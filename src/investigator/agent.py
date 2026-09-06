@@ -170,6 +170,7 @@ class Agent:
         started = time.monotonic()
         status = 'budget_exhausted'
         final_ids = []
+        failure_message = None
         for step in range(self.max_calls+1):
             if time.monotonic()-started >= self.max_seconds:
                 status = 'timeout'
@@ -184,6 +185,9 @@ class Agent:
                 action = self.planner.next_step(planner_context)
                 if not isinstance(action, dict):
                     raise ValueError('Planner action must be an object')
+                if set(action) == {'unavailable'} and isinstance(action['unavailable'], str):
+                    status = 'unavailable'
+                    break
                 if set(action) == {'final'}:
                     ids = action['final']
                     if not isinstance(ids, list) or not ids or any(not isinstance(r, str) or r not in store or not store[r]['ok'] or store[r]['tool']=='render_chart' for r in ids):
@@ -204,25 +208,29 @@ class Agent:
                     result = {'result_id': rid, **action, 'ok': False, 'error': {'code': 'invalid_tool_call', 'message': str(exc)}}
                 store[rid] = result
                 traces.append({**deepcopy(result), 'elapsed_ms': (time.perf_counter()-tick)*1000})
-            except Exception:
+            except Exception as exc:
+                failure_message = getattr(exc, 'public_message', None)
                 status = 'planner_error'
                 break
         if not final_ids:
             final_ids = [r for r, v in store.items() if v['ok'] and v['tool'] != 'render_chart']
         evidence = [store[r] for r in final_ids]
         sections = self._summarize(evidence)
+        if failure_message:
+            sections.insert(0, failure_message)
         if status != 'complete':
             sections.insert(0, f'Investigation stopped: {status}. Any results below are partial.')
-        context.shift = request['shifts'][-1]
-        context.history.append({'question': text, 'shifts': request['shifts'], 'intent': request['intent']})
+        result_shifts = list(dict.fromkeys(r['data']['shift'] for r in evidence)) or request['shifts']
+        context.shift = result_shifts[-1]
+        context.history.append({'question': text, 'shifts': result_shifts, 'intent': request['intent']})
         context.history = context.history[-4:]
-        return {'run_id': run_id, 'mode': 'offline rule-based planner; no language model', 'status': status,
-                'production_day': context.production_day, 'selected_shifts': request['shifts'],
+        return {'run_id': run_id, 'mode': getattr(self.planner, 'mode', 'offline rule-based planner; no language model'), 'status': status,
+                'production_day': context.production_day, 'selected_shifts': result_shifts,
                 'sections': sections, 'evidence_ids': final_ids,
                 'charts': [v['data'] for v in store.values() if v['ok'] and v['tool']=='render_chart'],
                 'trace': traces, 'context': {'production_day': context.production_day, 'shift': context.shift, 'dataset_version': context.dataset_version, 'history': deepcopy(context.history)},
-                'usage': {'tool_calls': len(traces), 'model_calls': 0, 'cost_usd': 0},
-                'limitations': 'Synthetic data. Recorded reasons are observations, not proven root causes. Offline routing understands only the supported question patterns.'}
+                'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0})},
+                'limitations': 'Synthetic data. Recorded reasons are observations, not proven root causes. Calculated summaries use tool evidence. Offline mode understands only supported question patterns; live mode depends on provider access.'}
 
     @staticmethod
     def _summarize(evidence):

@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse
 import hmac
 import json
+import os
 from pathlib import Path
 import secrets
 import time
@@ -28,9 +29,14 @@ class Workbench:
         for analysis in self.datasets.values():
             analysis.close()
 
-    def ask(self, payload):
-        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt'}:
+    def ask(self, payload, api_key=None):
+        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode'}:
             raise ValueError('Invalid request fields')
+        mode = payload.get('mode', 'offline')
+        if mode not in ('offline', 'openai'):
+            raise ValueError('Choose offline or OpenAI mode')
+        if mode == 'openai' and not (api_key or os.environ.get('OPENAI_API_KEY')):
+            raise ValueError('OpenAI mode needs your key in the local key field or server environment')
         day, shift = payload.get('day'), payload.get('shift')
         if day not in DAYS or type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Select a supported production day and shift')
@@ -62,11 +68,19 @@ class Workbench:
                 evicted.close()
             self.datasets[key] = Analysis(generate(seed=7+DAYS.index(day), production_day=day, corrupt=corrupt))
         self.datasets.move_to_end(key)
-        result = Agent(self.datasets[key]).ask(question, context)
+        if mode == 'openai':
+            from .openai_provider import OpenAIPlanner, Budget
+            planner = OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), Budget(Path('artifacts/model-budget.sqlite3')))
+            try:
+                result = Agent(self.datasets[key], planner=planner, max_calls=10, max_seconds=60).ask(question, context)
+            finally:
+                planner.close()
+        else:
+            result = Agent(self.datasets[key]).ask(question, context)
         result['session_id'] = session_id
         result['report_markdown'] = '\n\n'.join([
             f'# Synthetic production investigation: {day}',
-            'Offline rule-based planner. No live model or email delivery.',
+            result['mode'] + '. No email delivery.',
             *result['sections'], result['limitations']])
         return result
 
@@ -98,7 +112,7 @@ def make_server(port=8765):
                 return self._send(403, {'error': 'Local host only'})
             if self.path == '/api/config':
                 return self._send(200, {'days': DAYS, 'token': app.token, 'tools': TOOL_SCHEMAS,
-                                       'mode': 'offline', 'model_connected': False})
+                                       'mode': 'offline', 'server_key_available': bool(os.environ.get('OPENAI_API_KEY')), 'live_model': 'gpt-4.1-mini-2025-04-14'})
             files = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
             if self.path not in files:
                 return self._send(404, {'error': 'Not found'})
@@ -106,6 +120,20 @@ def make_server(port=8765):
             self._send(200, (WEB/filename).read_bytes(), content_type)
 
         def do_POST(self):
+            # Consume bounded bodies before a rejection so Windows clients receive
+            # the HTTP error instead of a reset from closing over unread bytes.
+            try:
+                self.connection.settimeout(5)
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 16000:
+                    if 0 < length <= 65536:
+                        self.rfile.read(length)
+                    return self._send(413, {'error': 'Request too large or empty'})
+                raw_body = self.rfile.read(length)
+                if len(raw_body) != length:
+                    return self._send(400, {'error': 'Incomplete request body'})
+            except (ValueError, TimeoutError):
+                return self._send(400, {'error': 'Invalid or timed-out request body'})
             if not self._host_ok() or self.path != '/api/ask':
                 return self._send(403, {'error': 'Request not allowed'})
             origin = self.headers.get('Origin')
@@ -126,8 +154,8 @@ def make_server(port=8765):
                     return self._send(429, {'error': 'Local request limit reached; retry in a minute'})
                 app.requests.append(now)
                 self.connection.settimeout(5)
-                payload = json.loads(self.rfile.read(length))
-                self._send(200, app.ask(payload))
+                payload = json.loads(raw_body)
+                self._send(200, app.ask(payload, api_key=self.headers.get('X-OpenAI-Key')))
             except (ValueError, UnicodeError, TypeError, KeyError) as exc:
                 self._send(400, {'error': str(exc)})
             except TimeoutError:
@@ -145,7 +173,7 @@ def main():
     args = parser.parse_args()
     server = make_server(args.port)
     print(f'Local workbench: http://127.0.0.1:{server.server_port}', flush=True)
-    print('Synthetic data. Offline planner. No model or email service connected.', flush=True)
+    print('Synthetic data. Offline by default; OpenAI mode requires a key. No email delivery.', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

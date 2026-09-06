@@ -25,32 +25,38 @@ function showResult(result) {
   d.append(node('pre',JSON.stringify(entry,null,2)));$('trace').append(d);
  }
  for(const chart of result.charts)showChart(chart);
- $('calls').textContent=` · ${result.usage.tool_calls} calls · $0 model cost`;
+ $('calls').textContent=result.usage.model_calls ? ` · ${result.usage.tool_calls} tool calls · estimated $${result.usage.cost_usd.toFixed(4)} · reserved $${result.usage.reserved_usd.toFixed(2)}` : ` · ${result.usage.tool_calls} tool calls · $0 model cost`;
  $('context').replaceChildren(node('h3','Context carried to the next question'),node('pre',JSON.stringify(result.context,null,2)));
  $('shift').value=result.context.shift;
 }
 async function ask(question) {
  if(busy)throw new Error('An investigation is already running');
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
- busy=true; ['reset','day','shift','corrupt'].forEach(id=>$(id).disabled=true); $('submit').disabled=true; document.querySelectorAll('[data-question]').forEach(b=>b.disabled=true);$('status').textContent='Querying evidence…';
+ busy=true; ['reset','day','shift','corrupt','mode','api-key'].forEach(id=>$(id).disabled=true); $('submit').disabled=true; document.querySelectorAll('[data-question]').forEach(b=>b.disabled=true);$('status').textContent='Querying evidence…';
  const empty=$('messages').querySelector('.empty');if(empty)empty.remove();message('You',[question],'user');
  try{
-  const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId})});
+  const headers={'Content-Type':'application/json','X-Workbench-Token':config.token};
+  if($('mode').value==='openai' && $('api-key').value)headers['X-OpenAI-Key']=$('api-key').value;
+  $('api-key').value='';
+  const pending=fetch('/api/ask',{method:'POST',headers,body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:$('mode').value})});
+  delete headers['X-OpenAI-Key'];
+  const response=await pending;
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');sessionId=result.session_id;
-  message('Investigator · offline',result.sections);showResult(result);$('status').textContent=`${result.status} · ${result.usage.tool_calls} tool calls`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+  message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${result.usage.tool_calls} tool calls`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
  }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
- finally{busy=false;['reset','day','shift','corrupt'].forEach(id=>$(id).disabled=false);$('submit').disabled=false;document.querySelectorAll('[data-question]').forEach(b=>b.disabled=false);}
+ finally{busy=false;['reset','day','shift','corrupt','mode','api-key'].forEach(id=>$(id).disabled=false);$('submit').disabled=false;document.querySelectorAll('[data-question]').forEach(b=>b.disabled=false);}
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('question').value).catch(()=>{});});
 document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{ $('question').value=button.dataset.question;ask(button.dataset.question).catch(()=>{}); }));
-function reset(){sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('status').textContent='Ready · no API costs';}
+function reset(){$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('status').textContent=$('mode').value==='openai'?'Ready · OpenAI calls incur charges':'Ready · no API costs';}
+$('mode').addEventListener('change',()=>{reset();const live=$('mode').value==='openai';$('key-label').hidden=!live;$('api-key').value='';$('mode-badge').textContent=live?'Synthetic data / OpenAI selected':'Synthetic data / Offline planner';$('mode-help').textContent=live?'OpenAI receives your question, bounded history and synthetic tool results. Your key passes through this local server to OpenAI for this request, is not saved, and the field clears on submit. Live calls incur API charges.':'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',reset);$('corrupt').addEventListener('change',reset);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 async function init(){
  $('submit').disabled=true;
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();for(const day of config.days){const option=node('option',day);option.value=day;$('day').append(option);} $('submit').disabled=false;
  const context=document.modelContext;
- if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
+ if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser tool is available only in offline mode');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}
 }
 init();

@@ -28,3 +28,8 @@ To materialize and validate all XML days:
 This writes 30 days / 90 shifts / 5,400 setups / 2,700 wet-end runs under ignored artifacts/month, with a file/hash/seed manifest. The archive matches the clean dataset in the day selector. The optional corrupt-record scenario is not included in the clean archive.
 
 The offline planner is deliberately limited. Unsupported questions return a clear error. A real model adapter will replace the router, while retaining the tested tool boundary. See AGENT_CONTRACT.md for permissions and limits.
+
+
+## Optional OpenAI mode
+
+Select OpenAI in the mode control to use your own API account. See [OpenAI/BYOK setup and limits](OPENAI_BYOK.md). Real model access requires your key and incurs API charges; default offline use remains free.
