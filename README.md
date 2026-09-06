@@ -2,7 +2,7 @@
 
 Build a manufacturing investigation agent from process knowledge, reliable tools, and evidence. This project is a worked example for learning how agents are constructed: interview a domain expert, generate consistent synthetic production records, implement calculations, connect a language model to bounded tools, and evaluate its behavior.
 
-**Status: design and owner interview.** The repository does not yet contain a working agent, dataset generator, website, or email service. Features below describe the intended build. All demonstration production will be synthetic.
+**Status: deterministic first slice implemented.** A one-day XML generator, validated DuckDB tools and static downtime charts are available. The model loop, website and email service remain planned. All demonstration production is synthetic. See [Run the first slice](docs/FIRST_SLICE.md).
 
 ## 1. Start with a job a person actually needs done
 

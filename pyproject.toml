@@ -1,0 +1,9 @@
+[project]
+name = "corrugator-shift-investigator"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["duckdb==1.5.1"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
