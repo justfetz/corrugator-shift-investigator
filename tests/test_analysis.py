@@ -32,7 +32,7 @@ def test_area_and_speed_independent_calculation(analysis):
     assert row["observed_shift_fpm"] == pytest.approx(feet/480)
     assert row["gross_sqft"] == pytest.approx(area)
     assert row["throughput_in"] == pytest.approx(area/feet*12)
-    assert row["dry_end_pct"] == pytest.approx((60*10*30*45/144)/area*100)
+    assert row["dry_end_pct"] == pytest.approx((sum(float(s.get("reject_sheets"))*30*45/144 for s in setups))/area*100)
     assert len(row["source_ids"]) == 60
 
 def test_continuing_order_and_shared_footage():

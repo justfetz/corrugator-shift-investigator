@@ -13,7 +13,7 @@ def build_archive(output, days=30):
         raise ValueError('Choose 1-30 days')
     output=Path(output)
     output.mkdir(parents=True,exist_ok=True)
-    manifest={'synthetic':True,'generator':'v1','clock':'fixed-demo-local','days':[]}
+    manifest={'synthetic':True,'generator':'v2-notes-quality-recurrence','clock':'fixed-demo-local','days':[]}
     for n in range(days):
         day=(date(2026,9,1)+timedelta(days=n)).isoformat()
         data=generate(seed=7+n,production_day=day)

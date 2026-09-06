@@ -2,7 +2,7 @@
 name = "corrugator-shift-investigator"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["duckdb==1.5.1"]
+dependencies = ["duckdb==1.5.1", "reportlab==4.4.9"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

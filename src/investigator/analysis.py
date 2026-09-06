@@ -1,6 +1,7 @@
 """Safe bounded demo XML ingestion and parameterized analysis tools."""
 from datetime import datetime, timedelta
 import hashlib
+import json
 import math
 import time
 from threading import Timer
@@ -64,10 +65,12 @@ class Analysis:
         self.version = hashlib.sha256(data).hexdigest()
         self.errors = []
         self._wet_ends = {}
-        self._db = duckdb.connect(":memory:")
-        self._db.execute("CREATE TABLE shifts (shift INTEGER, scheduled_seconds DOUBLE)")
-        self._db.execute("CREATE TABLE setups (id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, reject_reason VARCHAR)")
-        self._db.execute("CREATE TABLE stops (id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE)")
+        self._db = duckdb.connect(":memory:", config={"threads": 2})
+        self._db.execute("CREATE TABLE shifts (shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR)")
+        self._db.execute("CREATE TABLE setups (id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, reject_reason VARCHAR, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE)")
+        self._db.execute("CREATE TABLE stops (id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, notes VARCHAR)")
+        self._setup_rows = []
+        stop_rows, shift_rows = [], []
         seen = set()
         shifts = list(root)
         if len(shifts) != 3 or any(s.tag != "shift" for s in shifts):
@@ -76,7 +79,7 @@ class Analysis:
             begin, finish, seconds = duration(shift)
             if shift.get("number") != str(i) or begin != origin+timedelta(hours=8*(i-1)) or seconds != 28800:
                 raise ValueError("Invalid shift calendar")
-            self._db.execute("INSERT INTO shifts VALUES (?, ?)", [i, seconds])
+            shift_rows.append([i, seconds, self._note(shift)])
             prior_setup = begin
             intervals = []
             for node in shift:
@@ -91,8 +94,7 @@ class Analysis:
                     if node.get("kind") not in ("Maintenance", "Operator"):
                         raise ValueError("Unsupported downtime kind")
                     intervals.append((start, end))
-                    self._db.execute("INSERT INTO stops VALUES (?, ?, ?, ?, ?, ?)",
-                        [ident, i, node.get("kind"), node.attrib["place"], node.attrib["reason"], elapsed])
+                    stop_rows.append([ident, i, node.get("kind"), node.attrib["place"], node.attrib["reason"], elapsed, start, end, self._note(node)])
                 elif node.tag == "setup":
                     if start != prior_setup:
                         raise ValueError("Setup timeline must partition shift")
@@ -108,7 +110,24 @@ class Analysis:
             intervals.sort()
             if any(b[0] < a[1] for a, b in zip(intervals, intervals[1:])):
                 raise ValueError("Overlapping stops require resolution; unsupported in fixture v1")
+        for table, rows in (("shifts", shift_rows), ("setups", self._setup_rows), ("stops", stop_rows)):
+            if rows:
+                schema = self._db.execute(f"DESCRIBE {table}").fetchall()
+                records = [dict(zip([r[0] for r in schema], row)) for row in rows]
+                # One JSON scalar avoids per-value optional-module probes in the driver.
+                # Names/types come only from the fixed schema, never source/user text.
+                fields = ", ".join(f"CAST(value->>'{name}' AS {kind})" for name, kind, *_ in schema)
+                self._db.execute(f"INSERT INTO {table} SELECT {fields} FROM json_each(?)",
+                                 [json.dumps(records, default=lambda value: value.isoformat())])
+        del self._setup_rows
         self._db.execute("SET enable_external_access=false")
+
+    @staticmethod
+    def _note(node):
+        note = node.get("notes", "")
+        if len(note) > 1000:
+            raise ValueError("Notes exceed 1000 characters")
+        return note
 
     def _setup(self, node, shift, elapsed):
         from .fixture import GRADES
@@ -150,8 +169,7 @@ class Analysis:
         if group_key in self._wet_ends and self._wet_ends[group_key] != group_value:
             raise ValueError("Wet-end group changes grade, width or target")
         self._wet_ends[group_key] = group_value
-        self._db.execute("INSERT INTO setups VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, node.attrib["reject_reason"]])
+        self._setup_rows.append([node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, node.attrib["reject_reason"], datetime.fromisoformat(node.attrib["start"]), datetime.fromisoformat(node.attrib["end"]), width])
 
     def _query(self, shift, sql, params):
         if type(shift) is not int or shift not in (1, 2, 3):
@@ -179,7 +197,8 @@ class Analysis:
                 "elapsed_ms": (time.perf_counter()-start)*1000}}
 
     def get_shift_kpis(self, shift):
-        return self._query(shift, """SELECT count(*) AS valid_setups,
+        return self._query(shift, """SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
+        sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
         sum(feet) AS observed_lineal_ft, sum(feet)/480 AS observed_shift_fpm,
         sum(gross) AS gross_sqft, sum(gross)/nullif(sum(feet),0)*12 AS throughput_in,
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
@@ -209,13 +228,58 @@ class Analysis:
     def get_wet_end_performance(self, shift):
         return self._query(shift, """SELECT wet_end_id, grade, max(target) AS target_fpm,
         sum(feet)/(sum(seconds)/60) AS actual_fpm, sum(feet) AS lineal_ft,
-        sum(seconds)/60 AS elapsed_minutes, list(id ORDER BY id) AS source_ids
+        sum(seconds)/60 AS elapsed_minutes,
+        sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct, list(id ORDER BY id) AS source_ids
         FROM setups WHERE shift = ? GROUP BY wet_end_id, grade ORDER BY wet_end_id""", [shift])
 
     def get_quality_breakdown(self, shift):
         return self._query(shift, """SELECT reject_reason AS reason, sum(rejects) AS rejected_sqft,
         list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?
         GROUP BY reject_reason ORDER BY rejected_sqft DESC, reason""", [shift])
+
+    def get_setup_matrix(self, shift):
+        return self._query(shift, """SELECT s.id AS setup_id, s.wet_end_id, s.grade,
+        strftime(s.started, '%Y-%m-%d %H:%M:%S') AS start,
+        strftime(s.ended, '%Y-%m-%d %H:%M:%S') AS end,
+        s.width_in, s.feet AS lineal_ft, s.feet/(s.seconds/60) AS actual_fpm,
+        s.target AS target_fpm, s.feet/(s.seconds/60)/s.target*100 AS speed_to_target_pct,
+        count(d.id) AS stop_count,
+        coalesce(sum(CASE WHEN d.id IS NOT NULL THEN epoch(least(s.ended,d.ended)-greatest(s.started,d.started)) ELSE 0 END),0)/60 AS down_minutes,
+        s.rejects AS rejected_sqft, [s.id] AS source_ids
+        FROM setups s LEFT JOIN stops d ON s.shift=d.shift AND d.started<s.ended AND d.ended>s.started
+        WHERE s.shift=? GROUP BY ALL ORDER BY start""", [shift])
+
+    def get_shift_notes(self, shift):
+        return self._query(shift, """SELECT 'Shift' AS record_type, 'Shift ' || shift AS record_id,
+        '' AS start, '' AS end, '' AS kind, '' AS place, '' AS reason, NULL AS down_minutes,
+        notes, ['shift-' || shift] AS source_ids FROM shifts WHERE shift=?
+        UNION ALL SELECT 'Downtime', id, strftime(started,'%Y-%m-%d %H:%M:%S'),
+        strftime(ended,'%Y-%m-%d %H:%M:%S'), kind, place, reason, seconds/60, notes, [id]
+        FROM stops WHERE shift=? ORDER BY record_type DESC, start, record_id""", [shift, shift])
+
+    def get_rankings(self, shift, metric='speed'):
+        queries = {
+            'speed': """WITH runs AS (SELECT wet_end_id AS item, grade,
+                sum(feet)/sum(target*seconds/60)*100 AS value, list(id ORDER BY id) AS source_ids
+                FROM setups WHERE shift=? GROUP BY wet_end_id, grade)
+                SELECT dense_rank() OVER (ORDER BY value) AS rank, *, '% of target (lowest first)' AS unit
+                FROM runs ORDER BY value, item LIMIT 10""",
+            'downtime': """WITH losses AS (SELECT place || ' / ' || reason AS item,
+                sum(seconds)/60 AS value, list(id ORDER BY id) AS source_ids
+                FROM stops WHERE shift=? GROUP BY place, reason)
+                SELECT dense_rank() OVER (ORDER BY value DESC) AS rank, *, 'minutes (highest first)' AS unit
+                FROM losses ORDER BY value DESC, item LIMIT 10""",
+            'quality': """WITH losses AS (SELECT reject_reason AS item, sum(rejects) AS value,
+                list(id ORDER BY id) AS source_ids FROM setups WHERE shift=? GROUP BY reject_reason)
+                SELECT dense_rank() OVER (ORDER BY value DESC) AS rank, *, 'sq ft (highest first)' AS unit
+                FROM losses ORDER BY value DESC, item LIMIT 10"""}
+        if metric not in queries:
+            raise ValueError('Unsupported ranking metric')
+        result = self._query(shift, queries[metric], [shift])
+        result['metric'] = metric
+        if result['coverage'] != 'complete':
+            result['rows'] = []
+        return result
 
     def close(self):
         self._db.close()

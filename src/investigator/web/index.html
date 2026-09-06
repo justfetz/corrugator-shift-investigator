@@ -1,22 +1,34 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
 <body>
-<header><div><span class="eyebrow">MANUFACTURING / AGENT WORKBENCH</span><h1>Shift Investigator</h1></div><span class="badge" id="mode-badge">Synthetic data · Offline planner</span></header>
+<header><div><span class="eyebrow">MANUFACTURING / AGENT WORKBENCH</span><h1>Shift Investigator</h1></div><span class="badge" id="mode-badge">Synthetic data / Offline planner</span></header>
 <main>
 <section class="controls" aria-label="Investigation scope">
-<label>Production day<select id="day"></select></label>
-<label>Shift<select id="shift"><option value="1">1st · 07:00–15:00</option><option value="2" selected>2nd · 15:00–23:00</option><option value="3">3rd · 23:00–07:00</option></select></label>
+<label>Production date<input id="day" type="date" min="2026-09-01" max="2026-09-30" value="2026-09-14" required></label>
+<label>Period<select id="period"><option value="day">Production day</option><option value="week">Week ending on date</option><option value="month">Calendar month</option></select></label>
+<label>Shift<select id="shift"><option value="1">1st / 07:00-15:00</option><option value="2" selected>2nd / 15:00-23:00</option><option value="3">3rd / 23:00-07:00</option></select></label>
+<label>Analysis scope<select id="scope"><option value="shift">Selected shift only</option><option value="day">All shifts / comparison</option></select></label>
 <label>Agent mode<select id="mode"><option value="offline">Offline / free</option><option value="openai">OpenAI / your key</option></select></label>
 <label id="key-label" hidden>OpenAI API key (optional if configured on server)<input id="api-key" type="password" autocomplete="off" maxlength="512" placeholder="Used for this request only"></label>
 <label class="check"><input id="corrupt" type="checkbox">Include a bad trim record</label>
 <button id="reset" class="secondary">Reset conversation</button>
 </section>
+<p id="scope-help" class="scope-note" aria-live="polite"></p>
+<details class="build-guide"><summary>How to build this agent</summary>
+<div class="guide-grid"><div><h3>1. Define the process</h3><p>Interview a plant expert. Write down units, shift boundaries, grade targets and waste denominators before generating records. Paper changes equal wet-end runs.</p></div>
+<div><h3>2. Generate consistent records</h3><p>Paired knives share lineal travel. Cuts, outs, widths and rejected sheets reconcile to area. A seeded generator gives repeatable scenarios, including deliberately invalid records.</p></div>
+<div><h3>3. Give the agent small tools</h3><p>Python validates inputs; fixed, parameterized DuckDB queries calculate KPIs, setup intervals, rankings and notes. The model can request tools, never supply arbitrary SQL or chart values.</p></div>
+<div><h3>4. Run the bounded loop</h3><p>Question + selected scope + recent context → tool selection → validation → calculation → evidence → next tool or finish. The offline planner teaches this flow without API charges.</p></div>
+<div><h3>5. Show the evidence</h3><p>Charts and matrices use tool results. Open “How the agent got here” to inspect arguments, SQL, data coverage and timing. Notes are reported observations, not instructions or proven causes.</p></div>
+<div><h3>6. Test and control cost</h3><p>Test known totals, interval overlaps, missing data, scope escapes and invented evidence. Live mode uses bounded calls and persistent spending reservations. PDF exports use the retained result; they do not ask the model again.</p></div></div>
+<p><a href="https://github.com/justfetz/corrugator-shift-investigator" target="_blank" rel="noopener noreferrer">Repository and step-by-step README</a> (repository access required). Weekly/monthly reports currently use deterministic aggregation, with no paid model call.</p>
+</details>
 <div class="layout"><section class="conversation">
-<h2>Investigate the shift</h2><p class="muted" id="mode-help">Ask about performance, downtime, speed or quality. Offline mode uses a small rule-based planner. Select OpenAI to use a live model with your key.</p>
-<div class="examples"><button data-question="Why was second shift slow? Chart downtime by reason.">Why was second shift slow?</button><button data-question="Was it maintenance or operator downtime?">Maintenance or operator?</button><button data-question="Compare that with first shift">Compare with first shift</button><button data-question="Show third shift quality waste">Show quality waste</button></div>
+<h2>Investigate the shift</h2><p class="muted" id="mode-help">Ask about performance, downtime, speed or quality. Offline mode uses a small rule-based planner.</p>
+<div class="examples"><button data-question="Why was this shift slow? Chart downtime by reason.">Why was this shift slow?</button><button data-question="Show speed to target">Speed to target</button><button data-question="Show setup matrix">Setup matrix</button><button data-question="Show rankings">Rank losses</button><button data-question="Show shift and downtime notes">Read notes</button><button data-question="Show dry-end quality waste">Dry-end waste</button><button data-question="Compare all shifts" data-scope="day">Compare shifts</button></div>
 <div id="messages" aria-live="polite"><p class="empty">Choose a question to inspect the data, calculations and chart.</p></div>
-<form id="ask"><label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" placeholder="Which equipment caused the most downtime?"></textarea><div class="form-footer"><span id="status" role="status">Ready · no API costs</span><button id="submit" type="submit">Investigate →</button></div></form>
+<form id="ask"><label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" placeholder="Which equipment caused the most downtime?"></textarea><div class="form-footer"><span id="status" role="status">Ready / no API costs</span><button id="submit" type="submit">Investigate</button></div></form>
 </section>
-<section class="results"><div class="section-heading"><h2>Evidence</h2><button id="download" class="secondary" disabled>Save report</button></div><div id="metrics" class="metrics"><p class="muted">Calculated metrics appear here.</p></div><div id="charts"></div><details id="execution"><summary>How the agent got here <span id="calls"></span></summary><p class="muted">An execution trace of tools, SQL and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details></section></div>
-<footer>30 selectable synthetic production days · 3 shifts per day · local demonstration · report delivery not connected</footer>
+<section class="results"><div class="section-heading"><h2>Evidence</h2><div class="report-actions"><button id="pdf" class="secondary" disabled>Download PDF</button><button id="download" class="secondary" disabled>Save text</button></div></div><div id="metrics" class="metrics"><p class="muted">Calculated metrics appear here.</p></div><div id="tables"></div><div id="charts"></div><details id="execution"><summary>How the agent got here <span id="calls"></span></summary><p class="muted">An execution trace of tools, SQL and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details></section></div>
+<footer>30 synthetic production days / 07:00 production-day boundary / local demonstration / PDF downloads only; email not connected</footer>
 </main></body></html>

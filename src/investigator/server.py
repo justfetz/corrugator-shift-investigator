@@ -24,15 +24,26 @@ class Workbench:
         self.sessions = OrderedDict()
         self.datasets = OrderedDict()
         self.requests = deque()
+        self.reports = OrderedDict()
+        from .periods import PeriodReports
+        self.periods = PeriodReports()
 
     def close(self):
         for analysis in self.datasets.values():
             analysis.close()
 
     def ask(self, payload, api_key=None):
-        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode'}:
+        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period'}:
             raise ValueError('Invalid request fields')
+        scope = payload.get('scope', 'shift')
+        if scope not in ('shift', 'day'):
+            raise ValueError('Choose selected shift or production-day comparison')
+        period = payload.get('period', 'day')
+        if period not in ('day', 'week', 'month'):
+            raise ValueError('Choose day, week or month')
         mode = payload.get('mode', 'offline')
+        if period != 'day' and mode != 'offline':
+            raise ValueError('Week/month reports use the free deterministic tools; select Offline mode')
         if mode not in ('offline', 'openai'):
             raise ValueError('Choose offline or OpenAI mode')
         if mode == 'openai' and not (api_key or os.environ.get('OPENAI_API_KEY')):
@@ -54,12 +65,16 @@ class Workbench:
             if len(self.sessions) >= 32:
                 self.sessions.popitem(last=False)
             self.sessions[session_id] = Context(day, shift)
+        if period != 'day':
+            result = self.periods.investigate(day, shift, scope, period, corrupt)
+            return self._retain(result, session_id)
         context = self.sessions[session_id]
         # Visible date/shift controls own the scope; same-day follow-ups retain history.
-        if context.production_day != day:
+        if context.production_day != day or context.shift != shift or context.scope != scope:
             context = Context(day, shift)
             self.sessions[session_id] = context
         context.shift = shift
+        context.scope = scope
         self.sessions.move_to_end(session_id)
         key = (day, corrupt)
         if key not in self.datasets:
@@ -77,12 +92,30 @@ class Workbench:
                 planner.close()
         else:
             result = Agent(self.datasets[key]).ask(question, context)
+        return self._retain(result, session_id)
+
+    def _retain(self, result, session_id):
         result['session_id'] = session_id
         result['report_markdown'] = '\n\n'.join([
-            f'# Synthetic production investigation: {day}',
+            f'# Synthetic production investigation: {result.get("period_label", result["production_day"])}',
             result['mode'] + '. No email delivery.',
             *result['sections'], result['limitations']])
+        self.reports[session_id] = result
+        self.reports.move_to_end(session_id)
+        if len(self.reports) > 32:
+            self.reports.popitem(last=False)
         return result
+
+    def pdf(self, payload):
+        if not isinstance(payload, dict) or set(payload) != {'session_id', 'run_id'}:
+            raise ValueError('Invalid report request')
+        if not all(isinstance(v, str) for v in payload.values()):
+            raise ValueError('Invalid report reference')
+        result = self.reports.get(payload['session_id'])
+        if result is None or result['run_id'] != payload['run_id']:
+            raise ValueError('Report expired; run the investigation again')
+        from .reports import report_pdf
+        return report_pdf(result)
 
 
 def make_server(port=8765):
@@ -134,7 +167,7 @@ def make_server(port=8765):
                     return self._send(400, {'error': 'Incomplete request body'})
             except (ValueError, TimeoutError):
                 return self._send(400, {'error': 'Invalid or timed-out request body'})
-            if not self._host_ok() or self.path != '/api/ask':
+            if not self._host_ok() or self.path not in ('/api/ask', '/api/report'):
                 return self._send(403, {'error': 'Request not allowed'})
             origin = self.headers.get('Origin')
             if origin is not None and origin != f'http://127.0.0.1:{self.server.server_port}':
@@ -155,6 +188,8 @@ def make_server(port=8765):
                 app.requests.append(now)
                 self.connection.settimeout(5)
                 payload = json.loads(raw_body)
+                if self.path == '/api/report':
+                    return self._send(200, app.pdf(payload), 'application/pdf')
                 self._send(200, app.ask(payload, api_key=self.headers.get('X-OpenAI-Key')))
             except (ValueError, UnicodeError, TypeError, KeyError) as exc:
                 self._send(400, {'error': str(exc)})

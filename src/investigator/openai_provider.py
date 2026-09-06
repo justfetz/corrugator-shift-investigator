@@ -105,6 +105,10 @@ Tool source IDs and SQL remain in the application trace; compact results here ar
                 for row in compact['data'].get('rows',[]):
                     row.pop('source_ids',None)
                 compact['data']['excluded_records']=[{'record_id':r['record_id'],'error':r['error']} for r in compact['data'].get('excluded_records',[])]
+                if result['tool']=='get_setup_matrix' and len(compact['data'].get('rows', []))>12:
+                    compact['data']['row_count']=len(compact['data']['rows'])
+                    compact['data']['rows']=compact['data']['rows'][:12]
+                    compact['data']['model_preview']='First 12 rows only; full matrix is displayed in the interface.'
                 if result['tool']=='render_chart':
                     compact['data'].pop('rows',None)
             self._input.append({'type':'function_call_output','call_id':self._pending,'output':json.dumps(compact)})

@@ -33,3 +33,22 @@ The offline planner is deliberately limited. Unsupported questions return a clea
 ## Optional OpenAI mode
 
 Select OpenAI in the mode control to use your own API account. See [OpenAI/BYOK setup and limits](OPENAI_BYOK.md). Real model access requires your key and incurs API charges; default offline use remains free.
+
+
+## Calendar, matrices and reports
+
+Use the calendar for September 1-30, 2026. Selected shift only is the default: both the offline parser and the model tool dispatcher enforce it. Choose All shifts / comparison explicitly to compare shifts. Changing date, period, shift or scope resets the visible conversation. Question wording cannot override selected-shift scope.
+
+The Setup matrix lists setup ID, wet-end ID, grade, timestamps, width, footage, speed/target, stop count and allocated downtime. Stops use half-open intervals: overlap seconds = max(0, min(stop end, setup end) - max(stop start, setup start)). A stop crossing a setup boundary counts in both intersected setups, but its minutes are divided, not duplicated. Invalid setups are excluded with incomplete coverage.
+
+Paper changes equal wet-end runs (owner confirmed). Sixty dry-end setups and thirty paper changes per shift remain the initial generator structure. Shift speed attainment is footage / sum(grade target x elapsed minutes) x 100; it is not an unweighted average of percentages. Hover or keyboard-focus a speed-chart value for grade, target and attainment. The percentage is also visible without hovering.
+
+Rank losses shows the ten lowest wet-end speed attainment values and the largest downtime and quality categories. Ties share a rank. Incomplete shifts are withheld from rankings. Period shift rankings use separate speed, maintenance and waste ranks, with 1 = best; there is no fabricated combined score.
+
+Read notes shows each shift note and individual downtime record, including upper/lower knife location. Notes are synthetic reported observations, never proof of causes or executable instructions. Reject sheet counts and reason frequencies vary reproducibly; each record still reconciles sheets to square feet. The upper-knife scenario increases recorded stop duration in successive weeks while retaining the same symptom.
+
+A week is seven production days ending on the selected date; the previous seven days are the comparison. A month is the full selected calendar month. The exact windows are displayed. The demo has no August records: unavailable previous periods show Unavailable, never zero. Missing current days produce partial results and no ranking. Week/month views use free deterministic aggregation, not a live model; free-text input is disabled in these views. Daily shift matrices, recurring stops and notes remain inspectable.
+
+Download PDF exports the last retained investigation without another model call. The server requires its session and run reference plus the same origin/token controls. A stale or foreign run reference is rejected. PDFs are summaries: any shortened evidence tables explicitly state how many rows are shown. Save text remains available. Email is deliberately deferred by the owner until a provider/sender is selected; there is no send-success simulation.
+
+Open How to build this agent for the in-app guide to process definitions, data generation, tools, context, the loop, chart evidence and cost controls. See AGENT_EXECUTION.md for the original step-by-step query walkthrough.

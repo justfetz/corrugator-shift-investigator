@@ -46,4 +46,13 @@ Optional WebMCP registration invokes the same visible investigation action and v
 
 Tests exercise a full investigation, follow-up scope, all-shift comparison, exact chart/evidence equality, missing evidence, forbidden tools, call/deadline limits, incomplete records, history retention, date changes and HTTP protections. Unit/HTTP tests and JavaScript syntax checks do not replace visual browser QA or live-model evaluation.
 
-Still pending: live-provider validation, public service-wide budget infrastructure, range/trend tools, email provider and verified subscriptions, plant timezone/DST, overlapping-stop allocation, production security/deployment and broader scenario calibration.
+Still pending: live-provider validation, public service-wide budget infrastructure, email provider and verified subscriptions, plant timezone/DST, overlapping-stop allocation, production security/deployment and broader scenario calibration.
+
+
+## Evidence-reporting extension
+
+New read tools: get_setup_matrix(shift), get_shift_notes(shift), get_rankings(shift, metric). Metric is restricted to speed/downtime/quality. Notes are bounded to 1,000 characters, passed as untrusted evidence, and rendered with text nodes or escaped PDF paragraphs. They cannot expand tools or shift scope. Selected-shift mode is enforced in application code even for a malicious model call. Daily OpenAI matrix results show the model at most 12 preview rows with explicit disclosure; the UI retains the full validated matrix.
+
+Week/month reports are a separate deterministic job triggered by Build period report. It aggregates validated per-day SQL results for a bounded September 2026 calendar, returning sections, tables, charts, coverage and dataset hashes. No model/API permission exists on this path. At most 60 compact day/scenario snapshots are cached, with no live DB connection retained. These reports do not pretend to understand arbitrary free-text range questions. Period comparison requires both windows to be complete; no interpolation or zero-fill is used. Paper-change totals count distinct wet-end IDs within each day and shift, then sum across the period.
+
+The server retains at most 32 latest investigation reports for PDF export. The /api/report POST accepts only session_id and run_id; PDF layout is trusted application code, not submitted HTML. ReportLab is the only added application dependency. PDF export neither sends email nor incurs model cost. Host, Origin, token, request-size and rate checks apply to both POST routes. This remains a loopback demonstration, not a public multi-user service.
