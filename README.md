@@ -2,7 +2,7 @@
 
 Build a manufacturing investigation agent from process knowledge, reliable tools, and evidence. This project is a worked example for learning how agents are constructed: interview a domain expert, generate consistent synthetic production records, implement calculations, connect a language model to bounded tools, and evaluate its behavior.
 
-**Status: deterministic first slice implemented.** A one-day XML generator, validated DuckDB tools and static downtime charts are available. The model loop, website and email service remain planned. All demonstration production is synthetic. See [Run the first slice](docs/FIRST_SLICE.md).
+**Status: local learning workbench implemented.** Try a simple interface with 30 selectable synthetic days, tested SQL tools, a bounded offline planner, follow-up context, evidence-linked charts and report export. A live language model, email delivery and public hosting are not connected. See [Run the workbench](docs/WORKBENCH.md).
 
 ## 1. Start with a job a person actually needs done
 
@@ -116,3 +116,8 @@ Next unresolved definitions include waste-category overlap accounting, plant tim
 ## Follow a query through the agent
 
 Read [How a question becomes evidence and a chart](docs/AGENT_EXECUTION.md) for tool contracts, parameterized SQL, context management, the execution loop, chart validation and the first milestone's acceptance checks.
+
+
+## Inspect the working agent boundary
+
+Start with [the local interface walkthrough](docs/WORKBENCH.md), then read [the agent contract](docs/AGENT_CONTRACT.md) and [execution guide](docs/AGENT_EXECUTION.md). The offline router makes tool behavior reproducible while we prepare live-model integration.

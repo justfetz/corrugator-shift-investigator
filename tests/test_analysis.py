@@ -116,3 +116,12 @@ def test_chart_uses_rows_and_escapes_labels(analysis):
     result['rows'][0]['down_minutes'] = float('nan')
     with pytest.raises(ValueError):
         downtime_svg(result)
+
+def test_wet_end_grade_consistency():
+    root=ET.fromstring(generate())
+    root[0].findall('setup')[1].set('grade','32-C')
+    obj=Analysis(ET.tostring(root))
+    try:
+        assert 'Wet-end group changes' in obj.errors[0]['error']
+        assert obj.get_wet_end_performance(1)['coverage']=='incomplete'
+    finally:obj.close()

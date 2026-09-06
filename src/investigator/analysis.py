@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import hashlib
 import math
 import time
+from threading import Timer
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 import duckdb
@@ -62,9 +63,10 @@ class Analysis:
         origin = datetime.fromisoformat(self.day + "T07:00:00")
         self.version = hashlib.sha256(data).hexdigest()
         self.errors = []
+        self._wet_ends = {}
         self._db = duckdb.connect(":memory:")
         self._db.execute("CREATE TABLE shifts (shift INTEGER, scheduled_seconds DOUBLE)")
-        self._db.execute("CREATE TABLE setups (id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE)")
+        self._db.execute("CREATE TABLE setups (id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, reject_reason VARCHAR)")
         self._db.execute("CREATE TABLE stops (id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE)")
         seen = set()
         shifts = list(root)
@@ -143,15 +145,33 @@ class Analysis:
             raise ValueError("Reject sheets do not reconcile")
         if node.get("reject_reason") not in ("Warp", "Bond", "Misalignment"):
             raise ValueError("Unsupported reject reason")
-        self._db.execute("INSERT INTO setups VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects])
+        group_key = (shift, node.attrib["wet_end_id"])
+        group_value = (node.attrib["grade"], width, target)
+        if group_key in self._wet_ends and self._wet_ends[group_key] != group_value:
+            raise ValueError("Wet-end group changes grade, width or target")
+        self._wet_ends[group_key] = group_value
+        self._db.execute("INSERT INTO setups VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, node.attrib["reject_reason"]])
 
     def _query(self, shift, sql, params):
         if type(shift) is not int or shift not in (1, 2, 3):
             raise ValueError("Shift must be 1, 2 or 3")
         start = time.perf_counter()
-        result = self._db.execute(sql, params)
-        rows = [dict(zip([c[0] for c in result.description], row)) for row in result.fetchall()]
+        timer = Timer(2.0, self._db.interrupt)
+        timer.daemon = True
+        timer.start()
+        try:
+            result = self._db.execute(sql, params)
+            columns = [c[0] for c in result.description]
+            fetched = result.fetchmany(1001)
+            if len(fetched) > 1000:
+                raise ValueError("Result exceeds row limit")
+            rows = [dict(zip(columns, row)) for row in fetched]
+        except duckdb.InterruptException as exc:
+            raise ValueError("Query exceeded two-second limit") from exc
+        finally:
+            timer.cancel()
+            timer.join()
         errors = [e for e in self.errors if e["shift"] == shift]
         return {"production_day": self.day, "shift": shift, "dataset_version": self.version,
                 "rows": rows, "coverage": "incomplete" if errors else "complete",
@@ -165,7 +185,12 @@ class Analysis:
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
         sum(shear)/nullif(sum(gross),0)*100 AS shear_pct,
         sum(rejects)/nullif(sum(gross),0)*100 AS dry_end_pct,
-        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift])
+        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Maintenance') AS maintenance_pct,
+        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Operator') AS operator_pct,
+        sum(feet)/nullif(count(*),0) AS lineal_per_setup,
+        sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
+        count(*) FILTER (WHERE trim/gross*100 > 3.25) AS setups_above_trim_target,
+        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift])
 
     def get_downtime_breakdown(self, shift, kind=None, group_by="reason"):
         if group_by not in ("reason", "kind", "place") or kind not in (None, "Maintenance", "Operator"):
@@ -180,6 +205,17 @@ class Analysis:
             params.append(kind)
         sql += f" GROUP BY {group_by} ORDER BY down_minutes DESC, category"
         return self._query(shift, sql, params)
+
+    def get_wet_end_performance(self, shift):
+        return self._query(shift, """SELECT wet_end_id, grade, max(target) AS target_fpm,
+        sum(feet)/(sum(seconds)/60) AS actual_fpm, sum(feet) AS lineal_ft,
+        sum(seconds)/60 AS elapsed_minutes, list(id ORDER BY id) AS source_ids
+        FROM setups WHERE shift = ? GROUP BY wet_end_id, grade ORDER BY wet_end_id""", [shift])
+
+    def get_quality_breakdown(self, shift):
+        return self._query(shift, """SELECT reject_reason AS reason, sum(rejects) AS rejected_sqft,
+        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?
+        GROUP BY reject_reason ORDER BY rejected_sqft DESC, reason""", [shift])
 
     def close(self):
         self._db.close()
