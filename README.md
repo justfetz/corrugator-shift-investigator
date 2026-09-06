@@ -65,7 +65,7 @@ Proposed editable speed table, based on owner guidance rather than external stan
 | 275-BC | Double wall | 500 |
 | 275-EB | Double wall | 500 |
 
-The exact wet-end speed time denominator remains unresolved. Do not implement target comparisons until it is settled. Demo paper widths are 98, 95, 92 and 87 inches. Approximate shift scale is 50-75 dry-end records and roughly half as many wet-end records. About 200,000 lineal is a bad-shift example; 275,000-300,000 is contextual good-shift guidance, not a universal grade-independent target.
+Owner confirmed: wet-end actual speed uses its full elapsed duration, including downtime. Compare each wet-end ID against its grade target using this basis. Demo paper widths are 98, 95, 92 and 87 inches. Approximate shift scale is 50-75 dry-end records and roughly half as many wet-end records. About 200,000 lineal is a bad-shift example; 275,000-300,000 is contextual good-shift guidance, not a universal grade-independent target.
 
 ## 5. Build and test tools before connecting the model
 
@@ -111,4 +111,8 @@ Measure tool accuracy, evidence-supported answers, latency and cost per investig
 6. Add verified subscriptions and controlled report delivery.
 7. Review deployment, costs and limitations before publishing.
 
-Next unresolved definitions include wet-end speed time basis, waste-category overlap accounting, plant timezone/daylight-saving behavior and event allocation at boundaries. This project is separate from Talk to My Machine and has no access to live machinery or private production stores.
+Next unresolved definitions include waste-category overlap accounting, plant timezone/daylight-saving behavior and event allocation at boundaries. This project is separate from Talk to My Machine and has no access to live machinery or private production stores.
+
+## Follow a query through the agent
+
+Read [How a question becomes evidence and a chart](docs/AGENT_EXECUTION.md) for tool contracts, parameterized SQL, context management, the execution loop, chart validation and the first milestone's acceptance checks.
