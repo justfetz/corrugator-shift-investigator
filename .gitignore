@@ -4,3 +4,6 @@ __pycache__/
 .env
 artifacts/
 *.duckdb
+*.egg-info/
+build/
+dist/

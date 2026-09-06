@@ -7,11 +7,11 @@ GRADES = {"26-C": 900, "32-C": 900, "55-C": 850, "200-C": 800,
           "275-BC": 500, "275-EB": 500}
 
 
-def generate(seed=7):
+def generate(seed=7, production_day="2026-09-01", corrupt=False):
     rng = random.Random(seed)
     root = ET.Element("production", version="1", synthetic="true",
-                      production_day="2026-09-01", clock="fixed-demo-local")
-    origin = datetime(2026, 9, 1, 7)
+                      production_day=production_day, clock="fixed-demo-local")
+    origin = datetime.fromisoformat(production_day + "T07:00:00")
     for shift in range(1, 4):
         begin = origin + timedelta(hours=8*(shift-1))
         node = ET.SubElement(root, "shift", number=str(shift),
@@ -36,7 +36,7 @@ def generate(seed=7):
                 grade=grade, target_fpm=str(target), start=start.isoformat(),
                 end=(start+timedelta(minutes=8)).isoformat(), width_in=str(width),
                 gross_feet=str(gross_feet), gross_sqft=str(gross_area),
-                trim_sqft=str(trim_area), shear_sqft=str(chops*34*width/144),
+                trim_sqft=str(99999999 if corrupt and shift == 2 and n == 0 else trim_area), shear_sqft=str(chops*34*width/144),
                 reject_sheets=str(rejects), reject_sqft=str(reject_area),
                 reject_reason=("Warp", "Bond", "Misalignment")[n%3])
             ET.SubElement(setup, "knife", level="upper", stacker="upper", order_id=f"A{shift}-{n//2}",
@@ -51,4 +51,3 @@ def generate(seed=7):
                     place="Knife" if n != 48 else "Wet end",
                     reason="Knife jam" if n != 48 else "Missed splice")
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
-

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<header><div><span class="eyebrow">MANUFACTURING / AGENT WORKBENCH</span><h1>Shift Investigator</h1></div><span class="badge">Synthetic data · Offline planner</span></header>
+<main>
+<section class="controls" aria-label="Investigation scope">
+<label>Production day<select id="day"></select></label>
+<label>Shift<select id="shift"><option value="1">1st · 07:00–15:00</option><option value="2" selected>2nd · 15:00–23:00</option><option value="3">3rd · 23:00–07:00</option></select></label>
+<label class="check"><input id="corrupt" type="checkbox">Include a bad trim record</label>
+<button id="reset" class="secondary">Reset conversation</button>
+</section>
+<div class="layout"><section class="conversation">
+<h2>Investigate the shift</h2><p class="muted">Ask about performance, downtime, speed or quality. This offline version uses a small rule-based planner; a live model is not connected.</p>
+<div class="examples"><button data-question="Why was second shift slow? Chart downtime by reason.">Why was second shift slow?</button><button data-question="Was it maintenance or operator downtime?">Maintenance or operator?</button><button data-question="Compare that with first shift">Compare with first shift</button><button data-question="Show third shift quality waste">Show quality waste</button></div>
+<div id="messages" aria-live="polite"><p class="empty">Choose a question to inspect the data, calculations and chart.</p></div>
+<form id="ask"><label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" placeholder="Which equipment caused the most downtime?"></textarea><div class="form-footer"><span id="status" role="status">Ready · no API costs</span><button id="submit" type="submit">Investigate →</button></div></form>
+</section>
+<section class="results"><div class="section-heading"><h2>Evidence</h2><button id="download" class="secondary" disabled>Save report</button></div><div id="metrics" class="metrics"><p class="muted">Calculated metrics appear here.</p></div><div id="charts"></div><details id="execution"><summary>How the agent got here <span id="calls"></span></summary><p class="muted">An execution trace of tools, SQL and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details></section></div>
+<footer>30 selectable synthetic production days · 3 shifts per day · local demonstration · report delivery not connected</footer>
+</main></body></html>

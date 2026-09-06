@@ -40,7 +40,7 @@ Production days run 07:00 to the following 07:00, labeled by their starting date
 
 ## Inspect an example query
 
-The following illustrates a query over validated, non-overlapping shift allocations. The fourth parameter is the shift's scheduled seconds from its calendar record, not a model-selected denominator.
+The following illustrates a query over validated, non-overlapping shift allocations. The first parameter is the shift's scheduled seconds from its calendar record, not a model-selected denominator.
 
 ```sql
 SELECT

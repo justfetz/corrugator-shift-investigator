@@ -1,6 +1,6 @@
 # Run the deterministic first slice
 
-This implementation generates one fixed synthetic production day, imports it into a private in-memory DuckDB database and executes analysis tools. The language-model loop, interactive website and email delivery are not implemented yet.
+This implementation generates one fixed synthetic production day, imports it into a private in-memory DuckDB database and executes analysis tools. This page describes the original deterministic slice. The local interface and offline agent loop are now available; see WORKBENCH.md. A live language model and email delivery are not connected.
 
 From the repository root, with Python 3.11+:
 
