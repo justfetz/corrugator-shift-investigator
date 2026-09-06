@@ -61,3 +61,14 @@ def test_sessions_and_day_scope():
         assert len(changed['context']['history'])==1
         assert changed['production_day']=='2026-09-03'
     finally:app.close()
+
+
+def test_interface_control_references_exist():
+    import re
+    from investigator.server import WEB
+    html = (WEB / 'index.html').read_text(encoding='utf-8')
+    script = (WEB / 'app.js').read_text(encoding='utf-8')
+    ids = set(re.findall(r'id="([^"]+)"', html))
+    references = set(re.findall(r"\$\('([^']+)'\)", script))
+    assert references <= ids, references - ids
+    assert '\ufffd' not in html + script

@@ -6,9 +6,9 @@ A user question wakes one bounded investigation. The agent requests evidence, op
 
 ## Current execution mode
 
-The current Planner implementation is explicitly rule-based and offline. It exercises the same tool-dispatch boundary intended for a future model adapter. It is not an LLM and understands only the supported examples/patterns. Actual provider integration and model evaluation remain open.
+The current Planner implementation is explicitly rule-based and offline. It exercises the same tool-dispatch boundary intended for a future model adapter. It is not an LLM and understands only the supported examples/patterns. An optional OpenAIPlanner now implements native Responses function calling; see OPENAI_BYOK.md. Live account access and model-quality evaluation remain open.
 
-A future adapter implements Planner.next_step(context), returning either a tool request or a final list of evidence IDs. The application validates both. The current answer renderer formats verified results deterministically; it never accepts an arbitrary model-written numerical claim as a verified metric.
+The OpenAI adapter implements Planner.next_step(context), returning either a tool request or a final list of evidence IDs. The application validates both. The current answer renderer formats verified results deterministically; it never accepts an arbitrary model-written numerical claim as a verified metric.
 
 ## Context and memory
 
@@ -30,7 +30,7 @@ Forbidden: shell, arbitrary SQL/code, external URLs, filesystem browsing, machin
 
 Maximum 20 tool calls per turn; ten-second loop deadline checked between planner steps; at most 200,000 serialized context characters. DuckDB queries use a two-second interrupt timer and a 1,000-row limit. Failed validation produces a structured tool error and consumes a call. No infinite retries. Planner exceptions, invalid final evidence, exhausted budgets or deadlines return a partial/failed status, never a fabricated success.
 
-These are local-demo controls. The synchronous planner deadline does not preempt a blocked third-party adapter; any future adapter must enforce its own HTTP timeout, token/output limits and an application-wide spending reservation before making calls. No current model calls or model spend occur.
+These are local-demo controls. The synchronous planner deadline does not preempt a blocked third-party adapter; any future adapter must enforce its own HTTP timeout, token/output limits and an application-wide spending reservation before making calls. Offline mode makes no model calls. Explicit OpenAI mode reserves spending before each request; no real API calls have been made during automated validation.
 
 Done means the requested supported analysis has successful referenced evidence and any requested charts. Incomplete data must be disclosed and must not be ranked as valid performance. Escalate missing definitions/data or unsupported requests instead of guessing. A recorded symptom does not establish a mechanical cause.
 
@@ -46,4 +46,4 @@ Optional WebMCP registration invokes the same visible investigation action and v
 
 Tests exercise a full investigation, follow-up scope, all-shift comparison, exact chart/evidence equality, missing evidence, forbidden tools, call/deadline limits, incomplete records, history retention, date changes and HTTP protections. Unit/HTTP tests and JavaScript syntax checks do not replace visual browser QA or live-model evaluation.
 
-Still pending: live provider, token/cost budgeting, range/trend tools, email provider and verified subscriptions, plant timezone/DST, overlapping-stop allocation, production security/deployment and broader scenario calibration.
+Still pending: live-provider validation, public service-wide budget infrastructure, range/trend tools, email provider and verified subscriptions, plant timezone/DST, overlapping-stop allocation, production security/deployment and broader scenario calibration.

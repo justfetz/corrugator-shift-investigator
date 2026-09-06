@@ -1,16 +1,18 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
 <body>
-<header><div><span class="eyebrow">MANUFACTURING / AGENT WORKBENCH</span><h1>Shift Investigator</h1></div><span class="badge">Synthetic data · Offline planner</span></header>
+<header><div><span class="eyebrow">MANUFACTURING / AGENT WORKBENCH</span><h1>Shift Investigator</h1></div><span class="badge" id="mode-badge">Synthetic data · Offline planner</span></header>
 <main>
 <section class="controls" aria-label="Investigation scope">
 <label>Production day<select id="day"></select></label>
 <label>Shift<select id="shift"><option value="1">1st · 07:00–15:00</option><option value="2" selected>2nd · 15:00–23:00</option><option value="3">3rd · 23:00–07:00</option></select></label>
+<label>Agent mode<select id="mode"><option value="offline">Offline / free</option><option value="openai">OpenAI / your key</option></select></label>
+<label id="key-label" hidden>OpenAI API key (optional if configured on server)<input id="api-key" type="password" autocomplete="off" maxlength="512" placeholder="Used for this request only"></label>
 <label class="check"><input id="corrupt" type="checkbox">Include a bad trim record</label>
 <button id="reset" class="secondary">Reset conversation</button>
 </section>
 <div class="layout"><section class="conversation">
-<h2>Investigate the shift</h2><p class="muted">Ask about performance, downtime, speed or quality. This offline version uses a small rule-based planner; a live model is not connected.</p>
+<h2>Investigate the shift</h2><p class="muted" id="mode-help">Ask about performance, downtime, speed or quality. Offline mode uses a small rule-based planner. Select OpenAI to use a live model with your key.</p>
 <div class="examples"><button data-question="Why was second shift slow? Chart downtime by reason.">Why was second shift slow?</button><button data-question="Was it maintenance or operator downtime?">Maintenance or operator?</button><button data-question="Compare that with first shift">Compare with first shift</button><button data-question="Show third shift quality waste">Show quality waste</button></div>
 <div id="messages" aria-live="polite"><p class="empty">Choose a question to inspect the data, calculations and chart.</p></div>
 <form id="ask"><label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" placeholder="Which equipment caused the most downtime?"></textarea><div class="form-footer"><span id="status" role="status">Ready · no API costs</span><button id="submit" type="submit">Investigate →</button></div></form>
