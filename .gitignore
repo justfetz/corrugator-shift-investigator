@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.env
+artifacts/
+*.duckdb
+*.egg-info/
+build/
+dist/
+.env.*
+!.env.example

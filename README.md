@@ -2,7 +2,24 @@
 
 Build a manufacturing investigation agent from process knowledge, reliable tools, and evidence. This project is a worked example for learning how agents are constructed: interview a domain expert, generate consistent synthetic production records, implement calculations, connect a language model to bounded tools, and evaluate its behavior.
 
-**Status: design and owner interview.** The repository does not yet contain a working agent, dataset generator, website, or email service. Features below describe the intended build. All demonstration production will be synthetic.
+## Documentation map
+
+For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics reference](docs/METRICS.md) now holds the owner calibration review: quantity-driven orders, output/width/time checks, measured setup counts, and the implemented reason categories. The remaining links are supporting engineering references; no new document is needed for each refinement.
+
+| I want to… | Start here |
+| --- | --- |
+| Install, run, ask questions, and read reports | [Workbench how-to](docs/WORKBENCH.md) |
+| Check a formula, target, calendar boundary, or heatmap color | [Metrics and interpretation](docs/METRICS.md) |
+| Understand the agent, tools, context and data flow | [Execution walkthrough](docs/AGENT_EXECUTION.md) and [agent contract](docs/AGENT_CONTRACT.md) |
+| Use a key and understand the spending guard | [OpenAI/BYOK](docs/OPENAI_BYOK.md) |
+| Recover from an error or unexpected answer | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Verify the app or evaluate live question quality | [Testing and evaluation](docs/TESTING.md) |
+| Review defects and choose the next repair | [September 7 review](docs/REVIEW_2026-09-07.md) |
+| Prepare for public deployment | [Deployment readiness](docs/DEPLOYMENT.md) |
+
+**Implementation update:** quantity-driven mock orders and a daily OpenAI narrative stage are implemented. Include shifts offers an explicit full 24-hour scope. Period PDFs and comparison history are repaired. Reference validation and chart-presence checks do not prove semantic correctness; live narrative quality and visual PDF layout remain to be evaluated. See the implementation follow-up in the review.
+
+**Status: local learning workbench implemented.** Calendar day/week/month/4-4-5 reports, output heatmaps, setup matrices, speed attainment, rankings, operator/shift notes and PDF downloads are available. Try a simple interface with 30 selectable synthetic days, tested SQL tools, a bounded offline planner, follow-up context, evidence-linked charts and report export. An optional OpenAI/BYOK adapter is implemented but awaits live validation with your key; email delivery and public hosting are not connected. See [Run the workbench](docs/WORKBENCH.md), the user-facing `/guide` page, and the [deployment readiness plan](docs/DEPLOYMENT.md).
 
 ## 1. Start with a job a person actually needs done
 
@@ -40,7 +57,7 @@ Use raw quantities to calculate KPIs; aggregate numerators and denominators befo
 | Throughput | Gross square feet / lineal feet x 12; average gross web width in inches |
 | Run length | Lineal per dry-end setup and per wet-end change; boundary counting to be defined |
 
-Gross square footage includes all material through the shear before waste deductions. Dry-end rejects can be entered in square feet or individual sheets: sheets x width inches x length inches / 144. Do not multiply individual rejected sheets by outs again. Initial reject reasons are Warp, Bond and Misalignment.
+Gross square footage includes all material through the shear before waste deductions. Dry-end rejects can be entered in square feet or individual sheets: sheets x width inches x length inches / 144. Do not multiply individual rejected sheets by outs again. Reject reasons are Up warp, Down warp, Bond - delamination, Bond - paper/raw-material issue, and Misalignment. Reason codes describe reported observations, not proven causes.
 
 Downtime uses kind, place and reason/reason group. Examples include Maintenance or Operator kind, a knife or wet-end location, and recorded symptoms such as a jam or missed splice. The final taxonomy is still being defined.
 
@@ -65,7 +82,7 @@ Proposed editable speed table, based on owner guidance rather than external stan
 | 275-BC | Double wall | 500 |
 | 275-EB | Double wall | 500 |
 
-Owner confirmed: wet-end actual speed uses its full elapsed duration, including downtime. Compare each wet-end ID against its grade target using this basis. Demo paper widths are 98, 95, 92 and 87 inches. Approximate shift scale is 50-75 dry-end records and roughly half as many wet-end records. About 200,000 lineal is a bad-shift example; 275,000-300,000 is contextual good-shift guidance, not a universal grade-independent target.
+Owner confirmed: wet-end actual speed uses its full elapsed duration, including downtime. Compare each wet-end ID against its grade target using this basis. Demo paper widths are 98, 95, 92 and 87 inches. Approximate shift scale is 50-75 dry-end records and roughly half as many wet-end records. The quantity-driven generator pairs compatible orders across one to four dry-end setups per paper run, with single-order runs as well. The default month averages 181.1 setup records per day; shift-boundary fragments are counted in both shifts. Counts and sampling assumptions are detailed in METRICS.md. About 200,000 lineal is a bad-shift example; 275,000-300,000 is contextual good-shift guidance, not a universal grade-independent target.
 
 ## 5. Build and test tools before connecting the model
 
@@ -99,7 +116,7 @@ Planned delivery controls: verified email, unsubscribe, private recipient storag
 
 Test known-answer calculations, order continuation, unequal cut lengths, width fit, midnight boundaries, overlapping downtime, corrupt numeric values and waste reconciliation. Test questions that lack evidence, prompt-injection attempts, forbidden tool calls, chart/data agreement and delivery isolation.
 
-Measure tool accuracy, evidence-supported answers, latency and cost per investigation. Enforce server-side usage budgets and keep saved examples available when live usage is exhausted. Provider and hosting choices remain open; no running-cost promise has been validated.
+Measure tool accuracy, evidence-supported answers, latency and cost per investigation. Enforce server-side usage budgets and keep saved examples available when live usage is exhausted. OpenAI is available as an optional daily planner; hosting remains open; no running-cost promise has been validated.
 
 ## 10. Build in reviewable stages
 
@@ -116,3 +133,23 @@ Next unresolved definitions include waste-category overlap accounting, plant tim
 ## Follow a query through the agent
 
 Read [How a question becomes evidence and a chart](docs/AGENT_EXECUTION.md) for tool contracts, parameterized SQL, context management, the execution loop, chart validation and the first milestone's acceptance checks.
+
+
+## Inspect the working agent boundary
+
+Start with [the local interface walkthrough](docs/WORKBENCH.md), then read [the agent contract](docs/AGENT_CONTRACT.md) and [execution guide](docs/AGENT_EXECUTION.md). The offline router makes tool behavior reproducible alongside optional live-model integration. The in-app build guide explains the same boundary.
+
+
+## Connect a low-cost live model
+
+### Ask a question the records can answer
+
+Adding an OpenAI key does not give the investigator missing plant knowledge. OpenAI chooses among the available tools, then writes a short interpretation using referenced facts. Application code calculates the evidence, validates the references and inserts numeric values. Findings, hypotheses, checks and limitations are labeled, with calculated evidence retained below. The selected production day and shift scope still apply, and period reports remain deterministic with no model calls.
+
+“How can we be better?” is a starting point, not a measurable objective. Narrow it to “Which recorded downtime reasons took the most minutes in this shift?”, “Which wet-end runs were furthest below their grade targets?”, or “Which reject reasons contributed the most square feet?” Use the example buttons for these investigations in free offline mode.
+
+Read an answer as **recorded finding → investigation question → human verification**. A large knife-jam total identifies a place to investigate; it does not establish a worn component, an operator mistake, or the correct adjustment. Check the underlying events and notes with the crew before proposing a change. A target gap is not automatically recoverable output, and this dataset cannot establish savings, profitability, or the best plant-wide improvement. It has no measured intervention outcomes, costs, or live machine state.
+
+If the requested evidence is unavailable, narrow the question or collect the missing information. A completed investigation means the tool run finished, not that a root cause was proved. Tool restrictions and evidence-based summaries limit unsupported claims, but the model can still choose an unhelpful investigation. Live question quality remains to be evaluated with a real key.
+
+Read [OpenAI and BYOK mode](docs/OPENAI_BYOK.md) for the request-scoped key flow, model pricing, spending guard and current validation limits. Offline mode remains the default.
