@@ -65,11 +65,14 @@ class Analysis:
         self.version = hashlib.sha256(data).hexdigest()
         self.errors = []
         self._wet_ends = {}
+        self._orders = {}
         self._db = duckdb.connect(":memory:", config={"threads": 2})
         self._db.execute("CREATE TABLE shifts (shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR)")
         self._db.execute("CREATE TABLE setups (id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, reject_reason VARCHAR, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE)")
         self._db.execute("CREATE TABLE stops (id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, notes VARCHAR)")
         self._setup_rows = []
+        self._order_rows = []
+        self._db.execute("CREATE TABLE orders (record_id VARCHAR, shift INTEGER, setup_id VARCHAR, order_id VARCHAR, grade VARCHAR, knife VARCHAR, width_in DOUBLE, length_in DOUBLE, outs INTEGER, cuts INTEGER, requested_sheets INTEGER, planned_sheets INTEGER, produced_sheets INTEGER, remaining_before INTEGER, remaining_after INTEGER)")
         stop_rows, shift_rows = [], []
         seen = set()
         shifts = list(root)
@@ -110,7 +113,7 @@ class Analysis:
             intervals.sort()
             if any(b[0] < a[1] for a, b in zip(intervals, intervals[1:])):
                 raise ValueError("Overlapping stops require resolution; unsupported in fixture v1")
-        for table, rows in (("shifts", shift_rows), ("setups", self._setup_rows), ("stops", stop_rows)):
+        for table, rows in (("shifts", shift_rows), ("setups", self._setup_rows), ("stops", stop_rows), ("orders", self._order_rows)):
             if rows:
                 schema = self._db.execute(f"DESCRIBE {table}").fetchall()
                 records = [dict(zip([r[0] for r in schema], row)) for row in rows]
@@ -120,6 +123,7 @@ class Analysis:
                 self._db.execute(f"INSERT INTO {table} SELECT {fields} FROM json_each(?)",
                                  [json.dumps(records, default=lambda value: value.isoformat())])
         del self._setup_rows
+        del self._order_rows
         self._db.execute("SET enable_external_access=false")
 
     @staticmethod
@@ -140,8 +144,9 @@ class Analysis:
         if not math.isclose(gross, feet*width/12) or trim+shear+rejects > gross:
             raise ValueError("Waste/gross area out of bounds")
         knives = list(node)
-        if len(knives) != 2 or {k.get("level") for k in knives} != {"upper", "lower"}:
-            raise ValueError("Expected two knife assignments")
+        if not (len(knives) == 1 and knives[0].get("level") == "upper" or
+                len(knives) == 2 and {k.get("level") for k in knives} == {"upper", "lower"}):
+            raise ValueError("Expected one or two knife assignments")
         spans, travels = [], []
         for knife in knives:
             if knife.tag != "knife" or knife.get("stacker") != knife.get("level"):
@@ -152,9 +157,10 @@ class Analysis:
             spans.append((left, left+outs*w))
             travels.append(cuts*length/12)
         spans.sort()
-        if spans[0][1] > spans[1][0] or not math.isclose(spans[0][1], spans[1][0]) or not math.isclose(spans[0][0], width-spans[1][1]) or spans[1][1] > width:
+        if (any(not math.isclose(a[1], b[0]) for a,b in zip(spans,spans[1:])) or
+                not math.isclose(spans[0][0], width-spans[-1][1]) or spans[-1][1] > width):
             raise ValueError("Invalid centered web placement")
-        if not math.isclose(travels[0], travels[1]) or not math.isclose(feet, travels[0]+shear*12/width):
+        if any(not math.isclose(travels[0], value) for value in travels) or not math.isclose(feet, travels[0]+shear*12/width):
             raise ValueError("Knife footage does not reconcile")
         if not math.isclose(trim, travels[0]*(width-sum(b-a for a,b in spans))/12):
             raise ValueError("Trim geometry mismatch")
@@ -162,13 +168,36 @@ class Analysis:
         sheets = number(node, "reject_sheets")
         if not sheets.is_integer() or sheets > number(upper, "cuts")*number(upper, "outs") or not math.isclose(rejects, sheets*number(upper, "width_in")*number(upper, "length_in")/144):
             raise ValueError("Reject sheets do not reconcile")
-        if node.get("reject_reason") not in ("Warp", "Bond", "Misalignment"):
+        from .fixture import REJECT_REASONS
+        if node.get("reject_reason") not in (*REJECT_REASONS, "Warp", "Bond"):
             raise ValueError("Unsupported reject reason")
+        orders = {}
+        for knife in knives:
+            if "order_quantity" not in knife.attrib:
+                continue  # Older demo XML has no order ledger.
+            requested, planned, produced, before, after = [number(knife, k) for k in
+                ("order_quantity", "planned_sheets", "produced_sheets", "remaining_before", "remaining_after")]
+            if (any(not v.is_integer() for v in (requested,planned,produced,before,after)) or
+                    requested <= 0 or planned < requested or before > planned or
+                    produced != number(knife,"cuts")*number(knife,"outs") or before-produced != after):
+                raise ValueError("Order quantities do not reconcile")
+            identity = (node.get("grade"), number(knife,"width_in"), number(knife,"length_in"), requested, planned)
+            key = knife.attrib["order_id"]
+            if key in self._orders and self._orders[key] != (identity,before):
+                raise ValueError("Order identity or remaining quantity changed")
+            orders[key] = (identity,after)
         group_key = (shift, node.attrib["wet_end_id"])
         group_value = (node.attrib["grade"], width, target)
         if group_key in self._wet_ends and self._wet_ends[group_key] != group_value:
             raise ValueError("Wet-end group changes grade, width or target")
         self._wet_ends[group_key] = group_value
+        self._orders.update(orders)
+        for knife in knives:
+            if 'order_quantity' in knife.attrib:
+                self._order_rows.append([node.attrib['id'],shift,node.get('setup_id',node.attrib['id']),
+                    knife.attrib['order_id'],node.attrib['grade'],knife.attrib['level'],
+                    *[number(knife,k) for k in ('width_in','length_in','outs','cuts','order_quantity',
+                        'planned_sheets','produced_sheets','remaining_before','remaining_after')]])
         self._setup_rows.append([node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, node.attrib["reject_reason"], datetime.fromisoformat(node.attrib["start"]), datetime.fromisoformat(node.attrib["end"]), width])
 
     def _query(self, shift, sql, params):
@@ -200,16 +229,38 @@ class Analysis:
         return self._query(shift, """SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
         sum(feet) AS observed_lineal_ft, sum(feet)/480 AS observed_shift_fpm,
-        sum(gross) AS gross_sqft, sum(gross)/nullif(sum(feet),0)*12 AS throughput_in,
+        sum(gross) AS gross_sqft, sum(gross-trim-shear-rejects) AS estimated_good_sqft,
+        sum(gross)/nullif(sum(feet),0)*12 AS throughput_in,
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
         sum(shear)/nullif(sum(gross),0)*100 AS shear_pct,
         sum(rejects)/nullif(sum(gross),0)*100 AS dry_end_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Maintenance') AS maintenance_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Operator') AS operator_pct,
+        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ?) AS downtime_pct,
         sum(feet)/nullif(count(*),0) AS lineal_per_setup,
         sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
         count(*) FILTER (WHERE trim/gross*100 > 3.25) AS setups_above_trim_target,
-        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift])
+        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift, shift])
+
+    def get_shift_overview(self, shift):
+        """One bounded read bundle for a narrative covering speed, stops and waste."""
+        data=self.get_shift_kpis(shift)
+        components=[self.get_downtime_breakdown(shift), self.get_wet_end_performance(shift),
+                    self.get_quality_breakdown(shift)]
+        row=data['rows'][0]
+        stops,speed,quality=(c['rows'] for c in components)
+        row.update({'largest_downtime_reason':stops[0]['category'] if stops else 'No recorded stops',
+                    'largest_downtime_minutes':stops[0]['down_minutes'] if stops else 0,
+                    'largest_reject_reason':quality[0]['reason'] if quality else 'No recorded rejects',
+                    'largest_reject_sqft':quality[0]['rejected_sqft'] if quality else 0,
+                    'wet_end_runs_below_target':sum(r['actual_fpm']<r['target_fpm'] for r in speed),
+                    'wet_end_runs_observed':len(speed)})
+        data['components']=components
+        return data
+
+    def get_order_matrix(self, shift):
+        return self._query(shift, """SELECT *, planned_sheets-requested_sheets AS planned_overrun_sheets,
+        [record_id] AS source_ids FROM orders WHERE shift = ? ORDER BY record_id, knife""", [shift])
 
     def get_downtime_breakdown(self, shift, kind=None, group_by="reason"):
         if group_by not in ("reason", "kind", "place") or kind not in (None, "Maintenance", "Operator"):

@@ -4,7 +4,27 @@ let config, sessionId = null, latest = null, busy = false;
 function node(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 function message(label, paragraphs, cls='') { const e=node('div',undefined,'message '+cls);e.append(node('strong',label));for(const p of paragraphs)e.append(node('p',p));$('messages').append(e);$('messages').scrollTop=$('messages').scrollHeight; }
 function svgNode(tag, attrs, text) { const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text!==undefined)e.textContent=text;return e; }
+function showHeatmap(chart) {
+ const wrap=node('div',undefined,'chart heatmap');wrap.append(node('h3','Output heatmap'),node('p',chart.title,'muted'));
+ wrap.append(node('p','Darker cells mean more estimated good square feet. Hover or focus a day for output, downtime, KPIs and the largest recorded downtime contributor.','muted'));
+ if(chart.coverage!=='complete')wrap.append(node('p','This period is incomplete. Missing or invalid days are hatched and excluded from color scaling.','warning-note'));
+ const available=chart.rows.filter(r=>r.available&&Number.isFinite(r.estimated_good_sqft));
+ const values=available.map(r=>r.estimated_good_sqft), min=Math.min(...values), max=Math.max(...values);
+ const weekdays=node('div',undefined,'heatmap-weekdays');for(const label of ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])weekdays.append(node('span',label));wrap.append(weekdays);
+ const grid=node('div',undefined,'heatmap-grid');const first=new Date(chart.rows[0].day+'T00:00:00Z').getUTCDay();for(let i=0;i<first;i++)grid.append(node('span',undefined,'heatmap-blank'));
+ const tip=node('p','Choose a day.','heatmap-tip');tip.setAttribute('aria-live','polite');
+ for(const row of chart.rows){
+  const cell=node('button',String(Number(row.day.slice(-2))),'heatmap-cell'+(row.available?'':' missing'));cell.type='button';
+  // Assign the CSS property directly: style attributes are blocked by our CSP.
+  if(row.available){const density=max===min?1:(row.estimated_good_sqft-min)/(max-min);cell.style.backgroundColor=`rgba(8, 127, 117, ${(.22+density*.78).toFixed(3)})`;}
+  const detail=row.available?`${row.day}: estimated good ${row.estimated_good_sqft.toLocaleString(undefined,{maximumFractionDigits:0})} sq ft; gross ${row.gross_sqft.toLocaleString(undefined,{maximumFractionDigits:0})} sq ft; speed ${row.speed_to_target_pct.toFixed(1)}% of target; downtime ${row.downtime_pct.toFixed(2)}%; maintenance ${row.maintenance_pct.toFixed(2)}%; operator ${row.operator_pct.toFixed(2)}%; dry-end ${row.dry_end_pct.toFixed(2)}%; trim ${row.trim_pct.toFixed(2)}%; shear ${row.shear_pct.toFixed(2)}%; ${row.paper_changes} paper changes; heavy hitter ${row.heavy_hitter}, ${row.heavy_hitter_minutes.toFixed(1)} minutes across ${row.heavy_hitter_stops} stops.`:`${row.day}: no complete synthetic record available.`;
+  const tooltip=row.available?detail+` Dry-end setups: ${row.valid_setups}.`:detail;
+  cell.title=tooltip;cell.setAttribute('aria-label',tooltip);for(const event of ['mouseenter','focus','click'])cell.addEventListener(event,()=>{tip.textContent=tooltip;});grid.append(cell);
+ }
+ wrap.append(grid);const legend=node('div',undefined,'heatmap-legend');legend.append(node('span','Lower output'),node('span',undefined,'heatmap-scale'),node('span','Higher output'));wrap.append(legend,tip);$('heatmaps').append(wrap);
+}
 function showChart(chart) {
+ if(chart.type==='calendar_heatmap')return showHeatmap(chart);
  const wrap=node('div',undefined,'chart');wrap.append(node('h3',chart.title || `Shift ${chart.shift} · ${chart.unit === 'minutes' ? 'Recorded downtime' : chart.unit === 'ft/min' ? 'Wet-end speed (bars) / grade target (marks)' : 'Dry-end rejects'}`));
  if(chart.coverage!=='complete')wrap.append(node('p','Incomplete data: observed values only.','warning-note'));
  if(chart.unit==='ft/min')wrap.append(node('p','Value = ft/min / % of target. Hover or focus a value for grade and target details. 100% meets target; elapsed time includes downtime.','muted'));
@@ -15,17 +35,18 @@ function showChart(chart) {
 }
 function updateScope(){
  const ranged=$('period').value!=='day', live=$('mode').value==='openai';
- $('scope-help').textContent=`${$('day').value} / ${ranged?$('period').selectedOptions[0].textContent:'07:00 to next day 07:00'} / ${$('scope').value==='shift'?'Shift '+$('shift').value+' only. Other shifts are blocked.':'All three shifts available for comparison.'}`;
+ $('scope-help').textContent=`${$('day').value} / ${ranged?$('period').selectedOptions[0].textContent:'07:00 to next day 07:00'} / ${$('scope').value==='shift'?'Shift '+$('shift').value+' only — 8 hours per date.':'All shifts — full 24-hour production day per date.'}`;
+ $('shift').disabled=busy||$('scope').value==='day';
  $('mode').disabled=busy||ranged;$('question').disabled=ranged;$('key-label').hidden=!live;
  $('mode-badge').textContent=live?'Synthetic data / OpenAI selected':'Synthetic data / Offline planner';
- if(ranged)$('mode-help').textContent='Build a free deterministic period summary, recurring downtime comparison, daily matrix and notes. Weeks end on the selected production date. Missing comparison days are disclosed.';
+ if(ranged)$('mode-help').textContent='Build a free deterministic period summary, output heatmap, recurring downtime comparison, daily matrix and notes. The exact date range is shown; missing days are disclosed.';
  else $('mode-help').textContent=live?'OpenAI receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.':'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
  $('submit').textContent=ranged?'Build period report':'Investigate';
  document.querySelectorAll('[data-question]').forEach(b=>b.disabled=busy||ranged);
 }
 const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %'};
 function showTable(data){
- const titles={get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`};
+ const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));$('tables').append(box);return;}
@@ -36,9 +57,10 @@ function showTable(data){
  for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);$('tables').append(box);
 }
 function showResult(result) {
+ $('heatmaps').replaceChildren();
  latest=result; $('download').disabled=false; $('pdf').disabled=false; $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();
  for(const entry of result.trace) {
-  if(entry.ok && (entry.tool==='get_shift_kpis'||entry.tool==='get_period_report')){
+   if(entry.ok && (entry.tool==='get_shift_kpis'||entry.tool==='get_shift_overview'||entry.tool==='get_period_report')){
    const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete';
    for(const [label,value,unit,bad] of [['Speed',r.observed_shift_fpm,'ft/min',false],['Speed / target',r.speed_to_target_pct,'%',r.speed_to_target_pct<100],['Dry-end setups',r.valid_setups,'',false],['Paper changes',r.paper_changes,'',false],['Maintenance',r.maintenance_pct,'%',r.maintenance_pct>2.5],['Operator',r.operator_pct,'%',r.operator_pct>2.5],['Dry-end waste',r.dry_end_pct,'%',r.dry_end_pct>1],['Trim',r.trim_pct,'%',false],['Shear',r.shear_pct,'%',false],['Throughput',r.throughput_in,'in',false],['Lineal / setup',r.lineal_per_setup,'ft',false]]){
     const card=node('div',undefined,'metric '+(bad||incomplete?'warning':''));card.append(node('div',`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · ${label}`,'label'));if(label==='Speed / target')card.title='Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.';if(label==='Paper changes')card.title='Count of distinct wet-end runs, as defined by the plant expert.';card.append(node('div',incomplete?'Incomplete':`${Number(value).toFixed(1)} ${unit}`,'value'));if(incomplete)card.append(node('small',`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`));$('metrics').append(card);
@@ -72,7 +94,7 @@ async function ask(question) {
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('period').value==='day'?$('question').value:`Build ${$('period').value} report`).catch(()=>{});});
 document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{ if(button.dataset.scope){$('scope').value=button.dataset.scope;reset();} $('question').value=button.dataset.question;ask(button.dataset.question).catch(()=>{}); }));
-function reset(){$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=$('mode').value==='openai'?'Ready · OpenAI calls incur charges':'Ready · no API costs';updateScope();}
+function reset(){$('heatmaps').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=$('mode').value==='openai'?'Ready · OpenAI calls incur charges':'Ready · no API costs';updateScope();}
 $('mode').addEventListener('change',()=>{reset();const live=$('mode').value==='openai';$('key-label').hidden=!live;$('api-key').value='';$('mode-badge').textContent=live?'Synthetic data / OpenAI selected':'Synthetic data / Offline planner';$('mode-help').textContent=live?'OpenAI receives your question, bounded history and synthetic tool results. Your key passes through this local server to OpenAI for this request, is not saved, and the field clears on submit. Live calls incur API charges.':'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',reset);$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',()=>{if($('period').value!=='day')$('mode').value='offline';reset();});
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});

@@ -39,8 +39,8 @@ class Workbench:
         if scope not in ('shift', 'day'):
             raise ValueError('Choose selected shift or production-day comparison')
         period = payload.get('period', 'day')
-        if period not in ('day', 'week', 'month'):
-            raise ValueError('Choose day, week or month')
+        if period not in ('day', 'week', 'month', 'accounting'):
+            raise ValueError('Choose day, week, calendar month or accounting period')
         mode = payload.get('mode', 'offline')
         if period != 'day' and mode != 'offline':
             raise ValueError('Week/month reports use the free deterministic tools; select Offline mode')
@@ -146,7 +146,8 @@ def make_server(port=8765):
             if self.path == '/api/config':
                 return self._send(200, {'days': DAYS, 'token': app.token, 'tools': TOOL_SCHEMAS,
                                        'mode': 'offline', 'server_key_available': bool(os.environ.get('OPENAI_API_KEY')), 'live_model': 'gpt-4.1-mini-2025-04-14'})
-            files = {'/': ('index.html', 'text/html; charset=utf-8'), '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
+            files = {'/': ('index.html', 'text/html; charset=utf-8'), '/guide': ('guide.html', 'text/html; charset=utf-8'),
+                     '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
             if self.path not in files:
                 return self._send(404, {'error': 'Not found'})
             filename, content_type = files[self.path]

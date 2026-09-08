@@ -29,6 +29,13 @@ def test_responses_loop_and_no_key_in_payload(tmp_path):
             assert tool['parameters']['additionalProperties'] is False
             assert set(tool['parameters']['required'])==set(tool['parameters']['properties'])
         requests.append(payload)
+        if payload['tools'][0]['name']=='write_narrative':
+            packet=json.loads(payload['input'][-1]['content'])['evidence']
+            rid=packet[0]['result_id']
+            return response('write_narrative',{'paragraphs':[{'kind':'finding',
+                'text':'The leading recorded stop is {{0}}, totaling {{1}} minutes.',
+                'facts':[{'result_id':rid,'row':0,'field':'category'},
+                         {'result_id':rid,'row':0,'field':'down_minutes'}]}]})
         if len(requests)==1:
             return response('get_downtime_breakdown',{'shift':2,'kind':None,'group_by':'reason'})
         outputs=[i for i in payload['input'] if i.get('type')=='function_call_output']
@@ -46,10 +53,13 @@ def test_responses_loop_and_no_key_in_payload(tmp_path):
     try:
         result=Agent(a,planner,max_seconds=60).ask('Please investigate the stopping causes',Context(a.day))
         assert result['status']=='complete'
-        assert result['usage']['model_calls']==3
-        assert result['usage']['reserved_usd']==pytest.approx(.06)
+        assert result['usage']['model_calls']==4
+        assert result['usage']['reserved_usd']==pytest.approx(.08)
+        assert result['narrative_status']=='available'
+        assert 'Knife jam' in result['narrative'][0]['text']
+        assert '12.00 minutes' in result['narrative'][0]['text']
         assert len(result['charts'])==1
-        assert any('Knife jam: 16 min' in s for s in result['sections'])
+        assert any('Knife jam: 12 min' in s for s in result['sections'])
         assert KEY not in json.dumps(result)
     finally:
         planner.close();a.close()

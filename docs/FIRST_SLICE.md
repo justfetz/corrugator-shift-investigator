@@ -1,5 +1,7 @@
 # Run the deterministic first slice
 
+**Historical design snapshot.** The implementation has advanced beyond the inventory and remaining-work list below. Wet-end run sizes now vary, the local agent/UI and optional OpenAI adapter exist, and query/call bounds are implemented. Use [WORKBENCH](WORKBENCH.md), [AGENT_EXECUTION](AGENT_EXECUTION.md), and [METRICS](METRICS.md) for current behavior. The CLI commands below remain available for synthetic artifact export and overwrite same-named files in the selected output directory.
+
 This implementation generates one fixed synthetic production day, imports it into a private in-memory DuckDB database and executes analysis tools. This page describes the original deterministic slice. The local interface and offline agent loop are now available; see WORKBENCH.md. A live language model and email delivery are not connected.
 
 From the repository root, with Python 3.11+:

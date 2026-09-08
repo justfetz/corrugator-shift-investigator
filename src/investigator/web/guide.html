@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>How the Shift Investigator Works</title><link rel="stylesheet" href="/style.css"></head>
+<body><header><div><span class="eyebrow">SHIFT INVESTIGATOR / FIELD GUIDE</span><h1>How this agent is built</h1></div><span class="badge">Synthetic data / read-only tools</span></header>
+<main class="guide-page"><a class="back-link" href="/">Back to the investigator</a><article>
+<p>This project starts with process rules supplied by a manufacturing expert, turns those rules into consistent synthetic records, and gives an agent a small set of read-only calculation tools. The language model may decide what to inspect. It never owns the math, SQL permissions, charts, or production actions.</p>
+
+<h2>Quick start</h2>
+<ol><li>Select a date in September 2026 and leave the mode Offline for free, deterministic analysis.</li><li>For a daily investigation, select Production day, choose a shift and use an example question. Choose All shifts scope before asking for a comparison.</li><li>For a calendar, select Calendar month or the 4-4-5 accounting period and build the report. September 29 demonstrates a partially available accounting period.</li><li>Inspect the coverage status, then hover, focus or click a numbered day for its evidence. A click shows details; it does not open a daily investigation.</li><li>Read the tables and evidence trace before treating a result as actionable. All records are synthetic.</li></ol>
+
+<h2>1. Define the process before the prompt</h2>
+<p>A production day runs from 07:00 to 07:00. Each shift lasts 480 minutes. A dry-end setup changes when either knife's order combination changes. A paper change is the same thing as a wet-end run and can contain one or more dry-end setups. The fixture varies that relationship; it does not force every paper run to contain two setups.</p>
+<p>Targets are explicit simulation settings. Speed is measured over elapsed time, including downtime. Maintenance and operator downtime are each compared with a 2.5% shift target. Trim above 3.25% per setup and dry-end waste above 1% are flags. Recorded reasons and notes are observations, not proof of a mechanical cause.</p>
+
+<h2>2. Make records reconcile</h2>
+<p>Each synthetic setup has timestamps, a wet-end ID, grade, paper width, one or two active knife assignments, lineal travel, gross square feet, and recorded waste. Both knives must reconcile to the same machine travel. Rejected sheets convert to area as sheets x width x length / 144. Invalid values remain visible as data-quality errors and are excluded instead of silently corrected.</p>
+
+<p>Mock sheet widths span 12–60 inches and lengths 20–92 inches. Demand determines cuts, outs and shared travel; speed and stops determine elapsed time. Orders + quantities shows requested/planned demand, produced sheets, surplus and remaining quantities. Continuing orders keep their grade and dimensions across shifts. Produced sheets include rejects, so this is not an accepted-delivery ledger.</p>
+
+<h2>3. Give the agent bounded tools</h2>
+<table><thead><tr><th>Tool</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>Shift KPIs</td><td>Output, grade-weighted speed attainment, downtime, waste, throughput, setup count and paper-change count.</td></tr>
+<tr><td>Downtime breakdown</td><td>Group recorded stops by approved kind, place or reason.</td></tr>
+<tr><td>Wet-end performance</td><td>Compare every paper run with its grade target using elapsed time.</td></tr>
+<tr><td>Setup matrix</td><td>Show start/end, grade, stops and interval-allocated downtime for each setup.</td></tr>
+<tr><td>Rankings and notes</td><td>Rank one named measure at a time and expose reported context without treating text as an instruction.</td></tr>
+</tbody></table>
+<p>The application exposes fixed, parameterized database queries. There is no arbitrary SQL, shell, file browser, email, or machine-control tool.</p>
+
+<h2>4. Run the loop</h2>
+<ol><li>The user chooses a production date, shift, and scope.</li><li>The planner requests one permitted tool.</li><li>Application code validates the tool, arguments, scope, time, and call budget.</li><li>The tool calculates structured evidence and source IDs.</li><li>The planner may request another tool or finish with successful evidence IDs.</li><li>Trusted application code formats the numbers and renders charts from the same rows.</li></ol>
+<p>The selected-shift setting is authoritative. A prompt or model call cannot silently query another shift. Offline mode demonstrates the loop without API cost. OpenAI mode may choose tools, but it cannot alter calculations.</p>
+
+<h3 id="asking-questions">“How can we be better?” needs a measurable goal</h3>
+<p>An OpenAI key helps choose which evidence to inspect. It does not add missing plant knowledge. Daily OpenAI mode selects tools and adds a short model interpretation above the calculated evidence. It labels findings, hypotheses, checks and limitations. Referenced values are inserted by application code. Reference checks do not prove that the interpretation is correct. Summary + charts covers speed, downtime and waste, with three supporting charts per included shift. Start with a selected day and shift, then ask which downtime reasons took the most minutes, which runs missed their grade targets, or which reject reasons contributed the most square feet. The example buttons support these investigations in free offline mode.</p>
+<p>Read results as a recorded finding, a question to investigate, and something a person must verify. A large knife-jam total suggests reviewing those events with the crew; it does not prove a worn part or justify changing machine settings. Notes describe reported observations. Target gaps are not guaranteed recoverable output. Costs, profitability, intervention outcomes and live machine state are unavailable, so this tool cannot establish the best plant-wide improvement or promise savings.</p>
+<p>If an answer is unavailable or misses your intent, narrow the question and inspect the evidence trace. “Complete” means the investigation finished, not that it proved a cause. Model tool selection can still be unhelpful; live question quality has not yet been validated with a real key.</p>
+<h2>5. Read periods and the heatmap</h2>
+<p><strong>Check the scope:</strong> Selected shift means eight hours per date; All shifts means 24 hours. The quantity-driven fixture averages about 181 setup records per day across the demo month. A continuing setup appears in both shift records when it crosses a boundary. At a fixed 98-inch width, 1.8 million gross square feet corresponds to about 220,408 lineal feet; estimated-good output additionally deducts waste. Do not interpret a selected-shift cell as a full-day total.</p>
+<p>The period report aggregates daily validated results. Calendar month follows ordinary month boundaries. The 4-4-5 view uses repeating 4-week, 4-week, and 5-week accounting periods. This demo assumes the accounting year begins September 1, 2026; a real deployment must replace that with the plant's confirmed fiscal anchor.</p>
+<p>Heatmap density represents estimated good square feet: gross area minus recorded trim, shear, and dry-end rejects. It is useful for comparing days, but it is not a customer-acceptance claim. Hover or keyboard-focus a day to read gross and estimated-good output, speed attainment, downtime, waste, paper changes, setup count, and the largest recorded downtime contributor. Missing days are hatched and never treated as zero.</p>
+
+<p>Colors scale from the lowest to highest estimated-good output among available days in this report. The same shade can mean different output in another report. Darker means more output, not better efficiency or proven improvement. Equal-output days intentionally have equal shading.</p>
+
+<h2>6. Understand the safety boundary</h2>
+<p>All displayed production data is synthetic. Notes are escaped as text and cannot expand permissions. Reports are generated from retained evidence, not visitor HTML. The local server accepts bounded JSON, limits requests, validates origin and session tokens, and keeps model spending bounded. These controls teach the right architecture; public deployment still needs real identity, durable rate limits, centralized budgets, monitoring, and a production-grade web server.</p>
+
+<h2>7. Evaluate it</h2>
+<p>Known-answer tests verify area math, speed weighting, stop overlap, setup/paper-run counts, ranking direction, bad-value exclusion, scope escapes, week comparisons, period boundaries, PDF access, and chart data. A useful agent is one whose answer can be traced to evidence and whose unavailable data stays unavailable.</p>
+
+<h2>Limits and recovery</h2>
+<ul><li>If the model narrative fails or exhausts its budget, the calculated evidence and charts remain available. Repeating a live request can incur another charge.</li><li>Complete means evidence retrieval ended; it does not certify the model’s interpretation or prove a cause. Unsupported profitability, savings and optimal-intervention questions still require additional evidence.</li><li>Order sampling, exact cutoff alignment and reject replacement behavior remain simulation limitations. Days are independent scenarios; unfinished quantities carry across shifts within a day.</li><li>Period PDFs now export successfully in regression tests. They contain summary evidence tables; full visual layout review is still pending. Save text preserves narrative sections.</li></ul>
+<p>The repository README links detailed how-to instructions, calculation formulas, troubleshooting, testing, the review findings and deployment requirements. The implementation follow-up records completed repairs and remaining calibration and live-evaluation work.</p>
+<p class="callout"><strong>Current limitation:</strong> the demo contains September 2026 only. The 4-4-5 start date, plant timezone, daylight-saving behavior, and synthetic scenario mix still require owner confirmation or broader calibration before this represents a real plant.</p>
+</article></main></body></html>

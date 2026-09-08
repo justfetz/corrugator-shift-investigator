@@ -38,14 +38,21 @@ def report_pdf(result):
             ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
         story.extend([t,Spacer(1,10)])
     for chart in result.get('charts',[]):
-        cols=[(chart['x'],'Run / day / reason'),(chart['y'],chart['unit'])]
+        if chart.get('type')=='calendar_heatmap':
+            cols=[('day','Day'),('estimated_good_sqft','Est. good sq ft'),('speed_to_target_pct','% target'),
+                  ('downtime_pct','Down %'),('heavy_hitter','Heavy hitter'),('heavy_hitter_minutes','Heavy min')]
+        else:
+            cols=[(chart['x'],'Run / day / reason'),(chart['y'],chart['unit'])]
         if chart['unit']=='ft/min':cols.extend([('target_fpm','Target ft/min'),('speed_to_target_pct','% of target')])
-        table(chart.get('title',f'Shift {chart["shift"]}: {chart["unit"]} evidence'),chart['rows'],cols,12)
+        table(chart.get('title') or f'Shift {chart.get("shift", "selected scope")}: {chart["unit"]} evidence',chart['rows'],cols,12)
     for item in result.get('tables',[]):
         rows=item['rows']; title=item['title']
         if not rows:continue
         row=rows[0]
-        if 'setup_id' in row:
+        if 'order_id' in row:
+            cols=[('order_id','Order'),('width_in','Width in'),('length_in','Length in'),('outs','Outs'),
+                  ('requested_sheets','Requested (repeats)'),('produced_sheets','Produced here'),('remaining_after','Remaining plan')]
+        elif 'setup_id' in row:
             cols=[('setup_id','Setup'),('start','Start'),('end','End'),('stop_count','Stops'),('down_minutes','Down min'),('speed_to_target_pct','% target')]
         elif 'current_count' in row:
             cols=[('place','Place'),('reason','Reason'),('current_count','Stops now'),('current_minutes','Min now'),('previous_minutes','Min before'),('minutes_change','Change min')]

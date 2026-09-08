@@ -1,6 +1,6 @@
 """Bounded tool loop, explicit context, and a clearly labeled offline planner.
 
-A future model adapter implements Planner.next_step. OfflinePlanner is rule-based:
+The optional model adapter implements Planner.next_step. OfflinePlanner is rule-based:
 it is a teaching/test driver, not an LLM or general natural-language understanding.
 """
 from collections import OrderedDict
@@ -18,12 +18,14 @@ TOOL_SCHEMAS = [
         "required": ["shift"], "additionalProperties": False}}
     for name, description, extra in [
         ("get_shift_kpis", "Calculate shift output, downtime, waste and width metrics.", {}),
+        ("get_shift_overview", "Read KPIs, largest recorded losses, grade-target performance and supporting chart evidence together. Use for broad daily summaries, one call per allowed shift.", {}),
         ("get_downtime_breakdown", "Group recorded stops by reason, place or kind.", {
             "kind": {"type": ["string", "null"], "enum": [None, "Maintenance", "Operator"]},
             "group_by": {"type": "string", "enum": ["reason", "place", "kind"]}}),
         ("get_wet_end_performance", "Compare elapsed-time speed with each wet-end grade target.", {}),
         ("get_quality_breakdown", "Show dry-end rejected area by recorded defect.", {}),
         ("get_setup_matrix", "List setup start/end, stops, allocated downtime, speed and grade target.", {}),
+        ("get_order_matrix", "Inspect sheet dimensions, outs, cuts, requested and planned quantities, production and remaining demand. Repeated orders are fragments: do not sum repeated demand.", {}),
         ("get_shift_notes", "Read untrusted synthetic shift notes and individual downtime notes; not proven causes.", {}),
         ("get_rankings", "Rank lowest wet-end speed attainment or highest downtime/quality losses. Incomplete data is withheld.", {
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
@@ -65,6 +67,9 @@ class OfflinePlanner:
         results = context["results"]
         plan = []
         for shift in context["shifts"]:
+            if intent == 'summary':
+                plan.append(('get_shift_overview',{'shift':shift}))
+                continue
             plan.append(("get_shift_kpis", {"shift": shift}))
             if intent in ("overview", "downtime", "compare"):
                 plan.append(("get_downtime_breakdown", {"shift": shift, "group_by": context["group_by"], "kind": context["kind"]}))
@@ -76,6 +81,8 @@ class OfflinePlanner:
                 plan.append(("get_setup_matrix", {"shift": shift}))
             if intent == "notes":
                 plan.append(("get_shift_notes", {"shift": shift}))
+            if intent == "orders":
+                plan.append(("get_order_matrix", {"shift": shift}))
             if intent == "ranking":
                 for metric in context['ranking_metrics']:
                     plan.append(("get_rankings", {"shift": shift, "metric": metric}))
@@ -114,10 +121,10 @@ def parse_request(text, current):
     if 'all shifts' in lower or 'production day' in lower:
         shifts = [1, 2, 3]
         compare = True
-    shifts = shifts or [current.shift]
+    shifts = shifts or ([1,2,3] if current.scope=='day' else [current.shift])
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
         raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
-    intent = 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
+    intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
         'quality' if re.search(r'warp|bond|misalignment|reject|quality|waste', lower) else
         'downtime' if re.search(r'downtime|maintenance|operator|equipment|stops', lower) else
         'speed' if re.search(r'speed|feet per minute|fpm', lower) else
@@ -205,6 +212,7 @@ class Agent:
                 if not isinstance(action, dict):
                     raise ValueError('Planner action must be an object')
                 if set(action) == {'unavailable'} and isinstance(action['unavailable'], str):
+                    failure_message = 'The requested evidence or capability is unavailable. Ask about recorded speed, downtime, waste or orders in the selected scope.'
                     status = 'unavailable'
                     break
                 if set(action) == {'final'}:
@@ -237,22 +245,50 @@ class Agent:
             final_ids = [r for r, v in store.items() if v['ok'] and v['tool'] != 'render_chart']
         evidence = [store[r] for r in final_ids]
         sections = self._summarize(evidence)
+        charts=[v['data'] for v in store.values() if v['ok'] and v['tool']=='render_chart']
+        # Broad live overviews carry trusted chart rows in one bounded tool call.
+        for result in evidence:
+            if result['tool']=='get_shift_overview':
+                for component,(x,y,unit) in zip(result['data']['components'],
+                        (('category','down_minutes','minutes'),('wet_end_id','actual_fpm','ft/min'),('reason','rejected_sqft','sq ft'))):
+                    charts.append({'type':'bar','source_result_id':result['result_id'],
+                        'shift':component['shift'],'coverage':component['coverage'],
+                        'x':x,'y':y,'unit':unit,'rows':deepcopy(component['rows'])})
+        if status=='complete' and re.search(r'\b(chart|charts|graph|plot)\b',text,re.I) and not charts:
+            status='partial'
+            sections.insert(0,'The requested chart was not produced. The evidence below is available; try a specific speed, downtime or waste chart.')
+        if re.search(r'\b(profit|profitability|savings|revenue|roi)\b',text,re.I):
+            if status=='complete': status='partial'
+            sections.insert(0,'The requested financial objective is unavailable: these records contain no costs, revenue or measured intervention outcomes. Production evidence alone cannot establish profit or achievable savings.')
+        narrative=[]
+        narrative_status='not_requested'
+        if hasattr(self.planner,'summarize'):
+            narrative_status='unavailable'
+            if status in ('complete','partial') and evidence:
+                try:
+                    narrative=self.planner.summarize(text,evidence)
+                    narrative_status='available'
+                    sections=['Model interpretation — review with the evidence; hypotheses are not proven causes.',
+                        *[p['kind'].capitalize()+': '+p['text']+(' Evidence: '+'; '.join(p['citations']) if p['citations'] else '') for p in narrative],
+                        'Calculated evidence',*sections]
+                except Exception:
+                    sections.insert(0,'The model narrative is unavailable or failed validation. Calculated evidence and charts are retained.')
         if failure_message:
             sections.insert(0, failure_message)
         if status != 'complete':
             sections.insert(0, f'Investigation stopped: {status}. Any results below are partial.')
         result_shifts = list(dict.fromkeys(r['data']['shift'] for r in evidence)) or request['shifts']
-        context.shift = result_shifts[-1]
         context.history.append({'question': text, 'shifts': result_shifts, 'intent': request['intent']})
         context.history = context.history[-4:]
         return {'run_id': run_id, 'mode': getattr(self.planner, 'mode', 'offline rule-based planner; no language model'), 'status': status,
                 'production_day': context.production_day, 'selected_shifts': result_shifts,
                 'sections': sections, 'evidence_ids': final_ids,
-                'charts': [v['data'] for v in store.values() if v['ok'] and v['tool']=='render_chart'],
-                'tables': [dict(title=v['tool'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_shift_notes','get_rankings')],
+                'narrative':narrative,'narrative_status':narrative_status,
+                'charts': charts,
+                'tables': [dict(title=v['tool'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings')],
                 'trace': traces, 'context': {'production_day': context.production_day, 'shift': context.shift, 'dataset_version': context.dataset_version, 'scope': context.scope, 'history': deepcopy(context.history)},
                 'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0})},
-                'limitations': 'Synthetic data. Recorded reasons are observations, not proven root causes. Calculated summaries use tool evidence. Offline mode understands only supported question patterns; live mode depends on provider access.'}
+                'limitations': 'Synthetic data. Setup counts are shift records: a continuing setup appears in both shifts. Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled. Recorded reasons are observations, not proven root causes. Model prose is interpretation requiring human review; reference validation does not prove causality. Offline mode understands only supported question patterns; live mode depends on provider access.'}
 
     @staticmethod
     def _summarize(evidence):
@@ -263,7 +299,7 @@ class Agent:
             if data['coverage'] != 'complete':
                 lines.append(f'Shift {shift}: data incomplete; {len(data["excluded_records"])} excluded records. Do not rank its observed production totals.')
                 continue
-            if result['tool'] == 'get_shift_kpis':
+            if result['tool'] in ('get_shift_kpis','get_shift_overview'):
                 row = data['rows'][0]
                 lines.append(f'Shift {shift}: {row["observed_shift_fpm"]:.1f} ft/min including downtime; {row["observed_lineal_ft"]:,.0f} lineal ft. Maintenance {row["maintenance_pct"]:.2f}% and Operator {row["operator_pct"]:.2f}% (each target 2.5%). Dry-end waste {row["dry_end_pct"]:.2f}% (flag above 1%). {row["valid_setups"]} dry-end setups; {row["paper_changes"]} paper changes (wet-end runs). Speed attainment {row["speed_to_target_pct"]:.1f}%.')
             elif result['tool'] == 'get_downtime_breakdown':
@@ -273,6 +309,8 @@ class Agent:
                 lines.append(f'Shift {shift}: {below} of {len(data["rows"])} wet-end runs below their grade target. Chart uses elapsed time including stops; grade targets remain simulation settings.')
             elif result['tool'] == 'get_setup_matrix':
                 lines.append(f'Shift {shift}: setup matrix contains {len(data["rows"])} valid setups. Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.')
+            elif result['tool'] == 'get_order_matrix':
+                lines.append(f'Shift {shift}: {len(data["rows"])} order fragments. Requested and planned quantities repeat on continuing orders; sum produced sheets only. Remaining demand carries across shifts. Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled.')
             elif result['tool'] == 'get_shift_notes':
                 for row in data['rows']:
                     lines.append(f'Shift {shift}, {row["record_id"]} - reported note (synthetic, unverified): {row["notes"] or "No note recorded"}')

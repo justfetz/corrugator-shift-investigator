@@ -32,6 +32,8 @@ def test_server_home_and_security_headers(running):
     assert "frame-ancestors 'none'" in headers['Content-Security-Policy']
     assert request(running,'GET','/../../README.md')[0]==404
     assert request(running,'GET','/',headers={'Host':'evil.example'})[0]==403
+    guide_status,_,guide=request(running,'GET','/guide')
+    assert guide_status==200 and b'How this agent is built' in guide and b'4-4-5' in guide
 
 
 def test_post_protection_and_valid_round_trip(running):
