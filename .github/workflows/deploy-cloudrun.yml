@@ -18,6 +18,8 @@ jobs:
       REGION: ${{ vars.GCP_REGION || 'us-central1' }}
       SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
       EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
+      LIVE_MODEL: ${{ vars.PUBLIC_DEMO_LIVE_MODEL || '0' }}
+      OPENAI_SECRET: ${{ vars.OPENAI_SECRET_NAME || 'openai-api-key' }}
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
@@ -41,10 +43,19 @@ jobs:
       - name: Deploy from source
         run: |
           set -euo pipefail
+          # Live model: only when the repository variable PUBLIC_DEMO_LIVE_MODEL is "1". The key is
+          # never in GitHub; Cloud Run reads it from Secret Manager at start-up as OPENAI_API_KEY.
+          if [ "$LIVE_MODEL" = "1" ]; then
+            LIVE_FLAGS=(--set-secrets "OPENAI_API_KEY=${OPENAI_SECRET}:latest")
+            ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=1"
+          else
+            LIVE_FLAGS=(--clear-secrets)   # the service holds no other secrets; idempotent when none exist
+            ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=0"
+          fi
           gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
             --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
             --concurrency 20 --timeout 180 \
-            --set-env-vars "^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}" --quiet
+            --set-env-vars "$ENV_VARS" "${LIVE_FLAGS[@]}" --quiet
       - name: Add any URL the first deploy created to the allow-list
         run: |
           set -euo pipefail
@@ -67,4 +78,7 @@ jobs:
             [ "$CODE" = "200" ] && LIVE="$URL"
           done
           test -n "$LIVE"
+          CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
+          echo "live model available: $(echo "$CFG" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("live_model_available"))')"
+          if [ "$LIVE_MODEL" = "1" ]; then echo "$CFG" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("live_model_available") else 1)'; fi
           echo "Live at $LIVE"
