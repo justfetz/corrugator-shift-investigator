@@ -24,11 +24,14 @@ jobs:
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Resolve the service's deterministic URL (PUBLIC_DEMO_ORIGIN)
+      - name: Resolve the service URL (PUBLIC_DEMO_ORIGIN)
+        # An existing service keeps its real URL. A first deploy uses the deterministic
+        # form as a provisional origin and is corrected after the service exists.
         run: |
           set -euo pipefail
+          EXISTING=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)' 2>/dev/null || true)
           NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
-          echo "ORIGIN=https://${SERVICE}-${NUMBER}.${REGION}.run.app" >> "$GITHUB_ENV"
+          echo "ORIGIN=${EXISTING:-https://${SERVICE}-${NUMBER}.${REGION}.run.app}" >> "$GITHUB_ENV"
       - name: Deploy from source
         run: |
           set -euo pipefail
@@ -36,9 +39,21 @@ jobs:
             --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
             --concurrency 20 --timeout 180 \
             --set-env-vars "PUBLIC_DEMO_ORIGIN=${ORIGIN},PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}" --quiet
+      - name: Correct the origin if the real URL differs
+        run: |
+          set -euo pipefail
+          ACTUAL=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')
+          if [ "$ACTUAL" != "$ORIGIN" ]; then
+            echo "Service URL is $ACTUAL (provisional origin was $ORIGIN); updating PUBLIC_DEMO_ORIGIN"
+            gcloud run services update "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
+              --update-env-vars "PUBLIC_DEMO_ORIGIN=${ACTUAL}" --quiet
+            echo "ORIGIN=${ACTUAL}" >> "$GITHUB_ENV"
+          fi
       - name: Smoke test
         run: |
           set -euo pipefail
-          curl -fsS "$ORIGIN/healthz"
-          echo
+          CODE=$(curl -sS -o /tmp/healthz.txt -w '%{http_code}' "$ORIGIN/healthz" || true)
+          echo "GET $ORIGIN/healthz -> HTTP $CODE"
+          cat /tmp/healthz.txt; echo
+          test "$CODE" = "200"
           echo "Live at $ORIGIN"
