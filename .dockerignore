@@ -1,0 +1,6 @@
+.venv
+.git
+artifacts
+tests
+docs/_scratch
+**/__pycache__

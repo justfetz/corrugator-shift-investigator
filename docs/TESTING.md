@@ -69,3 +69,7 @@ Live evaluation has not been performed. Use your own key through the local field
 | Show the full setup matrix. | UI has full valid rows; model preview truncation is disclosed |
 
 Score evidence correctness, question fulfillment, scope, uncertainty/causal restraint, chart agreement, and cost separately. A valid tool result or `complete` status is not sufficient. Current code does not enforce all these semantic criteria; failures should become specific fixes and regression cases rather than being solved only with more reassuring documentation.
+
+## Public-demo mode
+
+`tests/test_server.py` also covers the hosted mode: `PublicDemo.from_env` parsing and rejection of non-https origins, foreign `Host` accepted, `frame-ancestors` from `PUBLIC_DEMO_EMBED_ORIGINS`, `/healthz`, `POST` refused without an allow-listed `Origin`, visitor `X-OpenAI-Key` ignored, and live mode requiring both `PUBLIC_DEMO_LIVE_MODEL=1` and a server key. The container image itself is not built in CI.
