@@ -2,18 +2,41 @@
 
 The current application is a local learning workbench. It is suitable for a local demonstration with the documented defects and is not ready to expose directly to the internet. The proposed first public release is the deterministic synthetic-data experience with OpenAI mode disabled, after completing the remaining calibration, live-quality and hosting requirements in [the September 7 review](REVIEW_2026-09-07.md). Period export and history defects are repaired in the working tree.
 
+## Implemented: hosted public-demo mode (offline planner)
+
+`PUBLIC_DEMO_ORIGIN` switches the server from the loopback workbench to the hosted synthetic demo. It is the smallest change that makes the existing app safe to put behind a platform's TLS proxy; it does not replace the release sequence below for anything beyond a demo.
+
+| Setting | Effect |
+| --- | --- |
+| `PUBLIC_DEMO_ORIGIN` (required; comma-separated https origins) | Bind `0.0.0.0:$PORT` (default 7860) with a threading server. The loopback `Host` rule is dropped (the proxy owns the hostname); every `POST` must carry an `Origin` in this list, in addition to the session token. |
+| `PUBLIC_DEMO_EMBED_ORIGINS` (optional) | `Content-Security-Policy: frame-ancestors` so the page can be framed by those sites. A Hugging Face Space page frames its own app, so include `https://huggingface.co` there. Default stays `'none'`. |
+| `PUBLIC_DEMO_LIVE_MODEL=1` + `OPENAI_API_KEY` | Allows OpenAI mode with the **server's** key under the existing reservation ledger. Off by default: the UI removes the OpenAI option and the server answers `400` to live requests. |
+| Visitor keys | Never read in public mode. `X-OpenAI-Key` is ignored server-side and the key field is removed client-side. |
+
+Investigations and PDFs run one at a time under a lock (the DuckDB handles and in-memory caches are not shared across threads); static files and `/healthz` do not wait. The in-memory 60-requests-per-minute window is per process, which on a single-container host is effectively service-wide; it is still not an abuse control. The model-budget ledger lives in the container's `artifacts/` directory and resets with the container unless the host provides persistent storage — keep the provider-side spend limit as the real cap.
+
+### Deploy to a Hugging Face Space (free CPU tier)
+
+1. Create a Space with the **Docker** SDK (e.g. `justfetz/corrugator-shift-investigator`), public visibility.
+2. In the Space's Settings → Variables add `PUBLIC_DEMO_ORIGIN` = the Space's direct URL (`https://<owner>-<space>.hf.space`) and `PUBLIC_DEMO_EMBED_ORIGINS` = `https://huggingface.co,https://justfetz.github.io`.
+3. In this GitHub repository add the secret `HF_TOKEN` (a Hugging Face token with write access) and the repository variable `HF_SPACE` = `<owner>/<space>`.
+4. Push to `main` or run the **Deploy Space** workflow. It force-pushes the tree with `deploy/huggingface/README.md` as the Space README (the front matter tells the Space it is a Docker app on port 7860).
+5. Open the Space; `/healthz` returns `{"ok": true, "public": true}`.
+
+The same container runs on Cloud Run, Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
+
 ## Recommended first host
 
 Use one small Google Cloud Run service for the public offline demo. Cloud Run can scale to zero and charges for consumed resources after its free tier; exact cost depends on region, traffic, build storage and network use. The official pricing page currently lists a request-based free tier, but treat that as a discount rather than a promise of a zero bill: <https://cloud.google.com/run/pricing>.
 
-Cloud Run requires the container to listen on `0.0.0.0` and the injected `PORT`, while this workbench deliberately binds to `127.0.0.1`. That is one reason the current server must not be deployed unchanged. See the official container contract: <https://docs.cloud.google.com/run/docs/container-contract>.
+Cloud Run requires the container to listen on `0.0.0.0` and the injected `PORT`; the default workbench binds to `127.0.0.1`, and public-demo mode (above) is what makes the container contract hold. See the official container contract: <https://docs.cloud.google.com/run/docs/container-contract>.
 
 ## Release sequence
 
-1. Replace the built-in single-threaded HTTP server with a production ASGI application and server. Preserve the existing request schemas, response shapes and tests.
-2. Add a container with a non-root user, pinned production dependencies, a health endpoint and `0.0.0.0:$PORT` binding. Build and run it locally before creating cloud resources.
-3. Add a `PUBLIC_DEMO_OFFLINE_ONLY` configuration. In public mode, remove the OpenAI option from configuration/UI and reject live-model requests in application code.
-4. Replace the exact loopback Host/Origin rules with one configured canonical HTTPS origin. Never trust arbitrary forwarded host values. Keep the static-file allowlist, content-security policy, bounded JSON and text-only rendering.
+1. Replace the built-in HTTP server with a production ASGI application and server if traffic ever warrants it. Preserve the existing request schemas, response shapes and tests. (Public-demo mode uses the standard-library threading server with a serialized investigation lock, which is enough for a demo.)
+2. Container with a non-root user, a health endpoint and `0.0.0.0:$PORT` binding: done (`Dockerfile`, `/healthz`).
+3. Offline-only public configuration: done (`PUBLIC_DEMO_ORIGIN` without `PUBLIC_DEMO_LIVE_MODEL`).
+4. Configured canonical origins instead of the loopback Host/Origin rules: done. The static-file allowlist, content-security policy, bounded JSON and text-only rendering are unchanged.
 5. Make PDF generation stateless or use a durable, short-lived report reference. The present report cache is process memory; another instance or a restart will not have it.
 6. Put a durable edge or datastore-backed rate limit in front of `/api/ask` and `/api/report`. The current in-memory 60-request window is per process and is not a public abuse control.
 7. If anonymous public querying is allowed, add an abuse challenge and validate it on the server. Cloudflare says Turnstile client tokens require server-side Siteverify validation, are single-use and expire after five minutes: <https://developers.cloudflare.com/turnstile/get-started/server-side-validation/>.

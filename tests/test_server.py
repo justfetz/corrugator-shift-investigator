@@ -78,3 +78,68 @@ def test_interface_control_references_exist():
     references = set(re.findall(r"\$\('([^']+)'\)", script))
     assert references <= ids, references - ids
     assert '\ufffd' not in html + script
+
+
+# ---- hosted public-demo mode (PUBLIC_DEMO_ORIGIN) ----
+from investigator.server import PublicDemo
+
+def test_public_demo_config_parsing():
+    assert PublicDemo.from_env({}) is None
+    demo=PublicDemo.from_env({'PUBLIC_DEMO_ORIGIN':'https://justfetz-shift.hf.space/, https://demo.example',
+                              'PUBLIC_DEMO_EMBED_ORIGINS':'https://huggingface.co,https://justfetz.github.io','PUBLIC_DEMO_LIVE_MODEL':'0'})
+    assert demo.origins==('https://justfetz-shift.hf.space','https://demo.example')
+    assert demo.frame_ancestors=='https://huggingface.co https://justfetz.github.io'
+    assert demo.live_model is False
+    assert PublicDemo.from_env({'PUBLIC_DEMO_ORIGIN':'https://demo.example'}).frame_ancestors=="'none'"
+    for bad in ('http://evil.example','https://demo.example/app','https://user@demo.example','ftp://demo.example'):
+        with pytest.raises(ValueError):
+            PublicDemo.from_env({'PUBLIC_DEMO_ORIGIN':bad})
+
+
+@pytest.fixture
+def public():
+    demo=PublicDemo(origins=('https://demo.example',),embed_origins=('https://justfetz.github.io',),live_model=False)
+    server=make_server(0,public=demo,host='127.0.0.1')
+    thread=Thread(target=server.serve_forever,daemon=True)
+    thread.start()
+    yield server
+    server.shutdown()
+    thread.join()
+    server.server_close()
+    server.app.close()
+
+
+def test_public_mode_hostname_embed_and_health(public):
+    status,headers,body=request(public,'GET','/',headers={'Host':'justfetz-shift.hf.space'})
+    assert status==200 and b'Shift Investigator' in body
+    assert 'frame-ancestors https://justfetz.github.io;' in headers['Content-Security-Policy']
+    assert request(public,'GET','/../../README.md')[0]==404
+    code,_,health=request(public,'GET','/healthz')
+    assert code==200 and json.loads(health)=={'ok':True,'public':True}
+    config=json.loads(request(public,'GET','/api/config')[2])
+    assert config['public'] is True and config['live_model_available'] is False
+
+
+def test_public_mode_requires_allowlisted_origin_and_ignores_visitor_keys(public,monkeypatch):
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    token=json.loads(request(public,'GET','/api/config')[2])['token']
+    headers={'Content-Type':'application/json','X-Workbench-Token':token,'Host':'anything.example'}
+    payload=json.dumps({'day':'2026-09-01','shift':2,'question':'Why was second shift slow?'})
+    assert request(public,'POST','/api/ask',payload,headers)[0]==403                       # no Origin: refused
+    assert request(public,'POST','/api/ask',payload,{**headers,'Origin':'https://evil.example'})[0]==403
+    status,_,body=request(public,'POST','/api/ask',payload,{**headers,'Origin':'https://demo.example'})
+    assert status==200 and json.loads(body)['status']=='complete'
+    # a visitor key never turns on live mode on a hosted demo
+    live=json.dumps({'day':'2026-09-01','shift':2,'question':'Why was second shift slow?','mode':'openai'})
+    status,_,body=request(public,'POST','/api/ask',live,{**headers,'Origin':'https://demo.example','X-OpenAI-Key':'sk-visitor'})
+    assert status==400 and 'offline planner only' in json.loads(body)['error']
+
+
+def test_public_live_model_needs_flag_and_server_key(monkeypatch):
+    from investigator.server import Workbench
+    monkeypatch.delenv('OPENAI_API_KEY',raising=False)
+    assert Workbench(PublicDemo(('https://demo.example',),(),True)).live_model_available is False
+    monkeypatch.setenv('OPENAI_API_KEY','sk-server')
+    assert Workbench(PublicDemo(('https://demo.example',),(),False)).live_model_available is False
+    assert Workbench(PublicDemo(('https://demo.example',),(),True)).live_model_available is True
+    assert Workbench().live_model_available is True

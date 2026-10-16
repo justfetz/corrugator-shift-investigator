@@ -1,0 +1,32 @@
+# Mirrors main to a Hugging Face Space (Docker SDK) when the repository has an
+# HF_TOKEN secret (write scope) and an HF_SPACE variable such as
+# "justfetz/corrugator-shift-investigator". Does nothing otherwise.
+name: Deploy Space
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync:
+    if: ${{ vars.HF_SPACE != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to the Space with its own README front matter
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          set -euo pipefail
+          test -n "$HF_TOKEN"
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -B space
+          cp deploy/huggingface/README.md README.md
+          git add README.md
+          git commit -q -m "Space README front matter" || true
+          git push --force "https://hf:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" space:main
