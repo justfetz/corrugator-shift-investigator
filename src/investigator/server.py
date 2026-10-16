@@ -208,7 +208,7 @@ def make_server(port=8765, public=None, host=None):
         def do_GET(self):
             if not self._host_ok():
                 return self._send(403, {'error': 'Local host only'})
-            if self.path == '/healthz':
+            if self.path in ('/api/health', '/healthz'):  # /healthz is reserved by Google's front end on *.run.app; /api/health reaches the container everywhere
                 return self._send(200, {'ok': True, 'public': public is not None})
             if self.path == '/api/config':
                 return self._send(200, {'days': DAYS, 'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',

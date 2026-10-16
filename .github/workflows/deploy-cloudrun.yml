@@ -62,8 +62,8 @@ jobs:
           set -euo pipefail
           LIVE=""
           for URL in $(echo "$ORIGINS" | tr ',' ' '); do
-            CODE=$(curl -sS -o /tmp/healthz.txt -w '%{http_code}' --max-time 30 "$URL/healthz" || true)
-            echo "GET $URL/healthz -> HTTP $CODE $(head -c 200 /tmp/healthz.txt 2>/dev/null)"
+            CODE=$(curl -sS -o /tmp/healthz.txt -w '%{http_code}' --max-time 30 "$URL/api/health" || true)
+            echo "GET $URL/api/health -> HTTP $CODE $(head -c 200 /tmp/healthz.txt 2>/dev/null)"
             [ "$CODE" = "200" ] && LIVE="$URL"
           done
           test -n "$LIVE"
