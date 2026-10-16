@@ -49,7 +49,7 @@ jobs:
             LIVE_FLAGS=(--set-secrets "OPENAI_API_KEY=${OPENAI_SECRET}:latest")
             ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=1"
           else
-            LIVE_FLAGS=(--remove-secrets OPENAI_API_KEY)
+            LIVE_FLAGS=(--clear-secrets)   # the service holds no other secrets; idempotent when none exist
             ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=0"
           fi
           gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
