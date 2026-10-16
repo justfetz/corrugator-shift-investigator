@@ -72,4 +72,4 @@ Score evidence correctness, question fulfillment, scope, uncertainty/causal rest
 
 ## Public-demo mode
 
-`tests/test_server.py` also covers the hosted mode: `PublicDemo.from_env` parsing and rejection of non-https origins, foreign `Host` accepted, `frame-ancestors` from `PUBLIC_DEMO_EMBED_ORIGINS`, `/healthz`, `POST` refused without an allow-listed `Origin`, visitor `X-OpenAI-Key` ignored, and live mode requiring both `PUBLIC_DEMO_LIVE_MODEL=1` and a server key. The container image itself is not built in CI.
+`tests/test_server.py` also covers the hosted mode: `PublicDemo.from_env` parsing and rejection of non-https origins, foreign `Host` accepted, `frame-ancestors` from `PUBLIC_DEMO_EMBED_ORIGINS`, `/api/health`, `POST` refused without an allow-listed `Origin`, visitor `X-OpenAI-Key` ignored, and live mode requiring both `PUBLIC_DEMO_LIVE_MODEL=1` and a server key. The container image itself is not built in CI.

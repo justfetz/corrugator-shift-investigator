@@ -13,11 +13,11 @@ The current application is a local learning workbench. It is suitable for a loca
 | `PUBLIC_DEMO_LIVE_MODEL=1` + `OPENAI_API_KEY` | Allows OpenAI mode with the **server's** key under the existing reservation ledger. Off by default: the UI removes the OpenAI option and the server answers `400` to live requests. |
 | Visitor keys | Never read in public mode. `X-OpenAI-Key` is ignored server-side and the key field is removed client-side. |
 
-Investigations and PDFs run one at a time under a lock (the DuckDB handles and in-memory caches are not shared across threads); static files and `/healthz` do not wait. The in-memory 60-requests-per-minute window is per process, which on a single-container host is effectively service-wide; it is still not an abuse control. The model-budget ledger lives in the container's `artifacts/` directory and resets with the container unless the host provides persistent storage — keep the provider-side spend limit as the real cap.
+Investigations and PDFs run one at a time under a lock (the DuckDB handles and in-memory caches are not shared across threads); static files and `/api/health` do not wait. The in-memory 60-requests-per-minute window is per process, which on a single-container host is effectively service-wide; it is still not an abuse control. The model-budget ledger lives in the container's `artifacts/` directory and resets with the container unless the host provides persistent storage — keep the provider-side spend limit as the real cap.
 
 ### Deploy to Google Cloud Run (free tier, scale to zero) — recommended
 
-`.github/workflows/deploy-cloudrun.yml` deploys `main` from source (Cloud Build reads the `Dockerfile`) whenever the repository has the variable `GCP_PROJECT_ID` and the secret `GCP_SA_KEY`. It allow-lists every URL the service answers on — the legacy `<service>-<hash>-<region code>.a.run.app` form and the deterministic `<service>-<project number>.<region>.run.app` form, since which one `gcloud` reports as primary varies — as the comma-separated `PUBLIC_DEMO_ORIGIN`, sets `PUBLIC_DEMO_EMBED_ORIGINS` (variable, default `https://justfetz.github.io`), deploys with `--min-instances 0 --max-instances 2 --memory 1Gi --concurrency 20 --timeout 180`, and curls `/healthz`. Optional variables: `GCP_REGION` (default `us-central1`), `CLOUD_RUN_SERVICE` (default `corrugator-shift-investigator`).
+`.github/workflows/deploy-cloudrun.yml` deploys `main` from source (Cloud Build reads the `Dockerfile`) whenever the repository has the variable `GCP_PROJECT_ID` and the secret `GCP_SA_KEY`. It allow-lists every URL the service answers on — the legacy `<service>-<hash>-<region code>.a.run.app` form and the deterministic `<service>-<project number>.<region>.run.app` form, since which one `gcloud` reports as primary varies — as the comma-separated `PUBLIC_DEMO_ORIGIN`, sets `PUBLIC_DEMO_EMBED_ORIGINS` (variable, default `https://justfetz.github.io`), deploys with `--min-instances 0 --max-instances 2 --memory 1Gi --concurrency 20 --timeout 180`, and curls `/api/health`. Optional variables: `GCP_REGION` (default `us-central1`), `CLOUD_RUN_SERVICE` (default `corrugator-shift-investigator`).
 
 One-time project setup (Cloud Shell):
 
@@ -46,7 +46,7 @@ Paste the key file's contents into the GitHub secret `GCP_SA_KEY`, set the varia
 2. In the Space's Settings → Variables add `PUBLIC_DEMO_ORIGIN` = the Space's direct URL (`https://<owner>-<space>.hf.space`) and `PUBLIC_DEMO_EMBED_ORIGINS` = `https://huggingface.co,https://justfetz.github.io`.
 3. In this GitHub repository add the secret `HF_TOKEN` (a Hugging Face token with write access) and the repository variable `HF_SPACE` = `<owner>/<space>`.
 4. Push to `main` or run the **Deploy Space** workflow. It force-pushes the tree with `deploy/huggingface/README.md` as the Space README (the front matter tells the Space it is a Docker app on port 7860).
-5. Open the Space; `/healthz` returns `{"ok": true, "public": true}`.
+5. Open the Space; `/api/health` returns `{"ok": true, "public": true}`.
 
 The same container runs on Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
 
@@ -59,7 +59,7 @@ Cloud Run requires the container to listen on `0.0.0.0` and the injected `PORT`;
 ## Release sequence
 
 1. Replace the built-in HTTP server with a production ASGI application and server if traffic ever warrants it. Preserve the existing request schemas, response shapes and tests. (Public-demo mode uses the standard-library threading server with a serialized investigation lock, which is enough for a demo.)
-2. Container with a non-root user, a health endpoint and `0.0.0.0:$PORT` binding: done (`Dockerfile`, `/healthz`).
+2. Container with a non-root user, a health endpoint and `0.0.0.0:$PORT` binding: done (`Dockerfile`, `/api/health`; `/healthz` also answers, but Google's front end reserves that path on `*.run.app` and never forwards it, so the smoke test and container healthcheck use `/api/health`).
 3. Offline-only public configuration: done (`PUBLIC_DEMO_ORIGIN` without `PUBLIC_DEMO_LIVE_MODEL`).
 4. Configured canonical origins instead of the loopback Host/Origin rules: done. The static-file allowlist, content-security policy, bounded JSON and text-only rendering are unchanged.
 5. Make PDF generation stateless or use a durable, short-lived report reference. The present report cache is process memory; another instance or a restart will not have it.

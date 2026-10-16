@@ -114,8 +114,9 @@ def test_public_mode_hostname_embed_and_health(public):
     assert status==200 and b'Shift Investigator' in body
     assert 'frame-ancestors https://justfetz.github.io;' in headers['Content-Security-Policy']
     assert request(public,'GET','/../../README.md')[0]==404
-    code,_,health=request(public,'GET','/healthz')
-    assert code==200 and json.loads(health)=={'ok':True,'public':True}
+    for path in ('/api/health','/healthz'):
+        code,_,health=request(public,'GET',path)
+        assert code==200 and json.loads(health)=={'ok':True,'public':True}
     config=json.loads(request(public,'GET','/api/config')[2])
     assert config['public'] is True and config['live_model_available'] is False
 
