@@ -15,7 +15,32 @@ The current application is a local learning workbench. It is suitable for a loca
 
 Investigations and PDFs run one at a time under a lock (the DuckDB handles and in-memory caches are not shared across threads); static files and `/healthz` do not wait. The in-memory 60-requests-per-minute window is per process, which on a single-container host is effectively service-wide; it is still not an abuse control. The model-budget ledger lives in the container's `artifacts/` directory and resets with the container unless the host provides persistent storage — keep the provider-side spend limit as the real cap.
 
-### Deploy to a Hugging Face Space (free CPU tier)
+### Deploy to Google Cloud Run (free tier, scale to zero) — recommended
+
+`.github/workflows/deploy-cloudrun.yml` deploys `main` from source (Cloud Build reads the `Dockerfile`) whenever the repository has the variable `GCP_PROJECT_ID` and the secret `GCP_SA_KEY`. It computes the service's deterministic URL `https://<service>-<project-number>.<region>.run.app` and passes it as `PUBLIC_DEMO_ORIGIN`, sets `PUBLIC_DEMO_EMBED_ORIGINS` (variable, default `https://justfetz.github.io`), deploys with `--min-instances 0 --max-instances 2 --memory 1Gi --concurrency 20 --timeout 180`, and curls `/healthz`. Optional variables: `GCP_REGION` (default `us-central1`), `CLOUD_RUN_SERVICE` (default `corrugator-shift-investigator`).
+
+One-time project setup (Cloud Shell):
+
+```bash
+PROJECT_ID=<globally-unique-id>          # e.g. corrugator-demo-<something>
+gcloud projects create "$PROJECT_ID" && gcloud config set project "$PROJECT_ID"
+# attach billing to the project in the console (Billing → link account); the demo stays inside the free tier
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+gcloud iam service-accounts create github-deployer --display-name "GitHub Actions deployer"
+SA="github-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+for ROLE in roles/run.admin roles/cloudbuild.builds.editor roles/artifactregistry.admin roles/storage.admin \
+            roles/iam.serviceAccountUser roles/serviceusage.serviceUsageConsumer; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${SA}" --role "$ROLE" --quiet >/dev/null
+done
+NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${NUMBER}-compute@developer.gserviceaccount.com" \
+  --role roles/cloudbuild.builds.builder --quiet >/dev/null   # the build runs as the default compute service account
+gcloud iam service-accounts keys create key.json --iam-account "$SA" && cat key.json
+```
+
+Paste the key file's contents into the GitHub secret `GCP_SA_KEY`, set the variable `GCP_PROJECT_ID`, delete `key.json`, then merge or run **Deploy Cloud Run**. The service-account key is a shortcut for a one-person project; Workload Identity Federation is the keyless alternative when this matters. Set a billing budget alert on the project regardless.
+
+### Deploy to a Hugging Face Space (Docker Spaces require a PRO subscription since July 2026)
 
 1. Create a Space with the **Docker** SDK (e.g. `justfetz/corrugator-shift-investigator`), public visibility.
 2. In the Space's Settings → Variables add `PUBLIC_DEMO_ORIGIN` = the Space's direct URL (`https://<owner>-<space>.hf.space`) and `PUBLIC_DEMO_EMBED_ORIGINS` = `https://huggingface.co,https://justfetz.github.io`.
@@ -23,7 +48,7 @@ Investigations and PDFs run one at a time under a lock (the DuckDB handles and i
 4. Push to `main` or run the **Deploy Space** workflow. It force-pushes the tree with `deploy/huggingface/README.md` as the Space README (the front matter tells the Space it is a Docker app on port 7860).
 5. Open the Space; `/healthz` returns `{"ok": true, "public": true}`.
 
-The same container runs on Cloud Run, Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
+The same container runs on Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
 
 ## Recommended first host
 

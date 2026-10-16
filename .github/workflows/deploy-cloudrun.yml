@@ -1,0 +1,44 @@
+# Deploys main to Google Cloud Run as the public synthetic demo when the
+# repository has a GCP_PROJECT_ID variable and a GCP_SA_KEY secret. No-op otherwise.
+# Builds from source (Cloud Build uses the Dockerfile), scale-to-zero, two instances max.
+name: Deploy Cloud Run
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: cloud-run-deploy
+jobs:
+  deploy:
+    if: ${{ vars.GCP_PROJECT_ID != '' }}
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
+      EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Resolve the service's deterministic URL (PUBLIC_DEMO_ORIGIN)
+        run: |
+          set -euo pipefail
+          NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+          echo "ORIGIN=https://${SERVICE}-${NUMBER}.${REGION}.run.app" >> "$GITHUB_ENV"
+      - name: Deploy from source
+        run: |
+          set -euo pipefail
+          gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
+            --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
+            --concurrency 20 --timeout 180 \
+            --set-env-vars "PUBLIC_DEMO_ORIGIN=${ORIGIN},PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}" --quiet
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          curl -fsS "$ORIGIN/healthz"
+          echo
+          echo "Live at $ORIGIN"
