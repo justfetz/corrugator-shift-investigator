@@ -66,12 +66,17 @@ def transport(payload, key, timeout):
 class OpenAIPlanner:
     mode = 'OpenAI investigation and narrative; calculated evidence'
 
-    def __init__(self, key, budget, send=None):
+    def __init__(self, key, budget, send=None, safety_identifier=None):
         if not isinstance(key,str) or not key.startswith('sk-') or not 10<=len(key)<=512 or not key.isascii() or any(c.isspace() for c in key):
             raise ProviderError('Enter a valid OpenAI API key through the local key field or environment')
+        if safety_identifier is not None and (not isinstance(safety_identifier,str) or not 8<=len(safety_identifier)<=64
+                or not all(c in '0123456789abcdef' for c in safety_identifier)):
+            raise ProviderError('safety_identifier must be a short hex digest, never a raw address or name')
         self._key=key
         self._budget=budget
         self._send=send or transport
+        # A stable hashed visitor id lets the provider link abuse signals without receiving identity.
+        self._safety_identifier=safety_identifier
         self._input=[]
         self._pending=None
         self._start=time.monotonic()
@@ -159,6 +164,8 @@ Profit, costs, staffing decisions, live machine state and plant-wide optimal imp
         remaining=60-(time.monotonic()-self._start)
         if remaining<=0 or self.usage['model_calls']>=10:
             raise ProviderError('Live investigation model-call/time limit reached')
+        if self._safety_identifier:
+            payload={**payload,'safety_identifier':self._safety_identifier}
         if len(json.dumps(payload).encode())>24000:
             raise ProviderError('Model context byte limit reached')
         self._budget.reserve()  # Commit before network call; never refund uncertain usage.

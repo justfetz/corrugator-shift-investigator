@@ -1,4 +1,5 @@
 import http.client
+from pathlib import Path
 import json
 from threading import Thread
 import pytest
@@ -144,3 +145,49 @@ def test_public_live_model_needs_flag_and_server_key(monkeypatch):
     assert Workbench(PublicDemo(('https://demo.example',),(),False)).live_model_available is False
     assert Workbench(PublicDemo(('https://demo.example',),(),True)).live_model_available is True
     assert Workbench().live_model_available is True
+
+
+def test_visitor_limiter_burst_refill_and_bound():
+    from investigator.server import VisitorLimiter
+    limiter=VisitorLimiter(burst=3,refill_seconds=10,size=2)
+    assert [limiter.allow('a',now=0) for _ in range(4)]==[True,True,True,False]
+    assert limiter.allow('a',now=9) is False      # not yet refilled
+    assert limiter.allow('a',now=10) is True      # one token back
+    assert limiter.allow('b',now=10) is True      # other visitors unaffected
+    limiter.allow('c',now=10)
+    assert 'a' not in limiter.buckets             # table bounded: oldest address evicted
+
+
+def test_visitor_id_is_salted_hex_never_the_address():
+    from investigator.server import visitor_id
+    vid=visitor_id('203.0.113.9',salt='s')
+    assert len(vid)==32 and all(c in '0123456789abcdef' for c in vid)
+    assert vid==visitor_id('203.0.113.9',salt='s') and vid!=visitor_id('203.0.113.9',salt='t')
+    assert '203' not in vid
+
+
+def test_public_mode_limits_each_forwarded_address(public,monkeypatch):
+    from investigator.server import VISITOR_BURST
+    token=json.loads(request(public,'GET','/api/config')[2])['token']
+    headers={'Content-Type':'application/json','X-Workbench-Token':token,'Origin':'https://demo.example'}
+    bad=json.dumps({})   # rejected by validation (400) but still consumes a visitor token
+    codes=[request(public,'POST','/api/ask',bad,{**headers,'X-Forwarded-For':'203.0.113.9, 10.0.0.1'})[0] for _ in range(VISITOR_BURST+1)]
+    assert codes==[400]*VISITOR_BURST+[429]
+    assert request(public,'POST','/api/ask',bad,{**headers,'X-Forwarded-For':'198.51.100.2'})[0]==400   # another visitor
+
+
+def test_local_mode_ignores_forwarded_header(running):
+    from investigator.server import VISITOR_BURST
+    token=json.loads(request(running,'GET','/api/config')[2])['token']
+    headers={'Content-Type':'application/json','X-Workbench-Token':token}
+    bad=json.dumps({})
+    codes=[request(running,'POST','/api/ask',bad,{**headers,'X-Forwarded-For':f'203.0.113.{n}'})[0] for n in range(VISITOR_BURST+1)]
+    assert codes==[400]*VISITOR_BURST+[429]   # spoofed hops do not buy more requests locally
+
+
+def test_budget_path_from_environment(monkeypatch,tmp_path):
+    from investigator.server import budget_path
+    monkeypatch.delenv('MODEL_BUDGET_PATH',raising=False)
+    assert budget_path()==Path('artifacts/model-budget.sqlite3')
+    monkeypatch.setenv('MODEL_BUDGET_PATH',str(tmp_path/'ledger'/'budget.sqlite3'))
+    assert budget_path()==tmp_path/'ledger'/'budget.sqlite3'

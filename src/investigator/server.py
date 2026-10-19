@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import argparse
+import hashlib
 import hmac
 import json
 import os
@@ -25,6 +26,41 @@ from .fixture import generate
 WEB = Path(__file__).with_name('web')
 DAYS = [(date(2026, 9, 1)+timedelta(days=n)).isoformat() for n in range(30)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
+# Per-visitor token bucket on POST: a visitor gets VISITOR_BURST requests at once,
+# then one more every VISITOR_REFILL_SECONDS. The service-wide 60/min window still applies.
+VISITOR_BURST = 10
+VISITOR_REFILL_SECONDS = 6.0
+VISITOR_TABLE_LIMIT = 4096
+
+
+class VisitorLimiter:
+    """Token bucket per client address, in memory, bounded in size."""
+    def __init__(self, burst=VISITOR_BURST, refill_seconds=VISITOR_REFILL_SECONDS, size=VISITOR_TABLE_LIMIT):
+        self.burst, self.refill_seconds, self.size = burst, refill_seconds, size
+        self.buckets = OrderedDict()   # address -> [tokens, last_refill]
+        self.lock = threading.Lock()
+
+    def allow(self, address, now=None):
+        now = time.monotonic() if now is None else now
+        with self.lock:
+            tokens, last = self.buckets.pop(address, (self.burst, now))
+            tokens = min(self.burst, tokens + (now-last)/self.refill_seconds)
+            allowed = tokens >= 1
+            self.buckets[address] = [tokens-1 if allowed else tokens, now]
+            while len(self.buckets) > self.size:
+                self.buckets.popitem(last=False)
+            return allowed
+
+
+def visitor_id(address, salt=None):
+    """Stable, non-reversible identifier for abuse signals (OpenAI safety_identifier). Never the raw address."""
+    salt = salt if salt is not None else os.environ.get('VISITOR_ID_SALT', 'corrugator-shift-investigator')
+    return hashlib.sha256(f'{salt}|{address}'.encode()).hexdigest()[:32]
+
+
+def budget_path():
+    """Where the model-budget ledger lives; a mounted volume keeps it across container restarts."""
+    return Path(os.environ.get('MODEL_BUDGET_PATH', 'artifacts/model-budget.sqlite3'))
 
 
 @dataclass(frozen=True)
@@ -70,6 +106,7 @@ class Workbench:
         self.sessions = OrderedDict()
         self.datasets = OrderedDict()
         self.requests = deque()
+        self.visitors = VisitorLimiter()
         self.reports = OrderedDict()
         from .periods import PeriodReports
         self.periods = PeriodReports()
@@ -84,7 +121,7 @@ class Workbench:
         for analysis in self.datasets.values():
             analysis.close()
 
-    def ask(self, payload, api_key=None):
+    def ask(self, payload, api_key=None, visitor=None):
         if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period'}:
             raise ValueError('Invalid request fields')
         scope = payload.get('scope', 'shift')
@@ -141,7 +178,8 @@ class Workbench:
         self.datasets.move_to_end(key)
         if mode == 'openai':
             from .openai_provider import OpenAIPlanner, Budget
-            planner = OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), Budget(Path('artifacts/model-budget.sqlite3')))
+            planner = OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), Budget(budget_path()),
+                                    safety_identifier=visitor if self.public is not None else None)
             try:
                 result = Agent(self.datasets[key], planner=planner, max_calls=10, max_seconds=60).ask(question, context)
             finally:
@@ -205,6 +243,16 @@ def make_server(port=8765, public=None, host=None):
                 return origin is not None and origin.rstrip('/') in public.origins
             return origin is None or origin == f'http://127.0.0.1:{self.server.server_port}'
 
+        def _visitor(self):
+            # Behind the platform proxy the socket peer is the proxy; the client is the first
+            # X-Forwarded-For hop, which Cloud Run sets itself. Locally the header is untrusted.
+            if public is not None:
+                forwarded = self.headers.get('X-Forwarded-For', '')
+                first = forwarded.split(',')[0].strip()
+                if first and len(first) <= 64:
+                    return first
+            return self.client_address[0]
+
         def do_GET(self):
             if not self._host_ok():
                 return self._send(403, {'error': 'Local host only'})
@@ -248,6 +296,9 @@ def make_server(port=8765, public=None, host=None):
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 16000:
                     return self._send(413, {'error': 'Request too large or empty'})
+                visitor = self._visitor()
+                if not app.visitors.allow(visitor):
+                    return self._send(429, {'error': 'Too many requests from this address; retry shortly'})
                 now = time.monotonic()
                 while app.requests and app.requests[0] < now-60:
                     app.requests.popleft()
@@ -261,7 +312,7 @@ def make_server(port=8765, public=None, host=None):
                     if self.path == '/api/report':
                         body = app.pdf(payload)
                     else:
-                        body = app.ask(payload, api_key=api_key)
+                        body = app.ask(payload, api_key=api_key, visitor=visitor_id(visitor))
                 self._send(200, body, 'application/pdf' if self.path == '/api/report' else 'application/json; charset=utf-8')
             except (ValueError, UnicodeError, TypeError, KeyError) as exc:
                 self._send(400, {'error': str(exc)})

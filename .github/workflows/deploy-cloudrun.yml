@@ -1,6 +1,9 @@
 # Deploys main to Google Cloud Run as the public synthetic demo when the
 # repository has a GCP_PROJECT_ID variable and a GCP_SA_KEY secret. No-op otherwise.
-# Builds from source (Cloud Build uses the Dockerfile), scale-to-zero, two instances max.
+# Builds from source (Cloud Build uses the Dockerfile), scale-to-zero, one instance max
+# (the server serializes investigations anyway; one instance keeps the cost ceiling and
+# the per-visitor limiter service-wide). Set BUDGET_BUCKET to keep the model-budget
+# ledger on a Cloud Storage volume so it survives container restarts.
 name: Deploy Cloud Run
 on:
   push:
@@ -20,6 +23,8 @@ jobs:
       EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
       LIVE_MODEL: ${{ vars.PUBLIC_DEMO_LIVE_MODEL || '0' }}
       OPENAI_SECRET: ${{ vars.OPENAI_SECRET_NAME || 'openai-api-key' }}
+      BUDGET_BUCKET: ${{ vars.BUDGET_BUCKET || '' }}
+      MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES || '1' }}
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
@@ -52,10 +57,22 @@ jobs:
             LIVE_FLAGS=(--clear-secrets)   # the service holds no other secrets; idempotent when none exist
             ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=0"
           fi
+          # Durable budget ledger: mount a Cloud Storage bucket and point the server at it.
+          # With one instance and the server's investigation lock there is a single writer,
+          # which is what SQLite on a FUSE mount needs. The service's runtime service account
+          # must hold roles/storage.objectUser on the bucket (docs/DEPLOYMENT.md).
+          if [ -n "$BUDGET_BUCKET" ]; then
+            VOLUME_FLAGS=(--execution-environment gen2
+                          --add-volume "name=ledger,type=cloud-storage,bucket=${BUDGET_BUCKET}"
+                          --add-volume-mount "volume=ledger,mount-path=/mnt/ledger")
+            ENV_VARS="${ENV_VARS}|MODEL_BUDGET_PATH=/mnt/ledger/model-budget.sqlite3"
+          else
+            VOLUME_FLAGS=(--clear-volumes --clear-volume-mounts)
+          fi
           gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
-            --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
+            --allow-unauthenticated --min-instances 0 --max-instances "$MAX_INSTANCES" --cpu 1 --memory 1Gi \
             --concurrency 20 --timeout 180 \
-            --set-env-vars "$ENV_VARS" "${LIVE_FLAGS[@]}" --quiet
+            --set-env-vars "$ENV_VARS" "${LIVE_FLAGS[@]}" "${VOLUME_FLAGS[@]}" --quiet
       - name: Add any URL the first deploy created to the allow-list
         run: |
           set -euo pipefail
