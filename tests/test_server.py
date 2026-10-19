@@ -191,3 +191,35 @@ def test_budget_path_from_environment(monkeypatch,tmp_path):
     assert budget_path()==Path('artifacts/model-budget.sqlite3')
     monkeypatch.setenv('MODEL_BUDGET_PATH',str(tmp_path/'ledger'/'budget.sqlite3'))
     assert budget_path()==tmp_path/'ledger'/'budget.sqlite3'
+
+
+def test_dataset_and_evals_are_served(public):
+    code,headers,body=request(public,'GET','/api/data/2026-09-14.xml')
+    assert code==200 and headers['Content-Type'].startswith('application/xml') and body.startswith(b'<?xml')
+    code,headers,body=request(public,'GET','/api/data/csv/stops.csv')
+    assert code==200 and body.splitlines()[0].startswith(b'production_day,id,shift,kind')
+    assert request(public,'GET','/api/data/manifest.json')[0]==200
+    assert request(public,'GET','/api/data/2026-10-01.xml')[0]==404          # not a demo day
+    assert request(public,'GET','/api/data/../pyproject.toml')[0]==404
+    assert request(public,'GET','/api/data/csv/secrets.csv')[0]==404
+    code,_,body=request(public,'GET','/api/evals')
+    listing=json.loads(body)
+    assert code==200 and len(listing['cases'])>=26 and listing['types']==['routing','faithfulness','grounding','refusal']
+    assert all(c['expectations'] for c in listing['cases'])
+    code,_,page=request(public,'GET','/evals')
+    assert code==200 and b'golden' in page.lower()
+    config=json.loads(request(public,'GET','/api/config')[2])
+    assert config['golden_cases']==len(listing['cases']) and config['repository'].startswith('https://github.com/')
+
+
+def test_evals_run_in_the_app_is_offline_only(public):
+    token=json.loads(request(public,'GET','/api/config')[2])['token']
+    headers={'Content-Type':'application/json','X-Workbench-Token':token,'Origin':'https://demo.example'}
+    code,_,body=request(public,'POST','/api/evals/run',json.dumps({'case_id':'why-slow'}),headers)
+    report=json.loads(body)['reports'][0]
+    assert code==200 and report['outcome']=='pass' and all(c['ok'] for c in report['checks'])
+    assert report['answer']['trace'][0]['tool']=='get_shift_kpis' and report['answer']['usage']['model_calls']==0
+    code,_,body=request(public,'POST','/api/evals/run',json.dumps({'case_id':'live-why-slow'}),headers)
+    assert code==200 and json.loads(body)['reports'][0]['outcome']=='skip'   # no recording: never a live call
+    assert request(public,'POST','/api/evals/run',json.dumps({'case_id':'nope'}),headers)[0]==400
+    assert request(public,'POST','/api/evals/run',json.dumps({'case_id':'why-slow','extra':1}),headers)[0]==400

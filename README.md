@@ -16,6 +16,8 @@ For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics
 | Verify the app or evaluate live question quality | [Testing and evaluation](docs/TESTING.md) |
 | Review defects and choose the next repair | [September 7 review](docs/REVIEW_2026-09-07.md) |
 | Prepare for public deployment | [Deployment readiness](docs/DEPLOYMENT.md) |
+| Open the records themselves, or rerun the SQL without the app | [The dataset](data/README.md), `tools/verify_day.py` |
+| See how correctness is checked, in the app or on the command line | `/evals` in the running app, [evals/README.md](evals/README.md), `python3 evals/run.py` |
 
 **Implementation update:** quantity-driven mock orders and a daily OpenAI narrative stage are implemented. Include shifts offers an explicit full 24-hour scope. Period PDFs and comparison history are repaired. Reference validation and chart-presence checks do not prove semantic correctness; live narrative quality and visual PDF layout remain to be evaluated. See the implementation follow-up in the review.
 

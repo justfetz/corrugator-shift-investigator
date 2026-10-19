@@ -1,0 +1,277 @@
+{
+  "synthetic": true,
+  "generator": "v4-quantity-orders",
+  "clock": "fixed-demo-local",
+  "days": [
+    {
+      "production_day": "2026-09-01",
+      "file": "2026-09-01.xml",
+      "seed": 7,
+      "sha256": "d22230ad16186e7532bacb7e1a64d9e4ca0f6c1a2946df97017a44f1750fd752",
+      "shifts": 3,
+      "setups": 167,
+      "wet_end_runs": 86
+    },
+    {
+      "production_day": "2026-09-02",
+      "file": "2026-09-02.xml",
+      "seed": 8,
+      "sha256": "02c0fa479018163975e350f1fa20be9d9a13575f793b81b90699685723841f7a",
+      "shifts": 3,
+      "setups": 175,
+      "wet_end_runs": 88
+    },
+    {
+      "production_day": "2026-09-03",
+      "file": "2026-09-03.xml",
+      "seed": 9,
+      "sha256": "891bc5fc3a9cedcca2cd5c5c993b83ca4fae65604492cced173ee54d40580b2b",
+      "shifts": 3,
+      "setups": 208,
+      "wet_end_runs": 103
+    },
+    {
+      "production_day": "2026-09-04",
+      "file": "2026-09-04.xml",
+      "seed": 10,
+      "sha256": "f4958c9c979768e0bb97e8ae13c608eb6df57262d25456c6a5360d12e62b9a46",
+      "shifts": 3,
+      "setups": 178,
+      "wet_end_runs": 86
+    },
+    {
+      "production_day": "2026-09-05",
+      "file": "2026-09-05.xml",
+      "seed": 11,
+      "sha256": "d1a4fe592cb132830881ad25f2109e55790db1ab3f0d1987ea2bc7376d0587c3",
+      "shifts": 3,
+      "setups": 180,
+      "wet_end_runs": 89
+    },
+    {
+      "production_day": "2026-09-06",
+      "file": "2026-09-06.xml",
+      "seed": 12,
+      "sha256": "0b9a7c2d76e950b56c41153fa5264aafee7ea4cb6acf2d9eac81a24a741c38cd",
+      "shifts": 3,
+      "setups": 173,
+      "wet_end_runs": 80
+    },
+    {
+      "production_day": "2026-09-07",
+      "file": "2026-09-07.xml",
+      "seed": 13,
+      "sha256": "e15361d8cf2cec36945a641f4e0b3b306b1064587503f06a0a4d1e241887e3e5",
+      "shifts": 3,
+      "setups": 196,
+      "wet_end_runs": 98
+    },
+    {
+      "production_day": "2026-09-08",
+      "file": "2026-09-08.xml",
+      "seed": 14,
+      "sha256": "4050527015fb1a7edab08a54d244f3b21874b0f85a8ec8accfe2a30c2900395e",
+      "shifts": 3,
+      "setups": 167,
+      "wet_end_runs": 78
+    },
+    {
+      "production_day": "2026-09-09",
+      "file": "2026-09-09.xml",
+      "seed": 15,
+      "sha256": "15da5bb6667aee6bffe7f564984177c3f95b09d07b5f82853c4160b7472a9fed",
+      "shifts": 3,
+      "setups": 188,
+      "wet_end_runs": 91
+    },
+    {
+      "production_day": "2026-09-10",
+      "file": "2026-09-10.xml",
+      "seed": 16,
+      "sha256": "cd2eddba4fff4e6bfb29063cf6663cc1b1b5e6e37dbcc3b08755871b69745798",
+      "shifts": 3,
+      "setups": 180,
+      "wet_end_runs": 86
+    },
+    {
+      "production_day": "2026-09-11",
+      "file": "2026-09-11.xml",
+      "seed": 17,
+      "sha256": "b852d1b89622ed34e2eb2640378247b12517fcc885a444942a2f2ef3caa433e6",
+      "shifts": 3,
+      "setups": 194,
+      "wet_end_runs": 99
+    },
+    {
+      "production_day": "2026-09-12",
+      "file": "2026-09-12.xml",
+      "seed": 18,
+      "sha256": "796367c404854b99d821aba376a9c5767794ca3049c212147f4397935339bcab",
+      "shifts": 3,
+      "setups": 184,
+      "wet_end_runs": 85
+    },
+    {
+      "production_day": "2026-09-13",
+      "file": "2026-09-13.xml",
+      "seed": 19,
+      "sha256": "481f30ea715460e34aab17e767ad396852e6fa5ec321be60b1d5c386db103204",
+      "shifts": 3,
+      "setups": 174,
+      "wet_end_runs": 88
+    },
+    {
+      "production_day": "2026-09-14",
+      "file": "2026-09-14.xml",
+      "seed": 20,
+      "sha256": "53931ca950fe598164db9cfe218bfbc4af5906398c2533bee10bd1fe5bc7d808",
+      "shifts": 3,
+      "setups": 193,
+      "wet_end_runs": 98
+    },
+    {
+      "production_day": "2026-09-15",
+      "file": "2026-09-15.xml",
+      "seed": 21,
+      "sha256": "f4b2d1849d16563c1b1206e00d2af6af998599d279e58d663969d93d1a871598",
+      "shifts": 3,
+      "setups": 172,
+      "wet_end_runs": 85
+    },
+    {
+      "production_day": "2026-09-16",
+      "file": "2026-09-16.xml",
+      "seed": 22,
+      "sha256": "f07ace1fc063a00a4f9aabbc9189250754807ecb593f3c3e892c2627fee490d2",
+      "shifts": 3,
+      "setups": 174,
+      "wet_end_runs": 89
+    },
+    {
+      "production_day": "2026-09-17",
+      "file": "2026-09-17.xml",
+      "seed": 23,
+      "sha256": "ec90e75af4ed68d5bca7060a475624671e5127633baecd0d83f5cdc84d4903d2",
+      "shifts": 3,
+      "setups": 186,
+      "wet_end_runs": 85
+    },
+    {
+      "production_day": "2026-09-18",
+      "file": "2026-09-18.xml",
+      "seed": 24,
+      "sha256": "48c45335920f5d3276102f62bc60d2235b14160dfa9a974f3f55d6e3ca4a7d8e",
+      "shifts": 3,
+      "setups": 185,
+      "wet_end_runs": 85
+    },
+    {
+      "production_day": "2026-09-19",
+      "file": "2026-09-19.xml",
+      "seed": 25,
+      "sha256": "ed7efabe8ed7f3802ac8a54e48d3b88e02af68904366883b5649dbfc377a41f2",
+      "shifts": 3,
+      "setups": 176,
+      "wet_end_runs": 90
+    },
+    {
+      "production_day": "2026-09-20",
+      "file": "2026-09-20.xml",
+      "seed": 26,
+      "sha256": "e3e7027d5c9600eab6fabe4c26aca51f6ec0ac9df75954c0cc206956f726dbad",
+      "shifts": 3,
+      "setups": 191,
+      "wet_end_runs": 92
+    },
+    {
+      "production_day": "2026-09-21",
+      "file": "2026-09-21.xml",
+      "seed": 27,
+      "sha256": "3bc5caa55400e94b53c0eee5ed850c240bd97bc21ad7a44c7e3d9675fac4c393",
+      "shifts": 3,
+      "setups": 190,
+      "wet_end_runs": 86
+    },
+    {
+      "production_day": "2026-09-22",
+      "file": "2026-09-22.xml",
+      "seed": 28,
+      "sha256": "d860fe6181d2bd9ce9a01d867841e2cea557c0b42f94e3d1c327e0317951d28c",
+      "shifts": 3,
+      "setups": 173,
+      "wet_end_runs": 84
+    },
+    {
+      "production_day": "2026-09-23",
+      "file": "2026-09-23.xml",
+      "seed": 29,
+      "sha256": "a69e33aa5743bf4b79d90f60702d5076034a7c10ec083059b2acb098b0ff453f",
+      "shifts": 3,
+      "setups": 165,
+      "wet_end_runs": 75
+    },
+    {
+      "production_day": "2026-09-24",
+      "file": "2026-09-24.xml",
+      "seed": 30,
+      "sha256": "82684d5b36a3a1ebe25bc2bf778bd92022e512cce253a074c69d01fe078c743b",
+      "shifts": 3,
+      "setups": 200,
+      "wet_end_runs": 93
+    },
+    {
+      "production_day": "2026-09-25",
+      "file": "2026-09-25.xml",
+      "seed": 31,
+      "sha256": "48d91e263b987270f5f05f56efe38923befe1ff70dd33a618e26d6888b708660",
+      "shifts": 3,
+      "setups": 185,
+      "wet_end_runs": 91
+    },
+    {
+      "production_day": "2026-09-26",
+      "file": "2026-09-26.xml",
+      "seed": 32,
+      "sha256": "ccaa0708b553d2dcff86e03f5f9e354d856363c0f862debf323b5ab4d670a5e5",
+      "shifts": 3,
+      "setups": 166,
+      "wet_end_runs": 81
+    },
+    {
+      "production_day": "2026-09-27",
+      "file": "2026-09-27.xml",
+      "seed": 33,
+      "sha256": "0b71964fbf8910f821f52fecaa82aa1873ce2946bde9f9e70770c1a125c2de73",
+      "shifts": 3,
+      "setups": 188,
+      "wet_end_runs": 95
+    },
+    {
+      "production_day": "2026-09-28",
+      "file": "2026-09-28.xml",
+      "seed": 34,
+      "sha256": "66546d9ab13014e1fc8af727dc6bdce22e4a324c2f978cfc177407a713c3a9b7",
+      "shifts": 3,
+      "setups": 171,
+      "wet_end_runs": 80
+    },
+    {
+      "production_day": "2026-09-29",
+      "file": "2026-09-29.xml",
+      "seed": 35,
+      "sha256": "b7f8a5b025b2f8480d823da3765fd9470d94bf77e682754c48d4ca6e2acb14aa",
+      "shifts": 3,
+      "setups": 172,
+      "wet_end_runs": 88
+    },
+    {
+      "production_day": "2026-09-30",
+      "file": "2026-09-30.xml",
+      "seed": 36,
+      "sha256": "c20f4557a995c23aae85abad26f4cec65c2e2ffbb670fa30eecbe3ae878e845a",
+      "shifts": 3,
+      "setups": 181,
+      "wet_end_runs": 91
+    }
+  ]
+}

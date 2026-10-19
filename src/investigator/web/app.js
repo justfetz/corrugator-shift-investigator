@@ -23,9 +23,10 @@ function showHeatmap(chart) {
  }
  wrap.append(grid);const legend=node('div',undefined,'heatmap-legend');legend.append(node('span','Lower output'),node('span',undefined,'heatmap-scale'),node('span','Higher output'));wrap.append(legend,tip);$('heatmaps').append(wrap);
 }
+function stepLink(resultId){ if(!latest||!resultId)return null; const i=latest.trace.findIndex(t=>t.result_id===resultId); if(i<0)return null; const a=node('a',`step ${i+1}`,'step-link'); a.href='#trace-row-'+(i+1); a.title='Show the tool call and SQL that produced this'; a.addEventListener('click',e=>{e.preventDefault();$('execution').open=true;const row=$('trace-row-'+(i+1));if(row){row.scrollIntoView({block:'center'});row.classList.add('lit');setTimeout(()=>row.classList.remove('lit'),1800);row.querySelector('.sql-toggle')?.click();}}); return a; }
 function showChart(chart) {
  if(chart.type==='calendar_heatmap')return showHeatmap(chart);
- const wrap=node('div',undefined,'chart');wrap.append(node('h3',chart.title || `Shift ${chart.shift} · ${chart.unit === 'minutes' ? 'Recorded downtime' : chart.unit === 'ft/min' ? 'Wet-end speed (bars) / grade target (marks)' : 'Dry-end rejects'}`));
+ const wrap=node('div',undefined,'chart');const h=node('h3',chart.title || `Shift ${chart.shift} · ${chart.unit === 'minutes' ? 'Recorded downtime' : chart.unit === 'ft/min' ? 'Wet-end speed (bars) / grade target (marks)' : 'Dry-end rejects'}`);const link=stepLink(chart.source_result_id);if(link){h.append(' · ');h.append(link);}wrap.append(h);
  if(chart.coverage!=='complete')wrap.append(node('p','Incomplete data: observed values only.','warning-note'));
  if(chart.unit==='ft/min')wrap.append(node('p','Value = ft/min / % of target. Hover or focus a value for grade and target details. 100% meets target; elapsed time includes downtime.','muted'));
  const rows=chart.rows; const max=Math.max(1,...rows.map(r=>Math.max(Number(r[chart.y])||0,Number(r.target_fpm)||0)));
@@ -56,6 +57,50 @@ function showTable(data){
  for(const key of columns){const th=node('th',labels[key]||key.replaceAll('_',' '));th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=node('tbody');
  for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);$('tables').append(box);
 }
+function describeResult(entry){
+ if(!entry.ok)return 'rejected: '+(entry.error?.message||'invalid tool call');
+ const d=entry.data||{};
+ if(entry.tool==='render_chart')return `bar chart, ${d.y} by ${d.x}, ${d.rows?.length??0} rows copied from the cited result`;
+ const rows=d.rows?Array.isArray(d.rows)?d.rows.length:0:0;
+ const bits=[`${rows} row${rows===1?'':'s'}`];
+ if(d.coverage&&d.coverage!=='complete')bits.push(`coverage ${d.coverage}, ${d.excluded_records?.length||0} excluded`);
+ if(entry.tool==='get_shift_kpis'||entry.tool==='get_shift_overview'){const r=d.rows?.[0];if(r&&d.coverage==='complete')bits.push(`${Number(r.observed_shift_fpm).toFixed(1)} ft/min · ${Number(r.speed_to_target_pct).toFixed(1)}% of target · downtime ${Number(r.downtime_pct).toFixed(2)}%`);}
+ if(entry.tool==='get_downtime_breakdown')bits.push(d.rows.map(r=>`${r.category} ${Number(r.down_minutes).toFixed(1)} min`).join(', '));
+ if(entry.tool==='get_wet_end_performance')bits.push(`${d.rows.filter(r=>r.actual_fpm<r.target_fpm).length} of ${d.rows.length} runs below grade target`);
+ if(entry.tool==='get_quality_breakdown')bits.push(d.rows.map(r=>`${r.reason} ${Number(r.rejected_sqft).toFixed(0)} sq ft`).join(', '));
+ if(entry.tool==='get_rankings')bits.push(`${d.metric} ranking`);
+ if(entry.tool==='get_shift_notes')bits.push('untrusted text, shown, never obeyed');
+ return bits.join(' · ');
+}
+function showTrace(result){
+ const box=$('trace');box.replaceChildren();if(!Array.isArray(result.trace)||!result.trace.length){box.append(node('p','No tool calls: period reports are deterministic aggregations with no planner.','muted'));return;}
+ const table=node('table',undefined,'trace-table');const head=node('thead');const hr=node('tr');for(const h of ['step','tool','arguments','result','ms',''])hr.append(node('th',h));head.append(hr);table.append(head);
+ const body=node('tbody');
+ result.trace.forEach((entry,i)=>{
+  const tr=node('tr',undefined,entry.ok?'':'rejected');tr.id='trace-row-'+(i+1);
+  tr.append(node('td',String(i+1)));tr.append(node('td',entry.tool,'tool'));tr.append(node('td',JSON.stringify(entry.arguments||{}).replace(/[0-9a-f]{32}:/g,'…:'),'args'));
+  tr.append(node('td',describeResult(entry)));tr.append(node('td',Number(entry.elapsed_ms||0).toFixed(1),'ms'));
+  const actions=node('td',undefined,'actions');const sql=entry.ok&&entry.data?.trace?.sql;
+  const detail=node('tr',undefined,'trace-detail');detail.hidden=true;const cell=node('td');cell.colSpan=6;detail.append(cell);
+  const show=(kind)=>{if(cell.dataset.kind===kind&&!detail.hidden){detail.hidden=true;cell.dataset.kind='';return;}cell.dataset.kind=kind;cell.replaceChildren();if(kind==='sql'){cell.append(node('div','Parameterized SQL run by the application; bound values follow. The planner never writes SQL.','muted'));cell.append(node('pre',sql.trim()+'\n-- parameters: '+JSON.stringify(entry.data.trace.parameters)+'  -- query time: '+Number(entry.data.trace.elapsed_ms).toFixed(1)+' ms'));}else cell.append(node('pre',JSON.stringify(entry,null,2)));detail.hidden=false;};
+  if(sql){const b=node('button','SQL','link sql-toggle');b.type='button';b.addEventListener('click',()=>show('sql'));actions.append(b);}
+  const raw=node('button','raw','link');raw.type='button';raw.addEventListener('click',()=>show('raw'));actions.append(raw);tr.append(actions);
+  body.append(tr);body.append(detail);
+ });
+ const fin=node('tr',undefined,'finish');fin.append(node('td',String(result.trace.length+1)));fin.append(node('td','finish','tool'));fin.append(node('td',JSON.stringify({result_ids:(result.evidence_ids||[]).map(id=>':'+id.split(':')[1])}),'args'));
+ fin.append(node('td',`${result.status} · ${result.usage.tool_calls} tool calls · ${result.usage.model_calls} model calls · $${Number(result.usage.cost_usd||0).toFixed(result.usage.model_calls?4:2)}`));fin.append(node('td','','ms'));fin.append(node('td',''));body.append(fin);
+ table.append(body);const scroller=node('div',undefined,'trace-scroll');scroller.append(table);box.append(scroller);
+ box.append(node('p','Loop: observe → planner names a tool and arguments → application validates name, schema, shift scope and budget → deterministic SQL runs it → evidence returns → repeat. A number with no result_id behind it cannot appear in the answer.','loop-note'));
+}
+function showProvenance(result){
+ const bar=$('provenance');if(!bar)return;bar.replaceChildren();
+ const first=result.trace.find(t=>t.ok&&t.data&&t.data.dataset_version);const version=first?first.data.dataset_version.slice(0,8):'';const day=result.production_day;const seed=config&&config.days?7+config.days.indexOf(day):'';
+ const items=[];
+ if(day&&seed!==''){items.push(node('span',`records: ${day}, seed ${seed}${version?', version '+version:''}`));const x=node('a','XML');x.href=`/api/data/${day}.xml`;const c=node('a','CSV');c.href='/api/data/csv/setups.csv';items.push(node('span','download: '));items.at(-1).append(x,' · ',c);}
+ const e=node('a',`${config?.golden_cases??''} golden cases`);e.href='/evals';items.push(node('span','correctness: '));items.at(-1).append(e);
+ const r=node('a','code and tests');r.href=config?.repository||'#';r.rel='noopener';items.push(r);
+ items.forEach((it,i)=>{if(i)bar.append(' · ');bar.append(it);});
+}
 function showResult(result) {
  $('heatmaps').replaceChildren();
  latest=result; $('download').disabled=false; $('pdf').disabled=false; $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();
@@ -63,16 +108,16 @@ function showResult(result) {
    if(entry.ok && (entry.tool==='get_shift_kpis'||entry.tool==='get_shift_overview'||entry.tool==='get_period_report')){
    const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete';
    for(const [label,value,unit,bad] of [['Speed',r.observed_shift_fpm,'ft/min',false],['Speed / target',r.speed_to_target_pct,'%',r.speed_to_target_pct<100],['Dry-end setups',r.valid_setups,'',false],['Paper changes',r.paper_changes,'',false],['Maintenance',r.maintenance_pct,'%',r.maintenance_pct>2.5],['Operator',r.operator_pct,'%',r.operator_pct>2.5],['Dry-end waste',r.dry_end_pct,'%',r.dry_end_pct>1],['Trim',r.trim_pct,'%',false],['Shear',r.shear_pct,'%',false],['Throughput',r.throughput_in,'in',false],['Lineal / setup',r.lineal_per_setup,'ft',false]]){
-    const card=node('div',undefined,'metric '+(bad||incomplete?'warning':''));card.append(node('div',`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · ${label}`,'label'));if(label==='Speed / target')card.title='Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.';if(label==='Paper changes')card.title='Count of distinct wet-end runs, as defined by the plant expert.';card.append(node('div',incomplete?'Incomplete':`${Number(value).toFixed(1)} ${unit}`,'value'));if(incomplete)card.append(node('small',`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`));$('metrics').append(card);
+    const card=node('div',undefined,'metric '+(bad||incomplete?'warning':''));const lab=node('div',`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · ${label}`,'label');const link=stepLink(entry.result_id);if(link){lab.append(' · ');lab.append(link);}card.append(lab);if(label==='Speed / target')card.title='Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.';if(label==='Paper changes')card.title='Count of distinct wet-end runs, as defined by the plant expert.';card.append(node('div',incomplete?'Incomplete':`${Number(value).toFixed(1)} ${unit}`,'value'));if(incomplete)card.append(node('small',`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`));$('metrics').append(card);
    }
   }
-  const d=node('details',undefined,'trace-step'); d.append(node('summary',`${entry.tool} · ${entry.ok?'OK':'error'} · ${entry.elapsed_ms.toFixed(1)} ms`));
-  d.append(node('pre',JSON.stringify(entry,null,2)));$('trace').append(d);
  }
+ showTrace(result);
+ showProvenance(result);
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
  $('calls').textContent=result.usage.model_calls ? ` · ${result.usage.tool_calls} tool calls · estimated $${result.usage.cost_usd.toFixed(4)} · reserved $${result.usage.reserved_usd.toFixed(2)}` : ` · ${result.usage.tool_calls} tool calls · $0 model cost`;
- $('context').replaceChildren(node('h3','Context carried to the next question'),node('pre',JSON.stringify(result.context,null,2)));
+ $('context').replaceChildren(node('pre',JSON.stringify(result.context,null,2)));
  updateScope();
 }
 async function ask(question) {

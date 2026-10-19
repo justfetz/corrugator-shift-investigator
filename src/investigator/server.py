@@ -26,6 +26,7 @@ from .fixture import generate
 WEB = Path(__file__).with_name('web')
 DAYS = [(date(2026, 9, 1)+timedelta(days=n)).isoformat() for n in range(30)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
+REPOSITORY = 'https://github.com/justfetz/corrugator-shift-investigator'
 
 
 def live_provider():
@@ -45,6 +46,31 @@ def live_model_name():
 
 def gemini_project():
     return os.environ.get('GOOGLE_CLOUD_PROJECT') or ''
+
+
+DATA_TABLES = ('shifts', 'setups', 'stops', 'orders')
+
+
+def data_dir():
+    """The committed data/ directory: DATA_DIR, ./data in a container, or data/ next to src/."""
+    for candidate in (os.environ.get('DATA_DIR'), Path.cwd() / 'data', Path(__file__).resolve().parents[2] / 'data'):
+        if candidate and (Path(candidate) / 'manifest.json').exists():
+            return Path(candidate)
+    return None
+
+
+def data_file(path):
+    """Map an allow-listed URL to a file under data/; anything else is None."""
+    folder = data_dir()
+    if folder is None:
+        return None
+    if path == '/api/data/manifest.json':
+        return folder / 'manifest.json', 'application/json; charset=utf-8'
+    if path.startswith('/api/data/') and path.endswith('.xml') and path[len('/api/data/'):-4] in DAYS:
+        return folder / path[len('/api/data/'):], 'application/xml; charset=utf-8'
+    if path.startswith('/api/data/csv/') and path.endswith('.csv') and path[len('/api/data/csv/'):-4] in DATA_TABLES:
+        return folder / 'csv' / path[len('/api/data/csv/'):], 'text/csv; charset=utf-8'
+    return None
 # Per-visitor token bucket on POST: a visitor gets VISITOR_BURST requests at once,
 # then one more every VISITOR_REFILL_SECONDS. The service-wide 60/min window still applies.
 VISITOR_BURST = 10
@@ -129,6 +155,8 @@ class Workbench:
         self.reports = OrderedDict()
         from .periods import PeriodReports
         self.periods = PeriodReports()
+        from . import evals
+        self.golden_case_count = len(evals.load_cases())
 
     @property
     def server_credentials_available(self):
@@ -146,6 +174,8 @@ class Workbench:
     def close(self):
         for analysis in self.datasets.values():
             analysis.close()
+        from . import evals
+        evals.close_datasets()
 
     def ask(self, payload, api_key=None, visitor=None):
         if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period'}:
@@ -213,6 +243,44 @@ class Workbench:
         else:
             result = Agent(self.datasets[key]).ask(question, context)
         return self._retain(result, session_id)
+
+    # ------------------------------------------------------------------ golden evals, in the app
+
+    def evals_list(self):
+        from . import evals
+        cases = evals.load_cases()
+        fixtures = {}
+        for case in cases:
+            path = evals.fixture_path(case['id'])
+            if case['mode'] == 'live' and path is not None and path.exists():
+                recorded = json.loads(path.read_text())
+                fixtures[case['id']] = {k: recorded.get(k) for k in ('provider', 'model', 'recorded_status', 'recorded_cost_usd')}
+        return {'types': evals.TYPES, 'invariants': [{'check': n, 'meaning': m} for n, m in evals.GLOBAL_INVARIANTS],
+                'cases': [{'id': c['id'], 'type': c['type'], 'mode': c['mode'], 'question': (c.get('turns') or [c['question']])[-1],
+                           'turns': c.get('turns'), 'day': c.get('day', '2026-09-14'), 'shift': c.get('shift', 2),
+                           'scope': c.get('scope', 'shift'), 'corrupt': c.get('corrupt', False), 'note': c.get('note'),
+                           'expectations': evals.describe_expectations(c), 'recording': fixtures.get(c['id'])} for c in cases]}
+
+    def evals_run(self, payload):
+        """Run golden cases on the server: offline cases for real, live cases from recordings only.
+        Never makes a model call; costs nothing beyond CPU."""
+        from . import evals
+        if not isinstance(payload, dict) or set(payload) - {'case_id', 'all'}:
+            raise ValueError('Invalid evals request')
+        cases = evals.load_cases()
+        if payload.get('all') is True:
+            selected = cases
+        else:
+            case_id = payload.get('case_id')
+            selected = [c for c in cases if c['id'] == case_id]
+            if not isinstance(case_id, str) or not selected:
+                raise ValueError('Unknown golden case')
+        reports = []
+        for case in selected:
+            report = evals.run_case(case)
+            report.pop('result', None)
+            reports.append(report)
+        return {'reports': reports, 'score': evals.score(reports)}
 
     def _planner(self, api_key, visitor):
         """The live planner behind the 'openai' wire value; the provider is a server setting."""
@@ -299,8 +367,15 @@ def make_server(port=8765, public=None, host=None):
                 return self._send(200, {'days': DAYS, 'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',
                                        'public': public is not None, 'server_key_available': app.live_model_available,
                                        'live_model_available': app.live_model_available, 'live_model': live_model_name(),
-                                       'live_provider': live_provider()})
+                                       'live_provider': live_provider(), 'golden_cases': app.golden_case_count,
+                                       'repository': REPOSITORY})
+            if self.path == '/api/evals':
+                return self._send(200, app.evals_list())
+            served = data_file(self.path)
+            if served is not None:
+                return self._send(200, served[0].read_bytes(), served[1])
             files = {'/': ('index.html', 'text/html; charset=utf-8'), '/guide': ('guide.html', 'text/html; charset=utf-8'),
+                     '/evals': ('evals.html', 'text/html; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
             if self.path not in files:
                 return self._send(404, {'error': 'Not found'})
@@ -322,7 +397,7 @@ def make_server(port=8765, public=None, host=None):
                     return self._send(400, {'error': 'Incomplete request body'})
             except (ValueError, TimeoutError):
                 return self._send(400, {'error': 'Invalid or timed-out request body'})
-            if not self._host_ok() or self.path not in ('/api/ask', '/api/report'):
+            if not self._host_ok() or self.path not in ('/api/ask', '/api/report', '/api/evals/run'):
                 return self._send(403, {'error': 'Request not allowed'})
             if not self._origin_ok():
                 return self._send(403, {'error': 'Origin not allowed'})
@@ -349,6 +424,8 @@ def make_server(port=8765, public=None, host=None):
                 with app.lock:
                     if self.path == '/api/report':
                         body = app.pdf(payload)
+                    elif self.path == '/api/evals/run':
+                        body = app.evals_run(payload)
                     else:
                         body = app.ask(payload, api_key=api_key, visitor=visitor_id(visitor))
                 self._send(200, body, 'application/pdf' if self.path == '/api/report' else 'application/json; charset=utf-8')
