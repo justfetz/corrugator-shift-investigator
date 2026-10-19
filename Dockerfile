@@ -10,6 +10,9 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY src ./src
+COPY data ./data
+COPY evals ./evals
+ENV DATA_DIR=/app/data EVALS_DIR=/app/evals
 RUN pip install --no-cache-dir . && mkdir -p /app/artifacts && chown -R app:app /app
 
 USER app

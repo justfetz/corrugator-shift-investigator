@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shift Investigator · golden evals</title><link rel="stylesheet" href="/style.css"></head>
+<body><header><div><span class="eyebrow">MANUFACTURING / AGENT WORKBENCH</span><h1>How the investigator is checked</h1></div><a class="badge" href="/">Back to the workbench</a></header>
+<main class="evals">
+<section class="intro">
+<p>An agent's answer can read well and be wrong. These are the golden cases: fixed questions with fixed expected behaviour, run against the same synthetic records every visitor sees. Each case fails for one named reason. Press <strong>Run</strong> on any case to execute it on this server right now and see every check; press <strong>Run all</strong> for the score table. Offline cases cost nothing. Live cases replay a recorded model answer and never call a model from here.</p>
+<div class="types">
+<div><h3>Routing</h3><p>Did the planner pick the right tool with the right arguments? Checkable because every tool call is a JSON object in the trace.</p></div>
+<div><h3>Faithfulness</h3><p>Did every number in the answer come out of a tool row? Every numeric token in the prose must equal a tool-row value under one of the app's formats, a row count, or a stated rule constant.</p></div>
+<div><h3>Grounding</h3><p>Does each finding cite evidence that exists? Citations are (result_id, row, field); each must resolve in the trace. A requested chart that could not be drawn must be disclosed.</p></div>
+<div><h3>Refusal</h3><p>Does it say no when it should? Profit, yesterday, other dates, a shift outside the selected scope, email, SQL.</p></div>
+</div>
+<details id="invariants"><summary>Checks that run on every case, whatever its type</summary><ul id="invariant-list"></ul></details>
+<div class="run-all"><button id="run-all" type="button">Run all</button><span id="run-status" role="status" class="muted">Ready · no model calls</span></div>
+<div id="score" class="score" hidden></div>
+</section>
+<section id="cases" aria-live="polite"></section>
+<footer>Same checks as <code>python3 evals/run.py</code> and <code>tests/test_evals.py</code> in the repository; the dataset is <code>data/</code>; the verifier that recomputes the numbers from the CSVs without the app is <code>tools/verify_day.py</code>.</footer>
+</main>
+<script src="/evals.js"></script>
+</body></html>
