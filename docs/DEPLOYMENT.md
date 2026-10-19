@@ -10,7 +10,8 @@ The current application is a local learning workbench. It is suitable for a loca
 | --- | --- |
 | `PUBLIC_DEMO_ORIGIN` (required; comma-separated https origins) | Bind `0.0.0.0:$PORT` (default 7860) with a threading server. The loopback `Host` rule is dropped (the proxy owns the hostname); every `POST` must carry an `Origin` in this list, in addition to the session token. |
 | `PUBLIC_DEMO_EMBED_ORIGINS` (optional) | `Content-Security-Policy: frame-ancestors` so the page can be framed by those sites. A Hugging Face Space page frames its own app, so include `https://huggingface.co` there. Default stays `'none'`. |
-| `PUBLIC_DEMO_LIVE_MODEL=1` + `OPENAI_API_KEY` | Allows OpenAI mode with the **server's** key under the existing reservation ledger. Off by default: the UI removes the OpenAI option and the server answers `400` to live requests. |
+| `PUBLIC_DEMO_LIVE_MODEL=1` + `OPENAI_API_KEY` | Allows live mode with the **server's** OpenAI key under the existing reservation ledger. Off by default: the UI removes the live option and the server answers `400` to live requests. |
+| `PUBLIC_DEMO_LIVE_MODEL=1` + `LIVE_MODEL_PROVIDER=gemini` + `GOOGLE_CLOUD_PROJECT` | Live mode on Gemini (Vertex AI) with the service's own identity: no key anywhere. `GEMINI_MODEL` (default `gemini-3.1-flash-lite`) and `GEMINI_LOCATION` (default `global`) are optional. Same ledger, limits and narrative validation as the OpenAI path. |
 | Visitor keys | Never read in public mode. `X-OpenAI-Key` is ignored server-side and the key field is removed client-side. |
 
 Investigations and PDFs run one at a time under a lock (the DuckDB handles and in-memory caches are not shared across threads); static files and `/api/health` do not wait. Two in-memory limits apply to every `POST`: a per-visitor token bucket (10 requests at once, then one every 6 seconds; the visitor is the first `X-Forwarded-For` hop in public mode, the socket peer locally) and the service-wide 60-requests-per-minute window. With one instance both are effectively service-wide; neither is a durable abuse control. In public live mode every provider request carries a `safety_identifier`: a salted SHA-256 digest of the visitor address (`VISITOR_ID_SALT` sets the salt), never the address itself. The model-budget ledger lives at `MODEL_BUDGET_PATH` (default `artifacts/model-budget.sqlite3` inside the container, which resets with the container); on Cloud Run a mounted Cloud Storage bucket keeps it across restarts (below). Keep the provider-side spend limit as the real cap regardless.
@@ -82,6 +83,49 @@ Cloud Run requires the container to listen on `0.0.0.0` and the injected `PORT`;
 8. Minimum instances zero and maximum one: done in the workflow. Google documents maximum instances as a cost guard and notes the limit can briefly be exceeded: <https://docs.cloud.google.com/run/docs/configuring/max-instances>.
 9. Add cloud billing alerts, request/error/latency dashboards, dependency and container scanning, deploy logs, and an immediate disable/rollback procedure. Load-test the period report and PDF endpoints with synthetic requests.
 10. Map the custom domain only after staging passes the security and behavior checks. Cloud Run terminates TLS for the service; keep the application HTTP-only behind that boundary as required by the container contract.
+
+## Live mode on Gemini (Vertex AI): the no-key path
+
+The analyst behind live mode can be Gemini instead of OpenAI. Cloud Run calls Vertex AI as the
+service's runtime service account, which it authenticates through the metadata server, so there
+is no API key to store, rotate or leak. The model still only chooses tools and writes the cited
+narrative; `narrative.py` validates every reference and substitutes every value exactly as before.
+
+One-time setup (Cloud Shell), in this order so the cap exists before the API does:
+
+1. Billing → Budgets & alerts → Create budget → **Spend cap enforcement** → scope: project
+   `felix-august`, service **Gemini Enterprise Agent Platform** (Vertex AI) → amount $5. A second
+   spend cap on **Cloud Run** at $10 bounds the rest of the bill.
+2. Enable the API and grant the runtime identity the one role it needs:
+
+```bash
+PROJECT_ID=felix-august
+gcloud services enable aiplatform.googleapis.com --project "$PROJECT_ID"
+NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member "serviceAccount:${NUMBER}-compute@developer.gserviceaccount.com" --role roles/aiplatform.user --quiet
+```
+
+3. Repository variables: `LIVE_MODEL_PROVIDER=gemini`, `PUBLIC_DEMO_LIVE_MODEL=1`. Redeploy. The
+   smoke test prints `live model available: True gemini gemini-3.1-flash-lite`.
+
+Before that, record the live evals once from your own machine so the first real answers are
+reviewed rather than published:
+
+```bash
+export GOOGLE_CLOUD_PROJECT=felix-august
+export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token)   # your identity; expires in an hour
+python3 evals/run.py --live --provider gemini                         # ~9 cases, about a cent each
+```
+
+Run the local workbench the same way (`LIVE_MODEL_PROVIDER=gemini python3 -m investigator.server`)
+to see the narrative in the interface. Price assumptions live at the top of `gemini_provider.py`;
+the ledger reserves $0.02 per call regardless, so the estimate being wrong cannot overspend.
+
+What this does not change: the per-visitor bucket, the 60/min window, one instance, the reservation
+ledger, and the narrative validator all apply to Gemini exactly as to OpenAI. `safety_identifier`
+is an OpenAI field and has no Vertex equivalent; abuse signals for Gemini come from Cloud Run's
+request logs and the spend cap.
 
 ## Adding live OpenAI later
 

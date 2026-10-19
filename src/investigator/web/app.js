@@ -105,7 +105,7 @@ function applyPublicMode(){
  $('key-label').hidden=true;$('api-key').value='';
  const option=$('mode').querySelector?.('option[value="openai"]');
  if(!config.live_model_available){if(option)option.remove();$('mode').value='offline';$('mode').disabled=true;$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';}
- else{if($('period').value==='day')$('mode').value='openai';$('mode-help').textContent='Public demo: the model chooses which bounded tools to run and writes the interpretation; every number is calculated by fixed queries and inserted by code. Uses this site\'s own key under a spend cap; no visitor key is accepted. Switch to Offline to see the same tools without a model.';}
+ else{const gemini=config.live_provider==='gemini';if(option)option.textContent=gemini?'Model / Gemini on Vertex AI':'Model / OpenAI';if($('period').value==='day')$('mode').value='openai';$('mode-help').textContent='Public demo: the model ('+(config.live_model||'')+') chooses which bounded tools to run and writes the interpretation; every number is calculated by fixed queries and inserted by code. '+(gemini?'Runs under this site\'s own Google Cloud identity and a spend cap; there is no API key anywhere.':'Uses this site\'s own key under a spend cap; no visitor key is accepted.')+' Switch to Offline to see the same tools without a model.';}
  $('mode-badge').textContent=config.live_model_available?'Synthetic data / Public demo · model on':'Synthetic data / Public demo';
 }
 async function init(){

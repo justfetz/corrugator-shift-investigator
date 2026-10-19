@@ -15,6 +15,8 @@ exists and skipped otherwise.
 
     python3 evals/run.py                  # offline + replay recorded live fixtures
     python3 evals/run.py --live           # also call OpenAI (OPENAI_API_KEY) and record fixtures
+    python3 evals/run.py --live --provider gemini   # same with Gemini on Vertex AI (GOOGLE_CLOUD_PROJECT
+                                          #   + GOOGLE_OAUTH_ACCESS_TOKEN from `gcloud auth print-access-token`)
     python3 evals/run.py --only why-slow  # one case
     python3 evals/run.py --json out.json  # machine-readable results
 
@@ -241,19 +243,31 @@ def expectations(case, result, trace):
 # ---------------------------------------------------------------- live planner transport
 
 def prompt_digest(payload):
-    first = payload['input'][0]['content'] if payload.get('input') else ''
+    if 'systemInstruction' in payload:                      # Gemini
+        first = payload['systemInstruction']['parts'][0]['text']
+    else:                                                   # OpenAI
+        first = payload['input'][0]['content'] if payload.get('input') else ''
     return hashlib.sha256(first.encode()).hexdigest()[:12]
 
 
-def recording_transport(exchanges):
-    from investigator.openai_provider import transport
+def recording_transport(exchanges, provider):
+    if provider == 'gemini':
+        from investigator import gemini_provider
+        project = os.environ['GOOGLE_CLOUD_PROJECT']
+
+        def transport(payload, token, timeout):
+            return gemini_provider.transport(payload, token, timeout, project)
+    else:
+        from investigator.openai_provider import transport
 
     def send(payload, key, timeout):
         response = transport(payload, key, timeout)
         seen = RUN_ID.search(json.dumps(payload))
+        tools = [t['name'] for t in payload['tools']] if 'input' in payload else \
+                [d['name'] for d in payload['tools'][0]['functionDeclarations']]
         exchanges.append({'run_id': seen.group(0).split(':')[0] if seen else None,
-                          'model': payload['model'], 'prompt_digest': prompt_digest(payload),
-                          'tools': [t['name'] for t in payload['tools']], 'response': response})
+                          'model': payload.get('model'), 'prompt_digest': prompt_digest(payload),
+                          'tools': tools, 'response': response})
         return response
     return send
 
@@ -278,7 +292,7 @@ def replay_transport(exchanges, warnings):
 
 # ---------------------------------------------------------------- running one case
 
-def run_case(case, live, record):
+def run_case(case, live, record, provider='openai'):
     """Return (outcome, failures, note) with outcome in pass/fail/skip."""
     day = case.get('day', '2026-09-14')
     scope = case.get('scope', 'shift')
@@ -296,23 +310,34 @@ def run_case(case, live, record):
             return Agent(analysis)
     else:
         from investigator.openai_provider import Budget, OpenAIPlanner
+        from investigator.gemini_provider import GeminiPlanner
         fixture = FIXTURES / f'{case["id"]}.json'
         if live:
-            key = os.environ.get('OPENAI_API_KEY')
-            if not key:
-                return 'skip', [], 'OPENAI_API_KEY not set'
+            if provider == 'gemini':
+                key = os.environ.get('GOOGLE_OAUTH_ACCESS_TOKEN')
+                if not key or not os.environ.get('GOOGLE_CLOUD_PROJECT'):
+                    return 'skip', [], 'GOOGLE_CLOUD_PROJECT and GOOGLE_OAUTH_ACCESS_TOKEN not set'
+            else:
+                key = os.environ.get('OPENAI_API_KEY')
+                if not key:
+                    return 'skip', [], 'OPENAI_API_KEY not set'
             exchanges = []
-            send = recording_transport(exchanges)
+            send = recording_transport(exchanges, provider)
         elif fixture.exists():
-            exchanges = json.loads(fixture.read_text())['exchanges']
+            recorded = json.loads(fixture.read_text())
+            provider = recorded.get('provider', 'openai')
+            exchanges = recorded['exchanges']
             send = replay_transport(exchanges, warnings)
-            key = 'sk-replay-fixture-not-a-credential'
+            key = 'ya29.replay-fixture-not-a-credential' if provider == 'gemini' else 'sk-replay-fixture-not-a-credential'
         else:
             return 'skip', [], 'no fixture; run --live to record'
         ledger = Path(tempfile.mkdtemp()) / 'budget.sqlite3'
 
         def make_agent():
-            planner = OpenAIPlanner(key, Budget(ledger), send)
+            if provider == 'gemini':
+                planner = GeminiPlanner(os.environ.get('GOOGLE_CLOUD_PROJECT', 'replay-project'), Budget(ledger), send, token=key)
+            else:
+                planner = OpenAIPlanner(key, Budget(ledger), send)
             return Agent(analysis, planner=planner, max_calls=10, max_seconds=60)
 
     result = None
@@ -331,11 +356,12 @@ def run_case(case, live, record):
     if case['mode'] == 'live' and live and record:
         FIXTURES.mkdir(exist_ok=True)
         (FIXTURES / f'{case["id"]}.json').write_text(json.dumps(
-            {'case': case['id'], 'question': turns[-1], 'recorded_status': result['status'],
+            {'case': case['id'], 'provider': provider, 'model': result['usage'].get('model'),
+             'question': turns[-1], 'recorded_status': result['status'],
              'recorded_cost_usd': result['usage']['cost_usd'], 'exchanges': exchanges}, indent=1))
-        note = f'recorded {len(exchanges)} exchanges, ${result["usage"]["cost_usd"]:.4f}'
+        note = f'recorded {len(exchanges)} {provider} exchanges, ${result["usage"]["cost_usd"]:.4f}'
     elif case['mode'] == 'live':
-        note = f'{result["status"]}, {result["usage"]["model_calls"]} model calls'
+        note = f'{result["status"]}, {result["usage"]["model_calls"]} {provider} model calls'
     else:
         note = f'{result["status"]}, {len(result["trace"])} tool calls'
     if warnings:
@@ -349,6 +375,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--live', action='store_true', help='run live cases against OpenAI and record fixtures')
     parser.add_argument('--no-record', action='store_true', help='with --live: do not overwrite fixtures')
+    parser.add_argument('--provider', choices=['openai', 'gemini'], default='openai', help='with --live: which model to call')
     parser.add_argument('--only', action='append', help='run only this case id (repeatable)')
     parser.add_argument('--json', type=Path, help='write results here')
     args = parser.parse_args(argv)
@@ -359,7 +386,7 @@ def main(argv=None):
     rows = []
     try:
         for case in cases:
-            outcome, failures, note = run_case(case, args.live, not args.no_record)
+            outcome, failures, note = run_case(case, args.live, not args.no_record, args.provider)
             rows.append({'id': case['id'], 'type': case['type'], 'mode': case['mode'],
                          'outcome': outcome, 'failures': failures, 'note': note})
     finally:
