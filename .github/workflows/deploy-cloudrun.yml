@@ -22,7 +22,10 @@ jobs:
       SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
       EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
       LIVE_MODEL: ${{ vars.PUBLIC_DEMO_LIVE_MODEL || '0' }}
+      LIVE_PROVIDER: ${{ vars.LIVE_MODEL_PROVIDER || 'openai' }}
       OPENAI_SECRET: ${{ vars.OPENAI_SECRET_NAME || 'openai-api-key' }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.1-flash-lite' }}
+      GEMINI_LOCATION: ${{ vars.GEMINI_LOCATION || 'global' }}
       BUDGET_BUCKET: ${{ vars.BUDGET_BUCKET || '' }}
       MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES || '1' }}
     steps:
@@ -48,11 +51,17 @@ jobs:
       - name: Deploy from source
         run: |
           set -euo pipefail
-          # Live model: only when the repository variable PUBLIC_DEMO_LIVE_MODEL is "1". The key is
-          # never in GitHub; Cloud Run reads it from Secret Manager at start-up as OPENAI_API_KEY.
-          if [ "$LIVE_MODEL" = "1" ]; then
+          # Live model: only when the repository variable PUBLIC_DEMO_LIVE_MODEL is "1".
+          #   LIVE_MODEL_PROVIDER=gemini  -> Vertex AI with the service's own identity; no secret anywhere.
+          #                                  The runtime service account needs roles/aiplatform.user.
+          #   LIVE_MODEL_PROVIDER=openai  -> the key is never in GitHub; Cloud Run reads it from
+          #                                  Secret Manager at start-up as OPENAI_API_KEY.
+          if [ "$LIVE_MODEL" = "1" ] && [ "$LIVE_PROVIDER" = "gemini" ]; then
+            LIVE_FLAGS=(--clear-secrets)
+            ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=1|LIVE_MODEL_PROVIDER=gemini|GOOGLE_CLOUD_PROJECT=${PROJECT_ID}|GEMINI_MODEL=${GEMINI_MODEL}|GEMINI_LOCATION=${GEMINI_LOCATION}"
+          elif [ "$LIVE_MODEL" = "1" ]; then
             LIVE_FLAGS=(--set-secrets "OPENAI_API_KEY=${OPENAI_SECRET}:latest")
-            ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=1"
+            ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=1|LIVE_MODEL_PROVIDER=openai"
           else
             LIVE_FLAGS=(--clear-secrets)   # the service holds no other secrets; idempotent when none exist
             ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=0"
@@ -96,6 +105,6 @@ jobs:
           done
           test -n "$LIVE"
           CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
-          echo "live model available: $(echo "$CFG" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("live_model_available"))')"
+          echo "live model available: $(echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); print(c.get("live_model_available"), c.get("live_provider"), c.get("live_model"))')"
           if [ "$LIVE_MODEL" = "1" ]; then echo "$CFG" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("live_model_available") else 1)'; fi
           echo "Live at $LIVE"

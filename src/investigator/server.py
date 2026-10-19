@@ -26,6 +26,25 @@ from .fixture import generate
 WEB = Path(__file__).with_name('web')
 DAYS = [(date(2026, 9, 1)+timedelta(days=n)).isoformat() for n in range(30)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
+
+
+def live_provider():
+    """Which model stands behind live mode: 'openai' (a key) or 'gemini' (the service's own identity)."""
+    provider = os.environ.get('LIVE_MODEL_PROVIDER', 'openai')
+    if provider not in ('openai', 'gemini'):
+        raise ValueError('LIVE_MODEL_PROVIDER must be openai or gemini')
+    return provider
+
+
+def live_model_name():
+    if live_provider() == 'gemini':
+        from .gemini_provider import MODEL
+        return MODEL
+    return LIVE_MODEL
+
+
+def gemini_project():
+    return os.environ.get('GOOGLE_CLOUD_PROJECT') or ''
 # Per-visitor token bucket on POST: a visitor gets VISITOR_BURST requests at once,
 # then one more every VISITOR_REFILL_SECONDS. The service-wide 60/min window still applies.
 VISITOR_BURST = 10
@@ -112,10 +131,17 @@ class Workbench:
         self.periods = PeriodReports()
 
     @property
+    def server_credentials_available(self):
+        """OpenAI: the server's key. Gemini: a project to bill; the identity itself comes from Cloud Run."""
+        if live_provider() == 'gemini':
+            return bool(gemini_project())
+        return bool(os.environ.get('OPENAI_API_KEY'))
+
+    @property
     def live_model_available(self):
         if self.public is None:
-            return bool(os.environ.get('OPENAI_API_KEY'))
-        return self.public.live_model and bool(os.environ.get('OPENAI_API_KEY'))
+            return self.server_credentials_available
+        return self.public.live_model and self.server_credentials_available
 
     def close(self):
         for analysis in self.datasets.values():
@@ -139,8 +165,10 @@ class Workbench:
             api_key = None  # a hosted demo never uses a visitor's key, even if one is sent
             if mode == 'openai' and not self.live_model_available:
                 raise ValueError('This public demo runs the free offline planner only')
-        if mode == 'openai' and not (api_key or os.environ.get('OPENAI_API_KEY')):
+        if mode == 'openai' and live_provider() == 'openai' and not (api_key or os.environ.get('OPENAI_API_KEY')):
             raise ValueError('OpenAI mode needs your key in the local key field or server environment')
+        if mode == 'openai' and live_provider() == 'gemini' and not gemini_project():
+            raise ValueError('Gemini mode needs GOOGLE_CLOUD_PROJECT on the server')
         day, shift = payload.get('day'), payload.get('shift')
         if day not in DAYS or type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Select a supported production day and shift')
@@ -177,9 +205,7 @@ class Workbench:
             self.datasets[key] = Analysis(generate(seed=7+DAYS.index(day), production_day=day, corrupt=corrupt))
         self.datasets.move_to_end(key)
         if mode == 'openai':
-            from .openai_provider import OpenAIPlanner, Budget
-            planner = OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), Budget(budget_path()),
-                                    safety_identifier=visitor if self.public is not None else None)
+            planner = self._planner(api_key, visitor)
             try:
                 result = Agent(self.datasets[key], planner=planner, max_calls=10, max_seconds=60).ask(question, context)
             finally:
@@ -187,6 +213,17 @@ class Workbench:
         else:
             result = Agent(self.datasets[key]).ask(question, context)
         return self._retain(result, session_id)
+
+    def _planner(self, api_key, visitor):
+        """The live planner behind the 'openai' wire value; the provider is a server setting."""
+        from .openai_provider import Budget
+        budget = Budget(budget_path())
+        if live_provider() == 'gemini':
+            from .gemini_provider import GeminiPlanner
+            return GeminiPlanner(gemini_project(), budget)
+        from .openai_provider import OpenAIPlanner
+        return OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), budget,
+                             safety_identifier=visitor if self.public is not None else None)
 
     def _retain(self, result, session_id):
         result['session_id'] = session_id
@@ -261,7 +298,8 @@ def make_server(port=8765, public=None, host=None):
             if self.path == '/api/config':
                 return self._send(200, {'days': DAYS, 'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',
                                        'public': public is not None, 'server_key_available': app.live_model_available,
-                                       'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL})
+                                       'live_model_available': app.live_model_available, 'live_model': live_model_name(),
+                                       'live_provider': live_provider()})
             files = {'/': ('index.html', 'text/html; charset=utf-8'), '/guide': ('guide.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
             if self.path not in files:
@@ -340,7 +378,8 @@ def main():
         print('Synthetic data. Offline by default; OpenAI mode requires a key. No email delivery.', flush=True)
     else:
         server = make_server(args.port or int(os.environ.get('PORT', '7860')), public=public)
-        live = 'server key with the spend cap' if server.app.live_model_available else 'offline planner only'
+        live = (f'{live_provider()} live model ({live_model_name()}) with the spend cap' if server.app.live_model_available
+                else 'offline planner only')
         print(f'Public synthetic demo on 0.0.0.0:{server.server_port} for {", ".join(public.origins)}; '
               f'embeddable by {public.frame_ancestors}; {live}. No visitor keys, no email.', flush=True)
     try:
