@@ -13,11 +13,25 @@ The current application is a local learning workbench. It is suitable for a loca
 | `PUBLIC_DEMO_LIVE_MODEL=1` + `OPENAI_API_KEY` | Allows OpenAI mode with the **server's** key under the existing reservation ledger. Off by default: the UI removes the OpenAI option and the server answers `400` to live requests. |
 | Visitor keys | Never read in public mode. `X-OpenAI-Key` is ignored server-side and the key field is removed client-side. |
 
-Investigations and PDFs run one at a time under a lock (the DuckDB handles and in-memory caches are not shared across threads); static files and `/api/health` do not wait. The in-memory 60-requests-per-minute window is per process, which on a single-container host is effectively service-wide; it is still not an abuse control. The model-budget ledger lives in the container's `artifacts/` directory and resets with the container unless the host provides persistent storage — keep the provider-side spend limit as the real cap.
+Investigations and PDFs run one at a time under a lock (the DuckDB handles and in-memory caches are not shared across threads); static files and `/api/health` do not wait. Two in-memory limits apply to every `POST`: a per-visitor token bucket (10 requests at once, then one every 6 seconds; the visitor is the first `X-Forwarded-For` hop in public mode, the socket peer locally) and the service-wide 60-requests-per-minute window. With one instance both are effectively service-wide; neither is a durable abuse control. In public live mode every provider request carries a `safety_identifier`: a salted SHA-256 digest of the visitor address (`VISITOR_ID_SALT` sets the salt), never the address itself. The model-budget ledger lives at `MODEL_BUDGET_PATH` (default `artifacts/model-budget.sqlite3` inside the container, which resets with the container); on Cloud Run a mounted Cloud Storage bucket keeps it across restarts (below). Keep the provider-side spend limit as the real cap regardless.
 
 ### Deploy to Google Cloud Run (free tier, scale to zero) — recommended
 
-`.github/workflows/deploy-cloudrun.yml` deploys `main` from source (Cloud Build reads the `Dockerfile`) whenever the repository has the variable `GCP_PROJECT_ID` and the secret `GCP_SA_KEY`. It allow-lists every URL the service answers on — the legacy `<service>-<hash>-<region code>.a.run.app` form and the deterministic `<service>-<project number>.<region>.run.app` form, since which one `gcloud` reports as primary varies — as the comma-separated `PUBLIC_DEMO_ORIGIN`, sets `PUBLIC_DEMO_EMBED_ORIGINS` (variable, default `https://justfetz.github.io`), deploys with `--min-instances 0 --max-instances 2 --memory 1Gi --concurrency 20 --timeout 180`, and curls `/api/health`. Optional variables: `GCP_REGION` (default `us-central1`), `CLOUD_RUN_SERVICE` (default `corrugator-shift-investigator`).
+`.github/workflows/deploy-cloudrun.yml` deploys `main` from source (Cloud Build reads the `Dockerfile`) whenever the repository has the variable `GCP_PROJECT_ID` and the secret `GCP_SA_KEY`. It allow-lists every URL the service answers on — the legacy `<service>-<hash>-<region code>.a.run.app` form and the deterministic `<service>-<project number>.<region>.run.app` form, since which one `gcloud` reports as primary varies — as the comma-separated `PUBLIC_DEMO_ORIGIN`, sets `PUBLIC_DEMO_EMBED_ORIGINS` (variable, default `https://justfetz.github.io`), deploys with `--min-instances 0 --max-instances 1 --memory 1Gi --concurrency 20 --timeout 180`, and curls `/api/health`. Optional variables: `GCP_REGION` (default `us-central1`), `CLOUD_RUN_SERVICE` (default `corrugator-shift-investigator`), `CLOUD_RUN_MAX_INSTANCES` (default `1`; the server serializes investigations, so a second instance only doubles the cost ceiling and splits the limiters), `BUDGET_BUCKET` (below).
+
+#### Durable budget ledger (`BUDGET_BUCKET`)
+
+Set the repository variable `BUDGET_BUCKET` to a Cloud Storage bucket name and the workflow mounts it at `/mnt/ledger` (gen2 execution environment, Cloud Storage FUSE) and sets `MODEL_BUDGET_PATH=/mnt/ledger/model-budget.sqlite3`, so the monthly reservation ledger survives container restarts and redeploys. One-time setup (Cloud Shell; the service runs as the default compute service account unless you changed it):
+
+```bash
+PROJECT_ID=felix-august; REGION=us-central1; BUCKET="${PROJECT_ID}-investigator-ledger"
+gcloud storage buckets create "gs://${BUCKET}" --project "$PROJECT_ID" --location "$REGION" --uniform-bucket-level-access
+NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+  --member "serviceAccount:${NUMBER}-compute@developer.gserviceaccount.com" --role roles/storage.objectUser
+```
+
+Then set `BUDGET_BUCKET=<bucket name>` in the repository variables and redeploy. SQLite on a FUSE mount is safe here only because there is a single writer: one instance (`CLOUD_RUN_MAX_INSTANCES=1`) and the server's investigation lock. Do not raise the instance count with the bucket mounted. Without `BUDGET_BUCKET` the ledger stays in the container and resets with it, which is acceptable while live mode is off (`PUBLIC_DEMO_LIVE_MODEL=0`, the default).
 
 One-time project setup (Cloud Shell):
 
@@ -63,9 +77,9 @@ Cloud Run requires the container to listen on `0.0.0.0` and the injected `PORT`;
 3. Offline-only public configuration: done (`PUBLIC_DEMO_ORIGIN` without `PUBLIC_DEMO_LIVE_MODEL`).
 4. Configured canonical origins instead of the loopback Host/Origin rules: done. The static-file allowlist, content-security policy, bounded JSON and text-only rendering are unchanged.
 5. Make PDF generation stateless or use a durable, short-lived report reference. The present report cache is process memory; another instance or a restart will not have it.
-6. Put a durable edge or datastore-backed rate limit in front of `/api/ask` and `/api/report`. The current in-memory 60-request window is per process and is not a public abuse control.
-7. If anonymous public querying is allowed, add an abuse challenge and validate it on the server. Cloudflare says Turnstile client tokens require server-side Siteverify validation, are single-use and expire after five minutes: <https://developers.cloudflare.com/turnstile/get-started/server-side-validation/>.
-8. Deploy staging with minimum instances zero and a small service-level maximum instance count. Google documents maximum instances as a cost guard and recommends starting at three, while noting that the limit can briefly be exceeded: <https://docs.cloud.google.com/run/docs/configuring/max-instances>.
+6. Put a durable edge or datastore-backed rate limit in front of `/api/ask` and `/api/report`. The per-visitor token bucket and the 60-request window are in memory (service-wide with one instance) and are not a public abuse control.
+7. If anonymous public querying is allowed with the live model on, add an abuse challenge and validate it on the server. Cloudflare says Turnstile client tokens require server-side Siteverify validation, are single-use and expire after five minutes: <https://developers.cloudflare.com/turnstile/get-started/server-side-validation/>. Not needed while the demo is offline-only.
+8. Minimum instances zero and maximum one: done in the workflow. Google documents maximum instances as a cost guard and notes the limit can briefly be exceeded: <https://docs.cloud.google.com/run/docs/configuring/max-instances>.
 9. Add cloud billing alerts, request/error/latency dashboards, dependency and container scanning, deploy logs, and an immediate disable/rollback procedure. Load-test the period report and PDF endpoints with synthetic requests.
 10. Map the custom domain only after staging passes the security and behavior checks. Cloud Run terminates TLS for the service; keep the application HTTP-only behind that boundary as required by the container contract.
 

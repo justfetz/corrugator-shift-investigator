@@ -120,3 +120,40 @@ def test_bad_key_not_echoed(tmp_path):
     with pytest.raises(ValueError) as exc:
         OpenAIPlanner('invalid-secret-value',Budget(tmp_path/'budget.db'))
     assert 'invalid-secret-value' not in str(exc.value)
+
+
+def test_safety_identifier_sent_only_as_hashed_digest(tmp_path):
+    payloads=[]
+    def send(payload,key,timeout):
+        payloads.append(payload)
+        return response('cannot_answer',{'reason':'test'})
+    a=Analysis(generate())
+    try:
+        planner=OpenAIPlanner(KEY,Budget(tmp_path/'b.db'),send,safety_identifier='a'*32)
+        Agent(a,planner,max_seconds=60).ask('Anything',Context(a.day))
+        assert payloads and payloads[0]['safety_identifier']=='a'*32
+        planner=OpenAIPlanner(KEY,Budget(tmp_path/'b.db'),send)
+        Agent(a,planner,max_seconds=60).ask('Anything',Context(a.day))
+        assert 'safety_identifier' not in payloads[-1]
+        for raw in ('203.0.113.9','jason','x'*7,'Z'*32):
+            with pytest.raises(ValueError):OpenAIPlanner(KEY,Budget(tmp_path/'b.db'),send,safety_identifier=raw)
+    finally:a.close()
+
+
+def test_workbench_passes_visitor_only_in_public_mode(monkeypatch,tmp_path):
+    from investigator import server
+    from investigator.server import PublicDemo
+    seen=[]
+    class Spy:
+        mode='spy'; usage={'model_calls':0,'cost_usd':0}
+        def __init__(self,key,budget,send=None,safety_identifier=None):seen.append((safety_identifier,budget.path))
+        def next_step(self,context):return {'unavailable':'spy'}
+        def close(self):pass
+    monkeypatch.setattr('investigator.openai_provider.OpenAIPlanner',Spy)
+    monkeypatch.setenv('OPENAI_API_KEY','sk-server-key-for-test')
+    monkeypatch.setenv('MODEL_BUDGET_PATH',str(tmp_path/'ledger.sqlite3'))
+    payload={'day':'2026-09-01','shift':2,'question':'Why was second shift slow?','mode':'openai'}
+    server.Workbench().ask(dict(payload),visitor='b'*32)
+    server.Workbench(PublicDemo(('https://demo.example',),(),True)).ask(dict(payload),visitor='b'*32)
+    assert [s[0] for s in seen]==[None,'b'*32]
+    assert all(s[1]==tmp_path/'ledger.sqlite3' for s in seen)
