@@ -69,6 +69,32 @@ def test_sessions_and_day_scope():
     finally:app.close()
 
 
+def test_config_reports_the_production_calendar_and_refuses_other_days(running):
+    from investigator.record_store import default_store
+    from investigator.server import DAYS
+    store=default_store()
+    config=json.loads(request(running,'GET','/api/config')[2])
+    assert config['days']==store.production_days==DAYS
+    assert (config['first_day'],config['last_day'],config['production_calendar'])==('2026-08-03','2026-09-30','Mon-Fri')
+    assert config['dataset_hash']==store.content_hash and len(config['dataset_hash'])==64
+    assert len(config['days'])==43 and '2026-08-03' in config['days'] and '2026-09-12' not in config['days']
+    assert {t['name'] for t in config['tools']}>={'get_period_kpis','compare_periods','get_downtime_pareto','get_waste_breakdown','get_stops_profile','get_trend'}
+    headers={'Content-Type':'application/json','X-Workbench-Token':config['token']}
+    for day,message in (('2026-09-12','Saturday'),('2026-09-13','Sunday'),('2026-07-31','outside the dataset'),('2026-10-01','outside the dataset'),('2026/09/14','YYYY-MM-DD')):
+        status,_,body=request(running,'POST','/api/ask',json.dumps({'day':day,'shift':2,'question':'Show speed'}),headers)
+        assert status==400 and message in json.loads(body)['error'], (day,body)
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-08-03','shift':1,'question':'Show speed'}),headers)
+    assert status==200 and json.loads(body)['production_day']=='2026-08-03'
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'scope':'day','question':'How did September go versus August?'}),headers)
+    result=json.loads(body)
+    assert status==200 and result['trace'][0]['tool']=='compare_periods' and result['charts'][0]['y2']=='previous'
+    assert result['context']['dataset_version']==running.app.datasets[('2026-09-14',False)].version
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-08-12','shift':2,'period':'month','question':'period'}),headers)
+    result=json.loads(body)
+    assert status==200 and result['period_label']=='2026-08-01 to 2026-08-31' and result['status']=='complete'
+    assert any('Full comparison unavailable' in s for s in result['sections'])   # July is before the dataset
+
+
 def test_interface_control_references_exist():
     import re
     from investigator.server import WEB

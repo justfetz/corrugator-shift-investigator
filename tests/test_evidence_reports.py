@@ -101,34 +101,64 @@ def test_scope_blocks_text_and_model_escape(analysis):
 def periods():return PeriodReports()
 
 
-def test_week_recurrence_and_counts(periods):
+@pytest.fixture(scope='module')
+def records():
+    from investigator.synth import generate_months
+    return generate_months()
+
+
+def stop_minutes(records, start, end, shift):
+    """Recorded (kind, place, reason) -> [count, minutes] from the record families, by hand."""
+    out={}
+    for st in records['stops']:
+        if start<=st.production_date<=end and st.shift_number==shift:
+            item=out.setdefault((st.kind,st.place,st.reason),[0,0.0])
+            item[0]+=1; item[1]+=st.duration_sec/60
+    return out
+
+
+def test_week_recurrence_and_counts(periods,records):
     result=periods.investigate('2026-09-14',2,'shift','week')
     assert result['status']=='complete'
+    assert result['period_label']=='2026-09-14 to 2026-09-18'   # the Mon-Fri production week containing the anchor
     totals=result['trace'][0]['data']['rows'][0]
     daily=result['tables'][2]['rows']
     assert totals['valid_setups']==sum(r['valid_setups'] for r in daily)
     assert totals['paper_changes']==sum(r['paper_changes'] for r in daily)
     assert totals['paper_changes'] != totals['valid_setups']/2
-    upper=next(r for r in result['tables'][0]['rows'] if r['place']=='Upper knife')
-    assert upper['current_count']==upper['previous_count']==21
-    assert upper['current_minutes']==94.5 and upper['previous_minutes']==84
-    assert upper['minutes_change']==10.5
-    assert len(result['tables'][2]['rows'])==7
+    assert len(daily)==5 and [r['day'] for r in daily]==['2026-09-14','2026-09-15','2026-09-16','2026-09-17','2026-09-18']
+    now=stop_minutes(records,'20260914','20260918',2); before=stop_minutes(records,'20260907','20260911',2)
+    recurring=result['tables'][0]['rows']
+    assert recurring[0]['current_minutes']==pytest.approx(max(now.values(),key=lambda v:v[1])[1])
+    assert {(r['kind'],r['place'],r['reason']) for r in recurring}>=set(now)
+    for row in recurring:
+        key=(row['kind'],row['place'],row['reason'])
+        assert (row['current_count'],row['current_minutes'])==(now.get(key,[0,0.0])[0],pytest.approx(now.get(key,[0,0.0])[1]))
+        assert (row['previous_count'],row['previous_minutes'])==(before.get(key,[0,0.0])[0],pytest.approx(before.get(key,[0,0.0])[1]))
+        assert row['minutes_change']==pytest.approx(row['current_minutes']-row['previous_minutes'])
 
 
 def test_missing_previous_week_is_unavailable(periods):
-    result=periods.investigate('2026-09-07',2,'shift','week')
+    result=periods.investigate('2026-08-03',2,'shift','week')   # first production week: nothing before it
+    assert result['status']=='complete' and result['period_label']=='2026-08-03 to 2026-08-07'
     assert any('Full comparison unavailable' in s for s in result['sections'])
     assert all(r['previous_minutes'] is None and r['minutes_change'] is None for r in result['tables'][0]['rows'])
-    result=periods.investigate('2026-09-03',2,'shift','week')
+    result=periods.investigate('2026-09-29',2,'shift','week')   # 28 Sep - 2 Oct: only three production days exist
     assert result['status']=='partial' and result['tables'][1]['rows']==[]
+    assert len(result['tables'][2]['rows'])==3 and [r['available'] for r in result['charts'][0]['rows']]==[True,True,True,False,False]
+    with pytest.raises(ValueError,match='supported calendar date'):
+        periods.investigate('2026-07-31',2,'shift','week')
 
 
 def test_month_counts_and_weighted_totals(periods):
     result=periods.investigate('2026-09-14',2,'day','month')
     totals=result['trace'][0]['data']['rows'][0]
     assert totals['valid_setups']==sum(r['valid_setups'] for r in result['tables'][2]['rows'])
-    assert len(result['tables'][2]['rows'])==90
+    assert len(result['tables'][2]['rows'])==66   # 22 production days x 3 shifts
+    assert result['status']=='complete' and any('Previous period 2026-08-01 to 2026-08-31' in s for s in result['sections'])
+    heatmap=result['charts'][0]['rows']
+    assert len(heatmap)==30 and sum(r['available'] for r in heatmap)==22
+    assert all(r.get('plant_down') for r in heatmap if not r['available'])   # the eight weekend days, not missing records
     assert len(result['tables'][1]['rows'])==3
     assert len(result['charts'])==4
     assert 'All three shifts (24 hours per date)' in result['charts'][0]['title']
@@ -138,7 +168,7 @@ def test_month_counts_and_weighted_totals(periods):
     assert result['usage']['model_calls']==0
 
 
-def test_heatmap_content_and_accounting_calendar(periods):
+def test_heatmap_content_and_accounting_calendar(periods,records):
     start,end,previous,number,weeks=accounting_window(date(2026,9,14))
     assert (start,end,previous,number,weeks)==(
         date(2026,9,1),date(2026,9,28),(date(2026,7,28),date(2026,8,31)),1,4)
@@ -150,7 +180,11 @@ def test_heatmap_content_and_accounting_calendar(periods):
     first=heatmap['rows'][0]
     assert first['available'] is True
     assert first['estimated_good_sqft'] < first['gross_sqft']
-    assert first['heavy_hitter']=='Upper knife / Knife jam'
+    (kind,place,reason),(count,minutes)=max(stop_minutes(records,'20260901','20260901',2).items(),key=lambda kv:kv[1][1])
+    assert first['heavy_hitter']==f'{place} / {reason}' and first['heavy_hitter_stops']==count
+    assert first['heavy_hitter_minutes']==pytest.approx(minutes)
+    # the previous 4-4-5 period reaches back before the first production day: still no full comparison
+    assert any('Full comparison unavailable' in s for s in result['sections'])
     assert {'speed_to_target_pct','downtime_pct','maintenance_pct','operator_pct','dry_end_pct','trim_pct','shear_pct'} <= set(first)
     assert '4-4-5 P1 (4 weeks)' in result['sections'][0]
 

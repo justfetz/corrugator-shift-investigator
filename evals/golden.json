@@ -172,6 +172,107 @@
         ]
       }
     },
+    {
+      "id": "period-month-vs-last",
+      "type": "routing",
+      "mode": "offline",
+      "scope": "day",
+      "question": "Compare this month to last",
+      "expect": {
+        "status": "complete",
+        "shifts": [],
+        "tools": [{"tool": "get_period_kpis", "arguments": {"window": {"period": "month", "anchor": "2026-09-14"}, "compare": true, "shift": null}}],
+        "tools_only": ["get_period_kpis", "render_chart"],
+        "charts": 1,
+        "tables": ["get_period_kpis"],
+        "sections_match": "September 2026 .* versus August 2026"
+      }
+    },
+    {
+      "id": "period-september-vs-august",
+      "type": "routing",
+      "mode": "offline",
+      "scope": "day",
+      "question": "How did September go versus August?",
+      "expect": {
+        "status": "complete",
+        "tools": [{"tool": "compare_periods", "arguments": {"current_window": {"period": "month", "anchor": "2026-09-01"}, "previous_window": {"period": "month", "anchor": "2026-08-01"}, "shift": null}}],
+        "charts": 1,
+        "sections_match": "Volume .* MSF"
+      }
+    },
+    {
+      "id": "period-shift-week",
+      "type": "routing",
+      "mode": "offline",
+      "scope": "day",
+      "question": "How did shift 2 go compared with last week?",
+      "expect": {
+        "status": "complete",
+        "shifts": [2],
+        "tools": [{"tool": "get_period_kpis", "arguments": {"window": {"period": "week", "anchor": "2026-09-14"}, "shift": 2}}],
+        "sections_match": "Week 2026-09-14 to 2026-09-18 .* shift 2, versus Week 2026-09-07"
+      }
+    },
+    {
+      "id": "period-pareto-selected-shift",
+      "type": "routing",
+      "mode": "offline",
+      "question": "Which downtime reason cost the most minutes this month?",
+      "note": "Selected-shift scope: the period tool must run for shift 2 only.",
+      "expect": {
+        "status": "complete",
+        "shifts": [2],
+        "tools": [{"tool": "get_downtime_pareto", "arguments": {"window": {"period": "month", "anchor": "2026-09-14"}, "group_by": "reason", "measure": "minutes", "shift": 2}}],
+        "charts": 1,
+        "sections_match": "Downtime Pareto by reason \\(minutes\\): .*cumulative"
+      }
+    },
+    {
+      "id": "period-bond-or-warp",
+      "type": "routing",
+      "mode": "offline",
+      "question": "Is it bond or warp?",
+      "expect": {
+        "status": "complete",
+        "tools": [{"tool": "get_waste_breakdown", "arguments": {"window": {"period": "day", "anchor": "2026-09-14"}, "shift": 2}}],
+        "charts": 1,
+        "sections_match": "Dry-end: bond .* sq ft = .*% of gross"
+      }
+    },
+    {
+      "id": "period-stops-per-day",
+      "type": "routing",
+      "mode": "offline",
+      "scope": "day",
+      "question": "Stops per day this week",
+      "expect": {
+        "status": "complete",
+        "tools": [{"tool": "get_stops_profile", "arguments": {"window": {"period": "week", "anchor": "2026-09-14"}, "shift": null}}],
+        "charts": 1,
+        "sections_match": "Weekday profile: Mon: .* stops per day"
+      }
+    },
+    {
+      "id": "period-trim-trend",
+      "type": "routing",
+      "mode": "offline",
+      "scope": "day",
+      "question": "Trend of trim over eight weeks",
+      "expect": {
+        "status": "complete",
+        "tools": [{"tool": "get_trend", "arguments": {"metric": "trim_pct", "weeks": 8, "anchor": "2026-09-14", "shift": null}}],
+        "charts": 1,
+        "sections_match": "Weekly trim_pct \\(% of gross\\), [0-9]+ weeks available: week of 2026-07-27|Weeks without records: 2026-07-27"
+      }
+    },
+    {
+      "id": "period-ambiguous-last-week",
+      "type": "refusal",
+      "mode": "offline",
+      "question": "Compare last week",
+      "expect": {"raises": "Ambiguous window"}
+    },
 
     {
       "id": "kpi-line-numbers",
