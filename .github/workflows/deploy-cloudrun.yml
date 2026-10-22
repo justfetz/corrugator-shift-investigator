@@ -62,12 +62,24 @@ jobs:
             [ -n "${pair#*=}" ] && ENV_VARS="${ENV_VARS}|${pair}"
           done
           if [ "$LIVE_MODEL" = "1" ]; then
+            # Mount only the secrets that actually exist in the project; a named-but-missing secret
+            # is a loud warning, not a failed deploy, so the first live deploy can land before every
+            # provider is provisioned. OpenAI keeps its historical default name.
             SECRETS=""
-            [ -n "$OPENAI_SECRET" ] && SECRETS="OPENAI_API_KEY=${OPENAI_SECRET}:latest"
-            [ -n "$ANTHROPIC_SECRET" ] && SECRETS="${SECRETS:+${SECRETS},}ANTHROPIC_API_KEY=${ANTHROPIC_SECRET}:latest"
-            test -n "$SECRETS"   # live mode with no provider secret named is a configuration error
-            LIVE_FLAGS=(--set-secrets "$SECRETS")
-            ENV_VARS="${ENV_VARS}|PUBLIC_DEMO_LIVE_MODEL=1"
+            for pair in "OPENAI_API_KEY=${OPENAI_SECRET}" "ANTHROPIC_API_KEY=${ANTHROPIC_SECRET}"; do
+              name="${pair#*=}"; [ -z "$name" ] && continue
+              if gcloud secrets describe "$name" --project "$PROJECT_ID" >/dev/null 2>&1; then
+                SECRETS="${SECRETS:+${SECRETS},}${pair}:latest"; echo "mounting ${pair%%=*} from secret ${name}"
+              else
+                echo "::warning::secret '${name}' not found in ${PROJECT_ID}; ${pair%%=*} will not be mounted"
+              fi
+            done
+            if [ -n "$SECRETS" ]; then
+              LIVE_FLAGS=(--set-secrets "$SECRETS"); ENV_VARS="${ENV_VARS}|PUBLIC_DEMO_LIVE_MODEL=1"
+            else
+              echo "::warning::PUBLIC_DEMO_LIVE_MODEL=1 but no provider secret exists yet; deploying offline-only"
+              LIVE_FLAGS=(--clear-secrets); ENV_VARS="${ENV_VARS}|PUBLIC_DEMO_LIVE_MODEL=0"; LIVE_MODEL=0; echo "LIVE_MODEL=0" >> "$GITHUB_ENV"
+            fi
           else
             LIVE_FLAGS=(--clear-secrets)   # the service holds no other secrets; idempotent when none exist
             ENV_VARS="${ENV_VARS}|PUBLIC_DEMO_LIVE_MODEL=0"
