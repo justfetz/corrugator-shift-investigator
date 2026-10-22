@@ -159,9 +159,79 @@ function showTable(data){
  for(const key of columns){const th=node('th',labels[key]||key.replaceAll('_',' '));th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=node('tbody');
  for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);$('tables').append(box);
 }
+
+// ---- KPI strip: dashboard-style tiles from a get_period_kpis / compare_periods envelope.
+// Twelve tiles visible in a fixed priority, the rest behind "more"; the delta chip is colored by the
+// tool's own `change` label (better/worse/same/neutral) and reads "withheld" when the comparison is.
+const TILE_PRIORITY=['volume_msf','speed_run_fpm','speed_all_fpm','downtime_pct','stops','minutes_per_stop','trim_pct','shear_pct','dry_end_pct','bale_pct','maintenance_pm_pct','operator_pct'];
+const VISIBLE_TILES=12;
+const UNIT_SHORT={'% of gross':'%','% of scheduled minutes':'%',count:'','min/stop':'min/stop'};
+const unitShort=unit=>UNIT_SHORT[unit]??unit;
+function fmtNumber(value,unit,signed=false){
+ if(value===null||value===undefined)return 'unavailable';
+ let places=Number.isInteger(value)?0:/MSF|ft\/min|^ft$|^min$/.test(unit)?1:2;
+ if(signed&&value!==0&&Math.abs(value)<0.5*10**-places)places=Math.min(4,places+2); // a nonzero delta never reads as ±0
+ const text=Math.abs(value).toLocaleString(undefined,{minimumFractionDigits:places,maximumFractionDigits:places});
+ return (signed?(value>0?'+':value<0?'−':'±'):(value<0?'−':''))+text;
+}
+function deltaChip(row,withheld){
+ const chip=node('span',undefined,'delta');
+ if(withheld||row.delta===null){chip.className+=' withheld';chip.textContent='withheld';chip.title='Deltas are withheld unless both windows are complete; missing days are not zero production.';return chip;}
+ const change=row.change||'neutral', arrow=row.delta>0?'▲':row.delta<0?'▼':'→';
+ chip.className+=' '+change;
+ const unit=unitShort(row.unit), pts=unit==='%'?' pts':unit?' '+unit:'';
+ chip.textContent=`${arrow} ${fmtNumber(row.delta,row.unit,true)}${pts}`;
+ chip.title=change==='neutral'?'A count: context, not a score.':`${change} — ${row.better} is better for ${row.label.toLowerCase()}`;
+ return chip;
+}
+function kpiTile(row,withheld){
+ const tile=node('div',undefined,'tile'+(row.change&&!withheld?' '+row.change:''));
+ tile.append(node('div',row.label,'l'));
+ const v=node('div',undefined,'v');v.append(node('span',fmtNumber(row.current,row.unit)));const unit=unitShort(row.unit);if(unit&&row.current!==null)v.append(node('small',unit));tile.append(v);
+ const foot=node('div',undefined,'f');foot.append(deltaChip(row,withheld));
+ foot.append(node('span',row.previous===null||row.previous===undefined?'prev unavailable':`prev ${fmtNumber(row.previous,row.unit)}${unit?' '+unit:''}`,'prev'));tile.append(foot);
+ tile.title=`${row.label}: ${row.unit}. ${row.better==='neutral'?'A count, not a score.':row.better+' is better.'}`;
+ return tile;
+}
+function orderedTiles(rows){ const rank=k=>{const i=TILE_PRIORITY.indexOf(k);return i<0?TILE_PRIORITY.length:i;}; return rows.map((r,i)=>[rank(r.metric),i,r]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]).map(x=>x[2]); }
+function renderKpiTiles(data,caption){
+ const box=$('kpis');box.replaceChildren();
+ const withheld=data.comparison!=='complete';
+ const head=node('div',undefined,'kpis-head');
+ head.append(node('strong',`${data.window.label}${data.previous_window?' vs '+data.previous_window.label:''} · ${data.shift?'shift '+data.shift:'all shifts'}`));
+ if(caption)head.append(node('span',caption,'muted mono'));box.append(head);
+ if(withheld)box.append(node('p',`Deltas withheld: ${String(data.comparison||'').replace(/^withheld:\s*/,'')||'a window is incomplete or unavailable'}. Missing days are not zero production.`,'warning-note'));
+ const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows);
+ rows.forEach((row,i)=>{const tile=kpiTile(row,withheld);if(i>=VISIBLE_TILES)tile.className+=' extra';grid.append(tile);});
+ box.append(grid);
+ if(rows.length>VISIBLE_TILES){const more=node('button',`Show ${rows.length-VISIBLE_TILES} more`,'secondary more');more.type='button';more.setAttribute('aria-expanded','false');
+  more.addEventListener('click',()=>{const open=grid.className.includes('expanded');grid.className=open?'kpi-grid':'kpi-grid expanded';more.setAttribute('aria-expanded',String(!open));more.textContent=open?`Show ${rows.length-VISIBLE_TILES} more`:'Show fewer';});box.append(more);}
+ return grid;
+}
+// On load and after every scope change, the tiles for the selected scope come from one free offline
+// get_period_kpis call (the offline planner; no model, no key). Skipped when a per-visitor rate limit
+// is on, so a visitor's rounds are not spent on priming, and for the 4-4-5 view (its report has no tool).
+let primeToken=0;
+function primeQuestion(){ return {day:'How did this shift go compared with the previous one?',week:'How did this week go versus the previous one?',month:'Compare this month to last'}[$('period').value]||null; }
+async function primeKpis(){
+ const token=++primeToken, question=primeQuestion();
+ if(!config||!question||busy||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;
+ try{
+  const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:'day'})});
+  const result=await response.json();
+  if(token!==primeToken||!response.ok||!Array.isArray(result.trace))return;
+  const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
+  if(!entry)return;
+  if(!latest)$('metrics').replaceChildren();
+  renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
+  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(node('pre',JSON.stringify(entry,null,2)));$('kpis').append(trail);
+ }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
+}
 function showResult(result) {
  $('heatmaps').replaceChildren();
  latest=result; $('download').disabled=false; $('pdf').disabled=false; $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();
+ const kpiEntry=result.trace.find(e=>e.ok&&(e.tool==='get_period_kpis'||e.tool==='compare_periods'));
+ if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`);
  for(const entry of result.trace) {
    if(entry.ok && (entry.tool==='get_shift_kpis'||entry.tool==='get_shift_overview'||entry.tool==='get_period_report')){
    const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete';
@@ -200,7 +270,7 @@ async function ask(question) {
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('period').value==='day'?$('question').value:`Build ${$('period').value} report`).catch(()=>{});});
 document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{ if(button.dataset.scope){$('scope').value=button.dataset.scope;reset();} $('question').value=button.dataset.question;ask(button.dataset.question).catch(()=>{}); }));
-function reset(){$('heatmaps').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();}
+function reset(){$('heatmaps').replaceChildren();$('kpis').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();primeKpis();}
 $('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
@@ -223,7 +293,7 @@ async function init(){
  $('submit').disabled=true;renderSegments();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
- applyPublicMode();updateScope(); $('submit').disabled=false;
+ applyPublicMode();updateScope(); $('submit').disabled=false;primeKpis();
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline'||$('period').value!=='day')throw new Error('Browser question tool is available only for offline daily investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}
