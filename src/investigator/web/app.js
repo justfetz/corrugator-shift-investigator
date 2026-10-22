@@ -137,15 +137,149 @@ function showHeatmap(chart) {
  }
  wrap.append(grid);const legend=node('div',undefined,'heatmap-legend');legend.append(node('span','Lower output'),node('span',undefined,'heatmap-scale'),node('span','Higher output'));wrap.append(legend,tip);$('heatmaps').append(wrap);
 }
+// ---- Charts: plain SVG, one axis per chart, text in ink tokens, series color on the marks only.
+// Every chart is drawn from a tool result's rows; the same rows sit in the evidence tables.
+const CHART_W=()=>(typeof window!=='undefined'&&window.innerWidth&&window.innerWidth<850)?420:690;
+const niceCeil=v=>{ if(!(v>0))return 1; const p=10**Math.floor(Math.log10(v)); const m=v/p; return (m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*p; };
+const fmtTick=(v,unit)=>v>=1000?`${(v/1000).toLocaleString(undefined,{maximumFractionDigits:1})}K`:Number.isInteger(v)?String(v):v.toFixed(v<1?2:1);
+const fmtVal=(v,unit)=>v===null||v===undefined?'unavailable':`${Number(v).toLocaleString(undefined,{maximumFractionDigits:Math.abs(v)>=100?0:Math.abs(v)>=10?1:2})}${unit&&unit!=='count'?' '+unitShort(unit):''}`;
+const shortDay=iso=>{ const d=utc(iso); return Number.isNaN(d.getTime())?String(iso):`${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`; };
+function barPath(x,y,w,h,cls,r=4){ // square at the baseline, 4px rounded data end
+ w=Math.max(0,w); r=Math.min(r,w,h/2);
+ const d=w<=0?`M${x} ${y}h0v${h}h0Z`:`M${x} ${y}h${w-r}a${r} ${r} 0 0 1 ${r} ${r}v${h-2*r}a${r} ${r} 0 0 1 ${-r} ${r}H${x}Z`;
+ return svgNode('path',{d,class:cls});
+}
+function chartCard(title,notes=[]){ const wrap=node('div',undefined,'chart');wrap.append(node('h3',title));for(const n of notes)if(n)wrap.append(node('p',n.text||n,n.cls||'muted'));return wrap; }
+function legend(items){ const box=node('div',undefined,'lg');for(const [cls,label] of items){const item=node('span');item.append(node('i',undefined,'sw '+cls),node('span',label));box.append(item);}return box; }
+// Horizontal axis along the bottom: hairline gridlines at 0, ½ and the nice maximum, labels beneath.
+function xAxis(svg,x0,x1,yTop,yBottom,max,unit){
+ for(const t of [0,.5,1]){const x=x0+(x1-x0)*t;svg.append(svgNode('line',{x1:x,x2:x,y1:yTop,y2:yBottom,class:'grid'+(t===0?' base':'')}));svg.append(svgNode('text',{x,y:yBottom+16,'text-anchor':t===0?'start':t===1?'end':'middle',class:'tick'},fmtTick(max*t,unit)));}
+}
+function frame(W,rows,rowH,top=8,wideValues=false){ const H=top+rows*rowH+28; const labelW=W<500?110:160, valueW=wideValues?(W<500?130:215):(W<500?96:150); return {W,H,labelW,valueW,x0:labelW+8,x1:W-valueW-8,top,chars:W<500?14:21}; }
+function labelText(svg,text,x,y,maxChars){ const t=String(text); svg.append(svgNode('text',{x,y,'text-anchor':'end',class:'lbl'},t.length>maxChars?t.slice(0,maxChars-1)+'…':t)); }
+// Generic single-series horizontal bars (downtime by reason, dry-end rejects, stops per day).
+function barChart(chart,wrap){
+ const rows=chart.rows, W=CHART_W(), f=frame(W,rows.length,30), max=niceCeil(Math.max(...rows.map(r=>Number(r[chart.y])||0)));
+ const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':`${chart.title||'Shift '+chart.shift} ${chart.unit} chart`});
+ xAxis(svg,f.x0,f.x1,f.top,f.top+rows.length*30,max,chart.unit);
+ rows.forEach((r,i)=>{const y=f.top+i*30, v=Number(r[chart.y])||0, label=r.weekday?`${r.weekday} ${shortDay(r[chart.x])}`:r[chart.x];
+  labelText(svg,label,f.x0-8,y+19,f.chars);
+  svg.append(barPath(f.x0,y+7,(v/max)*(f.x1-f.x0),16,chart.coverage==='complete'?'bar cur':'bar incomplete'));
+  const detail=`${label}: ${fmtVal(v,chart.unit)}`+(r.minutes_per_stop!==undefined?`; ${fmtVal(r.minutes,'min')}, ${fmtVal(r.minutes_per_stop,'min/stop')}`:'');
+  const t=svgNode('text',{x:f.x1+8,y:y+19,tabindex:0,'aria-label':detail,class:'val'},fmtVal(v,chart.unit));t.append(svgNode('title',{},detail));svg.append(t);});
+ wrap.append(svg);
+}
+// Wet-end speed: bars with the grade-target mark; long lists show the five best and five worst by % of target.
+function speedChart(chart,wrap){
+ const all=chart.rows, long=all.length>10; let showAll=!long;
+ const box=node('div'); wrap.append(box);
+ const draw=()=>{
+  box.replaceChildren();
+  let rows=all, divider=-1;
+  if(!showAll){const sorted=[...all].sort((a,b)=>(b.speed_to_target_pct??0)-(a.speed_to_target_pct??0));rows=[...sorted.slice(0,5),...sorted.slice(-5)];divider=5;}
+  const W=CHART_W(), f=frame(W,rows.length+(divider>0?1:0),30), max=niceCeil(Math.max(...rows.map(r=>Math.max(Number(r[chart.y])||0,Number(r.target_fpm)||0))));
+  const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':`Shift ${chart.shift} ${chart.unit} chart`});
+  xAxis(svg,f.x0,f.x1,f.top,f.top+(rows.length+(divider>0?1:0))*30,max,chart.unit);
+  let slot=0;
+  rows.forEach((r,i)=>{
+   if(i===divider){svg.append(svgNode('text',{x:f.x0,y:f.top+slot*30+19,class:'tick'},`… ${all.length-10} more between the best five and the worst five …`));slot++;}
+   const y=f.top+slot*30; slot++;
+   labelText(svg,r[chart.x],f.x0-8,y+19,f.chars);
+   svg.append(barPath(f.x0,y+7,(Number(r[chart.y])/max)*(f.x1-f.x0),16,chart.coverage==='complete'?'bar cur':'bar incomplete'));
+   if(r.target_fpm){const x=f.x0+r.target_fpm/max*(f.x1-f.x0);svg.append(svgNode('line',{x1:x,x2:x,y1:y+4,y2:y+26,class:'target'}));}
+   const detail=r.target_fpm?`${r[chart.x]} / ${r.grade||'grade-weighted'}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. Includes downtime.`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;
+   const value=svgNode('text',{x:f.x1+8,y:y+19,tabindex:0,'aria-label':detail,class:'val'},r.target_fpm?`${Number(r[chart.y]).toFixed(1)} / ${r.speed_to_target_pct.toFixed(1)}%`:Number(r[chart.y]).toFixed(1));value.append(svgNode('title',{},detail));svg.append(value);
+  });
+  box.append(svg);
+  if(long){const toggle=node('button',showAll?'Show the five best and five worst':`Show all ${all.length}`,'secondary more');toggle.type='button';toggle.addEventListener('click',()=>{showAll=!showAll;draw();});box.append(toggle);}
+ };
+ draw();
+}
+// Paired bars: the current window beside the previous one. KPI tables mix units, so each of those rows
+// is scaled to its own larger value and the numbers carry the comparison; same-unit results share one axis.
+function pairedChart(chart,wrap){
+ const rows=chart.rows, perRow=String(chart.unit).startsWith('per row'), W=CHART_W(), f=frame(W,rows.length,38,8,true);
+ const unitOf=r=>perRow?(r.unit||''):chart.unit;
+ const shared=perRow?null:niceCeil(Math.max(...rows.map(r=>Math.max(Number(r[chart.y])||0,Number(r[chart.y2])||0))));
+ if(perRow)wrap.append(node('p','Each row is scaled to its own larger value: compare the two bars within a row and read the numbers across rows. The tiles above carry the same values with their deltas.','muted'));
+ const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':chart.title||'paired bars'});
+ if(shared!==null)xAxis(svg,f.x0,f.x1,f.top,f.top+rows.length*38,shared,chart.unit);
+ rows.forEach((r,i)=>{const y=f.top+i*38, cur=Number(r[chart.y]), prev=r[chart.y2]===null||r[chart.y2]===undefined?null:Number(r[chart.y2]);
+  const max=shared??niceCeil(Math.max(Math.abs(cur)||0,Math.abs(prev)||0));
+  labelText(svg,r[chart.x],f.x0-8,y+20,f.chars);
+  svg.append(barPath(f.x0,y+6,(Math.max(0,cur)/max)*(f.x1-f.x0),14,'bar cur'));
+  if(prev!==null)svg.append(barPath(f.x0,y+22,(Math.max(0,prev)/max)*(f.x1-f.x0),8,'bar prev'));
+  const detail=`${r[chart.x]}: ${fmtVal(cur,unitOf(r))} now; previous ${prev===null?'unavailable':fmtVal(prev,unitOf(r))}`+(r.change?`; ${r.change}`:'');
+  const t=svgNode('text',{x:f.x1+8,y:y+20,tabindex:0,'aria-label':detail,class:'val small'},`${fmtVal(cur,'')} vs ${prev===null?'n/a':fmtVal(prev,'')}${unitShort(unitOf(r))?' '+unitShort(unitOf(r)):''}`);t.append(svgNode('title',{},detail));svg.append(t);});
+ wrap.append(svg,legend([['cur','current window'],['prev','previous window']]));
+}
+// Pareto: minutes (or stops) by category in the tool's order, the top three in color, share and cumulative share as text.
+function paretoChart(chart,wrap){
+ const rows=chart.rows, W=CHART_W(), f=frame(W,rows.length,36), key=chart.y, prevKey=chart.y2;
+ const max=niceCeil(Math.max(...rows.map(r=>Math.max(Number(r[key])||0,Number(r[prevKey])||0))));
+ const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':chart.title||'downtime Pareto'});
+ xAxis(svg,f.x0,f.x1,f.top,f.top+rows.length*36,max,chart.unit);
+ rows.forEach((r,i)=>{const y=f.top+i*36, v=Number(r[key])||0, prev=r[prevKey]===null||r[prevKey]===undefined?null:Number(r[prevKey]);
+  labelText(svg,r.category,f.x0-8,y+19,f.chars);
+  svg.append(barPath(f.x0,y+6,(v/max)*(f.x1-f.x0),14,i<3?'bar vital':'bar rest'));
+  if(prev!==null)svg.append(barPath(f.x0,y+22,(prev/max)*(f.x1-f.x0),6,'bar prev'));
+  const detail=`${r.category}: ${fmtVal(v,chart.unit)} over ${r.stops} stops, ${r.share_pct}% of the window, cumulative ${r.cumulative_pct}%; previous window ${prev===null?'unavailable':fmtVal(prev,chart.unit)}.`;
+  const t=svgNode('text',{x:f.x1+8,y:y+19,tabindex:0,'aria-label':detail,class:'val'},`${fmtVal(v,'')} · ${Math.round(r.share_pct)}% · cum ${Math.round(r.cumulative_pct)}%`);t.append(svgNode('title',{},detail));svg.append(t);});
+ wrap.append(svg,legend([['vital','top three'],['rest','the rest'],['prev','previous window']]));
+}
+// Waste breakdown: the dry-end split as stacked bars (current and previous), then every category paired.
+function wasteChart(chart,wrap){
+ const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3']];
+ const W=CHART_W(), f=frame(W,2,34), unit=chart.unit;
+ const stacks=[['current',r=>r.pct_of_gross],['previous',r=>r.previous_pct_of_gross]].map(([name,get])=>({name,segments:parts.map(([k,cls])=>({k,cls,value:byKey[k]?get(byKey[k]):null}))}));
+ const available=stacks.filter(s=>s.segments.every(x=>x.value!==null&&x.value!==undefined));
+ if(available.length){
+  const max=niceCeil(Math.max(...available.map(s=>s.segments.reduce((a,x)=>a+x.value,0))));
+  const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':'dry-end rejects split: bond, warp, misalignment'});
+  xAxis(svg,f.x0,f.x1,f.top,f.top+available.length*34,max,unit);
+  available.forEach((s,i)=>{const y=f.top+i*34; let x=f.x0; const total=s.segments.reduce((a,v)=>a+v.value,0);
+   labelText(svg,s.name==='current'?'Dry-end now':'Dry-end previous',f.x0-8,y+18,f.chars);
+   s.segments.forEach((seg,j)=>{const w=(seg.value/max)*(f.x1-f.x0); const gap=j<s.segments.length-1?2:0;
+    const rect=svgNode('rect',{x,y:y+5,width:Math.max(0,w-gap),height:16,class:'seg '+seg.cls});rect.append(svgNode('title',{},`${seg.k}: ${fmtVal(seg.value,unit)}`));svg.append(rect);
+    const inside=`${seg.k} ${seg.value.toFixed(2)}`; if(w>inside.length*6.8+14)svg.append(svgNode('text',{x:x+6,y:y+17,class:'inseg'},inside));x+=w;});
+   const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,class:'val','aria-label':`${s.name}: dry-end ${fmtVal(total,unit)} = `+s.segments.map(v=>`${v.k} ${fmtVal(v.value,unit)}`).join(', ')},fmtVal(total,unit));svg.append(t);});
+  wrap.append(node('p','Dry-end rejects split by recorded reason; the three segments add to the dry-end total.','muted'),svg,legend([['s1','bond'],['s2','warp'],['s3','misalignment']]));
+ }
+ const others=chart.rows.filter(r=>!['bond','warp','misalignment'].includes(r.category));
+ if(others.length){const sub=node('div',undefined,'subchart');sub.append(node('h4','All waste categories, % of gross'));pairedChart({...chart,rows:others},sub);wrap.append(sub);}
+}
+// Weekly trend: a 2px line with 8px markers; partial weeks are hollow and labelled; the last value is written at its point.
+function lineChart(chart,wrap){
+ const rows=chart.rows.filter(r=>r[chart.y]!==null&&r[chart.y]!==undefined); if(!rows.length){wrap.append(node('p','No weeks with records in this window.','muted'));return;}
+ const W=CHART_W(), H=240, m={l:W<500?44:56,r:W<500?48:70,t:16,b:40}, values=rows.map(r=>Number(r[chart.y]));
+ let lo=Math.min(...values), hi=Math.max(...values); if(lo===hi){lo-=1;hi+=1;} const pad=(hi-lo)*.25; lo=Math.max(0,lo-pad); hi=hi+pad;
+ const x=i=>rows.length===1?(m.l+W-m.r)/2:m.l+(W-m.l-m.r)*i/(rows.length-1), y=v=>m.t+(H-m.t-m.b)*(1-(v-lo)/(hi-lo));
+ const svg=svgNode('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':chart.title||'weekly trend'});
+ for(const t of [0,1/3,2/3,1]){const v=lo+(hi-lo)*t;svg.append(svgNode('line',{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),class:'grid'}));svg.append(svgNode('text',{x:m.l-8,y:y(v)+4,'text-anchor':'end',class:'tick'},fmtTick(Math.round(v*100)/100,chart.unit)));}
+ svg.append(svgNode('path',{d:rows.map((r,i)=>`${i?'L':'M'}${x(i).toFixed(1)} ${y(Number(r[chart.y])).toFixed(1)}`).join(' '),class:'line'}));
+ rows.forEach((r,i)=>{const v=Number(r[chart.y]), detail=`week of ${r[chart.x]}: ${fmtVal(v,chart.unit)}${r.partial?` (partial week: ${r.production_days} production days)`:''}`;
+  const dot=svgNode('circle',{cx:x(i),cy:y(v),r:4,class:'dot'+(r.partial?' partial':''),tabindex:0,'aria-label':detail});dot.append(svgNode('title',{},detail));svg.append(dot);
+  svg.append(svgNode('text',{x:x(i),y:H-m.b+18,'text-anchor':'middle',class:'tick'},shortDay(r[chart.x])));
+  if(r.partial)svg.append(svgNode('text',{x:x(i),y:H-m.b+32,'text-anchor':'middle',class:'tick'},'partial'));
+  if(i===rows.length-1)svg.append(svgNode('text',{x:x(i)+10,y:y(v)+4,class:'val'},fmtVal(v,'')));});
+ wrap.append(svg,node('p',`${chart.unit}; Monday–Friday production weeks ending with the selected week. Hollow markers are partial weeks.`,'muted'));
+}
 function showChart(chart) {
  if(chart.type==='calendar_heatmap')return showHeatmap(chart);
- const wrap=node('div',undefined,'chart');wrap.append(node('h3',chart.title || `Shift ${chart.shift} · ${chart.unit === 'minutes' ? 'Recorded downtime' : chart.unit === 'ft/min' ? 'Wet-end speed (bars) / grade target (marks)' : 'Dry-end rejects'}`));
- if(chart.coverage!=='complete')wrap.append(node('p','Incomplete data: observed values only.','warning-note'));
- if(chart.unit==='ft/min')wrap.append(node('p','Value = ft/min / % of target. Hover or focus a value for grade and target details. 100% meets target; elapsed time includes downtime.','muted'));
- const rows=chart.rows; const max=Math.max(1,...rows.map(r=>Math.max(Number(r[chart.y])||0,Number(r.target_fpm)||0)));
- const height=rows.length*32+25; const svg=svgNode('svg',{viewBox:`0 0 690 ${height}`,role:'img','aria-label':`Shift ${chart.shift} ${chart.unit} chart`});
- rows.forEach((r,i)=>{const y=i*32+8;svg.append(svgNode('text',{x:0,y:y+16},String(r[chart.x])));svg.append(svgNode('rect',{x:140,y,width:Math.max(0,Number(r[chart.y]))/max*360,height:21,class:chart.coverage==='complete'?'bar':'incomplete'}));if(r.target_fpm){const x=140+r.target_fpm/max*360;svg.append(svgNode('line',{x1:x,x2:x,y1:y-2,y2:y+23,class:'target'}));}const detail=r.target_fpm?`${r[chart.x]} / ${r.grade||'grade-weighted'}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. Includes downtime.`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;const value=svgNode('text',{x:515,y:y+16,tabindex:0,'aria-label':detail},r.target_fpm?`${Number(r[chart.y]).toFixed(1)} / ${r.speed_to_target_pct.toFixed(1)}%`:Number(r[chart.y]).toFixed(1));value.append(svgNode('title',{},detail));svg.append(value);});
- if(!rows.length)wrap.append(node('p','No records match this filter.','muted'));else wrap.append(svg);$('charts').append(wrap);
+ const rows=chart.rows||[], isSpeed=chart.unit==='ft/min'&&rows.some(r=>r.target_fpm), isPareto=rows.length&&rows[0].cumulative_pct!==undefined, isWaste=rows.length&&rows[0].pct_of_gross!==undefined&&rows[0].category!==undefined;
+ const title=chart.title||`Shift ${chart.shift} · ${chart.unit==='minutes'?'Recorded downtime':isSpeed?'Wet-end speed (bars) / grade target (marks)':'Dry-end rejects'}`;
+ const notes=[];
+ if(chart.coverage!=='complete')notes.push({text:'Incomplete data: observed values only.',cls:'warning-note'});
+ if(isSpeed)notes.push('Value = ft/min / % of target. Hover or focus a value for grade and target details. 100% meets target; elapsed time includes downtime.');
+ const wrap=chartCard(title,notes);
+ if(!rows.length)wrap.append(node('p','No records match this filter.','muted'));
+ else if(chart.type==='line')lineChart(chart,wrap);
+ else if(isPareto)paretoChart(chart,wrap);
+ else if(isWaste)wasteChart(chart,wrap);
+ else if(chart.y2)pairedChart(chart,wrap);
+ else if(isSpeed)speedChart(chart,wrap);
+ else barChart(chart,wrap);
+ $('charts').append(wrap);
 }
 const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %'};
 function showTable(data){
