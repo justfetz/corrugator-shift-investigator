@@ -29,7 +29,7 @@ def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
     assert 40 <= len(cases) <= 70 and len({c['id'] for c in cases}) == len(cases)
     tools = {c['tool'] for c in cases}
     assert tools == {'get_period_kpis', 'compare_periods', 'get_downtime_pareto', 'get_waste_breakdown',
-                     'get_stops_profile', 'get_trend', 'get_grade_totals', 'get_overrun',
+                     'get_stops_profile', 'get_trend', 'get_grade_totals', 'get_overrun', 'get_speed_opportunity',
                      'get_shift_kpis', 'get_downtime_breakdown', 'get_quality_breakdown'}
     tiles = {key for key, *_ in KPI_CATALOG}
     for case in cases:

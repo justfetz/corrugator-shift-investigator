@@ -432,6 +432,60 @@ def overrun_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", not
                 {"coverage": plain.coverage(*cur), "row_count": len(lines), "values": values}, day=day, note=note)
 
 
+def _ntile_first(values_desc, buckets=5):
+    """How many of n values (already sorted descending) land in DuckDB's first ntile bucket:
+    the first n % buckets buckets hold one extra row."""
+    n = len(values_desc)
+    return n // buckets + (1 if n % buckets else 0)
+
+
+def _median(values):
+    ordered = sorted(values)
+    n = len(ordered)
+    return ordered[n // 2] if n % 2 else (ordered[n // 2 - 1] + ordered[n // 2]) / 2
+
+
+def speed_case(plain, id, period, anchor, slice_by="width", shift=None, *, day="2026-09-14", note=""):
+    cur = window(period, anchor)
+    crews = {(sh.production_date, sh.shift_number): sh.group_name for sh in plain.between("shifts", *cur, shift)}
+    cells, short = defaultdict(list), 0
+    for s in plain.between("dry_end_setups", *cur, shift):
+        run_min = (s.elapsed_seconds - s.stop_time_sec) / 60
+        if run_min < 2.0:
+            short += 1
+            continue
+        key = (s.quality_id, f"{s.web_width_in:g} in" if slice_by == "width" else crews[(s.production_date, s.shift_number)])
+        cells[key].append((s.lineal_ft / run_min, s.lineal_ft, run_min, s.kqf_sqft, s.total_produced_sqft))
+    values, total = {}, 0.0
+    for (grade, slc), rows in cells.items():
+        rows.sort(key=lambda r: -r[0])
+        feet, run = sum(r[1] for r in rows), sum(r[2] for r in rows)
+        typical = feet / run
+        entry = {"setups": exact(len(rows)), "lineal_ft": num(feet, 1), "run_minutes": num(run, 1),
+                 "typical_fpm": num(typical, 1), "median_setup_fpm": num(_median([r[0] for r in rows]), 1),
+                 "typical_pct_of_target": [round(typical / GRADES[grade] * 100, 6), round(0.05 / GRADES[grade] * 100 + 0.051, 6)],
+                 "target_fpm": exact(float(GRADES[grade]))}
+        if len(rows) >= 10:
+            k = _ntile_first([r[0] for r in rows])
+            best_rows, rest_rows = rows[:k], rows[k:]
+            best = sum(r[1] for r in best_rows) / sum(r[2] for r in best_rows)
+            best_pct = sum(r[3] for r in best_rows) / sum(r[4] for r in best_rows) * 100
+            rest_pct = sum(r[3] for r in rest_rows) / sum(r[4] for r in rest_rows) * 100
+            hours = (run - feet / best) / 60
+            total += hours
+            entry.update({"best_fifth_fpm": num(best, 1), "gap_fpm": [round(best - typical, 6), 0.11],
+                          "opportunity_hours": num(hours, 2), "best_fifth_dry_end_pct": num(best_pct, 4),
+                          "rest_dry_end_pct": num(rest_pct, 4), "reject_penalty_points": [round(best_pct - rest_pct, 6), 1.02e-4],
+                          "status": exact("ok")})
+        else:
+            entry.update({"best_fifth_fpm": exact(None), "opportunity_hours": exact(None), "status": exact("insufficient: fewer than 10 setups")})
+        values[f"label={grade} · {slc}"] = entry
+    values["$"] = {"excluded_short_setups": exact(short), "min_run_minutes": exact(2.0), "min_setups": exact(10),
+                   "total_opportunity_hours": [round(total, 6), 0.02 * max(1, len(cells))]}
+    return case(id, "get_speed_opportunity", {"window": {"period": period, "anchor": anchor}, "slice_by": slice_by, "shift": shift},
+                {"coverage": plain.coverage(*cur), "row_count": len(cells), "values": values}, day=day, note=note)
+
+
 def trend_case(plain, id, metric, weeks, anchor, shift=None, *, day="2026-09-14", note=""):
     last_start, last_end = window("week", anchor)
     values, missing, rows = {}, [], 0
@@ -582,6 +636,10 @@ def build(data=None):
     # Over/under-run by knife: the story week for one shift, and September for all shifts.
     cases.append(overrun_case(plain, "value-overrun-week-0914-shift-2", "week", "2026-09-14", 2))
     cases.append(overrun_case(plain, "value-overrun-september", "month", "2026-09-14"))
+    # Speed opportunity: September by grade x width, the story week by grade x crew for one shift.
+    cases.append(speed_case(plain, "value-speed-opportunity-september-width", "month", "2026-09-14",
+                            note="Best fifth = the fastest fifth of each cell's setups by speed without stops (ntile 5, ratio of sums); setups under two running minutes excluded and counted."))
+    cases.append(speed_case(plain, "value-speed-opportunity-week-0907-crew-shift-2", "week", "2026-09-09", "crew", 2))
     # Trends for trim and warp, plus a series that starts before the dataset.
     cases.append(trend_case(plain, "value-trend-trim-8w", "trim_pct", 8, "2026-09-30", day="2026-09-30"))
     cases.append(trend_case(plain, "value-trend-warp-8w", "warp_pct", 8, "2026-09-14"))

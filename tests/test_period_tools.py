@@ -360,6 +360,39 @@ def test_overrun_chart_is_a_range_with_the_band(store):
     assert "Totals by grade" in grade["sections"][1] and "% of the" in grade["sections"][1]
 
 
+def test_speed_opportunity_best_fifth_is_a_ratio_of_sums(store, data):
+    result = store.get_speed_opportunity({"period": "month", "anchor": "2026-09-14"})
+    cells = defaultdict(list)
+    short = 0
+    for s in between(data["dry_end_setups"], date(2026, 9, 1), date(2026, 9, 30)):
+        run = (s.elapsed_seconds - s.stop_time_sec) / 60
+        if run < 2.0:
+            short += 1
+            continue
+        cells[(s.quality_id, f"{s.web_width_in:g} in")].append((s.lineal_ft / run, s.lineal_ft, run, s.kqf_sqft, s.total_produced_sqft))
+    assert result["excluded_short_setups"] == short and len(result["rows"]) == len(cells)
+    assert [r["opportunity_hours"] for r in result["rows"]] == sorted((r["opportunity_hours"] for r in result["rows"]), reverse=True)
+    for row in result["rows"]:
+        rows = sorted(cells[(row["grade"], row["slice"])], key=lambda r: -r[0])
+        n = len(rows)
+        k = n // 5 + (1 if n % 5 else 0)   # DuckDB ntile: the first buckets take the remainder
+        feet, run = sum(r[1] for r in rows), sum(r[2] for r in rows)
+        best = sum(r[1] for r in rows[:k]) / sum(r[2] for r in rows[:k])
+        assert row["setups"] == n and row["typical_fpm"] == pytest.approx(feet / run, abs=0.06)
+        assert row["best_fifth_fpm"] == pytest.approx(best, abs=0.06) and row["gap_fpm"] == pytest.approx(best - feet / run, abs=0.11)
+        assert row["opportunity_hours"] == pytest.approx((run - feet / best) / 60, abs=0.006)
+        assert row["best_fifth_dry_end_pct"] == pytest.approx(sum(r[3] for r in rows[:k]) / sum(r[4] for r in rows[:k]) * 100, abs=1e-3)
+        assert row["rest_dry_end_pct"] == pytest.approx(sum(r[3] for r in rows[k:]) / sum(r[4] for r in rows[k:]) * 100, abs=1e-3)
+        assert row["best_fifth_pct_of_target"] > row["typical_pct_of_target"] and row["status"] == "ok"
+        assert row["best_fifth_fpm"] < max(r[0] for r in rows)   # a ratio of sums over the fifth, never the peak
+    assert result["total_opportunity_hours"] == pytest.approx(sum(r["opportunity_hours"] for r in result["rows"]), abs=0.01 * len(result["rows"]))
+    crew = store.get_speed_opportunity({"period": "week", "anchor": "2026-09-09"}, slice_by="crew", shift=2)
+    assert {r["slice"] for r in crew["rows"]} <= {"Crew A", "Crew B", "Crew C"} and all(r["slice_by"] == "crew" for r in crew["rows"])
+    with pytest.raises(ValueError, match="slice_by"):
+        store.get_speed_opportunity({"period": "month", "anchor": "2026-09-14"}, slice_by="grade")
+    assert "no temperatures" in result["temperature_note"] and "Peak speeds are never used" in result["method_note"]
+
+
 def test_trend_is_weekly_ratio_of_sums_and_allow_listed(store, data):
     result = store.get_trend("trim_pct", weeks=8, anchor="2026-09-30")
     assert result["metric"] == "trim_pct" and result["unit"] == "% of gross" and result["weeks_requested"] == 8
@@ -409,6 +442,8 @@ ROUTES = [
     ("compare this period to the previous period", "get_period_kpis", {"window": {"period": "fiscal", "anchor": DAY}, "compare": True}),
     ("which downtime reason cost the most minutes this fiscal period", "get_downtime_pareto", {"window": {"period": "fiscal", "anchor": DAY}, "group_by": "reason"}),
     ("volume by grade this fiscal period", "get_grade_totals", {"window": {"period": "fiscal", "anchor": DAY}}),
+    ("where is the speed opportunity this month", "get_speed_opportunity", {"window": {"period": "month", "anchor": DAY}, "slice_by": "width"}),
+    ("which crews run faster on 275-BC this week", "get_speed_opportunity", {"window": {"period": "week", "anchor": DAY}, "slice_by": "crew"}),
     ("how much 275-BC did we run this week", "get_grade_totals", {"window": {"period": "week", "anchor": DAY}}),
     ("over/under-run by knife this week", "get_overrun", {"window": {"period": "week", "anchor": DAY}}),
     ("are we inside the cut range this month", "get_overrun", {"window": {"period": "month", "anchor": DAY}}),
@@ -455,7 +490,7 @@ def test_period_tool_schemas_are_declared():
     names = {s["name"] for s in TOOL_SCHEMAS}
     assert PERIOD_TOOLS <= names and PERIOD_TOOLS == {"get_period_kpis", "compare_periods", "get_downtime_pareto",
                                                      "get_waste_breakdown", "get_stops_profile", "get_trend",
-                                                     "get_grade_totals", "get_overrun"}
+                                                     "get_grade_totals", "get_overrun", "get_speed_opportunity"}
     for schema in TOOL_SCHEMAS:
         if schema["name"] in PERIOD_TOOLS:
             assert schema["parameters"]["additionalProperties"] is False and "shift" in schema["parameters"]["properties"]

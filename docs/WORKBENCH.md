@@ -47,6 +47,7 @@ With Period set to **Day**, these plain phrasings (the Compare group of example 
 - "Compare this period to the previous period" — the same tiles over 4-4-5 accounting periods; any comparison with unequal production days says so and points at MSF per day and the ratio tiles.
 - "Volume by grade this month", "How much 275-BC did we run this week?", "Which grade is eating the most downtime?" — totals by board grade with speed against target and allocated downtime.
 - "Over/under-run by knife this week", "Are we inside the cut range?" — nominal versus actual cuts per knife, drawn as a bullet chart against the ±2 % band.
+- "Where is the speed opportunity this month?", "Which crews run faster, and does it cost rejects?" — typical versus best-fifth speed by grade and width or crew, in hours, with the dry-end rate of the fast setups beside it.
 - "Which warp are we seeing this month, up warp or twist warp?" — the waste breakdown with the reported sub-reasons.
 
 The window is anchored on the selected day: a week is its Monday–Friday production week, a month its calendar month. Windows before 3 August 2026 are unavailable, never zero, and deltas are withheld unless both windows are complete. "Yesterday" and "today" still ask you to use the day control, and a bare "Compare last week" is refused as ambiguous. Every percentage is a ratio of sums over the window (METRICS.md).

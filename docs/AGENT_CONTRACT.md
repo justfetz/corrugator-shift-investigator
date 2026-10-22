@@ -36,6 +36,7 @@ Period tools read the whole record store (two production months, Monday to Frida
 - get_trend(metric, weeks 1–26, anchor, shift): weekly series of one allow-listed metric.
 - get_grade_totals(window, shift): per board grade, setups, wet ends, lineal ft, volume MSF and share, speed without stops and elapsed speed from the setup clocks, % of grade target, allocated stops and minutes, lineal per setup and per paper change, trim and dry-end %, previous window's volume.
 - get_overrun(window, shift): nominal versus actual cuts per knife (cuts, sheets, % of nominal) with the share of customer lines inside, over and under the ±2 % band; last row all knives.
+- get_speed_opportunity(window, slice_by width|crew, shift): per grade and width (or crew), typical speed without stops vs the best fifth of setups, % of target for both, gap, opportunity hours, dry-end % of the fast fifth vs the rest; short setups excluded and counted; no temperatures modelled.
 
 Forbidden: shell, arbitrary SQL/code, external URLs, filesystem browsing, machinery control, schedule changes, subscriber access or email sending. SQL values are bound separately and grouping identifiers are allowlisted.
 

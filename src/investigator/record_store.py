@@ -111,6 +111,11 @@ _STOP_MEASURES = ("minutes", "count")
 # (docs/METRICS.md). The record window is the +-10% the generator never leaves.
 OVERRUN_BAND_PCT = 2.0
 OVERRUN_WINDOW_PCT = 10.0
+# Speed opportunity: setups shorter than this running time never reach steady speed and are left
+# out (counted, never silently); a cell needs this many setups before a best-fifth is meaningful.
+SPEED_MIN_RUN_MINUTES = 2.0
+SPEED_MIN_SETUPS = 10
+_SPEED_SLICES = ("width", "crew")
 
 
 def _round(value, places):
@@ -751,6 +756,77 @@ class RecordStore:
                               band_note=f"Inside the band means actual cuts within +-{OVERRUN_BAND_PCT:g}% of nominal on that line; "
                                         "the band is a demo setting, the plant's acceptance range is an open owner input. "
                                         "Positive is overrun, negative is underrun.")
+
+    def get_speed_opportunity(self, window, slice_by="width", shift=None):
+        """Best-demonstrated versus typical running speed, by grade and web width (or crew).
+
+        For every setup of the window with at least SPEED_MIN_RUN_MINUTES of running time:
+        speed without stops = feet / (elapsed - setup-allocated stop seconds). Per cell:
+        typical = ratio of sums over all included setups; median = the median setup speed;
+        best fifth = ratio of sums over the fastest fifth of setups (ntile 5 by speed);
+        opportunity hours = running minutes now minus the minutes the same feet would take at
+        the best-fifth speed, / 60. Beside it, the dry-end reject percent of that fastest fifth
+        against the rest: a gain that costs bond or warp shows as a positive reject penalty.
+        Peak (max) speeds are never used. Records carry no temperatures, so the heat limit on
+        heavy grades and doublewall stays an open owner input; the envelope says so."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        if slice_by not in _SPEED_SLICES:
+            raise ValueError("slice_by must be width or crew")
+        current = self._window(window)
+        clause, extra = self._shift_clause(shift)
+        slice_sql = "s.width_in" if slice_by == "width" else "sh.crew"
+        sql = (f"WITH base AS (SELECT s.grade, {slice_sql} AS slice, s.target, s.feet, s.gross, s.rejects, "
+               "(s.seconds - s.stop_seconds) / 60 AS run_min, s.feet / ((s.seconds - s.stop_seconds) / 60) AS fpm "
+               "FROM setups s JOIN shifts sh ON sh.production_date = s.production_date AND sh.shift = s.shift "
+               f"WHERE s.production_date BETWEEN ? AND ?{clause.replace(' shift', ' s.shift')} AND s.seconds - s.stop_seconds >= ? * 60), "
+               "ranked AS (SELECT *, ntile(5) OVER (PARTITION BY grade, slice ORDER BY fpm DESC) AS fifth FROM base) "
+               "SELECT grade, slice, max(target) AS target, count(*) AS setups, sum(feet) AS feet, sum(gross) AS gross, sum(run_min) AS run_min, "
+               "quantile_cont(fpm, 0.5) AS median_fpm, "
+               "sum(CASE WHEN fifth = 1 THEN feet END) AS best_feet, sum(CASE WHEN fifth = 1 THEN run_min END) AS best_run_min, "
+               "sum(CASE WHEN fifth = 1 THEN rejects END) AS best_rejects, sum(CASE WHEN fifth = 1 THEN gross END) AS best_gross, "
+               "sum(CASE WHEN fifth > 1 THEN rejects END) AS rest_rejects, sum(CASE WHEN fifth > 1 THEN gross END) AS rest_gross "
+               "FROM ranked GROUP BY grade, slice ORDER BY grade, slice")
+        params = [current["start"], current["end"], *extra, SPEED_MIN_RUN_MINUTES]
+        fetched = self._fetch(sql, params)
+        trace["sql"].append(sql)
+        trace["parameters"].append(params)
+        short_sql = (f"SELECT count(*) AS short FROM setups WHERE production_date BETWEEN ? AND ?{clause} AND seconds - stop_seconds < ? * 60")
+        short = self._fetch(short_sql, params)[0]["short"]
+        trace["sql"].append(short_sql)
+        trace["parameters"].append(params)
+        rows = []
+        for r in fetched:
+            enough = r["setups"] >= SPEED_MIN_SETUPS
+            typical = r["feet"] / r["run_min"]
+            best = r["best_feet"] / r["best_run_min"] if enough and r["best_run_min"] else None
+            best_pct = _ratio(r["best_rejects"], r["best_gross"], 100) if enough else None
+            rest_pct = _ratio(r["rest_rejects"], r["rest_gross"], 100) if enough else None
+            rows.append({"grade": r["grade"], "slice_by": slice_by,
+                         "slice": (f"{r['slice']:g} in" if slice_by == "width" else r["slice"]),
+                         "label": f"{r['grade']} · " + (f"{r['slice']:g} in" if slice_by == "width" else r["slice"]),
+                         "target_fpm": r["target"], "setups": r["setups"], "lineal_ft": round(r["feet"], 1),
+                         "run_minutes": round(r["run_min"], 1),
+                         "typical_fpm": round(typical, 1), "median_setup_fpm": round(float(r["median_fpm"]), 1),
+                         "best_fifth_fpm": round(best, 1) if best else None,
+                         "gap_fpm": round(best - typical, 1) if best else None,
+                         "typical_pct_of_target": _ratio(typical, r["target"], 100, places=1),
+                         "best_fifth_pct_of_target": _ratio(best, r["target"], 100, places=1) if best else None,
+                         "opportunity_hours": round((r["run_min"] - r["feet"] / best) / 60, 2) if best else None,
+                         "best_fifth_dry_end_pct": best_pct, "rest_dry_end_pct": rest_pct,
+                         "reject_penalty_points": round(best_pct - rest_pct, 4) if best_pct is not None and rest_pct is not None else None,
+                         "status": "ok" if enough else f"insufficient: fewer than {SPEED_MIN_SETUPS} setups"})
+        rows.sort(key=lambda x: (-(x["opportunity_hours"] or -1), x["grade"], x["slice"]))
+        total = round(sum(x["opportunity_hours"] or 0 for x in rows), 2)
+        source = {"setups_included": sum(r["setups"] for r in fetched), "setups_excluded_short": short}
+        return self._envelope("get_speed_opportunity", current, None, shift, rows, trace, started, source,
+                              min_run_minutes=SPEED_MIN_RUN_MINUTES, min_setups=SPEED_MIN_SETUPS,
+                              excluded_short_setups=short, total_opportunity_hours=total,
+                              method_note=("Best fifth = the fastest fifth of the cell's setups by speed without stops, as a ratio of sums; "
+                                           "opportunity hours = running minutes now minus the minutes the same feet take at the best-fifth speed. "
+                                           "Peak speeds are never used. A positive reject penalty means the fast setups rejected more than the rest: "
+                                           "that part of the gap is a limit, not an opportunity."),
+                              temperature_note=("Records carry no temperatures: the heat-transfer limit on heavy grades and doublewall (bond needs its "
+                                                "temperature range) is an open owner input and is not modelled here."))
 
     def get_trend(self, metric, weeks=8, anchor=None, shift=None):
         """A weekly series (Mon-Fri production weeks) of one allow-listed metric,

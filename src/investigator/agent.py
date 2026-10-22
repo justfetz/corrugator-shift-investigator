@@ -61,6 +61,8 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_overrun", "Over/under-run by knife for a window: nominal cuts vs actual cuts as cuts, sheets and percent of nominal, with the share of customer lines inside, over and under the +-band; last row is all knives.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
+        ("get_speed_opportunity", "Where could we run faster: per grade and web width (or crew), typical speed without stops vs the best fifth of setups, gap, % of target for both, opportunity hours, and the dry-end reject % of the fast fifth against the rest (a positive penalty means the gain costs rejects). Peak speeds never used; setups under the minimum run time excluded and counted.",
+         {"window": WINDOW_SCHEMA, "slice_by": {"type": "string", "enum": ["width", "crew"]}, "shift": SHIFT_FILTER}, ["window"]),
         ("get_trend", "Weekly series (Mon-Fri production weeks) of one allow-listed metric, ending with the week containing the anchor.",
          {"metric": {"type": "string", "enum": TREND_METRICS}, "weeks": {"type": "integer", "description": "1-26, default 8"},
           "anchor": {"type": "string", "description": "YYYY-MM-DD; use the selected production day"}, "shift": SHIFT_FILTER}, ["metric"]),
@@ -73,7 +75,8 @@ TOOL_SCHEMAS.append({"name": "render_chart", "description": "Chart a result from
                    "required": ["result_id"], "additionalProperties": False}})
 CHART_TITLES = {'get_period_kpis': 'KPI tiles', 'compare_periods': 'KPI comparison', 'get_downtime_pareto': 'Downtime Pareto',
                 'get_waste_breakdown': 'Waste breakdown', 'get_stops_profile': 'Stops per production day', 'get_trend': 'Weekly trend',
-                'get_grade_totals': 'Volume by grade (MSF)', 'get_overrun': 'Over/under-run by knife'}
+                'get_grade_totals': 'Volume by grade (MSF)', 'get_overrun': 'Over/under-run by knife',
+                'get_speed_opportunity': 'Speed opportunity (hours at best-fifth speed)'}
 # Chartable results: tool -> (x field, y field or a function of the result data, unit or a function, chart type).
 CHARTABLE = {
     'get_downtime_breakdown': ('category', 'down_minutes', 'minutes', 'bar', None),
@@ -88,6 +91,7 @@ CHARTABLE = {
     'get_stops_profile': ('production_day', 'stops', 'stops', 'bar', None),
     'get_grade_totals': ('grade', 'volume_msf', 'MSF', 'bar', 'previous_volume_msf'),
     'get_overrun': ('knife', 'overrun_pct', '% of nominal cuts', 'range', None),
+    'get_speed_opportunity': ('label', 'opportunity_hours', 'hours', 'bar', None),
     'get_trend': ('week_start', 'value', lambda d: d['unit'], 'line', None),
 }
 
@@ -174,7 +178,7 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
                "'how did September go versus August', 'how did shift 2 go compared with last week', "
                "'which downtime reason cost the most minutes', 'is it bond or warp', 'stops per day this week', "
                "'trend of trim over eight weeks', 'volume by grade this month', 'over/under-run by knife this week', "
-               "'compare this period to the previous period' (4-4-5 accounting periods).")
+               "'compare this period to the previous period' (4-4-5 accounting periods), 'where is the speed opportunity this month'.")
 
 
 def parse_period_request(lower, current, shifts):
@@ -191,7 +195,8 @@ def parse_period_request(lower, current, shifts):
     this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
     grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
-    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun):
+    speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
+    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp):
         return None
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
@@ -199,7 +204,11 @@ def parse_period_request(lower, current, shifts):
     year = anchor[:4]
     shift = current.shift if current.scope == 'shift' else shifts[0] if len(shifts) == 1 else None
     window = {"period": period or 'day', "anchor": anchor}
-    if overrun:
+    if speed_opp:
+        slice_by = 'crew' if re.search(r"\bcrews?\b|\bteams?\b", lower) else 'width'
+        plan = [("get_speed_opportunity", {"window": {"period": period or 'month', "anchor": anchor}, "slice_by": slice_by, "shift": shift})]
+        intent = 'period_speed_opportunity'
+    elif overrun:
         plan = [("get_overrun", {"window": window, "shift": shift})]
         intent = 'period_overrun'
     elif grade:
@@ -565,6 +574,11 @@ class Agent:
                 f'trim {num(r["trim_pct"])}%, dry-end {num(r["dry_end_pct"])}%' +
                 (f', previous {num(r["previous_volume_msf"])} MSF ({num(r["delta_volume_msf"], signed=True)})' if r['previous_volume_msf'] is not None else '')
                 for r in data['rows']) or 'no setups in this window') + '. ' + data['speed_note'])
+        elif tool == 'get_speed_opportunity':
+            lines.append(f'Speed opportunity by grade and {data["rows"][0]["slice_by"] if data["rows"] else "width"} ({num(data["total_opportunity_hours"])} hours in total if every cell ran at its best-fifth speed; {num(data["excluded_short_setups"])} setups under {num(data["min_run_minutes"])} running minutes excluded): ' + ('; '.join(
+                f'{r["label"]}: typical {num(r["typical_fpm"])} ft/min ({num(r["typical_pct_of_target"])}% of target) vs best fifth {num(r["best_fifth_fpm"])} ({num(r["best_fifth_pct_of_target"])}%), gap {num(r["gap_fpm"])} ft/min = {num(r["opportunity_hours"])} hours over {num(r["setups"])} setups; '
+                f'dry-end {num(r["best_fifth_dry_end_pct"])}% on the fast fifth vs {num(r["rest_dry_end_pct"])}% on the rest' + (f' ({r["status"]})' if r['status'] != 'ok' else '')
+                for r in data['rows']) or 'no setups long enough in this window') + '. ' + data['method_note'] + ' ' + data['temperature_note'])
         elif tool == 'get_overrun':
             lines.append(f'Over/under-run by knife (+-{num(data["band_pct"])}% band): ' + ('; '.join(
                 f'{r["knife"]}: {num(r["actual_cuts"])} actual vs {num(r["nominal_cuts"])} nominal cuts = {num(r["overrun_pct"], signed=True)}%, '

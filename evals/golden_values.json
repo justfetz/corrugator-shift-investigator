@@ -18347,6 +18347,1825 @@
    }
   },
   {
+   "id": "value-speed-opportunity-september-width",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_speed_opportunity",
+   "arguments": {
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "slice_by": "width",
+    "shift": null
+   },
+   "note": "Best fifth = the fastest fifth of each cell's setups by speed without stops (ntile 5, ratio of sums); setups under two running minutes excluded and counted.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 24,
+    "values": {
+     "label=275-BC \u00b7 87 in": {
+      "setups": [
+       178,
+       null
+      ],
+      "lineal_ft": [
+       767007.9,
+       0.051
+      ],
+      "run_minutes": [
+       1722.15,
+       0.051
+      ],
+      "typical_fpm": [
+       445.378103,
+       0.051
+      ],
+      "median_setup_fpm": [
+       443.081227,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.075621,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       473.641068,
+       0.051
+      ],
+      "gap_fpm": [
+       28.262965,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.712727,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.045907,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.03578,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.010127,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-EB \u00b7 98 in": {
+      "setups": [
+       189,
+       null
+      ],
+      "lineal_ft": [
+       845358.3,
+       0.051
+      ],
+      "run_minutes": [
+       1881.683333,
+       0.051
+      ],
+      "typical_fpm": [
+       449.25641,
+       0.051
+      ],
+      "median_setup_fpm": [
+       452.003861,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.851282,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       473.220451,
+       0.051
+      ],
+      "gap_fpm": [
+       23.964041,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.588151,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.011077,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.030925,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.019848,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=55-C \u00b7 87 in": {
+      "setups": [
+       162,
+       null
+      ],
+      "lineal_ft": [
+       791058.4,
+       0.051
+      ],
+      "run_minutes": [
+       1047.933333,
+       0.051
+      ],
+      "typical_fpm": [
+       754.874738,
+       0.051
+      ],
+      "median_setup_fpm": [
+       760.17653,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.808793,
+       0.056882
+      ],
+      "target_fpm": [
+       850.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       796.041711,
+       0.051
+      ],
+      "gap_fpm": [
+       41.166973,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.903224,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.000852,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.01555,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.014697,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-EB \u00b7 92 in": {
+      "setups": [
+       153,
+       null
+      ],
+      "lineal_ft": [
+       724226.5,
+       0.051
+      ],
+      "run_minutes": [
+       1630.45,
+       0.051
+      ],
+      "typical_fpm": [
+       444.188108,
+       0.051
+      ],
+      "median_setup_fpm": [
+       446.12326,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.837622,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       470.325732,
+       0.051
+      ],
+      "gap_fpm": [
+       26.137624,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.510162,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.005129,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.023801,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.018672,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=200-C \u00b7 92 in": {
+      "setups": [
+       183,
+       null
+      ],
+      "lineal_ft": [
+       924949.8,
+       0.051
+      ],
+      "run_minutes": [
+       1293.783333,
+       0.051
+      ],
+      "typical_fpm": [
+       714.918624,
+       0.051
+      ],
+      "median_setup_fpm": [
+       716.224543,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.364828,
+       0.05725
+      ],
+      "target_fpm": [
+       800.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       752.755545,
+       0.051
+      ],
+      "gap_fpm": [
+       37.836922,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.083857,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.029846,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.009021,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.020825,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-BC \u00b7 98 in": {
+      "setups": [
+       171,
+       null
+      ],
+      "lineal_ft": [
+       767598.0,
+       0.051
+      ],
+      "run_minutes": [
+       1722.45,
+       0.051
+      ],
+      "typical_fpm": [
+       445.643125,
+       0.051
+      ],
+      "median_setup_fpm": [
+       447.99022,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.128625,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       472.48098,
+       0.051
+      ],
+      "gap_fpm": [
+       26.837855,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.630643,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.050784,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.003229,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.047555,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=26-C \u00b7 98 in": {
+      "setups": [
+       138,
+       null
+      ],
+      "lineal_ft": [
+       643126.4,
+       0.051
+      ],
+      "run_minutes": [
+       797.9,
+       0.051
+      ],
+      "typical_fpm": [
+       806.023813,
+       0.051
+      ],
+      "median_setup_fpm": [
+       807.603731,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.558201,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       852.706617,
+       0.051
+      ],
+      "gap_fpm": [
+       46.682804,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.728039,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.0375,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.025499,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.012,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=32-C \u00b7 95 in": {
+      "setups": [
+       180,
+       null
+      ],
+      "lineal_ft": [
+       759743.2,
+       0.051
+      ],
+      "run_minutes": [
+       941.616667,
+       0.051
+      ],
+      "typical_fpm": [
+       806.84978,
+       0.051
+      ],
+      "median_setup_fpm": [
+       807.570068,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.649976,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       852.714374,
+       0.051
+      ],
+      "gap_fpm": [
+       45.864595,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.844106,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.000362,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.027965,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.027604,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=55-C \u00b7 95 in": {
+      "setups": [
+       177,
+       null
+      ],
+      "lineal_ft": [
+       798112.4,
+       0.051
+      ],
+      "run_minutes": [
+       1053.333333,
+       0.051
+      ],
+      "typical_fpm": [
+       757.701646,
+       0.051
+      ],
+      "median_setup_fpm": [
+       756.088757,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.14137,
+       0.056882
+      ],
+      "target_fpm": [
+       850.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       801.077909,
+       0.051
+      ],
+      "gap_fpm": [
+       43.376264,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.950587,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.042144,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.011798,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.030346,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=32-C \u00b7 92 in": {
+      "setups": [
+       189,
+       null
+      ],
+      "lineal_ft": [
+       889012.5,
+       0.051
+      ],
+      "run_minutes": [
+       1114.433333,
+       0.051
+      ],
+      "typical_fpm": [
+       797.726049,
+       0.051
+      ],
+      "median_setup_fpm": [
+       797.43128,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.636228,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       842.984598,
+       0.051
+      ],
+      "gap_fpm": [
+       45.258548,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.997204,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.007263,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.028198,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.020935,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=200-C \u00b7 98 in": {
+      "setups": [
+       164,
+       null
+      ],
+      "lineal_ft": [
+       723848.0,
+       0.051
+      ],
+      "run_minutes": [
+       1018.166667,
+       0.051
+      ],
+      "typical_fpm": [
+       710.932722,
+       0.051
+      ],
+      "median_setup_fpm": [
+       711.268477,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.86659,
+       0.05725
+      ],
+      "target_fpm": [
+       800.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       752.518463,
+       0.051
+      ],
+      "gap_fpm": [
+       41.58574,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.937767,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.022554,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.011389,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.011165,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-BC \u00b7 92 in": {
+      "setups": [
+       165,
+       null
+      ],
+      "lineal_ft": [
+       730700.6,
+       0.051
+      ],
+      "run_minutes": [
+       1636.5,
+       0.051
+      ],
+      "typical_fpm": [
+       446.502047,
+       0.051
+      ],
+      "median_setup_fpm": [
+       444.59164,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.300409,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       472.011391,
+       0.051
+      ],
+      "gap_fpm": [
+       25.509344,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.474048,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.056021,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.034961,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.02106,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-EB \u00b7 95 in": {
+      "setups": [
+       170,
+       null
+      ],
+      "lineal_ft": [
+       788707.3,
+       0.051
+      ],
+      "run_minutes": [
+       1772.216667,
+       0.051
+      ],
+      "typical_fpm": [
+       445.039997,
+       0.051
+      ],
+      "median_setup_fpm": [
+       445.474988,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.007999,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       470.874019,
+       0.051
+      ],
+      "gap_fpm": [
+       25.834022,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.620514,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       0.956309,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.028112,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.071803,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=26-C \u00b7 92 in": {
+      "setups": [
+       170,
+       null
+      ],
+      "lineal_ft": [
+       735017.3,
+       0.051
+      ],
+      "run_minutes": [
+       917.75,
+       0.051
+      ],
+      "typical_fpm": [
+       800.890548,
+       0.051
+      ],
+      "median_setup_fpm": [
+       800.679697,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.987839,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       854.992025,
+       0.051
+      ],
+      "gap_fpm": [
+       54.101478,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.967877,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       0.998818,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.020055,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.021237,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-EB \u00b7 87 in": {
+      "setups": [
+       157,
+       null
+      ],
+      "lineal_ft": [
+       726621.4,
+       0.051
+      ],
+      "run_minutes": [
+       1626.616667,
+       0.051
+      ],
+      "typical_fpm": [
+       446.707214,
+       0.051
+      ],
+      "median_setup_fpm": [
+       447.584302,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.341443,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       472.598363,
+       0.051
+      ],
+      "gap_fpm": [
+       25.891149,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.485228,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.01975,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.038041,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.018291,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=55-C \u00b7 98 in": {
+      "setups": [
+       138,
+       null
+      ],
+      "lineal_ft": [
+       604684.4,
+       0.051
+      ],
+      "run_minutes": [
+       799.55,
+       0.051
+      ],
+      "typical_fpm": [
+       756.280908,
+       0.051
+      ],
+      "median_setup_fpm": [
+       761.049913,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.974224,
+       0.056882
+      ],
+      "target_fpm": [
+       850.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       804.180657,
+       0.051
+      ],
+      "gap_fpm": [
+       47.899749,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.793732,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.050643,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.007254,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.043388,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=26-C \u00b7 95 in": {
+      "setups": [
+       192,
+       null
+      ],
+      "lineal_ft": [
+       910137.2,
+       0.051
+      ],
+      "run_minutes": [
+       1139.05,
+       0.051
+      ],
+      "typical_fpm": [
+       799.031825,
+       0.051
+      ],
+      "median_setup_fpm": [
+       796.979308,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.781314,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       847.791362,
+       0.051
+      ],
+      "gap_fpm": [
+       48.759538,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.091848,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.00844,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.020758,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.012318,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=32-C \u00b7 98 in": {
+      "setups": [
+       229,
+       null
+      ],
+      "lineal_ft": [
+       1066179.5,
+       0.051
+      ],
+      "run_minutes": [
+       1336.733333,
+       0.051
+      ],
+      "typical_fpm": [
+       797.600743,
+       0.051
+      ],
+      "median_setup_fpm": [
+       800.605873,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.622305,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       844.150644,
+       0.051
+      ],
+      "gap_fpm": [
+       46.549901,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.228549,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.008182,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.007868,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.000314,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=26-C \u00b7 87 in": {
+      "setups": [
+       182,
+       null
+      ],
+      "lineal_ft": [
+       835171.4,
+       0.051
+      ],
+      "run_minutes": [
+       1043.75,
+       0.051
+      ],
+      "typical_fpm": [
+       800.164216,
+       0.051
+      ],
+      "median_setup_fpm": [
+       796.039315,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.907135,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       850.402839,
+       0.051
+      ],
+      "gap_fpm": [
+       50.238624,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.027681,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.038081,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.015111,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.022971,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=55-C \u00b7 92 in": {
+      "setups": [
+       182,
+       null
+      ],
+      "lineal_ft": [
+       860662.0,
+       0.051
+      ],
+      "run_minutes": [
+       1133.366667,
+       0.051
+      ],
+      "typical_fpm": [
+       759.385312,
+       0.051
+      ],
+      "median_setup_fpm": [
+       759.95442,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.339448,
+       0.056882
+      ],
+      "target_fpm": [
+       850.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       798.908783,
+       0.051
+      ],
+      "gap_fpm": [
+       39.523471,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.934495,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.011891,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.010949,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.000942,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=200-C \u00b7 95 in": {
+      "setups": [
+       176,
+       null
+      ],
+      "lineal_ft": [
+       837225.2,
+       0.051
+      ],
+      "run_minutes": [
+       1169.2,
+       0.051
+      ],
+      "typical_fpm": [
+       716.066712,
+       0.051
+      ],
+      "median_setup_fpm": [
+       713.432972,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.508339,
+       0.05725
+      ],
+      "target_fpm": [
+       800.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       755.210709,
+       0.051
+      ],
+      "gap_fpm": [
+       39.143996,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.010031,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       0.991921,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.024126,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.032205,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=200-C \u00b7 87 in": {
+      "setups": [
+       143,
+       null
+      ],
+      "lineal_ft": [
+       617233.7,
+       0.051
+      ],
+      "run_minutes": [
+       871.216667,
+       0.051
+      ],
+      "typical_fpm": [
+       708.473246,
+       0.051
+      ],
+      "median_setup_fpm": [
+       708.408791,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.559156,
+       0.05725
+      ],
+      "target_fpm": [
+       800.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       755.544486,
+       0.051
+      ],
+      "gap_fpm": [
+       47.07124,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.904629,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       0.981075,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.039719,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.058644,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=32-C \u00b7 87 in": {
+      "setups": [
+       155,
+       null
+      ],
+      "lineal_ft": [
+       729910.3,
+       0.051
+      ],
+      "run_minutes": [
+       909.383333,
+       0.051
+      ],
+      "typical_fpm": [
+       802.643146,
+       0.051
+      ],
+      "median_setup_fpm": [
+       807.380054,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       89.182572,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       845.521287,
+       0.051
+      ],
+      "gap_fpm": [
+       42.878141,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.768612,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.000663,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.054737,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.054074,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-BC \u00b7 95 in": {
+      "setups": [
+       160,
+       null
+      ],
+      "lineal_ft": [
+       752562.5,
+       0.051
+      ],
+      "run_minutes": [
+       1695.333333,
+       0.051
+      ],
+      "typical_fpm": [
+       443.902379,
+       0.051
+      ],
+      "median_setup_fpm": [
+       445.609889,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       88.780476,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       471.599589,
+       0.051
+      ],
+      "gap_fpm": [
+       27.69721,
+       0.11
+      ],
+      "opportunity_hours": [
+       1.659459,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.023808,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.020422,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.003385,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "$": {
+      "excluded_short_setups": [
+       12,
+       null
+      ],
+      "min_run_minutes": [
+       2.0,
+       null
+      ],
+      "min_setups": [
+       10,
+       null
+      ],
+      "total_opportunity_hours": [
+       27.853169,
+       0.48
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-speed-opportunity-week-0907-crew-shift-2",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_speed_opportunity",
+   "arguments": {
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-09"
+    },
+    "slice_by": "crew",
+    "shift": 2
+   },
+   "expect": {
+    "coverage": "complete",
+    "row_count": 6,
+    "values": {
+     "label=32-C \u00b7 Crew A": {
+      "setups": [
+       65,
+       null
+      ],
+      "lineal_ft": [
+       277409.3,
+       0.051
+      ],
+      "run_minutes": [
+       333.4,
+       0.051
+      ],
+      "typical_fpm": [
+       832.061488,
+       0.051
+      ],
+      "median_setup_fpm": [
+       834.397213,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       92.451276,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       867.256613,
+       0.051
+      ],
+      "gap_fpm": [
+       35.195125,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.225501,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.018082,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.018391,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.000308,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=200-C \u00b7 Crew A": {
+      "setups": [
+       47,
+       null
+      ],
+      "lineal_ft": [
+       209931.2,
+       0.051
+      ],
+      "run_minutes": [
+       283.166667,
+       0.051
+      ],
+      "typical_fpm": [
+       741.369747,
+       0.051
+      ],
+      "median_setup_fpm": [
+       744.586387,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       92.671218,
+       0.05725
+      ],
+      "target_fpm": [
+       800.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       774.663147,
+       0.051
+      ],
+      "gap_fpm": [
+       33.293401,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.202832,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       0.928449,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.010002,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.081553,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-BC \u00b7 Crew A": {
+      "setups": [
+       48,
+       null
+      ],
+      "lineal_ft": [
+       219280.7,
+       0.051
+      ],
+      "run_minutes": [
+       472.716667,
+       0.051
+      ],
+      "typical_fpm": [
+       463.873427,
+       0.051
+      ],
+      "median_setup_fpm": [
+       469.117659,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       92.774685,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       482.460651,
+       0.051
+      ],
+      "gap_fpm": [
+       18.587224,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.30353,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.059464,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.055118,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       0.004347,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=55-C \u00b7 Crew A": {
+      "setups": [
+       44,
+       null
+      ],
+      "lineal_ft": [
+       213787.3,
+       0.051
+      ],
+      "run_minutes": [
+       269.766667,
+       0.051
+      ],
+      "typical_fpm": [
+       792.489682,
+       0.051
+      ],
+      "median_setup_fpm": [
+       786.792949,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       93.23408,
+       0.056882
+      ],
+      "target_fpm": [
+       850.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       823.01334,
+       0.051
+      ],
+      "gap_fpm": [
+       30.523657,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.16675,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       1.042172,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.056103,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.013931,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=26-C \u00b7 Crew A": {
+      "setups": [
+       55,
+       null
+      ],
+      "lineal_ft": [
+       279331.8,
+       0.051
+      ],
+      "run_minutes": [
+       331.75,
+       0.051
+      ],
+      "typical_fpm": [
+       841.994876,
+       0.051
+      ],
+      "median_setup_fpm": [
+       843.553073,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       93.554986,
+       0.056556
+      ],
+      "target_fpm": [
+       900.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       874.365882,
+       0.051
+      ],
+      "gap_fpm": [
+       32.371007,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.204702,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       0.946863,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.010355,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.063492,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "label=275-EB \u00b7 Crew A": {
+      "setups": [
+       60,
+       null
+      ],
+      "lineal_ft": [
+       290360.9,
+       0.051
+      ],
+      "run_minutes": [
+       626.483333,
+       0.051
+      ],
+      "typical_fpm": [
+       463.477454,
+       0.051
+      ],
+      "median_setup_fpm": [
+       462.385203,
+       0.051
+      ],
+      "typical_pct_of_target": [
+       92.695491,
+       0.061
+      ],
+      "target_fpm": [
+       500.0,
+       null
+      ],
+      "best_fifth_fpm": [
+       482.415081,
+       0.051
+      ],
+      "gap_fpm": [
+       18.937628,
+       0.11
+      ],
+      "opportunity_hours": [
+       0.409886,
+       0.0051
+      ],
+      "best_fifth_dry_end_pct": [
+       0.935791,
+       5.1e-05
+      ],
+      "rest_dry_end_pct": [
+       1.040916,
+       5.1e-05
+      ],
+      "reject_penalty_points": [
+       -0.105125,
+       0.000102
+      ],
+      "status": [
+       "ok",
+       null
+      ]
+     },
+     "$": {
+      "excluded_short_setups": [
+       1,
+       null
+      ],
+      "min_run_minutes": [
+       2.0,
+       null
+      ],
+      "min_setups": [
+       10,
+       null
+      ],
+      "total_opportunity_hours": [
+       1.513202,
+       0.12
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "value-trend-trim-8w",
    "type": "value",
    "mode": "offline",

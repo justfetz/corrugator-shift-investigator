@@ -1065,6 +1065,57 @@
    }
   },
   {
+   "id": "period-speed-opportunity-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Where is the speed opportunity this month? Which grades have headroom?",
+   "expect": {
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_opportunity",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "slice_by": "width",
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Speed opportunity by grade and width \\(.* hours in total if every cell ran at its best-fifth speed.*Peak speeds are never used.*no temperatures"
+   }
+  },
+  {
+   "id": "period-speed-opportunity-crew-shift",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Which crews run faster this week, and does it cost rejects?",
+   "expect": {
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_opportunity",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "slice_by": "crew",
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Speed opportunity by grade and crew .*Crew [ABC]: typical .* on the fast fifth vs .* on the rest"
+   }
+  },
+  {
    "id": "period-trim-trend",
    "type": "routing",
    "mode": "offline",
