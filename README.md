@@ -72,6 +72,10 @@ Two 30-inch outs plus one 34-inch out occupy 94 inches of a 98-inch web, leaving
 
 Use a reproducible seed and explicit scenarios. Keep scenario answer keys outside the agent's accessible evidence so tests measure investigation rather than answer retrieval. Keep paper recipes optional; do not infer strength or furnish from fictional grade labels.
 
+### Synthetic record families
+
+`src/investigator/synth.py` generates two full months (August and September 2026) of one corrugator as four record families whose field names and units mirror the machine's own record types: dry-end setups, wet ends, shifts and stops (`src/investigator/records.py`). Same seed, byte-identical JSONL, exposed content hash. The records satisfy the physics and accounting invariants in [docs/RECORDS.md](docs/RECORDS.md) (centered web geometry, shared knife travel, exact wet-end and shift aggregates, gap-free time partition, monthly downtime and waste bands) and carry three seeded stories whose answer keys are read by the generator only. This remains our own documented demo schema: the borrowed names make the data read like plant records, and nothing here claims OEM protocol compatibility. The one-day XML fixture stays the data source of the current tools until a later step.
+
 Proposed editable speed table, based on owner guidance rather than external standards:
 
 | Fictional board grade | Construction | Target ft/min |
