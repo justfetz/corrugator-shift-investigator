@@ -1,6 +1,20 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let config, sessionId = null, latest = null, busy = false;
+const PROVIDERS={openai:{name:'OpenAI',header:'X-OpenAI-Key'},anthropic:{name:'Anthropic',header:'X-Anthropic-Key'}};
+function provider(){ return PROVIDERS[$('mode').value]||null; }
+function isLive(){ return provider()!==null; }
+function liveModes(){ // modes the server's own key enables; older servers report only the OpenAI flag
+ if(!config)return [];
+ if(Array.isArray(config.live_modes))return config.live_modes.filter(m=>PROVIDERS[m]);
+ return config.live_model_available?['openai']:[];
+}
+function syncKeyLabel(){
+ const p=provider();
+ $('key-label').hidden=!p||!!(config&&config.public);
+ if(p)$('key-label-text').textContent=`${p.name} API key (optional if configured on server)`;
+}
+function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
 function node(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 function message(label, paragraphs, cls='') { const e=node('div',undefined,'message '+cls);e.append(node('strong',label));for(const p of paragraphs)e.append(node('p',p));$('messages').append(e);$('messages').scrollTop=$('messages').scrollHeight; }
 function svgNode(tag, attrs, text) { const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text!==undefined)e.textContent=text;return e; }
@@ -34,13 +48,13 @@ function showChart(chart) {
  if(!rows.length)wrap.append(node('p','No records match this filter.','muted'));else wrap.append(svg);$('charts').append(wrap);
 }
 function updateScope(){
- const ranged=$('period').value!=='day', live=$('mode').value==='openai';
+ const ranged=$('period').value!=='day', live=isLive();
  $('scope-help').textContent=`${$('day').value} / ${ranged?$('period').selectedOptions[0].textContent:'07:00 to next day 07:00'} / ${$('scope').value==='shift'?'Shift '+$('shift').value+' only — 8 hours per date.':'All shifts — full 24-hour production day per date.'}`;
  $('shift').disabled=busy||$('scope').value==='day';
- $('mode').disabled=busy||ranged;$('question').disabled=ranged;$('key-label').hidden=!live||!!(config&&config.public);
- $('mode-badge').textContent=live?'Synthetic data / OpenAI selected':'Synthetic data / Offline planner';
+ $('mode').disabled=busy||ranged;$('question').disabled=ranged;syncKeyLabel();
+ $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
  if(ranged)$('mode-help').textContent='Build a free deterministic period summary, output heatmap, recurring downtime comparison, daily matrix and notes. The exact date range is shown; missing days are disclosed.';
- else $('mode-help').textContent=live?'OpenAI receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.':'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
+ else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
  $('submit').textContent=ranged?'Build period report':'Investigate';
  document.querySelectorAll('[data-question]').forEach(b=>b.disabled=busy||ranged);
 }
@@ -82,10 +96,11 @@ async function ask(question) {
  const empty=$('messages').querySelector('.empty');if(empty)empty.remove();message('You',[question],'user');
  try{
   const headers={'Content-Type':'application/json','X-Workbench-Token':config.token};
-  if($('mode').value==='openai' && $('api-key').value && !(config&&config.public))headers['X-OpenAI-Key']=$('api-key').value;
+  const p=provider();
+  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
   $('api-key').value='';
   const pending=fetch('/api/ask',{method:'POST',headers,body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:$('mode').value,scope:$('scope').value,period:$('period').value})});
-  delete headers['X-OpenAI-Key'];
+  for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
   const response=await pending;
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');sessionId=result.session_id;
   message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${result.usage.tool_calls} tool calls`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
@@ -94,19 +109,24 @@ async function ask(question) {
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('period').value==='day'?$('question').value:`Build ${$('period').value} report`).catch(()=>{});});
 document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{ if(button.dataset.scope){$('scope').value=button.dataset.scope;reset();} $('question').value=button.dataset.question;ask(button.dataset.question).catch(()=>{}); }));
-function reset(){$('heatmaps').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=$('mode').value==='openai'?'Ready · OpenAI calls incur charges':'Ready · no API costs';updateScope();}
-$('mode').addEventListener('change',()=>{reset();const live=$('mode').value==='openai';$('key-label').hidden=!live||!!(config&&config.public);$('api-key').value='';$('mode-badge').textContent=live?'Synthetic data / OpenAI selected':'Synthetic data / Offline planner';$('mode-help').textContent=live?'OpenAI receives your question, bounded history and synthetic tool results. Your key passes through this local server to OpenAI for this request, is not saved, and the field clears on submit. Live calls incur API charges.':'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
+function reset(){$('heatmaps').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();}
+$('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',reset);$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',()=>{if($('period').value!=='day')$('mode').value='offline';reset();});
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 $('pdf').addEventListener('click',async()=>{if(!latest||busy)return;$('pdf').disabled=true;try{const response=await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({session_id:latest.session_id,run_id:latest.run_id})});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
 function applyPublicMode(){
- // Hosted synthetic demo: no visitor keys, ever. The OpenAI option stays only when the server's own key and cap are enabled.
+ // Hosted synthetic demo: no visitor keys, ever. A live option stays only when the server's own key for that provider and the cap are enabled.
  if(!config.public)return;
  $('key-label').hidden=true;$('api-key').value='';
- const option=$('mode').querySelector?.('option[value="openai"]');
- if(!config.live_model_available){if(option)option.remove();$('mode').value='offline';$('mode').disabled=true;$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';}
- else{if($('period').value==='day')$('mode').value='openai';$('mode-help').textContent='Public demo: the model chooses which bounded tools to run and writes the interpretation; every number is calculated by fixed queries and inserted by code. Uses this site\'s own key under a spend cap; no visitor key is accepted. Switch to Offline to see the same tools without a model.';}
- $('mode-badge').textContent=config.live_model_available?'Synthetic data / Public demo · model on':'Synthetic data / Public demo';
+ const modes=liveModes();
+ for(const [value,entry] of Object.entries(PROVIDERS)){
+  const option=$('mode').querySelector?.(`option[value="${value}"]`);
+  if(!option)continue;
+  if(modes.includes(value))option.textContent=`${entry.name} / server key`;else option.remove();
+ }
+ if(!modes.length){$('mode').value='offline';$('mode').disabled=true;$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';}
+ else{if($('period').value==='day')$('mode').value=modes.includes('anthropic')?'anthropic':modes[0];$('mode-help').textContent=`Public demo: the model (${PROVIDERS[$('mode').value]?.name||'server'}) chooses which bounded tools to run and writes the interpretation; every number is calculated by fixed queries and inserted by code. Uses this site's own key under a spend cap; no visitor key is accepted. Switch to Offline to see the same tools without a model.`;}
+ $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model on':'Synthetic data / Public demo';
 }
 async function init(){
  $('submit').disabled=true;
