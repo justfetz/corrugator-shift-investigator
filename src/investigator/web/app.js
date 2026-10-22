@@ -16,7 +16,16 @@ function syncKeyLabel(){
 }
 function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
 function node(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
-function message(label, paragraphs, cls='') { const e=node('div',undefined,'message '+cls);e.append(node('strong',label));for(const p of paragraphs)e.append(node('p',p));$('messages').append(e);$('messages').scrollTop=$('messages').scrollHeight; }
+const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
+function message(label, paragraphs, cls='') {
+ const e=node('div',undefined,'message '+cls);e.append(node('strong',label));
+ let notes=null; // consecutive shift-note lines fold into one disclosure instead of a dump
+ for(const p of paragraphs){
+  if(NOTE_LINE.test(p)){ if(!notes){notes=node('details',undefined,'note-group');notes.append(node('summary'));e.append(notes);} notes.append(node('p',p)); notes.children[0].textContent=`${notes.children.length-1} reported note${notes.children.length-1===1?'':'s'} (synthetic, unverified — observations, not causes)`; continue; }
+  notes=null; e.append(node('p',p));
+ }
+ $('messages').append(e);$('messages').scrollTop=$('messages').scrollHeight;
+}
 
 // ---- Scope: the hidden selects (#day, #period, #shift, #scope, #mode) hold the state the
 // request payload reads; the segmented buttons and the sentence are views over them.
@@ -382,9 +391,44 @@ async function primeKpis(){
   if(!entry)return;
   if(!latest)$('metrics').replaceChildren();
   renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
-  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(node('pre',JSON.stringify(entry,null,2)));$('kpis').append(trail);
+  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
+
+// ---- The tool trail: one row per tool call. Arguments, row count, coverage and timing on the row;
+// the exact SQL with its bound values and the full result JSON behind disclosures.
+const compactJson=value=>JSON.stringify(value,(k,v)=>v===null?null:v)||'';
+function traceRow(entry){
+ const d=node('details',undefined,'trace-step '+(entry.ok?'ok':'failed')), data=entry.ok?entry.data:null;
+ const rows=data?Array.isArray(data.rows)?data.rows.length:null:null;
+ const sum=node('summary',undefined,'trace-sum');
+ sum.append(node('code',entry.tool,'tool'));
+ sum.append(node('span',compactJson(entry.arguments||{}),'args mono'));
+ const facts=[];
+ if(rows!==null)facts.push(`${rows} row${rows===1?'':'s'}`);
+ if(data&&data.coverage)facts.push(data.coverage);
+ if(typeof entry.elapsed_ms==='number')facts.push(`${entry.elapsed_ms.toFixed(1)} ms`);
+ facts.push(entry.ok?'OK':'error');
+ sum.append(node('span',facts.join(' · '),'facts mono'));
+ d.append(sum);
+ if(!entry.ok){d.append(node('p',`${entry.error?.code||'error'}: ${entry.error?.message||'tool call rejected'}`,'warning-note'));}
+ else{
+  const meta=node('dl',undefined,'trace-meta');const add=(k,v)=>{if(v===undefined||v===null||v==='')return;meta.append(node('dt',k),node('dd',String(v)));};
+  if(data.window)add('Window',`${data.window.label} (${data.window.coverage})`+(data.previous_window?`; previous ${data.previous_window.label} (${data.previous_window.coverage})`:''));
+  if(data.shift!==undefined)add('Shift',data.shift===null?'all shifts':data.shift);
+  if(data.source_rows)add('Source rows',compactJson(data.source_rows));
+  if(data.excluded_records?.length)add('Excluded records',data.excluded_records.map(r=>`${r.record_id}: ${r.error}`).join('; '));
+  if(entry.tool==='render_chart')add('Chart',`${data.type}; x=${data.x}; y=${data.y}${data.y2?'; y2='+data.y2:''}; unit=${data.unit}; from ${data.source_result_id}`);
+  if(data.dataset_version)add('Dataset',String(data.dataset_version).slice(0,16)+'…');
+  if(meta.children.length)d.append(meta);
+  const sql=data.trace?.sql||data.daily_sql; const params=data.trace?.parameters;
+  if(sql){const q=node('details',undefined,'trace-sql');q.append(node('summary','SQL and bound values'));q.append(node('pre',String(sql).trim()+(params?`\n\n-- bound values\n${JSON.stringify(params)}`:'')));d.append(q);}
+  else if(entry.tool!=='render_chart'){d.append(node('p','No SQL: this tool composes other results.','muted'));}
+ }
+ const full=node('details',undefined,'trace-json');full.append(node('summary','Full result JSON'));full.append(node('pre',JSON.stringify(entry,null,2)));d.append(full);
+ return d;
+}
+function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool calls · ${usage.model_calls} model call${usage.model_calls===1?'':'s'} · estimated $${Number(usage.cost_usd||0).toFixed(4)}`+(usage.reserved_usd!==undefined?` · reserved $${Number(usage.reserved_usd).toFixed(2)}`:''):`${usage.tool_calls} tool call${usage.tool_calls===1?'':'s'} · $0 model cost`; }
 function showResult(result) {
  $('heatmaps').replaceChildren();
  latest=result; $('download').disabled=false; $('pdf').disabled=false; $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();
@@ -397,13 +441,12 @@ function showResult(result) {
     const card=node('div',undefined,'metric '+(bad||incomplete?'warning':''));card.append(node('div',`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · ${label}`,'label'));if(label==='Speed / target')card.title='Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.';if(label==='Paper changes')card.title='Count of distinct wet-end runs, as defined by the plant expert.';card.append(node('div',incomplete?'Incomplete':`${Number(value).toFixed(1)} ${unit}`,'value'));if(incomplete)card.append(node('small',`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`));$('metrics').append(card);
    }
   }
-  const d=node('details',undefined,'trace-step'); d.append(node('summary',`${entry.tool} · ${entry.ok?'OK':'error'} · ${entry.elapsed_ms.toFixed(1)} ms`));
-  d.append(node('pre',JSON.stringify(entry,null,2)));$('trace').append(d);
+  $('trace').append(traceRow(entry));
  }
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
- $('calls').textContent=result.usage.model_calls ? ` · ${result.usage.tool_calls} tool calls · estimated $${result.usage.cost_usd.toFixed(4)} · reserved $${result.usage.reserved_usd.toFixed(2)}` : ` · ${result.usage.tool_calls} tool calls · $0 model cost`;
- $('context').replaceChildren(node('h3','Context carried to the next question'),node('pre',JSON.stringify(result.context,null,2)));
+ $('calls').textContent=' · '+usageText(result.usage);
+ const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
 }
 const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key'];
@@ -422,7 +465,7 @@ async function ask(question) {
   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
   const response=await pending;
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');sessionId=result.session_id;
-  message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${result.usage.tool_calls} tool calls`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+  message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
  }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
  finally{setBusy(false);updateScope();}
 }

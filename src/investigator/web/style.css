@@ -169,7 +169,21 @@ details{margin-top:24px;border-top:1px solid var(--line-2);padding-top:18px}
 summary{cursor:pointer;font-weight:600}
 #calls{font-weight:400;font-size:.85rem;color:var(--ink-3);font-family:var(--mono)}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.78rem;line-height:1.5;background:var(--code-bg);color:var(--code-ink);padding:14px;border-radius:var(--radius-s);max-height:350px;overflow:auto;font-family:var(--mono)}
-.trace-step{border-left:3px solid var(--line);padding-left:12px;margin-top:18px}.trace-step h3{font-size:.85rem}
+.trace-step{border-left:3px solid var(--line);padding-left:12px;margin-top:12px;border-top:0;padding-top:0}
+.trace-step.failed{border-left-color:var(--bad)}
+.trace-sum{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-weight:500;font-size:.85rem;padding:6px 0}
+.trace-sum .tool{font-family:var(--mono);font-size:.82rem;font-weight:600;color:var(--brand-ink);background:var(--brand-soft);padding:2px 6px;border-radius:4px}
+.trace-sum .args{font-size:.74rem;color:var(--ink-2);overflow-wrap:anywhere;flex:1 1 200px}
+.trace-sum .facts{font-size:.72rem;color:var(--ink-3);white-space:nowrap}
+.trace-meta{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:6px 0 8px;font-size:.78rem}
+.trace-meta dt{font-family:var(--mono);color:var(--ink-3)}.trace-meta dd{margin:0;overflow-wrap:anywhere;font-family:var(--mono);color:var(--ink-2)}
+.trace-sql,.trace-json,.trace-context{margin-top:6px;border-top:0;padding-top:0}
+.trace-sql summary,.trace-json summary,.trace-context summary{font-size:.78rem;font-family:var(--mono);color:var(--ink-3);font-weight:500}
+.trace-sql pre,.trace-json pre,.trace-context pre{margin-top:6px}
+code{font-family:var(--mono)}
+.note-group{margin:8px 0;border-top:0;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-s)}
+.note-group summary{font-size:.82rem;font-weight:500;color:var(--ink-2)}
+.note-group p{margin:8px 0 2px;font-size:.85rem;color:var(--ink-2)}
 footer{font-size:.8rem;color:var(--ink-3);margin-top:22px}
 
 /* Heatmap */
@@ -204,6 +218,7 @@ footer{font-size:.8rem;color:var(--ink-3);margin-top:22px}
  .section-heading{align-items:start;flex-direction:column}
  .metrics,.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .chip-group{grid-template-columns:1fr;gap:4px}.chip-group h4{padding-top:4px}
+ .trace-meta{grid-template-columns:1fr}.trace-sum .facts{white-space:normal}
  .tile .v{font-size:1.2rem}
  .heatmap-weekdays,.heatmap-grid{gap:4px}.heatmap-cell{padding:5px}
  #messages{max-height:350px}
