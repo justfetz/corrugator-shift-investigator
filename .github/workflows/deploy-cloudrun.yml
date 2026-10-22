@@ -19,7 +19,15 @@ jobs:
       SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
       EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
       LIVE_MODEL: ${{ vars.PUBLIC_DEMO_LIVE_MODEL || '0' }}
+      # Secret Manager secret NAMES (never values). Empty = that provider is not mounted.
+      # OpenAI keeps its historical default; Anthropic is opt-in by setting the variable.
       OPENAI_SECRET: ${{ vars.OPENAI_SECRET_NAME || 'openai-api-key' }}
+      ANTHROPIC_SECRET: ${{ vars.ANTHROPIC_SECRET_NAME || '' }}
+      # Hosted-demo guards (docs/ANTHROPIC_DEMO.md); empty keeps each guard off.
+      ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || '' }}
+      DEMO_RATE_LIMIT_PER_MIN: ${{ vars.DEMO_RATE_LIMIT_PER_MIN || '' }}
+      DEMO_DAILY_CAP: ${{ vars.DEMO_DAILY_CAP || '' }}
+      DEMO_MAX_TURNS: ${{ vars.DEMO_MAX_TURNS || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
@@ -43,14 +51,26 @@ jobs:
       - name: Deploy from source
         run: |
           set -euo pipefail
-          # Live model: only when the repository variable PUBLIC_DEMO_LIVE_MODEL is "1". The key is
-          # never in GitHub; Cloud Run reads it from Secret Manager at start-up as OPENAI_API_KEY.
+          # Live model: only when the repository variable PUBLIC_DEMO_LIVE_MODEL is "1". Keys are
+          # never in GitHub; Cloud Run reads each from Secret Manager at start-up (OPENAI_API_KEY and/or
+          # ANTHROPIC_API_KEY). A provider whose secret NAME variable is empty is simply not mounted.
+          # The guards ride as plain env vars; TRUST_PROXY=1 because Cloud Run's front end sets
+          # X-Forwarded-For (one trusted hop; the server takes the rightmost entry).
+          ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|TRUST_PROXY=1"
+          for pair in "ANTHROPIC_MODEL=${ANTHROPIC_MODEL}" "DEMO_RATE_LIMIT_PER_MIN=${DEMO_RATE_LIMIT_PER_MIN}" \
+                      "DEMO_DAILY_CAP=${DEMO_DAILY_CAP}" "DEMO_MAX_TURNS=${DEMO_MAX_TURNS}"; do
+            [ -n "${pair#*=}" ] && ENV_VARS="${ENV_VARS}|${pair}"
+          done
           if [ "$LIVE_MODEL" = "1" ]; then
-            LIVE_FLAGS=(--set-secrets "OPENAI_API_KEY=${OPENAI_SECRET}:latest")
-            ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=1"
+            SECRETS=""
+            [ -n "$OPENAI_SECRET" ] && SECRETS="OPENAI_API_KEY=${OPENAI_SECRET}:latest"
+            [ -n "$ANTHROPIC_SECRET" ] && SECRETS="${SECRETS:+${SECRETS},}ANTHROPIC_API_KEY=${ANTHROPIC_SECRET}:latest"
+            test -n "$SECRETS"   # live mode with no provider secret named is a configuration error
+            LIVE_FLAGS=(--set-secrets "$SECRETS")
+            ENV_VARS="${ENV_VARS}|PUBLIC_DEMO_LIVE_MODEL=1"
           else
             LIVE_FLAGS=(--clear-secrets)   # the service holds no other secrets; idempotent when none exist
-            ENV_VARS="^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}|PUBLIC_DEMO_EMBED_ORIGINS=${EMBED_ORIGINS}|PUBLIC_DEMO_LIVE_MODEL=0"
+            ENV_VARS="${ENV_VARS}|PUBLIC_DEMO_LIVE_MODEL=0"
           fi
           gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
             --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
@@ -79,6 +99,6 @@ jobs:
           done
           test -n "$LIVE"
           CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
-          echo "live model available: $(echo "$CFG" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("live_model_available"))')"
-          if [ "$LIVE_MODEL" = "1" ]; then echo "$CFG" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("live_model_available") else 1)'; fi
+          echo "live modes: $(echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); print(c.get("live_modes") or c.get("live_model_available"))')"
+          if [ "$LIVE_MODEL" = "1" ]; then echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); sys.exit(0 if (c.get("live_modes") or c.get("live_model_available")) else 1)'; fi
           echo "Live at $LIVE"
