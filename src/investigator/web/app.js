@@ -351,7 +351,7 @@ function showTable(data){
 // ---- KPI strip: dashboard-style tiles from a get_period_kpis / compare_periods envelope.
 // Twelve tiles visible in a fixed priority, the rest behind "more"; the delta chip is colored by the
 // tool's own `change` label (better/worse/same/neutral) and reads "withheld" when the comparison is.
-const TILE_PRIORITY=['volume_msf','speed_run_fpm','speed_all_fpm','downtime_pct','stops','minutes_per_stop','trim_pct','shear_pct','dry_end_pct','bale_pct','maintenance_pm_pct','operator_pct'];
+const TILE_PRIORITY=['volume_msf','msf_per_day','speed_run_fpm','speed_all_fpm','downtime_pct','stops','minutes_per_stop','trim_pct','shear_pct','dry_end_pct','bale_pct','maintenance_pm_pct','operator_pct'];
 const VISIBLE_TILES=12;
 const UNIT_SHORT={'% of gross':'%','% of scheduled minutes':'%',count:'','min/stop':'min/stop'};
 const unitShort=unit=>UNIT_SHORT[unit]??unit;
@@ -387,6 +387,7 @@ function renderKpiTiles(data,caption){
  const withheld=data.comparison!=='complete';
  const head=node('div',undefined,'kpis-head');
  head.append(node('strong',`${data.window.label}${data.previous_window?' vs '+data.previous_window.label:''} · ${data.shift?'shift '+data.shift:'all shifts'}`));
+ if(data.equal_production_days===false)head.append(node('span',`${data.production_days_current} vs ${data.production_days_previous} production days: compare MSF/day and the ratio tiles, not raw totals`,'warning-note'));
  if(caption)head.append(node('span',caption,'muted mono'));box.append(head);
  if(withheld)box.append(node('p',`Deltas withheld: ${String(data.comparison||'').replace(/^withheld:\s*/,'')||'a window is incomplete or unavailable'}. Missing days are not zero production.`,'warning-note'));
  const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows);

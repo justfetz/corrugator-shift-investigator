@@ -9,12 +9,12 @@ from collections import OrderedDict, defaultdict
 from datetime import date, timedelta
 import time
 from uuid import uuid4
-from .record_store import DEFAULT_MONTHS, default_store
+from .record_store import DEFAULT_MONTHS, FISCAL_START, default_store
 from .synth import production_days
 
 FIRST = production_days(DEFAULT_MONTHS)[0]
 LAST = production_days(DEFAULT_MONTHS)[-1]
-ACCOUNTING_445_START = date(2026, 9, 1)  # Editable demo assumption.
+ACCOUNTING_445_START = FISCAL_START  # shared with the period tools: one 4-4-5 calendar in the app
 ACCOUNTING_WEEKS = (4, 4, 5) * 4
 
 

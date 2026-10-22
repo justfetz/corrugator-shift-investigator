@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 import pytest
 from investigator.agent import Agent, Context, PERIOD_TOOLS, TOOL_SCHEMAS, parse_request
-from investigator.record_store import (KPI_CATALOG, TREND_METRICS, default_store, parse_window, previous_window)
+from investigator.record_store import (KPI_CATALOG, TREND_METRICS, default_store, fiscal_bounds, parse_window, previous_window, window_label)
 from investigator.synth import generate_months
 
 
@@ -77,6 +77,14 @@ def test_window_semantics():
     assert previous_window("week", date(2026, 9, 14), date(2026, 9, 18)) == (date(2026, 9, 7), date(2026, 9, 11))
     assert previous_window("month", date(2026, 9, 1), date(2026, 9, 30)) == (date(2026, 8, 1), date(2026, 8, 31))
     assert previous_window("day", date(2026, 9, 14), date(2026, 9, 14)) == (date(2026, 9, 11), date(2026, 9, 11))  # Monday -> Friday
+    # 4-4-5 from Monday 3 August: P1 = 4 weeks, P2 = 4 weeks, P3 = 5 weeks (only its first three days are in the data)
+    assert parse_window({"period": "fiscal", "anchor": "2026-08-14"})[2:] == (date(2026, 8, 3), date(2026, 8, 30))
+    assert parse_window({"period": "fiscal", "anchor": "2026-09-14"})[2:] == (date(2026, 8, 31), date(2026, 9, 27))
+    assert parse_window({"period": "fiscal", "anchor": "2026-09-29"})[2:] == (date(2026, 9, 28), date(2026, 11, 1))
+    assert previous_window("fiscal", date(2026, 8, 31), date(2026, 9, 27)) == (date(2026, 8, 3), date(2026, 8, 30))
+    assert previous_window("fiscal", date(2026, 8, 3), date(2026, 8, 30)) == (date(2026, 6, 29), date(2026, 8, 2))  # prior year P13, 5 weeks
+    assert fiscal_bounds(date(2026, 7, 1))[2].startswith("4-4-5 P13 of the prior year (5 weeks)")
+    assert window_label("fiscal", date(2026, 8, 31), date(2026, 9, 27)) == "4-4-5 P2 (4 weeks) 2026-08-31 to 2026-09-27"
     for bad in ({"period": "day", "anchor": "2026-09-12"}, {"period": "quarter", "anchor": "2026-09-01"},
                 {"period": "week", "anchor": "September"}, {"period": "week"}, "week"):
         with pytest.raises(ValueError):
@@ -262,6 +270,23 @@ def test_stops_profile_per_day_and_weekday(store, data):
     assert len(shift_only["rows"]) == 5 and all(r["downtime_pct"] == pytest.approx(r["minutes"] / 480 * 100, abs=1e-3) for r in shift_only["rows"])
 
 
+def test_day_basis_flags_unequal_production_days(store):
+    months = store.get_period_kpis({"period": "month", "anchor": "2026-09-14"})
+    assert (months["production_days_current"], months["production_days_previous"], months["equal_production_days"]) == (22, 21, False)
+    assert "Unequal production days: 22 vs 21" in months["day_basis_note"] and "MSF/day" in months["day_basis_note"]
+    fiscal = store.get_period_kpis({"period": "fiscal", "anchor": "2026-09-14"})
+    assert fiscal["window"]["label"].startswith("4-4-5 P2 (4 weeks)") and fiscal["previous_window"]["label"].startswith("4-4-5 P1 (4 weeks)")
+    assert (fiscal["production_days_current"], fiscal["production_days_previous"], fiscal["equal_production_days"]) == (20, 20, True)
+    assert fiscal["coverage"] == "complete" and fiscal["comparison"] == "complete"
+    rows = {r["metric"]: r for r in fiscal["rows"]}
+    assert rows["msf_per_day"]["current"] == pytest.approx(rows["volume_msf"]["current"] / 20, abs=0.06)
+    first = store.get_period_kpis({"period": "fiscal", "anchor": "2026-08-14"})
+    assert first["previous_window"]["coverage"] == "unavailable" and first["equal_production_days"] is False  # 20 vs 0 observed
+    assert first["comparison"].startswith("withheld")
+    single = store.get_period_kpis({"period": "week", "anchor": "2026-09-14"}, compare=False)
+    assert single["production_days_previous"] is None and single["equal_production_days"] is None
+
+
 def test_grade_totals_are_ratios_of_sums_within_each_grade(store, data):
     result = store.get_grade_totals({"period": "month", "anchor": "2026-09-14"})
     setups = between(data["dry_end_setups"], date(2026, 9, 1), date(2026, 9, 30))
@@ -381,6 +406,9 @@ ROUTES = [
     ("trend of minutes per stop", "get_trend", {"metric": "minutes_per_stop", "weeks": 8}),
     ("weekly warp trend", "get_trend", {"metric": "warp_pct"}),
     ("volume by grade this month", "get_grade_totals", {"window": {"period": "month", "anchor": DAY}}),
+    ("compare this period to the previous period", "get_period_kpis", {"window": {"period": "fiscal", "anchor": DAY}, "compare": True}),
+    ("which downtime reason cost the most minutes this fiscal period", "get_downtime_pareto", {"window": {"period": "fiscal", "anchor": DAY}, "group_by": "reason"}),
+    ("volume by grade this fiscal period", "get_grade_totals", {"window": {"period": "fiscal", "anchor": DAY}}),
     ("how much 275-BC did we run this week", "get_grade_totals", {"window": {"period": "week", "anchor": DAY}}),
     ("over/under-run by knife this week", "get_overrun", {"window": {"period": "week", "anchor": DAY}}),
     ("are we inside the cut range this month", "get_overrun", {"window": {"period": "month", "anchor": DAY}}),

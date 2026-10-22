@@ -34,8 +34,8 @@ TOOL_SCHEMAS = [
 # Period tools read the whole record store (two production months) instead of one day.
 # A window is {period, anchor}: day = that Monday-Friday production day, week = the
 # Monday-Friday production week containing the anchor, month = its calendar month.
-WINDOW_SCHEMA = {"type": "object", "description": "day = one production day (Mon-Fri); week = the Mon-Fri production week containing the anchor; month = the calendar month containing it.",
-                 "properties": {"period": {"type": "string", "enum": ["day", "week", "month"]},
+WINDOW_SCHEMA = {"type": "object", "description": "day = one production day (Mon-Fri); week = the Mon-Fri production week containing the anchor; month = the calendar month containing it; fiscal = the 4-4-5 accounting period containing it (periods of 4, 4, 5 weeks from Monday 2026-08-03).",
+                 "properties": {"period": {"type": "string", "enum": ["day", "week", "month", "fiscal"]},
                                 "anchor": {"type": "string", "description": "YYYY-MM-DD; use the selected production day"}},
                  "required": ["period", "anchor"], "additionalProperties": False}
 SHIFT_FILTER = {"type": ["integer", "null"], "enum": [None, 1, 2, 3], "description": "null = all three shifts; under selected-shift scope only the selected shift is allowed"}
@@ -173,13 +173,15 @@ TREND_WORDS = ((r"lineal per paper change|per paper change|per wet[- ]end|feet p
 PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare this month to last', "
                "'how did September go versus August', 'how did shift 2 go compared with last week', "
                "'which downtime reason cost the most minutes', 'is it bond or warp', 'stops per day this week', "
-               "'trend of trim over eight weeks', 'volume by grade this month', 'over/under-run by knife this week'.")
+               "'trend of trim over eight weeks', 'volume by grade this month', 'over/under-run by knife this week', "
+               "'compare this period to the previous period' (4-4-5 accounting periods).")
 
 
 def parse_period_request(lower, current, shifts):
     """Route plain period phrasing to the store tools; None when the question is about one day."""
     months = [MONTH_NAMES[m] for m in re.findall(r"\b(" + "|".join(MONTH_NAMES) + r")\b", lower)]
-    period = 'month' if months or re.search(r"\bmonth(s|ly)?\b", lower) else 'week' if re.search(r"\bweek(s|ly)?\b", lower) else None
+    fiscal = bool(re.search(r"\bfiscal\b|\baccounting period\b|4-4-5|\b445\b|\b(this|last|previous|prior|current) period\b|\bperiod (over|vs|versus|to|against) period\b|\bp(1[0-3]|[1-9])\b", lower))
+    period = 'fiscal' if fiscal else 'month' if months or re.search(r"\bmonth(s|ly)?\b", lower) else 'week' if re.search(r"\bweek(s|ly)?\b", lower) else None
     trend = bool(re.search(r"\btrends?\b", lower))
     pareto = bool(re.search(r"\bpareto\b|cost the most|most (downtime )?minutes|most often|most stops|most frequent", lower)
                   and re.search(r"downtime|stop|reason|place|equipment|kind", lower))
@@ -191,7 +193,7 @@ def parse_period_request(lower, current, shifts):
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
     if not (period or trend or pareto or profile or waste or this_shift or grade or overrun):
         return None
-    if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift)\b", lower):
+    if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
     anchor = current.production_day
     year = anchor[:4]
@@ -528,7 +530,9 @@ class Agent:
                 return text
             if data.get('comparison') != 'complete':
                 lines.append('Deltas are withheld: a window is incomplete or unavailable. Missing days are not zero production.')
-            lines.append(f'Volume {cell("volume_msf", " MSF")}; lineal {cell("lineal_ft", " ft")}; speed with stops {cell("speed_all_fpm", " ft/min")}; without stops {cell("speed_run_fpm", " ft/min")}.')
+            lines.append(f'Volume {cell("volume_msf", " MSF")} = {cell("msf_per_day", " MSF")} per production day; lineal {cell("lineal_ft", " ft")}; speed with stops {cell("speed_all_fpm", " ft/min")}; without stops {cell("speed_run_fpm", " ft/min")}.')
+            if data.get('day_basis_note'):
+                lines.append(data['day_basis_note'])
             lines.append(f'Downtime {cell("downtime_pct", "%")} of scheduled minutes: {cell("downtime_minutes", " min")} over {cell("stops")} stops, {cell("minutes_per_stop", " min")} per stop. Maintenance + PM {cell("maintenance_pm_pct", "%")}; Operator {cell("operator_pct", "%")}.')
             lines.append(f'Waste as % of gross: side trim {cell("trim_pct", "%")}; shear {cell("shear_pct", "%")}; dry-end {cell("dry_end_pct", "%")} (bond {cell("bond_pct", "%")}, warp {cell("warp_pct", "%")}, misalignment {cell("misalignment_pct", "%")}, moisture {cell("moisture_pct", "%")}); bale {cell("bale_pct", "%")}; unexplained {cell("unexplained_pct", "%")}.')
             lines.append(f'Setup records {cell("setups")}; paper changes (distinct wet ends) {cell("paper_changes")}; lineal per setup {cell("lineal_per_setup", " ft")}; lineal per paper change {cell("lineal_per_paper_change", " ft")}; baled waste {cell("bale_msf", " MSF")}. Lower is better for downtime and waste, higher for volume, speed and run length; counts are context, not scores.')

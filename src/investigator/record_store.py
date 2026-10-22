@@ -37,7 +37,14 @@ DEFAULT_MONTHS = (("2026", 8), ("2026", 9))
 DEFAULT_MACHINE = "CORR-1"
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 WEEKDAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-PERIODS = ("day", "week", "month")
+PERIODS = ("day", "week", "month", "fiscal")
+# 4-4-5 accounting calendar for the demo: the fiscal year starts on the dataset's first Monday and
+# periods run 4, 4, 5 weeks per quarter. periods.py (the legacy period report) shares the start, so
+# the scope bar's "4-4-5" view and the period tools name the same windows. Walking backwards from
+# the start continues the pattern (5, 4, 4 ...), labelled as the prior year.
+FISCAL_START = date(2026, 8, 3)
+FISCAL_WEEKS = (4, 4, 5)
+
 CORRUPT_TRIM_SQFT = 99999999.0          # the fixture's bad-trim record, injected on demand
 MAX_TREND_WEEKS = 26
 ROW_LIMIT = 1000
@@ -64,6 +71,7 @@ TABLES = {
 KPI_CATALOG = (
     ("volume_msf", "Volume", "MSF", "higher"),
     ("lineal_ft", "Lineal feet", "ft", "higher"),
+    ("msf_per_day", "Volume per production day", "MSF/day", "higher"),
     ("speed_run_fpm", "Speed without stops", "ft/min", "higher"),
     ("speed_all_fpm", "Speed with stops", "ft/min", "higher"),
     ("downtime_pct", "Downtime", "% of scheduled minutes", "lower"),
@@ -130,15 +138,34 @@ def _month_bounds(moment):
     return start, start.replace(day=monthrange(start.year, start.month)[1])
 
 
+def fiscal_bounds(moment):
+    """(start, end, label) of the 4-4-5 period containing `moment`."""
+    if moment >= FISCAL_START:
+        start, index = FISCAL_START, 0
+        while True:
+            weeks = FISCAL_WEEKS[index % 3]
+            end = start + timedelta(days=weeks * 7 - 1)
+            if moment <= end:
+                return start, end, f"4-4-5 P{index % 13 + 1} ({weeks} weeks)"
+            start, index = end + timedelta(days=1), index + 1
+    end, index = FISCAL_START - timedelta(days=1), -1
+    while True:
+        weeks = FISCAL_WEEKS[index % 3]
+        start = end - timedelta(days=weeks * 7 - 1)
+        if moment >= start:
+            return start, end, f"4-4-5 P{index % 13 + 1} of the prior year ({weeks} weeks)"
+        end, index = start - timedelta(days=1), index - 1
+
+
 def parse_window(spec, first_day=None, last_day=None):
     """Validate {"period": day|week|month, "anchor": "YYYY-MM-DD"} and return
     (period, anchor, start, end). A day window needs a weekday; when bounds
     are given the resolved window must overlap the store's calendar range."""
     if not isinstance(spec, dict) or set(spec) != {"period", "anchor"}:
-        raise ValueError('A window is {"period": "day|week|month", "anchor": "YYYY-MM-DD"}')
+        raise ValueError('A window is {"period": "day|week|month|fiscal", "anchor": "YYYY-MM-DD"}')
     period, anchor = spec["period"], spec["anchor"]
     if period not in PERIODS:
-        raise ValueError("Window period must be day, week or month")
+        raise ValueError("Window period must be day, week, month or fiscal (4-4-5)")
     if not isinstance(anchor, str):
         raise ValueError("Window anchor must be a YYYY-MM-DD date")
     try:
@@ -152,6 +179,8 @@ def parse_window(spec, first_day=None, last_day=None):
     elif period == "week":
         start = moment - timedelta(days=moment.weekday())
         end = start + timedelta(days=4)
+    elif period == "fiscal":
+        start, end, _ = fiscal_bounds(moment)
     else:
         start, end = _month_bounds(moment)
     if first_day and last_day and (end < first_day or start > last_day):
@@ -168,6 +197,8 @@ def previous_window(period, start, end):
         return moment, moment
     if period == "week":
         return start - timedelta(days=7), end - timedelta(days=7)
+    if period == "fiscal":
+        return fiscal_bounds(start - timedelta(days=1))[:2]
     return _month_bounds(start - timedelta(days=1))
 
 
@@ -176,6 +207,8 @@ def window_label(period, start, end):
         return f"{start.isoformat()} ({WEEKDAYS[start.weekday()]})"
     if period == "week":
         return f"Week {start.isoformat()} to {end.isoformat()} (Mon-Fri)"
+    if period == "fiscal":
+        return f"{fiscal_bounds(start)[2]} {start.isoformat()} to {end.isoformat()}"
     return f"{start.strftime('%B %Y')} ({start.isoformat()} to {end.isoformat()})"
 
 
@@ -464,6 +497,23 @@ class RecordStore:
                          "delta": delta, "better": better, "change": change})
         return rows
 
+    @staticmethod
+    def _day_basis(current, previous):
+        """How many production days each window holds. Unequal counts (a 21-day August against a
+        22-day September, a 5-week 4-4-5 period against a 4-week one) make raw totals incomparable;
+        the per-day and ratio tiles stay comparable, and the note says so."""
+        now = current["production_days_observed"]
+        before = previous["production_days_observed"] if previous else None
+        equal = None if before is None else now == before
+        if equal is None:
+            note = f"{now} production days; no comparison window."
+        elif equal:
+            note = f"Both windows hold {now} production days; raw totals are comparable."
+        else:
+            note = (f"Unequal production days: {now} vs {before}. Compare volume per production day (MSF/day) and the "
+                    "ratio tiles (speed, downtime %, waste %, minutes per stop); raw volume and lineal totals are not like for like.")
+        return {"production_days_current": now, "production_days_previous": before, "equal_production_days": equal, "day_basis_note": note}
+
     def _envelope(self, tool, window, previous, shift, rows, trace, started, source_rows, **extra):
         windows = [window] + ([previous] if previous else [])
         coverage = "complete" if all(w["coverage"] == "complete" for w in windows) else \
@@ -490,7 +540,8 @@ class RecordStore:
         rows = self._kpi_rows(self._kpis(now), self._kpis(before) if before else None, comparable)
         source = {"current": now["source_rows"], "previous": before["source_rows"] if before else None}
         return self._envelope("get_period_kpis", current, previous, shift, rows, trace, started, source,
-                              comparison="complete" if comparable else "withheld: a window is incomplete or unavailable")
+                              comparison="complete" if comparable else "withheld: a window is incomplete or unavailable",
+                              **self._day_basis(current, previous))
 
     def compare_periods(self, current_window, previous_window, shift=None):
         """The same KPI table for two arbitrary windows (month vs month, week vs
@@ -502,7 +553,8 @@ class RecordStore:
         rows = self._kpi_rows(self._kpis(now), self._kpis(before), comparable)
         source = {"current": now["source_rows"], "previous": before["source_rows"]}
         return self._envelope("compare_periods", current, previous, shift, rows, trace, started, source,
-                              comparison="complete" if comparable else "withheld: a window is incomplete or unavailable")
+                              comparison="complete" if comparable else "withheld: a window is incomplete or unavailable",
+                              **self._day_basis(current, previous))
 
     def get_downtime_pareto(self, window, group_by="reason", measure="minutes", shift=None):
         """Stops of the window grouped by reason, place or kind, ordered by the

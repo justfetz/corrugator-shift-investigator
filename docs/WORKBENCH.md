@@ -44,6 +44,7 @@ With Period set to **Day**, these plain phrasings (the Compare group of example 
 - "Is it bond or warp?" — the waste breakdown (day window unless you name a week or month).
 - "Stops per day this week" — per production day plus the Monday-to-Friday profile.
 - "Trend of trim over eight weeks" — a weekly line for one metric (trim, shear, dry-end, warp, bond, misalignment, moisture, speed, downtime, stops, minutes per stop, MSF per day, lineal per setup, lineal per paper change).
+- "Compare this period to the previous period" — the same tiles over 4-4-5 accounting periods; any comparison with unequal production days says so and points at MSF per day and the ratio tiles.
 - "Volume by grade this month", "How much 275-BC did we run this week?", "Which grade is eating the most downtime?" — totals by board grade with speed against target and allocated downtime.
 - "Over/under-run by knife this week", "Are we inside the cut range?" — nominal versus actual cuts per knife, drawn as a bullet chart against the ±2 % band.
 - "Which warp are we seeing this month, up warp or twist warp?" — the waste breakdown with the reported sub-reasons.

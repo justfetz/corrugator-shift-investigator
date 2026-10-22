@@ -1012,6 +1012,59 @@
    }
   },
   {
+   "id": "period-fiscal-vs-previous",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Compare this period to the previous period",
+   "expect": {
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Both windows hold 20 production days; raw totals are comparable"
+   }
+  },
+  {
+   "id": "period-month-unequal-days",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "How did September compare with August?",
+   "expect": {
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "compare_periods",
+      "arguments": {
+       "current_window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "previous_window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Unequal production days: 22 vs 21\\. Compare volume per production day"
+   }
+  },
+  {
    "id": "period-trim-trend",
    "type": "routing",
    "mode": "offline",

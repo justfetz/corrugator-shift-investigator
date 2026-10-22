@@ -38,12 +38,13 @@ The six period tools (`get_period_kpis`, `compare_periods`, `get_downtime_pareto
 | `week` | the Monday–Friday production week containing the anchor (a weekend anchor maps to the week it closes) | the preceding Monday–Friday week |
 | `month` | the calendar month containing the anchor | the preceding calendar month |
 
-A window must overlap the dataset (3 August – 30 September 2026). Coverage is `complete` when every weekday of the window has records, `partial` when some do (the week of 28 September has three days; the week of 3 August has a `complete` current window and an `unavailable` previous one), `unavailable` when none do. Deltas and the `change` label are withheld unless both windows are complete; weekends and days before 3 August are never zero.
+A window is `day`, `week` (Mon–Fri), `month` (calendar) or `fiscal`: the 4-4-5 accounting period containing the anchor, periods of 4, 4, 5 weeks from Monday 3 August 2026 (P1 = 3–30 Aug, P2 = 31 Aug–27 Sep, P3 = 28 Sep–1 Nov with three days in the data; the scope bar's "4-4-5" report uses the same calendar). Every KPI envelope states `production_days_current` / `production_days_previous` and `equal_production_days`; when the counts differ (a 21-day August against a 22-day September, a 5-week period against a 4-week one) the `day_basis_note` says to compare `msf_per_day` and the ratio tiles rather than raw totals. A window must overlap the dataset (3 August – 30 September 2026). Coverage is `complete` when every weekday of the window has records, `partial` when some do (the week of 28 September has three days; the week of 3 August has a `complete` current window and an `unavailable` previous one), `unavailable` when none do. Deltas and the `change` label are withheld unless both windows are complete; weekends and days before 3 August are never zero.
 
 | Tile | Formula over the window | `better` |
 | --- | --- | --- |
 | volume_msf | sum(gross sq ft) / 1000 | higher |
 | lineal_ft | sum(lineal ft) | higher |
+| msf_per_day | sum(gross sq ft) / 1000 / count of production days with records — the like-for-like volume when windows hold different numbers of days | higher |
 | speed_run_fpm (without stops) | sum(lineal ft) / sum(elapsed − stop minutes of the setup records) | higher |
 | speed_all_fpm (with stops) | sum(lineal ft) / sum(scheduled shift minutes) | higher |
 | downtime_pct, downtime_minutes | sum(stop seconds) / sum(scheduled seconds) × 100; sum(stop seconds) / 60 | lower |

@@ -32,7 +32,7 @@
    "note": "September against August: every tile, delta and change label.",
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -71,6 +71,28 @@
       ],
       "delta": [
        1011910.0,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6641.605882,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6582.478481,
+       0.051
+      ],
+      "delta": [
+       59.127401,
        0.102
       ],
       "change": [
@@ -566,6 +588,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       22,
+       null
+      ],
+      "production_days_previous": [
+       21,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -588,7 +622,7 @@
    "note": "August's previous window is July, which is outside the dataset: previous, delta and change are null, never zero.",
    "expect": {
     "coverage": "partial",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -615,6 +649,28 @@
      "metric=lineal_ft": {
       "current": [
        17827923.8,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6582.478481,
        0.051
       ],
       "better": [
@@ -1122,6 +1178,18 @@
       "comparison": [
        "withheld: a window is incomplete or unavailable",
        null
+      ],
+      "production_days_current": [
+       21,
+       null
+      ],
+      "production_days_previous": [
+       0,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -1143,7 +1211,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -1186,6 +1254,28 @@
       ],
       "change": [
        "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2149.689414,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2181.42379,
+       0.051
+      ],
+      "delta": [
+       -31.734377,
+       0.102
+      ],
+      "change": [
+       "worse",
        null
       ]
      },
@@ -1677,6 +1767,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       22,
+       null
+      ],
+      "production_days_previous": [
+       21,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -1698,7 +1800,7 @@
    },
    "expect": {
     "coverage": "partial",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -1725,6 +1827,28 @@
      "metric=lineal_ft": {
       "current": [
        5909021.6,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2181.42379,
        0.051
       ],
       "better": [
@@ -2232,6 +2356,18 @@
       "comparison": [
        "withheld: a window is incomplete or unavailable",
        null
+      ],
+      "production_days_current": [
+       21,
+       null
+      ],
+      "production_days_previous": [
+       0,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -2253,7 +2389,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -2292,6 +2428,28 @@
       ],
       "delta": [
        365351.8,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2249.385277,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2222.028924,
+       0.051
+      ],
+      "delta": [
+       27.356353,
        0.102
       ],
       "change": [
@@ -2787,6 +2945,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       22,
+       null
+      ],
+      "production_days_previous": [
+       21,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -2808,7 +2978,7 @@
    },
    "expect": {
     "coverage": "partial",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -2835,6 +3005,28 @@
      "metric=lineal_ft": {
       "current": [
        6016639.6,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2222.028924,
        0.051
       ],
       "better": [
@@ -3342,6 +3534,18 @@
       "comparison": [
        "withheld: a window is incomplete or unavailable",
        null
+      ],
+      "production_days_current": [
+       21,
+       null
+      ],
+      "production_days_previous": [
+       0,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -3363,7 +3567,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -3402,6 +3606,28 @@
       ],
       "delta": [
        446692.2,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2242.531191,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2179.025767,
+       0.051
+      ],
+      "delta": [
+       63.505424,
        0.102
       ],
       "change": [
@@ -3897,6 +4123,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       22,
+       null
+      ],
+      "production_days_previous": [
+       21,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -3918,7 +4156,7 @@
    },
    "expect": {
     "coverage": "partial",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -3945,6 +4183,28 @@
      "metric=lineal_ft": {
       "current": [
        5902262.6,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2179.025767,
        0.051
       ],
       "better": [
@@ -4452,6 +4712,18 @@
       "comparison": [
        "withheld: a window is incomplete or unavailable",
        null
+      ],
+      "production_days_current": [
+       21,
+       null
+      ],
+      "production_days_previous": [
+       0,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -4473,7 +4745,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -4516,6 +4788,28 @@
       ],
       "change": [
        "worse",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6544.97484,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6539.3777,
+       0.051
+      ],
+      "delta": [
+       5.59714,
+       0.102
+      ],
+      "change": [
+       "better",
        null
       ]
      },
@@ -5007,6 +5301,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       5,
+       null
+      ],
+      "production_days_previous": [
+       5,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
       ]
      }
     }
@@ -5028,7 +5334,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -5067,6 +5373,28 @@
       ],
       "delta": [
        57116.8,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2163.79314,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2065.4231,
+       0.051
+      ],
+      "delta": [
+       98.37004,
        0.102
       ],
       "change": [
@@ -5562,6 +5890,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       5,
+       null
+      ],
+      "production_days_previous": [
+       5,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
       ]
      }
     }
@@ -5584,7 +5924,7 @@
    "note": "A Monday: the previous production day is the Friday before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -5623,6 +5963,28 @@
       ],
       "delta": [
        2173.9,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2296.5787,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2228.2851,
+       0.051
+      ],
+      "delta": [
+       68.2936,
        0.102
       ],
       "change": [
@@ -6118,6 +6480,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       1,
+       null
+      ],
+      "production_days_previous": [
+       1,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
       ]
      }
     }
@@ -6139,7 +6513,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -6178,6 +6552,28 @@
       ],
       "delta": [
        -57798.9,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2212.9688,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2310.21314,
+       0.051
+      ],
+      "delta": [
+       -97.24434,
        0.102
       ],
       "change": [
@@ -6673,6 +7069,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       5,
+       null
+      ],
+      "production_days_previous": [
+       5,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
       ]
      }
     }
@@ -6695,7 +7103,7 @@
    "note": "A Monday: the previous production day is the Friday before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -6734,6 +7142,28 @@
       ],
       "delta": [
        -15212.0,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2252.1743,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2366.4711,
+       0.051
+      ],
+      "delta": [
+       -114.2968,
        0.102
       ],
       "change": [
@@ -7229,6 +7659,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       1,
+       null
+      ],
+      "production_days_previous": [
+       1,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
       ]
      }
     }
@@ -7250,7 +7692,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -7293,6 +7735,28 @@
       ],
       "change": [
        "worse",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2168.2129,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2163.74146,
+       0.051
+      ],
+      "delta": [
+       4.47144,
+       0.102
+      ],
+      "change": [
+       "better",
        null
       ]
      },
@@ -7784,6 +8248,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       5,
+       null
+      ],
+      "production_days_previous": [
+       5,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
       ]
      }
     }
@@ -7806,7 +8282,7 @@
    "note": "A Monday: the previous production day is the Friday before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -7845,6 +8321,28 @@
       ],
       "delta": [
        3051.7,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2189.3934,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2171.9267,
+       0.051
+      ],
+      "delta": [
+       17.4667,
        0.102
       ],
       "change": [
@@ -8340,6 +8838,1198 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       1,
+       null
+      ],
+      "production_days_previous": [
+       1,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-kpi-fiscal-p2-vs-p1",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_period_kpis",
+   "arguments": {
+    "window": {
+     "period": "fiscal",
+     "anchor": "2026-09-14"
+    },
+    "compare": true,
+    "shift": null
+   },
+   "note": "Two complete 4-week periods: equal production days, raw totals comparable.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 25,
+    "values": {
+     "metric=volume_msf": {
+      "current": [
+       132619.2602,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       131434.3931,
+       0.051
+      ],
+      "delta": [
+       1184.8671,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=lineal_ft": {
+      "current": [
+       17100585.1,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       16954396.8,
+       0.051
+      ],
+      "delta": [
+       146188.3,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6630.96301,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6571.719655,
+       0.051
+      ],
+      "delta": [
+       59.243355,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_run_fpm": {
+      "current": [
+       622.368283,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       616.867844,
+       0.051
+      ],
+      "delta": [
+       5.500438,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_all_fpm": {
+      "current": [
+       593.770316,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       588.694333,
+       0.051
+      ],
+      "delta": [
+       5.075983,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=downtime_pct": {
+      "current": [
+       4.595023,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.567188,
+       5.1e-05
+      ],
+      "delta": [
+       0.027836,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=downtime_minutes": {
+      "current": [
+       1323.366667,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1315.35,
+       0.051
+      ],
+      "delta": [
+       8.016667,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=stops": {
+      "current": [
+       516,
+       0
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       495,
+       0
+      ],
+      "delta": [
+       21,
+       0
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=minutes_per_stop": {
+      "current": [
+       2.564664,
+       0.0051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       2.657273,
+       0.0051
+      ],
+      "delta": [
+       -0.092609,
+       0.0102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=trim_pct": {
+      "current": [
+       3.144193,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       2.823955,
+       5.1e-05
+      ],
+      "delta": [
+       0.320238,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=shear_pct": {
+      "current": [
+       0.638792,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.629413,
+       5.1e-05
+      ],
+      "delta": [
+       0.009379,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=dry_end_pct": {
+      "current": [
+       1.03345,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.164129,
+       5.1e-05
+      ],
+      "delta": [
+       -0.130679,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bond_pct": {
+      "current": [
+       0.39847,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.402042,
+       5.1e-05
+      ],
+      "delta": [
+       -0.003571,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=warp_pct": {
+      "current": [
+       0.336198,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.46375,
+       5.1e-05
+      ],
+      "delta": [
+       -0.127553,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=misalignment_pct": {
+      "current": [
+       0.199236,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.198357,
+       5.1e-05
+      ],
+      "delta": [
+       0.000879,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.099545,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.09998,
+       5.1e-05
+      ],
+      "delta": [
+       -0.000434,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       5.067613,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.866535,
+       5.1e-05
+      ],
+      "delta": [
+       0.201078,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=unexplained_pct": {
+      "current": [
+       0.251178,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.249038,
+       5.1e-05
+      ],
+      "delta": [
+       0.00214,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=maintenance_pm_pct": {
+      "current": [
+       2.67581,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       2.55515,
+       5.1e-05
+      ],
+      "delta": [
+       0.12066,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=operator_pct": {
+      "current": [
+       1.919213,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       2.012037,
+       5.1e-05
+      ],
+      "delta": [
+       -0.092824,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=setups": {
+      "current": [
+       3729,
+       0
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       3668,
+       0
+      ],
+      "delta": [
+       61,
+       0
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=paper_changes": {
+      "current": [
+       1724,
+       0
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       1713,
+       0
+      ],
+      "delta": [
+       11,
+       0
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=lineal_per_setup": {
+      "current": [
+       4585.836712,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       4622.245583,
+       0.051
+      ],
+      "delta": [
+       -36.408871,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=lineal_per_paper_change": {
+      "current": [
+       9919.132889,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       9897.487916,
+       0.051
+      ],
+      "delta": [
+       21.644973,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bale_msf": {
+      "current": [
+       6720.6303,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       6396.3007,
+       0.051
+      ],
+      "delta": [
+       324.3296,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "$": {
+      "comparison": [
+       "complete",
+       null
+      ],
+      "production_days_current": [
+       20,
+       null
+      ],
+      "production_days_previous": [
+       20,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-kpi-fiscal-p1-no-previous",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_period_kpis",
+   "arguments": {
+    "window": {
+     "period": "fiscal",
+     "anchor": "2026-08-14"
+    },
+    "compare": true,
+    "shift": null
+   },
+   "note": "P1's predecessor is the prior year's 5-week P13, before the dataset: previous null, deltas withheld.",
+   "expect": {
+    "coverage": "partial",
+    "row_count": 25,
+    "values": {
+     "metric=volume_msf": {
+      "current": [
+       131434.3931,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=lineal_ft": {
+      "current": [
+       16954396.8,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6571.719655,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=speed_run_fpm": {
+      "current": [
+       616.867844,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=speed_all_fpm": {
+      "current": [
+       588.694333,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=downtime_pct": {
+      "current": [
+       4.567188,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=downtime_minutes": {
+      "current": [
+       1315.35,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=stops": {
+      "current": [
+       495,
+       0
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=minutes_per_stop": {
+      "current": [
+       2.657273,
+       0.0051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=trim_pct": {
+      "current": [
+       2.823955,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=shear_pct": {
+      "current": [
+       0.629413,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=dry_end_pct": {
+      "current": [
+       1.164129,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=bond_pct": {
+      "current": [
+       0.402042,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=warp_pct": {
+      "current": [
+       0.46375,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=misalignment_pct": {
+      "current": [
+       0.198357,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.09998,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       4.866535,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=unexplained_pct": {
+      "current": [
+       0.249038,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=maintenance_pm_pct": {
+      "current": [
+       2.55515,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=operator_pct": {
+      "current": [
+       2.012037,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=setups": {
+      "current": [
+       3668,
+       0
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=paper_changes": {
+      "current": [
+       1713,
+       0
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=lineal_per_setup": {
+      "current": [
+       4622.245583,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=lineal_per_paper_change": {
+      "current": [
+       9897.487916,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=bale_msf": {
+      "current": [
+       6396.3007,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "$": {
+      "comparison": [
+       "withheld: a window is incomplete or unavailable",
+       null
+      ],
+      "production_days_current": [
+       20,
+       null
+      ],
+      "production_days_previous": [
+       0,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -8362,7 +10052,7 @@
    "note": "The first week has an unavailable previous window: deltas withheld, current tiles present.",
    "expect": {
     "coverage": "partial",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -8389,6 +10079,28 @@
      "metric=lineal_ft": {
       "current": [
        4223565.8,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6549.03116,
        0.051
       ],
       "better": [
@@ -8896,6 +10608,18 @@
       "comparison": [
        "withheld: a window is incomplete or unavailable",
        null
+      ],
+      "production_days_current": [
+       5,
+       null
+      ],
+      "production_days_previous": [
+       0,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -8918,7 +10642,7 @@
    "note": "The week of 28 September has three production days: coverage partial, deltas withheld.",
    "expect": {
     "coverage": "partial",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -8953,6 +10677,28 @@
       ],
       "previous": [
        4361440.5,
+       0.051
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6764.574733,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6760.7066,
        0.051
       ],
       "delta": [
@@ -9452,6 +11198,18 @@
       "comparison": [
        "withheld: a window is incomplete or unavailable",
        null
+      ],
+      "production_days_current": [
+       3,
+       null
+      ],
+      "production_days_previous": [
+       5,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -9476,7 +11234,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -9515,6 +11273,28 @@
       ],
       "delta": [
        1011910.0,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       6641.605882,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6582.478481,
+       0.051
+      ],
+      "delta": [
+       59.127401,
        0.102
       ],
       "change": [
@@ -10010,6 +11790,18 @@
       "comparison": [
        "complete",
        null
+      ],
+      "production_days_current": [
+       22,
+       null
+      ],
+      "production_days_previous": [
+       21,
+       null
+      ],
+      "equal_production_days": [
+       false,
+       null
       ]
      }
     }
@@ -10034,7 +11826,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 24,
+    "row_count": 25,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -10073,6 +11865,28 @@
       ],
       "delta": [
        -22510.6,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2296.5787,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2480.0155,
+       0.051
+      ],
+      "delta": [
+       -183.4368,
        0.102
       ],
       "change": [
@@ -10567,6 +12381,18 @@
      "$": {
       "comparison": [
        "complete",
+       null
+      ],
+      "production_days_current": [
+       1,
+       null
+      ],
+      "production_days_previous": [
+       1,
+       null
+      ],
+      "equal_production_days": [
+       true,
        null
       ]
      }

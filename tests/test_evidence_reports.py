@@ -169,33 +169,37 @@ def test_month_counts_and_weighted_totals(periods):
 
 
 def test_heatmap_content_and_accounting_calendar(periods,records):
+    # One 4-4-5 calendar in the app (shared with the period tools): P1 = 3-30 Aug, P2 = 31 Aug-27 Sep, P3 = 28 Sep-1 Nov.
     start,end,previous,number,weeks=accounting_window(date(2026,9,14))
     assert (start,end,previous,number,weeks)==(
-        date(2026,9,1),date(2026,9,28),(date(2026,7,28),date(2026,8,31)),1,4)
+        date(2026,8,31),date(2026,9,27),(date(2026,8,3),date(2026,8,30)),2,4)
     result=periods.investigate('2026-09-14',2,'shift','accounting')
     heatmap=result['charts'][0]
     assert heatmap['type']=='calendar_heatmap' and len(heatmap['rows'])==28
     assert 'Shift 2 only (8 hours per date)' in heatmap['title']
-    assert result['period_label']=='2026-09-01 to 2026-09-28'
+    assert result['period_label']=='2026-08-31 to 2026-09-27'
     first=heatmap['rows'][0]
     assert first['available'] is True
     assert first['estimated_good_sqft'] < first['gross_sqft']
-    (kind,place,reason),(count,minutes)=max(stop_minutes(records,'20260901','20260901',2).items(),key=lambda kv:kv[1][1])
+    (kind,place,reason),(count,minutes)=max(stop_minutes(records,'20260831','20260831',2).items(),key=lambda kv:kv[1][1])
     assert first['heavy_hitter']==f'{place} / {reason}' and first['heavy_hitter_stops']==count
     assert first['heavy_hitter_minutes']==pytest.approx(minutes)
-    # the previous 4-4-5 period reaches back before the first production day: still no full comparison
-    assert any('Full comparison unavailable' in s for s in result['sections'])
+    # the previous 4-4-5 period (P1) sits entirely inside the data, so the comparison is full
+    assert not any('Full comparison unavailable' in s for s in result['sections'])
     assert {'speed_to_target_pct','downtime_pct','maintenance_pct','operator_pct','dry_end_pct','trim_pct','shear_pct'} <= set(first)
-    assert '4-4-5 P1 (4 weeks)' in result['sections'][0]
+    assert '4-4-5 P2 (4 weeks)' in result['sections'][0]
+    first_period=periods.investigate('2026-08-14',2,'shift','accounting')
+    # P1's predecessor is the prior year's 5-week period, before the first production day: no full comparison
+    assert '4-4-5 P1 (4 weeks)' in first_period['sections'][0] and any('Full comparison unavailable' in s for s in first_period['sections'])
 
 
-def test_accounting_period_two_discloses_missing_future_days(periods):
+def test_accounting_period_three_discloses_missing_future_days(periods):
     result=periods.investigate('2026-09-29',2,'shift','accounting')
     assert result['status']=='partial'
-    assert result['period_label']=='2026-09-29 to 2026-10-26'
+    assert result['period_label']=='2026-09-28 to 2026-11-01'   # the 5-week period of the quarter
     heatmap=result['charts'][0]
-    assert len(heatmap['rows'])==28
-    assert sum(row['available'] for row in heatmap['rows'])==2
+    assert len(heatmap['rows'])==35
+    assert sum(row['available'] for row in heatmap['rows'])==3
 
 
 def test_pdf_uses_retained_result_and_rejects_other_run():

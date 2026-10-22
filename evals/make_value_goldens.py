@@ -46,7 +46,7 @@ SCHEDULED_SECONDS = 28800
 # and set the tolerance. Both are checked against the application's catalog in
 # `check_catalog()` so the two lists cannot drift apart silently.
 TILES = {
-    "volume_msf": ("higher", 1), "lineal_ft": ("higher", 1), "speed_run_fpm": ("higher", 1),
+    "volume_msf": ("higher", 1), "lineal_ft": ("higher", 1), "msf_per_day": ("higher", 1), "speed_run_fpm": ("higher", 1),
     "speed_all_fpm": ("higher", 1), "downtime_pct": ("lower", 4), "downtime_minutes": ("lower", 1),
     "stops": ("lower", 0), "minutes_per_stop": ("lower", 2), "trim_pct": ("lower", 4),
     "shear_pct": ("lower", 4), "dry_end_pct": ("lower", 4), "bond_pct": ("lower", 4),
@@ -55,7 +55,7 @@ TILES = {
     "setups": ("neutral", 0), "paper_changes": ("neutral", 0),
     "lineal_per_setup": ("higher", 1), "lineal_per_paper_change": ("higher", 1), "bale_msf": ("lower", 1),
 }
-TREND_PLACES = {**{k: p for k, (_, p) in TILES.items()}, "msf_per_day": 1}
+TREND_PLACES = {k: p for k, (_, p) in TILES.items()}
 WASTE = ("trim", "shear", "bond", "warp", "misalignment", "moisture", "dry_end", "bale", "unexplained")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri")
 
@@ -76,6 +76,27 @@ def month_bounds(moment):
     return first, first.replace(day=monthrange(first.year, first.month)[1])
 
 
+FISCAL_START = date(2026, 8, 3)   # the demo 4-4-5 year starts on the dataset's first Monday
+
+
+def fiscal_bounds(moment):
+    """Own 4-4-5 arithmetic: periods of 4, 4, 5 weeks forward from FISCAL_START (5, 4, 4 backward)."""
+    pattern = (4, 4, 5)
+    if moment >= FISCAL_START:
+        start, i = FISCAL_START, 0
+        while True:
+            end = start + timedelta(days=pattern[i % 3] * 7 - 1)
+            if moment <= end:
+                return start, end
+            start, i = end + timedelta(days=1), i + 1
+    end, i = FISCAL_START - timedelta(days=1), -1
+    while True:
+        start = end - timedelta(days=pattern[i % 3] * 7 - 1)
+        if moment >= start:
+            return start, end
+        end, i = start - timedelta(days=1), i - 1
+
+
 def window(period, anchor):
     moment = date.fromisoformat(anchor)
     if period == "day":
@@ -83,6 +104,8 @@ def window(period, anchor):
     if period == "week":
         start = moment - timedelta(days=moment.weekday())
         return start, start + timedelta(days=4)
+    if period == "fiscal":
+        return fiscal_bounds(moment)
     return month_bounds(moment)
 
 
@@ -94,6 +117,8 @@ def previous(period, start, end):
         return moment, moment
     if period == "week":
         return start - timedelta(days=7), end - timedelta(days=7)
+    if period == "fiscal":
+        return fiscal_bounds(start - timedelta(days=1))
     return month_bounds(start - timedelta(days=1))
 
 
@@ -233,7 +258,10 @@ def kpi_values(plain, cur, prev, shift):
             row["delta"] = exact(None)
             row["change"] = exact(None)
         values[f"metric={key}"] = row
-    values["$"] = {"comparison": exact("complete" if comparable else "withheld: a window is incomplete or unavailable")}
+    now_days, prev_days = len([d for d in weekdays(*cur) if d in plain.days]), (len([d for d in weekdays(*prev) if d in plain.days]) if prev else None)
+    values["$"] = {"comparison": exact("complete" if comparable else "withheld: a window is incomplete or unavailable"),
+                   "production_days_current": exact(now_days), "production_days_previous": exact(prev_days),
+                   "equal_production_days": exact(None if prev_days is None else now_days == prev_days)}
     coverage = "complete" if plain.coverage(*cur) == "complete" and (not prev or plain.coverage(*prev) == "complete") else \
         ("unavailable" if plain.coverage(*cur) == "unavailable" else "partial")
     return values, coverage
@@ -518,6 +546,11 @@ def build(data=None):
         cases.append(kpi_case(plain, f"value-kpi-week-0914-shift-{shift}", "week", "2026-09-16", shift))
         cases.append(kpi_case(plain, f"value-kpi-day-0914-shift-{shift}", "day", "2026-09-14", shift,
                               note="A Monday: the previous production day is the Friday before."))
+    # 4-4-5 periods: P2 (31 Aug - 27 Sep) against P1 (3 - 30 Aug), equal 20-day windows; P1 against the prior year's P13.
+    cases.append(kpi_case(plain, "value-kpi-fiscal-p2-vs-p1", "fiscal", "2026-09-14",
+                          note="Two complete 4-week periods: equal production days, raw totals comparable."))
+    cases.append(kpi_case(plain, "value-kpi-fiscal-p1-no-previous", "fiscal", "2026-08-14",
+                          note="P1's predecessor is the prior year's 5-week P13, before the dataset: previous null, deltas withheld."))
     cases.append(kpi_case(plain, "value-kpi-first-week-no-previous", "week", "2026-08-05",
                           note="The first week has an unavailable previous window: deltas withheld, current tiles present."))
     cases.append(kpi_case(plain, "value-kpi-last-week-partial", "week", "2026-09-29",
