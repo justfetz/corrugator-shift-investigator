@@ -54,6 +54,32 @@ def duration(node):
     return start, end, (end-start).total_seconds()
 
 
+def load_rows(db, table, rows):
+    """Insert positional rows into a fixed-schema table of `db`.
+
+    One JSON scalar avoids per-value optional-module probes in the driver.
+    Names/types come only from the fixed schema, never source/user text."""
+    schema = db.execute(f"DESCRIBE {table}").fetchall()
+    records = [dict(zip([r[0] for r in schema], row)) for row in rows]
+    fields = ", ".join(f"CAST(value->>'{name}' AS {kind})" for name, kind, *_ in schema)
+    db.execute(f"INSERT INTO {table} SELECT {fields} FROM json_each(?)",
+               [json.dumps(records, default=lambda value: value.isoformat())])
+
+
+# The per-day tables every tool reads. The XML fixture path and the record-store
+# path (record_store.py) both load exactly these; the tool queries never fork.
+TABLES = {
+    "shifts": "shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR",
+    "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE",
+    "stops": "id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, notes VARCHAR",
+    "orders": "record_id VARCHAR, shift INTEGER, setup_id VARCHAR, order_id VARCHAR, grade VARCHAR, knife VARCHAR, width_in DOUBLE, length_in DOUBLE, outs INTEGER, cuts INTEGER, requested_sheets INTEGER, planned_sheets INTEGER, produced_sheets INTEGER, remaining_before INTEGER, remaining_after INTEGER",
+    # One line per (setup, reject reason): the fixture writes one line per setup,
+    # the record families up to three reasons per knife position.
+    "rejects": "id VARCHAR, shift INTEGER, reason VARCHAR, sheets DOUBLE, sqft DOUBLE",
+}
+STOP_KINDS = ("Maintenance", "Operator", "PM")
+
+
 class Analysis:
     """Private in-memory database: only fixed read queries are exposed as tools."""
     def __init__(self, data):
@@ -64,15 +90,12 @@ class Analysis:
         origin = datetime.fromisoformat(self.day + "T07:00:00")
         self.version = hashlib.sha256(data).hexdigest()
         self.errors = []
+        self.store = None
         self._wet_ends = {}
         self._orders = {}
-        self._db = duckdb.connect(":memory:", config={"threads": 2})
-        self._db.execute("CREATE TABLE shifts (shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR)")
-        self._db.execute("CREATE TABLE setups (id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, reject_reason VARCHAR, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE)")
-        self._db.execute("CREATE TABLE stops (id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, notes VARCHAR)")
         self._setup_rows = []
         self._order_rows = []
-        self._db.execute("CREATE TABLE orders (record_id VARCHAR, shift INTEGER, setup_id VARCHAR, order_id VARCHAR, grade VARCHAR, knife VARCHAR, width_in DOUBLE, length_in DOUBLE, outs INTEGER, cuts INTEGER, requested_sheets INTEGER, planned_sheets INTEGER, produced_sheets INTEGER, remaining_before INTEGER, remaining_after INTEGER)")
+        self._reject_rows = []
         stop_rows, shift_rows = [], []
         seen = set()
         shifts = list(root)
@@ -113,17 +136,32 @@ class Analysis:
             intervals.sort()
             if any(b[0] < a[1] for a, b in zip(intervals, intervals[1:])):
                 raise ValueError("Overlapping stops require resolution; unsupported in fixture v1")
-        for table, rows in (("shifts", shift_rows), ("setups", self._setup_rows), ("stops", stop_rows), ("orders", self._order_rows)):
+        self._load(shift_rows, self._setup_rows, stop_rows, self._order_rows, self._reject_rows)
+        del self._setup_rows, self._order_rows, self._reject_rows
+
+    @classmethod
+    def from_rows(cls, day, version, shift_rows, setup_rows, stop_rows, order_rows, reject_rows, errors=(), store=None):
+        """Build the same private database from already-validated per-day rows
+        (the record-store path). `errors` are excluded records in the shape the
+        fixture path writes: record_id, shift, error, raw."""
+        self = cls.__new__(cls)
+        self.day = day
+        self.version = version
+        self.errors = list(errors)
+        self.store = store
+        self._wet_ends = {}
+        self._orders = {}
+        self._load(shift_rows, setup_rows, stop_rows, order_rows, reject_rows)
+        return self
+
+    def _load(self, shift_rows, setup_rows, stop_rows, order_rows, reject_rows):
+        self._db = duckdb.connect(":memory:", config={"threads": 2})
+        for table, columns in TABLES.items():
+            self._db.execute(f"CREATE TABLE {table} ({columns})")
+        for table, rows in (("shifts", shift_rows), ("setups", setup_rows), ("stops", stop_rows),
+                            ("orders", order_rows), ("rejects", reject_rows)):
             if rows:
-                schema = self._db.execute(f"DESCRIBE {table}").fetchall()
-                records = [dict(zip([r[0] for r in schema], row)) for row in rows]
-                # One JSON scalar avoids per-value optional-module probes in the driver.
-                # Names/types come only from the fixed schema, never source/user text.
-                fields = ", ".join(f"CAST(value->>'{name}' AS {kind})" for name, kind, *_ in schema)
-                self._db.execute(f"INSERT INTO {table} SELECT {fields} FROM json_each(?)",
-                                 [json.dumps(records, default=lambda value: value.isoformat())])
-        del self._setup_rows
-        del self._order_rows
+                load_rows(self._db, table, rows)
         self._db.execute("SET enable_external_access=false")
 
     @staticmethod
@@ -198,7 +236,8 @@ class Analysis:
                     knife.attrib['order_id'],node.attrib['grade'],knife.attrib['level'],
                     *[number(knife,k) for k in ('width_in','length_in','outs','cuts','order_quantity',
                         'planned_sheets','produced_sheets','remaining_before','remaining_after')]])
-        self._setup_rows.append([node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, node.attrib["reject_reason"], datetime.fromisoformat(node.attrib["start"]), datetime.fromisoformat(node.attrib["end"]), width])
+        self._setup_rows.append([node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, datetime.fromisoformat(node.attrib["start"]), datetime.fromisoformat(node.attrib["end"]), width])
+        self._reject_rows.append([node.attrib["id"], shift, node.attrib["reject_reason"], sheets, rejects])
 
     def _query(self, shift, sql, params):
         if type(shift) is not int or shift not in (1, 2, 3):
@@ -236,11 +275,12 @@ class Analysis:
         sum(rejects)/nullif(sum(gross),0)*100 AS dry_end_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Maintenance') AS maintenance_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Operator') AS operator_pct,
+        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'PM') AS pm_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ?) AS downtime_pct,
         sum(feet)/nullif(count(*),0) AS lineal_per_setup,
         sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
         count(*) FILTER (WHERE trim/gross*100 > 3.25) AS setups_above_trim_target,
-        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift, shift])
+        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift, shift, shift])
 
     def get_shift_overview(self, shift):
         """One bounded read bundle for a narrative covering speed, stops and waste."""
@@ -263,7 +303,7 @@ class Analysis:
         [record_id] AS source_ids FROM orders WHERE shift = ? ORDER BY record_id, knife""", [shift])
 
     def get_downtime_breakdown(self, shift, kind=None, group_by="reason"):
-        if group_by not in ("reason", "kind", "place") or kind not in (None, "Maintenance", "Operator"):
+        if group_by not in ("reason", "kind", "place") or kind not in (None, *STOP_KINDS):
             raise ValueError("Unsupported filter or grouping")
         # group_by is strictly allowlisted; all visitor values are bound.
         sql = f"""SELECT {group_by} AS category, sum(seconds)/60 AS down_minutes,
@@ -284,9 +324,9 @@ class Analysis:
         FROM setups WHERE shift = ? GROUP BY wet_end_id, grade ORDER BY wet_end_id""", [shift])
 
     def get_quality_breakdown(self, shift):
-        return self._query(shift, """SELECT reject_reason AS reason, sum(rejects) AS rejected_sqft,
-        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?
-        GROUP BY reject_reason ORDER BY rejected_sqft DESC, reason""", [shift])
+        return self._query(shift, """SELECT reason, sum(sqft) AS rejected_sqft,
+        list(DISTINCT id ORDER BY id) AS source_ids FROM rejects WHERE shift = ?
+        GROUP BY reason ORDER BY rejected_sqft DESC, reason""", [shift])
 
     def get_setup_matrix(self, shift):
         return self._query(shift, """SELECT s.id AS setup_id, s.wet_end_id, s.grade,
@@ -320,8 +360,8 @@ class Analysis:
                 FROM stops WHERE shift=? GROUP BY place, reason)
                 SELECT dense_rank() OVER (ORDER BY value DESC) AS rank, *, 'minutes (highest first)' AS unit
                 FROM losses ORDER BY value DESC, item LIMIT 10""",
-            'quality': """WITH losses AS (SELECT reject_reason AS item, sum(rejects) AS value,
-                list(id ORDER BY id) AS source_ids FROM setups WHERE shift=? GROUP BY reject_reason)
+            'quality': """WITH losses AS (SELECT reason AS item, sum(sqft) AS value,
+                list(DISTINCT id ORDER BY id) AS source_ids FROM rejects WHERE shift=? GROUP BY reason)
                 SELECT dense_rank() OVER (ORDER BY value DESC) AS rank, *, 'sq ft (highest first)' AS unit
                 FROM losses ORDER BY value DESC, item LIMIT 10"""}
         if metric not in queries:
