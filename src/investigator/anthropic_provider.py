@@ -54,11 +54,33 @@ def anthropic_tools(schemas):
     """Map the application's tool schemas (OpenAI-style parameters) to Anthropic input_schema."""
     tools = []
     for schema in schemas:
-        parameters = deepcopy(schema['parameters'])
+        parameters = _strip_null_enum_members(deepcopy(schema['parameters']))
         parameters['required'] = list(parameters['properties'])
         tools.append({'name': schema['name'], 'description': schema['description'], 'input_schema': parameters, 'strict': True})
     tools.extend(deepcopy(CONTROL_TOOLS))
     return tools
+
+
+def _strip_null_enum_members(node):
+    """Drop ``None`` from every ``enum`` list, recursively.
+
+    The application's schemas write nullable filters as
+    ``{"type": ["string", "null"], "enum": [None, ...]}``. The Messages API
+    rejects that whole tool definition (HTTP 400, ``Enum value None does not
+    match declared type``) even though the type admits null, so the first live
+    eval run recorded fifteen identical errors and no answers. The nullable
+    ``type`` stays, which is what lets the model send ``null``; the application
+    validates the value on its own side exactly as before.
+    """
+    if isinstance(node, dict):
+        if isinstance(node.get('enum'), list):
+            node['enum'] = [value for value in node['enum'] if value is not None]
+        for value in node.values():
+            _strip_null_enum_members(value)
+    elif isinstance(node, list):
+        for value in node:
+            _strip_null_enum_members(value)
+    return node
 
 
 def transport(payload, key, timeout):

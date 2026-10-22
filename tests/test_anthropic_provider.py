@@ -227,3 +227,26 @@ def test_transport_headers_and_fixed_destination(monkeypatch):
     assert captured['host'] == 'api.anthropic.com' and captured['path'] == '/v1/messages' and captured['method'] == 'POST'
     assert captured['headers'] == {'x-api-key': KEY, 'anthropic-version': API_VERSION, 'content-type': 'application/json'}
     assert captured['timeout'] == 7 and captured['closed'] is True
+
+
+def test_mapped_tool_schemas_carry_no_null_enum_member():
+    """The Messages API rejects a tool whose enum lists None (first live run, 15 x HTTP 400)."""
+    from investigator.agent import TOOL_SCHEMAS
+    from investigator.anthropic_provider import anthropic_tools
+
+    def walk(node):
+        if isinstance(node, dict):
+            if 'enum' in node:
+                assert None not in node['enum'], node
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    tools = anthropic_tools(TOOL_SCHEMAS)
+    walk(tools)
+    kind = next(t for t in tools if t['name'] == 'get_downtime_breakdown')['input_schema']['properties']['kind']
+    assert kind['type'] == ['string', 'null'] and 'Maintenance' in kind['enum']
+    # The application's own schemas are untouched: the agent still validates None as "all kinds".
+    assert None in next(t for t in TOOL_SCHEMAS if t['name'] == 'get_downtime_breakdown')['parameters']['properties']['kind']['enum']
