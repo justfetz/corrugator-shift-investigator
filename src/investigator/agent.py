@@ -143,11 +143,14 @@ def parse_request(text, current):
 
 
 class Agent:
-    def __init__(self, analysis, planner=None, max_calls=20, max_seconds=10):
+    def __init__(self, analysis, planner=None, max_calls=20, max_seconds=10, max_turns=4):
         self.analysis = analysis
         self.planner = planner or OfflinePlanner()
         self.max_calls = max_calls
         self.max_seconds = max_seconds
+        if type(max_turns) is not int or not 1 <= max_turns <= 50:
+            raise ValueError('Conversation history length must be 1-50 turns')
+        self.max_turns = max_turns  # question/scope entries carried to the next question
 
     def _execute(self, name, arguments, store):
         if not isinstance(arguments, dict):
@@ -203,7 +206,7 @@ class Agent:
                 break
             planner_context = {**request, 'question': text, 'production_day': context.production_day,
                 'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.', 'tools': deepcopy(TOOL_SCHEMAS),
-                'history': deepcopy(context.history[-4:]), 'results': deepcopy(list(store.values()))}
+                'history': deepcopy(context.history[-self.max_turns:]), 'results': deepcopy(list(store.values()))}
             if len(json.dumps(planner_context)) > 200000:
                 status = 'context_limit'
                 break
@@ -279,7 +282,7 @@ class Agent:
             sections.insert(0, f'Investigation stopped: {status}. Any results below are partial.')
         result_shifts = list(dict.fromkeys(r['data']['shift'] for r in evidence)) or request['shifts']
         context.history.append({'question': text, 'shifts': result_shifts, 'intent': request['intent']})
-        context.history = context.history[-4:]
+        context.history = context.history[-self.max_turns:]
         return {'run_id': run_id, 'mode': getattr(self.planner, 'mode', 'offline rule-based planner; no language model'), 'status': status,
                 'production_day': context.production_day, 'selected_shifts': result_shifts,
                 'sections': sections, 'evidence_ids': final_ids,

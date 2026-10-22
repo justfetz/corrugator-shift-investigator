@@ -3,28 +3,72 @@
 Default: loopback only, for one person on one computer. With PUBLIC_DEMO_ORIGIN
 set, it runs as the offline synthetic demo behind a hosting platform's TLS proxy:
 binds 0.0.0.0:$PORT, allows only the configured browser origins, never accepts
-visitor API keys, and serves investigations one at a time under a lock.
+visitor API keys, and serves investigations one at a time under a lock. The
+optional demo guards (DEMO_RATE_LIMIT_PER_MIN, DEMO_DAILY_CAP, DEMO_MAX_TURNS,
+TRUST_PROXY) are off unless set; see docs/ANTHROPIC_DEMO.md.
 """
 from collections import OrderedDict, deque
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import argparse
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import secrets
+import sqlite3
 import threading
 import time
 
 from .agent import Agent, Context, TOOL_SCHEMAS
 from .analysis import Analysis
+from .anthropic_provider import resolve_model
 from .fixture import generate
 
 WEB = Path(__file__).with_name('web')
 DAYS = [(date(2026, 9, 1)+timedelta(days=n)).isoformat() for n in range(30)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
+LIVE_MODES = ('openai', 'anthropic')
+LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
+
+
+class DemoLimit(Exception):
+    """A visitor or service-wide limit was reached; answered as 429 with a code and Retry-After."""
+    def __init__(self, message, code, retry_after):
+        super().__init__(message)
+        self.code = code
+        self.retry_after = max(1, int(retry_after))
+
+
+@dataclass(frozen=True)
+class DemoGuards:
+    """Env-gated public-demo controls. Zero means off; the defaults keep today's behavior."""
+    rate_limit_per_min: int = 0   # /api/ask rounds per client IP per fixed 60-second window
+    daily_cap: int = 0            # live-model rounds per UTC day for everyone together
+    max_turns: int = 4            # question/scope entries carried to the next question
+    trust_proxy: bool = False     # read the client IP from X-Forwarded-For (one trusted hop, e.g. Cloud Run)
+    ledger: Path = LEDGER
+
+    @classmethod
+    def from_env(cls, environ=None):
+        environ = os.environ if environ is None else environ
+        values = {}
+        for field, name, low, high in (('rate_limit_per_min', 'DEMO_RATE_LIMIT_PER_MIN', 0, 10000),
+                                       ('daily_cap', 'DEMO_DAILY_CAP', 0, 1_000_000), ('max_turns', 'DEMO_MAX_TURNS', 1, 50)):
+            raw = (environ.get(name) or '').strip()
+            if not raw:
+                continue
+            if not raw.isdigit() or not low <= int(raw) <= high:
+                raise ValueError(f'{name} must be an integer from {low} to {high}')
+            values[field] = int(raw)
+        return cls(trust_proxy=environ.get('TRUST_PROXY') == '1', **values)
+
+    @property
+    def summary(self):
+        return {'rate_limit_per_min': self.rate_limit_per_min, 'daily_cap': self.daily_cap,
+                'max_turns': self.max_turns, 'trust_proxy': self.trust_proxy}
 
 
 @dataclass(frozen=True)
@@ -63,28 +107,79 @@ class PublicDemo:
 
 
 class Workbench:
-    def __init__(self, public=None):
+    def __init__(self, public=None, guards=None):
         self.public = public
+        self.guards = guards or DemoGuards()
+        self.anthropic_model = resolve_model(os.environ.get('ANTHROPIC_MODEL'))  # an unsupported value fails at boot
         self.lock = threading.Lock()  # investigations and PDFs run one at a time; static files do not wait
         self.token = secrets.token_urlsafe(32)
         self.sessions = OrderedDict()
         self.datasets = OrderedDict()
         self.requests = deque()
+        self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
+        self.rate_lock = threading.Lock()
         self.reports = OrderedDict()
         from .periods import PeriodReports
         self.periods = PeriodReports()
 
     @property
+    def live_modes(self):
+        """Live modes the SERVER key enables. Public mode also needs PUBLIC_DEMO_LIVE_MODEL=1."""
+        if self.public is not None and not self.public.live_model:
+            return ()
+        return tuple(mode for mode, var in (('openai', 'OPENAI_API_KEY'), ('anthropic', 'ANTHROPIC_API_KEY')) if os.environ.get(var))
+
+    @property
     def live_model_available(self):
-        if self.public is None:
-            return bool(os.environ.get('OPENAI_API_KEY'))
-        return self.public.live_model and bool(os.environ.get('OPENAI_API_KEY'))
+        return bool(self.live_modes)
+
+    @property
+    def live_models(self):
+        return {'openai': LIVE_MODEL, 'anthropic': self.anthropic_model}
+
+    def client_round(self, ip):
+        """Per-IP fixed window over /api/ask rounds. Off unless DEMO_RATE_LIMIT_PER_MIN is set."""
+        limit = self.guards.rate_limit_per_min
+        if not limit:
+            return
+        now = time.monotonic()
+        with self.rate_lock:
+            for stale in [k for k, window in self.rate_windows.items() if not window or window[0] < now-60]:
+                window = self.rate_windows[stale]
+                while window and window[0] < now-60:
+                    window.popleft()
+                if not window:
+                    del self.rate_windows[stale]
+            window = self.rate_windows.setdefault(ip, deque())
+            if len(window) >= limit:
+                raise DemoLimit('too many questions, slow down', 'rate_limited', math.ceil(window[0]+60-now))
+            window.append(now)
+
+    def daily_round(self):
+        """Service-wide live-model rounds per UTC day, persisted beside the monthly budget."""
+        cap = self.guards.daily_cap
+        if not cap:
+            return
+        now = datetime.now(timezone.utc)
+        day = now.strftime('%Y-%m-%d')
+        ledger = Path(self.guards.ledger)
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(ledger, timeout=5) as db:
+            db.execute('CREATE TABLE IF NOT EXISTS demo_rounds (day TEXT PRIMARY KEY, rounds INTEGER NOT NULL)')
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT rounds FROM demo_rounds WHERE day=?', (day,)).fetchone()
+            rounds = row[0] if row else 0
+            if rounds >= cap:
+                midnight = datetime.combine(now.date()+timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+                raise DemoLimit("today's budget for the chat is used up", 'budget', (midnight-now).total_seconds())
+            db.execute('INSERT INTO demo_rounds VALUES (?,?) ON CONFLICT(day) DO UPDATE SET rounds=excluded.rounds', (day, rounds+1))
+            db.execute('DELETE FROM demo_rounds WHERE day < ?', ((now-timedelta(days=2)).strftime('%Y-%m-%d'),))
 
     def close(self):
         for analysis in self.datasets.values():
             analysis.close()
 
-    def ask(self, payload, api_key=None):
+    def ask(self, payload, api_key=None, anthropic_key=None):
         if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period'}:
             raise ValueError('Invalid request fields')
         scope = payload.get('scope', 'shift')
@@ -96,14 +191,17 @@ class Workbench:
         mode = payload.get('mode', 'offline')
         if period != 'day' and mode != 'offline':
             raise ValueError('Week/month reports use the free deterministic tools; select Offline mode')
-        if mode not in ('offline', 'openai'):
-            raise ValueError('Choose offline or OpenAI mode')
+        if mode not in ('offline', *LIVE_MODES):
+            raise ValueError('Choose offline, OpenAI or Anthropic mode')
         if self.public is not None:
-            api_key = None  # a hosted demo never uses a visitor's key, even if one is sent
-            if mode == 'openai' and not self.live_model_available:
-                raise ValueError('This public demo runs the free offline planner only')
+            api_key = anthropic_key = None  # a hosted demo never uses a visitor's key, even if one is sent
+            if mode != 'offline' and mode not in self.live_modes:
+                raise ValueError('This public demo runs the free offline planner only' if not self.live_modes
+                                 else f'This public demo does not offer {mode} mode')
         if mode == 'openai' and not (api_key or os.environ.get('OPENAI_API_KEY')):
             raise ValueError('OpenAI mode needs your key in the local key field or server environment')
+        if mode == 'anthropic' and not (anthropic_key or os.environ.get('ANTHROPIC_API_KEY')):
+            raise ValueError('Anthropic mode needs your key in the local key field or server environment')
         day, shift = payload.get('day'), payload.get('shift')
         if day not in DAYS or type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Select a supported production day and shift')
@@ -116,6 +214,8 @@ class Workbench:
         session_id = payload.get('session_id')
         if session_id is not None and (not isinstance(session_id, str) or session_id not in self.sessions):
             raise ValueError('Session expired; reset the conversation')
+        if mode != 'offline':
+            self.daily_round()  # counted before the model is asked; failed rounds still count
         if session_id is None:
             session_id = secrets.token_urlsafe(24)
             if len(self.sessions) >= 32:
@@ -139,15 +239,21 @@ class Workbench:
                 evicted.close()
             self.datasets[key] = Analysis(generate(seed=7+DAYS.index(day), production_day=day, corrupt=corrupt))
         self.datasets.move_to_end(key)
-        if mode == 'openai':
-            from .openai_provider import OpenAIPlanner, Budget
-            planner = OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), Budget(Path('artifacts/model-budget.sqlite3')))
+        if mode == 'offline':
+            result = Agent(self.datasets[key], max_turns=self.guards.max_turns).ask(question, context)
+        else:
+            from .openai_provider import Budget
+            budget = Budget(Path(self.guards.ledger))
+            if mode == 'openai':
+                from .openai_provider import OpenAIPlanner
+                planner = OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), budget)
+            else:
+                from .anthropic_provider import AnthropicPlanner
+                planner = AnthropicPlanner(anthropic_key or os.environ.get('ANTHROPIC_API_KEY'), budget, model=self.anthropic_model)
             try:
-                result = Agent(self.datasets[key], planner=planner, max_calls=10, max_seconds=60).ask(question, context)
+                result = Agent(self.datasets[key], planner=planner, max_calls=10, max_seconds=60, max_turns=self.guards.max_turns).ask(question, context)
             finally:
                 planner.close()
-        else:
-            result = Agent(self.datasets[key]).ask(question, context)
         return self._retain(result, session_id)
 
     def _retain(self, result, session_id):
@@ -174,17 +280,19 @@ class Workbench:
         return report_pdf(result)
 
 
-def make_server(port=8765, public=None, host=None):
-    app = Workbench(public)
+def make_server(port=8765, public=None, host=None, guards=None):
+    app = Workbench(public, guards)
     frame_ancestors = public.frame_ancestors if public else "'none'"
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass  # Do not retain visitor prompts or session identifiers in access logs.
 
-        def _send(self, status, body, content_type='application/json; charset=utf-8'):
+        def _send(self, status, body, content_type='application/json; charset=utf-8', extra=None):
             if not isinstance(body, bytes):
                 body = json.dumps(body, allow_nan=False).encode()
             self.send_response(status)
+            for name, value in (extra or {}).items():
+                self.send_header(name, value)
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
             self.send_header('Cache-Control', 'no-store')
@@ -198,6 +306,16 @@ def make_server(port=8765, public=None, host=None):
             if public is not None:
                 return True  # the platform proxy owns the hostname; POSTs are checked by Origin instead
             return self.headers.get('Host') == f'127.0.0.1:{self.server.server_port}'
+
+        def _client_ip(self):
+            # Behind exactly one trusted proxy (TRUST_PROXY=1) the proxy appends the real client to
+            # X-Forwarded-For, so the rightmost entry is the one it vouches for; anything a client
+            # sent itself sits further left and is ignored. Without the flag the header is ignored.
+            if app.guards.trust_proxy:
+                forwarded = self.headers.get('X-Forwarded-For', '')
+                if forwarded.strip():
+                    return forwarded.split(',')[-1].strip()[:64] or self.client_address[0]
+            return self.client_address[0]
 
         def _origin_ok(self):
             origin = self.headers.get('Origin')
@@ -213,7 +331,9 @@ def make_server(port=8765, public=None, host=None):
             if self.path == '/api/config':
                 return self._send(200, {'days': DAYS, 'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',
                                        'public': public is not None, 'server_key_available': app.live_model_available,
-                                       'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL})
+                                       'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
+                                       'live_modes': list(app.live_modes), 'live_models': app.live_models,
+                                       'demo_guards': app.guards.summary})
             files = {'/': ('index.html', 'text/html; charset=utf-8'), '/guide': ('guide.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
             if self.path not in files:
@@ -254,15 +374,21 @@ def make_server(port=8765, public=None, host=None):
                 if len(app.requests) >= 60:
                     return self._send(429, {'error': 'Local request limit reached; retry in a minute'})
                 app.requests.append(now)
+                if self.path == '/api/ask':
+                    app.client_round(self._client_ip())  # a round is counted even if the question is later rejected
                 self.connection.settimeout(5)
                 payload = json.loads(raw_body)
-                api_key = None if public is not None else self.headers.get('X-OpenAI-Key')
+                api_key = anthropic_key = None
+                if public is None:
+                    api_key, anthropic_key = self.headers.get('X-OpenAI-Key'), self.headers.get('X-Anthropic-Key')
                 with app.lock:
                     if self.path == '/api/report':
                         body = app.pdf(payload)
                     else:
-                        body = app.ask(payload, api_key=api_key)
+                        body = app.ask(payload, api_key=api_key, anthropic_key=anthropic_key)
                 self._send(200, body, 'application/pdf' if self.path == '/api/report' else 'application/json; charset=utf-8')
+            except DemoLimit as exc:
+                self._send(429, {'error': str(exc), 'code': exc.code}, extra={'Retry-After': str(exc.retry_after)})
             except (ValueError, UnicodeError, TypeError, KeyError) as exc:
                 self._send(400, {'error': str(exc)})
             except TimeoutError:
@@ -283,15 +409,16 @@ def main():
     parser.add_argument('--port', type=int, default=None)
     args = parser.parse_args()
     public = PublicDemo.from_env()
+    guards = DemoGuards.from_env()
     if public is None:
-        server = make_server(args.port or 8765)
+        server = make_server(args.port or 8765, guards=guards)
         print(f'Local workbench: http://127.0.0.1:{server.server_port}', flush=True)
-        print('Synthetic data. Offline by default; OpenAI mode requires a key. No email delivery.', flush=True)
+        print('Synthetic data. Offline by default; OpenAI and Anthropic modes require a key. No email delivery.', flush=True)
     else:
-        server = make_server(args.port or int(os.environ.get('PORT', '7860')), public=public)
-        live = 'server key with the spend cap' if server.app.live_model_available else 'offline planner only'
+        server = make_server(args.port or int(os.environ.get('PORT', '7860')), public=public, guards=guards)
+        live = ('server key for ' + '/'.join(server.app.live_modes) + ' with the spend cap') if server.app.live_modes else 'offline planner only'
         print(f'Public synthetic demo on 0.0.0.0:{server.server_port} for {", ".join(public.origins)}; '
-              f'embeddable by {public.frame_ancestors}; {live}. No visitor keys, no email.', flush=True)
+              f'embeddable by {public.frame_ancestors}; {live}. No visitor keys, no email. Guards: {guards.summary}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
