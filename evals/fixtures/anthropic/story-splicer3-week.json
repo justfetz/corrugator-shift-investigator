@@ -1,0 +1,111 @@
+{
+ "case": "story-splicer3-week",
+ "provider": "anthropic",
+ "question": "Did the shear chops follow? Give me the waste breakdown for the week.",
+ "recorded_status": "planner_error",
+ "recorded_cost_usd": 0.0,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "c51c3a974c83",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "type": "error",
+    "error": {
+     "type": "invalid_request_error",
+     "message": "tools.2.custom: Invalid schema: Enum value None does not match declared type '['string', 'null']'"
+    },
+    "request_id": "req_011CgHUnfKQgQToySYcicnEC"
+   },
+   "status": 400
+  },
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "c51c3a974c83",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "type": "error",
+    "error": {
+     "type": "invalid_request_error",
+     "message": "tools.2.custom: Invalid schema: Enum value None does not match declared type '['string', 'null']'"
+    },
+    "request_id": "req_011CgHUnhnUpSFpcebFnwFFg"
+   },
+   "status": 400
+  },
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "c51c3a974c83",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "type": "error",
+    "error": {
+     "type": "invalid_request_error",
+     "message": "tools.2.custom: Invalid schema: Enum value None does not match declared type '['string', 'null']'"
+    },
+    "request_id": "req_011CgHUnkZvc9SisWDBDAMV3"
+   },
+   "status": 400
+  }
+ ]
+}
