@@ -20,8 +20,9 @@ jobs:
       EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
       LIVE_MODEL: ${{ vars.PUBLIC_DEMO_LIVE_MODEL || '0' }}
       # Secret Manager secret NAMES (never values). Empty = that provider is not mounted.
-      # OpenAI keeps its historical default; Anthropic is opt-in by setting the variable.
-      OPENAI_SECRET: ${{ vars.OPENAI_SECRET_NAME || 'openai-api-key' }}
+      # Both providers are opt-in by naming their secret; an unset variable mounts nothing.
+      # (OpenAI used to default to 'openai-api-key'; set OPENAI_SECRET_NAME to keep it.)
+      OPENAI_SECRET: ${{ vars.OPENAI_SECRET_NAME || '' }}
       ANTHROPIC_SECRET: ${{ vars.ANTHROPIC_SECRET_NAME || '' }}
       # Hosted-demo guards (docs/ANTHROPIC_DEMO.md); empty keeps each guard off.
       ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || '' }}
