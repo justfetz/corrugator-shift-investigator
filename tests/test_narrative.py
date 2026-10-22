@@ -52,10 +52,31 @@ def test_unplaced_trailing_facts_are_dropped_not_fatal():
     value={'paragraphs':[{'kind':'check','text':'Ask the crew about the {{0}} percent operator time.','facts':_facts('a','b','c')}]}
     p=render_narrative(value,WIDE)[0]
     assert p['text']=='Ask the crew about the 1.00 percent operator time.' and len(p['citations'])==1
-    # A gap, a placeholder beyond the facts, or no placeholder at all on a cited paragraph still fail.
-    for text in ('{{0}} and {{2}}','{{0}} {{1}} {{2}} {{3}}','No placeholder here.'):
+    # A gap or a placeholder beyond the facts still fails.
+    for text in ('{{0}} and {{2}}','{{0}} {{1}} {{2}} {{3}}'):
         bad={'paragraphs':[{'kind':'finding','text':text,'facts':_facts('a','b','c')}]}
         with pytest.raises(ValueError):render_narrative(bad,WIDE)
+
+
+def test_shift_is_answered_from_result_metadata():
+    value={'paragraphs':[{'kind':'finding','text':'Shift {{0}} recorded {{1}} minutes of downtime.',
+                         'facts':[{'result_id':'e1','row':0,'field':'shift'},{'result_id':'e1','row':0,'field':'down_minutes'}]}]}
+    p=render_narrative(value,PACKET)[0]
+    assert p['text']=='Shift 2 recorded 12.50 minutes of downtime.' and p['citations'][0].startswith('Shift 2, shift, e1')
+    packet=deepcopy(PACKET);packet[0]['shift']=None   # an all-shifts result has no shift to name
+    with pytest.raises(ValueError,match='Unknown narrative field'):render_narrative(value,packet)
+
+
+def test_prose_without_placeholders_keeps_its_citations():
+    """A paragraph that names a ranking or a category in words, with no digits, keeps every
+    cited row as a pointer to the evidence; an uncited non-limitation paragraph still fails."""
+    value={'paragraphs':[{'kind':'finding','text':'Order change led the recorded stops, ahead of raw material and the missed splice.','facts':_facts('a','b','c')}]}
+    p=render_narrative(value,WIDE)[0]
+    assert p['text'].startswith('Order change led') and len(p['citations'])==3
+    uncited={'paragraphs':[{'kind':'finding','text':'Uncited assertion.','facts':[]}]}
+    with pytest.raises(ValueError,match='cited evidence'):render_narrative(uncited,WIDE)
+    with_digits={'paragraphs':[{'kind':'finding','text':'Order change cost 12 minutes.','facts':_facts('a')}]}
+    with pytest.raises(ValueError,match='placeholders'):render_narrative(with_digits,WIDE)
 
 
 def test_incomplete_evidence_only_supports_limitations():

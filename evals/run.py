@@ -244,8 +244,9 @@ def invariants(mode, result, analysis, allowed_shifts):
                 continue
             shift, field, rid, row = (int(m[1]) if m[1] else None), m[2], m[3], int(m[4])
             source = by_id.get(rid)
-            if source is None or not source['ok'] or source['data']['shift'] != shift \
-                    or row >= len(source['data']['rows']) or field not in source['data']['rows'][row]:
+            # `shift` may be cited as a field: the validator answers it from the result's metadata.
+            row_has_field = row < len(source['data']['rows']) and (field in source['data']['rows'][row] or (field == 'shift' and shift is not None)) if source and source['ok'] else False
+            if source is None or not source['ok'] or source['data']['shift'] != shift or not row_has_field:
                 failures.append(f'citation does not resolve: {citation}')
         if paragraph['kind'] != 'limitation' and not paragraph['citations']:
             failures.append(f'{paragraph["kind"]} paragraph cites nothing')

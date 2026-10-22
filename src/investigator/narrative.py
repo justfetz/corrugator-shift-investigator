@@ -50,13 +50,16 @@ def render_narrative(value, packet):
         if any(x!=str(int(x)) for x in tokens):
             raise ValueError('Fact placeholders do not match references')
         placed={int(x) for x in tokens}
-        # Placeholders must name a prefix of the fact list. Facts listed after the last one
-        # placed are dropped rather than failing the whole narrative: the prose claims
-        # nothing from them, and a citation nobody can check against the text is noise.
-        # A placeholder with no fact, or a gap, is still an error.
+        # Placeholders must name a prefix of the fact list; a placeholder with no fact, or a
+        # gap, is an error. When some facts are placed, the ones listed after the last placed
+        # fact are dropped: the prose claims nothing from them. When NONE are placed the prose
+        # carries no numbers at all (the digit check above), so every listed fact stays as a
+        # citation: it is the pointer to the evidence the paragraph talks about, and the live
+        # writer regularly describes a ranking or a category in words and cites the rows.
         if placed!=set(range(len(placed))) or len(placed)>len(facts):
             raise ValueError('Fact placeholders do not match references')
-        facts=facts[:len(placed)]
+        if placed:
+            facts=facts[:len(placed)]
         if p['kind']!='limitation' and not facts:
             raise ValueError('Narrative requires cited evidence')
         citations=[]
@@ -67,11 +70,16 @@ def render_narrative(value, packet):
             if not isinstance(rid,str) or rid not in sources or type(index) is not int or not isinstance(field,str):
                 raise ValueError('Unknown narrative source')
             source=sources[rid]
-            if not 0<=index<len(source['rows']) or field not in source['rows'][index]:
+            if not 0<=index<len(source['rows']):
+                raise ValueError('Unknown narrative field')
+            if field in source['rows'][index]:
+                val=source['rows'][index][field]
+            elif field=='shift' and source.get('shift') is not None:
+                val=source['shift']   # the shift is result metadata, not a row field; the writer asks for it by name
+            else:
                 raise ValueError('Unknown narrative field')
             if source['coverage']!='complete' and p['kind']!='limitation':
                 raise ValueError('Incomplete evidence is not a performance finding')
-            val=source['rows'][index][field]
             if val is None or isinstance(val,(bool,list,dict)) or isinstance(val,float) and not math.isfinite(val):
                 raise ValueError('Unavailable narrative value')
             formatted=f'{val:,.2f}' if isinstance(val,float) else str(val)
