@@ -42,7 +42,7 @@ def test_tool_use_rounds_final_round_and_no_key_in_payload(tmp_path, analysis):
     def send(payload, key, timeout):
         assert key == KEY and KEY not in json.dumps(payload)
         assert 0 < timeout <= 20
-        assert payload['model'] == DEFAULT_MODEL and payload['max_tokens'] <= 1024
+        assert payload['model'] == DEFAULT_MODEL and payload['max_tokens'] <= (4096 if payload['tools'][0]['name'] == 'write_narrative' else 2048)
         assert 'temperature' not in payload  # non-default sampling is rejected by the target models
         assert payload['tool_choice'] == {'type': 'auto', 'disable_parallel_tool_use': True}
         assert payload['output_config'] == {'effort': 'low'}
@@ -254,3 +254,72 @@ def test_mapped_tool_schemas_use_anyof_for_nullable_filters():
     assert 'description' in shift
     # The application's own schemas are untouched: the agent still validates None as "all kinds".
     assert None in next(t for t in TOOL_SCHEMAS if t['name'] == 'get_downtime_breakdown')['parameters']['properties']['kind']['enum']
+
+
+def test_finish_drops_chart_ids_instead_of_failing(tmp_path, analysis):
+    """Live run 3: the model listed the rendered chart among the evidence ids and the whole
+    investigation ended planner_error. Charts are output; filter them out of finish."""
+    calls = []
+    def send(payload, key, timeout):
+        calls.append(payload)
+        if payload['tools'][0]['name'] == 'write_narrative':
+            packet = json.loads(payload['messages'][-1]['content'])['evidence']
+            rid = packet[0]['result_id']
+            return reply(tool_use('write_narrative', {'paragraphs': [{'kind': 'finding', 'text': 'Top recorded stop: {{0}}.',
+                'facts': [{'result_id': rid, 'row': 0, 'field': 'category'}]}]}))
+        n = len([c for c in calls if c['tools'][0]['name'] != 'write_narrative'])
+        if n == 1:
+            return reply(tool_use('get_downtime_breakdown', {'shift': 2, 'kind': None, 'group_by': 'reason'}, 'toolu_a'))
+        if n == 2:
+            run = json.loads(payload['messages'][-1]['content'][0]['content'])['result_id'].split(':')[0]
+            return reply(tool_use('render_chart', {'result_id': f'{run}:1'}, 'toolu_b'))
+        run = json.loads(payload['messages'][-1]['content'][0]['content'])['result_id'].split(':')[0]
+        return reply(tool_use('finish', {'result_ids': [f'{run}:1', f'{run}:2', f'{run}:nonsense']}, 'toolu_c'))
+    planner = AnthropicPlanner(KEY, Budget(tmp_path / 'b.sqlite3'), send=send)
+    result = Agent(analysis, planner=planner).ask('Why was this shift slow? Chart downtime by reason.', Context('2026-09-01', 2))
+    assert result['status'] == 'complete', result['sections'][:2]
+    assert len(result['evidence_ids']) == 1 and result['evidence_ids'][0].endswith(':1')
+    assert len(result['charts']) == 1 and result['narrative_status'] == 'available'
+
+
+def test_finish_with_only_chart_ids_is_unavailable(tmp_path, analysis):
+    calls = []
+    def send(payload, key, timeout):
+        calls.append(payload)
+        if len(calls) == 1:
+            return reply(tool_use('get_downtime_breakdown', {'shift': 2, 'kind': None, 'group_by': 'reason'}, 'toolu_a'))
+        if len(calls) == 2:
+            run = json.loads(payload['messages'][-1]['content'][0]['content'])['result_id'].split(':')[0]
+            return reply(tool_use('render_chart', {'result_id': f'{run}:1'}, 'toolu_b'))
+        run = json.loads(payload['messages'][-1]['content'][0]['content'])['result_id'].split(':')[0]
+        return reply(tool_use('finish', {'result_ids': [f'{run}:2']}, 'toolu_c'))
+    planner = AnthropicPlanner(KEY, Budget(tmp_path / 'b.sqlite3'), send=send)
+    result = Agent(analysis, planner=planner).ask('Chart downtime by reason.', Context('2026-09-01', 2))
+    assert result['status'] == 'unavailable'
+
+
+@pytest.mark.parametrize('scope, expected_selected, expected_scope_word', [
+    ('shift', 2, 'selected shift only'), ('day', None, 'all three shifts')])
+def test_first_message_states_scope_and_nulls_the_shift_in_day_scope(tmp_path, analysis, scope, expected_selected, expected_scope_word):
+    """Live run 3: every month/week question was filtered to shift 2 because the first message
+    always said selected_shift: 2. In production-day scope the model must be told null = all shifts."""
+    seen = {}
+    def send(payload, key, timeout):
+        if not seen:
+            seen.update(json.loads(payload['messages'][0]['content']))
+            return reply(tool_use('get_period_kpis', {'window': {'period': 'month', 'anchor': '2026-09-01'}, 'compare': True,
+                                                      'shift': expected_selected}, 'toolu_a'))
+        return reply([{'type': 'text', 'text': 'done'}], stop_reason='end_turn')
+    planner = AnthropicPlanner(KEY, Budget(tmp_path / 'b.sqlite3'), send=send)
+    context = Context('2026-09-01', 2); context.scope = scope
+    Agent(analysis, planner=planner).ask('How did this month go?', context)
+    assert seen['selected_shift'] == expected_selected
+    assert expected_scope_word in seen['scope']
+    assert seen['allowed_shifts'] == ([2] if scope == 'shift' else [1, 2, 3])
+
+
+def test_planner_instructions_cover_scope_and_place_versus_reason():
+    from investigator.openai_provider import PLANNER_INSTRUCTIONS
+    assert 'pass shift null' in PLANNER_INSTRUCTIONS
+    assert 'group_by "place"' in PLANNER_INSTRUCTIONS
+    assert 'a rendered chart is output, not evidence' in PLANNER_INSTRUCTIONS

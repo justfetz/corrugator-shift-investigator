@@ -344,7 +344,7 @@ class Agent:
                 status = 'timeout'
                 break
             planner_context = {**request, 'question': text, 'production_day': context.production_day,
-                'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.', 'tools': deepcopy(TOOL_SCHEMAS),
+                'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.', 'scope': context.scope, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
                 'history': deepcopy(context.history[-self.max_turns:]), 'results': deepcopy(list(store.values()))}
             if len(json.dumps(planner_context)) > 200000:
                 status = 'context_limit'

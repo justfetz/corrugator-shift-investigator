@@ -23,7 +23,8 @@ PRICING = {
     'claude-haiku-5-5': {'input': 0.10, 'output': 0.50, 'reserve_micro_usd': 2000},    # $0.002 guard per call
     'claude-sonnet-5-5': {'input': 2.00, 'output': 10.00, 'reserve_micro_usd': 30000},  # $0.03 guard per call
 }
-MAX_TOKENS = 1024          # thinking (adaptive, on by default) counts toward this cap
+MAX_TOKENS = 2048          # planning step; thinking (adaptive, on by default) counts toward this cap
+NARRATIVE_MAX_TOKENS = 4096  # the write_narrative call carries paragraphs plus citations; 1024 was cut off every time
 MAX_REQUEST_BYTES = 24000  # same serialized request ceiling as the OpenAI adapter
 MAX_RESPONSE_BYTES = 512000
 MAX_CALLS = 10
@@ -143,9 +144,12 @@ class AnthropicPlanner:
         self._check_limits()
         if not self._messages:
             self._system = context['process'] + PLANNER_INSTRUCTIONS + TOOL_RULE
+            allowed = context.get('allowed_shifts') or context['shifts']
+            selected = context['shifts'][0] if context.get('scope', 'shift') == 'shift' or len(allowed) == 1 else None
             self._messages = [{'role': 'user', 'content': json.dumps({
                 'question': context['question'], 'production_day': context['production_day'],
-                'selected_shift': context['shifts'][0], 'history': context['history']})}]
+                'scope': 'selected shift only' if selected is not None else 'production day: all three shifts (pass shift null unless the user names one)',
+                'selected_shift': selected, 'allowed_shifts': allowed, 'history': context['history']})}]
         elif self._pending:
             compact = compact_result(context['results'][-1])
             self._messages.append({'role': 'user', 'content': [
@@ -164,9 +168,16 @@ class AnthropicPlanner:
             return {'unavailable': 'The model ended without requesting evidence.'}
         args = call['input']
         if call['name'] == 'finish':
-            if set(args) != {'result_ids'}:
+            if set(args) != {'result_ids'} or not isinstance(args['result_ids'], list):
                 raise ProviderError('Invalid finish arguments')
-            return {'final': args['result_ids']}
+            # Models routinely list the chart they just rendered among the evidence; charts are
+            # output, not evidence, so drop them (and anything unknown or failed) rather than
+            # failing the whole investigation on a bookkeeping slip.
+            usable = {r['result_id'] for r in context['results'] if r['ok'] and r['tool'] != 'render_chart'}
+            ids = [r for r in args['result_ids'] if isinstance(r, str) and r in usable]
+            if ids:
+                return {'final': list(dict.fromkeys(ids))}
+            return {'unavailable': 'The model finished without usable evidence.'}
         if call['name'] == 'cannot_answer':
             return {'unavailable': 'The requested information or action is outside the available tools. Try another question or select the relevant production day.'}
         # Echo the assistant turn unchanged (thinking blocks included) so the tool result can follow it.
@@ -177,7 +188,7 @@ class AnthropicPlanner:
     def summarize(self, question, evidence):
         from .narrative import NARRATIVE_SCHEMA, evidence_packet, render_narrative
         packet = evidence_packet(evidence)
-        payload = {'model': self.model, 'max_tokens': MAX_TOKENS,
+        payload = {'model': self.model, 'max_tokens': NARRATIVE_MAX_TOKENS,
                    'system': NARRATIVE_INSTRUCTIONS + '\nRespond only by calling write_narrative.',
                    'tools': [{'name': 'write_narrative', 'description': 'Return a concise evidence-linked interpretation.',
                               'strict': True, 'input_schema': deepcopy(NARRATIVE_SCHEMA)}],
