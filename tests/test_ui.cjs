@@ -15,9 +15,9 @@ Object.assign(elements.day,{value:'2026-09-14'});elements.period.value='day';ele
 const document={getElementById:id=>{assert.ok(elements[id],`Unknown control ${id}`);return elements[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[]};
 const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test'})}),window:{addEventListener(){}},console,setTimeout,URL,Blob,AbortController};
 vm.createContext(context);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),context);
-vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/Shift 2 only/);
-elements.scope.value='day';vm.runInContext('updateScope()',context);assert.equal(elements.shift.disabled,true);assert.match(elements['scope-help'].textContent,/24-hour/);
-elements.scope.value='shift';vm.runInContext('updateScope()',context);assert.equal(elements.shift.disabled,false);
+vm.runInContext('updateScope()',context);assert.equal(elements['scope-help'].textContent,'Monday 14 Sep 2026 · shift 2 · 15:00–23:00 · compared with Friday 11 Sep');
+elements.scope.value='day';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/all three shifts · 24 hours from 07:00 · compared with Friday 11 Sep/);
+elements.scope.value='shift';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/shift 2/);
 elements.mode.value='openai';vm.runInContext('updateScope()',context);assert.equal(elements['key-label'].hidden,false);
 elements.period.value='month';elements.period.events.change();assert.equal(elements.mode.value,'offline');assert.equal(elements['key-label'].hidden,true);
 elements.period.value='week';vm.runInContext('updateScope()',context);assert.equal(elements.question.disabled,true);assert.equal(elements.mode.disabled,true);

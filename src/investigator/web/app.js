@@ -17,6 +17,106 @@ function syncKeyLabel(){
 function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
 function node(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 function message(label, paragraphs, cls='') { const e=node('div',undefined,'message '+cls);e.append(node('strong',label));for(const p of paragraphs)e.append(node('p',p));$('messages').append(e);$('messages').scrollTop=$('messages').scrollHeight; }
+
+// ---- Scope: the hidden selects (#day, #period, #shift, #scope, #mode) hold the state the
+// request payload reads; the segmented buttons and the sentence are views over them.
+const WEEKDAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SHIFT_HOURS={1:'07:00–15:00',2:'15:00–23:00',3:'23:00–07:00 next day'};
+const SEGMENTS={period:[['day','Day'],['week','Week'],['month','Month'],['accounting','4-4-5']],shift:[['1','1'],['2','2'],['3','3'],['all','All shifts']]};
+const segButtons={period:[],shift:[]};
+const utc=iso=>new Date(iso+'T00:00:00Z');
+const iso=d=>d.toISOString().slice(0,10);
+const addDays=(d,n)=>new Date(d.getTime()+n*86400000);
+const dayText=(d,{weekday=true,year=true,long=false}={})=>`${weekday?(long?WEEKDAYS[d.getUTCDay()]:WEEKDAYS[d.getUTCDay()].slice(0,3))+' ':''}${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}${year?' '+d.getUTCFullYear():''}`;
+function storeDays(){ return config&&Array.isArray(config.days)&&config.days.length?config.days:null; }
+function firstStoreDay(){ return (config&&config.first_day)||(storeDays()||[])[0]||null; }
+function lastStoreDay(){ return (config&&config.last_day)||(storeDays()||[]).slice(-1)[0]||null; }
+// Why a date cannot be selected, or null when it is a production day of the store.
+function dayRejection(value, days){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))return 'Choose a production day as YYYY-MM-DD.';
+ const d=utc(value); if(Number.isNaN(d.getTime()))return 'Choose a production day as YYYY-MM-DD.';
+ const first=days&&days.length?days[0]:null, last=days&&days.length?days[days.length-1]:null;
+ const range=first&&last?` Production days are Monday to Friday, ${dayText(utc(first),{weekday:false})} to ${dayText(utc(last),{weekday:false})}.`:' Production days are Monday to Friday.';
+ if(d.getUTCDay()===0||d.getUTCDay()===6)return `${dayText(d,{long:true})} is a ${WEEKDAYS[d.getUTCDay()]}: the plant is down at weekends, so there are no records.${range}`;
+ if(days&&days.length&&!days.includes(value))return `${dayText(d,{long:true})} is outside the record store.${range}`;
+ return null;
+}
+function weekOf(d){ const monday=addDays(d,-((d.getUTCDay()+6)%7)); return [monday,addDays(monday,4)]; }
+function spanText(a,b){ return a.getUTCMonth()===b.getUTCMonth()?`Mon ${a.getUTCDate()} – Fri ${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]} ${b.getUTCFullYear()}`:`Mon ${dayText(a,{weekday:false,year:false})} – Fri ${dayText(b,{weekday:false})}`; }
+// The plain-English read-back of the selected scope: window, shift, hours and the comparison base.
+function scopeSentence(state){
+ const {day,period,shift,scope}=state, days=state.days||null, first=state.first_day||(days&&days[0])||null;
+ const d=utc(day); if(Number.isNaN(d.getTime()))return 'Choose a production day.';
+ const who=scope==='day'?'all three shifts':`shift ${shift}`;
+ const before=(start)=>first&&iso(start)<first;
+ if(period==='day'){
+  let prev=addDays(d,-1); while(prev.getUTCDay()===0||prev.getUTCDay()===6)prev=addDays(prev,-1);
+  const hours=scope==='day'?'24 hours from 07:00':SHIFT_HOURS[shift]||'';
+  const cmp=before(prev)?'first day in the store, nothing earlier to compare':`compared with ${dayText(prev,{year:false,long:true})}`;
+  return `${dayText(d,{long:true})} · ${who} · ${hours} · ${cmp}`;
+ }
+ if(period==='week'){
+  const [a,b]=weekOf(d), [pa,pb]=[addDays(a,-7),addDays(b,-7)];
+  const cmp=before(pb)?'no earlier week in the store, comparison withheld':`compared with the week of ${spanText(pa,pb)}`;
+  return `Week of ${spanText(a,b)} · ${who} · ${cmp}`;
+ }
+ if(period==='month'){
+  const prev=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()-1,1)), prevEnd=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),0));
+  const cmp=before(prevEnd)?'no earlier month in the store, comparison withheld':`compared with ${MONTHS_LONG[prev.getUTCMonth()]} ${prev.getUTCFullYear()}`;
+  return `${MONTHS_LONG[d.getUTCMonth()]} ${d.getUTCFullYear()} · ${who} · ${cmp}`;
+ }
+ return `4-4-5 accounting period containing ${dayText(d,{long:true})} · ${who} · the exact window and its predecessor are shown in the report`;
+}
+function currentScope(){ return {day:$('day').value,period:$('period').value,shift:Number($('shift').value),scope:$('scope').value,days:storeDays(),first_day:firstStoreDay()}; }
+function renderSegments(){
+ for(const [group,options] of Object.entries(SEGMENTS)){
+  const box=$(group+'-seg'); if(!box)continue; box.replaceChildren(); segButtons[group]=[];
+  for(const [value,label] of options){
+   const b=node('button',label,'seg-btn'); b.type='button'; b.dataset.value=value; b.setAttribute('aria-pressed','false');
+   b.addEventListener('click',()=>{ if(busy)return; if(group==='period')selectPeriod(value); else selectShift(value); });
+   box.append(b); segButtons[group].push(b);
+  }
+ }
+ syncSegments();
+}
+function syncSegments(){
+ const period=$('period').value, shiftValue=$('scope').value==='day'?'all':$('shift').value;
+ for(const b of segButtons.period){b.setAttribute('aria-pressed',String(b.dataset.value===period));b.disabled=busy;}
+ for(const b of segButtons.shift){b.setAttribute('aria-pressed',String(b.dataset.value===shiftValue));b.disabled=busy;}
+}
+function selectPeriod(value){ if($('period').value===value)return; $('period').value=value; periodChanged(); }
+function selectShift(value){
+ if(value==='all'){ if($('scope').value==='day')return; $('scope').value='day'; }
+ else { if($('scope').value==='shift'&&$('shift').value===value)return; $('scope').value='shift'; $('shift').value=value; }
+ reset();
+}
+function periodChanged(){ if($('period').value!=='day')$('mode').value='offline'; reset(); }
+let acceptedDay=null;
+function dayChanged(){
+ const value=$('day').value, reason=dayRejection(value,storeDays());
+ if(reason){ $('day-note').textContent=reason; $('day-note').hidden=false; if(acceptedDay)$('day').value=acceptedDay; updateScope(); return reason; }
+ acceptedDay=value; $('day-note').hidden=true; $('day-note').textContent=''; reset(); return null;
+}
+function stepDay(direction){
+ const days=storeDays(); if(!days)return;
+ const index=days.indexOf($('day').value); const next=index<0?(direction>0?0:days.length-1):index+direction;
+ if(next<0||next>=days.length)return;
+ $('day').value=days[next]; dayChanged();
+}
+function updateScope(){
+ const ranged=$('period').value!=='day', live=isLive();
+ $('scope-help').textContent=scopeSentence(currentScope());
+ $('mode').disabled=busy||ranged;$('question').disabled=ranged;syncKeyLabel();syncSegments();
+ const days=storeDays(), index=days?days.indexOf($('day').value):-1;
+ $('day-prev').disabled=busy||!days||index<=0; $('day-next').disabled=busy||!days||index<0||index>=days.length-1;
+ $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
+ if(ranged)$('mode-help').textContent='Build a free deterministic period summary, output heatmap, recurring downtime comparison, daily matrix and notes. The exact date range is shown; missing days are disclosed.';
+ else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
+ $('submit').textContent=ranged?'Build period report':'Investigate';
+ document.querySelectorAll('[data-question]').forEach(b=>b.disabled=busy||ranged);
+}
 function svgNode(tag, attrs, text) { const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text!==undefined)e.textContent=text;return e; }
 function showHeatmap(chart) {
  const wrap=node('div',undefined,'chart heatmap');wrap.append(node('h3','Output heatmap'),node('p',chart.title,'muted'));
@@ -46,17 +146,6 @@ function showChart(chart) {
  const height=rows.length*32+25; const svg=svgNode('svg',{viewBox:`0 0 690 ${height}`,role:'img','aria-label':`Shift ${chart.shift} ${chart.unit} chart`});
  rows.forEach((r,i)=>{const y=i*32+8;svg.append(svgNode('text',{x:0,y:y+16},String(r[chart.x])));svg.append(svgNode('rect',{x:140,y,width:Math.max(0,Number(r[chart.y]))/max*360,height:21,class:chart.coverage==='complete'?'bar':'incomplete'}));if(r.target_fpm){const x=140+r.target_fpm/max*360;svg.append(svgNode('line',{x1:x,x2:x,y1:y-2,y2:y+23,class:'target'}));}const detail=r.target_fpm?`${r[chart.x]} / ${r.grade||'grade-weighted'}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. Includes downtime.`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;const value=svgNode('text',{x:515,y:y+16,tabindex:0,'aria-label':detail},r.target_fpm?`${Number(r[chart.y]).toFixed(1)} / ${r.speed_to_target_pct.toFixed(1)}%`:Number(r[chart.y]).toFixed(1));value.append(svgNode('title',{},detail));svg.append(value);});
  if(!rows.length)wrap.append(node('p','No records match this filter.','muted'));else wrap.append(svg);$('charts').append(wrap);
-}
-function updateScope(){
- const ranged=$('period').value!=='day', live=isLive();
- $('scope-help').textContent=`${$('day').value} / ${ranged?$('period').selectedOptions[0].textContent:'07:00 to next day 07:00'} / ${$('scope').value==='shift'?'Shift '+$('shift').value+' only — 8 hours per date.':'All shifts — full 24-hour production day per date.'}`;
- $('shift').disabled=busy||$('scope').value==='day';
- $('mode').disabled=busy||ranged;$('question').disabled=ranged;syncKeyLabel();
- $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
- if(ranged)$('mode-help').textContent='Build a free deterministic period summary, output heatmap, recurring downtime comparison, daily matrix and notes. The exact date range is shown; missing days are disclosed.';
- else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
- $('submit').textContent=ranged?'Build period report':'Investigate';
- document.querySelectorAll('[data-question]').forEach(b=>b.disabled=busy||ranged);
 }
 const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %'};
 function showTable(data){
@@ -89,10 +178,12 @@ function showResult(result) {
  $('context').replaceChildren(node('h3','Context carried to the next question'),node('pre',JSON.stringify(result.context,null,2)));
  updateScope();
 }
+const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key'];
+function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; document.querySelectorAll('[data-question]').forEach(b=>b.disabled=flag); const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
 async function ask(question) {
  if(busy)throw new Error('An investigation is already running');
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
- busy=true; ['reset','day','period','scope','shift','corrupt','mode','api-key'].forEach(id=>$(id).disabled=true); $('submit').disabled=true; document.querySelectorAll('[data-question]').forEach(b=>b.disabled=true);$('status').textContent=$('period').value==='day'?'Querying evidence…':'Preparing validated daily records; the first period report can take a minute…';
+ setBusy(true);$('status').textContent=$('period').value==='day'?'Querying evidence…':'Preparing validated daily records; the first period report can take a minute…';
  const empty=$('messages').querySelector('.empty');if(empty)empty.remove();message('You',[question],'user');
  try{
   const headers={'Content-Type':'application/json','X-Workbench-Token':config.token};
@@ -105,13 +196,13 @@ async function ask(question) {
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');sessionId=result.session_id;
   message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${result.usage.tool_calls} tool calls`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
  }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
- finally{busy=false;['reset','day','period','scope','shift','corrupt','mode','api-key'].forEach(id=>$(id).disabled=false);$('submit').disabled=false;document.querySelectorAll('[data-question]').forEach(b=>b.disabled=false);updateScope();}
+ finally{setBusy(false);updateScope();}
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('period').value==='day'?$('question').value:`Build ${$('period').value} report`).catch(()=>{});});
 document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{ if(button.dataset.scope){$('scope').value=button.dataset.scope;reset();} $('question').value=button.dataset.question;ask(button.dataset.question).catch(()=>{}); }));
 function reset(){$('heatmaps').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();}
 $('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
-$('reset').addEventListener('click',reset);$('day').addEventListener('change',reset);$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',()=>{if($('period').value!=='day')$('mode').value='offline';reset();});
+$('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 $('pdf').addEventListener('click',async()=>{if(!latest||busy)return;$('pdf').disabled=true;try{const response=await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({session_id:latest.session_id,run_id:latest.run_id})});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
 function applyPublicMode(){
@@ -129,8 +220,10 @@ function applyPublicMode(){
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model on':'Synthetic data / Public demo';
 }
 async function init(){
- $('submit').disabled=true;
- try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];applyPublicMode();updateScope(); $('submit').disabled=false;
+ $('submit').disabled=true;renderSegments();
+ try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
+ if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
+ applyPublicMode();updateScope(); $('submit').disabled=false;
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline'||$('period').value!=='day')throw new Error('Browser question tool is available only for offline daily investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}
