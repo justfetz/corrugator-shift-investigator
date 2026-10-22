@@ -113,8 +113,8 @@ class OfflinePlanner:
     def next_step(self, context):
         intent = context["intent"]
         results = context["results"]
-        plan = []
-        for shift in context["shifts"]:
+        plan = [(step["tool"], step["arguments"]) for step in context.get("plan", [])]
+        for shift in ([] if plan else context["shifts"]):
             if intent == 'summary':
                 plan.append(('get_shift_overview',{'shift':shift}))
                 continue
@@ -142,11 +142,81 @@ class OfflinePlanner:
                 return {"tool": tool, "arguments": args}
         if context["want_chart"]:
             for result in results:
-                if result["tool"] in ("get_downtime_breakdown", "get_wet_end_performance", "get_quality_breakdown") and result["ok"]:
+                if result["tool"] in CHARTABLE and result["ok"]:
                     args = {"result_id": result["result_id"]}
                     if ("render_chart", args) not in completed:
                         return {"tool": "render_chart", "arguments": args}
         return {"final": [r["result_id"] for r in results if r["ok"] and r["tool"] != "render_chart"]}
+
+
+MONTH_NAMES = {name: index for index, name in enumerate(
+    ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), 1)}
+WORD_NUMBERS = {w: i for i, w in enumerate(("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"), 1)}
+# Trend metric words, first match wins (the longer phrase comes before its prefix).
+TREND_WORDS = (("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bond", "bond_pct"),
+               ("misalignment", "misalignment_pct"), (r"dry[- ]end|reject|quality", "dry_end_pct"),
+               ("minutes per stop", "minutes_per_stop"), ("downtime", "downtime_pct"), (r"\bstops?\b", "stops"),
+               (r"running speed|speed without stops", "speed_run_fpm"), (r"speed|\bfpm\b", "speed_all_fpm"),
+               (r"\bmsf\b|volume|output", "msf_per_day"))
+PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare this month to last', "
+               "'how did September go versus August', 'how did shift 2 go compared with last week', "
+               "'which downtime reason cost the most minutes', 'is it bond or warp', 'stops per day this week', "
+               "'trend of trim over eight weeks'.")
+
+
+def parse_period_request(lower, current, shifts):
+    """Route plain period phrasing to the store tools; None when the question is about one day."""
+    months = [MONTH_NAMES[m] for m in re.findall(r"\b(" + "|".join(MONTH_NAMES) + r")\b", lower)]
+    period = 'month' if months or re.search(r"\bmonth(s|ly)?\b", lower) else 'week' if re.search(r"\bweek(s|ly)?\b", lower) else None
+    trend = bool(re.search(r"\btrends?\b", lower))
+    pareto = bool(re.search(r"\bpareto\b|cost the most|most (downtime )?minutes|most often|most stops|most frequent", lower)
+                  and re.search(r"downtime|stop|reason|place|equipment|kind", lower))
+    profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower))
+    reasons = {w for w in ("bond", "warp", "misalignment") if re.search(rf"\b{w}\b", lower)}
+    waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|bale|unexplained", lower))
+    this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
+    if not (period or trend or pareto or profile or waste or this_shift):
+        return None
+    if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift)\b", lower):
+        raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
+    anchor = current.production_day
+    year = anchor[:4]
+    shift = current.shift if current.scope == 'shift' else shifts[0] if len(shifts) == 1 else None
+    window = {"period": period or 'day', "anchor": anchor}
+    if trend:
+        metric = next((m for pattern, m in TREND_WORDS if re.search(pattern, lower)), None)
+        if metric is None:
+            raise ValueError("Name the metric to trend: trim, shear, dry-end, warp, bond, misalignment, speed, downtime, stops, minutes per stop or MSF per day")
+        found = re.search(r"\b(\d{1,2}|" + "|".join(WORD_NUMBERS) + r")\s+(production\s+)?weeks?\b", lower)
+        weeks = (int(found[1]) if found[1].isdigit() else WORD_NUMBERS[found[1]]) if found else 8
+        if not 1 <= weeks <= 26:
+            raise ValueError("Trends cover 1 to 26 production weeks")
+        plan = [("get_trend", {"metric": metric, "weeks": weeks, "anchor": anchor, "shift": shift})]
+        intent = 'period_trend'
+    elif pareto:
+        group_by = 'place' if re.search(r"equipment|place|where|location", lower) else 'kind' if re.search(r"\bkind\b", lower) or ('maintenance' in lower and 'operator' in lower) else 'reason'
+        measure = 'count' if re.search(r"\b(count|how many|number of|most often|most stops|frequent)\b", lower) else 'minutes'
+        plan = [("get_downtime_pareto", {"window": window, "group_by": group_by, "measure": measure, "shift": shift})]
+        intent = 'period_pareto'
+    elif profile:
+        plan = [("get_stops_profile", {"window": {"period": period or 'week', "anchor": anchor}, "shift": shift})]
+        intent = 'period_stops'
+    elif waste:
+        plan = [("get_waste_breakdown", {"window": window, "shift": shift})]
+        intent = 'period_waste'
+    elif len(set(months)) >= 2:
+        first, second = months[0], months[1]
+        plan = [("compare_periods", {"current_window": {"period": "month", "anchor": f"{year}-{first:02d}-01"},
+                                     "previous_window": {"period": "month", "anchor": f"{year}-{second:02d}-01"}, "shift": shift})]
+        intent = 'period_compare'
+    elif months:
+        plan = [("get_period_kpis", {"window": {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"}, "compare": True, "shift": shift})]
+        intent = 'period_compare'
+    else:
+        plan = [("get_period_kpis", {"window": window, "compare": True, "shift": shift})]
+        intent = 'period_compare'
+    return {"intent": intent, "shifts": [shift] if shift else [], "kind": None, "group_by": "reason", "want_chart": True,
+            "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
 
 def parse_request(text, current):
@@ -156,13 +226,18 @@ def parse_request(text, current):
     date_tokens = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", text)
     if date_tokens and any(d != current.production_day for d in date_tokens):
         raise ValueError("Select that production day in the day control first")
-    if re.search(r"\b(yesterday|today|last week|this week|month|trend|tomorrow)\b", lower):
-        raise ValueError("Offline mode analyzes the selected production day; use the day control. Date-range questions need the model/range tools.")
+    if re.search(r"\b(yesterday|today|tomorrow)\b", lower):
+        raise ValueError("Offline mode anchors on the selected production day; use the day control. Period questions name a window: this week, this month, September versus August.")
     shifts = []
     patterns = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
     for shift, pattern in patterns.items():
         if re.search(pattern, lower):
             shifts.append(shift)
+    if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
+        raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
+    period_request = parse_period_request(lower, current, shifts)
+    if period_request:
+        return period_request
     compare = bool(re.search(r"\b(compare|comparison|versus|vs)\b", lower))
     if compare and len(shifts) == 1 and shifts[0] != current.shift:
         shifts.insert(0, current.shift)
@@ -178,7 +253,7 @@ def parse_request(text, current):
         'speed' if re.search(r'speed|feet per minute|fpm', lower) else
         'overview' if re.search(r'slow|bad|killed|shift|loss', lower) else None)
     if intent is None:
-        raise ValueError("Offline mode supports shift performance, downtime, speed, quality and comparisons. Try an example question.")
+        raise ValueError("Offline mode supports shift performance, downtime, speed, quality and comparisons. Try an example question. " + PERIOD_HELP)
     kind = None
     if 'maintenance' in lower and 'operator' not in lower:
         kind = 'Maintenance'
