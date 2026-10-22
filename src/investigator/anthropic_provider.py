@@ -18,8 +18,9 @@ DEFAULT_MODEL = 'claude-haiku-5-5'
 # USD per million tokens, first-party API list prices read on 2026-10-22. Display estimates
 # only: the Anthropic console spend limit is the hard stop. Haiku 5.5 is the <=100K-token
 # prompt rate card; this adapter never sends more than 24 KB per request.
+# The guard reserved per call is about 2x the worst case at the 24 KB request cap and 1024 output tokens.
 PRICING = {
-    'claude-haiku-5-5': {'input': 0.10, 'output': 0.50, 'reserve_micro_usd': 10000},   # $0.01 guard per call
+    'claude-haiku-5-5': {'input': 0.10, 'output': 0.50, 'reserve_micro_usd': 2000},    # $0.002 guard per call
     'claude-sonnet-5-5': {'input': 2.00, 'output': 10.00, 'reserve_micro_usd': 30000},  # $0.03 guard per call
 }
 MAX_TOKENS = 1024          # thinking (adaptive, on by default) counts toward this cap

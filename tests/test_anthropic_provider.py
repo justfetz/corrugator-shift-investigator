@@ -144,8 +144,9 @@ def test_response_size_cap_and_incomplete_stop(tmp_path, analysis):
 
 
 def test_budget_exhaustion_blocks_before_network(tmp_path):
-    budget = Budget(tmp_path/'budget.db', limit_usd=.01)
-    budget.reserve(PRICING[DEFAULT_MODEL]['reserve_micro_usd'])  # the month's $0.01 is taken
+    guard = PRICING[DEFAULT_MODEL]['reserve_micro_usd']
+    budget = Budget(tmp_path/'budget.db', limit_usd=guard/1_000_000)
+    budget.reserve(guard)  # the month's allowance is taken by one earlier call
     planner = AnthropicPlanner(KEY, budget, lambda *a: pytest.fail('Network should not run'))
     with pytest.raises(ValueError, match='budget exhausted'):
         planner.next_step({'process': 'p', 'question': 'q', 'production_day': 'd', 'shifts': [2], 'history': [], 'tools': TOOL_SCHEMAS, 'results': []})

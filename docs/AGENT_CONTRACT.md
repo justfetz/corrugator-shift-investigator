@@ -6,7 +6,7 @@ A user question wakes one bounded investigation. The agent requests evidence, op
 
 ## Current execution mode
 
-The default OfflinePlanner is rule-based and understands only supported patterns. Optional OpenAIPlanner implements native Responses function calling through the same dispatcher; see OPENAI_BYOK.md. PeriodReports is a separate deterministic aggregation path. Live account access and model-quality evaluation remain open.
+The default OfflinePlanner is rule-based and understands only supported patterns. Optional OpenAIPlanner implements native Responses function calling through the same dispatcher; see OPENAI_BYOK.md. Optional AnthropicPlanner implements the same Planner contract over the Messages API with tool_use blocks, intended for the hosted demo with a server-held key behind per-IP and daily round guards; see ANTHROPIC_DEMO.md. PeriodReports is a separate deterministic aggregation path. Live account access and model-quality evaluation remain open for both providers.
 
 The OpenAI adapter implements Planner.next_step(context), returning either a tool request or a final list of evidence IDs. The application validates both. The answer renderer retains deterministic calculated evidence. After successful daily investigation, the OpenAI adapter can write a bounded narrative with fact placeholders. Application code validates field references and substitutes their values. It labels prose as model interpretation; schema/reference checks do not prove its meaning.
 

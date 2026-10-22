@@ -12,6 +12,7 @@ For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics
 | Check a formula, target, calendar boundary, or heatmap color | [Metrics and interpretation](docs/METRICS.md) |
 | Understand the agent, tools, context and data flow | [Execution walkthrough](docs/AGENT_EXECUTION.md) and [agent contract](docs/AGENT_CONTRACT.md) |
 | Use a key and understand the spending guard | [OpenAI/BYOK](docs/OPENAI_BYOK.md) |
+| Run the hosted demo on Anthropic with the server's key, rate limit and daily cap | [Anthropic demo](docs/ANTHROPIC_DEMO.md) |
 | Recover from an error or unexpected answer | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Verify the app or evaluate live question quality | [Testing and evaluation](docs/TESTING.md) |
 | Review defects and choose the next repair | [September 7 review](docs/REVIEW_2026-09-07.md) |
