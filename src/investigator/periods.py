@@ -1,17 +1,26 @@
-"""Deterministic period reports; only validated synthetic daily analysis is read."""
+"""Deterministic period reports; only validated synthetic daily analysis is read.
+
+Daily snapshots come from the record store (`RecordStore.day_analysis`), so
+the calendar is the store's Monday-Friday production calendar: weekends are
+plant-down, never missing data, and a window is complete when every weekday
+in it has three validated shifts.
+"""
 from collections import OrderedDict, defaultdict
 from datetime import date, timedelta
-import hashlib
-import json
 import time
 from uuid import uuid4
-from .analysis import Analysis
-from .fixture import generate
+from .record_store import DEFAULT_MONTHS, default_store
+from .synth import production_days
 
-FIRST = date(2026, 9, 1)
-LAST = date(2026, 9, 30)
+FIRST = production_days(DEFAULT_MONTHS)[0]
+LAST = production_days(DEFAULT_MONTHS)[-1]
 ACCOUNTING_445_START = date(2026, 9, 1)  # Editable demo assumption.
 ACCOUNTING_WEEKS = (4, 4, 5) * 4
+
+
+def weekdays(start, end):
+    """Production (Mon-Fri) dates from start to end inclusive."""
+    return [start+timedelta(days=n) for n in range((end-start).days+1) if (start+timedelta(days=n)).weekday() < 5]
 
 
 def accounting_window(anchor):
@@ -32,14 +41,15 @@ def accounting_window(anchor):
     raise ValueError('Date is outside the configured demo accounting year')
 
 
-def window(day, period):
+def window(day, period, first=FIRST, last=LAST):
     anchor = date.fromisoformat(day)
-    if not FIRST <= anchor <= LAST or period not in ('week', 'month', 'accounting'):
+    if not first <= anchor <= last or period not in ('week', 'month', 'accounting'):
         raise ValueError('Choose a supported calendar date and period')
     if period == 'week':
-        start, end = anchor - timedelta(days=6), anchor
-        previous = (start-timedelta(days=7), start-timedelta(days=1))
-        return start, end, previous, 'Trailing 7 days'
+        start = anchor - timedelta(days=anchor.weekday())
+        end = start + timedelta(days=4)
+        previous = (start-timedelta(days=7), end-timedelta(days=7))
+        return start, end, previous, 'Production week (Mon-Fri)'
     if period == 'accounting':
         start, end, previous, number, weeks = accounting_window(anchor)
         return start, end, previous, f'4-4-5 P{number} ({weeks} weeks)'
@@ -52,13 +62,16 @@ def window(day, period):
 
 
 class PeriodReports:
-    def __init__(self):
+    def __init__(self, store=None):
+        self.store = store if store is not None else default_store()
+        self.first = date.fromisoformat(self.store.first_day)
+        self.last = date.fromisoformat(self.store.last_day)
         self.cache = OrderedDict()
 
     def snapshot(self, day, corrupt=False):
         key = (day.isoformat(), corrupt)
         if key not in self.cache:
-            a = Analysis(generate(seed=7+(day-FIRST).days, production_day=day.isoformat(), corrupt=corrupt))
+            a = self.store.day_analysis(day.isoformat(), corrupt)
             try:
                 self.cache[key] = {'version': a.version, 'shifts': {
                     s: {'kpis': a.get_shift_kpis(s), 'notes': a.get_shift_notes(s)} for s in (1,2,3)}}
@@ -71,17 +84,16 @@ class PeriodReports:
 
     def investigate(self, day, shift, scope, period, corrupt=False):
         started = time.monotonic()
-        start, end, (old_start, old_end), period_name = window(day, period)
+        start, end, (old_start, old_end), period_name = window(day, period, self.first, self.last)
         shifts = [shift] if scope == 'shift' else [1,2,3]
-        expected = (end-start).days+1
-        expected_old = (old_end-old_start).days+1
+        expected = len(weekdays(start, end))          # weekends are plant-down, not missing days
+        expected_old = len(weekdays(old_start, old_end))
         current, previous, note_rows, versions = [], [], [], {}
         stops = defaultdict(lambda: {'current_count':0,'previous_count':0,'current_minutes':0.0,'previous_minutes':0.0})
         daily_stops = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'minutes': 0.0}))
         for label, begin, finish, target in [('current',start,end,current),('previous',old_start,old_end,previous)]:
-            for n in range((finish-begin).days+1):
-                d = begin+timedelta(days=n)
-                if not FIRST <= d <= LAST:
+            for d in weekdays(begin, finish):
+                if d.isoformat() not in self.store.production_days:
                     continue
                 snapshot = self.snapshot(d, corrupt)
                 versions[d.isoformat()] = snapshot['version']
@@ -100,6 +112,8 @@ class PeriodReports:
                                 day_item['minutes'] += note['down_minutes']
                         if label=='current':
                             note_rows.append(dict(note, day=d.isoformat(), shift=s))
+        if not current:
+            raise ValueError(f'No production days between {start} and {end}: the dataset covers {self.first} to {self.last}')
         complete = len(current)==expected*len(shifts) and all(r['coverage']=='complete' for r in current)
         old_complete = len(previous)==expected_old*len(shifts) and all(r['coverage']=='complete' for r in previous)
         def aggregate(rows):
@@ -152,13 +166,15 @@ class PeriodReports:
         trace={'result_id':rid,'tool':'get_period_report','arguments':{'day':day,'period':period,'scope':scope,'shift':shift},
                'ok':True,'elapsed_ms':(time.monotonic()-started)*1000,'data':{'range':label,'coverage':'complete' if complete else 'incomplete',
                'rows':[totals],'dataset_versions':versions,'calculation':'Sum raw numerators and denominators from validated daily SQL tools. Fixed 480 minutes per shift. Speed target weighted by elapsed grade time.',
-               'daily_sql':self.snapshot(max(start,FIRST),corrupt)['shifts'][shifts[0]]['kpis']['trace']['sql']}}
+               'daily_sql':self.snapshot(date.fromisoformat(current[0]['day']),corrupt)['shifts'][shifts[0]]['kpis']['trace']['sql']}}
         heatmap_rows=[]
-        for n in range(expected):
-            value_day = (start+timedelta(days=n)).isoformat()
+        for n in range((end-start).days+1):
+            moment = start+timedelta(days=n)
+            value_day = moment.isoformat()
             rows = [r for r in current if r['day']==value_day]
             if not rows:
-                heatmap_rows.append({'day': value_day, 'available': False})
+                # Weekends are plant-down by calendar; other gaps are missing records.
+                heatmap_rows.append({'day': value_day, 'available': False, 'plant_down': moment.weekday() >= 5})
                 continue
             summary = aggregate(rows)
             hitters = daily_stops[value_day]

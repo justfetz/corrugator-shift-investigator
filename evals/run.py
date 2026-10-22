@@ -36,10 +36,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
-from investigator.agent import TOOL_SCHEMAS, Agent, Context  # noqa: E402
-from investigator.analysis import Analysis  # noqa: E402
-from investigator.fixture import generate  # noqa: E402
-from investigator.server import DAYS  # noqa: E402
+from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context  # noqa: E402
+from investigator.record_store import default_store  # noqa: E402
 
 GOLDEN = ROOT / 'evals' / 'golden.json'
 FIXTURES = ROOT / 'evals' / 'fixtures'
@@ -48,7 +46,7 @@ TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
 RULE_CONSTANTS = {'2.5', '1', '3.25', '0.4', '480', '12', '0'}
 NUMBER = re.compile(r'\d[\d,]*(?:\.\d+)?')
 RUN_ID = re.compile(r'[0-9a-f]{32}:\d+')
-CITATION = re.compile(r'^Shift (\d), (\w+), ([0-9a-f]{32}:\d+), row (\d+)$')
+CITATION = re.compile(r'^(?:Shift (\d)|All shifts), (\w+), ([0-9a-f]{32}:\d+), row (\d+)$')
 
 
 # ---------------------------------------------------------------- datasets
@@ -57,9 +55,10 @@ _DATASETS = {}
 
 
 def dataset(day, corrupt=False):
+    """A production day of the record store (the app's data source), built once per run."""
     key = (day, corrupt)
     if key not in _DATASETS:
-        _DATASETS[key] = Analysis(generate(seed=7 + DAYS.index(day), production_day=day, corrupt=corrupt))
+        _DATASETS[key] = default_store().day_analysis(day, corrupt=corrupt)
     return _DATASETS[key]
 
 
@@ -75,6 +74,8 @@ def renderings(value):
     """Every way the application formats a numeric field."""
     if value is None or isinstance(value, bool):
         return set()
+    if isinstance(value, (int, float)) and value < 0:
+        return renderings(-value)  # a signed delta prints as "-0.12"; the number token is "0.12"
     if isinstance(value, int):
         return {str(value), f'{value:,}', f'{value:.1f}', f'{value:.2f}', f'{value:,.1f}', f'{value:,.2f}'}
     if isinstance(value, float) and math.isfinite(value):
@@ -90,7 +91,12 @@ def evidence_vocabulary(trace):
         if not result['ok']:
             continue
         data = result['data']
-        row_sets = [data.get('rows', [])] + [c['rows'] for c in data.get('components', [])]
+        row_sets = [data.get('rows', [])] + [c['rows'] for c in data.get('components', [])] + [data.get('weekday_profile', [])]
+        # Period evidence names its windows (labels carry dates) and the weeks it could not find.
+        for window in (data.get('window'), data.get('previous_window')):
+            if isinstance(window, dict):
+                strings.update(v for v in window.values() if isinstance(v, str))
+        strings.update(data.get('missing_weeks', []))
         for rows in row_sets:
             numbers.update(renderings(len(rows)))
             if rows and 'actual_fpm' in rows[0] and 'target_fpm' in rows[0]:
@@ -120,6 +126,7 @@ def unfaithful_numbers(lines, trace):
             if s:
                 text = text.replace(s, ' ')
         for token in NUMBER.findall(text):
+            token = token.rstrip(',')  # "523, better": the comma is punctuation, not a thousands separator
             if token not in numbers:
                 bad.append(f'{token!r} in {line[:70]!r}')
     return bad
@@ -134,9 +141,10 @@ def invariants(case, result, analysis, allowed_shifts):
     for step in trace:
         if step['ok'] and step['tool'] not in TOOL_NAMES:
             failures.append(f'executed unknown tool {step["tool"]}')
-        if step['ok'] and 'shift' in step['arguments'] and step['arguments']['shift'] not in allowed_shifts:
+        if step['ok'] and step['arguments'].get('shift') is not None and step['arguments']['shift'] not in allowed_shifts:
             failures.append(f'{step["tool"]} ran for shift {step["arguments"]["shift"]} outside scope {allowed_shifts}')
-    evidence_shifts = {step['data']['shift'] for step in trace if step['ok'] and step['tool'] != 'render_chart'}
+    evidence_shifts = {step['data']['shift'] for step in trace if step['ok'] and step['tool'] != 'render_chart'
+                       and step['data']['shift'] is not None}  # period tools report None for all shifts
     if evidence_shifts - set(allowed_shifts):
         failures.append(f'evidence for shifts {sorted(evidence_shifts - set(allowed_shifts))} outside scope')
     by_id = {step['result_id']: step for step in trace}
@@ -168,6 +176,8 @@ def invariants(case, result, analysis, allowed_shifts):
         if paragraph['kind'] != 'limitation' and not paragraph['citations']:
             failures.append(f'{paragraph["kind"]} paragraph cites nothing')
     for table in result['tables']:
+        if table['title'] in PERIOD_TOOLS:
+            continue  # period tables are the whole store result; chart-row equality covers them above
         shift = table['shift']
         full = getattr(analysis, table['title'])(shift, **({'metric': table['metric']} if 'metric' in table else {}))
         if len(table['rows']) != len(full['rows']):

@@ -8,7 +8,7 @@ optional demo guards (DEMO_RATE_LIMIT_PER_MIN, DEMO_DAILY_CAP, DEMO_MAX_TURNS,
 TRUST_PROXY) are off unless set; see docs/ANTHROPIC_DEMO.md.
 """
 from collections import OrderedDict, deque
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import argparse
@@ -23,12 +23,14 @@ import threading
 import time
 
 from .agent import Agent, Context, TOOL_SCHEMAS
-from .analysis import Analysis
 from .anthropic_provider import resolve_model
-from .fixture import generate
+from .record_store import DEFAULT_MONTHS, default_store
+from .synth import production_days
 
 WEB = Path(__file__).with_name('web')
-DAYS = [(date(2026, 9, 1)+timedelta(days=n)).isoformat() for n in range(30)]
+# The record store's Monday-Friday production calendar (August and September 2026);
+# a pure calendar here, the records themselves are built once by default_store().
+DAYS = [d.isoformat() for d in production_days(DEFAULT_MONTHS)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
 LIVE_MODES = ('openai', 'anthropic')
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
@@ -119,8 +121,9 @@ class Workbench:
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
         self.rate_lock = threading.Lock()
         self.reports = OrderedDict()
+        self.store = default_store()  # the two synthetic months, built once per process
         from .periods import PeriodReports
-        self.periods = PeriodReports()
+        self.periods = PeriodReports(self.store)
 
     @property
     def live_modes(self):
@@ -203,8 +206,9 @@ class Workbench:
         if mode == 'anthropic' and not (anthropic_key or os.environ.get('ANTHROPIC_API_KEY')):
             raise ValueError('Anthropic mode needs your key in the local key field or server environment')
         day, shift = payload.get('day'), payload.get('shift')
-        if day not in DAYS or type(shift) is not int or shift not in (1,2,3):
-            raise ValueError('Select a supported production day and shift')
+        if type(shift) is not int or shift not in (1,2,3):
+            raise ValueError('Select a supported shift (1, 2 or 3)')
+        day = self.store.check_day(day)  # a weekend or out-of-range date is refused with the reason
         question = payload.get('question')
         if not isinstance(question, str) or not question.strip() or len(question)>2000:
             raise ValueError('Enter a question of 1-2000 characters')
@@ -237,7 +241,7 @@ class Workbench:
             if len(self.datasets) >= 3:
                 _, evicted = self.datasets.popitem(last=False)
                 evicted.close()
-            self.datasets[key] = Analysis(generate(seed=7+DAYS.index(day), production_day=day, corrupt=corrupt))
+            self.datasets[key] = self.store.day_analysis(day, corrupt=corrupt)
         self.datasets.move_to_end(key)
         if mode == 'offline':
             result = Agent(self.datasets[key], max_turns=self.guards.max_turns).ask(question, context)
@@ -329,7 +333,10 @@ def make_server(port=8765, public=None, host=None, guards=None):
             if self.path in ('/api/health', '/healthz'):  # /healthz is reserved by Google's front end on *.run.app; /api/health reaches the container everywhere
                 return self._send(200, {'ok': True, 'public': public is not None})
             if self.path == '/api/config':
-                return self._send(200, {'days': DAYS, 'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',
+                return self._send(200, {'days': app.store.production_days, 'first_day': app.store.first_day,
+                                       'last_day': app.store.last_day, 'production_calendar': 'Mon-Fri',
+                                       'dataset_hash': app.store.content_hash,
+                                       'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',
                                        'public': public is not None, 'server_key_available': app.live_model_available,
                                        'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
