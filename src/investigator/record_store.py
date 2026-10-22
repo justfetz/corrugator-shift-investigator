@@ -82,10 +82,14 @@ KPI_CATALOG = (
     ("operator_pct", "Operator downtime", "% of scheduled minutes", "lower"),
     ("setups", "Setup records", "count", "neutral"),
     ("paper_changes", "Paper changes (distinct wet ends)", "count", "neutral"),
+    ("lineal_per_setup", "Lineal per setup (dry-end record)", "ft/setup", "higher"),
+    ("lineal_per_paper_change", "Lineal per paper change (wet-end record)", "ft/paper change", "higher"),
+    ("bale_msf", "Baled waste (scale reading)", "MSF", "lower"),
 )
 KPI_UNITS = {key: unit for key, _, unit, _ in KPI_CATALOG}
 TREND_METRICS = ("trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct",
-                 "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day")
+                 "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day",
+                 "lineal_per_setup", "lineal_per_paper_change")
 TREND_UNITS = {**{m: KPI_UNITS[m] for m in TREND_METRICS if m in KPI_UNITS}, "msf_per_day": "MSF per production day"}
 WASTE_CATEGORIES = (("trim", "Side trim"), ("shear", "Shear chops"), ("bond", "Dry-end: bond"),
                     ("warp", "Dry-end: warp"), ("misalignment", "Dry-end: misalignment"),
@@ -93,6 +97,11 @@ WASTE_CATEGORIES = (("trim", "Side trim"), ("shear", "Shear chops"), ("bond", "D
                     ("unexplained", "Unexplained (bale minus accounted waste)"))
 _STOP_GROUPS = ("reason", "place", "kind")
 _STOP_MEASURES = ("minutes", "count")
+# Over/under-run: actual cuts against nominal cuts per knife. The band is the demo's
+# "inside the cut range" width; the plant's acceptance range is an open owner input
+# (docs/METRICS.md). The record window is the +-10% the generator never leaves.
+OVERRUN_BAND_PCT = 2.0
+OVERRUN_WINDOW_PCT = 10.0
 
 
 def _round(value, places):
@@ -429,6 +438,9 @@ class RecordStore:
             "operator_pct": _ratio(t["operator_seconds"], scheduled, 100),
             "setups": t["setup_records"] if t["shift_records"] else None,
             "paper_changes": t["paper_changes"] if t["shift_records"] else None,
+            "lineal_per_setup": _ratio(t["lineal_ft"], t["setup_records"], places=1),
+            "lineal_per_paper_change": _ratio(t["lineal_ft"], t["paper_changes"], places=1),
+            "bale_msf": _round(t["bale_sqft"] / 1000, 1) if t["shift_records"] else None,
             "msf_per_day": _ratio(gross / 1000, t["production_days"], places=1),
         }
 
@@ -588,6 +600,97 @@ class RecordStore:
         source = {"shifts": len(fetched["shifts"]), "stops": sum(r["stops"] for r in daily)}
         return self._envelope("get_stops_profile", current, None, shift, daily, trace, started, source,
                               weekday_profile=weekday_rows)
+
+    def get_grade_totals(self, window, shift=None):
+        """Volume, lineal feet, speed and waste by board grade for one window,
+        previous window's volume alongside. Ratios of sums within each grade.
+
+        Grade-level speed can only use the setup records' own clocks: without
+        stops = feet / (elapsed - setup-allocated stop seconds), elapsed = feet /
+        elapsed seconds. Scheduled shift minutes carry no grade, so the tile
+        table's "speed with stops" has no per-grade equivalent."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        current = self._window(window)
+        previous = self._previous(current)
+        clause, extra = self._shift_clause(shift)
+        sql = ("SELECT grade, max(target) AS target, count(*) AS setups, count(DISTINCT wet_end_id) AS wet_ends, "
+               "sum(feet) AS feet, sum(gross) AS gross, sum(seconds) AS seconds, sum(stop_seconds) AS stop_seconds, "
+               "sum(stops) AS stops, sum(trim) AS trim, sum(rejects) AS rejects "
+               f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY grade ORDER BY gross DESC, grade")
+        fetched = {}
+        for name, win in (("current", current), ("previous", previous)):
+            params = [win["start"], win["end"], *extra]
+            fetched[name] = self._fetch(sql, params)
+            trace["sql"].append(sql)
+            trace["parameters"].append(params)
+        available = previous["coverage"] != "unavailable"
+        before = {r["grade"]: r for r in fetched["previous"]}
+        total_gross = sum(r["gross"] for r in fetched["current"])
+        rows = []
+        for r in fetched["current"]:
+            prior = before.get(r["grade"]) if available else None
+            prior_msf = round(prior["gross"] / 1000, 1) if prior else (0.0 if available else None)
+            run_fpm = _ratio(r["feet"], (r["seconds"] - r["stop_seconds"]) / 60, places=1)
+            rows.append({"grade": r["grade"], "target_fpm": r["target"], "setups": r["setups"], "wet_ends": r["wet_ends"],
+                         "lineal_ft": round(r["feet"], 1), "volume_msf": round(r["gross"] / 1000, 1),
+                         "share_of_volume_pct": _ratio(r["gross"], total_gross, 100),
+                         "speed_run_fpm": run_fpm, "speed_elapsed_fpm": _ratio(r["feet"], r["seconds"] / 60, places=1),
+                         "speed_to_target_pct": _ratio(run_fpm, r["target"], 100, places=1),
+                         "setup_stops": r["stops"], "setup_stop_minutes": round(r["stop_seconds"] / 60, 1),
+                         "downtime_pct_of_elapsed": _ratio(r["stop_seconds"], r["seconds"], 100),
+                         "lineal_per_setup": _ratio(r["feet"], r["setups"], places=1),
+                         "lineal_per_wet_end": _ratio(r["feet"], r["wet_ends"], places=1),
+                         "trim_pct": _ratio(r["trim"], r["gross"], 100), "dry_end_pct": _ratio(r["rejects"], r["gross"], 100),
+                         "previous_volume_msf": prior_msf,
+                         "delta_volume_msf": round(r["gross"] / 1000 - prior_msf, 1) if prior_msf is not None else None})
+        source = {"current": {"setups": sum(r["setups"] for r in fetched["current"])},
+                  "previous": {"setups": sum(r["setups"] for r in fetched["previous"])} if available else None}
+        return self._envelope("get_grade_totals", current, previous, shift, rows, trace, started, source,
+                              total_volume_msf=round(total_gross / 1000, 1),
+                              speed_note="Grade speeds come from the setup records' own elapsed clocks; "
+                                         "scheduled shift minutes carry no grade, so there is no per-grade speed with stops.")
+
+    def get_overrun(self, window, shift=None):
+        """Over/under-run by knife: actual cuts against nominal cuts for every
+        customer line of the window, as cuts, sheets (cuts x outs) and percent of
+        nominal, plus the share of lines inside the +-band, over it and under it.
+        The last row is all knives together."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        current = self._window(window)
+        clause, extra = self._shift_clause(shift)
+        sql = ("SELECT position AS knife, count(*) AS lines, sum(nominal_cuts) AS nominal_cuts, sum(actual_cuts) AS actual_cuts, "
+               "sum(nominal_cuts*outs) AS nominal_sheets, sum(actual_cuts*outs) AS actual_sheets, "
+               "sum(CASE WHEN actual_cuts > nominal_cuts THEN (actual_cuts-nominal_cuts)*outs ELSE 0 END) AS over_sheets, "
+               "sum(CASE WHEN actual_cuts < nominal_cuts THEN (nominal_cuts-actual_cuts)*outs ELSE 0 END) AS under_sheets, "
+               "sum(CASE WHEN (actual_cuts-nominal_cuts)*100.0/nominal_cuts > ? THEN 1 ELSE 0 END) AS lines_over, "
+               "sum(CASE WHEN (actual_cuts-nominal_cuts)*100.0/nominal_cuts < -? THEN 1 ELSE 0 END) AS lines_under "
+               f"FROM customers WHERE production_date BETWEEN ? AND ?{clause} AND nominal_cuts > 0 GROUP BY position ORDER BY position")
+        # bound order: the two band values sit first in the SQL text, then the window and shift
+        params = [OVERRUN_BAND_PCT, OVERRUN_BAND_PCT, current["start"], current["end"], *extra]
+        fetched = self._fetch(sql, params)
+        trace["sql"].append(sql)
+        trace["parameters"].append(params)
+
+        def row(label, r):
+            inside = r["lines"] - r["lines_over"] - r["lines_under"]
+            return {"knife": label, "lines": r["lines"], "nominal_cuts": r["nominal_cuts"], "actual_cuts": r["actual_cuts"],
+                    "delta_cuts": r["actual_cuts"] - r["nominal_cuts"],
+                    "overrun_pct": _ratio(r["actual_cuts"] - r["nominal_cuts"], r["nominal_cuts"], 100, places=2),
+                    "nominal_sheets": r["nominal_sheets"], "actual_sheets": r["actual_sheets"],
+                    "over_sheets": r["over_sheets"], "under_sheets": r["under_sheets"],
+                    "lines_inside_band_pct": _ratio(inside, r["lines"], 100, places=1),
+                    "lines_over_pct": _ratio(r["lines_over"], r["lines"], 100, places=1),
+                    "lines_under_pct": _ratio(r["lines_under"], r["lines"], 100, places=1)}
+        rows = [row(f"knife {r['knife']}", r) for r in fetched]
+        if fetched:
+            total = {k: sum(r[k] for r in fetched) for k in fetched[0] if k != "knife"}
+            rows.append(row("all knives", total))
+        source = {"customer_lines": sum(r["lines"] for r in fetched)}
+        return self._envelope("get_overrun", current, None, shift, rows, trace, started, source,
+                              band_pct=OVERRUN_BAND_PCT, window_pct=OVERRUN_WINDOW_PCT,
+                              band_note=f"Inside the band means actual cuts within +-{OVERRUN_BAND_PCT:g}% of nominal on that line; "
+                                        "the band is a demo setting, the plant's acceptance range is an open owner input. "
+                                        "Positive is overrun, negative is underrun.")
 
     def get_trend(self, metric, weeks=8, anchor=None, shift=None):
         """A weekly series (Mon-Fri production weeks) of one allow-listed metric,

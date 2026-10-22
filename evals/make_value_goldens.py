@@ -53,6 +53,7 @@ TILES = {
     "warp_pct": ("lower", 4), "misalignment_pct": ("lower", 4), "bale_pct": ("lower", 4),
     "unexplained_pct": ("lower", 4), "maintenance_pm_pct": ("lower", 4), "operator_pct": ("lower", 4),
     "setups": ("neutral", 0), "paper_changes": ("neutral", 0),
+    "lineal_per_setup": ("higher", 1), "lineal_per_paper_change": ("higher", 1), "bale_msf": ("lower", 1),
 }
 TREND_PLACES = {**{k: p for k, (_, p) in TILES.items()}, "msf_per_day": 1}
 WASTE = ("trim", "shear", "bond", "warp", "misalignment", "dry_end", "bale", "unexplained")
@@ -166,6 +167,9 @@ class Plain:
             "operator_pct": ratio(t["operator_seconds"], scheduled, 100),
             "setups": None if not t["shift_records"] else t["setups"],
             "paper_changes": None if not t["shift_records"] else t["paper_changes"],
+            "lineal_per_setup": ratio(t["feet"], t["setups"]),
+            "lineal_per_paper_change": ratio(t["feet"], t["paper_changes"]),
+            "bale_msf": None if not t["shift_records"] else t["bale"] / 1000,
             "msf_per_day": ratio(gross / 1000, t["production_days"]),
         }
 
@@ -340,6 +344,65 @@ def profile_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", not
                 {"coverage": plain.coverage(*cur), "row_count": len(days), "values": values}, day=day, note=note)
 
 
+def grade_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
+    cur = window(period, anchor)
+    prev = previous(period, *cur)
+    available = plain.coverage(*prev) != "unavailable"
+    by_grade, before = defaultdict(list), defaultdict(float)
+    for s in plain.between("dry_end_setups", *cur, shift):
+        by_grade[s.quality_id].append(s)
+    for s in plain.between("dry_end_setups", *prev, shift):
+        before[s.quality_id] += s.total_produced_sqft
+    total = sum(s.total_produced_sqft for group in by_grade.values() for s in group)
+    values = {"$": {"total_volume_msf": num(total / 1000, 1)}}
+    for grade, mine in by_grade.items():
+        gross, feet = sum(s.total_produced_sqft for s in mine), sum(s.lineal_ft for s in mine)
+        running = sum(s.elapsed_seconds - s.stop_time_sec for s in mine) / 60
+        elapsed = sum(s.elapsed_seconds for s in mine) / 60
+        run_fpm = feet / running
+        values[f"grade={grade}"] = {
+            "target_fpm": exact(float(GRADES[grade])), "setups": exact(len(mine)), "wet_ends": exact(len({s.wet_end_id for s in mine})),
+            "lineal_ft": num(feet, 1), "volume_msf": num(gross / 1000, 1), "share_of_volume_pct": num(gross / total * 100, 4),
+            "speed_run_fpm": num(run_fpm, 1), "speed_elapsed_fpm": num(feet / elapsed, 1),
+            # the tool divides the displayed (1-dp) speed by the target
+            "speed_to_target_pct": [round(run_fpm / GRADES[grade] * 100, 6), round(0.05 / GRADES[grade] * 100 + 0.051, 6)],
+            "setup_stops": exact(sum(s.number_of_stops for s in mine)), "setup_stop_minutes": num(sum(s.stop_time_sec for s in mine) / 60, 1),
+            "downtime_pct_of_elapsed": num(sum(s.stop_time_sec for s in mine) / sum(s.elapsed_seconds for s in mine) * 100, 4),
+            "lineal_per_setup": num(feet / len(mine), 1), "lineal_per_wet_end": num(feet / len({s.wet_end_id for s in mine}), 1),
+            "trim_pct": num(sum(s.trim_sqft for s in mine) / gross * 100, 4), "dry_end_pct": num(sum(s.kqf_sqft for s in mine) / gross * 100, 4),
+            "previous_volume_msf": num(before[grade] / 1000, 1) if available else exact(None),
+            "delta_volume_msf": [round(gross / 1000 - round(before[grade] / 1000, 1), 6), 0.11] if available else exact(None)}
+    coverage = "complete" if plain.coverage(*cur) == "complete" and plain.coverage(*prev) == "complete" else "partial"
+    return case(id, "get_grade_totals", {"window": {"period": period, "anchor": anchor}, "shift": shift},
+                {"coverage": coverage, "row_count": len(by_grade), "values": values}, day=day, note=note)
+
+
+def overrun_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
+    cur = window(period, anchor)
+    lines = defaultdict(list)
+    for s in plain.between("dry_end_setups", *cur, shift):
+        for c in s.customers:
+            lines[c.cutoff_allocation].append(c)
+    lines["all knives"] = [c for k in sorted(k for k in lines if k != "all knives") for c in lines[k]]
+    values = {"$": {"band_pct": exact(2.0), "window_pct": exact(10.0)}}
+    for key, mine in lines.items():
+        label = key if key == "all knives" else f"knife {key}"
+        nominal, actual = sum(c.nominal_cuts for c in mine), sum(c.actual_cuts for c in mine)
+        over = sum(1 for c in mine if (c.actual_cuts - c.nominal_cuts) / c.nominal_cuts * 100 > 2)
+        under = sum(1 for c in mine if (c.actual_cuts - c.nominal_cuts) / c.nominal_cuts * 100 < -2)
+        values[f"knife={label}"] = {
+            "lines": exact(len(mine)), "nominal_cuts": exact(nominal), "actual_cuts": exact(actual), "delta_cuts": exact(actual - nominal),
+            "overrun_pct": num((actual - nominal) / nominal * 100, 2),
+            "nominal_sheets": exact(sum(c.nominal_cuts * c.number_of_outs for c in mine)),
+            "actual_sheets": exact(sum(c.actual_cuts * c.number_of_outs for c in mine)),
+            "over_sheets": exact(sum((c.actual_cuts - c.nominal_cuts) * c.number_of_outs for c in mine if c.actual_cuts > c.nominal_cuts)),
+            "under_sheets": exact(sum((c.nominal_cuts - c.actual_cuts) * c.number_of_outs for c in mine if c.actual_cuts < c.nominal_cuts)),
+            "lines_inside_band_pct": num((len(mine) - over - under) / len(mine) * 100, 1),
+            "lines_over_pct": num(over / len(mine) * 100, 1), "lines_under_pct": num(under / len(mine) * 100, 1)}
+    return case(id, "get_overrun", {"window": {"period": period, "anchor": anchor}, "shift": shift},
+                {"coverage": plain.coverage(*cur), "row_count": len(lines), "values": values}, day=day, note=note)
+
+
 def trend_case(plain, id, metric, weeks, anchor, shift=None, *, day="2026-09-14", note=""):
     last_start, last_end = window("week", anchor)
     values, missing, rows = {}, [], 0
@@ -477,6 +540,14 @@ def build(data=None):
     cases.append(profile_case(plain, "value-stops-profile-august", "month", "2026-08-14"))
     cases.append(profile_case(plain, "value-stops-profile-september", "month", "2026-09-14"))
     cases.append(profile_case(plain, "value-stops-profile-week-0914-shift-1", "week", "2026-09-14", 1))
+    # Totals by grade: both months (August's previous is July: null), one week for one shift.
+    cases.append(grade_case(plain, "value-grade-totals-september", "month", "2026-09-14"))
+    cases.append(grade_case(plain, "value-grade-totals-august", "month", "2026-08-14",
+                            note="July is unavailable: previous and delta volume are null, never zero."))
+    cases.append(grade_case(plain, "value-grade-totals-week-0914-shift-2", "week", "2026-09-14", 2))
+    # Over/under-run by knife: the story week for one shift, and September for all shifts.
+    cases.append(overrun_case(plain, "value-overrun-week-0914-shift-2", "week", "2026-09-14", 2))
+    cases.append(overrun_case(plain, "value-overrun-september", "month", "2026-09-14"))
     # Trends for trim and warp, plus a series that starts before the dataset.
     cases.append(trend_case(plain, "value-trend-trim-8w", "trim_pct", 8, "2026-09-30", day="2026-09-30"))
     cases.append(trend_case(plain, "value-trend-warp-8w", "warp_pct", 8, "2026-09-14"))

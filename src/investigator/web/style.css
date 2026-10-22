@@ -144,6 +144,7 @@ textarea{display:block;width:100%;resize:vertical;margin-top:7px}
 .chart text{font-family:var(--mono);font-size:12px;fill:var(--ink-2)}
 .chart .bar,.chart .bar.cur{fill:var(--s1)}.chart .bar.prev{fill:var(--prev)}.chart .bar.vital{fill:var(--s1)}.chart .bar.rest{fill:var(--prev)}.chart .incomplete,.chart .bar.incomplete{fill:var(--neutral)}
 .chart .target{stroke:var(--target);stroke-width:3}
+.chart .band{fill:var(--brand-soft)}.chart .bar.out{fill:var(--s2)}.chart .dot.out{fill:var(--s2)}.lg .sw.out{background:var(--s2)}.lg .sw.band{background:var(--brand-soft);border:1px solid var(--line)}
 .chart .grid{stroke:var(--grid);stroke-width:1}.chart .grid.base{stroke:var(--ink-3)}
 .chart .tick{font-size:11px;fill:var(--ink-3)}.chart .val.small{font-size:11px}.chart .lbl{fill:var(--ink-2)}.chart .val{fill:var(--ink)}
 .chart .seg.s1{fill:var(--s1)}.chart .seg.s2{fill:var(--s2)}.chart .seg.s3{fill:var(--s3)}.chart .inseg{fill:#fff;font-size:11px}

@@ -41,6 +41,10 @@ def report_pdf(result):
         if chart.get('type')=='calendar_heatmap':
             cols=[('day','Day'),('estimated_good_sqft','Est. good sq ft'),('speed_to_target_pct','% target'),
                   ('downtime_pct','Down %'),('heavy_hitter','Heavy hitter'),('heavy_hitter_minutes','Heavy min')]
+        elif chart.get('type')=='range':
+            cols=[('knife','Knife'),('nominal_cuts','Nominal cuts'),('actual_cuts','Actual cuts'),('overrun_pct','Over/under %'),('lines_inside_band_pct','In band %')]
+        elif chart.get('y')=='volume_msf':
+            cols=[('grade','Grade'),('volume_msf','MSF'),('previous_volume_msf','Prev MSF'),('speed_run_fpm','ft/min w/o stops'),('speed_to_target_pct','% of target')]
         else:
             cols=[(chart['x'],'Run / day / reason'),(chart['y'],chart['unit'])]
         if chart['unit']=='ft/min':cols.extend([('target_fpm','Target ft/min'),('speed_to_target_pct','% of target')])

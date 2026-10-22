@@ -40,7 +40,8 @@ WINDOW_SCHEMA = {"type": "object", "description": "day = one production day (Mon
                  "required": ["period", "anchor"], "additionalProperties": False}
 SHIFT_FILTER = {"type": ["integer", "null"], "enum": [None, 1, 2, 3], "description": "null = all three shifts; under selected-shift scope only the selected shift is allowed"}
 TREND_METRICS = ["trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct",
-                 "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day"]
+                 "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day",
+                 "lineal_per_setup", "lineal_per_paper_change"]
 PERIOD_TOOL_SCHEMAS = [
     {"name": name, "description": description, "parameters": {"type": "object", "properties": properties,
                                                               "required": required, "additionalProperties": False}}
@@ -56,6 +57,10 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_stops_profile", "Stops, minutes and minutes per stop for each production day of a window, plus its Monday-to-Friday weekday profile.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
+        ("get_grade_totals", "Totals by board grade for a window: setups, wet ends, lineal ft, volume MSF and share, speed without stops and elapsed speed from the setup clocks, percent of grade target, setup stops, trim and dry-end percent; previous window's volume beside. Use for 'how much 275-BC did we run', 'which grade is slowest against target'.",
+         {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
+        ("get_overrun", "Over/under-run by knife for a window: nominal cuts vs actual cuts as cuts, sheets and percent of nominal, with the share of customer lines inside, over and under the +-band; last row is all knives.",
+         {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_trend", "Weekly series (Mon-Fri production weeks) of one allow-listed metric, ending with the week containing the anchor.",
          {"metric": {"type": "string", "enum": TREND_METRICS}, "weeks": {"type": "integer", "description": "1-26, default 8"},
           "anchor": {"type": "string", "description": "YYYY-MM-DD; use the selected production day"}, "shift": SHIFT_FILTER}, ["metric"]),
@@ -66,6 +71,9 @@ TOOL_SCHEMAS.extend(PERIOD_TOOL_SCHEMAS)
 TOOL_SCHEMAS.append({"name": "render_chart", "description": "Chart a result from this investigation; never supply invented rows.",
     "parameters": {"type": "object", "properties": {"result_id": {"type": "string"}},
                    "required": ["result_id"], "additionalProperties": False}})
+CHART_TITLES = {'get_period_kpis': 'KPI tiles', 'compare_periods': 'KPI comparison', 'get_downtime_pareto': 'Downtime Pareto',
+                'get_waste_breakdown': 'Waste breakdown', 'get_stops_profile': 'Stops per production day', 'get_trend': 'Weekly trend',
+                'get_grade_totals': 'Volume by grade (MSF)', 'get_overrun': 'Over/under-run by knife'}
 # Chartable results: tool -> (x field, y field or a function of the result data, unit or a function, chart type).
 CHARTABLE = {
     'get_downtime_breakdown': ('category', 'down_minutes', 'minutes', 'bar', None),
@@ -78,6 +86,8 @@ CHARTABLE = {
                             lambda d: 'previous_minutes' if d['measure'] == 'minutes' else 'previous_stops'),
     'get_waste_breakdown': ('label', 'pct_of_gross', '% of gross', 'bar', 'previous_pct_of_gross'),
     'get_stops_profile': ('production_day', 'stops', 'stops', 'bar', None),
+    'get_grade_totals': ('grade', 'volume_msf', 'MSF', 'bar', 'previous_volume_msf'),
+    'get_overrun': ('knife', 'overrun_pct', '% of nominal cuts', 'range', None),
     'get_trend': ('week_start', 'value', lambda d: d['unit'], 'line', None),
 }
 
@@ -153,7 +163,9 @@ MONTH_NAMES = {name: index for index, name in enumerate(
     ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), 1)}
 WORD_NUMBERS = {w: i for i, w in enumerate(("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"), 1)}
 # Trend metric words, first match wins (the longer phrase comes before its prefix).
-TREND_WORDS = (("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bond", "bond_pct"),
+TREND_WORDS = ((r"lineal per paper change|per paper change|per wet[- ]end|feet per paper change", "lineal_per_paper_change"),
+               (r"lineal per setup|per setup|run length|feet per setup", "lineal_per_setup"),
+               ("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bond", "bond_pct"),
                ("misalignment", "misalignment_pct"), (r"dry[- ]end|reject|quality", "dry_end_pct"),
                ("minutes per stop", "minutes_per_stop"), ("downtime", "downtime_pct"), (r"\bstops?\b", "stops"),
                (r"running speed|speed without stops", "speed_run_fpm"), (r"speed|\bfpm\b", "speed_all_fpm"),
@@ -161,7 +173,7 @@ TREND_WORDS = (("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"
 PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare this month to last', "
                "'how did September go versus August', 'how did shift 2 go compared with last week', "
                "'which downtime reason cost the most minutes', 'is it bond or warp', 'stops per day this week', "
-               "'trend of trim over eight weeks'.")
+               "'trend of trim over eight weeks', 'volume by grade this month', 'over/under-run by knife this week'.")
 
 
 def parse_period_request(lower, current, shifts):
@@ -175,7 +187,9 @@ def parse_period_request(lower, current, shifts):
     reasons = {w for w in ("bond", "warp", "misalignment") if re.search(rf"\b{w}\b", lower)}
     waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|bale|unexplained", lower))
     this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
-    if not (period or trend or pareto or profile or waste or this_shift):
+    grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
+    overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
+    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun):
         return None
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
@@ -183,7 +197,13 @@ def parse_period_request(lower, current, shifts):
     year = anchor[:4]
     shift = current.shift if current.scope == 'shift' else shifts[0] if len(shifts) == 1 else None
     window = {"period": period or 'day', "anchor": anchor}
-    if trend:
+    if overrun:
+        plan = [("get_overrun", {"window": window, "shift": shift})]
+        intent = 'period_overrun'
+    elif grade:
+        plan = [("get_grade_totals", {"window": window, "shift": shift})]
+        intent = 'period_grade'
+    elif trend:
         metric = next((m for pattern, m in TREND_WORDS if re.search(pattern, lower)), None)
         if metric is None:
             raise ValueError("Name the metric to trend: trim, shear, dry-end, warp, bond, misalignment, speed, downtime, stops, minutes per stop or MSF per day")
@@ -300,11 +320,13 @@ class Agent:
             chart = {'type': kind, 'source_result_id': rid, 'shift': data['shift'], 'coverage': data['coverage'],
                      'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
             if result['tool'] in PERIOD_TOOLS:
-                chart['title'] = f"{result['tool'].replace('_', ' ')}: {data['window']['label']}" + \
+                chart['title'] = f"{CHART_TITLES.get(result['tool'], result['tool'].replace('_', ' '))}: {data['window']['label']}" + \
                     (f" vs {data['previous_window']['label']}" if data.get('previous_window') else '') + \
                     (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)')
                 if y2:
                     chart['y2'] = y2  # paired bars: current beside previous
+            if kind == 'range':
+                chart['band_pct'] = data['band_pct']  # the shaded +-band the bullet chart draws
             return chart
         if name in PERIOD_TOOLS:
             if self.store is None:
@@ -507,7 +529,7 @@ class Agent:
             lines.append(f'Volume {cell("volume_msf", " MSF")}; lineal {cell("lineal_ft", " ft")}; speed with stops {cell("speed_all_fpm", " ft/min")}; without stops {cell("speed_run_fpm", " ft/min")}.')
             lines.append(f'Downtime {cell("downtime_pct", "%")} of scheduled minutes: {cell("downtime_minutes", " min")} over {cell("stops")} stops, {cell("minutes_per_stop", " min")} per stop. Maintenance + PM {cell("maintenance_pm_pct", "%")}; Operator {cell("operator_pct", "%")}.')
             lines.append(f'Waste as % of gross: side trim {cell("trim_pct", "%")}; shear {cell("shear_pct", "%")}; dry-end {cell("dry_end_pct", "%")} (bond {cell("bond_pct", "%")}, warp {cell("warp_pct", "%")}, misalignment {cell("misalignment_pct", "%")}); bale {cell("bale_pct", "%")}; unexplained {cell("unexplained_pct", "%")}.')
-            lines.append(f'Setup records {cell("setups")}; paper changes (distinct wet ends) {cell("paper_changes")}. Lower is better for downtime and waste, higher for volume and speed; counts are context, not scores.')
+            lines.append(f'Setup records {cell("setups")}; paper changes (distinct wet ends) {cell("paper_changes")}; lineal per setup {cell("lineal_per_setup", " ft")}; lineal per paper change {cell("lineal_per_paper_change", " ft")}; baled waste {cell("bale_msf", " MSF")}. Lower is better for downtime and waste, higher for volume, speed and run length; counts are context, not scores.')
         elif tool == 'get_downtime_pareto':
             lines.append(f'Downtime Pareto by {data["group_by"]} ({data["measure"]}): ' + ('; '.join(
                 f'{r["category"]}: {num(r["minutes"])} min over {num(r["stops"])} stops, {num(r["share_pct"])}% (cumulative {num(r["cumulative_pct"])}%), previous {num(r["previous_minutes"])} min'
@@ -524,6 +546,21 @@ class Agent:
             lines.append('Weekday profile: ' + '; '.join(
                 f'{r["weekday"]}: {num(r["stops_per_day"])} stops per day and {num(r["minutes_per_day"])} min per day over {num(r["days"])} day(s)'
                 for r in data['weekday_profile'] if r['days']) + '.')
+        elif tool == 'get_grade_totals':
+            lines.append(f'Totals by grade ({num(data["total_volume_msf"])} MSF in the window): ' + ('; '.join(
+                f'{r["grade"]}: {num(r["volume_msf"])} MSF ({num(r["share_of_volume_pct"])}%), {num(r["lineal_ft"])} ft over {num(r["setups"])} setups / {num(r["wet_ends"])} wet ends, '
+                f'{num(r["speed_run_fpm"])} ft/min without stops = {num(r["speed_to_target_pct"])}% of the {num(r["target_fpm"])} target, '
+                f'{num(r["setup_stops"])} setup stops / {num(r["setup_stop_minutes"])} min = {num(r["downtime_pct_of_elapsed"])}% of its elapsed time, '
+                f'{num(r["lineal_per_setup"])} ft per setup, {num(r["lineal_per_wet_end"])} ft per paper change, '
+                f'trim {num(r["trim_pct"])}%, dry-end {num(r["dry_end_pct"])}%' +
+                (f', previous {num(r["previous_volume_msf"])} MSF ({num(r["delta_volume_msf"], signed=True)})' if r['previous_volume_msf'] is not None else '')
+                for r in data['rows']) or 'no setups in this window') + '. ' + data['speed_note'])
+        elif tool == 'get_overrun':
+            lines.append(f'Over/under-run by knife (+-{num(data["band_pct"])}% band): ' + ('; '.join(
+                f'{r["knife"]}: {num(r["actual_cuts"])} actual vs {num(r["nominal_cuts"])} nominal cuts = {num(r["overrun_pct"], signed=True)}%, '
+                f'{num(r["over_sheets"])} sheets over and {num(r["under_sheets"])} under across {num(r["lines"])} lines, '
+                f'{num(r["lines_inside_band_pct"])}% of lines inside the band ({num(r["lines_over_pct"])}% over, {num(r["lines_under_pct"])}% under)'
+                for r in data['rows']) or 'no customer lines in this window') + '. ' + data['band_note'])
         elif tool == 'get_trend':
             lines.append(f'Weekly {data["metric"]} ({data["unit"]}), {len(data["rows"])} weeks available: ' + ('; '.join(
                 f'week of {r["week_start"]}: {num(r["value"])}' + (' (partial week)' if r['partial'] else '') for r in data['rows']) or 'no weeks available') +

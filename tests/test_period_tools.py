@@ -57,6 +57,8 @@ def plain_kpis(data, start, end, shift=None):
         "unexplained_pct": (bale - trim - shear - rejects) / gross * 100,
         "maintenance_pm_pct": (kinds["Maintenance"] + kinds["PM"]) / scheduled * 100, "operator_pct": kinds["Operator"] / scheduled * 100,
         "setups": len(setups), "paper_changes": len({s.wet_end_id for s in setups}),
+        "lineal_per_setup": feet / len(setups), "lineal_per_paper_change": feet / len({s.wet_end_id for s in setups}),
+        "bale_msf": bale / 1000,
         "msf_per_day": gross / 1000 / len({s.production_date for s in setups}),
     }
 
@@ -260,6 +262,79 @@ def test_stops_profile_per_day_and_weekday(store, data):
     assert len(shift_only["rows"]) == 5 and all(r["downtime_pct"] == pytest.approx(r["minutes"] / 480 * 100, abs=1e-3) for r in shift_only["rows"])
 
 
+def test_grade_totals_are_ratios_of_sums_within_each_grade(store, data):
+    result = store.get_grade_totals({"period": "month", "anchor": "2026-09-14"})
+    setups = between(data["dry_end_setups"], date(2026, 9, 1), date(2026, 9, 30))
+    by_grade = defaultdict(list)
+    for s in setups:
+        by_grade[s.quality_id].append(s)
+    assert [r["grade"] for r in result["rows"]] == sorted(by_grade, key=lambda g: (-sum(s.total_produced_sqft for s in by_grade[g]), g))
+    total = sum(s.total_produced_sqft for s in setups)
+    assert result["total_volume_msf"] == pytest.approx(total / 1000, abs=0.06)
+    assert sum(r["share_of_volume_pct"] for r in result["rows"]) == pytest.approx(100, abs=0.01)
+    for row in result["rows"]:
+        mine = by_grade[row["grade"]]
+        gross, feet = sum(s.total_produced_sqft for s in mine), sum(s.lineal_ft for s in mine)
+        running = sum(s.elapsed_seconds - s.stop_time_sec for s in mine) / 60
+        assert row["setups"] == len(mine) and row["wet_ends"] == len({s.wet_end_id for s in mine})
+        assert row["volume_msf"] == pytest.approx(gross / 1000, abs=0.06) and row["lineal_ft"] == pytest.approx(feet, abs=0.06)
+        assert row["speed_run_fpm"] == pytest.approx(feet / running, abs=0.06)
+        assert row["speed_elapsed_fpm"] == pytest.approx(feet / (sum(s.elapsed_seconds for s in mine) / 60), abs=0.06)
+        assert row["speed_elapsed_fpm"] <= row["speed_run_fpm"]
+        assert row["speed_to_target_pct"] == pytest.approx(row["speed_run_fpm"] / row["target_fpm"] * 100, abs=0.06)
+        assert row["trim_pct"] == pytest.approx(sum(s.trim_sqft for s in mine) / gross * 100, abs=1e-3)
+        assert row["dry_end_pct"] == pytest.approx(sum(s.kqf_sqft for s in mine) / gross * 100, abs=1e-3)
+        assert row["downtime_pct_of_elapsed"] == pytest.approx(sum(s.stop_time_sec for s in mine) / sum(s.elapsed_seconds for s in mine) * 100, abs=1e-3)
+        assert row["lineal_per_setup"] == pytest.approx(feet / len(mine), abs=0.06)
+        assert row["lineal_per_wet_end"] == pytest.approx(feet / row["wet_ends"], abs=0.06)
+        previous = [s for s in between(data["dry_end_setups"], date(2026, 8, 1), date(2026, 8, 31)) if s.quality_id == row["grade"]]
+        assert row["previous_volume_msf"] == pytest.approx(sum(s.total_produced_sqft for s in previous) / 1000, abs=0.06)
+    august = store.get_grade_totals({"period": "month", "anchor": "2026-08-14"}, shift=3)
+    assert all(r["previous_volume_msf"] is None and r["delta_volume_msf"] is None for r in august["rows"])  # July is unavailable, never zero
+
+
+def test_overrun_sums_cuts_and_sheets_per_knife(store, data):
+    result = store.get_overrun({"period": "week", "anchor": "2026-09-14"}, shift=2)
+    setups = between(data["dry_end_setups"], date(2026, 9, 14), date(2026, 9, 18), 2)
+    lines = defaultdict(list)
+    for s in setups:
+        for c in s.customers:
+            lines[c.cutoff_allocation].append(c)
+    assert [r["knife"] for r in result["rows"]] == [f"knife {k}" for k in sorted(lines)] + ["all knives"]
+    assert result["band_pct"] == 2.0 and result["window_pct"] == 10.0
+    everything = [c for group in lines.values() for c in group]
+    for row in result["rows"]:
+        mine = everything if row["knife"] == "all knives" else lines[int(row["knife"].split()[1])]
+        nominal, actual = sum(c.nominal_cuts for c in mine), sum(c.actual_cuts for c in mine)
+        assert (row["lines"], row["nominal_cuts"], row["actual_cuts"], row["delta_cuts"]) == (len(mine), nominal, actual, actual - nominal)
+        assert row["overrun_pct"] == pytest.approx((actual - nominal) / nominal * 100, abs=0.006)
+        assert row["nominal_sheets"] == sum(c.nominal_cuts * c.number_of_outs for c in mine)
+        assert row["over_sheets"] == sum((c.actual_cuts - c.nominal_cuts) * c.number_of_outs for c in mine if c.actual_cuts > c.nominal_cuts)
+        assert row["under_sheets"] == sum((c.nominal_cuts - c.actual_cuts) * c.number_of_outs for c in mine if c.actual_cuts < c.nominal_cuts)
+        over = sum(1 for c in mine if (c.actual_cuts - c.nominal_cuts) / c.nominal_cuts * 100 > 2)
+        under = sum(1 for c in mine if (c.actual_cuts - c.nominal_cuts) / c.nominal_cuts * 100 < -2)
+        assert row["lines_over_pct"] == pytest.approx(over / len(mine) * 100, abs=0.06)
+        assert row["lines_under_pct"] == pytest.approx(under / len(mine) * 100, abs=0.06)
+        assert row["lines_inside_band_pct"] == pytest.approx((len(mine) - over - under) / len(mine) * 100, abs=0.06)
+        assert abs(row["overrun_pct"]) <= 10  # the generator never leaves the record window
+    assert 0.80 <= result["rows"][-1]["lines_inside_band_pct"] / 100 <= 0.90  # the generator keeps ~85% of lines inside +-2%
+
+
+def test_overrun_chart_is_a_range_with_the_band(store):
+    analysis = store.day_analysis("2026-09-14")
+    context = Context("2026-09-14", 2, scope="day")
+    context.scope = "day"
+    result = Agent(analysis, store=store).ask("Over/under-run by knife this week", context)
+    assert result["status"] == "complete"
+    [chart] = result["charts"]
+    assert chart["type"] == "range" and chart["y"] == "overrun_pct" and chart["band_pct"] == 2.0
+    assert chart["rows"][-1]["knife"] == "all knives"
+    assert "Over/under-run by knife" in result["sections"][1] and "inside the band" in result["sections"][1]
+    grade = Agent(analysis, store=store).ask("Volume by grade this month", context)
+    assert grade["status"] == "complete" and grade["charts"][0]["y2"] == "previous_volume_msf"
+    assert "Totals by grade" in grade["sections"][1] and "% of the" in grade["sections"][1]
+
+
 def test_trend_is_weekly_ratio_of_sums_and_allow_listed(store, data):
     result = store.get_trend("trim_pct", weeks=8, anchor="2026-09-30")
     assert result["metric"] == "trim_pct" and result["unit"] == "% of gross" and result["weeks_requested"] == 8
@@ -305,6 +380,10 @@ ROUTES = [
     ("show the downtime trend over 4 weeks", "get_trend", {"metric": "downtime_pct", "weeks": 4, "anchor": DAY}),
     ("trend of minutes per stop", "get_trend", {"metric": "minutes_per_stop", "weeks": 8}),
     ("weekly warp trend", "get_trend", {"metric": "warp_pct"}),
+    ("volume by grade this month", "get_grade_totals", {"window": {"period": "month", "anchor": DAY}}),
+    ("how much 275-BC did we run this week", "get_grade_totals", {"window": {"period": "week", "anchor": DAY}}),
+    ("over/under-run by knife this week", "get_overrun", {"window": {"period": "week", "anchor": DAY}}),
+    ("are we inside the cut range this month", "get_overrun", {"window": {"period": "month", "anchor": DAY}}),
 ]
 
 
@@ -347,7 +426,8 @@ def test_day_questions_still_route_to_the_day_tools():
 def test_period_tool_schemas_are_declared():
     names = {s["name"] for s in TOOL_SCHEMAS}
     assert PERIOD_TOOLS <= names and PERIOD_TOOLS == {"get_period_kpis", "compare_periods", "get_downtime_pareto",
-                                                     "get_waste_breakdown", "get_stops_profile", "get_trend"}
+                                                     "get_waste_breakdown", "get_stops_profile", "get_trend",
+                                                     "get_grade_totals", "get_overrun"}
     for schema in TOOL_SCHEMAS:
         if schema["name"] in PERIOD_TOOLS:
             assert schema["parameters"]["additionalProperties"] is False and "shift" in schema["parameters"]["properties"]

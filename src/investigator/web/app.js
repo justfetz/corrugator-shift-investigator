@@ -297,6 +297,26 @@ function lineChart(chart,wrap){
   if(i===rows.length-1)svg.append(svgNode('text',{x:x(i)+10,y:y(v)+4,class:'val'},fmtVal(v,'')));});
  wrap.append(svg,node('p',`${chart.unit}; Monday–Friday production weeks ending with the selected week. Hollow markers are partial weeks.`,'muted'));
 }
+// Over/under-run: one horizontal bullet per knife. Zero (nominal) sits mid-axis, the +-band is shaded
+// behind, the bar runs from zero to the knife's percent; inside the band reads as the series color.
+function rangeChart(chart,wrap){
+ const rows=chart.rows, band=Number(chart.band_pct)||2, W=CHART_W(), f=frame(W,rows.length,34,8,true);
+ const span=niceCeil(Math.max(band*1.5,...rows.map(r=>Math.abs(Number(r[chart.y])||0))));
+ const x=v=>f.x0+(f.x1-f.x0)*(v+span)/(2*span), yEnd=f.top+rows.length*34;
+ const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':chart.title||'over/under-run by knife'});
+ svg.append(svgNode('rect',{x:x(-band),y:f.top,width:x(band)-x(-band),height:yEnd-f.top,class:'band'}));
+ for(const v of [-span,-band,0,band,span]){svg.append(svgNode('line',{x1:x(v),x2:x(v),y1:f.top,y2:yEnd,class:'grid'+(v===0?' base':'')}));
+  svg.append(svgNode('text',{x:x(v),y:yEnd+16,'text-anchor':'middle',class:'tick'},`${v>0?'+':''}${v}%`));}
+ rows.forEach((r,i)=>{const y=f.top+i*34, v=Number(r[chart.y])||0, inside=Math.abs(v)<=band;
+  labelText(svg,r[chart.x],f.x0-8,y+20,f.chars);
+  const x0=Math.min(x(0),x(v)), w=Math.abs(x(v)-x(0));
+  svg.append(svgNode('rect',{x:x0,y:y+8,width:Math.max(w,2),height:14,rx:3,class:'bar '+(inside?'cur':'out')}));
+  svg.append(svgNode('circle',{cx:x(v),cy:y+15,r:5,class:'dot'+(inside?'':' out')}));
+  const detail=`${r[chart.x]}: ${r.actual_cuts.toLocaleString()} actual vs ${r.nominal_cuts.toLocaleString()} nominal cuts (${v>0?'+':''}${v.toFixed(2)}%); ${r.over_sheets.toLocaleString()} sheets over, ${r.under_sheets.toLocaleString()} under; ${r.lines_inside_band_pct}% of ${r.lines} lines inside the ±${band}% band.`;
+  const t=svgNode('text',{x:f.x1+8,y:y+20,tabindex:0,'aria-label':detail,class:'val small'},`${v>0?'+':''}${v.toFixed(2)}% · ${Math.round(r.lines_inside_band_pct)}% in band`);t.append(svgNode('title',{},detail));svg.append(t);});
+ wrap.append(svg,legend([['cur','inside the band'],['out','outside the band'],['band','±'+band+'% band']]),
+  node('p',`Actual cuts against nominal cuts, summed per knife over the window. Positive is overrun, negative is underrun. The band is a demo setting; the plant's acceptance range is an open input.`,'muted'));
+}
 function showChart(chart) {
  if(chart.type==='calendar_heatmap')return showHeatmap(chart);
  const rows=chart.rows||[], isSpeed=chart.unit==='ft/min'&&rows.some(r=>r.target_fpm), isPareto=rows.length&&rows[0].cumulative_pct!==undefined, isWaste=rows.length&&rows[0].pct_of_gross!==undefined&&rows[0].category!==undefined;
@@ -307,6 +327,7 @@ function showChart(chart) {
  const wrap=chartCard(title,notes);
  if(!rows.length)wrap.append(node('p','No records match this filter.','muted'));
  else if(chart.type==='line')lineChart(chart,wrap);
+ else if(chart.type==='range')rangeChart(chart,wrap);
  else if(isPareto)paretoChart(chart,wrap);
  else if(isWaste)wasteChart(chart,wrap);
  else if(chart.y2)pairedChart(chart,wrap);
@@ -314,9 +335,9 @@ function showChart(chart) {
  else barChart(chart,wrap);
  $('charts').append(wrap);
 }
-const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %'};
+const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'Speed w/o stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change'};
 function showTable(data){
- const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`};
+ const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'Totals by grade',get_overrun:'Over/under-run by knife (nominal vs actual cuts)'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));$('tables').append(box);return;}

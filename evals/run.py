@@ -173,6 +173,10 @@ def evidence_vocabulary(trace):
                         strings.add(value)
                     else:
                         numbers.update(renderings(value))
+        # Envelope scalars (a window total, a band width, a gross area) are tool output as much as rows are.
+        for value in data.values():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                numbers.update(renderings(value))
         numbers.update(renderings(len(data.get('excluded_records', []))))
         for record in data.get('excluded_records', []):
             strings.update(str(v) for v in record.values() if isinstance(v, str))
