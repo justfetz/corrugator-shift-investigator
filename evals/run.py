@@ -157,7 +157,11 @@ def evidence_vocabulary(trace):
             strings.add(result['error']['message'])
             continue
         data = result['data']
-        row_sets = [data.get('rows', [])] + [c['rows'] for c in data.get('components', [])] + [data.get('weekday_profile', [])]
+        # Every row set the envelope carries: rows, chart components, the weekday profile, reported
+        # sub-reason details, and any other list of records a tool adds.
+        row_sets = [data.get('rows', [])] + [c['rows'] for c in data.get('components', [])]
+        row_sets += [v for k, v in data.items() if k not in ('rows', 'components', 'excluded_records')
+                     and isinstance(v, list) and v and all(isinstance(r, dict) for r in v)]
         # Period evidence names its windows (labels carry dates) and the weeks it could not find.
         for window in (data.get('window'), data.get('previous_window')):
             if isinstance(window, dict):

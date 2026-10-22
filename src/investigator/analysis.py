@@ -75,7 +75,7 @@ TABLES = {
     "orders": "record_id VARCHAR, shift INTEGER, setup_id VARCHAR, order_id VARCHAR, grade VARCHAR, knife VARCHAR, width_in DOUBLE, length_in DOUBLE, outs INTEGER, cuts INTEGER, requested_sheets INTEGER, planned_sheets INTEGER, produced_sheets INTEGER, remaining_before INTEGER, remaining_after INTEGER",
     # One line per (setup, reject reason): the fixture writes one line per setup,
     # the record families up to three reasons per knife position.
-    "rejects": "id VARCHAR, shift INTEGER, reason VARCHAR, sheets DOUBLE, sqft DOUBLE",
+    "rejects": "id VARCHAR, shift INTEGER, reason VARCHAR, detail VARCHAR, sheets DOUBLE, sqft DOUBLE",
 }
 STOP_KINDS = ("Maintenance", "Operator", "PM")
 
@@ -237,7 +237,7 @@ class Analysis:
                     *[number(knife,k) for k in ('width_in','length_in','outs','cuts','order_quantity',
                         'planned_sheets','produced_sheets','remaining_before','remaining_after')]])
         self._setup_rows.append([node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, datetime.fromisoformat(node.attrib["start"]), datetime.fromisoformat(node.attrib["end"]), width])
-        self._reject_rows.append([node.attrib["id"], shift, node.attrib["reject_reason"], sheets, rejects])
+        self._reject_rows.append([node.attrib["id"], shift, node.attrib["reject_reason"], node.attrib["reject_reason"], sheets, rejects])
 
     def _query(self, shift, sql, params):
         if type(shift) is not int or shift not in (1, 2, 3):
@@ -324,9 +324,14 @@ class Analysis:
         FROM setups WHERE shift = ? GROUP BY wet_end_id, grade ORDER BY wet_end_id""", [shift])
 
     def get_quality_breakdown(self, shift):
-        return self._query(shift, """SELECT reason, sum(sqft) AS rejected_sqft,
+        """Rejected area by family (the chart), with the reported sub-reasons beside as `details`."""
+        result = self._query(shift, """SELECT reason, sum(sqft) AS rejected_sqft,
         list(DISTINCT id ORDER BY id) AS source_ids FROM rejects WHERE shift = ?
         GROUP BY reason ORDER BY rejected_sqft DESC, reason""", [shift])
+        detail = self._query(shift, """SELECT reason, detail, sum(sqft) AS rejected_sqft, sum(sheets) AS sheets
+        FROM rejects WHERE shift = ? GROUP BY reason, detail ORDER BY rejected_sqft DESC, reason, detail""", [shift])
+        result["details"] = [{k: v for k, v in row.items() if k != "source_ids"} for row in detail["rows"]]
+        return result
 
     def get_setup_matrix(self, shift):
         return self._query(shift, """SELECT s.id AS setup_id, s.wet_end_id, s.grade,

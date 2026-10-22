@@ -13,7 +13,7 @@
   ]
  ],
  "machine_id": "CORR-1",
- "content_hash": "7facc4a1813b305f14916267b1a791cbab03584d40955a606cecad84b66a7ae1",
+ "content_hash": "4b61a3c61953ec23f5c9ef10f398771ba28d19e1bd09852c57d81b0c8237634e",
  "cases": [
   {
    "id": "value-kpi-september-all",
@@ -32,7 +32,7 @@
    "note": "September against August: every tile, delta and change label.",
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -256,7 +256,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.028723,
+       1.02101,
        5.1e-05
       ],
       "better": [
@@ -264,11 +264,11 @@
        null
       ],
       "previous": [
-       1.171187,
+       1.171938,
        5.1e-05
       ],
       "delta": [
-       -0.142465,
+       -0.150927,
        0.000102
       ],
       "change": [
@@ -278,7 +278,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.401333,
+       0.397467,
        5.1e-05
       ],
       "better": [
@@ -286,21 +286,21 @@
        null
       ],
       "previous": [
-       0.400061,
+       0.402161,
        5.1e-05
       ],
       "delta": [
-       0.001272,
+       -0.004694,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.327182,
+       0.324182,
        5.1e-05
       ],
       "better": [
@@ -308,11 +308,11 @@
        null
       ],
       "previous": [
-       0.47076,
+       0.471813,
        5.1e-05
       ],
       "delta": [
-       -0.143578,
+       -0.14763,
        0.000102
       ],
       "change": [
@@ -322,7 +322,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.300208,
+       0.199652,
        5.1e-05
       ],
       "better": [
@@ -330,11 +330,33 @@
        null
       ],
       "previous": [
-       0.300367,
+       0.198167,
        5.1e-05
       ],
       "delta": [
-       -0.000159,
+       0.001485,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.099709,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.099797,
+       5.1e-05
+      ],
+      "delta": [
+       -8.7e-05,
        0.000102
       ],
       "change": [
@@ -344,7 +366,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.106027,
+       5.092193,
        5.1e-05
       ],
       "better": [
@@ -352,11 +374,11 @@
        null
       ],
       "previous": [
-       4.884166,
+       4.881843,
        5.1e-05
       ],
       "delta": [
-       0.221861,
+       0.21035,
        0.000102
       ],
       "change": [
@@ -366,7 +388,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.256921,
+       0.250799,
        5.1e-05
       ],
       "better": [
@@ -374,11 +396,11 @@
        null
       ],
       "previous": [
-       0.252152,
+       0.249079,
        5.1e-05
       ],
       "delta": [
-       0.004769,
+       0.00172,
        0.000102
       ],
       "change": [
@@ -520,7 +542,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       7460.6881,
+       7440.4744,
        0.051
       ],
       "better": [
@@ -528,11 +550,11 @@
        null
       ],
       "previous": [
-       6751.4827,
+       6748.272,
        0.051
       ],
       "delta": [
-       709.2054,
+       692.2024,
        0.102
       ],
       "change": [
@@ -566,7 +588,7 @@
    "note": "August's previous window is July, which is outside the dataset: previous, delta and change are null, never zero.",
    "expect": {
     "coverage": "partial",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -790,7 +812,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.171187,
+       1.171938,
        5.1e-05
       ],
       "better": [
@@ -812,7 +834,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.400061,
+       0.402161,
        5.1e-05
       ],
       "better": [
@@ -834,7 +856,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.47076,
+       0.471813,
        5.1e-05
       ],
       "better": [
@@ -856,7 +878,29 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.300367,
+       0.198167,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.099797,
        5.1e-05
       ],
       "better": [
@@ -878,7 +922,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       4.884166,
+       4.881843,
        5.1e-05
       ],
       "better": [
@@ -900,7 +944,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.252152,
+       0.249079,
        5.1e-05
       ],
       "better": [
@@ -1054,7 +1098,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       6751.4827,
+       6748.272,
        0.051
       ],
       "better": [
@@ -1099,7 +1143,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -1323,7 +1367,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.037806,
+       1.027557,
        5.1e-05
       ],
       "better": [
@@ -1331,11 +1375,11 @@
        null
       ],
       "previous": [
-       1.176069,
+       1.177847,
        5.1e-05
       ],
       "delta": [
-       -0.138263,
+       -0.15029,
        0.000102
       ],
       "change": [
@@ -1345,7 +1389,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.404436,
+       0.402953,
        5.1e-05
       ],
       "better": [
@@ -1353,11 +1397,11 @@
        null
       ],
       "previous": [
-       0.401109,
+       0.402864,
        5.1e-05
       ],
       "delta": [
-       0.003327,
+       8.9e-05,
        0.000102
       ],
       "change": [
@@ -1367,7 +1411,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.329978,
+       0.324898,
        5.1e-05
       ],
       "better": [
@@ -1375,11 +1419,11 @@
        null
       ],
       "previous": [
-       0.472135,
+       0.478014,
        5.1e-05
       ],
       "delta": [
-       -0.142157,
+       -0.153116,
        0.000102
       ],
       "change": [
@@ -1389,7 +1433,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.303392,
+       0.199519,
        5.1e-05
       ],
       "better": [
@@ -1397,11 +1441,11 @@
        null
       ],
       "previous": [
-       0.302825,
+       0.196148,
        5.1e-05
       ],
       "delta": [
-       0.000568,
+       0.003372,
        0.000102
       ],
       "change": [
@@ -1409,9 +1453,9 @@
        null
       ]
      },
-     "metric=bale_pct": {
+     "metric=moisture_pct": {
       "current": [
-       5.150629,
+       0.100187,
        5.1e-05
       ],
       "better": [
@@ -1419,11 +1463,33 @@
        null
       ],
       "previous": [
-       4.943053,
+       0.100822,
        5.1e-05
       ],
       "delta": [
-       0.207576,
+       -0.000635,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       5.080647,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.962632,
+       5.1e-05
+      ],
+      "delta": [
+       0.118015,
        0.000102
       ],
       "change": [
@@ -1433,7 +1499,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.27946,
+       0.219728,
        5.1e-05
       ],
       "better": [
@@ -1441,15 +1507,15 @@
        null
       ],
       "previous": [
-       0.261171,
+       0.278972,
        5.1e-05
       ],
       "delta": [
-       0.01829,
+       -0.059245,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -1587,7 +1653,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       2435.8955,
+       2402.7988,
        0.051
       ],
       "better": [
@@ -1595,11 +1661,11 @@
        null
       ],
       "previous": [
-       2264.4074,
+       2273.3767,
        0.051
       ],
       "delta": [
-       171.4881,
+       129.4221,
        0.102
       ],
       "change": [
@@ -1632,7 +1698,7 @@
    },
    "expect": {
     "coverage": "partial",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -1856,7 +1922,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.176069,
+       1.177847,
        5.1e-05
       ],
       "better": [
@@ -1878,7 +1944,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.401109,
+       0.402864,
        5.1e-05
       ],
       "better": [
@@ -1900,7 +1966,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.472135,
+       0.478014,
        5.1e-05
       ],
       "better": [
@@ -1922,7 +1988,29 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.302825,
+       0.196148,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.100822,
        5.1e-05
       ],
       "better": [
@@ -1944,7 +2032,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       4.943053,
+       4.962632,
        5.1e-05
       ],
       "better": [
@@ -1966,7 +2054,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.261171,
+       0.278972,
        5.1e-05
       ],
       "better": [
@@ -2120,7 +2208,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       2264.4074,
+       2273.3767,
        0.051
       ],
       "better": [
@@ -2165,7 +2253,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -2389,7 +2477,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.022469,
+       1.017594,
        5.1e-05
       ],
       "better": [
@@ -2397,11 +2485,11 @@
        null
       ],
       "previous": [
-       1.170939,
+       1.169855,
        5.1e-05
       ],
       "delta": [
-       -0.14847,
+       -0.152262,
        0.000102
       ],
       "change": [
@@ -2411,7 +2499,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.39735,
+       0.393853,
        5.1e-05
       ],
       "better": [
@@ -2419,11 +2507,11 @@
        null
       ],
       "previous": [
-       0.399856,
+       0.401568,
        5.1e-05
       ],
       "delta": [
-       -0.002506,
+       -0.007715,
        0.000102
       ],
       "change": [
@@ -2433,7 +2521,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.325955,
+       0.324887,
        5.1e-05
       ],
       "better": [
@@ -2441,11 +2529,11 @@
        null
       ],
       "previous": [
-       0.472932,
+       0.470389,
        5.1e-05
       ],
       "delta": [
-       -0.146976,
+       -0.145502,
        0.000102
       ],
       "change": [
@@ -2455,7 +2543,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.299164,
+       0.200606,
        5.1e-05
       ],
       "better": [
@@ -2463,11 +2551,11 @@
        null
       ],
       "previous": [
-       0.298152,
+       0.198411,
        5.1e-05
       ],
       "delta": [
-       0.001012,
+       0.002195,
        0.000102
       ],
       "change": [
@@ -2475,9 +2563,9 @@
        null
       ]
      },
-     "metric=bale_pct": {
+     "metric=moisture_pct": {
       "current": [
-       5.081318,
+       0.098248,
        5.1e-05
       ],
       "better": [
@@ -2485,11 +2573,33 @@
        null
       ],
       "previous": [
-       4.862013,
+       0.099487,
        5.1e-05
       ],
       "delta": [
-       0.219304,
+       -0.001239,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       5.109561,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.838687,
+       5.1e-05
+      ],
+      "delta": [
+       0.270874,
        0.000102
       ],
       "change": [
@@ -2499,7 +2609,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.232633,
+       0.265753,
        5.1e-05
       ],
       "better": [
@@ -2507,15 +2617,15 @@
        null
       ],
       "previous": [
-       0.246696,
+       0.224454,
        5.1e-05
       ],
       "delta": [
-       -0.014063,
+       0.041299,
        0.000102
       ],
       "change": [
-       "better",
+       "worse",
        null
       ]
      },
@@ -2653,7 +2763,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       2514.565,
+       2528.5419,
        0.051
       ],
       "better": [
@@ -2661,11 +2771,11 @@
        null
       ],
       "previous": [
-       2268.7422,
+       2257.8575,
        0.051
       ],
       "delta": [
-       245.8228,
+       270.6844,
        0.102
       ],
       "change": [
@@ -2698,7 +2808,7 @@
    },
    "expect": {
     "coverage": "partial",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -2922,7 +3032,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.170939,
+       1.169855,
        5.1e-05
       ],
       "better": [
@@ -2944,7 +3054,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.399856,
+       0.401568,
        5.1e-05
       ],
       "better": [
@@ -2966,7 +3076,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.472932,
+       0.470389,
        5.1e-05
       ],
       "better": [
@@ -2988,7 +3098,29 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.298152,
+       0.198411,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.099487,
        5.1e-05
       ],
       "better": [
@@ -3010,7 +3142,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       4.862013,
+       4.838687,
        5.1e-05
       ],
       "better": [
@@ -3032,7 +3164,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.246696,
+       0.224454,
        5.1e-05
       ],
       "better": [
@@ -3186,7 +3318,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       2268.7422,
+       2257.8575,
        0.051
       ],
       "better": [
@@ -3231,7 +3363,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -3455,7 +3587,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.026287,
+       1.018162,
        5.1e-05
       ],
       "better": [
@@ -3463,11 +3595,11 @@
        null
       ],
       "previous": [
-       1.166553,
+       1.168145,
        5.1e-05
       ],
       "delta": [
-       -0.140266,
+       -0.149982,
        0.000102
       ],
       "change": [
@@ -3477,7 +3609,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.402354,
+       0.395834,
        5.1e-05
       ],
       "better": [
@@ -3485,21 +3617,21 @@
        null
       ],
       "previous": [
-       0.39922,
+       0.402062,
        5.1e-05
       ],
       "delta": [
-       0.003134,
+       -0.006228,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.325731,
+       0.322789,
        5.1e-05
       ],
       "better": [
@@ -3507,11 +3639,11 @@
        null
       ],
       "previous": [
-       0.467167,
+       0.467056,
        5.1e-05
       ],
       "delta": [
-       -0.141437,
+       -0.144267,
        0.000102
       ],
       "change": [
@@ -3521,7 +3653,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.298202,
+       0.198822,
        5.1e-05
       ],
       "better": [
@@ -3529,11 +3661,11 @@
        null
       ],
       "previous": [
-       0.300166,
+       0.19994,
        5.1e-05
       ],
       "delta": [
-       -0.001963,
+       -0.001118,
        0.000102
       ],
       "change": [
@@ -3541,9 +3673,9 @@
        null
       ]
      },
-     "metric=bale_pct": {
+     "metric=moisture_pct": {
       "current": [
-       5.088057,
+       0.100717,
        5.1e-05
       ],
       "better": [
@@ -3551,11 +3683,33 @@
        null
       ],
       "previous": [
-       4.847805,
+       0.099086,
        5.1e-05
       ],
       "delta": [
-       0.240252,
+       0.001631,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       5.085839,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.844974,
+       5.1e-05
+      ],
+      "delta": [
+       0.240865,
        0.000102
       ],
       "change": [
@@ -3565,7 +3719,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.259677,
+       0.265585,
        5.1e-05
       ],
       "better": [
@@ -3573,11 +3727,11 @@
        null
       ],
       "previous": [
-       0.248686,
+       0.244264,
        5.1e-05
       ],
       "delta": [
-       0.010991,
+       0.021321,
        0.000102
       ],
       "change": [
@@ -3719,7 +3873,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       2510.2276,
+       2509.1337,
        0.051
       ],
       "better": [
@@ -3727,11 +3881,11 @@
        null
       ],
       "previous": [
-       2218.3331,
+       2217.0378,
        0.051
       ],
       "delta": [
-       291.8945,
+       292.0959,
        0.102
       ],
       "change": [
@@ -3764,7 +3918,7 @@
    },
    "expect": {
     "coverage": "partial",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -3988,7 +4142,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.166553,
+       1.168145,
        5.1e-05
       ],
       "better": [
@@ -4010,7 +4164,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.39922,
+       0.402062,
        5.1e-05
       ],
       "better": [
@@ -4032,7 +4186,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.467167,
+       0.467056,
        5.1e-05
       ],
       "better": [
@@ -4054,7 +4208,29 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.300166,
+       0.19994,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.099086,
        5.1e-05
       ],
       "better": [
@@ -4076,7 +4252,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       4.847805,
+       4.844974,
        5.1e-05
       ],
       "better": [
@@ -4098,7 +4274,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.248686,
+       0.244264,
        5.1e-05
       ],
       "better": [
@@ -4252,7 +4428,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       2218.3331,
+       2217.0378,
        0.051
       ],
       "better": [
@@ -4297,7 +4473,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -4521,7 +4697,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.033841,
+       1.028862,
        5.1e-05
       ],
       "better": [
@@ -4529,11 +4705,11 @@
        null
       ],
       "previous": [
-       1.026112,
+       1.023484,
        5.1e-05
       ],
       "delta": [
-       0.007729,
+       0.005377,
        0.000102
       ],
       "change": [
@@ -4543,7 +4719,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.402865,
+       0.395734,
        5.1e-05
       ],
       "better": [
@@ -4551,21 +4727,21 @@
        null
       ],
       "previous": [
-       0.398969,
+       0.396876,
        5.1e-05
       ],
       "delta": [
-       0.003896,
+       -0.001142,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.329635,
+       0.330509,
        5.1e-05
       ],
       "better": [
@@ -4573,11 +4749,11 @@
        null
       ],
       "previous": [
-       0.326216,
+       0.327357,
        5.1e-05
       ],
       "delta": [
-       0.003419,
+       0.003153,
        0.000102
       ],
       "change": [
@@ -4587,7 +4763,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.301341,
+       0.201195,
        5.1e-05
       ],
       "better": [
@@ -4595,11 +4771,33 @@
        null
       ],
       "previous": [
-       0.300926,
+       0.199646,
        5.1e-05
       ],
       "delta": [
-       0.000415,
+       0.001549,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.101423,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.099605,
+       5.1e-05
+      ],
+      "delta": [
+       0.001818,
        0.000102
       ],
       "change": [
@@ -4609,7 +4807,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.054899,
+       5.026101,
        5.1e-05
       ],
       "better": [
@@ -4617,21 +4815,21 @@
        null
       ],
       "previous": [
-       5.050775,
+       5.064868,
        5.1e-05
       ],
       "delta": [
-       0.004124,
+       -0.038767,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=unexplained_pct": {
       "current": [
-       0.252309,
+       0.22849,
        5.1e-05
       ],
       "better": [
@@ -4639,15 +4837,15 @@
        null
       ],
       "previous": [
-       0.249905,
+       0.266625,
        5.1e-05
       ],
       "delta": [
-       0.002404,
+       -0.038135,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -4785,7 +4983,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       1654.2093,
+       1644.7851,
        0.051
       ],
       "better": [
@@ -4793,15 +4991,15 @@
        null
       ],
       "previous": [
-       1651.4462,
+       1656.0541,
        0.051
       ],
       "delta": [
-       2.7631,
+       -11.269,
        0.102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -4830,7 +5028,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -5054,7 +5252,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.037468,
+       1.02775,
        5.1e-05
       ],
       "better": [
@@ -5062,55 +5260,11 @@
        null
       ],
       "previous": [
-       1.033189,
+       1.029931,
        5.1e-05
       ],
       "delta": [
-       0.004279,
-       0.000102
-      ],
-      "change": [
-       "worse",
-       null
-      ]
-     },
-     "metric=bond_pct": {
-      "current": [
-       0.408184,
-       5.1e-05
-      ],
-      "better": [
-       "lower",
-       null
-      ],
-      "previous": [
-       0.399512,
-       5.1e-05
-      ],
-      "delta": [
-       0.008672,
-       0.000102
-      ],
-      "change": [
-       "worse",
-       null
-      ]
-     },
-     "metric=warp_pct": {
-      "current": [
-       0.328661,
-       5.1e-05
-      ],
-      "better": [
-       "lower",
-       null
-      ],
-      "previous": [
-       0.334065,
-       5.1e-05
-      ],
-      "delta": [
-       -0.005404,
+       -0.002182,
        0.000102
       ],
       "change": [
@@ -5118,9 +5272,9 @@
        null
       ]
      },
-     "metric=misalignment_pct": {
+     "metric=bond_pct": {
       "current": [
-       0.300623,
+       0.396504,
        5.1e-05
       ],
       "better": [
@@ -5128,11 +5282,77 @@
        null
       ],
       "previous": [
-       0.299611,
+       0.40191,
        5.1e-05
       ],
       "delta": [
-       0.001012,
+       -0.005406,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=warp_pct": {
+      "current": [
+       0.332289,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.32469,
+       5.1e-05
+      ],
+      "delta": [
+       0.007599,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=misalignment_pct": {
+      "current": [
+       0.196218,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.203668,
+       5.1e-05
+      ],
+      "delta": [
+       -0.007449,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.102739,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.099664,
+       5.1e-05
+      ],
+      "delta": [
+       0.003075,
        0.000102
       ],
       "change": [
@@ -5142,7 +5362,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.070008,
+       5.023095,
        5.1e-05
       ],
       "better": [
@@ -5150,11 +5370,11 @@
        null
       ],
       "previous": [
-       5.13652,
+       5.046643,
        5.1e-05
       ],
       "delta": [
-       -0.066513,
+       -0.023549,
        0.000102
       ],
       "change": [
@@ -5164,7 +5384,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.238966,
+       0.201771,
        5.1e-05
       ],
       "better": [
@@ -5172,11 +5392,11 @@
        null
       ],
       "previous": [
-       0.304881,
+       0.218261,
        5.1e-05
       ],
       "delta": [
-       -0.065915,
+       -0.016491,
        0.000102
       ],
       "change": [
@@ -5318,7 +5538,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       548.5224,
+       543.4469,
        0.051
       ],
       "better": [
@@ -5326,11 +5546,11 @@
        null
       ],
       "previous": [
-       530.4544,
+       521.1727,
        0.051
       ],
       "delta": [
-       18.068,
+       22.2742,
        0.102
       ],
       "change": [
@@ -5364,7 +5584,7 @@
    "note": "A Monday: the previous production day is the Friday before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -5588,7 +5808,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.148565,
+       1.187728,
        5.1e-05
       ],
       "better": [
@@ -5596,11 +5816,11 @@
        null
       ],
       "previous": [
-       0.998072,
+       1.01535,
        5.1e-05
       ],
       "delta": [
-       0.150493,
+       0.172377,
        0.000102
       ],
       "change": [
@@ -5610,7 +5830,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.402777,
+       0.41466,
        5.1e-05
       ],
       "better": [
@@ -5618,11 +5838,11 @@
        null
       ],
       "previous": [
-       0.408866,
+       0.423218,
        5.1e-05
       ],
       "delta": [
-       -0.006089,
+       -0.008558,
        0.000102
       ],
       "change": [
@@ -5632,7 +5852,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.438065,
+       0.472882,
        5.1e-05
       ],
       "better": [
@@ -5640,11 +5860,11 @@
        null
       ],
       "previous": [
-       0.29043,
+       0.296371,
        5.1e-05
       ],
       "delta": [
-       0.147635,
+       0.17651,
        0.000102
       ],
       "change": [
@@ -5654,7 +5874,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.307723,
+       0.195012,
        5.1e-05
       ],
       "better": [
@@ -5662,11 +5882,33 @@
        null
       ],
       "previous": [
-       0.298777,
+       0.202546,
        5.1e-05
       ],
       "delta": [
-       0.008946,
+       -0.007534,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.105174,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.093215,
+       5.1e-05
+      ],
+      "delta": [
+       0.011959,
        0.000102
       ],
       "change": [
@@ -5676,7 +5918,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.110933,
+       5.241236,
        5.1e-05
       ],
       "better": [
@@ -5684,21 +5926,21 @@
        null
       ],
       "previous": [
-       5.14221,
+       4.997372,
        5.1e-05
       ],
       "delta": [
-       -0.031277,
+       0.243863,
        0.000102
       ],
       "change": [
-       "better",
+       "worse",
        null
       ]
      },
      "metric=unexplained_pct": {
       "current": [
-       0.150341,
+       0.241481,
        5.1e-05
       ],
       "better": [
@@ -5706,15 +5948,15 @@
        null
       ],
       "previous": [
-       0.269575,
+       0.107459,
        5.1e-05
       ],
       "delta": [
-       -0.119234,
+       0.134022,
        0.000102
       ],
       "change": [
-       "better",
+       "worse",
        null
       ]
      },
@@ -5852,7 +6094,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       117.3766,
+       120.3691,
        0.051
       ],
       "better": [
@@ -5860,11 +6102,11 @@
        null
       ],
       "previous": [
-       114.5831,
+       111.3557,
        0.051
       ],
       "delta": [
-       2.7935,
+       9.0134,
        0.102
       ],
       "change": [
@@ -5897,7 +6139,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -6121,7 +6363,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.023488,
+       1.02365,
        5.1e-05
       ],
       "better": [
@@ -6129,11 +6371,11 @@
        null
       ],
       "previous": [
-       1.021894,
+       1.022754,
        5.1e-05
       ],
       "delta": [
-       0.001594,
+       0.000896,
        0.000102
       ],
       "change": [
@@ -6143,7 +6385,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.398783,
+       0.394898,
        5.1e-05
       ],
       "better": [
@@ -6151,33 +6393,11 @@
        null
       ],
       "previous": [
-       0.400987,
+       0.391881,
        5.1e-05
       ],
       "delta": [
-       -0.002204,
-       0.000102
-      ],
-      "change": [
-       "better",
-       null
-      ]
-     },
-     "metric=warp_pct": {
-      "current": [
-       0.326955,
-       5.1e-05
-      ],
-      "better": [
-       "lower",
-       null
-      ],
-      "previous": [
-       0.32134,
-       5.1e-05
-      ],
-      "delta": [
-       0.005615,
+       0.003017,
        0.000102
       ],
       "change": [
@@ -6185,9 +6405,9 @@
        null
       ]
      },
-     "metric=misalignment_pct": {
+     "metric=warp_pct": {
       "current": [
-       0.29775,
+       0.327195,
        5.1e-05
       ],
       "better": [
@@ -6195,11 +6415,55 @@
        null
       ],
       "previous": [
-       0.299567,
+       0.332032,
        5.1e-05
       ],
       "delta": [
-       -0.001817,
+       -0.004837,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=misalignment_pct": {
+      "current": [
+       0.203783,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.199704,
+       5.1e-05
+      ],
+      "delta": [
+       0.00408,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.097775,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.099138,
+       5.1e-05
+      ],
+      "delta": [
+       -0.001364,
        0.000102
       ],
       "change": [
@@ -6209,7 +6473,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.031448,
+       5.039121,
        5.1e-05
       ],
       "better": [
@@ -6217,21 +6481,21 @@
        null
       ],
       "previous": [
-       5.001752,
+       5.054542,
        5.1e-05
       ],
       "delta": [
-       0.029696,
+       -0.015421,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=unexplained_pct": {
       "current": [
-       0.242221,
+       0.249732,
        5.1e-05
       ],
       "better": [
@@ -6239,15 +6503,15 @@
        null
       ],
       "previous": [
-       0.218801,
+       0.270731,
        5.1e-05
       ],
       "delta": [
-       0.023421,
+       -0.020998,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -6385,7 +6649,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       556.7219,
+       557.5709,
        0.051
       ],
       "better": [
@@ -6393,11 +6657,11 @@
        null
       ],
       "previous": [
-       577.7557,
+       583.8535,
        0.051
       ],
       "delta": [
-       -21.0338,
+       -26.2826,
        0.102
       ],
       "change": [
@@ -6431,7 +6695,7 @@
    "note": "A Monday: the previous production day is the Friday before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -6655,7 +6919,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.123306,
+       1.147962,
        5.1e-05
       ],
       "better": [
@@ -6663,11 +6927,11 @@
        null
       ],
       "previous": [
-       0.99547,
+       0.982201,
        5.1e-05
       ],
       "delta": [
-       0.127836,
+       0.165761,
        0.000102
       ],
       "change": [
@@ -6677,7 +6941,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.400147,
+       0.396523,
        5.1e-05
       ],
       "better": [
@@ -6685,21 +6949,21 @@
        null
       ],
       "previous": [
-       0.402012,
+       0.390467,
        5.1e-05
       ],
       "delta": [
-       -0.001865,
+       0.006056,
        0.000102
       ],
       "change": [
-       "better",
+       "worse",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.419124,
+       0.452865,
        5.1e-05
       ],
       "better": [
@@ -6707,11 +6971,11 @@
        null
       ],
       "previous": [
-       0.302873,
+       0.295693,
        5.1e-05
       ],
       "delta": [
-       0.116251,
+       0.157171,
        0.000102
       ],
       "change": [
@@ -6721,7 +6985,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.304035,
+       0.199829,
        5.1e-05
       ],
       "better": [
@@ -6729,11 +6993,33 @@
        null
       ],
       "previous": [
-       0.290585,
+       0.200062,
        5.1e-05
       ],
       "delta": [
-       0.013451,
+       -0.000232,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.098745,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.095978,
+       5.1e-05
+      ],
+      "delta": [
+       0.002766,
        0.000102
       ],
       "change": [
@@ -6743,7 +7029,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.316169,
+       5.33809,
        5.1e-05
       ],
       "better": [
@@ -6751,11 +7037,11 @@
        null
       ],
       "previous": [
-       4.963783,
+       4.845975,
        5.1e-05
       ],
       "delta": [
-       0.352386,
+       0.492115,
        0.000102
       ],
       "change": [
@@ -6765,7 +7051,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.344405,
+       0.34167,
        5.1e-05
       ],
       "better": [
@@ -6773,11 +7059,11 @@
        null
       ],
       "previous": [
-       0.265501,
+       0.160961,
        5.1e-05
       ],
       "delta": [
-       0.078904,
+       0.180709,
        0.000102
       ],
       "change": [
@@ -6919,7 +7205,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       119.7294,
+       120.2231,
        0.051
       ],
       "better": [
@@ -6927,11 +7213,11 @@
        null
       ],
       "previous": [
-       117.4665,
+       114.6786,
        0.051
       ],
       "delta": [
-       2.2629,
+       5.5445,
        0.102
       ],
       "change": [
@@ -6964,7 +7250,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -7188,7 +7474,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.040788,
+       1.03529,
        5.1e-05
       ],
       "better": [
@@ -7196,11 +7482,11 @@
        null
       ],
       "previous": [
-       1.023859,
+       1.01811,
        5.1e-05
       ],
       "delta": [
-       0.016929,
+       0.017181,
        0.000102
       ],
       "change": [
@@ -7210,7 +7496,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.401723,
+       0.395819,
        5.1e-05
       ],
       "better": [
@@ -7218,21 +7504,21 @@
        null
       ],
       "previous": [
-       0.396297,
+       0.397404,
        5.1e-05
       ],
       "delta": [
-       0.005427,
+       -0.001585,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.333342,
+       0.332117,
        5.1e-05
       ],
       "better": [
@@ -7240,11 +7526,11 @@
        null
       ],
       "previous": [
-       0.323929,
+       0.324911,
        5.1e-05
       ],
       "delta": [
-       0.009413,
+       0.007206,
        0.000102
       ],
       "change": [
@@ -7254,7 +7540,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.305723,
+       0.20352,
        5.1e-05
       ],
       "better": [
@@ -7262,11 +7548,33 @@
        null
       ],
       "previous": [
-       0.303633,
+       0.195746,
        5.1e-05
       ],
       "delta": [
-       0.002089,
+       0.007774,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.103835,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.100048,
+       5.1e-05
+      ],
+      "delta": [
+       0.003787,
        0.000102
       ],
       "change": [
@@ -7276,7 +7584,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.063756,
+       5.015811,
        5.1e-05
       ],
       "better": [
@@ -7284,21 +7592,21 @@
        null
       ],
       "previous": [
-       5.021266,
+       5.093288,
        5.1e-05
       ],
       "delta": [
-       0.042489,
+       -0.077477,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=unexplained_pct": {
       "current": [
-       0.275922,
+       0.233475,
        5.1e-05
       ],
       "better": [
@@ -7306,15 +7614,15 @@
        null
       ],
       "previous": [
-       0.230637,
+       0.308407,
        5.1e-05
       ],
       "delta": [
-       0.045286,
+       -0.074932,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -7452,7 +7760,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       548.965,
+       543.7673,
        0.051
       ],
       "better": [
@@ -7460,15 +7768,15 @@
        null
       ],
       "previous": [
-       543.2361,
+       551.0279,
        0.051
       ],
       "delta": [
-       5.7289,
+       -7.2606,
        0.102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -7498,7 +7806,7 @@
    "note": "A Monday: the previous production day is the Friday before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -7722,7 +8030,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.152045,
+       1.155156,
        5.1e-05
       ],
       "better": [
@@ -7730,11 +8038,11 @@
        null
       ],
       "previous": [
-       1.002916,
+       0.965346,
        5.1e-05
       ],
       "delta": [
-       0.149129,
+       0.18981,
        0.000102
       ],
       "change": [
@@ -7744,7 +8052,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.388254,
+       0.3894,
        5.1e-05
       ],
       "better": [
@@ -7752,21 +8060,21 @@
        null
       ],
       "previous": [
-       0.401086,
+       0.37487,
        5.1e-05
       ],
       "delta": [
-       -0.012833,
+       0.01453,
        0.000102
       ],
       "change": [
-       "better",
+       "worse",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.453715,
+       0.461808,
        5.1e-05
       ],
       "better": [
@@ -7774,11 +8082,11 @@
        null
       ],
       "previous": [
-       0.289513,
+       0.289936,
        5.1e-05
       ],
       "delta": [
-       0.164202,
+       0.171872,
        0.000102
       ],
       "change": [
@@ -7788,7 +8096,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.310077,
+       0.199763,
        5.1e-05
       ],
       "better": [
@@ -7796,11 +8104,55 @@
        null
       ],
       "previous": [
-       0.312317,
+       0.198713,
        5.1e-05
       ],
       "delta": [
-       -0.00224,
+       0.00105,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.104184,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.101827,
+       5.1e-05
+      ],
+      "delta": [
+       0.002357,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       4.841601,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       5.041832,
+       5.1e-05
+      ],
+      "delta": [
+       -0.200231,
        0.000102
       ],
       "change": [
@@ -7808,31 +8160,9 @@
        null
       ]
      },
-     "metric=bale_pct": {
-      "current": [
-       5.016869,
-       5.1e-05
-      ],
-      "better": [
-       "lower",
-       null
-      ],
-      "previous": [
-       4.904189,
-       5.1e-05
-      ],
-      "delta": [
-       0.11268,
-       0.000102
-      ],
-      "change": [
-       "worse",
-       null
-      ]
-     },
      "metric=unexplained_pct": {
       "current": [
-       0.335326,
+       0.156948,
        5.1e-05
       ],
       "better": [
@@ -7840,15 +8170,15 @@
        null
       ],
       "previous": [
-       0.127265,
+       0.302478,
        5.1e-05
       ],
       "delta": [
-       0.208061,
+       -0.14553,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -7986,7 +8316,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       109.839,
+       106.0017,
        0.051
       ],
       "better": [
@@ -7994,15 +8324,15 @@
        null
       ],
       "previous": [
-       106.5154,
+       109.5049,
        0.051
       ],
       "delta": [
-       3.3236,
+       -3.5032,
        0.102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
@@ -8032,7 +8362,7 @@
    "note": "The first week has an unavailable previous window: deltas withheld, current tiles present.",
    "expect": {
     "coverage": "partial",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -8256,7 +8586,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.165143,
+       1.16659,
        5.1e-05
       ],
       "better": [
@@ -8278,7 +8608,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.402189,
+       0.404429,
        5.1e-05
       ],
       "better": [
@@ -8300,7 +8630,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.462496,
+       0.462151,
        5.1e-05
       ],
       "better": [
@@ -8322,7 +8652,29 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.300458,
+       0.19809,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       null,
+       null
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.10192,
        5.1e-05
       ],
       "better": [
@@ -8344,7 +8696,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       4.86938,
+       4.810705,
        5.1e-05
       ],
       "better": [
@@ -8366,7 +8718,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.265114,
+       0.204991,
        5.1e-05
       ],
       "better": [
@@ -8520,7 +8872,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       1594.4862,
+       1575.2727,
        0.051
       ],
       "better": [
@@ -8566,7 +8918,7 @@
    "note": "The week of 28 September has three production days: coverage partial, deltas withheld.",
    "expect": {
     "coverage": "partial",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -8790,7 +9142,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.050411,
+       1.040849,
        5.1e-05
       ],
       "better": [
@@ -8798,7 +9150,7 @@
        null
       ],
       "previous": [
-       1.033622,
+       1.019572,
        5.1e-05
       ],
       "delta": [
@@ -8812,7 +9164,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.39977,
+       0.393256,
        5.1e-05
       ],
       "better": [
@@ -8820,7 +9172,7 @@
        null
       ],
       "previous": [
-       0.400534,
+       0.399048,
        5.1e-05
       ],
       "delta": [
@@ -8834,7 +9186,7 @@
      },
      "metric=warp_pct": {
       "current": [
-       0.350848,
+       0.347329,
        5.1e-05
       ],
       "better": [
@@ -8842,7 +9194,7 @@
        null
       ],
       "previous": [
-       0.332708,
+       0.323058,
        5.1e-05
       ],
       "delta": [
@@ -8856,7 +9208,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.299793,
+       0.20064,
        5.1e-05
       ],
       "better": [
@@ -8864,7 +9216,29 @@
        null
       ],
       "previous": [
-       0.300379,
+       0.198871,
+       5.1e-05
+      ],
+      "delta": [
+       null,
+       null
+      ],
+      "change": [
+       null,
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.099625,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.098595,
        5.1e-05
       ],
       "delta": [
@@ -8878,7 +9252,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.343136,
+       5.281512,
        5.1e-05
       ],
       "better": [
@@ -8886,7 +9260,7 @@
        null
       ],
       "previous": [
-       5.225094,
+       5.273973,
        5.1e-05
       ],
       "delta": [
@@ -8900,7 +9274,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.300076,
+       0.248014,
        5.1e-05
       ],
       "better": [
@@ -8908,7 +9282,7 @@
        null
       ],
       "previous": [
-       0.235675,
+       0.298604,
        5.1e-05
       ],
       "delta": [
@@ -9054,7 +9428,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       1084.3213,
+       1071.8154,
        0.051
       ],
       "better": [
@@ -9062,7 +9436,7 @@
        null
       ],
       "previous": [
-       1766.2665,
+       1782.7893,
        0.051
       ],
       "delta": [
@@ -9102,7 +9476,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -9326,7 +9700,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.028723,
+       1.02101,
        5.1e-05
       ],
       "better": [
@@ -9334,11 +9708,11 @@
        null
       ],
       "previous": [
-       1.171187,
+       1.171938,
        5.1e-05
       ],
       "delta": [
-       -0.142465,
+       -0.150927,
        0.000102
       ],
       "change": [
@@ -9348,7 +9722,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.401333,
+       0.397467,
        5.1e-05
       ],
       "better": [
@@ -9356,21 +9730,21 @@
        null
       ],
       "previous": [
-       0.400061,
+       0.402161,
        5.1e-05
       ],
       "delta": [
-       0.001272,
+       -0.004694,
        0.000102
       ],
       "change": [
-       "worse",
+       "better",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.327182,
+       0.324182,
        5.1e-05
       ],
       "better": [
@@ -9378,11 +9752,11 @@
        null
       ],
       "previous": [
-       0.47076,
+       0.471813,
        5.1e-05
       ],
       "delta": [
-       -0.143578,
+       -0.14763,
        0.000102
       ],
       "change": [
@@ -9392,7 +9766,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.300208,
+       0.199652,
        5.1e-05
       ],
       "better": [
@@ -9400,11 +9774,33 @@
        null
       ],
       "previous": [
-       0.300367,
+       0.198167,
        5.1e-05
       ],
       "delta": [
-       -0.000159,
+       0.001485,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.099709,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.099797,
+       5.1e-05
+      ],
+      "delta": [
+       -8.7e-05,
        0.000102
       ],
       "change": [
@@ -9414,7 +9810,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.106027,
+       5.092193,
        5.1e-05
       ],
       "better": [
@@ -9422,11 +9818,11 @@
        null
       ],
       "previous": [
-       4.884166,
+       4.881843,
        5.1e-05
       ],
       "delta": [
-       0.221861,
+       0.21035,
        0.000102
       ],
       "change": [
@@ -9436,7 +9832,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.256921,
+       0.250799,
        5.1e-05
       ],
       "better": [
@@ -9444,11 +9840,11 @@
        null
       ],
       "previous": [
-       0.252152,
+       0.249079,
        5.1e-05
       ],
       "delta": [
-       0.004769,
+       0.00172,
        0.000102
       ],
       "change": [
@@ -9590,7 +9986,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       7460.6881,
+       7440.4744,
        0.051
       ],
       "better": [
@@ -9598,11 +9994,11 @@
        null
       ],
       "previous": [
-       6751.4827,
+       6748.272,
        0.051
       ],
       "delta": [
-       709.2054,
+       692.2024,
        0.102
       ],
       "change": [
@@ -9638,7 +10034,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 23,
+    "row_count": 24,
     "values": {
      "metric=volume_msf": {
       "current": [
@@ -9862,7 +10258,7 @@
      },
      "metric=dry_end_pct": {
       "current": [
-       1.148565,
+       1.187728,
        5.1e-05
       ],
       "better": [
@@ -9870,11 +10266,11 @@
        null
       ],
       "previous": [
-       1.328371,
+       1.3616,
        5.1e-05
       ],
       "delta": [
-       -0.179806,
+       -0.173873,
        0.000102
       ],
       "change": [
@@ -9884,7 +10280,7 @@
      },
      "metric=bond_pct": {
       "current": [
-       0.402777,
+       0.41466,
        5.1e-05
       ],
       "better": [
@@ -9892,21 +10288,21 @@
        null
       ],
       "previous": [
-       0.412542,
+       0.406554,
        5.1e-05
       ],
       "delta": [
-       -0.009764,
+       0.008106,
        0.000102
       ],
       "change": [
-       "better",
+       "worse",
        null
       ]
      },
      "metric=warp_pct": {
       "current": [
-       0.438065,
+       0.472882,
        5.1e-05
       ],
       "better": [
@@ -9914,11 +10310,11 @@
        null
       ],
       "previous": [
-       0.617,
+       0.643798,
        5.1e-05
       ],
       "delta": [
-       -0.178936,
+       -0.170917,
        0.000102
       ],
       "change": [
@@ -9928,7 +10324,7 @@
      },
      "metric=misalignment_pct": {
       "current": [
-       0.307723,
+       0.195012,
        5.1e-05
       ],
       "better": [
@@ -9936,11 +10332,33 @@
        null
       ],
       "previous": [
-       0.298829,
+       0.207769,
        5.1e-05
       ],
       "delta": [
-       0.008894,
+       -0.012757,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.105174,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.103479,
+       5.1e-05
+      ],
+      "delta": [
+       0.001695,
        0.000102
       ],
       "change": [
@@ -9950,7 +10368,7 @@
      },
      "metric=bale_pct": {
       "current": [
-       5.110933,
+       5.241236,
        5.1e-05
       ],
       "better": [
@@ -9958,11 +10376,11 @@
        null
       ],
       "previous": [
-       4.900006,
+       5.10498,
        5.1e-05
       ],
       "delta": [
-       0.210927,
+       0.136255,
        0.000102
       ],
       "change": [
@@ -9972,7 +10390,7 @@
      },
      "metric=unexplained_pct": {
       "current": [
-       0.150341,
+       0.241481,
        5.1e-05
       ],
       "better": [
@@ -9980,11 +10398,11 @@
        null
       ],
       "previous": [
-       0.175007,
+       0.346752,
        5.1e-05
       ],
       "delta": [
-       -0.024666,
+       -0.105271,
        0.000102
       ],
       "change": [
@@ -10126,7 +10544,7 @@
      },
      "metric=bale_msf": {
       "current": [
-       117.3766,
+       120.3691,
        0.051
       ],
       "better": [
@@ -10134,11 +10552,11 @@
        null
       ],
       "previous": [
-       121.5209,
+       126.6043,
        0.051
       ],
       "delta": [
-       -4.1443,
+       -6.2352,
        0.102
       ],
       "change": [
@@ -12115,7 +12533,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 8,
+    "row_count": 9,
     "values": {
      "category=trim": {
       "sqft": [
@@ -12163,133 +12581,155 @@
      },
      "category=bond": {
       "sqft": [
-       586409.3,
+       580760.4,
        0.051
       ],
       "pct_of_gross": [
-       0.401333,
+       0.397467,
        5.1e-05
       ],
       "previous_sqft": [
-       553012.3,
+       555915.4,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.400061,
+       0.402161,
        5.1e-05
       ],
       "delta_pct_points": [
-       0.001272,
+       -0.004694,
        0.000102
       ]
      },
      "category=warp": {
       "sqft": [
-       478062.4,
+       473680.0,
        0.051
       ],
       "pct_of_gross": [
-       0.327182,
+       0.324182,
        5.1e-05
       ],
       "previous_sqft": [
-       650740.6,
+       652196.3,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.47076,
+       0.471813,
        5.1e-05
       ],
       "delta_pct_points": [
-       -0.143578,
+       -0.14763,
        0.000102
       ]
      },
      "category=misalignment": {
       "sqft": [
-       438649.6,
+       291721.8,
        0.051
       ],
       "pct_of_gross": [
-       0.300208,
+       0.199652,
        5.1e-05
       ],
       "previous_sqft": [
-       415203.3,
+       273930.6,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.300367,
+       0.198167,
        5.1e-05
       ],
       "delta_pct_points": [
-       -0.000159,
+       0.001485,
+       0.000102
+      ]
+     },
+     "category=moisture": {
+      "sqft": [
+       145690.6,
+       0.051
+      ],
+      "pct_of_gross": [
+       0.099709,
+       5.1e-05
+      ],
+      "previous_sqft": [
+       137951.0,
+       0.051
+      ],
+      "previous_pct_of_gross": [
+       0.099797,
+       5.1e-05
+      ],
+      "delta_pct_points": [
+       -8.7e-05,
        0.000102
       ]
      },
      "category=dry_end": {
       "sqft": [
-       1503121.3,
+       1491852.8,
        0.051
       ],
       "pct_of_gross": [
-       1.028723,
+       1.02101,
        5.1e-05
       ],
       "previous_sqft": [
-       1618956.2,
+       1619993.3,
        0.051
       ],
       "previous_pct_of_gross": [
-       1.171187,
+       1.171938,
        5.1e-05
       ],
       "delta_pct_points": [
-       -0.142465,
+       -0.150927,
        0.000102
       ]
      },
      "category=bale": {
       "sqft": [
-       7460688.1,
+       7440474.4,
        0.051
       ],
       "pct_of_gross": [
-       5.106027,
+       5.092193,
        5.1e-05
       ],
       "previous_sqft": [
-       6751482.7,
+       6748272.0,
        0.051
       ],
       "previous_pct_of_gross": [
-       4.884166,
+       4.881843,
        5.1e-05
       ],
       "delta_pct_points": [
-       0.221861,
+       0.21035,
        0.000102
       ]
      },
      "category=unexplained": {
       "sqft": [
-       375401.2,
+       366456.0,
        0.051
       ],
       "pct_of_gross": [
-       0.256921,
+       0.250799,
        5.1e-05
       ],
       "previous_sqft": [
-       348554.8,
+       344307.0,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.252152,
+       0.249079,
        5.1e-05
       ],
       "delta_pct_points": [
-       0.004769,
+       0.00172,
        0.000102
       ]
      },
@@ -12322,7 +12762,7 @@
    "note": "July is unavailable: previous columns and deltas are null.",
    "expect": {
     "coverage": "partial",
-    "row_count": 8,
+    "row_count": 9,
     "values": {
      "category=trim": {
       "sqft": [
@@ -12370,11 +12810,11 @@
      },
      "category=bond": {
       "sqft": [
-       553012.3,
+       555915.4,
        0.051
       ],
       "pct_of_gross": [
-       0.400061,
+       0.402161,
        5.1e-05
       ],
       "previous_sqft": [
@@ -12392,11 +12832,11 @@
      },
      "category=warp": {
       "sqft": [
-       650740.6,
+       652196.3,
        0.051
       ],
       "pct_of_gross": [
-       0.47076,
+       0.471813,
        5.1e-05
       ],
       "previous_sqft": [
@@ -12414,11 +12854,33 @@
      },
      "category=misalignment": {
       "sqft": [
-       415203.3,
+       273930.6,
        0.051
       ],
       "pct_of_gross": [
-       0.300367,
+       0.198167,
+       5.1e-05
+      ],
+      "previous_sqft": [
+       null,
+       null
+      ],
+      "previous_pct_of_gross": [
+       null,
+       null
+      ],
+      "delta_pct_points": [
+       null,
+       null
+      ]
+     },
+     "category=moisture": {
+      "sqft": [
+       137951.0,
+       0.051
+      ],
+      "pct_of_gross": [
+       0.099797,
        5.1e-05
       ],
       "previous_sqft": [
@@ -12436,11 +12898,11 @@
      },
      "category=dry_end": {
       "sqft": [
-       1618956.2,
+       1619993.3,
        0.051
       ],
       "pct_of_gross": [
-       1.171187,
+       1.171938,
        5.1e-05
       ],
       "previous_sqft": [
@@ -12458,11 +12920,11 @@
      },
      "category=bale": {
       "sqft": [
-       6751482.7,
+       6748272.0,
        0.051
       ],
       "pct_of_gross": [
-       4.884166,
+       4.881843,
        5.1e-05
       ],
       "previous_sqft": [
@@ -12480,11 +12942,11 @@
      },
      "category=unexplained": {
       "sqft": [
-       348554.8,
+       344307.0,
        0.051
       ],
       "pct_of_gross": [
-       0.252152,
+       0.249079,
        5.1e-05
       ],
       "previous_sqft": [
@@ -12528,7 +12990,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 8,
+    "row_count": 9,
     "values": {
      "category=trim": {
       "sqft": [
@@ -12576,133 +13038,155 @@
      },
      "category=bond": {
       "sqft": [
-       130450.6,
+       129766.1,
        0.051
       ],
       "pct_of_gross": [
-       0.398969,
+       0.396876,
        5.1e-05
       ],
       "previous_sqft": [
-       133893.9,
+       134286.5,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.400952,
+       0.402128,
        5.1e-05
       ],
       "delta_pct_points": [
-       -0.001983,
+       -0.005252,
        0.000102
       ]
      },
      "category=warp": {
       "sqft": [
-       106662.4,
+       107035.5,
        0.051
       ],
       "pct_of_gross": [
-       0.326216,
+       0.327357,
        5.1e-05
       ],
       "previous_sqft": [
-       122870.4,
+       121463.6,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.367942,
+       0.363729,
        5.1e-05
       ],
       "delta_pct_points": [
-       -0.041726,
+       -0.036372,
        0.000102
       ]
      },
      "category=misalignment": {
       "sqft": [
-       98393.6,
+       65278.1,
        0.051
       ],
       "pct_of_gross": [
-       0.300926,
+       0.199646,
        5.1e-05
       ],
       "previous_sqft": [
-       99351.4,
+       65881.4,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.297513,
+       0.197285,
        5.1e-05
       ],
       "delta_pct_points": [
-       0.003413,
+       0.002361,
+       0.000102
+      ]
+     },
+     "category=moisture": {
+      "sqft": [
+       32567.8,
+       0.051
+      ],
+      "pct_of_gross": [
+       0.099605,
+       5.1e-05
+      ],
+      "previous_sqft": [
+       32929.3,
+       0.051
+      ],
+      "previous_pct_of_gross": [
+       0.098609,
+       5.1e-05
+      ],
+      "delta_pct_points": [
+       0.000997,
        0.000102
       ]
      },
      "category=dry_end": {
       "sqft": [
-       335506.6,
+       334647.5,
        0.051
       ],
       "pct_of_gross": [
-       1.026112,
+       1.023484,
        5.1e-05
       ],
       "previous_sqft": [
-       356115.7,
+       354560.8,
        0.051
       ],
       "previous_pct_of_gross": [
-       1.066407,
+       1.061751,
        5.1e-05
       ],
       "delta_pct_points": [
-       -0.040296,
+       -0.038267,
        0.000102
       ]
      },
      "category=bale": {
       "sqft": [
-       1651446.2,
+       1656054.1,
        0.051
       ],
       "pct_of_gross": [
-       5.050775,
+       5.064868,
        5.1e-05
       ],
       "previous_sqft": [
-       1654366.2,
+       1637001.8,
        0.051
       ],
       "previous_pct_of_gross": [
-       4.954087,
+       4.902089,
        5.1e-05
       ],
       "delta_pct_points": [
-       0.096687,
+       0.162779,
        0.000102
       ]
      },
      "category=unexplained": {
       "sqft": [
-       81711.1,
+       87178.1,
        0.051
       ],
       "pct_of_gross": [
-       0.249905,
+       0.266625,
        5.1e-05
       ],
       "previous_sqft": [
-       86030.0,
+       70220.5,
        0.051
       ],
       "previous_pct_of_gross": [
-       0.257621,
+       0.210279,
        5.1e-05
       ],
       "delta_pct_points": [
-       -0.007717,
+       0.056346,
        0.000102
       ]
      },
@@ -14250,7 +14734,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.027222,
+       1.027449,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14324,7 +14808,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.036766,
+       1.023611,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14398,7 +14882,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.027999,
+       1.014191,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14472,7 +14956,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.031326,
+       1.017482,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14546,7 +15030,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.029331,
+       1.020291,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14620,7 +15104,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.020595,
+       1.022882,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14721,7 +15205,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.175948,
+       1.183616,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14795,7 +15279,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.15896,
+       1.160594,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14869,7 +15353,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.176809,
+       1.179847,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -14943,7 +15427,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.175007,
+       1.169909,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15017,7 +15501,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.163041,
+       1.166221,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15091,7 +15575,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.177499,
+       1.171985,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15191,7 +15675,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.036413,
+       1.029062,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15265,7 +15749,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.021029,
+       1.037873,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15339,7 +15823,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.028756,
+       1.015374,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15413,7 +15897,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.032856,
+       1.035617,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15487,7 +15971,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       1.024594,
+       1.002148,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15561,7 +16045,7 @@
        5.1e-05
       ],
       "dry_end_pct": [
-       0.991265,
+       1.019551,
        5.1e-05
       ],
       "previous_volume_msf": [
@@ -15613,15 +16097,15 @@
        null
       ],
       "actual_cuts": [
-       371331,
+       370492,
        null
       ],
       "delta_cuts": [
-       -312,
+       -1151,
        null
       ],
       "overrun_pct": [
-       -0.083952,
+       -0.309706,
        0.0051
       ],
       "nominal_sheets": [
@@ -15629,27 +16113,27 @@
        null
       ],
       "actual_sheets": [
-       601405,
+       600960,
        null
       ],
       "over_sheets": [
-       5163,
+       4595,
        null
       ],
       "under_sheets": [
-       6094,
+       5971,
        null
       ],
       "lines_inside_band_pct": [
-       83.164983,
+       83.838384,
        0.051
       ],
       "lines_over_pct": [
-       8.754209,
+       7.070707,
        0.051
       ],
       "lines_under_pct": [
-       8.080808,
+       9.090909,
        0.051
       ]
      },
@@ -15663,15 +16147,15 @@
        null
       ],
       "actual_cuts": [
-       331316,
+       331937,
        null
       ],
       "delta_cuts": [
-       98,
+       719,
        null
       ],
       "overrun_pct": [
-       0.029588,
+       0.217078,
        0.0051
       ],
       "nominal_sheets": [
@@ -15679,27 +16163,27 @@
        null
       ],
       "actual_sheets": [
-       543788,
+       544839,
        null
       ],
       "over_sheets": [
-       5187,
+       5164,
        null
       ],
       "under_sheets": [
-       4791,
+       3717,
        null
       ],
       "lines_inside_band_pct": [
-       84.191176,
+       81.985294,
        0.051
       ],
       "lines_over_pct": [
-       8.455882,
+       9.191176,
        0.051
       ],
       "lines_under_pct": [
-       7.352941,
+       8.823529,
        0.051
       ]
      },
@@ -15713,15 +16197,15 @@
        null
       ],
       "actual_cuts": [
-       51145,
+       51824,
        null
       ],
       "delta_cuts": [
-       -342,
+       337,
        null
       ],
       "overrun_pct": [
-       -0.664245,
+       0.654534,
        0.0051
       ],
       "nominal_sheets": [
@@ -15729,27 +16213,27 @@
        null
       ],
       "actual_sheets": [
-       58451,
+       59224,
        null
       ],
       "over_sheets": [
-       297,
+       813,
        null
       ],
       "under_sheets": [
-       698,
+       441,
        null
       ],
       "lines_inside_band_pct": [
-       87.179487,
+       82.051282,
        0.051
       ],
       "lines_over_pct": [
-       5.128205,
+       12.820513,
        0.051
       ],
       "lines_under_pct": [
-       7.692308,
+       5.128205,
        0.051
       ]
      },
@@ -15763,15 +16247,15 @@
        null
       ],
       "actual_cuts": [
-       753792,
+       754253,
        null
       ],
       "delta_cuts": [
-       -556,
+       -95,
        null
       ],
       "overrun_pct": [
-       -0.073706,
+       -0.012594,
        0.0051
       ],
       "nominal_sheets": [
@@ -15779,19 +16263,19 @@
        null
       ],
       "actual_sheets": [
-       1203644,
+       1205023,
        null
       ],
       "over_sheets": [
-       10647,
+       10572,
        null
       ],
       "under_sheets": [
-       11583,
+       10129,
        null
       ],
       "lines_inside_band_pct": [
-       83.881579,
+       82.894737,
        0.051
       ],
       "lines_over_pct": [
@@ -15799,7 +16283,7 @@
        0.051
       ],
       "lines_under_pct": [
-       7.730263,
+       8.717105,
        0.051
       ]
      }
@@ -15843,15 +16327,15 @@
        null
       ],
       "actual_cuts": [
-       4843056,
+       4840613,
        null
       ],
       "delta_cuts": [
-       -774,
+       -3217,
        null
       ],
       "overrun_pct": [
-       -0.015979,
+       -0.066414,
        0.0051
       ],
       "nominal_sheets": [
@@ -15859,27 +16343,27 @@
        null
       ],
       "actual_sheets": [
-       7920238,
+       7914351,
        null
       ],
       "over_sheets": [
-       71381,
+       67982,
        null
       ],
       "under_sheets": [
-       70834,
+       73322,
        null
       ],
       "lines_inside_band_pct": [
-       82.818955,
+       84.325638,
        0.051
       ],
       "lines_over_pct": [
-       8.942892,
+       7.484812,
        0.051
       ],
       "lines_under_pct": [
-       8.238153,
+       8.18955,
        0.051
       ]
      },
@@ -15893,15 +16377,15 @@
        null
       ],
       "actual_cuts": [
-       4331811,
+       4329986,
        null
       ],
       "delta_cuts": [
-       3378,
+       1553,
        null
       ],
       "overrun_pct": [
-       0.078042,
+       0.035879,
        0.0051
       ],
       "nominal_sheets": [
@@ -15909,27 +16393,27 @@
        null
       ],
       "actual_sheets": [
-       7355228,
+       7354215,
        null
       ],
       "over_sheets": [
-       67239,
+       64722,
        null
       ],
       "under_sheets": [
-       61479,
+       59975,
        null
       ],
       "lines_inside_band_pct": [
-       83.909895,
+       84.231698,
        0.051
       ],
       "lines_over_pct": [
-       8.500939,
+       7.964602,
        0.051
       ],
       "lines_under_pct": [
-       7.589166,
+       7.803701,
        0.051
       ]
      },
@@ -15943,15 +16427,15 @@
        null
       ],
       "actual_cuts": [
-       594536,
+       598390,
        null
       ],
       "delta_cuts": [
-       -2426,
+       1428,
        null
       ],
       "overrun_pct": [
-       -0.406391,
+       0.239211,
        0.0051
       ],
       "nominal_sheets": [
@@ -15959,27 +16443,27 @@
        null
       ],
       "actual_sheets": [
-       726482,
+       730752,
        null
       ],
       "over_sheets": [
-       5161,
+       7370,
        null
       ],
       "under_sheets": [
-       7607,
+       5546,
        null
       ],
       "lines_inside_band_pct": [
-       85.544554,
+       81.584158,
        0.051
       ],
       "lines_over_pct": [
-       6.138614,
+       9.70297,
        0.051
       ],
       "lines_under_pct": [
-       8.316832,
+       8.712871,
        0.051
       ]
      },
@@ -15993,15 +16477,15 @@
        null
       ],
       "actual_cuts": [
-       9769403,
+       9768989,
        null
       ],
       "delta_cuts": [
-       178,
+       -236,
        null
       ],
       "overrun_pct": [
-       0.001822,
+       -0.002416,
        0.0051
       ],
       "nominal_sheets": [
@@ -16009,27 +16493,27 @@
        null
       ],
       "actual_sheets": [
-       16001948,
+       15999318,
        null
       ],
       "over_sheets": [
-       143781,
+       140074,
        null
       ],
       "under_sheets": [
-       139920,
+       138843,
        null
       ],
       "lines_inside_band_pct": [
-       83.471074,
+       84.117858,
        0.051
       ],
       "lines_over_pct": [
-       8.575877,
+       7.833273,
        0.051
       ],
       "lines_under_pct": [
-       7.953048,
+       8.048868,
        0.051
       ]
      }
@@ -16235,7 +16719,7 @@
        null
       ],
       "value": [
-       0.462496,
+       0.462151,
        5.1e-05
       ],
       "production_days": [
@@ -16253,7 +16737,7 @@
        null
       ],
       "value": [
-       0.461231,
+       0.471677,
        5.1e-05
       ],
       "production_days": [
@@ -16271,7 +16755,7 @@
        null
       ],
       "value": [
-       0.464627,
+       0.458005,
        5.1e-05
       ],
       "production_days": [
@@ -16289,7 +16773,7 @@
        null
       ],
       "value": [
-       0.461182,
+       0.46304,
        5.1e-05
       ],
       "production_days": [
@@ -16307,7 +16791,7 @@
        null
       ],
       "value": [
-       0.367942,
+       0.363729,
        5.1e-05
       ],
       "production_days": [
@@ -16325,7 +16809,7 @@
        null
       ],
       "value": [
-       0.326216,
+       0.327357,
        5.1e-05
       ],
       "production_days": [
@@ -16343,7 +16827,7 @@
        null
       ],
       "value": [
-       0.329635,
+       0.330509,
        5.1e-05
       ],
       "production_days": [
@@ -16681,8 +17165,8 @@
        2.4800165
       ],
       "estimated_good_sqft": [
-       2362834.8,
-       2.3628358
+       2362010.7,
+       2.3620117
       ],
       "throughput_in": [
        94.230077635,
@@ -16697,8 +17181,8 @@
        1.586e-06
       ],
       "dry_end_pct": [
-       1.32837073,
-       2.328e-06
+       1.361600361,
+       2.362e-06
       ],
       "maintenance_pct": [
        0.246527778,
@@ -16771,8 +17255,8 @@
        2.2002319
       ],
       "estimated_good_sqft": [
-       2096802.6,
-       2.0968036
+       2095611.7,
+       2.0956127
       ],
       "throughput_in": [
        91.701696512,
@@ -16787,8 +17271,8 @@
        1.684e-06
       ],
       "dry_end_pct": [
-       1.301654295,
-       2.302e-06
+       1.355780432,
+       2.356e-06
       ],
       "maintenance_pct": [
        1.201388889,
@@ -16861,8 +17345,8 @@
        2.1975505
       ],
       "estimated_good_sqft": [
-       2091619.1,
-       2.0916201
+       2091205.2,
+       2.0912062
       ],
       "throughput_in": [
        94.012243063,
@@ -16877,8 +17361,8 @@
        1.732e-06
       ],
       "dry_end_pct": [
-       1.329344345,
-       2.329e-06
+       1.34817896,
+       2.348e-06
       ],
       "maintenance_pct": [
        1.392361111,
@@ -17105,24 +17589,30 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 3,
+    "row_count": 4,
     "values": {
      "reason=WARP": {
       "rejected_sqft": [
-       13640.9,
-       0.0136419
+       13658.7,
+       0.0136597
       ]
      },
      "reason=BOND": {
       "rejected_sqft": [
-       8982.3,
-       0.0089833
+       9450.3,
+       0.0094513
       ]
      },
      "reason=MISALIGNMENT": {
       "rejected_sqft": [
-       6589.8,
-       0.0065908
+       4317.1,
+       0.0043181
+      ]
+     },
+     "reason=MOISTURE": {
+      "rejected_sqft": [
+       2200.8,
+       0.0022018
       ]
      },
      "#0": {
@@ -17173,8 +17663,8 @@
        2.2965797
       ],
       "estimated_good_sqft": [
-       2182654.8,
-       2.1826558
+       2181755.4,
+       2.1817564
       ],
       "throughput_in": [
        93.957107415,
@@ -17189,8 +17679,8 @@
        1.624e-06
       ],
       "dry_end_pct": [
-       1.148565037,
-       2.149e-06
+       1.18772764,
+       2.188e-06
       ],
       "maintenance_pct": [
        1.020833333,
@@ -17263,8 +17753,8 @@
        2.2521753
       ],
       "estimated_good_sqft": [
-       2140201.5,
-       2.1402025
+       2139646.2,
+       2.1396472
       ],
       "throughput_in": [
        92.852905294,
@@ -17279,8 +17769,8 @@
        1.628e-06
       ],
       "dry_end_pct": [
-       1.123305599,
-       2.123e-06
+       1.147961772,
+       2.148e-06
       ],
       "maintenance_pct": [
        0.222222222,
@@ -17353,8 +17843,8 @@
        2.1893944
       ],
       "estimated_good_sqft": [
-       2086896.0,
-       2.086897
+       2086827.9,
+       2.0868289
       ],
       "throughput_in": [
        93.447211172,
@@ -17369,8 +17859,8 @@
        1.536e-06
       ],
       "dry_end_pct": [
-       1.152045128,
-       2.152e-06
+       1.155155579,
+       2.155e-06
       ],
       "maintenance_pct": [
        0.84375,
@@ -17567,24 +18057,30 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 3,
+    "row_count": 4,
     "values": {
      "reason=WARP": {
       "rejected_sqft": [
-       9933.6,
-       0.0099346
+       10110.8,
+       0.0101118
       ]
      },
      "reason=BOND": {
       "rejected_sqft": [
-       8500.4,
-       0.0085014
+       8525.5,
+       0.0085265
       ]
      },
      "reason=MISALIGNMENT": {
       "rejected_sqft": [
-       6788.8,
-       0.0067898
+       4373.6,
+       0.0043746
+      ]
+     },
+     "reason=MOISTURE": {
+      "rejected_sqft": [
+       2281.0,
+       0.002282
       ]
      },
      "#0": {
@@ -17635,8 +18131,8 @@
        2.2488243
       ],
       "estimated_good_sqft": [
-       2140033.0,
-       2.140034
+       2141103.6,
+       2.1411046
       ],
       "throughput_in": [
        92.0123211,
@@ -17651,8 +18147,8 @@
        1.521e-06
       ],
       "dry_end_pct": [
-       1.029845253,
-       2.03e-06
+       0.982238133,
+       1.982e-06
       ],
       "maintenance_pct": [
        0.635416667,
@@ -17725,8 +18221,8 @@
        2.3317793
       ],
       "estimated_good_sqft": [
-       2217548.5,
-       2.2175495
+       2217012.8,
+       2.2170138
       ],
       "throughput_in": [
        91.273043383,
@@ -17741,8 +18237,8 @@
        1.667e-06
       ],
       "dry_end_pct": [
-       0.975547289,
-       1.976e-06
+       0.998521172,
+       1.999e-06
       ],
       "maintenance_pct": [
        0.0,
@@ -17815,8 +18311,8 @@
        2.2185303
       ],
       "estimated_good_sqft": [
-       2110143.8,
-       2.1101448
+       2110012.9,
+       2.1100139
       ],
       "throughput_in": [
        94.878008066,
@@ -17831,8 +18327,8 @@
        1.613e-06
       ],
       "dry_end_pct": [
-       1.001753729,
-       2.002e-06
+       1.007654035,
+       2.008e-06
       ],
       "maintenance_pct": [
        0.243055556,
@@ -17999,24 +18495,30 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 3,
+    "row_count": 4,
     "values": {
      "reason=BOND": {
       "rejected_sqft": [
-       8670.1,
-       0.0086711
-      ]
-     },
-     "reason=MISALIGNMENT": {
-      "rejected_sqft": [
-       6825.6,
-       0.0068266
+       9117.2,
+       0.0091182
       ]
      },
      "reason=WARP": {
       "rejected_sqft": [
-       6728.5,
-       0.0067295
+       6617.2,
+       0.0066182
+      ]
+     },
+     "reason=MISALIGNMENT": {
+      "rejected_sqft": [
+       4367.9,
+       0.0043689
+      ]
+     },
+     "reason=MOISTURE": {
+      "rejected_sqft": [
+       2252.8,
+       0.0022538
       ]
      },
      "#0": {
@@ -18069,8 +18571,8 @@
        2.1993574
       ],
       "estimated_good_sqft": [
-       2090434.7,
-       2.0904357
+       2090005.3,
+       2.0900063
       ],
       "throughput_in": [
        92.735937258,
@@ -18085,8 +18587,8 @@
        1.627e-06
       ],
       "dry_end_pct": [
-       1.124715394,
-       2.125e-06
+       1.144239287,
+       2.144e-06
       ],
       "maintenance_pct": [
        0.222222222,
@@ -18173,8 +18675,8 @@
        2.2965797
       ],
       "estimated_good_sqft": [
-       2182654.8,
-       2.1826558
+       2181755.4,
+       2.1817564
       ],
       "throughput_in": [
        93.957107415,
@@ -18189,8 +18691,8 @@
        1.624e-06
       ],
       "dry_end_pct": [
-       1.148565037,
-       2.149e-06
+       1.18772764,
+       2.188e-06
       ],
       "maintenance_pct": [
        1.020833333,

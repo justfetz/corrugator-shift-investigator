@@ -262,13 +262,13 @@ function paretoChart(chart,wrap){
 }
 // Waste breakdown: the dry-end split as stacked bars (current and previous), then every category paired.
 function wasteChart(chart,wrap){
- const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3']];
+ const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3'],['moisture','s4']];
  const W=CHART_W(), f=frame(W,2,34), unit=chart.unit;
  const stacks=[['current',r=>r.pct_of_gross],['previous',r=>r.previous_pct_of_gross]].map(([name,get])=>({name,segments:parts.map(([k,cls])=>({k,cls,value:byKey[k]?get(byKey[k]):null}))}));
  const available=stacks.filter(s=>s.segments.every(x=>x.value!==null&&x.value!==undefined));
  if(available.length){
   const max=niceCeil(Math.max(...available.map(s=>s.segments.reduce((a,x)=>a+x.value,0))));
-  const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':'dry-end rejects split: bond, warp, misalignment'});
+  const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':'dry-end rejects split: bond, warp, misalignment, moisture'});
   xAxis(svg,f.x0,f.x1,f.top,f.top+available.length*34,max,unit);
   available.forEach((s,i)=>{const y=f.top+i*34; let x=f.x0; const total=s.segments.reduce((a,v)=>a+v.value,0);
    labelText(svg,s.name==='current'?'Dry-end now':'Dry-end previous',f.x0-8,y+18,f.chars);
@@ -276,9 +276,9 @@ function wasteChart(chart,wrap){
     const rect=svgNode('rect',{x,y:y+5,width:Math.max(0,w-gap),height:16,class:'seg '+seg.cls});rect.append(svgNode('title',{},`${seg.k}: ${fmtVal(seg.value,unit)}`));svg.append(rect);
     const inside=`${seg.k} ${seg.value.toFixed(2)}`; if(w>inside.length*6.8+14)svg.append(svgNode('text',{x:x+6,y:y+17,class:'inseg'},inside));x+=w;});
    const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,class:'val','aria-label':`${s.name}: dry-end ${fmtVal(total,unit)} = `+s.segments.map(v=>`${v.k} ${fmtVal(v.value,unit)}`).join(', ')},fmtVal(total,unit));svg.append(t);});
-  wrap.append(node('p','Dry-end rejects split by recorded reason; the three segments add to the dry-end total.','muted'),svg,legend([['s1','bond'],['s2','warp'],['s3','misalignment']]));
+  wrap.append(node('p','Dry-end rejects split by recorded reason; the four segments add to the dry-end total.','muted'),svg,legend([['s1','bond'],['s2','warp'],['s3','misalignment'],['s4','moisture']]));
  }
- const others=chart.rows.filter(r=>!['bond','warp','misalignment'].includes(r.category));
+ const others=chart.rows.filter(r=>!['bond','warp','misalignment','moisture'].includes(r.category));
  if(others.length){const sub=node('div',undefined,'subchart');sub.append(node('h4','All waste categories, % of gross'));pairedChart({...chart,rows:others},sub);wrap.append(sub);}
 }
 // Weekly trend: a 2px line with 8px markers; partial weeks are hollow and labelled; the last value is written at its point.

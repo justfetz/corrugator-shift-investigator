@@ -53,7 +53,7 @@ def plain_kpis(data, start, end, shift=None):
         "downtime_pct": stop_minutes / scheduled * 100, "downtime_minutes": stop_minutes, "stops": len(stops),
         "minutes_per_stop": stop_minutes / len(stops), "trim_pct": trim / gross * 100, "shear_pct": shear / gross * 100,
         "dry_end_pct": rejects / gross * 100, "bond_pct": reasons["BOND"] / gross * 100, "warp_pct": reasons["WARP"] / gross * 100,
-        "misalignment_pct": reasons["MISALIGNMENT"] / gross * 100, "bale_pct": bale / gross * 100,
+        "misalignment_pct": reasons["MISALIGNMENT"] / gross * 100, "moisture_pct": reasons["MOISTURE"] / gross * 100, "bale_pct": bale / gross * 100,
         "unexplained_pct": (bale - trim - shear - rejects) / gross * 100,
         "maintenance_pm_pct": (kinds["Maintenance"] + kinds["PM"]) / scheduled * 100, "operator_pct": kinds["Operator"] / scheduled * 100,
         "setups": len(setups), "paper_changes": len({s.wet_end_id for s in setups}),
@@ -114,7 +114,7 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
     assert rows["lineal_ft"]["current"] == pytest.approx(18839833.8)
     assert rows["stops"]["current"] == 558 and rows["stops"]["previous"] == 523
     assert rows["trim_pct"]["current"] == pytest.approx(3.1819, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(2.8317, abs=1e-4)
-    assert rows["warp_pct"]["current"] == pytest.approx(0.3272, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4708, abs=1e-4)
+    assert rows["warp_pct"]["current"] == pytest.approx(0.3242, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4718, abs=1e-4)
     assert rows["downtime_pct"]["current"] == pytest.approx(4.3783, abs=1e-4)
     assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.4827, abs=1e-4)
     assert rows["setups"]["current"] == 4115 and rows["paper_changes"]["current"] == 1914
@@ -223,7 +223,7 @@ def test_waste_breakdown_matches_sums_and_month_story(store, data):
     setups = between(data["dry_end_setups"], date(2026, 9, 1), date(2026, 9, 30))
     assert rows["trim"]["sqft"] == pytest.approx(sum(s.trim_sqft for s in setups), abs=0.1)
     assert rows["shear"]["sqft"] == pytest.approx(sum(s.chop_sqft for s in setups), abs=0.1)
-    assert rows["dry_end"]["sqft"] == pytest.approx(rows["bond"]["sqft"] + rows["warp"]["sqft"] + rows["misalignment"]["sqft"], abs=0.2)
+    assert rows["dry_end"]["sqft"] == pytest.approx(rows["bond"]["sqft"] + rows["warp"]["sqft"] + rows["misalignment"]["sqft"] + rows["moisture"]["sqft"], abs=0.2)
     assert rows["bale"]["sqft"] == pytest.approx(sum(sh.bale_sqft for sh in between(data["shifts"], date(2026, 9, 1), date(2026, 9, 30))), abs=0.1)
     assert rows["unexplained"]["sqft"] == pytest.approx(rows["bale"]["sqft"] - rows["trim"]["sqft"] - rows["shear"]["sqft"] - rows["dry_end"]["sqft"], abs=0.3)
     for key, metric in (("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bale", "bale_pct"), ("unexplained", "unexplained_pct")):

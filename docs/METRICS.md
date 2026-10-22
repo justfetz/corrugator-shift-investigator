@@ -49,7 +49,7 @@ A window must overlap the dataset (3 August – 30 September 2026). Coverage is 
 | downtime_pct, downtime_minutes | sum(stop seconds) / sum(scheduled seconds) × 100; sum(stop seconds) / 60 | lower |
 | stops, minutes_per_stop | count of stop records; downtime minutes / stops | lower |
 | trim_pct, shear_pct, dry_end_pct | sum(category sq ft) / sum(gross sq ft) × 100 | lower |
-| bond_pct, warp_pct, misalignment_pct | sum(reject lines of that reason) / sum(gross) × 100; the three add to dry_end_pct | lower |
+| bond_pct, warp_pct, misalignment_pct, moisture_pct | sum(reject lines of that family) / sum(gross) × 100; the four add to dry_end_pct. `get_waste_breakdown` and the daily `get_quality_breakdown` also carry `details`: the reported sub-reasons (up / down / twist / S-warp, delamination / paper) with area and share of dry-end | lower |
 | bale_pct | sum(shift `bale_sqft`) / sum(gross) × 100 — a scale reading of baled waste, not an accounting sum | lower |
 | unexplained_pct | (sum(bale) − sum(trim + shear + rejects)) / sum(gross) × 100 — what the scale weighed beyond the accounted categories (0.1–0.4 % in this dataset) | lower |
 | maintenance_pm_pct | sum(Maintenance + PM stop seconds) / scheduled × 100 (the owner's dashboard combines planned and unplanned) | lower |

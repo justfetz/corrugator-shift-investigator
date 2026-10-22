@@ -443,6 +443,15 @@ def _layout(rng, slots, planner, machine_code, outage_slots):
     return frames
 
 
+def _reject_detail(rng, reason, weights):
+    """One reported sub-reason per reject line, drawn by the family's weights (deterministic per rng)."""
+    options = R.REJECT_DETAILS[reason]
+    if len(options) == 1:
+        return options[0]
+    mix = weights[reason]
+    return rng.choices(options, weights=[mix[o] for o in options])[0]
+
+
 def _actual_cuts(rng, nominal):
     draw = rng.random()
     if draw < 0.85:
@@ -472,7 +481,8 @@ def _setup_record(rng, frame, ctx, machine_id):
     rates = {"BOND": warp["bond_rate"],
              "WARP": warp["warp_rate_by_month"].get(ctx.month, warp["warp_rate_by_month"][9])
              * (warp["monday_multiplier"] if ctx.monday else 1),
-             "MISALIGNMENT": warp["misalignment_rate"]}
+             "MISALIGNMENT": warp["misalignment_rate"], "MOISTURE": warp["moisture_rate"]}
+    detail_weights = {"WARP": warp["warp_detail_weights"], "BOND": warp["bond_detail_weights"]}
     customers, rejects = [], []
     for position, spec in enumerate(plan["specs"], 1):
         nominal = max(1, round(order_travel * 12 / spec["L"]))
@@ -484,7 +494,7 @@ def _setup_record(rng, frame, ctx, machine_id):
             sheets = min(_stochastic_round(rng, target / area), actual * spec["outs"])
             if sheets:
                 sqft = round(sheets * area, 1)
-                rejects.append(R.RejectEntry(reason, position, sheets, sqft))
+                rejects.append(R.RejectEntry(reason, position, sheets, sqft, _reject_detail(rng, reason, detail_weights)))
                 waste["hqm" if reason == "MISALIGNMENT" else "asm"] += sqft
         customers.append(R.CustomerBlock(spec["order_number"], spec["part_number"], spec["w"],
                                          spec["L"], spec["outs"], position, nominal, actual,

@@ -113,6 +113,7 @@ def test_setup_area_accounting(setups):
         for entry in setup.rejects:
             customer = setup.customers[entry.cutoff_allocation - 1]
             assert entry.reason in R.REJECT_REASONS and entry.sheets > 0
+            assert entry.detail in R.REJECT_DETAILS[entry.reason]
             assert entry.sqft == pytest.approx(entry.sheets * customer.sheet_width_in * customer.sheet_length_in / 144, abs=0.06)
             bucket = waste[entry.cutoff_allocation]
             bucket[0 if entry.reason == "MISALIGNMENT" else 1] += entry.sqft
@@ -268,9 +269,17 @@ def test_waste_bands_per_month(data):
     for month in ("202608", "202609"):
         assert 2.5 <= ratio(trim[month], gross[month]) <= 3.5
         assert 0.4 <= ratio(chop[month], gross[month]) <= 1.0
-        bond, warp, mis = (ratio(rejects[(month, r)], gross[month]) for r in R.REJECT_REASONS)
-        assert 0.8 <= bond + warp + mis <= 1.4
-        assert 0.3 <= bond <= 0.5 and 0.25 <= warp <= 0.55 and 0.2 <= mis <= 0.4
+        bond, warp, mis, moisture = (ratio(rejects[(month, r)], gross[month]) for r in R.REJECT_REASONS)
+        assert 0.9 <= bond + warp + mis + moisture <= 1.3   # "dry-end waste should be about 1%"
+        assert 0.3 <= bond <= 0.5 and 0.25 <= warp <= 0.55 and 0.15 <= mis <= 0.25 and 0.07 <= moisture <= 0.13
+        # Reported sub-reasons follow the stories' mix: up warp leads the warp family, delamination leads bond.
+        by_detail = defaultdict(float)
+        for setup in data["dry_end_setups"]:
+            if month_of(setup) == month:
+                for entry in setup.rejects:
+                    by_detail[entry.detail] += entry.sqft
+        assert by_detail["Up warp"] > by_detail["Down warp"] > by_detail["Twist warp"] > by_detail["S-warp"] > 0
+        assert by_detail["Delamination"] > by_detail["Paper / raw material"] > 0
     for shift in data["shifts"]:
         assert shift.bale_sqft > shift.side_trim_sqft + shift.chop_sqft + shift.reject_sqft
 

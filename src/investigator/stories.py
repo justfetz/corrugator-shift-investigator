@@ -42,10 +42,15 @@ SPLICER3_MISSED_SPLICE = {
 
 # Story 3: warp rejects are higher on the first production day after a weekend
 # (Monday) and higher in August than in September. Rates are fractions of
-# gross square feet; bond and misalignment stay flat.
+# gross square feet; bond, misalignment and moisture stay flat (dry-end total
+# about 1.0-1.1% of gross).
 WEEKEND_WARP = {
     "monday_multiplier": 1.5,
     "warp_rate_by_month": {8: 0.0042, 9: 0.0030},
     "bond_rate": 0.0040,
-    "misalignment_rate": 0.0030,
+    "misalignment_rate": 0.0020,
+    "moisture_rate": 0.0010,
+    # reported sub-reason mix inside a family (fractions of that family's rejects)
+    "warp_detail_weights": {"Up warp": 0.45, "Down warp": 0.25, "Twist warp": 0.20, "S-warp": 0.10},
+    "bond_detail_weights": {"Delamination": 0.60, "Paper / raw material": 0.40},
 }

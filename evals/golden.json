@@ -965,6 +965,53 @@
    }
   },
   {
+   "id": "period-warp-kind-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Which warp are we seeing this month, up warp or twist warp?",
+   "expect": {
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Dry-end by reported sub-reason: .*Up warp \\(warp\\) .* sq ft = .*% of dry-end rejects.*Twist warp"
+   }
+  },
+  {
+   "id": "period-moisture-trend",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Trend of moisture rejects over eight weeks",
+   "expect": {
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_trend",
+      "arguments": {
+       "metric": "moisture_pct",
+       "weeks": 8,
+       "anchor": "2026-09-14",
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Weekly moisture_pct"
+   }
+  },
+  {
    "id": "period-trim-trend",
    "type": "routing",
    "mode": "offline",

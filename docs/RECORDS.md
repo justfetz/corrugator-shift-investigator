@@ -71,7 +71,8 @@ The same seed gives byte-identical JSONL. Two months generate in well under thre
 
 | Field | Unit | Meaning |
 | --- | --- | --- |
-| `reason` | BOND / WARP / MISALIGNMENT | reported observation, not a proven cause |
+| `reason` | BOND / WARP / MISALIGNMENT / MOISTURE | reported family, not a proven cause |
+| `detail` | text | reported sub-reason within the family: warp is Up warp / Down warp / Twist warp / S-warp, bond is Delamination / Paper / raw material; misalignment and moisture carry their own name (owner taxonomy 2026-10-22) |
 | `cutoff_allocation` | 1-3 | whose sheets were rejected |
 | `sheets` | count | individual sheets; never multiplied by outs again |
 | `sqft` | sq ft | `sheets x sheet_width_in x sheet_length_in / 144` |
@@ -124,7 +125,7 @@ These are simulation choices (`synth.py` constants), not plant standards. `tests
 - **Time**: setups tile each shift with no gaps; a setup that would cross a shift boundary is split there (first part keeps its code, second part is `S` and shares the orders). A remainder with under 60 s of running time is absorbed; a first part under 60 s stretches the prior record instead. Across a weekend the open run simply ends.
 - **Output**: about 5.5-7.5 million gross sq ft per production day (1.8-2.5 million per shift), 150-190 setups and roughly half as many wet ends per day. Running speed is the grade target x crew factor (0.88-0.94) x shift factor x noise; displayed averages include stops.
 - **Downtime**: Maintenance + PM between 2% and 3% of scheduled minutes per month; PM is one 120-135 minute window every Thursday on shift 1 (the rebuild week runs 180 min), recorded with kind `PM` and reason `Planned maintenance`, plus unplanned maintenance stops (Monday x1.25, August x1.08), one 10-15 minute power outage per month. Operator stops separately 1-3%.
-- **Waste per month**: side trim 2.5-3.5% of gross, shear chops 0.4-1.0%, dry-end rejects 0.8-1.4% split about bond 0.40 / warp 0.30-0.42 / misalignment 0.30 points. Each missed splice adds a run of 8-14 chops (a web break).
+- **Waste per month**: side trim 2.5-3.5% of gross, shear chops 0.4-1.0%, dry-end rejects about 1.0-1.1% split bond 0.40 / warp 0.30-0.42 / misalignment 0.20 / moisture 0.10 points; inside warp about 45% up, 25% down, 20% twist, 10% S; inside bond 60% delamination, 40% paper / raw material. Rejected sheets are discarded; they are never replaced in the records. Each missed splice adds a run of 8-14 chops (a web break).
 - **Determinism**: `content_hash` is pinned in `tests/test_synth_determinism.py`; change it only with an intended generator change.
 
 ## Seeded stories

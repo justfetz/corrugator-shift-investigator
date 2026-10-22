@@ -39,21 +39,21 @@ WINDOW_SCHEMA = {"type": "object", "description": "day = one production day (Mon
                                 "anchor": {"type": "string", "description": "YYYY-MM-DD; use the selected production day"}},
                  "required": ["period", "anchor"], "additionalProperties": False}
 SHIFT_FILTER = {"type": ["integer", "null"], "enum": [None, 1, 2, 3], "description": "null = all three shifts; under selected-shift scope only the selected shift is allowed"}
-TREND_METRICS = ["trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct",
+TREND_METRICS = ["trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct", "moisture_pct",
                  "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day",
                  "lineal_per_setup", "lineal_per_paper_change"]
 PERIOD_TOOL_SCHEMAS = [
     {"name": name, "description": description, "parameters": {"type": "object", "properties": properties,
                                                               "required": required, "additionalProperties": False}}
     for name, description, properties, required in [
-        ("get_period_kpis", "Dashboard tiles for one window with the previous window of the same kind: volume MSF, lineal ft, speed with and without stops, downtime, stops, minutes per stop, trim, shear, dry-end (bond/warp/misalignment), bale, unexplained, maintenance+PM, operator, setups, paper changes; each with delta and the better direction. Ratios of sums.",
+        ("get_period_kpis", "Dashboard tiles for one window with the previous window of the same kind: volume MSF, lineal ft, speed with and without stops, downtime, stops, minutes per stop, trim, shear, dry-end (bond/warp/misalignment/moisture), bale, unexplained, maintenance+PM, operator, setups, paper changes, lineal per setup, lineal per paper change, baled MSF; each with delta and the better direction. Ratios of sums.",
          {"window": WINDOW_SCHEMA, "compare": {"type": "boolean"}, "shift": SHIFT_FILTER}, ["window"]),
         ("compare_periods", "The same KPI table for two arbitrary windows (month vs month, week vs week, day vs day); the second window is the comparison base.",
          {"current_window": WINDOW_SCHEMA, "previous_window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["current_window", "previous_window"]),
         ("get_downtime_pareto", "Stops of a window grouped by reason, place or kind, ordered by minutes or count with share and cumulative share; previous-window minutes alongside.",
          {"window": WINDOW_SCHEMA, "group_by": {"type": "string", "enum": ["reason", "place", "kind"]},
           "measure": {"type": "string", "enum": ["minutes", "count"]}, "shift": SHIFT_FILTER}, ["window"]),
-        ("get_waste_breakdown", "Trim, shear, bond, warp, misalignment, bale and the unexplained remainder as square feet and percent of gross for a window, with the previous window.",
+        ("get_waste_breakdown", "Trim, shear, bond, warp, misalignment, moisture, bale and the unexplained remainder as square feet and percent of gross for a window, with the previous window; details lists the reported sub-reasons (up / down / twist / S-warp, delamination / paper) with share of dry-end.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_stops_profile", "Stops, minutes and minutes per stop for each production day of a window, plus its Monday-to-Friday weekday profile.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
@@ -166,7 +166,7 @@ WORD_NUMBERS = {w: i for i, w in enumerate(("one", "two", "three", "four", "five
 TREND_WORDS = ((r"lineal per paper change|per paper change|per wet[- ]end|feet per paper change", "lineal_per_paper_change"),
                (r"lineal per setup|per setup|run length|feet per setup", "lineal_per_setup"),
                ("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bond", "bond_pct"),
-               ("misalignment", "misalignment_pct"), (r"dry[- ]end|reject|quality", "dry_end_pct"),
+               ("misalignment", "misalignment_pct"), ("moisture", "moisture_pct"), (r"dry[- ]end|reject|quality", "dry_end_pct"),
                ("minutes per stop", "minutes_per_stop"), ("downtime", "downtime_pct"), (r"\bstops?\b", "stops"),
                (r"running speed|speed without stops", "speed_run_fpm"), (r"speed|\bfpm\b", "speed_all_fpm"),
                (r"\bmsf\b|volume|output", "msf_per_day"))
@@ -184,8 +184,8 @@ def parse_period_request(lower, current, shifts):
     pareto = bool(re.search(r"\bpareto\b|cost the most|most (downtime )?minutes|most often|most stops|most frequent", lower)
                   and re.search(r"downtime|stop|reason|place|equipment|kind", lower))
     profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower))
-    reasons = {w for w in ("bond", "warp", "misalignment") if re.search(rf"\b{w}\b", lower)}
-    waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|bale|unexplained", lower))
+    reasons = {w for w in ("bond", "warp", "misalignment", "moisture") if re.search(rf"\b{w}\b", lower)}
+    waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|moisture|bale|unexplained|twist|s-warp|delamination", lower))
     this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
     grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
@@ -497,6 +497,8 @@ class Agent:
                 lines.append(f'Shift {shift} {data["metric"]} ranking: ' + '; '.join(f'{r["rank"]}. {r["item"]}: {r["value"]:.1f} {r["unit"]}' for r in data['rows']))
             elif result['tool'] == 'get_quality_breakdown':
                 lines.append(f'Shift {shift} dry-end rejects: '+ '; '.join(f'{r["reason"]}: {r["rejected_sqft"]:,.1f} sq ft' for r in data['rows'])+'.')
+                if data.get('details'):
+                    lines.append(f'Shift {shift} reported sub-reasons: ' + '; '.join(f'{d["detail"]}: {d["rejected_sqft"]:,.1f} sq ft' for d in data['details']) + '.')
         return lines
 
     @staticmethod
@@ -528,7 +530,7 @@ class Agent:
                 lines.append('Deltas are withheld: a window is incomplete or unavailable. Missing days are not zero production.')
             lines.append(f'Volume {cell("volume_msf", " MSF")}; lineal {cell("lineal_ft", " ft")}; speed with stops {cell("speed_all_fpm", " ft/min")}; without stops {cell("speed_run_fpm", " ft/min")}.')
             lines.append(f'Downtime {cell("downtime_pct", "%")} of scheduled minutes: {cell("downtime_minutes", " min")} over {cell("stops")} stops, {cell("minutes_per_stop", " min")} per stop. Maintenance + PM {cell("maintenance_pm_pct", "%")}; Operator {cell("operator_pct", "%")}.')
-            lines.append(f'Waste as % of gross: side trim {cell("trim_pct", "%")}; shear {cell("shear_pct", "%")}; dry-end {cell("dry_end_pct", "%")} (bond {cell("bond_pct", "%")}, warp {cell("warp_pct", "%")}, misalignment {cell("misalignment_pct", "%")}); bale {cell("bale_pct", "%")}; unexplained {cell("unexplained_pct", "%")}.')
+            lines.append(f'Waste as % of gross: side trim {cell("trim_pct", "%")}; shear {cell("shear_pct", "%")}; dry-end {cell("dry_end_pct", "%")} (bond {cell("bond_pct", "%")}, warp {cell("warp_pct", "%")}, misalignment {cell("misalignment_pct", "%")}, moisture {cell("moisture_pct", "%")}); bale {cell("bale_pct", "%")}; unexplained {cell("unexplained_pct", "%")}.')
             lines.append(f'Setup records {cell("setups")}; paper changes (distinct wet ends) {cell("paper_changes")}; lineal per setup {cell("lineal_per_setup", " ft")}; lineal per paper change {cell("lineal_per_paper_change", " ft")}; baled waste {cell("bale_msf", " MSF")}. Lower is better for downtime and waste, higher for volume, speed and run length; counts are context, not scores.')
         elif tool == 'get_downtime_pareto':
             lines.append(f'Downtime Pareto by {data["group_by"]} ({data["measure"]}): ' + ('; '.join(
@@ -539,6 +541,10 @@ class Agent:
                 f'{r["label"]} {num(r["sqft"])} sq ft = {num(r["pct_of_gross"])}% of gross' +
                 (f' (previous {num(r["previous_pct_of_gross"])}%, {num(r["delta_pct_points"], signed=True)} points)' if r['previous_pct_of_gross'] is not None else '')
                 for r in data['rows']) + '. Bale is a scale reading; unexplained is bale minus trim, shear and rejects.')
+            if data.get('details'):
+                lines.append('Dry-end by reported sub-reason: ' + '; '.join(
+                    f'{d["detail"]} ({d["reason"].lower()}) {num(d["sqft"])} sq ft = {num(d["share_of_dry_end_pct"])}% of dry-end rejects' for d in data['details']) +
+                    '. Sub-reasons are reported observations, not proven causes.')
         elif tool == 'get_stops_profile':
             lines.append('Stops per production day: ' + ('; '.join(
                 f'{r["production_day"]} ({r["weekday"]}): {num(r["stops"])} stops, {num(r["minutes"])} min, {num(r["minutes_per_stop"])} min per stop'

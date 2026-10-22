@@ -50,7 +50,7 @@ TABLES = {
     "customers": ("setup_id VARCHAR, production_date DATE, shift INTEGER, order_number VARCHAR, part_number VARCHAR, "
                   "sheet_width_in DOUBLE, sheet_length_in DOUBLE, outs INTEGER, position INTEGER, nominal_cuts INTEGER, "
                   "actual_cuts INTEGER, hqm_waste_sqft DOUBLE, asm_waste_sqft DOUBLE, stack_height INTEGER"),
-    "rejects": "setup_id VARCHAR, production_date DATE, shift INTEGER, reason VARCHAR, position INTEGER, sheets INTEGER, sqft DOUBLE",
+    "rejects": "setup_id VARCHAR, production_date DATE, shift INTEGER, reason VARCHAR, detail VARCHAR, position INTEGER, sheets INTEGER, sqft DOUBLE",
     "wet_ends": ("wet_end_id VARCHAR, production_date DATE, grade VARCHAR, width_in DOUBLE, started TIMESTAMP, "
                  "ended TIMESTAMP, feet DOUBLE, gross DOUBLE, trim DOUBLE, max_fpm DOUBLE, avg_fpm DOUBLE, setup_count INTEGER"),
     "shifts": ("production_date DATE, shift INTEGER, crew VARCHAR, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, "
@@ -76,6 +76,7 @@ KPI_CATALOG = (
     ("bond_pct", "Dry-end: bond", "% of gross", "lower"),
     ("warp_pct", "Dry-end: warp", "% of gross", "lower"),
     ("misalignment_pct", "Dry-end: misalignment", "% of gross", "lower"),
+    ("moisture_pct", "Dry-end: moisture", "% of gross", "lower"),
     ("bale_pct", "Bale (scale reading)", "% of gross", "lower"),
     ("unexplained_pct", "Unexplained (bale minus trim, shear and rejects)", "% of gross", "lower"),
     ("maintenance_pm_pct", "Maintenance + PM downtime", "% of scheduled minutes", "lower"),
@@ -87,12 +88,12 @@ KPI_CATALOG = (
     ("bale_msf", "Baled waste (scale reading)", "MSF", "lower"),
 )
 KPI_UNITS = {key: unit for key, _, unit, _ in KPI_CATALOG}
-TREND_METRICS = ("trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct",
+TREND_METRICS = ("trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct", "moisture_pct",
                  "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day",
                  "lineal_per_setup", "lineal_per_paper_change")
 TREND_UNITS = {**{m: KPI_UNITS[m] for m in TREND_METRICS if m in KPI_UNITS}, "msf_per_day": "MSF per production day"}
 WASTE_CATEGORIES = (("trim", "Side trim"), ("shear", "Shear chops"), ("bond", "Dry-end: bond"),
-                    ("warp", "Dry-end: warp"), ("misalignment", "Dry-end: misalignment"),
+                    ("warp", "Dry-end: warp"), ("misalignment", "Dry-end: misalignment"), ("moisture", "Dry-end: moisture"),
                     ("dry_end", "Dry-end rejects (all reasons)"), ("bale", "Bale (scale reading)"),
                     ("unexplained", "Unexplained (bale minus accounted waste)"))
 _STOP_GROUPS = ("reason", "place", "kind")
@@ -218,7 +219,7 @@ class RecordStore:
                                   float(c.sheet_length_in), c.number_of_outs, c.cutoff_allocation, c.nominal_cuts,
                                   c.actual_cuts, c.hqm_waste_sqft, c.asm_waste_sqft, c.stack_height_sheets])
             for r in s.rejects:
-                rejects.append([s.setup_id, day, s.shift_number, r.reason, r.cutoff_allocation, r.sheets, r.sqft])
+                rejects.append([s.setup_id, day, s.shift_number, r.reason, r.detail, r.cutoff_allocation, r.sheets, r.sqft])
         for w in data["wet_ends"]:
             wet_ends.append([w.wet_end_id, self._iso(w.production_date), w.quality_id, float(w.web_width_in), w.start, w.end,
                              w.lineal_ft, w.total_produced_sqft, w.side_trim_sqft, w.max_speed_fpm, w.avg_speed_fpm,
@@ -318,7 +319,7 @@ class RecordStore:
                                        float(c.sheet_length_in), c.number_of_outs, c.actual_cuts, None,
                                        c.nominal_cuts * c.number_of_outs, c.actual_cuts * c.number_of_outs, None, None])
                 for r in s.rejects:
-                    reject_rows.append([s.setup_id, s.shift_number, r.reason, float(r.sheets), r.sqft])
+                    reject_rows.append([s.setup_id, s.shift_number, r.reason, r.detail, float(r.sheets), r.sqft])
             shift_rows = [[sh.shift_number, float(sh.scheduled_minutes * 60),
                            f"{sh.group_name} on duty (synthetic crew label, not a person). "
                            "The record families carry no free-text shift note."]
@@ -391,6 +392,7 @@ class RecordStore:
                       f"coalesce(sum(bale),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
             "stops": f"SELECT kind, count(*) AS stops, sum(seconds) AS seconds FROM stops WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind",
             "rejects": f"SELECT reason, sum(sqft) AS sqft FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason",
+            "details": f"SELECT reason, detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason, detail ORDER BY sum(sqft) DESC, reason, detail",
         }
         sums = {}
         for name, sql in queries.items():
@@ -407,7 +409,8 @@ class RecordStore:
                  "maintenance_pm_seconds": sum(r["seconds"] for k, r in by_kind.items() if k in ("Maintenance", "PM")),
                  "operator_seconds": by_kind.get("Operator", {}).get("seconds", 0) or 0,
                  "bond_sqft": by_reason.get("BOND", 0.0), "warp_sqft": by_reason.get("WARP", 0.0),
-                 "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0),
+                 "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0), "moisture_sqft": by_reason.get("MOISTURE", 0.0),
+                 "details": sums["details"],
                  "source_rows": {"setups": setup["setup_records"], "shifts": shifts["shift_records"],
                                  "stops": sum(r["stops"] for r in sums["stops"]), "rejects": len(sums["rejects"])}}
         return total
@@ -432,6 +435,7 @@ class RecordStore:
             "bond_pct": _ratio(t["bond_sqft"], gross, 100),
             "warp_pct": _ratio(t["warp_sqft"], gross, 100),
             "misalignment_pct": _ratio(t["misalignment_sqft"], gross, 100),
+            "moisture_pct": _ratio(t["moisture_sqft"], gross, 100),
             "bale_pct": _ratio(t["bale_sqft"], gross, 100),
             "unexplained_pct": _ratio(t["bale_sqft"] - accounted, gross, 100),
             "maintenance_pm_pct": _ratio(t["maintenance_pm_seconds"], scheduled, 100),
@@ -545,7 +549,7 @@ class RecordStore:
         def areas(t):
             accounted = t["trim_sqft"] + t["shear_sqft"] + t["reject_sqft"]
             return {"trim": t["trim_sqft"], "shear": t["shear_sqft"], "bond": t["bond_sqft"], "warp": t["warp_sqft"],
-                    "misalignment": t["misalignment_sqft"], "dry_end": t["reject_sqft"], "bale": t["bale_sqft"],
+                    "misalignment": t["misalignment_sqft"], "moisture": t["moisture_sqft"], "dry_end": t["reject_sqft"], "bale": t["bale_sqft"],
                     "unexplained": t["bale_sqft"] - accounted}
         a, b = areas(now), areas(before)
         available = previous["coverage"] != "unavailable"
@@ -556,8 +560,12 @@ class RecordStore:
                          "previous_sqft": round(b[key], 1) if available else None, "previous_pct_of_gross": prior,
                          "delta_pct_points": round(pct - prior, 4) if pct is not None and prior is not None else None})
         source = {"current": now["source_rows"], "previous": before["source_rows"]}
+        details = [{"reason": d["reason"], "detail": d["detail"], "sqft": round(d["sqft"], 1), "sheets": d["sheets"],
+                    "pct_of_gross": _ratio(d["sqft"], now["gross_sqft"], 100),
+                    "share_of_dry_end_pct": _ratio(d["sqft"], now["reject_sqft"], 100, places=1)} for d in now["details"]]
         return self._envelope("get_waste_breakdown", current, previous, shift, rows, trace, started, source,
-                              gross_sqft=round(now["gross_sqft"], 1), previous_gross_sqft=round(before["gross_sqft"], 1) if available else None)
+                              gross_sqft=round(now["gross_sqft"], 1), previous_gross_sqft=round(before["gross_sqft"], 1) if available else None,
+                              details=details)
 
     def get_stops_profile(self, window, shift=None):
         """Stops, minutes and minutes per stop for every production day of the

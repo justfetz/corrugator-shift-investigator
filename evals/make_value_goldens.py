@@ -50,13 +50,13 @@ TILES = {
     "speed_all_fpm": ("higher", 1), "downtime_pct": ("lower", 4), "downtime_minutes": ("lower", 1),
     "stops": ("lower", 0), "minutes_per_stop": ("lower", 2), "trim_pct": ("lower", 4),
     "shear_pct": ("lower", 4), "dry_end_pct": ("lower", 4), "bond_pct": ("lower", 4),
-    "warp_pct": ("lower", 4), "misalignment_pct": ("lower", 4), "bale_pct": ("lower", 4),
+    "warp_pct": ("lower", 4), "misalignment_pct": ("lower", 4), "moisture_pct": ("lower", 4), "bale_pct": ("lower", 4),
     "unexplained_pct": ("lower", 4), "maintenance_pm_pct": ("lower", 4), "operator_pct": ("lower", 4),
     "setups": ("neutral", 0), "paper_changes": ("neutral", 0),
     "lineal_per_setup": ("higher", 1), "lineal_per_paper_change": ("higher", 1), "bale_msf": ("lower", 1),
 }
 TREND_PLACES = {**{k: p for k, (_, p) in TILES.items()}, "msf_per_day": 1}
-WASTE = ("trim", "shear", "bond", "warp", "misalignment", "dry_end", "bale", "unexplained")
+WASTE = ("trim", "shear", "bond", "warp", "misalignment", "moisture", "dry_end", "bale", "unexplained")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri")
 
 
@@ -139,7 +139,7 @@ class Plain:
             "bale": sum(sh.bale_sqft for sh in shifts),
             "stop_count": len(stops), "stop_seconds": sum(st.duration_sec for st in stops),
             "maintenance_pm_seconds": kinds["Maintenance"] + kinds["PM"], "operator_seconds": kinds["Operator"],
-            "bond": reasons["BOND"], "warp": reasons["WARP"], "misalignment": reasons["MISALIGNMENT"],
+            "bond": reasons["BOND"], "warp": reasons["WARP"], "misalignment": reasons["MISALIGNMENT"], "moisture": reasons["MOISTURE"],
         }
 
     @staticmethod
@@ -161,6 +161,7 @@ class Plain:
             "trim_pct": ratio(t["trim"], gross, 100), "shear_pct": ratio(t["shear"], gross, 100),
             "dry_end_pct": ratio(t["rejects"], gross, 100), "bond_pct": ratio(t["bond"], gross, 100),
             "warp_pct": ratio(t["warp"], gross, 100), "misalignment_pct": ratio(t["misalignment"], gross, 100),
+            "moisture_pct": ratio(t["moisture"], gross, 100),
             "bale_pct": ratio(t["bale"], gross, 100),
             "unexplained_pct": ratio(t["bale"] - t["trim"] - t["shear"] - t["rejects"], gross, 100),
             "maintenance_pm_pct": ratio(t["maintenance_pm_seconds"], scheduled, 100),
@@ -294,7 +295,7 @@ def waste_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=
     prev_available = plain.coverage(*prev) != "unavailable"
     def areas(t):
         return {"trim": t["trim"], "shear": t["shear"], "bond": t["bond"], "warp": t["warp"],
-                "misalignment": t["misalignment"], "dry_end": t["rejects"], "bale": t["bale"],
+                "misalignment": t["misalignment"], "moisture": t["moisture"], "dry_end": t["rejects"], "bale": t["bale"],
                 "unexplained": t["bale"] - t["trim"] - t["shear"] - t["rejects"]}
     a, b = areas(now), areas(before)
     values = {}

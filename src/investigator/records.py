@@ -17,7 +17,12 @@ from typing import get_args, get_origin
 SCHEMA = "demo-records/v1"
 WEB_WIDTHS = (98, 95, 92, 87)
 CHANGE_CODES = ("O", "S", "C")  # order change, shift split, continuation
-REJECT_REASONS = ("BOND", "WARP", "MISALIGNMENT")
+REJECT_REASONS = ("BOND", "WARP", "MISALIGNMENT", "MOISTURE")
+# Reported detail under each family (owner taxonomy 2026-10-22): warp is up / down / twist / S,
+# bond is delamination or a paper / raw-material attribution, moisture is its own family.
+REJECT_DETAILS = {"BOND": ("Delamination", "Paper / raw material"),
+                  "WARP": ("Up warp", "Down warp", "Twist warp", "S-warp"),
+                  "MISALIGNMENT": ("Misalignment",), "MOISTURE": ("Moisture",)}
 STOP_KINDS = ("Maintenance", "Operator", "PM")
 STOP_PLACES = ("Upper knife", "Lower knife", "Shear knife", "Slitter/scorer",
                "Double backer", "Splicer 1", "Splicer 2", "Splicer 3", "Splicer 4",
@@ -85,14 +90,16 @@ class CustomerBlock:
 class RejectEntry:
     """Non-protocol dry-end reject line: counted sheets of one customer block.
 
-    reason: BOND, WARP or MISALIGNMENT (a reported observation, not a cause).
+    reason: BOND, WARP, MISALIGNMENT or MOISTURE (a reported observation, not a cause).
     cutoff_allocation: the knife position whose sheets were rejected.
     sheets: individual sheets; sqft = sheets x width x length / 144.
+    detail: the reported sub-reason from REJECT_DETAILS[reason] (Up warp, Twist warp, ...).
     """
     reason: str
     cutoff_allocation: int
     sheets: int
     sqft: float
+    detail: str
 
 
 @dataclass

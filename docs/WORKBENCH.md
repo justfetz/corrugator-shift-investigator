@@ -43,7 +43,10 @@ With Period set to **Day**, these plain phrasings (the Compare group of example 
 - "Which downtime reason cost the most minutes this month?" — a Pareto with share and cumulative share and last month's minutes beside; "where did we stop most often this week" groups by place and counts.
 - "Is it bond or warp?" — the waste breakdown (day window unless you name a week or month).
 - "Stops per day this week" — per production day plus the Monday-to-Friday profile.
-- "Trend of trim over eight weeks" — a weekly line for one metric (trim, shear, dry-end, warp, bond, misalignment, speed, downtime, stops, minutes per stop, MSF per day).
+- "Trend of trim over eight weeks" — a weekly line for one metric (trim, shear, dry-end, warp, bond, misalignment, moisture, speed, downtime, stops, minutes per stop, MSF per day, lineal per setup, lineal per paper change).
+- "Volume by grade this month", "How much 275-BC did we run this week?", "Which grade is eating the most downtime?" — totals by board grade with speed against target and allocated downtime.
+- "Over/under-run by knife this week", "Are we inside the cut range?" — nominal versus actual cuts per knife, drawn as a bullet chart against the ±2 % band.
+- "Which warp are we seeing this month, up warp or twist warp?" — the waste breakdown with the reported sub-reasons.
 
 The window is anchored on the selected day: a week is its Monday–Friday production week, a month its calendar month. Windows before 3 August 2026 are unavailable, never zero, and deltas are withheld unless both windows are complete. "Yesterday" and "today" still ask you to use the day control, and a bare "Compare last week" is refused as ambiguous. Every percentage is a ratio of sums over the window (METRICS.md).
 
