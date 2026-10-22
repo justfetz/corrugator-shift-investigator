@@ -42,11 +42,15 @@ MAX_CALLS = 10
 LIFETIME_SECONDS = 60
 SOCKET_TIMEOUT = 20
 
+# The API accepts at most 20 strict tools per request. The two control tools below are validated
+# by next_step itself (finish must carry exactly result_ids, ids are filtered against the evidence),
+# so they are sent without strict mode; investigation tools take the strict slots, oldest first.
+MAX_STRICT_TOOLS = 20
 CONTROL_TOOLS = [
-    {'name': 'finish', 'description': 'Finish with successful evidence result IDs.', 'strict': True,
+    {'name': 'finish', 'description': 'Finish with successful evidence result IDs.', 'strict': False,
      'input_schema': {'type': 'object', 'properties': {'result_ids': {'type': 'array', 'items': {'type': 'string'}}},
                       'required': ['result_ids'], 'additionalProperties': False}},
-    {'name': 'cannot_answer', 'description': 'Explain that the requested evidence or capability is unavailable.', 'strict': True,
+    {'name': 'cannot_answer', 'description': 'Explain that the requested evidence or capability is unavailable.', 'strict': False,
      'input_schema': {'type': 'object', 'properties': {'reason': {'type': 'string'}}, 'required': ['reason'], 'additionalProperties': False}},
 ]
 TOOL_RULE = ('\nRespond only by calling exactly one tool per turn: an investigation tool, finish, or cannot_answer. '
@@ -91,7 +95,8 @@ def anthropic_tools(schemas):
     for schema in schemas:
         parameters = _strip_null_enum_members(deepcopy(schema['parameters']))
         parameters['required'] = list(parameters['properties'])
-        tools.append({'name': schema['name'], 'description': schema['description'], 'input_schema': parameters, 'strict': True})
+        strict = sum(t['strict'] for t in tools) < MAX_STRICT_TOOLS
+        tools.append({'name': schema['name'], 'description': schema['description'], 'input_schema': parameters, 'strict': strict})
     tools.extend(deepcopy(CONTROL_TOOLS))
     return tools
 

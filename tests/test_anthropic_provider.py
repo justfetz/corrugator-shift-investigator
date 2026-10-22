@@ -32,10 +32,23 @@ def test_tool_schemas_map_to_input_schema():
     names = [t['name'] for t in tools]
     assert names[-2:] == ['finish', 'cannot_answer'] and 'get_shift_kpis' in names
     for tool in tools:
-        assert set(tool) == {'name', 'description', 'input_schema', 'strict'} and tool['strict'] is True
+        assert set(tool) == {'name', 'description', 'input_schema', 'strict'}
         assert tool['input_schema']['additionalProperties'] is False
         assert set(tool['input_schema']['required']) == set(tool['input_schema']['properties'])
         assert 'parameters' not in tool
+    # The API refuses more than 20 strict tools per request ("Too many strict tools (21)" took every
+    # live golden down on 2026-10-22). Investigation tools are strict; the two control tools are
+    # validated locally and sent without strict mode.
+    assert sum(t['strict'] for t in tools) <= 20
+    assert all(t['strict'] for t in tools if t['name'] not in ('finish', 'cannot_answer'))
+    assert not any(t['strict'] for t in tools if t['name'] in ('finish', 'cannot_answer'))
+
+
+def test_strict_cap_holds_as_tools_grow():
+    from investigator.anthropic_provider import MAX_STRICT_TOOLS
+    many = TOOL_SCHEMAS + [{**TOOL_SCHEMAS[0], 'name': f'extra_{i}'} for i in range(8)]
+    tools = anthropic_tools(many)
+    assert len(tools) == len(many) + 2 and sum(t['strict'] for t in tools) == MAX_STRICT_TOOLS
 
 
 def test_tool_use_rounds_final_round_and_no_key_in_payload(tmp_path, analysis):
