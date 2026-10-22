@@ -15,14 +15,33 @@ NARRATIVE_SCHEMA = {'type':'object','properties':{'paragraphs':{'type':'array','
 
 
 def evidence_packet(evidence):
-    """Bound the writer's preview explicitly; row positions stay stable."""
+    """Bound the writer's preview explicitly; row positions stay stable.
+
+    `coverage` here is the coverage of the rows the writer may cite. A daily tool's coverage
+    is its own (excluded records make it partial). A period tool's envelope coverage also
+    folds in its comparison window and the weeks it could not find, which would bar every
+    finding on an August-versus-July table or an eight-week trend that starts before the
+    data; those rows are exact, so the packet reports the current window's coverage (for a
+    trend: whether any returned week is short) and discloses what is missing beside it."""
     packet=[]
     for result in evidence:
         data=result['data']
         rows=[{k:v for k,v in row.items() if k!='source_ids'} for row in data.get('rows',[])[:12]]
-        packet.append({'result_id':result['result_id'],'tool':result['tool'],
+        entry={'result_id':result['result_id'],'tool':result['tool'],
             'shift':data['shift'],'coverage':data['coverage'],'rows':rows,
-            'total_rows':len(data.get('rows',[])), 'preview_rows':len(rows)})
+            'total_rows':len(data.get('rows',[])), 'preview_rows':len(rows)}
+        if isinstance(data.get('window'),dict):
+            if 'missing_weeks' in data:
+                entry['coverage']='complete' if rows and not any(r.get('partial') for r in rows) else data['coverage']
+                entry['missing_weeks']=list(data['missing_weeks'])
+            else:
+                entry['coverage']=data['window'].get('coverage',data['coverage'])
+            previous=data.get('previous_window')
+            if isinstance(previous,dict):
+                entry['previous_window_coverage']=previous.get('coverage')
+            if data.get('day_basis_note'):
+                entry['day_basis_note']=data['day_basis_note']
+        packet.append(entry)
     return packet
 
 

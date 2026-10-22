@@ -160,3 +160,37 @@ def test_period_exports_are_free(period):
         pdf=app.pdf({'session_id':result['session_id'],'run_id':result['run_id']})
         assert pdf.startswith(b'%PDF-') and pdf.rstrip().endswith(b'%%EOF')
     finally:app.close()
+
+
+def test_period_findings_rest_on_the_rows_that_exist():
+    """A trend reaching before the dataset and a month whose previous month is unavailable are
+    'partial' envelopes, but their rows are exact: findings may cite them, and the packet discloses
+    the missing weeks / the previous window's coverage for the writer to state as a limitation."""
+    from investigator.narrative import evidence_packet
+    from investigator.record_store import default_store
+    store=default_store()
+    trend=store.get_trend('speed_all_fpm',weeks=8,anchor='2026-09-14',shift=2)
+    august=store.get_period_kpis({'period':'month','anchor':'2026-08-14'})
+    day=store.day_analysis('2026-09-14')
+    try:
+        assert trend['coverage']=='partial' and trend['missing_weeks']==['2026-07-27'] and august['coverage']=='partial'
+        packet=evidence_packet([{'result_id':'t:1','tool':'get_trend','ok':True,'data':trend},
+                                {'result_id':'a:1','tool':'get_period_kpis','ok':True,'data':august}])
+        assert packet[0]['coverage']=='complete' and packet[0]['missing_weeks']==['2026-07-27']
+        assert packet[1]['coverage']=='complete' and packet[1]['previous_window_coverage']=='unavailable'
+        rendered=render_narrative({'paragraphs':[
+            {'kind':'finding','text':'Speed reached {{0}} ft/min in the week of {{1}}.','facts':[{'result_id':'t:1','row':5,'field':'value'},{'result_id':'t:1','row':5,'field':'week_start'}]},
+            {'kind':'finding','text':'August volume was {{0}} MSF.','facts':[{'result_id':'a:1','row':0,'field':'current'}]}]},packet)
+        assert rendered[0]['text'].startswith('Speed reached 621.20 ft/min in the week of 2026-09-07')
+        # a daily result with an excluded record stays partial and still bars findings
+        corrupt=store.day_analysis('2026-09-14',corrupt=True)
+        try:
+            kpis=corrupt.get_shift_kpis(2)
+            assert kpis['coverage']!='complete'
+            bad=evidence_packet([{'result_id':'k:1','tool':'get_shift_kpis','ok':True,'data':kpis}])
+            with pytest.raises(ValueError,match='Incomplete evidence'):
+                render_narrative({'paragraphs':[{'kind':'finding','text':'Speed was {{0}} ft/min.','facts':[{'result_id':'k:1','row':0,'field':'observed_shift_fpm'}]}]},bad)
+        finally:
+            corrupt.close()
+    finally:
+        day.close()
