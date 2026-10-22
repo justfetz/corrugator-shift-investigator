@@ -12,12 +12,14 @@ Open http://127.0.0.1:8765/ on the same computer. The server is local only. No A
 
 Use Python 3.11 or newer. Run the installation commands once; on subsequent visits run only the server command in the project virtual environment. Stop it with Ctrl+C in that terminal. Python changes require a restart; frontend changes require a page reload. To use another port, append `--port 8766` and open `http://127.0.0.1:8766/`. Use the numeric loopback host, not localhost.
 
-1. Keep the default second shift and ask "Why was second shift slow? Chart downtime by reason."
-2. Read the KPI cards and charts. Grade target markers use each wet-end run's grade.
-3. Expand "How the agent got here" and a tool call. Inspect its arguments, exact SQL, bound values, returned rows, record references and time.
-4. Choose All shifts / comparison, then ask "Compare that with first shift". The default Selected shift only setting deliberately blocks that comparison. Changing scope resets the visible conversation. Follow-ups retain history while the selected controls stay unchanged.
-5. Enable "Include a bad trim record" and repeat. The affected metrics become incomplete, with the rejected source value visible in the trace.
-6. Save a Markdown report. This downloads a local report; it does not send email.
+The scope bar at the top holds the whole selection: a **Production day** date with ‹ › steppers (weekends are skipped), **Period** as segmented buttons (Day / Week / Month / 4-4-5), **Shift** as segmented buttons (1 / 2 / 3 / All shifts — "All shifts" is the 24-hour scope that used to be the "Include shifts" select), and an **Agent mode** select (Offline / free, OpenAI / your key, Anthropic / your key). A plain-English scope sentence under the bar reads the selection back, for example "Monday 14 September 2026 · shift 2 · 15:00–23:00 · compared with Friday 11 September", and says when a comparison is withheld because nothing earlier exists in the store. The "Include a bad trim record" toggle lives under the **Advanced** disclosure. Example questions are grouped by intent: Speed, Downtime, Waste, Compare and Orders.
+
+1. Keep the defaults (Day, shift 2) and ask "Why was second shift slow? Chart downtime by reason."
+2. Read the KPI tile strip and the charts. The strip shows the dashboard tiles for the selected window with the previous window beside; each tile's delta chip is colored by the tool's own `change` label (better / worse / same / neutral — the direction comes from the tool's `better` map, not from the sign) and reads "withheld" when the comparison is incomplete or the previous window is unavailable. Twelve tiles are visible by default; the rest sit behind "more". Grade target markers on the speed chart use each wet-end run's grade.
+3. Expand "How the agent got here" (or "How these tiles were produced" under the strip). The tool trail has one row per tool call — tool, arguments, row count, coverage and timing — with the exact SQL, its bound values and the full result JSON behind disclosures. The trail is execution evidence, not model reasoning.
+4. Choose **All shifts**, then ask "Compare that with first shift". With a single shift selected that comparison is deliberately refused ("Selected shift only"). Changing the scope resets the visible conversation; follow-ups retain history while the controls stay unchanged.
+5. Open **Advanced**, enable "Include a bad trim record" and repeat. The affected metrics read Incomplete, the rejected source value shows in the trail, and rankings are withheld for that shift.
+6. Save a text report or download the PDF. Both are local files; nothing is emailed.
 
 The date selector covers the record store's 43 production days: Monday to Friday from 3 August to 30 September 2026, generated once from one seed when the server starts (about four seconds) as the record families described in [RECORDS](RECORDS.md). Weekends are plant-down; selecting one is refused with the reason. Two months of one machine with three seeded effects to find; this is a demonstration dataset, not a calibrated statistical sample.
 
@@ -33,11 +35,11 @@ The offline planner is deliberately limited. Unsupported questions return a clea
 
 ### Ask about a shift, week or month versus the previous one
 
-With Production day selected, these plain phrasings run the period tools over the whole two months (offline, no model call) and chart the result:
+With Period set to **Day**, these plain phrasings (the Compare group of example questions) run the period tools over the whole two months (offline, no model call) and chart the result:
 
 - "Compare this month to last" or "How did this week go versus the previous one?" — the dashboard tiles (volume MSF, lineal feet, speed with and without stops, downtime, stops, minutes per stop, trim, shear, dry-end with its bond/warp/misalignment split, bale, unexplained, maintenance + PM, operator, setups, paper changes) with the previous window, the delta and whether lower or higher is better.
 - "How did September go versus August?" — the same table for two named months.
-- "How did shift 2 go compared with last week?" — a named shift filters the window; under Selected shift only the selected shift is used.
+- "How did shift 2 go compared with last week?" — a named shift filters the window; with a single shift selected in the Shift segment, that shift is used.
 - "Which downtime reason cost the most minutes this month?" — a Pareto with share and cumulative share and last month's minutes beside; "where did we stop most often this week" groups by place and counts.
 - "Is it bond or warp?" — the waste breakdown (day window unless you name a week or month).
 - "Stops per day this week" — per production day plus the Monday-to-Friday profile.
@@ -52,7 +54,7 @@ The window is anchored on the selected day: a week is its Monday–Friday produc
 
 Yes. Daily OpenAI mode now selects evidence, then requests a short narrative with findings, hypotheses, checks and limitations. It appears above the calculated evidence. Numeric values are inserted from validated field references; citations identify the shift, result, row and field. The writer uses up to twelve preview rows per result and must disclose missing evidence. Period reports never call the model.
 
-Use Summary + charts for an overview of speed, downtime and waste. With Include shifts set to All shifts / full 24-hour day, the default scope covers all three shifts; an explicitly named shift can narrow a daily question. The overview supplies three supporting charts per shift. Offline mode provides the same calculated overview for free; OpenAI adds a model-written interpretation.
+Use Summary + charts for an overview of speed, downtime and waste. With the Shift segment on **All shifts**, the scope covers all three shifts; an explicitly named shift can narrow a daily question. The overview supplies three supporting charts per shift. Offline mode provides the same calculated overview for free; OpenAI adds a model-written interpretation.
 
 Narrative validation rejects unknown references, unavailable values, literal numeric claims, malformed output and performance findings from incomplete evidence. It cannot prove that prose is relevant, causal or correct; number words and qualitative claims still need human review. Hypotheses are unverified. Budget exhaustion, a failed provider call or invalid narrative preserves the calculated report and charts with an explicit notice. The extra call shares the existing ten-call/time/spending limits. Live quality and endpoint compatibility still need a deliberate evaluation with a real key.
 
@@ -65,9 +67,9 @@ For “How can we be better?”, first choose an objective: fewer downtime minut
 
 ### Inspect an order
 
-Choose Production day, then Orders + quantities. Each row is an order fragment on a knife. Width and length are sheet dimensions in inches; outs multiply cuts to get sheets. Requested and planned totals repeat when an order continues. Compare remaining before/after to see what each fragment produced, and planned overrun to see cutoff rounding. The same order keeps its dimensions and grade across shift boundaries. Completed gross production includes rejects; it is not accepted delivery. See METRICS.md for the simulation choices and time/area audits.
+Choose Period **Day**, then the Orders example. Each row is an order fragment on a knife. Width and length are sheet dimensions in inches; outs multiply cuts to get sheets. Requested and planned totals repeat when an order continues. Compare remaining before/after to see what each fragment produced, and planned overrun to see cutoff rounding. The same order keeps its dimensions and grade across shift boundaries. Completed gross production includes rejects; it is not accepted delivery. See METRICS.md for the simulation choices and time/area audits.
 
-Use the calendar for the production days 3 August – 30 September 2026 (Monday to Friday). Selected shift only is the default: both the offline parser and the model tool dispatcher enforce it. Choose All shifts / comparison explicitly to compare shifts. Changing date, period, shift or scope resets the visible conversation. Question wording cannot override selected-shift scope.
+Use the production day and the Period segment for the production days 3 August – 30 September 2026 (Monday to Friday). A single shift is the default: both the offline parser and the model tool dispatcher enforce it. Choose **All shifts** explicitly to compare shifts. Changing day, period, shift or mode resets the visible conversation. Question wording cannot override the selected shift.
 
 The Setup matrix lists setup ID, wet-end ID, grade, timestamps, width, footage, speed/target, stop count and allocated downtime. Stops use half-open intervals: overlap seconds = max(0, min(stop end, setup end) - max(stop start, setup start)). A stop crossing a setup boundary counts in both intersected setups, but its minutes are divided, not duplicated. Invalid setups are excluded with incomplete coverage.
 
@@ -87,11 +89,11 @@ Period PDF export now passes regression checks for week, month and accounting vi
 
 ### Try the calendar step by step
 
-1. Select September 14, 2026, shift 2, Calendar month, then Build period report.
-2. Read the range and scope. This report has 22 shift records (one per production day); All shifts / full 24-hour day has 66. The August comparison is real data.
+1. Select September 14, 2026, shift 2, Period **Month**, then Build period report.
+2. Read the scope sentence and the KPI tile strip (September against August; delta chips colored by `change`). This report has 22 shift records (one per production day); **All shifts** has 66. The August comparison is real data.
 3. Hover, Tab to, or click a day. Its detail box gives the actual quantities; a dark day is high output within this report, not necessarily high efficiency.
-4. Choose 4-4-5 accounting period. September 14 belongs to September 1–28. September 29 belongs to September 29–October 26 and is partial because only two days exist.
-5. To investigate a heatmap date, explicitly select Production day and set the date. Clicking a cell only updates its details.
+4. Choose Period **4-4-5**. September 14 belongs to September 1–28. September 29 belongs to September 29–October 26 and is partial because only two days exist; its tiles read "withheld".
+5. To investigate a heatmap date, switch Period back to **Day** and set the date. Clicking a cell only updates its details.
 
 For formulas and why colors cannot be compared directly across reports, read [METRICS](METRICS.md). For status messages and recovery, read [TROUBLESHOOTING](TROUBLESHOOTING.md). For a repeatable browser checklist and live-model question rubric, read [TESTING](TESTING.md).
 
