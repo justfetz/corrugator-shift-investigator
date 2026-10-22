@@ -9,3 +9,5 @@ build/
 dist/
 .env.*
 !.env.example
+# Generated synthetic record files; write them under artifacts/
+*.jsonl
