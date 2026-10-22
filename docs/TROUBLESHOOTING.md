@@ -16,9 +16,9 @@ If dependencies cannot import, use the project virtual environment and run `pyth
 | --- | --- |
 | Selected shift only error | The question mentions another shift. Explicitly change the Shift control or choose All shifts / comparison. |
 | Unsupported offline question | The router recognizes a small set of patterns. Use an example button or state a metric such as downtime, speed, or quality. |
-| `unavailable` | The app shows supported next steps. Narrow the question to evidence the tools expose. |
+| `unavailable` | The planner found no evidence it could answer with, or every tool call was refused. When calls were refused the answer text is the tools' own reason (for example a window outside the dataset range 2026-08-03 to 2026-09-30); otherwise the app shows supported next steps. Narrow the question to evidence the tools expose. |
 | `complete` but the question was not answered | Completion validates evidence references, not semantic fulfillment. Check the actual tools and results; see R4. |
-| `planner_error` | Provider, planner, or final-evidence validation failed. Some failures have only a generic status. Review the trace and any displayed message; partial evidence is not a successful full answer. |
+| `planner_error` | Provider, planner, or final-evidence validation failed with evidence or a provider message in play (an investigation whose every call was refused reads `unavailable` instead). Some failures have only a generic status. Review the trace and any displayed message; partial evidence is not a successful full answer. |
 | `budget_exhausted`, `timeout`, `context_limit` | A bounded investigation stopped. Narrow the request. Retained results, if any, are partial. |
 | Session expired | Restart, reset, or session eviction invalidated the session. Use Reset conversation and ask again. |
 | Follow-up forgets a comparison | History now persists with unchanged controls. Date/scope/mode changes, resets and dataset changes intentionally clear it. Report unexpected loss with a minimal reproduction. |

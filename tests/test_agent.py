@@ -83,6 +83,46 @@ def test_cannot_fabricate_final_evidence(analysis):
     assert not result['evidence_ids']
 
 
+def test_every_tool_call_refused_surfaces_the_reason_as_unavailable():
+    """A window outside the dataset: the only tool call is refused, and the tool's own
+    reason is the visible answer (status unavailable), not a planner_error with the
+    reason buried in the trace. No chart, no table, no zero is invented."""
+    from investigator.record_store import default_store
+    analysis=default_store().day_analysis('2026-09-14')
+    try:
+        for scope in ('day','shift'):
+            context=Context('2026-09-14',2,scope=scope)
+            result=Agent(analysis).ask('How did July go?',context)
+            assert result['status']=='unavailable'
+            [step]=result['trace']
+            assert step['tool']=='get_period_kpis' and not step['ok']
+            reason=step['error']['message']
+            assert 'outside the dataset range 2026-08-03 to 2026-09-30' in reason
+            assert reason in result['sections'] and result['sections'][0].startswith('Investigation stopped: unavailable')
+            assert result['charts']==[] and result['tables']==[] and result['evidence_ids']==[]
+            assert not any('July 2026' in s or ' 0 MSF' in s or '0.0 ft' in s for s in result['sections'])
+            assert context.history[-1]['question']=='How did July go?'
+    finally:
+        analysis.close()
+
+
+def test_a_refused_call_beside_successful_evidence_is_not_unavailable(analysis):
+    """Only an investigation with NO successful evidence becomes unavailable; a refusal
+    beside real evidence keeps the bound that stopped it."""
+    planner=RepeatPlanner({'tool':'execute_shell','arguments':{'command':'anything'}})
+    result=Agent(analysis,planner,max_calls=2).ask('Show shift 2',Context(analysis.day))
+    assert result['status']=='budget_exhausted'   # a bound, not a refusal: every call refused but the loop was cut short
+    class OneGoodThenBad:
+        def __init__(self):self.n=0
+        def next_step(self,context):
+            self.n+=1
+            if self.n==1:return {'tool':'get_shift_kpis','arguments':{'shift':2}}
+            if self.n==2:return {'tool':'get_shift_kpis','arguments':{'shift':9}}
+            return {'final':['invented']}
+    result=Agent(analysis,OneGoodThenBad()).ask('Show shift 2',Context(analysis.day))
+    assert result['status']=='planner_error' and len(result['trace'])==2
+
+
 def test_incomplete_data_not_ranked():
     a=Analysis(generate(corrupt=True))
     try:

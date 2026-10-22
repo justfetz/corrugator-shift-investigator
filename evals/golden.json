@@ -691,9 +691,9 @@
       "mode": "offline",
       "scope": "day",
       "question": "How did July go?",
-      "note": "July is before the first production day. The period tool refuses the window; the answer carries no July tile and no zero. Status is planner_error today (see july-reason-surfaced).",
+      "note": "July is before the first production day. The period tool refuses the window; the answer carries no July tile and no zero, and the status is unavailable (the reason itself is checked by july-reason-surfaced).",
       "expect": {
-        "status_in": ["unavailable", "planner_error"],
+        "status": "unavailable",
         "tool_calls": 1,
         "rejected_tool_calls": 1,
         "charts": 0,
@@ -706,10 +706,14 @@
       "mode": "offline",
       "scope": "day",
       "question": "How did July go?",
-      "known_defect": "when the only tool call is refused the offline agent ends with status planner_error and the window reason ('outside the dataset range 2026-08-03 to 2026-09-30') stays in the trace; the visible answer should say why and read unavailable",
+      "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2026-08-03 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it.",
       "expect": {
         "status": "unavailable",
-        "sections_match": "outside the dataset range"
+        "tool_calls": 1,
+        "rejected_tool_calls": 1,
+        "charts": 0,
+        "tables": [],
+        "sections_match": "outside the dataset range 2026-08-03 to 2026-09-30"
       }
     },
     {

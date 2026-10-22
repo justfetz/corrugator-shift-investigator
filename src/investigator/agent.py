@@ -387,6 +387,14 @@ class Agent:
                 failure_message = getattr(exc, 'public_message', None)
                 status = 'planner_error'
                 break
+        refusals = [v['error']['message'] for v in store.values() if not v['ok']]
+        if store and len(refusals) == len(store) and (status == 'unavailable' or (status == 'planner_error' and failure_message is None)):
+            # Every tool call was refused (a window outside the dataset, a shift outside the
+            # scope, an unknown tool) and the planner had no evidence to finish on. The
+            # tools' own refusal reasons are the visible answer, not a planner failure; a
+            # provider failure keeps its public message and status.
+            status = 'unavailable'
+            failure_message = ' '.join(dict.fromkeys(refusals))
         if not final_ids:
             final_ids = [r for r, v in store.items() if v['ok'] and v['tool'] != 'render_chart']
         evidence = [store[r] for r in final_ids]

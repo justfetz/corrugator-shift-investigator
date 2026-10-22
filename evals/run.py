@@ -151,6 +151,10 @@ def evidence_vocabulary(trace):
     numbers, strings = set(RULE_CONSTANTS), set()
     for result in trace:
         if not result['ok']:
+            # A refused call's own message (a window outside the dataset range, a shift
+            # outside the scope) is tool output the answer may quote verbatim; the numbers
+            # inside it are the tool's, not the planner's.
+            strings.add(result['error']['message'])
             continue
         data = result['data']
         row_sets = [data.get('rows', [])] + [c['rows'] for c in data.get('components', [])] + [data.get('weekday_profile', [])]

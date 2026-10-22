@@ -23,7 +23,7 @@ fails the build when the committed value goldens are not what the generator prod
 | Type | What it proves | How it is checked |
 | --- | --- | --- |
 | routing | the planner picked the right tools with the right arguments | required tool calls (argument subset), optional allow-list, call count, chart and table counts, selected shifts |
-| faithfulness | every number in the answer came out of a tool row | each numeric token in the prose must equal some tool-row value under one of the application's formats (`.1f`, `.2f`, `,.0f`, `g`, …), a row count, a below-target count, or a stated rule constant |
+| faithfulness | every number in the answer came out of a tool row | each numeric token in the prose must equal some tool-row value under one of the application's formats (`.1f`, `.2f`, `,.0f`, `g`, …), a row count, a below-target count, or a stated rule constant; a refused call's own message, quoted verbatim, is tool output too |
 | grounding | findings cite evidence that exists and nothing is silently dropped | narrative citations resolve to `(result_id, row, field)` in the trace; non-limitation paragraphs cite something; a requested chart that could not be drawn is disclosed |
 | refusal | out-of-scope requests are refused rather than answered | expected `ValueError` text, or a `partial`/`unavailable` status with the disclaimer, or forbidden phrases absent; a window before the dataset is unavailable, never zero; a weekend day is refused with the calendar reason |
 | value | a tool's numbers equal a second, plain computation over the records | one tool call through the real agent loop; `expect.values` maps a row selector to fields to `[expected, tolerance]`; `row_count`, `coverage` and reported `excluded_records` alongside |
@@ -121,10 +121,12 @@ fixture is recorded in this repository yet.
 
 A case may carry `known_defect`. It is run, shown as `xfail` in the table with
 the defect text, and does not count against the exit status; when it starts
-passing the note says to remove the marker. Today: `july-reason-surfaced` — the
-only tool call is refused with the window reason, but the offline agent ends
-with status `planner_error` and the reason stays in the trace instead of the
-answer.
+passing the note says to remove the marker. None is marked today. The last one,
+`july-reason-surfaced`, recorded that an investigation whose only tool call was
+refused ended `planner_error` with the window reason left in the trace; the
+agent now answers `unavailable` with the tool's own reason as the text (the
+offline planner and both live adapters alike), and the case is an ordinary
+passing refusal case.
 
 ## What this does not prove
 

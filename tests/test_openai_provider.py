@@ -90,6 +90,35 @@ def test_atomic_budget_reservations(tmp_path):
         assert sum(pool.map(attempt,range(4)))==1
 
 
+@pytest.mark.parametrize('ending',['finish','cannot_answer'])
+def test_only_tool_call_refused_ends_unavailable_with_the_tool_reason(tmp_path,ending):
+    """The model's only function call asks for July, which the store refuses; whether it
+    then finishes on the failed id or calls cannot_answer, the answer reads unavailable
+    with the tool's own reason, the same as the offline and Anthropic paths."""
+    from investigator.record_store import default_store
+    calls=[]
+    def send(payload,key,timeout):
+        calls.append(payload)
+        if len(calls)==1:
+            return response('get_period_kpis',{'window':{'period':'month','anchor':'2026-07-01'},'compare':True,'shift':None})
+        outputs=[i for i in payload['input'] if i.get('type')=='function_call_output']
+        failed=json.loads(outputs[-1]['output'])
+        assert failed['ok'] is False and 'outside the dataset range' in failed['error']['message']
+        if ending=='finish':
+            return response('finish',{'result_ids':[failed['result_id']]},'call-2')
+        return response('cannot_answer',{'reason':'July is not in the dataset'},'call-2')
+    a=default_store().day_analysis('2026-09-14')
+    planner=OpenAIPlanner(KEY,Budget(tmp_path/'budget.db'),send)
+    try:
+        result=Agent(a,planner,max_calls=10,max_seconds=60).ask('How did July go?',Context('2026-09-14',2,scope='day'))
+        assert result['status']=='unavailable' and result['usage']['model_calls']==2
+        [step]=result['trace']
+        assert step['tool']=='get_period_kpis' and not step['ok']
+        assert step['error']['message'] in result['sections'] and 'outside the dataset range 2026-08-03 to 2026-09-30' in step['error']['message']
+        assert result['charts']==[] and result['tables']==[] and result['evidence_ids']==[] and result['narrative_status']=='unavailable'
+    finally:planner.close();a.close()
+
+
 def test_incomplete_response_executes_no_tools(tmp_path):
     planner=OpenAIPlanner(KEY,Budget(tmp_path/'budget.db'),lambda *args:response('get_shift_kpis',{'shift':2},status='incomplete'))
     a=Analysis(generate())

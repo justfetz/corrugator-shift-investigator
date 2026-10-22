@@ -104,6 +104,39 @@ def test_text_only_reply_finishes_with_gathered_evidence(tmp_path, analysis):
         planner.close()
 
 
+@pytest.mark.parametrize('ending', ['finish', 'cannot_answer', 'text'])
+def test_only_tool_call_refused_ends_unavailable_with_the_tool_reason(tmp_path, ending):
+    """The model's only tool call asks for July, which the store refuses; however the
+    model then ends (finish on the failed id, cannot_answer, or plain text) the answer
+    reads unavailable with the tool's own reason, the same as the offline planner."""
+    from investigator.record_store import default_store
+    calls = []
+    def send(payload, key, timeout):
+        calls.append(payload)
+        if len(calls) == 1:
+            return reply(tool_use('get_period_kpis', {'window': {'period': 'month', 'anchor': '2026-07-01'}, 'compare': True, 'shift': None}))
+        result_block = payload['messages'][-1]['content'][0]
+        failed = json.loads(result_block['content'])
+        assert result_block['type'] == 'tool_result' and failed['ok'] is False and 'outside the dataset range' in failed['error']['message']
+        if ending == 'finish':
+            return reply(tool_use('finish', {'result_ids': [failed['result_id']]}, 'toolu_2'))
+        if ending == 'cannot_answer':
+            return reply(tool_use('cannot_answer', {'reason': 'July is not in the dataset'}, 'toolu_2'))
+        return reply([{'type': 'text', 'text': 'July is not available.'}], 'end_turn')
+    store_analysis = default_store().day_analysis('2026-09-14')
+    planner = AnthropicPlanner(KEY, Budget(tmp_path/'budget.db'), send)
+    try:
+        result = Agent(store_analysis, planner, max_calls=10, max_seconds=60).ask('How did July go?', Context('2026-09-14', 2, scope='day'))
+        assert result['status'] == 'unavailable' and result['usage']['model_calls'] == 2
+        [step] = result['trace']
+        assert step['tool'] == 'get_period_kpis' and not step['ok']
+        assert step['error']['message'] in result['sections'] and 'outside the dataset range 2026-08-03 to 2026-09-30' in step['error']['message']
+        assert result['charts'] == [] and result['tables'] == [] and result['evidence_ids'] == [] and result['narrative_status'] == 'unavailable'
+    finally:
+        planner.close()
+        store_analysis.close()
+
+
 def test_text_only_reply_without_evidence_is_unavailable(tmp_path, analysis):
     planner = AnthropicPlanner(KEY, Budget(tmp_path/'budget.db'), lambda *a: reply([{'type': 'text', 'text': 'Hello'}], 'end_turn'))
     try:
