@@ -22,6 +22,8 @@ def test_values_are_substituted_from_evidence():
 
 @pytest.mark.parametrize('change',[
     {'text':'We can save 999 dollars.'}, {'text':'<script>run()</script>'},
+    {'text':'Speed was about eighty-nine percent of target with {{0}} minutes down.'},   # a number in words
+    {'text':'There were two stops and {{0}} minutes down.'},
     {'facts':[{'result_id':'foreign','row':0,'field':'down_minutes'}]},
     {'facts':[{'result_id':'e1','row':99,'field':'down_minutes'}]},   # beyond the preview rows
     {'facts':[{'result_id':'e1','row':0,'field':'profit'}]},
@@ -204,3 +206,9 @@ def test_null_field_renders_as_the_word_unavailable():
     assert p['text']=='Order SO-1 produced 120 sheets against a requested quantity of unavailable.'
     beyond={'paragraphs':[{'kind':'finding','text':'{{0}}','facts':[{'result_id':'o1','row':12,'field':'order_id'}]}]}
     with pytest.raises(ValueError,match='only the 1 preview rows'):render_narrative(beyond,packet)
+
+
+def test_small_counts_in_plain_prose_are_still_allowed():
+    value={'paragraphs':[{'kind':'finding','text':'One knife carried the order while the other two ran short sheets; downtime totals {{0}} minutes.',
+                         'facts':[{'result_id':'e1','row':0,'field':'down_minutes'}]}]}
+    assert render_narrative(value,PACKET)[0]['text'].endswith('12.50 minutes.')

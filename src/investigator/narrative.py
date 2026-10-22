@@ -3,6 +3,11 @@ import math
 import re
 
 KINDS = ('finding', 'hypothesis', 'check', 'limitation')
+# A number written in words is still a number the writer did not take from a cited row:
+# tens and larger anywhere, or a small count glued to a unit ("three percent", "two stops").
+NUMBER_WORDS = re.compile(r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen)\b"
+                          r"|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|half|quarter)"
+                          r"[- ]?(percent|per cent|points?|minutes?|hours?|seconds?|feet|foot|ft|fpm|msf|sq(uare)? ?f(ee)?t|stops?|setups?|runs?|sheets?|cuts?|orders?|weeks?|days?|shifts?)\b", re.I)
 MAX_FACTS = 6  # per paragraph; the live Haiku writer cites five in a dense hypothesis
 FACT_SCHEMA = {'type':'object','properties':{
     'result_id':{'type':'string'}, 'row':{'type':'integer'}, 'field':{'type':'string'}},
@@ -63,8 +68,8 @@ def render_narrative(value, packet):
             raise ValueError('Narrative size limit')
         bare=re.sub(r'\{\{\d+\}\}', '', text)
         # Numerical statements must use application-substituted evidence fields.
-        if any(c.isdigit() or ord(c)<32 for c in bare) or any(c in bare for c in '<>{}') or re.search(r'https?://',bare):
-            raise ValueError('Use fact placeholders for values; plain prose only')
+        if any(c.isdigit() or ord(c)<32 for c in bare) or any(c in bare for c in '<>{}') or re.search(r'https?://',bare) or NUMBER_WORDS.search(bare):
+            raise ValueError('Use fact placeholders for values; plain prose only (numbers written as words count)')
         tokens=re.findall(r'\{\{(\d+)\}\}',text)
         if any(x!=str(int(x)) for x in tokens):
             raise ValueError('Fact placeholders do not match references')
