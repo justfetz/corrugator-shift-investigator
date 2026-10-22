@@ -36,19 +36,35 @@ def test_tool_schemas_map_to_input_schema():
         assert tool['input_schema']['additionalProperties'] is False
         assert set(tool['input_schema']['required']) == set(tool['input_schema']['properties'])
         assert 'parameters' not in tool
-    # The API refuses more than 20 strict tools per request ("Too many strict tools (21)" took every
-    # live golden down on 2026-10-22). Investigation tools are strict; the two control tools are
-    # validated locally and sent without strict mode.
+    # Strict mode is off: the API caps strict tools at 20 and the total compiled grammar, and both
+    # took every live golden down on 2026-10-22. The application's own argument validation is the gate.
+    from investigator.anthropic_provider import STRICT_TOOLS
+    assert not STRICT_TOOLS and not any(t['strict'] for t in tools)
     assert sum(t['strict'] for t in tools) <= 20
-    assert all(t['strict'] for t in tools if t['name'] not in ('finish', 'cannot_answer'))
-    assert not any(t['strict'] for t in tools if t['name'] in ('finish', 'cannot_answer'))
 
 
-def test_strict_cap_holds_as_tools_grow():
-    from investigator.anthropic_provider import MAX_STRICT_TOOLS
-    many = TOOL_SCHEMAS + [{**TOOL_SCHEMAS[0], 'name': f'extra_{i}'} for i in range(8)]
-    tools = anthropic_tools(many)
-    assert len(tools) == len(many) + 2 and sum(t['strict'] for t in tools) == MAX_STRICT_TOOLS
+def test_bad_arguments_are_refused_locally_without_strict_mode(tmp_path, analysis):
+    """With strict mode off the model may send a wrong type; the agent refuses it, the error goes
+    back as the tool result, and the next call can correct it."""
+    calls = []
+    def send(payload, key, timeout):
+        calls.append(payload)
+        if len(calls) == 1:
+            return reply(tool_use('get_shift_kpis', {'shift': '2'}))          # a string where an int is required
+        if len(calls) == 2:
+            result = json.loads(payload['messages'][-1]['content'][0]['content'])
+            assert result['ok'] is False and 'shift' in result['error']['message'].lower()
+            return reply(tool_use('get_shift_kpis', {'shift': 2}, 'toolu_2'))
+        if payload['tools'][0]['name'] == 'write_narrative':
+            return reply([{'type': 'text', 'text': 'no narrative'}], 'end_turn')
+        first = json.loads(payload['messages'][-1]['content'][0]['content'])
+        return reply(tool_use('finish', {'result_ids': [first['result_id']]}, 'toolu_3'))
+    planner = AnthropicPlanner(KEY, Budget(tmp_path/'budget.db'), send)
+    try:
+        result = Agent(analysis, planner, max_calls=10, max_seconds=60).ask('Show speed', Context(analysis.day))
+        assert result['status'] == 'complete' and [s['ok'] for s in result['trace']] == [False, True]
+    finally:
+        planner.close()
 
 
 def test_tool_use_rounds_final_round_and_no_key_in_payload(tmp_path, analysis):

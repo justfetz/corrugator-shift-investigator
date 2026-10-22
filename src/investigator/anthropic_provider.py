@@ -42,10 +42,13 @@ MAX_CALLS = 10
 LIFETIME_SECONDS = 60
 SOCKET_TIMEOUT = 20
 
-# The API accepts at most 20 strict tools per request. The two control tools below are validated
-# by next_step itself (finish must carry exactly result_ids, ids are filtered against the evidence),
-# so they are sent without strict mode; investigation tools take the strict slots, oldest first.
-MAX_STRICT_TOOLS = 20
+# Strict mode is OFF for every tool. Two API limits bit on 2026-10-22: at most 20 strict tools per
+# request, and a total "compiled grammar" budget that 19 strict schemas with nested window objects
+# already exceeded ("The compiled grammar is too large"). The application validates every tool
+# call's arguments itself (agent.py refuses a bad shift, window, enum or type and the model gets
+# the error back; finish and cannot_answer are checked in next_step), so strict mode was a
+# convenience, not the gate. STRICT_TOOLS can name a few small schemas to opt back in.
+STRICT_TOOLS = frozenset()
 CONTROL_TOOLS = [
     {'name': 'finish', 'description': 'Finish with successful evidence result IDs.', 'strict': False,
      'input_schema': {'type': 'object', 'properties': {'result_ids': {'type': 'array', 'items': {'type': 'string'}}},
@@ -95,8 +98,8 @@ def anthropic_tools(schemas):
     for schema in schemas:
         parameters = _strip_null_enum_members(deepcopy(schema['parameters']))
         parameters['required'] = list(parameters['properties'])
-        strict = sum(t['strict'] for t in tools) < MAX_STRICT_TOOLS
-        tools.append({'name': schema['name'], 'description': schema['description'], 'input_schema': parameters, 'strict': strict})
+        tools.append({'name': schema['name'], 'description': schema['description'], 'input_schema': parameters,
+                      'strict': schema['name'] in STRICT_TOOLS})
     tools.extend(deepcopy(CONTROL_TOOLS))
     return tools
 
