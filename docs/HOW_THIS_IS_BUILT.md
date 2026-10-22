@@ -3,7 +3,7 @@
 A ten-minute walk through the Corrugator Shift Investigator in the order the data flows: from one seed to four record families, through the invariants that hold them together, into a store and a set of bounded tools, through a planner that may only choose, out as evidence with a trail, and finally into a golden set that owns its own truth. Every section names the file that does the work and the test that proves it. Nothing here is a real plant, a vendor protocol, or a proof of cause; the last section says so plainly.
 
 ```
- seed 2026 ──► synth.generate_months() ──► four record families ──► content hash 92b4b4e1…
+ seed 2026 ──► synth.generate_months() ──► four record families ──► content hash 7facc4a1…
                      ▲                      dry-end setups   7,968
                      │                      wet ends         3,712
               stories.py (answer keys)      shifts             129
@@ -95,7 +95,7 @@ Each line is one rule the generator keeps for every record of both months and th
 - A wet end is the exact aggregate of its contiguous setups and spans at most two shifts — `test_wet_end_is_the_exact_aggregate_of_its_setups`.
 - A shift is the exact aggregate of its setups, and the bale reading exceeds the accounted waste by 0.1–0.4 % of gross — `test_shift_is_the_exact_aggregate_of_its_setups`.
 - Setups tile every shift with no gap; every stop sits inside one setup, stops never overlap, and a setup's stop count and seconds equal its stops — `test_time_partition_setups_tile_shifts_and_stops_sit_inside`.
-- Maintenance + PM downtime is 2–3 % of scheduled minutes per month and operator downtime 1–3 %, with one PM window every Thursday on shift 1 — `test_downtime_budget_per_month`.
+- Maintenance + PM downtime is 2–3 % of scheduled minutes per month and operator downtime 1–3 %, with one PM window every Thursday on shift 1, recorded as kind `PM` with its own reason `Planned maintenance` — `test_downtime_budget_per_month`.
 - Per month, side trim is 2.5–3.5 % of gross, shear chops 0.4–1.0 %, dry-end rejects 0.8–1.4 % — `test_waste_bands_per_month`.
 - Each production day makes 5.5–7.5 million gross square feet from 130–230 setup records — `test_output_per_production_day`.
 - The same seed gives the same bytes: the content hash is pinned — `tests/test_synth_determinism.py::test_pinned_content_hash`.

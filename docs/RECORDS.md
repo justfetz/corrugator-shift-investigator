@@ -110,9 +110,9 @@ The same seed gives byte-identical JSONL. Two months generate in well under thre
 | --- | --- | --- |
 | `stop_id` | text | `ST` + start `YYYYMMDDHHMMSS` |
 | `start_date`, `start_time`, `end_date`, `end_time`, `duration_sec` | | whole seconds; stops never overlap and always sit inside one setup |
-| `kind` | Maintenance / Operator / PM | PM = planned maintenance window |
+| `kind` | Maintenance / Operator / PM | PM = planned maintenance window; every PM stop carries the reason `Planned maintenance` |
 | `place` | text | Upper knife, Lower knife, Shear knife, Slitter/scorer, Double backer, Splicer 1-5, Glue dams, Stacker, Single facer, Steam system, Power |
-| `reason` | text | Knife / slitter jam, Missed splice, Raw material (roll), Stacker, Order change, Glue / starch, Steam / moisture, Power outage, Other |
+| `reason` | text | nine unplanned reasons - Knife / slitter jam, Missed splice, Raw material (roll), Stacker, Order change, Glue / starch, Steam / moisture, Power outage, Other - plus `Planned maintenance`, used only by `PM`-kind stops so the planned window is its own Pareto row rather than inflating Other |
 | `shift_number`, `production_date` | | the shift the stop fell in |
 | `setup_id` | text | the setup record that contains it |
 | `user_info` | text | synthetic operator note, always labelled unverified |
@@ -123,7 +123,7 @@ These are simulation choices (`synth.py` constants), not plant standards. `tests
 
 - **Time**: setups tile each shift with no gaps; a setup that would cross a shift boundary is split there (first part keeps its code, second part is `S` and shares the orders). A remainder with under 60 s of running time is absorbed; a first part under 60 s stretches the prior record instead. Across a weekend the open run simply ends.
 - **Output**: about 5.5-7.5 million gross sq ft per production day (1.8-2.5 million per shift), 150-190 setups and roughly half as many wet ends per day. Running speed is the grade target x crew factor (0.88-0.94) x shift factor x noise; displayed averages include stops.
-- **Downtime**: Maintenance + PM between 2% and 3% of scheduled minutes per month; PM is one 120-135 minute window every Thursday on shift 1 (the rebuild week runs 180 min), plus unplanned maintenance stops (Monday x1.25, August x1.08), one 10-15 minute power outage per month. Operator stops separately 1-3%.
+- **Downtime**: Maintenance + PM between 2% and 3% of scheduled minutes per month; PM is one 120-135 minute window every Thursday on shift 1 (the rebuild week runs 180 min), recorded with kind `PM` and reason `Planned maintenance`, plus unplanned maintenance stops (Monday x1.25, August x1.08), one 10-15 minute power outage per month. Operator stops separately 1-3%.
 - **Waste per month**: side trim 2.5-3.5% of gross, shear chops 0.4-1.0%, dry-end rejects 0.8-1.4% split about bond 0.40 / warp 0.30-0.42 / misalignment 0.30 points. Each missed splice adds a run of 8-14 chops (a web break).
 - **Determinism**: `content_hash` is pinned in `tests/test_synth_determinism.py`; change it only with an intended generator change.
 

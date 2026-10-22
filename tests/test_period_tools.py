@@ -197,6 +197,15 @@ def test_downtime_pareto_shares_cumulate_and_match_sums(store, data):
     assert {r["category"]: r["previous_minutes"] for r in rows} == pytest.approx({p: previous[p] for p in minutes}, abs=0.01)
     splicer = next(r for r in rows if r["category"] == "Splicer 3")
     assert splicer["minutes"] > 3 * splicer["previous_minutes"]   # the week's missed-splice problem is visible in the data
+    by_reason = {r["category"]: r for r in store.get_downtime_pareto({"period": "week", "anchor": "2026-09-09"}, group_by="reason")["rows"]}
+    # The planned window is its own reason row: Thursday 10 September's 127-minute PM stop leads the week
+    # (135 minutes the Thursday before), and "Other" holds only the unclassified stops.
+    assert (by_reason["Planned maintenance"]["stops"], by_reason["Planned maintenance"]["minutes"]) == (1, pytest.approx(127.0, abs=0.01))
+    assert by_reason["Planned maintenance"]["previous_minutes"] == pytest.approx(135.0, abs=0.01)
+    assert (by_reason["Other"]["stops"], by_reason["Other"]["minutes"]) == (19, pytest.approx(30.0333, abs=0.01))
+    assert next(iter(by_reason)) == "Planned maintenance" and by_reason["Missed splice"]["cumulative_pct"] == pytest.approx(56.14, abs=0.01)
+    assert all(st.reason == "Planned maintenance" for st in data["stops"] if st.kind == "PM")
+    assert all(st.kind == "PM" for st in data["stops"] if st.reason == "Planned maintenance")
     by_count = store.get_downtime_pareto({"period": "week", "anchor": "2026-09-09"}, group_by="reason", measure="count")
     assert [r["stops"] for r in by_count["rows"]] == sorted((r["stops"] for r in by_count["rows"]), reverse=True)
     assert by_count["rows"][-1]["cumulative_pct"] == pytest.approx(100, abs=0.02)

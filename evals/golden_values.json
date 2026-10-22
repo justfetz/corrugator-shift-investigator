@@ -13,7 +13,7 @@
   ]
  ],
  "machine_id": "CORR-1",
- "content_hash": "92b4b4e11b52df92f04ad9b31a5bf0e38d64f380e6f2d1e06746663b63f63413",
+ "content_hash": "7facc4a1813b305f14916267b1a791cbab03584d40955a606cecad84b66a7ae1",
  "cases": [
   {
    "id": "value-kpi-september-all",
@@ -8919,31 +8919,31 @@
    "note": "The missed-splice week: Splicer 3 minutes against the week before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 8,
+    "row_count": 9,
     "values": {
-     "category=Other": {
+     "category=Planned maintenance": {
       "stops": [
-       20,
+       1,
        null
       ],
       "minutes": [
-       157.033333,
+       127.0,
        0.0051
       ],
       "share_pct": [
-       41.050889,
+       33.199721,
        0.0051
       ],
       "cumulative_pct": [
-       41.050889,
+       33.199721,
        0.0051
       ],
       "previous_stops": [
-       15,
+       1,
        null
       ],
       "previous_minutes": [
-       155.1,
+       135.0,
        0.0051
       ]
      },
@@ -8961,7 +8961,7 @@
        0.0051
       ],
       "cumulative_pct": [
-       63.990066,
+       56.138899,
        0.0051
       ],
       "previous_stops": [
@@ -8987,7 +8987,7 @@
        0.0051
       ],
       "cumulative_pct": [
-       72.690833,
+       64.839665,
        0.0051
       ],
       "previous_stops": [
@@ -8996,6 +8996,32 @@
       ],
       "previous_minutes": [
        30.366667,
+       0.0051
+      ]
+     },
+     "category=Other": {
+      "stops": [
+       19,
+       null
+      ],
+      "minutes": [
+       30.033333,
+       0.0051
+      ],
+      "share_pct": [
+       7.851168,
+       0.0051
+      ],
+      "cumulative_pct": [
+       72.690833,
+       0.0051
+      ],
+      "previous_stops": [
+       14,
+       null
+      ],
+      "previous_minutes": [
+       20.1,
        0.0051
       ]
      },
@@ -9131,7 +9157,7 @@
      },
      "#0": {
       "category": [
-       "Other",
+       "Planned maintenance",
        null
       ]
      },
@@ -9174,7 +9200,7 @@
    "note": "The missed-splice week: Splicer 3 minutes against the week before.",
    "expect": {
     "coverage": "complete",
-    "row_count": 8,
+    "row_count": 9,
     "values": {
      "category=Missed splice": {
       "stops": [
@@ -9228,32 +9254,6 @@
        0.0051
       ]
      },
-     "category=Other": {
-      "stops": [
-       20,
-       null
-      ],
-      "minutes": [
-       157.033333,
-       0.0051
-      ],
-      "share_pct": [
-       11.904762,
-       0.0051
-      ],
-      "cumulative_pct": [
-       63.690476,
-       0.0051
-      ],
-      "previous_stops": [
-       15,
-       null
-      ],
-      "previous_minutes": [
-       155.1,
-       0.0051
-      ]
-     },
      "category=Stacker": {
       "stops": [
        20,
@@ -9268,7 +9268,7 @@
        0.0051
       ],
       "cumulative_pct": [
-       75.595238,
+       63.690476,
        0.0051
       ],
       "previous_stops": [
@@ -9277,6 +9277,32 @@
       ],
       "previous_minutes": [
        24.933333,
+       0.0051
+      ]
+     },
+     "category=Other": {
+      "stops": [
+       19,
+       null
+      ],
+      "minutes": [
+       30.033333,
+       0.0051
+      ],
+      "share_pct": [
+       11.309524,
+       0.0051
+      ],
+      "cumulative_pct": [
+       75.0,
+       0.0051
+      ],
+      "previous_stops": [
+       14,
+       null
+      ],
+      "previous_minutes": [
+       20.1,
        0.0051
       ]
      },
@@ -9294,7 +9320,7 @@
        0.0051
       ],
       "cumulative_pct": [
-       83.928571,
+       83.333333,
        0.0051
       ],
       "previous_stops": [
@@ -9320,7 +9346,7 @@
        0.0051
       ],
       "cumulative_pct": [
-       91.071429,
+       90.47619,
        0.0051
       ],
       "previous_stops": [
@@ -9346,7 +9372,7 @@
        0.0051
       ],
       "cumulative_pct": [
-       97.619048,
+       97.02381,
        0.0051
       ],
       "previous_stops": [
@@ -9372,7 +9398,7 @@
        0.0051
       ],
       "cumulative_pct": [
-       100.0,
+       99.404762,
        0.0051
       ],
       "previous_stops": [
@@ -9381,6 +9407,32 @@
       ],
       "previous_minutes": [
        18.616667,
+       0.0051
+      ]
+     },
+     "category=Planned maintenance": {
+      "stops": [
+       1,
+       null
+      ],
+      "minutes": [
+       127.0,
+       0.0051
+      ],
+      "share_pct": [
+       0.595238,
+       0.0051
+      ],
+      "cumulative_pct": [
+       100.0,
+       0.0051
+      ],
+      "previous_stops": [
+       1,
+       null
+      ],
+      "previous_minutes": [
+       135.0,
        0.0051
       ]
      },

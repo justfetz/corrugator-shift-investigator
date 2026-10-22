@@ -403,7 +403,7 @@ def _layout(rng, slots, planner, machine_code, outage_slots):
                 if ctx.pm:
                     minutes, place, note = ctx.pm
                     minutes = minutes or rng.randint(*PM_MINUTES)
-                    _insert_stop(segments, _stop("PM", "Other", place, minutes * 60, 0, note),
+                    _insert_stop(segments, _stop("PM", "Planned maintenance", place, minutes * 60, 0, note),
                                  min(run, rng.randint(300, 900)))
                 if ctx.outage:
                     _insert_stop(segments, _stop("Maintenance", "Power outage", "Power",

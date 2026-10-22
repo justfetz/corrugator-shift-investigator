@@ -23,9 +23,11 @@ STOP_PLACES = ("Upper knife", "Lower knife", "Shear knife", "Slitter/scorer",
                "Double backer", "Splicer 1", "Splicer 2", "Splicer 3", "Splicer 4",
                "Splicer 5", "Glue dams", "Stacker", "Single facer", "Steam system",
                "Power")
-STOP_REASONS = ("Knife / slitter jam", "Missed splice", "Raw material (roll)",
-                "Stacker", "Order change", "Glue / starch", "Steam / moisture",
-                "Power outage", "Other")
+UNPLANNED_STOP_REASONS = ("Knife / slitter jam", "Missed splice", "Raw material (roll)",
+                          "Stacker", "Order change", "Glue / starch", "Steam / moisture",
+                          "Power outage", "Other")
+PLANNED_STOP_REASON = "Planned maintenance"   # the reason every PM-kind stop carries
+STOP_REASONS = UNPLANNED_STOP_REASONS + (PLANNED_STOP_REASON,)
 CREWS = ("Crew A", "Crew B", "Crew C")
 SCHEDULED_SHIFT_MINUTES = 480
 
@@ -281,7 +283,9 @@ class StopRecord:
     duration_sec: whole seconds = end - start.
     kind: Maintenance, Operator or PM (planned maintenance window).
     place: equipment location from STOP_PLACES.
-    reason: one of the nine STOP_REASONS; a recorded symptom, not a cause.
+    reason: one of STOP_REASONS - the nine unplanned reasons, or
+        "Planned maintenance" for every PM-kind stop; a recorded symptom,
+        not a cause.
     shift_number, production_date: the shift the stop fell in.
     setup_id: the dry-end setup record that contains the stop.
     user_info: synthetic operator note, labelled unverified.
