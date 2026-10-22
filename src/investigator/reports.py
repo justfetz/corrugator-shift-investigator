@@ -5,6 +5,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+from .pdf_charts import drawing_for
 
 
 def report_pdf(result):
@@ -38,6 +39,12 @@ def report_pdf(result):
             ('LEFTPADDING',(0,0),(-1,-1),6),('RIGHTPADDING',(0,0),(-1,-1),6),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
         story.extend([t,Spacer(1,10)])
     for chart in result.get('charts',[]):
+        drawing=drawing_for(chart)
+        if drawing is not None:
+            title=chart.get('title') or f'Shift {chart.get("shift", "selected scope")}: {chart["unit"]} chart'
+            story.append(KeepTogether([p(title,'Heading2'),drawing,Spacer(1,4)]))
+            if chart.get('coverage')!='complete':
+                story.append(p('Incomplete data: observed values only.'))
         if chart.get('type')=='calendar_heatmap':
             cols=[('day','Day'),('estimated_good_sqft','Est. good sq ft'),('speed_to_target_pct','% target'),
                   ('downtime_pct','Down %'),('heavy_hitter','Heavy hitter'),('heavy_hitter_minutes','Heavy min')]
@@ -46,9 +53,15 @@ def report_pdf(result):
         elif chart.get('y')=='volume_msf':
             cols=[('grade','Grade'),('volume_msf','MSF'),('previous_volume_msf','Prev MSF'),('speed_run_fpm','ft/min w/o stops'),('speed_to_target_pct','% of target')]
         else:
-            cols=[(chart['x'],'Run / day / reason'),(chart['y'],chart['unit'])]
+            cols=[(chart['x'],{'label':'Grade / slice','grade':'Grade','knife':'Knife','category':'Category','week_start':'Week of','production_day':'Day'}.get(chart['x'],'Run / day / reason')),(chart['y'],chart['unit'])]
         if chart['unit']=='ft/min':cols.extend([('target_fpm','Target ft/min'),('speed_to_target_pct','% of target')])
-        table(chart.get('title') or f'Shift {chart.get("shift", "selected scope")}: {chart["unit"]} evidence',chart['rows'],cols,12)
+        table((chart.get('title') or f'Shift {chart.get("shift", "selected scope")}: {chart["unit"]} evidence')+(' (data)' if drawing is not None else ''),chart['rows'],cols,12)
+    for item in result.get('tables',[]):
+        if item['title']=='get_speed_opportunity' and item['rows']:
+            top=[r for r in item['rows'] if r.get('opportunity_hours') is not None][:8]
+            lines=[f"Opportunities are read from the evidence, not predicted: if every cell ran at the speed its own best fifth of setups already held, the window would have needed {item.get('total_opportunity_hours', 0):,.2f} fewer running hours. A positive reject penalty means the fast setups rejected more, so that part of the gap is a limit, not an opportunity. {item.get('temperature_note', '')}"]
+            story.append(KeepTogether([p('Opportunities (from evidence)','Heading2'),p(lines[0])]))
+            table('Largest speed opportunities',top,[('label','Grade / slice'),('typical_fpm','Typical ft/min'),('best_fifth_fpm','Best fifth ft/min'),('gap_fpm','Gap'),('opportunity_hours','Hours'),('reject_penalty_points','Reject penalty pts')],8)
     for item in result.get('tables',[]):
         rows=item['rows']; title=item['title']
         if not rows:continue
@@ -66,9 +79,25 @@ def report_pdf(result):
             cols=[('record_id','Record'),('day','Day'),('place','Place'),('notes','Reported note')]
         elif 'rank' in row:
             cols=[('rank','Rank'),('item','Item'),('value','Value'),('unit','Unit / direction')]
+        elif 'opportunity_hours' in row:
+            cols=[('label','Grade / slice'),('setups','Setups'),('typical_fpm','Typical ft/min'),('best_fifth_fpm','Best fifth'),('opportunity_hours','Hours'),('best_fifth_dry_end_pct','Dry-end % fast'),('rest_dry_end_pct','Dry-end % rest'),('status','Status')]
+        elif 'overrun_pct' in row:
+            cols=[('knife','Knife'),('lines','Lines'),('nominal_cuts','Nominal cuts'),('actual_cuts','Actual cuts'),('overrun_pct','Over/under %'),('over_sheets','Sheets over'),('under_sheets','Sheets under'),('lines_inside_band_pct','In band %')]
+        elif 'share_of_volume_pct' in row:
+            cols=[('grade','Grade'),('volume_msf','MSF'),('share_of_volume_pct','Share %'),('speed_run_fpm','ft/min w/o stops'),('speed_to_target_pct','% target'),('setup_stop_minutes','Stop min'),('lineal_per_setup','ft / setup'),('dry_end_pct','Dry-end %')]
+        elif 'metric' in row and 'current' in row:
+            cols=[('label','Tile'),('current','Current'),('previous','Previous'),('delta','Delta'),('unit','Unit'),('change','Change')]
+        elif 'cumulative_pct' in row:
+            cols=[('category','Category'),('stops','Stops'),('minutes','Minutes'),('share_pct','Share %'),('cumulative_pct','Cumulative %'),('previous_minutes','Prev min')]
+        elif 'pct_of_gross' in row and 'category' in row:
+            cols=[('label','Category'),('sqft','Sq ft'),('pct_of_gross','% of gross'),('previous_pct_of_gross','Prev %'),('delta_pct_points','Delta pts')]
+        elif 'weekday' in row and 'minutes_per_stop' in row:
+            cols=[('production_day','Day'),('weekday','Weekday'),('stops','Stops'),('minutes','Minutes'),('minutes_per_stop','Min / stop'),('downtime_pct','Down %')]
+        elif 'week_start' in row:
+            cols=[('week_start','Week of'),('value','Value'),('production_days','Days'),('partial','Partial')]
         else:
             cols=[('day','Day'),('shift','Shift'),('observed_shift_fpm','ft/min'),('speed_to_target_pct','% target'),('paper_changes','Paper changes'),('valid_setups','Setups')]
-        table(title + (f' | Shift {item["shift"]}' if 'shift' in item else ''),rows,cols,12 if 'notes' in row else 40)
+        table(title + ((f' | Shift {item["shift"]}' if item.get('shift') else ' | All shifts') if 'shift' in item else ''),rows,cols,12 if 'notes' in row else 40)
     story.append(KeepTogether([p('Definitions and limitations','Heading2'),p('Speed attainment = lineal feet / sum(grade target ft/min x elapsed minutes) x 100. Downtime is included. Paper changes equal wet-end runs. Stop counts per setup include every intersecting stop; allocated minutes avoid double counting.'),p(result['limitations']),p('Run reference: '+result['run_id'])]))
     def footer(canvas, doc):
         canvas.saveState();canvas.setFont('Helvetica',8);canvas.setFillColor(colors.HexColor('#536878'))

@@ -218,3 +218,37 @@ def test_corrupt_period_withholds_rankings(periods):
     assert result['status']=='partial'
     assert result['tables'][1]['rows']==[]
     assert all(r['minutes_change'] is None for r in result['tables'][0]['rows'])
+
+
+def test_pdf_draws_native_charts_and_an_opportunities_section():
+    """Every chart kind the tools produce becomes a vector drawing in the PDF (never a visitor
+    image), and a speed-opportunity table adds the opportunities section."""
+    from investigator.agent import Agent, Context
+    from investigator.pdf_charts import drawing_for
+    from investigator.record_store import default_store
+    from investigator.reports import report_pdf
+    from reportlab.graphics.shapes import Drawing
+    store = default_store()
+    analysis = store.day_analysis('2026-09-14')
+    try:
+        kinds = {}
+        sizes = {}
+        for question in ('Over/under-run by knife this week', 'Volume by grade this month', 'Trend of trim over eight weeks',
+                         'Where is the speed opportunity this month', 'Which downtime reason cost the most minutes this month'):
+            context = Context('2026-09-14', 2, scope='day')
+            context.scope = 'day'
+            result = Agent(analysis, store=store).ask(question, context)
+            assert result['status'] == 'complete' and result['charts']
+            for chart in result['charts']:
+                drawing = drawing_for(chart)
+                assert isinstance(drawing, Drawing) and drawing.width > 0 and drawing.height > 0
+                kinds[chart['type']] = kinds.get(chart['type'], 0) + 1
+            pdf = report_pdf(result)
+            assert pdf.startswith(b'%PDF-') and pdf.rstrip().endswith(b'%%EOF')
+            bare = report_pdf({**result, 'charts': [], 'tables': []})
+            sizes[question] = (len(pdf), len(bare))
+            assert len(pdf) > len(bare)   # the drawing and tables are in the file
+        assert kinds['range'] == 1 and kinds['line'] == 1 and kinds['bar'] >= 3
+        assert drawing_for({'type': 'calendar_heatmap', 'rows': []}) is None   # the heatmap stays a table
+    finally:
+        analysis.close()

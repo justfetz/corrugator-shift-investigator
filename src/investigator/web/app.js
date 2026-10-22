@@ -262,7 +262,7 @@ function paretoChart(chart,wrap){
 }
 // Waste breakdown: the dry-end split as stacked bars (current and previous), then every category paired.
 function wasteChart(chart,wrap){
- const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3'],['moisture','s4']];
+ const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3'],['moisture','s4']].filter(([k])=>byKey[k]);  // a result without a family (older recordings) stacks the ones it has
  const W=CHART_W(), f=frame(W,2,34), unit=chart.unit;
  const stacks=[['current',r=>r.pct_of_gross],['previous',r=>r.previous_pct_of_gross]].map(([name,get])=>({name,segments:parts.map(([k,cls])=>({k,cls,value:byKey[k]?get(byKey[k]):null}))}));
  const available=stacks.filter(s=>s.segments.every(x=>x.value!==null&&x.value!==undefined));
@@ -276,7 +276,7 @@ function wasteChart(chart,wrap){
     const rect=svgNode('rect',{x,y:y+5,width:Math.max(0,w-gap),height:16,class:'seg '+seg.cls});rect.append(svgNode('title',{},`${seg.k}: ${fmtVal(seg.value,unit)}`));svg.append(rect);
     const inside=`${seg.k} ${seg.value.toFixed(2)}`; if(w>inside.length*6.8+14)svg.append(svgNode('text',{x:x+6,y:y+17,class:'inseg'},inside));x+=w;});
    const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,class:'val','aria-label':`${s.name}: dry-end ${fmtVal(total,unit)} = `+s.segments.map(v=>`${v.k} ${fmtVal(v.value,unit)}`).join(', ')},fmtVal(total,unit));svg.append(t);});
-  wrap.append(node('p','Dry-end rejects split by recorded reason; the four segments add to the dry-end total.','muted'),svg,legend([['s1','bond'],['s2','warp'],['s3','misalignment'],['s4','moisture']]));
+  wrap.append(node('p',`Dry-end rejects split by recorded reason; the ${parts.length} segments add to the dry-end total.`,'muted'),svg,legend(parts.map(([k,cls])=>[cls,k])));
  }
  const others=chart.rows.filter(r=>!['bond','warp','misalignment','moisture'].includes(r.category));
  if(others.length){const sub=node('div',undefined,'subchart');sub.append(node('h4','All waste categories, % of gross'));pairedChart({...chart,rows:others},sub);wrap.append(sub);}
