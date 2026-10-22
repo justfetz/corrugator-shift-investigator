@@ -14,7 +14,8 @@ wet_ends, shifts, stops) and exposes two things:
 
 Every percentage is a ratio of summed numerators and denominators over the
 window, never an average of per-shift percentages (docs/METRICS.md). The
-seeded story answer keys (`stories.py`) are never imported here.
+generator's seeded answer keys are never imported here: the effects have to
+be found in the records.
 """
 from calendar import monthrange
 from datetime import date, timedelta

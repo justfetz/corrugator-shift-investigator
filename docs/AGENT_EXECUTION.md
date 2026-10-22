@@ -16,7 +16,14 @@ In the UI, choose September 14, shift 2, Selected shift only, Production day, an
 
 The browser POSTs JSON to /api/ask with question, day, shift, scope, period, mode, corrupt, and optional session_id. It sends the workbench token in a header. A live BYOK request also uses X-OpenAI-Key, which is kept out of the JSON and cleared from the field on submit.
 
-The server validates the request before selecting a dataset. A day is generated with seed 7 plus its offset from September 1. Analysis validates the XML and loads private in-memory DuckDB tables. Up to three day/scenario Analysis objects are retained by the server.
+The server validates the request before selecting a dataset: the day must be one of the store's Monday–Friday production days (a weekend or out-of-range date is a 400 with the reason). `RecordStore.day_analysis` builds that day's private in-memory DuckDB tables from the record families. Up to three day/scenario Analysis objects are retained by the server.
+
+## Data flow: records → store → day tables → tools
+
+1. `synth.generate_months(seed=2026)` lays out August and September 2026 (Mon–Fri) as four record families — dry-end setups with customer blocks and reject lines, wet ends, shifts, stops ([RECORDS](RECORDS.md)) — byte-identical for the same seed, with a content hash.
+2. `RecordStore` (`record_store.py`) builds them once per process (about 3.5 s: 2 s generating, 1.5 s loading) into one in-memory DuckDB with external access disabled: `setups`, `customers`, `rejects`, `wet_ends`, `shifts`, `stops`. The server, the period reports and the eval harness share the process-wide `default_store()`.
+3. `day_analysis(production_day, corrupt)` validates each setup record of that day (finite non-negative quantities, web width and grade, gross = lineal × width / 12, waste within gross, interval and knife positions, reject lines reconciling) and loads the SAME per-day tables the daily tools always read — `shifts`, `setups`, `stops`, `orders`, `rejects` — through `Analysis.from_rows`. A shift-split setup (`change_code S`) lands in the shift its half falls in; a failed record is excluded with its raw values and makes its shift's coverage incomplete; `corrupt=True` injects the fixture's bad-trim record into the first setup of shift 2. The nine daily tools, the offline planner, the PDF and the period reports are unchanged above this line.
+4. The six period tools query the store directly with bound window dates (and an optional shift), so "this month versus last" is one fixed read over the whole dataset rather than a loop over days.
 
 The offline plan for this question requests KPIs, downtime by reason, wet-end performance, notes, and the two corresponding charts. The result has numeric summaries, chart/table payloads, trace entries, coverage, context, usage, and a run ID.
 

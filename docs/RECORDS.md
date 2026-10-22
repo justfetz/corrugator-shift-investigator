@@ -2,7 +2,7 @@
 
 `src/investigator/records.py` defines four plain dataclasses whose field names and units mirror the shape of a corrugator controller's own record types: the dry-end setup record ("P04P"-shaped), the wet-end record ("P04G"-shaped), the shift record ("P04T"-shaped) and the stop record ("P04S"-shaped). They are **our own documented demo schema** (`demo-records/v1`). The names are borrowed so the data reads like plant records; nothing here claims OEM protocol or wire-format compatibility, and no vendor field semantics are asserted beyond what this page states.
 
-`src/investigator/synth.py` generates two full months (August and September 2026) of one machine from a seed. The one-day XML fixture (`fixture.generate()`) and `Analysis` are unchanged; wiring these records into the analysis layer is a later step.
+`src/investigator/synth.py` generates two full months (August and September 2026) of one machine from a seed. These records are the app's data source: `src/investigator/record_store.py` builds them once per process into one in-memory DuckDB, derives the per-day tables the daily tools read (`RecordStore.day_analysis`, see [AGENT_EXECUTION](AGENT_EXECUTION.md)) and answers the period tools over the whole two months ([METRICS](METRICS.md)). The one-day XML fixture (`fixture.generate()`) remains only for its own tests.
 
 ## Generating
 

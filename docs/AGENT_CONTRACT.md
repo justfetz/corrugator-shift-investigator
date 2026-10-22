@@ -23,8 +23,17 @@ No conversation or subscriber information is persisted. The local server retains
 - get_wet_end_performance: actual elapsed-time speed versus grade-specific target.
 - get_quality_breakdown: rejected area by the expanded warp, bond and misalignment observation categories.
 - get_shift_overview: KPI row plus largest losses and three chart evidence components from fixed queries.
-- get_order_matrix: dimensions, outs, cuts, requested/planned/produced sheets and remaining quantities per fragment.
-- render_chart: supported bar specification referencing a successful result from this run.
+- get_order_matrix: dimensions, outs, cuts, requested/planned/produced sheets and remaining quantities per fragment (the record families carry no order ledger, so requested and remaining sheets are null).
+- render_chart: supported bar or line specification referencing a successful result from this run.
+
+Period tools read the whole record store (two production months, Monday to Friday) instead of the selected day. Each takes a `window` of `{"period": "day|week|month", "anchor": "YYYY-MM-DD"}` — week is the Mon–Fri production week containing the anchor, month the calendar month, and the previous window is computed the same way — plus an optional `shift` (null = all three shifts; under Selected shift only the selected shift is enforced in application code). All are read-only, bounded (fixed queries, bound values, 1,000-row limit, two-second interrupt), and return `window`, `previous_window`, `coverage`, `source_rows` and rows whose percentages are ratios of sums (METRICS.md).
+
+- get_period_kpis(window, compare, shift): the dashboard tiles with current, previous, delta, `better` direction and a `change` label; deltas withheld unless both windows are complete.
+- compare_periods(current_window, previous_window, shift): the same table for two arbitrary windows.
+- get_downtime_pareto(window, group_by reason|place|kind, measure minutes|count, shift): ordered with share and cumulative share, previous-window minutes alongside.
+- get_waste_breakdown(window, shift): trim, shear, bond, warp, misalignment, bale and unexplained as sq ft and % of gross, with the previous window.
+- get_stops_profile(window, shift): stops, minutes and minutes per stop per production day plus the Mon–Fri weekday profile.
+- get_trend(metric, weeks 1–26, anchor, shift): weekly series of one allow-listed metric.
 
 Forbidden: shell, arbitrary SQL/code, external URLs, filesystem browsing, machinery control, schedule changes, subscriber access or email sending. SQL values are bound separately and grouping identifiers are allowlisted.
 
@@ -55,6 +64,6 @@ Still pending: live-provider validation, public service-wide budget infrastructu
 
 New read tools: get_setup_matrix(shift), get_shift_notes(shift), get_rankings(shift, metric). Metric is restricted to speed/downtime/quality. Notes are bounded to 1,000 characters, passed as untrusted evidence, and rendered with text nodes or escaped PDF paragraphs. They cannot expand tools or shift scope. Selected-shift mode is enforced in application code even for a malicious model call. Daily OpenAI matrix results show the model at most 12 preview rows with explicit disclosure; the UI retains the full validated matrix.
 
-Week, calendar-month and 4-4-5 reports are a separate deterministic job triggered by Build period report. It aggregates validated per-day SQL results for a bounded September 2026 calendar, returning sections, tables, heatmaps, charts, coverage and dataset hashes. No model/API permission exists on this path. At most 60 compact day/scenario snapshots are cached, with no live DB connection retained. These reports do not pretend to understand arbitrary free-text range questions. Period comparison requires both windows to be complete; no interpolation or zero-fill is used. Paper-change totals count distinct wet-end IDs within each day and shift, then sum across the period. The synthetic year uses September 1, 2026 as its provisional 4-4-5 anchor pending owner confirmation.
+Week, calendar-month and 4-4-5 reports are a separate deterministic job triggered by Build period report. It aggregates validated per-day SQL results for the bounded Monday–Friday calendar of the record store (3 August – 30 September 2026), returning sections, tables, heatmaps, charts, coverage and dataset hashes. No model/API permission exists on this path. At most 60 compact day/scenario snapshots are cached, with no live DB connection retained. These reports do not pretend to understand arbitrary free-text range questions. Period comparison requires both windows to be complete; no interpolation or zero-fill is used. Paper-change totals count distinct wet-end IDs within each day and shift, then sum across the period. The synthetic year uses September 1, 2026 as its provisional 4-4-5 anchor pending owner confirmation.
 
 The server retains at most 32 latest investigation reports for PDF export. The /api/report POST accepts only session_id and run_id; PDF layout is trusted application code, not submitted HTML. ReportLab is the only added application dependency. PDF export neither sends email nor incurs model cost. Host, Origin, token, request-size and rate checks apply to both POST routes. By default this is a loopback demonstration; the hosted public-demo mode (docs/DEPLOYMENT.md) swaps the loopback Host rule for an Origin allowlist, serializes investigations under a lock, and never accepts visitor keys. It is still a demo, not a multi-tenant service.

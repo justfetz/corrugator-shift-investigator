@@ -22,8 +22,15 @@ The implementation follow-up passed 106 backend tests plus UI, syntax and whites
 | `test_evidence_reports.py` | Setup-stop allocation, weighted metrics, rankings, period windows/coverage, heatmap payload, daily PDF signatures |
 | `test_archive.py` | Synthetic archive dates, manifests, reproducibility and run/setup counts |
 | `test_openai_provider.py` | Scripted provider responses, schema/payload handling, key hygiene, time/call limits and budget reservations |
-| `test_server.py` | Local HTTP protections, daily round trip, retained-report access, control references |
+| `test_server.py` | Local HTTP protections, daily round trip, retained-report access, control references, `/api/config` calendar fields, weekend and out-of-range day refusals |
 | `test_ui.cjs` | DOM-stub rendering, direct density colors, day detail events, legend, reset and controls |
+| `test_synth_determinism.py` | Same seed gives byte-identical record families; the pinned content hash of the default two months |
+| `test_records_invariants.py` | Physics and accounting invariants of every record, the seeded effects visible in the data, and the rule that no tool layer imports the answer keys |
+| `test_record_store.py` | Per-day tool tables reconcile to the record families by plain Python sums: shift totals, split setups, stops/orders/rejects field by field, the corrupt flag, weekend refusal |
+| `test_period_tools.py` | Known-answer values for the period tools computed by hand over `generate_months()` (pinned goldens for September versus August), window semantics, withheld deltas, Pareto shares, waste, stops profile, trend, and every new offline phrasing |
+| `test_evals.py` + `evals/golden.json` | The routing/faithfulness/grounding/refusal regression gate, now over the record store, including the period cases |
+
+As of the record-store change the suite is 243 tests (one skipped); `python3 evals/run.py` reports 34 passed, 9 live cases skipped without fixtures.
 
 The UI stub does not parse CSS, calculate contrast, enforce CSP, download a real file, or execute in a browser. PDF signatures do not prove page layout. Provider mocks do not prove that a live model chooses useful tools. Keep these distinctions in test reports.
 
@@ -42,7 +49,7 @@ Start the server using [WORKBENCH](WORKBENCH.md). Reload after frontend changes.
 1. Production day / Offline / Selected shift only: click Why was this shift slow? Expect numeric evidence, downtime and speed charts, and $0 model cost.
 2. Ask about shift 1 without changing selected-shift scope. Expect a scope error. Choose All shifts / comparison explicitly to compare.
 3. Compare all shifts, then ask Show speed with the same controls. Inspect history in the execution panel. History must retain both questions; the selected control shift stays unchanged.
-4. Calendar month: build the report. Expect September 1–30, 30 numbered cells, visible color variation, variable setup totals for shift 2, and unavailable August comparison. Free-text and OpenAI mode controls must be disabled.
+4. Calendar month: build the report. Expect September 1–30, 30 numbered cells of which 22 production days carry color and the 8 weekend cells are hatched plant-down, visible color variation, and a real August comparison (July, by contrast, is unavailable). Free-text and OpenAI mode controls must be disabled.
 5. Select a day by click and keyboard Tab. Check date, estimated/gross area, speed attainment, downtime categories, waste percentages, paper changes, setups, and heavy hitter. Check the legend remains visible.
 6. 4-4-5 at September 14: expect September 1–28 and 28 cells. At September 29: expect September 29–October 26, two available dates, hatched missing dates, partial status, and no rankings.
 7. Enable the bad-trim option for shift 2 and rebuild. Expect incomplete evidence, hatched cells and withheld rankings. Disable it afterward.

@@ -1,6 +1,6 @@
 # Metrics, targets, and calendar interpretation
 
-This is the calculation reference for the current synthetic workbench. The implementation lives in `analysis.py`, `fixture.py`, and `periods.py`. These definitions describe what the code measures; they do not establish causal explanations or achievable savings.
+This is the calculation reference for the current synthetic workbench. The data source is the record store (`record_store.py`): two production months, August and September 2026, Monday to Friday, generated once from seed 2026 (`synth.py`, [RECORDS](RECORDS.md)). The daily tools live in `analysis.py`, the period tools in `record_store.py`, the period reports in `periods.py`; `fixture.py` is the legacy one-day XML generator kept for its own tests. These definitions describe what the code measures; they do not establish causal explanations or achievable savings.
 
 ## Quantities and denominators
 
@@ -25,6 +25,41 @@ For each valid setup, let F be gross machine lineal feet, G gross square feet, T
 Example: 10 minutes at a 900 target and 10 minutes at a 500 target have a combined target of 14,000 feet. If those runs produce 10,500 feet, attainment is 75%. It is not obtained by taking an unweighted average of their individual percentages.
 
 Period speed is total feet / (480 × number of observed shifts). Period downtime percentages average shift percentages because every supported shift has exactly the same 480-minute denominator. Period waste is weighted by gross area. The current implementation reconstructs target footage from each daily footage/attainment pair; it does not retain an independent raw target-footage field in the period response. Zero or wholly invalid shifts would require additional handling before supporting external data.
+
+In the daily tools `maintenance_pct` is unplanned Maintenance only; the planned window is reported separately as `pm_pct` (stop kind `PM`), and `downtime_pct` is every stop. Dry-end rejects in the record families are per knife position and reason (`BOND`, `WARP`, `MISALIGNMENT`); the quality tools read per-reason areas from the `rejects` table, so a setup with three reasons contributes to three rows (the fixture wrote one reason per setup). The record families carry no order quantity ledger: in the order matrix `requested_sheets`, `remaining_before`, `remaining_after` and `planned_overrun_sheets` are null, `planned_sheets` is this record's `nominal_cuts × outs`, `produced_sheets` is `actual_cuts × outs`, and the knife column is `knife 1/2/3` from `cutoff_allocation` (the fixture's upper/lower only covers two positions).
+
+## Period tools (record store)
+
+The six period tools (`get_period_kpis`, `compare_periods`, `get_downtime_pareto`, `get_waste_breakdown`, `get_stops_profile`, `get_trend`) read the whole store. Every percentage is a ratio of summed numerators and denominators over the window, never an average of per-day or per-shift percentages: September side trim is sum(trim sq ft) / sum(gross sq ft) over the month's 4,115 setup records, not the mean of 22 daily percentages (the test suite pins that the two differ). Deltas are the difference of the two displayed tiles, so a tile reconciles on screen. An optional `shift` filter restricts every sum to one shift; under the Selected shift only scope the selected shift is enforced.
+
+| Window | Current | Previous |
+| --- | --- | --- |
+| `day` | the anchor's production day (07:00 to 07:00); a weekend anchor is refused | the previous production day (Friday before a Monday) |
+| `week` | the Monday–Friday production week containing the anchor (a weekend anchor maps to the week it closes) | the preceding Monday–Friday week |
+| `month` | the calendar month containing the anchor | the preceding calendar month |
+
+A window must overlap the dataset (3 August – 30 September 2026). Coverage is `complete` when every weekday of the window has records, `partial` when some do (the week of 28 September has three days; the week of 3 August has a `complete` current window and an `unavailable` previous one), `unavailable` when none do. Deltas and the `change` label are withheld unless both windows are complete; weekends and days before 3 August are never zero.
+
+| Tile | Formula over the window | `better` |
+| --- | --- | --- |
+| volume_msf | sum(gross sq ft) / 1000 | higher |
+| lineal_ft | sum(lineal ft) | higher |
+| speed_run_fpm (without stops) | sum(lineal ft) / sum(elapsed − stop minutes of the setup records) | higher |
+| speed_all_fpm (with stops) | sum(lineal ft) / sum(scheduled shift minutes) | higher |
+| downtime_pct, downtime_minutes | sum(stop seconds) / sum(scheduled seconds) × 100; sum(stop seconds) / 60 | lower |
+| stops, minutes_per_stop | count of stop records; downtime minutes / stops | lower |
+| trim_pct, shear_pct, dry_end_pct | sum(category sq ft) / sum(gross sq ft) × 100 | lower |
+| bond_pct, warp_pct, misalignment_pct | sum(reject lines of that reason) / sum(gross) × 100; the three add to dry_end_pct | lower |
+| bale_pct | sum(shift `bale_sqft`) / sum(gross) × 100 — a scale reading of baled waste, not an accounting sum | lower |
+| unexplained_pct | (sum(bale) − sum(trim + shear + rejects)) / sum(gross) × 100 — what the scale weighed beyond the accounted categories (0.1–0.4 % in this dataset) | lower |
+| maintenance_pm_pct | sum(Maintenance + PM stop seconds) / scheduled × 100 (the owner's dashboard combines planned and unplanned) | lower |
+| operator_pct | sum(Operator stop seconds) / scheduled × 100 | lower |
+| setups | count of setup records (a shift-split setup is two records, as in the daily tools) | neutral |
+| paper_changes | count of distinct wet-end IDs in the window (a run crossing a shift boundary counts once; the daily tool counts it in each shift it touches) | neutral |
+
+`better` is the direction the UI should color as good: `lower`, `higher`, or `neutral` for counts that are context rather than a score. `change` is `better`, `worse`, `same`, `neutral` or null when withheld.
+
+`get_downtime_pareto` groups the window's stops by reason, place or kind, orders by minutes or count, and gives each row its share and cumulative share of the window total plus the previous window's stops and minutes (0 when the category did not recur, null when the previous window is unavailable). `get_waste_breakdown` is the waste half of the tile table as square feet and percent of gross, previous window alongside. `get_stops_profile` gives stops, minutes, minutes per stop and downtime percent for each production day plus the Monday-to-Friday profile (stops per day, minutes per day) so a first-day-after-the-weekend effect is visible. `get_trend` is the weekly series (Mon–Fri weeks, each a ratio of sums) of one metric from the allow-list `trim_pct, shear_pct, dry_end_pct, warp_pct, bond_pct, misalignment_pct, speed_run_fpm, speed_all_fpm, downtime_pct, stops, minutes_per_stop, msf_per_day`, 1–26 weeks ending with the anchor's week; weeks before the dataset are listed as missing, a short week is flagged partial.
 
 ## Configured targets
 
@@ -97,14 +132,14 @@ Version 1 rejects overlapping stops and stops crossing shift boundaries. It hand
 
 | Selection | Current window | Previous window |
 | --- | --- | --- |
-| Production day | Selected date 07:00 through next date 07:00 | No automatic previous-day report |
-| Week ending on date | Selected date and preceding six production dates | Preceding seven production dates |
+| Production day | Selected date 07:00 through next date 07:00 | No automatic previous-day report (the `day` window of `get_period_kpis` compares with the previous production day) |
+| Production week | Monday–Friday production week containing the selected date | Preceding Monday–Friday week |
 | Calendar month | Calendar month containing selected date | Previous calendar month |
 | 4-4-5 accounting period | Containing period in repeating 4, 4, 5 week pattern | Immediately preceding accounting period |
 
-The demo year starts September 1, 2026, a Tuesday. P1 is September 1–28; P2 is September 29–October 26. The displayed heatmap still uses Sunday–Saturday columns: weekday presentation is independent of the accounting anchor. The demo only contains September 1–30. P2 therefore has two observed days and 26 unavailable days. Fiscal anchor, week convention, 53-week years, and timezone/DST require plant confirmation before extending the calendar.
+The production calendar is Monday to Friday from 3 August to 30 September 2026 (43 production days, 129 shifts); weekends are plant-down and emit no records, and there is no holiday calendar. The demo accounting year starts September 1, 2026, a Tuesday. P1 is September 1–28; P2 is September 29–October 26. The displayed heatmap still uses Sunday–Saturday columns: weekday presentation is independent of the accounting anchor; weekend cells are marked `plant_down` and hatched. P1's previous period (28 July – 31 August) starts before the first production day, so its comparison is unavailable; P2 has two observed days and the rest unavailable. Fiscal anchor, week convention, 53-week years, and timezone/DST require plant confirmation before extending the calendar.
 
-Missing periods are unavailable, not zero. Current partial totals describe observed contributions. Rankings and comparison deltas require complete windows. A bad setup conservatively makes all evidence for its shift incomplete, including otherwise sound downtime records. Daily investigations can finish with `status=complete` while their evidence has `coverage=incomplete`; check both fields. Period investigations instead use `status=partial` when coverage is incomplete.
+Missing periods are unavailable, not zero; a weekend is plant-down, not missing. Current partial totals describe observed contributions. Rankings and comparison deltas require complete windows. A bad setup conservatively makes all evidence for its shift incomplete, including otherwise sound downtime records. Daily investigations can finish with `status=complete` while their evidence has `coverage=incomplete`; check both fields. Period investigations instead use `status=partial` when coverage is incomplete.
 
 ## Reading the heatmap
 
