@@ -14,7 +14,7 @@ The cost discipline copies the owner's Paper Network chat Worker: a per-visitor 
 
 ## What one round sends
 
-A round is one `/api/ask` request. Inside it the planner may make up to ten model calls within 60 seconds (tool choices plus one narrative call), each bounded to a 24 KB request and a 512 KB response with a 20-second socket timeout.
+A round is one `/api/ask` request. Inside it the planner may make up to ten model calls within 60 seconds (tool choices plus one narrative call), each bounded to a 64 KB serialized request and a 512 KB response with a 20-second socket timeout. When the running history would push a request past 64 KB, the adapter first trims the oldest tool results to a stub (result id, tool, ok, row count, and a note) so the model can still cite them; only a request that does not fit after trimming is refused. The newest tool result is never trimmed.
 
 - `system`: the shared PROCESS_CONTEXT, the selected-scope rule and the same planner instructions the OpenAI adapter sends.
 - `tools`: every entry of `TOOL_SCHEMAS` with its `parameters` mapped to Anthropic `input_schema` (`strict: true`, all properties required) plus `finish` and `cannot_answer`.
@@ -46,12 +46,12 @@ Every control above is a per-process or per-container ledger. Cloud Run can run 
 
 List prices read from Anthropic's pricing on 2026-10-22 (display estimates; recheck before changing the model):
 
-| Model | Input $/MTok | Output $/MTok | Typical round (3-4 calls, ~2.5K input and ~400 output tokens each) | Worst case (10 calls at the 24 KB request cap, 1024 output tokens each) |
+| Model | Input $/MTok | Output $/MTok | Typical round (3-4 calls, ~2.5K input and ~400 output tokens each) | Worst case (10 calls at the 64 KB request cap, 2,048 planning / 4,096 narrative output tokens each) |
 | --- | ---: | ---: | ---: | ---: |
-| `claude-haiku-5-5` (default) | 0.10 | 0.50 | about $0.002 | about $0.011 |
-| `claude-sonnet-5-5` | 2.00 | 10.00 | about $0.04 | about $0.22 |
+| `claude-haiku-5-5` (default) | 0.10 | 0.50 | about $0.002 | about $0.03 |
+| `claude-sonnet-5-5` | 2.00 | 10.00 | about $0.04 | about $0.57 |
 
-Haiku 5.5 prices above are the rate card for prompts of 100K tokens or fewer; this adapter never sends more than 24 KB per request. At the Worker's 400 rounds per day, Haiku 5.5 stays under about $1 a day in the typical case and about $4.50 at the worst case; Sonnet 5.5 is roughly twenty times that. Note the interaction with the monthly `Budget` guard, which the code caps at $5 per installation: at $0.002 per Haiku call it allows 2,500 calls, roughly 600-800 rounds, per UTC month per container before answering "Monthly application model budget exhausted" (a `200` with status `planner_error`, not a `429`). That is well under 400 rounds a day. A Sonnet demo reaches the same wall after about 165 calls. Serving the Worker's volume therefore needs a deliberate decision to raise the `Budget` ceiling in `openai_provider.py` (and the console limit with it), or a lower `DEMO_DAILY_CAP`; nothing here changes that ceiling silently.
+Haiku 5.5 prices above are the rate card for prompts of 100K tokens or fewer; this adapter never sends more than 64 KB (under 20K tokens) per request. At the Worker's 400 rounds per day, Haiku 5.5 stays under about $1 a day in the typical case and about $12 at the worst case; Sonnet 5.5 is roughly twenty times that. Note the interaction with the monthly `Budget` guard, which the code caps at $5 per installation. The reservation taken before each call is sized from the request actually sent (about twice the list-price worst case for that request: input estimated at 3 bytes per token, output at the call's `max_tokens`, floor $0.0005), so a typical Haiku call reserves $0.003-0.004 and a typical four-call round about $0.013; $5 therefore allows roughly 1,400 Haiku calls, about 350-400 rounds, per UTC month per container before answering "Monthly application model budget exhausted" (a `200` with status `planner_error`, not a `429`). That is well under 400 rounds a day. A Sonnet demo reserves about $0.06 per typical call and reaches the same wall after about 80 calls. Reservations are never refunded, so the ledger always overstates spend. Serving the Worker's volume therefore needs a deliberate decision to raise the `Budget` ceiling in `openai_provider.py` (and the console limit with it), or a lower `DEMO_DAILY_CAP`; nothing here changes that ceiling silently.
 
 ## What is not verified
 

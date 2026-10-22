@@ -6,6 +6,7 @@ mode; locally a visitor key arrives through the X-Anthropic-Key header for one r
 from copy import deepcopy
 import http.client
 import json
+import math
 import time
 
 from .openai_provider import (Budget, NARRATIVE_INSTRUCTIONS, PLANNER_INSTRUCTIONS,  # noqa: F401 (Budget re-exported)
@@ -17,16 +18,26 @@ API_VERSION = '2023-06-01'
 DEFAULT_MODEL = 'claude-haiku-5-5'
 # USD per million tokens, first-party API list prices read on 2026-10-22. Display estimates
 # only: the Anthropic console spend limit is the hard stop. Haiku 5.5 is the <=100K-token
-# prompt rate card; this adapter never sends more than 24 KB per request.
-# The guard reserved per call is about 2x the worst case at the 24 KB request cap and 1024 output tokens.
+# prompt rate card; this adapter never sends more than 64 KB (well under 20K tokens) per request.
 PRICING = {
-    'claude-haiku-5-5': {'input': 0.10, 'output': 0.50, 'reserve_micro_usd': 2000},    # $0.002 guard per call
-    'claude-sonnet-5-5': {'input': 2.00, 'output': 10.00, 'reserve_micro_usd': 30000},  # $0.03 guard per call
+    'claude-haiku-5-5': {'input': 0.10, 'output': 0.50},
+    'claude-sonnet-5-5': {'input': 2.00, 'output': 10.00},
 }
 MAX_TOKENS = 2048          # planning step; thinking (adaptive, on by default) counts toward this cap
 NARRATIVE_MAX_TOKENS = 4096  # the write_narrative call carries paragraphs plus citations; 1024 was cut off every time
-MAX_REQUEST_BYTES = 24000  # same serialized request ceiling as the OpenAI adapter
+# Serialized request ceiling. A four-step investigation over the period tools (wet-end
+# performance plus a setup matrix) passed 24 KB on the fourth call, so the cap is 64 KB and
+# older tool results are trimmed to a stub first (_fit); only a request that still does not
+# fit after trimming is refused.
+MAX_REQUEST_BYTES = 64000
 MAX_RESPONSE_BYTES = 512000
+# Pre-call budget reservation, sized from the request actually being sent rather than a flat
+# guard: about 2x the list-price worst case for this request (input estimated at a
+# conservative 3 bytes per token, output at the call's max_tokens). Never refunded.
+BYTES_PER_TOKEN = 3
+RESERVE_MULTIPLIER = 2
+RESERVE_FLOOR_MICRO_USD = 500
+COMPACTED_NOTE = 'Earlier tool result trimmed to fit the request limit; its evidence stays citable by result_id.'
 MAX_CALLS = 10
 LIFETIME_SECONDS = 60
 SOCKET_TIMEOUT = 20
@@ -49,6 +60,29 @@ def resolve_model(name):
     if name not in PRICING:
         raise ProviderError('ANTHROPIC_MODEL must be one of: ' + ', '.join(sorted(PRICING)))
     return name
+
+
+def reserve_micro_usd(model, request_bytes, max_tokens):
+    """Micro-dollars to reserve before a call of this size; floor keeps tiny calls from rounding to nothing."""
+    rates = PRICING[model]
+    estimate = (request_bytes/BYTES_PER_TOKEN)*rates['input'] + max_tokens*rates['output']
+    return max(RESERVE_FLOOR_MICRO_USD, int(math.ceil(RESERVE_MULTIPLIER*estimate)))
+
+
+def compacted_stub(content):
+    """The few fields a trimmed tool result keeps so the model can still cite it by id."""
+    try:
+        result = json.loads(content)
+    except ValueError:
+        result = {}
+    if not isinstance(result, dict):
+        result = {}
+    stub = {key: result[key] for key in ('result_id', 'tool', 'ok') if key in result}
+    data = result.get('data')
+    if isinstance(data, dict) and isinstance(data.get('rows'), list):
+        stub['row_count'] = len(data['rows'])
+    stub['note'] = COMPACTED_NOTE
+    return json.dumps(stub)
 
 
 def anthropic_tools(schemas):
@@ -132,12 +166,14 @@ class AnthropicPlanner:
         self._messages = []
         self._system = None
         self._pending = None
+        self._compacted = set()  # indices into _messages whose tool_result is already a stub
         self._start = time.monotonic()
         self.usage = {'model_calls': 0, 'input_tokens': 0, 'output_tokens': 0, 'cost_usd': 0.0, 'reserved_usd': 0.0, 'model': self.model}
 
     def close(self):
         self._key = None
         self._messages.clear()
+        self._compacted.clear()
         self._pending = None
 
     def next_step(self, context):
@@ -206,11 +242,36 @@ class AnthropicPlanner:
             raise ProviderError('Live investigation model-call/time limit reached')
         return remaining
 
+    def _fit(self, payload):
+        """Trim the oldest tool results in the running history until the request fits; return its size.
+
+        The result the model is about to read (the last tool_result) is never trimmed, and a
+        stub keeps result_id/tool/ok so finish can still cite the evidence. Trimming is
+        permanent for the rest of the investigation: a later request would only be larger.
+        """
+        size = len(json.dumps(payload).encode())
+        if size <= MAX_REQUEST_BYTES or payload.get('messages') is not self._messages:
+            return size
+        result_turns = [i for i, m in enumerate(self._messages)
+                        if m['role'] == 'user' and isinstance(m['content'], list)
+                        and m['content'][0].get('type') == 'tool_result']
+        for index in result_turns[:-1]:
+            if index in self._compacted:
+                continue
+            block = self._messages[index]['content'][0]
+            block['content'] = compacted_stub(block['content'])
+            self._compacted.add(index)
+            size = len(json.dumps(payload).encode())
+            if size <= MAX_REQUEST_BYTES:
+                break
+        return size
+
     def _request(self, payload):
         remaining = self._check_limits()
-        if len(json.dumps(payload).encode()) > MAX_REQUEST_BYTES:
+        size = self._fit(payload)
+        if size > MAX_REQUEST_BYTES:
             raise ProviderError('Model context byte limit reached')
-        reserve = PRICING[self.model]['reserve_micro_usd']
+        reserve = reserve_micro_usd(self.model, size, payload['max_tokens'])
         self._budget.reserve(reserve)  # Commit before the network call; never refund uncertain usage.
         self.usage['reserved_usd'] += reserve/1_000_000
         self.usage['model_calls'] += 1

@@ -1,7 +1,8 @@
 import json
 import pytest
 from investigator.anthropic_provider import (AnthropicPlanner, Budget, DEFAULT_MODEL, PRICING, API_VERSION,
-                                             anthropic_tools, resolve_model, transport)
+                                             COMPACTED_NOTE, MAX_REQUEST_BYTES, RESERVE_FLOOR_MICRO_USD,
+                                             anthropic_tools, reserve_micro_usd, resolve_model, transport)
 from investigator.agent import Agent, Context, TOOL_SCHEMAS, PROCESS_CONTEXT
 from investigator.analysis import Analysis
 from investigator.fixture import generate
@@ -38,9 +39,10 @@ def test_tool_schemas_map_to_input_schema():
 
 
 def test_tool_use_rounds_final_round_and_no_key_in_payload(tmp_path, analysis):
-    requests = []
+    requests, reserves = [], []
     def send(payload, key, timeout):
         assert key == KEY and KEY not in json.dumps(payload)
+        reserves.append(reserve_micro_usd(DEFAULT_MODEL, len(json.dumps(payload).encode()), payload['max_tokens']))
         assert 0 < timeout <= 20
         assert payload['model'] == DEFAULT_MODEL and payload['max_tokens'] <= (4096 if payload['tools'][0]['name'] == 'write_narrative' else 2048)
         assert 'temperature' not in payload  # non-default sampling is rejected by the target models
@@ -74,7 +76,8 @@ def test_tool_use_rounds_final_round_and_no_key_in_payload(tmp_path, analysis):
         result = Agent(analysis, planner, max_calls=10, max_seconds=60).ask('Please investigate the stopping causes', Context(analysis.day))
         assert result['status'] == 'complete'
         assert result['usage']['model_calls'] == 4
-        assert result['usage']['reserved_usd'] == pytest.approx(4*PRICING[DEFAULT_MODEL]['reserve_micro_usd']/1_000_000)
+        assert result['usage']['reserved_usd'] == pytest.approx(sum(reserves)/1_000_000)
+        print('reserves', reserves)
         assert result['usage']['cost_usd'] == pytest.approx((400*0.10+200*0.50)/1_000_000)
         assert result['narrative_status'] == 'available'
         assert 'Knife jam' in result['narrative'][0]['text']
@@ -177,7 +180,7 @@ def test_response_size_cap_and_incomplete_stop(tmp_path, analysis):
 
 
 def test_budget_exhaustion_blocks_before_network(tmp_path):
-    guard = PRICING[DEFAULT_MODEL]['reserve_micro_usd']
+    guard = RESERVE_FLOOR_MICRO_USD  # no call reserves less than the floor
     budget = Budget(tmp_path/'budget.db', limit_usd=guard/1_000_000)
     budget.reserve(guard)  # the month's allowance is taken by one earlier call
     planner = AnthropicPlanner(KEY, budget, lambda *a: pytest.fail('Network should not run'))
@@ -196,7 +199,9 @@ def test_model_selection_and_pricing(tmp_path):
     planner = AnthropicPlanner(KEY, Budget(tmp_path/'budget.db'), lambda p, k, t: seen.append(p) or reply(tool_use('finish', {'result_ids': []})), model='claude-sonnet-5-5')
     planner.next_step({'process': 'p', 'question': 'q', 'production_day': 'd', 'shifts': [2], 'history': [], 'tools': TOOL_SCHEMAS, 'results': []})
     assert seen[0]['model'] == 'claude-sonnet-5-5'
-    assert planner.usage['reserved_usd'] == pytest.approx(.03)
+    expected = reserve_micro_usd('claude-sonnet-5-5', len(json.dumps(seen[0]).encode()), 2048)
+    assert planner.usage['reserved_usd'] == pytest.approx(expected/1_000_000)
+    assert expected > reserve_micro_usd(DEFAULT_MODEL, len(json.dumps(seen[0]).encode()), 2048)
     assert planner.usage['cost_usd'] == pytest.approx((100*2.0+50*10.0)/1_000_000)
     planner.close()
 
@@ -323,3 +328,61 @@ def test_planner_instructions_cover_scope_and_place_versus_reason():
     assert 'pass shift null' in PLANNER_INSTRUCTIONS
     assert 'group_by "place"' in PLANNER_INSTRUCTIONS
     assert 'a rendered chart is output, not evidence' in PLANNER_INSTRUCTIONS
+
+
+def _big_result(index, size):
+    return {'result_id': f'r{index}', 'tool': 'get_wet_end_performance', 'ok': True,
+            'data': {'rows': [{'order_id': f'o{index}-{n}', 'note': 'x'*200} for n in range(size//210)]}}
+
+
+def _ctx(results):
+    return {'process': 'p', 'question': 'why slow', 'production_day': 'd', 'shifts': [1, 2, 3], 'scope': 'day',
+            'allowed_shifts': [1, 2, 3], 'history': [], 'tools': TOOL_SCHEMAS, 'results': results}
+
+
+def test_long_investigation_trims_older_results_instead_of_failing(tmp_path):
+    sizes = []
+    def send(payload, key, timeout):
+        sizes.append(len(json.dumps(payload).encode()))
+        n = len(sizes)
+        return reply(tool_use('get_wet_end_performance', {'window': 'month'}, f'toolu_{n}'))
+    planner = AnthropicPlanner(KEY, Budget(tmp_path/'budget.db'), send)
+    try:
+        results = []
+        planner.next_step(_ctx(results))
+        for i in range(5):  # five 20 KB results: the raw history would pass 100 KB
+            results.append(_big_result(i, 20000))
+            planner.next_step(_ctx(results))
+        assert len(sizes) == 6 and max(sizes) <= MAX_REQUEST_BYTES
+        tool_results = [m['content'][0] for m in planner._messages if m['role'] == 'user' and isinstance(m['content'], list)]
+        assert len(tool_results) == 5
+        # The newest result is sent in full; the oldest ones are stubs that keep the citation handle.
+        assert json.loads(tool_results[-1]['content'])['data']['rows'][0]['order_id'] == 'o4-0'
+        first = json.loads(tool_results[0]['content'])
+        assert first == {'result_id': 'r0', 'tool': 'get_wet_end_performance', 'ok': True,
+                         'row_count': len(_big_result(0, 20000)['data']['rows']), 'note': COMPACTED_NOTE}
+        assert planner.usage['model_calls'] == 6
+    finally:
+        planner.close()
+
+
+def test_single_oversized_result_is_still_refused(tmp_path):
+    planner = AnthropicPlanner(KEY, Budget(tmp_path/'budget.db'),
+                               lambda *a: reply(tool_use('get_wet_end_performance', {'window': 'month'})))
+    try:
+        planner.next_step(_ctx([]))
+        with pytest.raises(ValueError, match='byte limit'):
+            planner.next_step(_ctx([_big_result(0, MAX_REQUEST_BYTES+5000)]))
+        assert planner.usage['model_calls'] == 1  # refused before the network and before any reservation
+    finally:
+        planner.close()
+
+
+def test_reserve_scales_with_request_size_and_model():
+    small = reserve_micro_usd(DEFAULT_MODEL, 1000, 2048)
+    typical = reserve_micro_usd(DEFAULT_MODEL, 14000, 2048)
+    worst = reserve_micro_usd(DEFAULT_MODEL, MAX_REQUEST_BYTES, 4096)
+    assert RESERVE_FLOOR_MICRO_USD <= small < typical < worst
+    assert worst == pytest.approx(2*((MAX_REQUEST_BYTES/3)*0.10 + 4096*0.50), abs=1)
+    assert reserve_micro_usd('claude-sonnet-5-5', 14000, 2048) == pytest.approx(2*((14000/3)*2.0 + 2048*10.0), abs=1)
+    assert reserve_micro_usd(DEFAULT_MODEL, 1, 1) == RESERVE_FLOOR_MICRO_USD
