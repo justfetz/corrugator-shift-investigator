@@ -115,7 +115,7 @@ def test_investigation_rules_on_a_synthetic_trace():
     assert golden.investigation_failures({**expect, 'prose_numbers': []}, [limitation]) == []
 
 
-def test_live_plumbing_knows_both_providers(monkeypatch):
+def test_live_plumbing_knows_both_providers(monkeypatch, tmp_path):
     assert set(golden.PROVIDERS) == {'openai', 'anthropic'}
     assert golden.fixture_path('x', 'anthropic') == ROOT / 'evals' / 'fixtures' / 'anthropic' / 'x.json'
     monkeypatch.delenv('OPENAI_API_KEY', raising=False)
@@ -134,6 +134,7 @@ def test_live_plumbing_knows_both_providers(monkeypatch):
     status, body = send({'system': 'other', 'messages': [{'role': 'user', 'content': 'd' * 32 + ':1'}]}, 'k', 5)
     assert status == 200 and ('d' * 32 + ':1').encode() in body and warnings
     live = next(c for c in CASES if c.get('live'))
+    monkeypatch.setattr(golden, 'FIXTURES', tmp_path)  # recordings are committed; an empty fixture dir means skip
     assert golden.run_case(live, 'anthropic')[0] == 'skip'
 
 
