@@ -69,6 +69,7 @@ def render_narrative(value, packet):
             if len(formatted)>200:
                 raise ValueError('Narrative field too long')
             text=text.replace('{{'+str(i)+'}}',formatted)
-            citations.append(f"Shift {source['shift']}, {field}, {rid}, row {index}")
+            scope = f"Shift {source['shift']}" if source['shift'] is not None else 'All shifts'
+            citations.append(f"{scope}, {field}, {rid}, row {index}")
         rendered.append({'kind':p['kind'],'text':text,'citations':citations})
     return rendered

@@ -58,6 +58,42 @@ TABLES = {
               "reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, note VARCHAR"),
 }
 
+# The dashboard tiles: key, label, unit, which direction is better.
+# "neutral" means the count is context, not a score (docs/METRICS.md).
+KPI_CATALOG = (
+    ("volume_msf", "Volume", "MSF", "higher"),
+    ("lineal_ft", "Lineal feet", "ft", "higher"),
+    ("speed_run_fpm", "Speed without stops", "ft/min", "higher"),
+    ("speed_all_fpm", "Speed with stops", "ft/min", "higher"),
+    ("downtime_pct", "Downtime", "% of scheduled minutes", "lower"),
+    ("downtime_minutes", "Downtime minutes", "min", "lower"),
+    ("stops", "Stops", "count", "lower"),
+    ("minutes_per_stop", "Minutes per stop", "min/stop", "lower"),
+    ("trim_pct", "Side trim", "% of gross", "lower"),
+    ("shear_pct", "Shear", "% of gross", "lower"),
+    ("dry_end_pct", "Dry-end rejects", "% of gross", "lower"),
+    ("bond_pct", "Dry-end: bond", "% of gross", "lower"),
+    ("warp_pct", "Dry-end: warp", "% of gross", "lower"),
+    ("misalignment_pct", "Dry-end: misalignment", "% of gross", "lower"),
+    ("bale_pct", "Bale (scale reading)", "% of gross", "lower"),
+    ("unexplained_pct", "Unexplained (bale minus trim, shear and rejects)", "% of gross", "lower"),
+    ("maintenance_pm_pct", "Maintenance + PM downtime", "% of scheduled minutes", "lower"),
+    ("operator_pct", "Operator downtime", "% of scheduled minutes", "lower"),
+    ("setups", "Setup records", "count", "neutral"),
+    ("paper_changes", "Paper changes (distinct wet ends)", "count", "neutral"),
+)
+KPI_UNITS = {key: unit for key, _, unit, _ in KPI_CATALOG}
+TREND_METRICS = ("trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct",
+                 "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day")
+TREND_UNITS = {**{m: KPI_UNITS[m] for m in TREND_METRICS if m in KPI_UNITS}, "msf_per_day": "MSF per production day"}
+WASTE_CATEGORIES = (("trim", "Side trim"), ("shear", "Shear chops"), ("bond", "Dry-end: bond"),
+                    ("warp", "Dry-end: warp"), ("misalignment", "Dry-end: misalignment"),
+                    ("dry_end", "Dry-end rejects (all reasons)"), ("bale", "Bale (scale reading)"),
+                    ("unexplained", "Unexplained (bale minus accounted waste)"))
+_STOP_GROUPS = ("reason", "place", "kind")
+_STOP_MEASURES = ("minutes", "count")
+
+
 def _round(value, places):
     return None if value is None else round(value, places)
 
@@ -303,6 +339,281 @@ class RecordStore:
             finally:
                 timer.cancel()
                 timer.join()
+
+    def _window(self, spec):
+        period, anchor, start, end = parse_window(spec, self._first, self._last)
+        return self._describe(period, start, end, anchor)
+
+    def _describe(self, period, start, end, anchor=None):
+        expected = _weekdays(start, end)
+        observed = [d for d in expected if d.isoformat() in self._days]
+        coverage = "complete" if observed and len(observed) == len(expected) else "partial" if observed else "unavailable"
+        return {"period": period, "anchor": (anchor or start).isoformat(), "start": start.isoformat(),
+                "end": end.isoformat(), "label": window_label(period, start, end),
+                "production_days_expected": len(expected), "production_days_observed": len(observed),
+                "coverage": coverage}
+
+    def _previous(self, window):
+        period = window["period"]
+        start, end = previous_window(period, date.fromisoformat(window["start"]), date.fromisoformat(window["end"]))
+        return self._describe(period, start, end)
+
+    @staticmethod
+    def _shift_clause(shift):
+        if shift is None:
+            return "", []
+        if type(shift) is not int or shift not in (1, 2, 3):
+            raise ValueError("Shift must be 1, 2, 3 or null for all shifts")
+        return " AND shift = ?", [shift]
+
+    def _sums(self, window, shift, trace):
+        """Raw numerators and denominators of one window; KPIs are ratios of these."""
+        clause, extra = self._shift_clause(shift)
+        params = [window["start"], window["end"], *extra]
+        queries = {
+            "setups": "SELECT count(*) AS setup_records, count(DISTINCT wet_end_id) AS paper_changes, "
+                      "coalesce(sum(feet),0) AS lineal_ft, coalesce(sum(gross),0) AS gross_sqft, "
+                      "coalesce(sum(trim),0) AS trim_sqft, coalesce(sum(shear),0) AS shear_sqft, "
+                      "coalesce(sum(rejects),0) AS reject_sqft, coalesce(sum(seconds),0) AS elapsed_seconds, "
+                      "coalesce(sum(stop_seconds),0) AS setup_stop_seconds, count(DISTINCT production_date) AS production_days "
+                      f"FROM setups WHERE production_date BETWEEN ? AND ?{clause}",
+            "shifts": "SELECT count(*) AS shift_records, coalesce(sum(scheduled_minutes),0)*60 AS scheduled_seconds, "
+                      f"coalesce(sum(bale),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
+            "stops": f"SELECT kind, count(*) AS stops, sum(seconds) AS seconds FROM stops WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind",
+            "rejects": f"SELECT reason, sum(sqft) AS sqft FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason",
+        }
+        sums = {}
+        for name, sql in queries.items():
+            rows = self._fetch(sql, params)
+            trace["sql"].append(sql)
+            trace["parameters"].append(params)
+            sums[name] = rows
+        setup, shifts = sums["setups"][0], sums["shifts"][0]
+        by_kind = {r["kind"]: r for r in sums["stops"]}
+        by_reason = {r["reason"]: r["sqft"] for r in sums["rejects"]}
+        total = {**setup, **shifts,
+                 "stop_count": sum(r["stops"] for r in sums["stops"]),
+                 "stop_seconds": sum(r["seconds"] for r in sums["stops"]),
+                 "maintenance_pm_seconds": sum(r["seconds"] for k, r in by_kind.items() if k in ("Maintenance", "PM")),
+                 "operator_seconds": by_kind.get("Operator", {}).get("seconds", 0) or 0,
+                 "bond_sqft": by_reason.get("BOND", 0.0), "warp_sqft": by_reason.get("WARP", 0.0),
+                 "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0),
+                 "source_rows": {"setups": setup["setup_records"], "shifts": shifts["shift_records"],
+                                 "stops": sum(r["stops"] for r in sums["stops"]), "rejects": len(sums["rejects"])}}
+        return total
+
+    @staticmethod
+    def _kpis(t):
+        gross, scheduled = t["gross_sqft"], t["scheduled_seconds"]
+        running_minutes = (t["elapsed_seconds"] - t["setup_stop_seconds"]) / 60
+        accounted = t["trim_sqft"] + t["shear_sqft"] + t["reject_sqft"]
+        return {
+            "volume_msf": _round(gross / 1000, 1) if t["setup_records"] else None,
+            "lineal_ft": _round(t["lineal_ft"], 1) if t["setup_records"] else None,
+            "speed_run_fpm": _ratio(t["lineal_ft"], running_minutes, places=1),
+            "speed_all_fpm": _ratio(t["lineal_ft"], scheduled / 60, places=1),
+            "downtime_pct": _ratio(t["stop_seconds"], scheduled, 100),
+            "downtime_minutes": _round(t["stop_seconds"] / 60, 1) if t["shift_records"] else None,
+            "stops": t["stop_count"] if t["shift_records"] else None,
+            "minutes_per_stop": _ratio(t["stop_seconds"] / 60, t["stop_count"], places=2),
+            "trim_pct": _ratio(t["trim_sqft"], gross, 100),
+            "shear_pct": _ratio(t["shear_sqft"], gross, 100),
+            "dry_end_pct": _ratio(t["reject_sqft"], gross, 100),
+            "bond_pct": _ratio(t["bond_sqft"], gross, 100),
+            "warp_pct": _ratio(t["warp_sqft"], gross, 100),
+            "misalignment_pct": _ratio(t["misalignment_sqft"], gross, 100),
+            "bale_pct": _ratio(t["bale_sqft"], gross, 100),
+            "unexplained_pct": _ratio(t["bale_sqft"] - accounted, gross, 100),
+            "maintenance_pm_pct": _ratio(t["maintenance_pm_seconds"], scheduled, 100),
+            "operator_pct": _ratio(t["operator_seconds"], scheduled, 100),
+            "setups": t["setup_records"] if t["shift_records"] else None,
+            "paper_changes": t["paper_changes"] if t["shift_records"] else None,
+            "msf_per_day": _ratio(gross / 1000, t["production_days"], places=1),
+        }
+
+    @staticmethod
+    def _kpi_rows(current, previous, comparable):
+        rows = []
+        for key, label, unit, better in KPI_CATALOG:
+            now, before = current[key], previous[key] if previous else None
+            delta = round(now - before, 4) if comparable and now is not None and before is not None else None
+            if delta is None or better == "neutral":
+                change = None if delta is None else "neutral"
+            elif delta == 0:
+                change = "same"
+            else:
+                change = "better" if (delta < 0) == (better == "lower") else "worse"
+            rows.append({"metric": key, "label": label, "unit": unit, "current": now, "previous": before,
+                         "delta": delta, "better": better, "change": change})
+        return rows
+
+    def _envelope(self, tool, window, previous, shift, rows, trace, started, source_rows, **extra):
+        windows = [window] + ([previous] if previous else [])
+        coverage = "complete" if all(w["coverage"] == "complete" for w in windows) else \
+            "unavailable" if window["coverage"] == "unavailable" else "partial"
+        trace["elapsed_ms"] = (time.perf_counter() - started) * 1000
+        trace["sql"] = ";\n".join(trace["sql"])
+        return {"tool": tool, "window": window, "previous_window": previous, "shift": shift,
+                "dataset_version": self.content_hash, "rows": rows, "coverage": coverage,
+                "excluded_records": [], "source_rows": source_rows, "trace": trace, **extra}
+
+    # ------------------------------------------------------------ period tools
+
+    def get_period_kpis(self, window, compare=True, shift=None):
+        """The dashboard tiles for one window, with the previous window of the
+        same kind alongside when compare is true. Ratios of sums throughout."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        if type(compare) is not bool:
+            raise ValueError("compare must be true or false")
+        current = self._window(window)
+        previous = self._previous(current) if compare else None
+        now = self._sums(current, shift, trace)
+        before = self._sums(previous, shift, trace) if previous else None
+        comparable = bool(previous) and current["coverage"] == "complete" and previous["coverage"] == "complete"
+        rows = self._kpi_rows(self._kpis(now), self._kpis(before) if before else None, comparable)
+        source = {"current": now["source_rows"], "previous": before["source_rows"] if before else None}
+        return self._envelope("get_period_kpis", current, previous, shift, rows, trace, started, source,
+                              comparison="complete" if comparable else "withheld: a window is incomplete or unavailable")
+
+    def compare_periods(self, current_window, previous_window, shift=None):
+        """The same KPI table for two arbitrary windows (month vs month, week vs
+        week, day vs day); the second window is the comparison base."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        current, previous = self._window(current_window), self._window(previous_window)
+        now, before = self._sums(current, shift, trace), self._sums(previous, shift, trace)
+        comparable = current["coverage"] == "complete" and previous["coverage"] == "complete"
+        rows = self._kpi_rows(self._kpis(now), self._kpis(before), comparable)
+        source = {"current": now["source_rows"], "previous": before["source_rows"]}
+        return self._envelope("compare_periods", current, previous, shift, rows, trace, started, source,
+                              comparison="complete" if comparable else "withheld: a window is incomplete or unavailable")
+
+    def get_downtime_pareto(self, window, group_by="reason", measure="minutes", shift=None):
+        """Stops of the window grouped by reason, place or kind, ordered by the
+        measure, with share and cumulative share and the previous window beside."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        if group_by not in _STOP_GROUPS or measure not in _STOP_MEASURES:
+            raise ValueError("group_by must be reason, place or kind; measure must be minutes or count")
+        current = self._window(window)
+        previous = self._previous(current)
+        clause, extra = self._shift_clause(shift)
+        # group_by is strictly allowlisted; every visitor value is bound.
+        sql = (f"SELECT {group_by} AS category, count(*) AS stops, sum(seconds)/60 AS minutes "
+               f"FROM stops WHERE production_date BETWEEN ? AND ?{clause} GROUP BY {group_by}")
+        grouped = {}
+        for label, w in (("current", current), ("previous", previous)):
+            params = [w["start"], w["end"], *extra]
+            grouped[label] = {r["category"]: r for r in self._fetch(sql, params)}
+            trace["sql"].append(sql)
+            trace["parameters"].append(params)
+        key = "minutes" if measure == "minutes" else "stops"
+        rows = sorted(grouped["current"].values(), key=lambda r: (-r[key], r["category"]))
+        total = sum(r[key] for r in rows)
+        running, out = 0.0, []
+        for r in rows:
+            running += r[key]
+            before = grouped["previous"].get(r["category"])
+            out.append({"category": r["category"], "stops": r["stops"], "minutes": round(r["minutes"], 2),
+                        "share_pct": _ratio(r[key], total, 100, 2), "cumulative_pct": _ratio(running, total, 100, 2),
+                        "previous_stops": before["stops"] if before else (0 if previous["coverage"] != "unavailable" else None),
+                        "previous_minutes": round(before["minutes"], 2) if before else (0.0 if previous["coverage"] != "unavailable" else None)})
+        source = {"stops": sum(r["stops"] for r in rows), "previous_stops": sum(r["stops"] for r in grouped["previous"].values())}
+        return self._envelope("get_downtime_pareto", current, previous, shift, out, trace, started, source,
+                              group_by=group_by, measure=measure, total_minutes=round(sum(r["minutes"] for r in rows), 2),
+                              total_stops=sum(r["stops"] for r in rows))
+
+    def get_waste_breakdown(self, window, shift=None):
+        """Trim, shear, bond, warp, misalignment, bale and the unexplained
+        remainder as square feet and percent of gross, previous window alongside."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        current = self._window(window)
+        previous = self._previous(current)
+        now, before = self._sums(current, shift, trace), self._sums(previous, shift, trace)
+
+        def areas(t):
+            accounted = t["trim_sqft"] + t["shear_sqft"] + t["reject_sqft"]
+            return {"trim": t["trim_sqft"], "shear": t["shear_sqft"], "bond": t["bond_sqft"], "warp": t["warp_sqft"],
+                    "misalignment": t["misalignment_sqft"], "dry_end": t["reject_sqft"], "bale": t["bale_sqft"],
+                    "unexplained": t["bale_sqft"] - accounted}
+        a, b = areas(now), areas(before)
+        available = previous["coverage"] != "unavailable"
+        rows = []
+        for key, label in WASTE_CATEGORIES:
+            pct, prior = _ratio(a[key], now["gross_sqft"], 100), _ratio(b[key], before["gross_sqft"], 100) if available else None
+            rows.append({"category": key, "label": label, "sqft": round(a[key], 1), "pct_of_gross": pct,
+                         "previous_sqft": round(b[key], 1) if available else None, "previous_pct_of_gross": prior,
+                         "delta_pct_points": round(pct - prior, 4) if pct is not None and prior is not None else None})
+        source = {"current": now["source_rows"], "previous": before["source_rows"]}
+        return self._envelope("get_waste_breakdown", current, previous, shift, rows, trace, started, source,
+                              gross_sqft=round(now["gross_sqft"], 1), previous_gross_sqft=round(before["gross_sqft"], 1) if available else None)
+
+    def get_stops_profile(self, window, shift=None):
+        """Stops, minutes and minutes per stop for every production day of the
+        window, plus the window's Monday-to-Friday weekday profile."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        current = self._window(window)
+        clause, extra = self._shift_clause(shift)
+        params = [current["start"], current["end"], *extra]
+        queries = {
+            "shifts": "SELECT production_date, sum(scheduled_minutes) AS scheduled_minutes FROM shifts "
+                      f"WHERE production_date BETWEEN ? AND ?{clause} GROUP BY production_date ORDER BY production_date",
+            "stops": "SELECT production_date, count(*) AS stops, sum(seconds)/60 AS minutes FROM stops "
+                     f"WHERE production_date BETWEEN ? AND ?{clause} GROUP BY production_date",
+        }
+        fetched = {}
+        for name, sql in queries.items():
+            fetched[name] = self._fetch(sql, params)
+            trace["sql"].append(sql)
+            trace["parameters"].append(params)
+        stops_by_day = {r["production_date"]: r for r in fetched["stops"]}
+        daily, profile = [], {name: {"weekday": name, "days": 0, "stops": 0, "minutes": 0.0} for name in WEEKDAYS[:5]}
+        for r in fetched["shifts"]:
+            day = r["production_date"]
+            name = WEEKDAYS[day.weekday()]
+            stopped = stops_by_day.get(day, {"stops": 0, "minutes": 0.0})
+            minutes = round(stopped["minutes"], 2)
+            daily.append({"production_day": day.isoformat(), "weekday": name, "stops": stopped["stops"], "minutes": minutes,
+                          "minutes_per_stop": _ratio(minutes, stopped["stops"], places=2),
+                          "downtime_pct": _ratio(minutes, r["scheduled_minutes"], 100)})
+            bucket = profile[name]
+            bucket["days"] += 1
+            bucket["stops"] += stopped["stops"]
+            bucket["minutes"] += minutes
+        weekday_rows = []
+        for bucket in profile.values():
+            weekday_rows.append({**bucket, "minutes": round(bucket["minutes"], 2),
+                                 "stops_per_day": _ratio(bucket["stops"], bucket["days"], places=2),
+                                 "minutes_per_day": _ratio(bucket["minutes"], bucket["days"], places=2),
+                                 "minutes_per_stop": _ratio(bucket["minutes"], bucket["stops"], places=2)})
+        source = {"shifts": len(fetched["shifts"]), "stops": sum(r["stops"] for r in daily)}
+        return self._envelope("get_stops_profile", current, None, shift, daily, trace, started, source,
+                              weekday_profile=weekday_rows)
+
+    def get_trend(self, metric, weeks=8, anchor=None, shift=None):
+        """A weekly series (Mon-Fri production weeks) of one allow-listed metric,
+        ending with the week that contains the anchor."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        if metric not in TREND_METRICS:
+            raise ValueError("metric must be one of: " + ", ".join(TREND_METRICS))
+        if type(weeks) is not int or not 1 <= weeks <= MAX_TREND_WEEKS:
+            raise ValueError(f"weeks must be an integer from 1 to {MAX_TREND_WEEKS}")
+        _, anchor_day, last_start, last_end = parse_window({"period": "week", "anchor": anchor or self.last_day}, self._first, self._last)
+        rows, missing = [], []
+        for back in range(weeks - 1, -1, -1):
+            w = self._describe("week", last_start - timedelta(days=7 * back), last_end - timedelta(days=7 * back))
+            if w["coverage"] == "unavailable":
+                missing.append(w["start"])
+                continue
+            value = self._kpis(self._sums(w, shift, trace))[metric]
+            rows.append({"week_start": w["start"], "week_end": w["end"], "production_days": w["production_days_observed"],
+                         "value": value, "unit": TREND_UNITS[metric], "partial": w["coverage"] != "complete"})
+        window = {"period": "week", "anchor": anchor_day.isoformat(), "start": (last_start - timedelta(days=7 * (weeks - 1))).isoformat(),
+                  "end": last_end.isoformat(), "label": f"{weeks} production weeks ending {last_end.isoformat()}",
+                  "production_days_expected": 5 * weeks, "production_days_observed": sum(r["production_days"] for r in rows),
+                  "coverage": "complete" if rows and not missing and not any(r["partial"] for r in rows) else "partial" if rows else "unavailable"}
+        source = {"weeks": len(rows)}
+        return self._envelope("get_trend", window, None, shift, rows, trace, started, source,
+                              metric=metric, unit=TREND_UNITS[metric], weeks_requested=weeks, missing_weeks=missing)
+
 
 _DEFAULT = None
 _DEFAULT_LOCK = threading.Lock()
