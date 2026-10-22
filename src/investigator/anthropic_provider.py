@@ -62,20 +62,40 @@ def anthropic_tools(schemas):
 
 
 def _strip_null_enum_members(node):
-    """Drop ``None`` from every ``enum`` list, recursively.
+    """Rewrite nullable properties into the form the Messages API's strict validator accepts.
 
     The application's schemas write nullable filters as
-    ``{"type": ["string", "null"], "enum": [None, ...]}``. The Messages API
-    rejects that whole tool definition (HTTP 400, ``Enum value None does not
-    match declared type``) even though the type admits null, so the first live
-    eval run recorded fifteen identical errors and no answers. The nullable
-    ``type`` stays, which is what lets the model send ``null``; the application
-    validates the value on its own side exactly as before.
+    ``{"type": ["string", "null"], "enum": [None, "Maintenance", ...]}``. The
+    strict validator rejects a list-valued ``type`` whenever an ``enum`` is
+    present ("Enum value 'Maintenance' does not match declared type
+    '['string', 'null']'"), and rejects ``None`` as an enum member. Every
+    nullable property therefore becomes
+    ``{"anyOf": [{"type": "string", "enum": [...]}, {"type": "null"}]}``
+    with its description kept. The model can still send ``null`` and the
+    application validates the value on its own side exactly as before.
     """
     if isinstance(node, dict):
-        if isinstance(node.get('enum'), list):
-            node['enum'] = [value for value in node['enum'] if value is not None]
-        for value in node.values():
+        kinds = node.get('type')
+        if isinstance(kinds, list) and 'null' in kinds:
+            concrete = [k for k in kinds if k != 'null']
+            branches = []
+            for kind in concrete:
+                branch = {'type': kind}
+                if isinstance(node.get('enum'), list):
+                    members = [v for v in node['enum'] if v is not None]
+                    if kind == 'integer':
+                        members = [v for v in members if isinstance(v, int) and not isinstance(v, bool)]
+                    elif kind == 'string':
+                        members = [v for v in members if isinstance(v, str)]
+                    branch['enum'] = members
+                branches.append(branch)
+            branches.append({'type': 'null'})
+            rebuilt = {k: v for k, v in node.items() if k not in ('type', 'enum')}
+            rebuilt['anyOf'] = branches
+            node.clear(); node.update(rebuilt)
+        elif isinstance(node.get('enum'), list):
+            node['enum'] = [v for v in node['enum'] if v is not None]
+        for value in list(node.values()):
             _strip_null_enum_members(value)
     elif isinstance(node, list):
         for value in node:
