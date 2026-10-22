@@ -82,4 +82,4 @@ def test_plain_tiles_are_ratios_of_sums_not_averages_of_averages():
     days = [d for d in sorted(plain.days) if d.month == 9]
     per_day = [plain.tiles(plain.sums(d, d))['trim_pct'] for d in days]
     assert month['trim_pct'] != pytest.approx(sum(per_day) / len(per_day), abs=1e-6)
-    assert month['trim_pct'] == pytest.approx(3.1819, abs=1e-4) and month['stops'] == 558
+    assert month['trim_pct'] == pytest.approx(3.2274, abs=1e-4) and month['stops'] == 617

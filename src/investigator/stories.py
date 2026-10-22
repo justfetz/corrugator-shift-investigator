@@ -23,7 +23,7 @@ SLITTER_REBUILD = {
     "place": "Slitter/scorer",
     "baseline_trim_pct": 2.7,              # target before the rebuild
     "trim_creep_pp_per_week": 0.10,        # added per week after pm_date
-    "knife_slitter_minutes_multiplier": 2.2,
+    "knife_slitter_minutes_multiplier": 3.0,   # strong enough to survive Poisson noise at the month grain
     "slitter_place_share_before": 0.20,    # share of knife/slitter jams at the slitter
     "slitter_place_share_after": 0.50,
 }

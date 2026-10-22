@@ -8,6 +8,7 @@ from threading import Timer
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 import duckdb
+from .records import WEB_WIDTHS
 
 MAX_BYTES = 1_000_000
 
@@ -175,7 +176,7 @@ class Analysis:
         from .fixture import GRADES
         width, feet, gross, trim, shear, rejects, target = [number(node, k) for k in
             ("width_in", "gross_feet", "gross_sqft", "trim_sqft", "shear_sqft", "reject_sqft", "target_fpm")]
-        if width not in (98, 95, 92, 87) or feet <= 0 or gross <= 0:
+        if width not in WEB_WIDTHS or feet <= 0 or gross <= 0:
             raise ValueError("Invalid gross geometry")
         if node.get("grade") not in GRADES or target != GRADES[node.get("grade")]:
             raise ValueError("Invalid demo grade target")

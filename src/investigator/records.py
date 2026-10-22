@@ -15,7 +15,10 @@ from datetime import datetime, timedelta
 from typing import get_args, get_origin
 
 SCHEMA = "demo-records/v1"
-WEB_WIDTHS = (98, 95, 92, 87)
+# Paper widths on a 110-inch machine; the generator weights them to a 98-inch average
+# (owner picture 2026-10-22: about 98 in of throughput on a 110 in machine).
+WEB_WIDTHS = (106, 103, 100, 98, 95, 92, 87)
+WEB_WIDTH_WEIGHTS = (10, 15, 20, 25, 15, 10, 5)
 CHANGE_CODES = ("O", "S", "C")  # order change, shift split, continuation
 REJECT_REASONS = ("BOND", "WARP", "MISALIGNMENT", "MOISTURE")
 # Reported detail under each family (owner taxonomy 2026-10-22): warp is up / down / twist / S,
@@ -113,7 +116,7 @@ class DryEndSetupRecord:
     lineal_ft: all web travel through the machine during the record, order
         sheets and shear chops alike. Gross area is lineal_ft x web / 12.
     avg_speed_fpm: lineal_ft / elapsed minutes, elapsed INCLUDING stops.
-    web_width_in: paper (web) width, one of 98, 95, 92, 87.
+    web_width_in: paper (web) width, one of WEB_WIDTHS (87-106 in on a 110 in machine).
     quality_id: board grade (fixture.GRADES key).
     total_nominal_ft: planned order travel = nominal_cuts x cutoff / 12 of the
         guide customer (cutoff_allocation 1); knives share travel, so this is

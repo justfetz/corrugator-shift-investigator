@@ -13,7 +13,7 @@ REPO = Path(__file__).resolve().parents[1]
 # Pinned hash of the default two months at seed 2026: byte-identical output
 # is the determinism claim. Change this constant only with an intended
 # generator change, and say so in the commit.
-PINNED_HASH = "4b61a3c61953ec23f5c9ef10f398771ba28d19e1bd09852c57d81b0c8237634e"
+PINNED_HASH = "d9143ff1d15029b5992069d664eb8430d3e0aaed617b82a953f84e0a4964e6c5"
 
 
 def test_same_seed_is_byte_identical_and_fast(tmp_path):

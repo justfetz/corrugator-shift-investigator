@@ -288,12 +288,23 @@ def test_output_per_production_day(data):
     per_day = defaultdict(float)
     for shift in data["shifts"]:
         per_day[shift.production_date] += shift.total_produced_sqft
-        assert 1_000_000 < shift.total_produced_sqft < 2_800_000
-    assert all(5_500_000 <= gross <= 7_500_000 for gross in per_day.values()), (min(per_day.values()), max(per_day.values()))
+        assert 1_200_000 < shift.total_produced_sqft < 3_000_000   # about 2.5M a shift at a 98-inch average web
+    assert all(6_000_000 <= gross <= 8_500_000 for gross in per_day.values()), (min(per_day.values()), max(per_day.values()))
     setups_per_day = defaultdict(int)
     for setup in data["dry_end_setups"]:
         setups_per_day[setup.production_date] += 1
-    assert 130 <= min(setups_per_day.values()) and max(setups_per_day.values()) <= 230
+    assert 90 <= min(setups_per_day.values()) and max(setups_per_day.values()) <= 160   # about 7,000 lineal ft per setup
+    feet = sum(s.lineal_ft for s in data["dry_end_setups"])
+    assert 6_500 <= feet / len(data["dry_end_setups"]) <= 7_800
+    assert 18_000 <= feet / len(data["wet_ends"]) <= 23_000   # about 20,000 lineal ft per paper run
+    gross = sum(s.total_produced_sqft for s in data["dry_end_setups"])
+    assert 97.0 <= gross / feet * 12 <= 99.5   # a 98-inch average web on a 110-inch machine
+    weeks = defaultdict(float)
+    for day_text, total in per_day.items():
+        weeks[date(int(day_text[:4]), int(day_text[4:6]), int(day_text[6:])).isocalendar()[1]] += total
+    full = [weeks[w] for w in sorted(weeks)][:-1]   # the last week of September is short
+    moves = [abs(b - a) / a for a, b in zip(full, full[1:])]
+    assert max(moves) >= 0.04   # week-to-week volume moves a few percent, not a flat line
 
 
 def test_story_signals_are_visible_in_the_records(data):

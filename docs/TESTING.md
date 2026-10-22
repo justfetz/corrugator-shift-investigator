@@ -64,7 +64,7 @@ Record results as pass, fail, or not tested. A report that appears is not proof 
 
 ## Live evaluation: separate, deliberate, charged
 
-Live evaluation has not been performed. `python3 evals/run.py --live` runs the live cases against OpenAI (`OPENAI_API_KEY`) or Anthropic (`ANTHROPIC_API_KEY`, `--provider anthropic` when both are set), records fixtures under `evals/fixtures/<provider>/`, and scores each type by pass rate (routing 0.9, investigation 0.8, the rest 1.0). Use your own key only after deliberately choosing to incur provider charges. Use synthetic questions, start with one investigation, and record provider model, tool choices, selected scope, status, latency, usage and estimated/reserved cost. Do not record the key.
+Live evaluation runs against Anthropic (Haiku 5.5) from the owner's machine; the recordings under `evals/fixtures/anthropic/` replay in CI with no key. Each recording is stamped with the dataset hash it was made against: after a generator change the runner reports them as stale (skipped, named in the summary) until they are re-recorded, never scoring a model's choices against data it did not see. `python3 evals/run.py --live` runs the live cases against OpenAI (`OPENAI_API_KEY`) or Anthropic (`ANTHROPIC_API_KEY`, `--provider anthropic` when both are set), records fixtures under `evals/fixtures/<provider>/`, and scores each type by pass rate (routing 0.9, investigation 0.8, the rest 1.0). Use your own key only after deliberately choosing to incur provider charges. Use synthetic questions, start with one investigation, and record provider model, tool choices, selected scope, status, latency, usage and estimated/reserved cost. Do not record the key.
 
 | Question | Acceptance criterion |
 | --- | --- |

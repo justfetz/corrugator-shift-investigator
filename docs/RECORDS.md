@@ -22,7 +22,7 @@ The same seed gives byte-identical JSONL. Two months generate in well under thre
 - Production days are Monday to Friday. Weekends are plant-down and emit no records; there is no holiday calendar. A production day starts 07:00 and is labelled by its start date; shift 1 = 07:00, 2 = 15:00, 3 = 23:00, each 480 scheduled minutes.
 - `lineal_ft` counts every foot of web through the machine: order sheets *and* full-web shear chops. Gross area is therefore exactly `lineal_ft x web_width_in / 12`. Order travel (what reached the cutoff knives) is `lineal_ft - chop_sqft x 12 / web_width_in`.
 - Knives share travel: nominal cuts on each knife multiply out to the same order travel within one cutoff length. Outs multiply sheets and occupied width, never distance.
-- Web geometry: `sum(sheet_width_in x number_of_outs) + trim_in = web_width_in`, trim split evenly (1-7 inches per side), web centered. Web widths 98, 95, 92, 87. Grades and target speeds are `fixture.GRADES`.
+- Web geometry: `sum(sheet_width_in x number_of_outs) + trim_in = web_width_in`, trim split evenly (1-7 inches per side), web centered. Web widths 87-106 in on a 110-inch machine (106, 103, 100, 98, 95, 92, 87, weighted to a 98-inch average). Grades and target speeds are `fixture.GRADES`.
 - Averages include downtime: a setup's `avg_speed_fpm` is lineal over elapsed minutes with stops inside; a shift's is total lineal over 480 minutes. `max_speed_fpm` on wet ends and shifts is the highest running speed (lineal over running minutes) of their setups.
 - Rounding: feet, square feet and speeds carry one decimal, percentages two. Aggregates are sums of the rounded setup values, rounded once more.
 
@@ -35,7 +35,7 @@ The same seed gives byte-identical JSONL. Two months generate in well under thre
 | `start_date`, `start_time`, `end_date`, `end_time` | YYYYMMDD / HHMMSS | record interval; end = start + running + stop seconds |
 | `lineal_ft` | ft | all web travel, order sheets and chops |
 | `avg_speed_fpm` | ft/min | `lineal_ft` / elapsed minutes, stops included |
-| `web_width_in` | in | paper width (98, 95, 92, 87) |
+| `web_width_in` | in | paper width, one of 106, 103, 100, 98, 95, 92, 87 (98-inch average) |
 | `quality_id` | text | board grade key of `fixture.GRADES` |
 | `total_nominal_ft` | ft | planned order travel of the guide customer: `nominal_cuts x sheet_length_in / 12` (knives share travel; not a sum over customers) |
 | `total_produced_sqft` | sq ft | gross area, trim and chops included |
@@ -123,8 +123,8 @@ The same seed gives byte-identical JSONL. Two months generate in well under thre
 These are simulation choices (`synth.py` constants), not plant standards. `tests/test_records_invariants.py` checks each line for every record of both months.
 
 - **Time**: setups tile each shift with no gaps; a setup that would cross a shift boundary is split there (first part keeps its code, second part is `S` and shares the orders). A remainder with under 60 s of running time is absorbed; a first part under 60 s stretches the prior record instead. Across a weekend the open run simply ends.
-- **Output**: about 5.5-7.5 million gross sq ft per production day (1.8-2.5 million per shift), 150-190 setups and roughly half as many wet ends per day. Running speed is the grade target x crew factor (0.88-0.94) x shift factor x noise; displayed averages include stops.
-- **Downtime**: Maintenance + PM between 2% and 3% of scheduled minutes per month; PM is one 120-135 minute window every Thursday on shift 1 (the rebuild week runs 180 min), recorded with kind `PM` and reason `Planned maintenance`, plus unplanned maintenance stops (Monday x1.25, August x1.08), one 10-15 minute power outage per month. Operator stops separately 1-3%.
+- **Output**: about 2.5 million gross sq ft per shift (6-8.5 million per production day) at a 98-inch average web on a 110-inch machine; about 7,000 lineal ft per dry-end setup (roughly 100-140 setups a day) and about 20,000 lineal ft per wet-end run (roughly 40 paper changes a day); week-to-week volume moves a few percent through a per-week speed draw. Running speed is the grade target x crew factor (0.88-0.94) x shift factor x noise; displayed averages include stops.
+- **Downtime**: Maintenance + PM between 2% and 3% of scheduled minutes per month; PM is one 120-135 minute window every Thursday on shift 1 (the rebuild week runs 180 min), recorded with kind `PM` and reason `Planned maintenance`, plus unplanned maintenance stops (Monday x1.40, August x1.08; operator stops Monday x1.15), one 10-15 minute power outage per month. Operator stops separately 1-3%.
 - **Waste per month**: side trim 2.5-3.5% of gross, shear chops 0.4-1.0%, dry-end rejects about 1.0-1.1% split bond 0.40 / warp 0.30-0.42 / misalignment 0.20 / moisture 0.10 points; inside warp about 45% up, 25% down, 20% twist, 10% S; inside bond 60% delamination, 40% paper / raw material. Rejected sheets are discarded; they are never replaced in the records. Each missed splice adds a run of 8-14 chops (a web break).
 - **Determinism**: `content_hash` is pinned in `tests/test_synth_determinism.py`; change it only with an intended generator change.
 

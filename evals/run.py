@@ -17,7 +17,8 @@ Every case also passes the global invariants in `invariants()`, whatever its
 type. Offline cases are deterministic and free. Cases marked `live: true` (and
 the `mode: live` cases) also run against a live planner: OpenAI or Anthropic,
 chosen by `--provider` or by whichever key is set. Live runs are recorded to
-`evals/fixtures/<provider>/<id>.json` and replayed afterwards; a live type passes
+`evals/fixtures/<provider>/<id>.json` (stamped with the dataset hash; a recording made
+against another dataset is reported as stale, never scored) and replayed afterwards; a live type passes
 by pass rate (`THRESHOLDS`), an offline case passes or fails on its own.
 
     python3 evals/run.py                              # offline + replay of recorded fixtures
@@ -76,6 +77,11 @@ def load_cases():
 
 
 _VALUES_STATUS = {}
+
+
+def dataset_version():
+    """The live store's content hash; recordings and value goldens are scored only against it."""
+    return default_store().content_hash
 
 
 def stale_values():
@@ -663,7 +669,15 @@ def run_case(case, provider=None, live=False, record=False):
                 return 'skip', [], f'{spec["env"]} not set'
             send = spec['record'](exchanges)
         elif fixture.exists():
-            exchanges = json.loads(fixture.read_text())['exchanges']
+            recording = json.loads(fixture.read_text())
+            # A recording replays the model's choices against the live store's data. Made against
+            # another dataset (or before recordings were versioned) it cannot be scored: the rows the
+            # model cited may no longer exist. That is a stale recording, not a failure.
+            recorded_dataset, live_dataset = recording.get('dataset_version'), dataset_version()
+            if recorded_dataset != live_dataset:
+                return 'skip', [], (f'stale recording: dataset {str(recorded_dataset)[:12] if recorded_dataset else "unversioned"} '
+                                    f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}')
+            exchanges = recording['exchanges']
             send = spec['replay'](exchanges, warnings)
             key = spec['replay_key']
         else:
@@ -703,7 +717,7 @@ def run_case(case, provider=None, live=False, record=False):
         fixture.parent.mkdir(parents=True, exist_ok=True)
         fixture.write_text(json.dumps(
             {'case': case['id'], 'provider': provider, 'question': turns[-1], 'recorded_status': last['status'],
-             'recorded_cost_usd': last['usage']['cost_usd'], 'exchanges': exchanges}, indent=1))
+             'recorded_cost_usd': last['usage']['cost_usd'], 'dataset_version': dataset_version(), 'exchanges': exchanges}, indent=1))
         note = f'recorded {len(exchanges)} exchanges, ${last["usage"]["cost_usd"]:.4f}'
     elif provider:
         note = f'{last["status"]}, {last["usage"]["model_calls"]} model calls'
@@ -799,6 +813,9 @@ def main(argv=None):
                 ok = rate >= THRESHOLDS[kind]
                 breaches += not ok
                 parts.append(f'{kind} {p}/{p + f} (threshold {THRESHOLDS[kind]:.0%}: {"ok" if ok else "BELOW"})')
+        stale = sum(1 for r in live_rows if r['provider'] == name and r['outcome'] == 'skip' and str(r.get('note', '')).startswith('stale recording'))
+        if stale:
+            parts.append(f'{stale} stale recording(s): re-record with --live --provider {name}')
         if parts:
             print(f'live {name}: ' + '  '.join(parts))
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)

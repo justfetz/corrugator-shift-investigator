@@ -118,15 +118,15 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
             improved = (row["delta"] < 0) == (better == "lower")
             assert row["change"] == ("better" if improved else "worse")
     # Pinned goldens of the default seed (ratios of sums, never averages of averages).
-    assert rows["volume_msf"]["current"] == pytest.approx(146115.3) and rows["volume_msf"]["previous"] == pytest.approx(138232.0)
-    assert rows["lineal_ft"]["current"] == pytest.approx(18839833.8)
-    assert rows["stops"]["current"] == 558 and rows["stops"]["previous"] == 523
-    assert rows["trim_pct"]["current"] == pytest.approx(3.1819, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(2.8317, abs=1e-4)
-    assert rows["warp_pct"]["current"] == pytest.approx(0.3242, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4718, abs=1e-4)
-    assert rows["downtime_pct"]["current"] == pytest.approx(4.3783, abs=1e-4)
-    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.4827, abs=1e-4)
-    assert rows["setups"]["current"] == 4115 and rows["paper_changes"]["current"] == 1914
-    assert result["source_rows"]["current"]["setups"] == 4115 and result["source_rows"]["previous"]["setups"] == 3853
+    assert rows["volume_msf"]["current"] == pytest.approx(160260.2) and rows["volume_msf"]["previous"] == pytest.approx(150593.0)
+    assert rows["lineal_ft"]["current"] == pytest.approx(19515934.8)
+    assert rows["stops"]["current"] == 617 and rows["stops"]["previous"] == 567
+    assert rows["trim_pct"]["current"] == pytest.approx(3.2274, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(2.8669, abs=1e-4)
+    assert rows["warp_pct"]["current"] == pytest.approx(0.3265, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4721, abs=1e-4)
+    assert rows["downtime_pct"]["current"] == pytest.approx(4.6535, abs=1e-4)
+    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.4882, abs=1e-4)
+    assert rows["setups"]["current"] == 2672 and rows["paper_changes"]["current"] == 942
+    assert result["source_rows"]["current"]["setups"] == 2672 and result["source_rows"]["previous"]["setups"] == 2524
     # downtime_pct is a ratio of sums: it is NOT the mean of the 66 shift percentages
     shift_pcts = []
     for sh in between(data["shifts"], date(2026, 9, 1), date(2026, 9, 30)):
@@ -210,10 +210,10 @@ def test_downtime_pareto_shares_cumulate_and_match_sums(store, data):
     by_reason = {r["category"]: r for r in store.get_downtime_pareto({"period": "week", "anchor": "2026-09-09"}, group_by="reason")["rows"]}
     # The planned window is its own reason row: Thursday 10 September's 127-minute PM stop leads the week
     # (135 minutes the Thursday before), and "Other" holds only the unclassified stops.
-    assert (by_reason["Planned maintenance"]["stops"], by_reason["Planned maintenance"]["minutes"]) == (1, pytest.approx(127.0, abs=0.01))
-    assert by_reason["Planned maintenance"]["previous_minutes"] == pytest.approx(135.0, abs=0.01)
-    assert (by_reason["Other"]["stops"], by_reason["Other"]["minutes"]) == (19, pytest.approx(30.0333, abs=0.01))
-    assert next(iter(by_reason)) == "Planned maintenance" and by_reason["Missed splice"]["cumulative_pct"] == pytest.approx(56.14, abs=0.01)
+    assert (by_reason["Planned maintenance"]["stops"], by_reason["Planned maintenance"]["minutes"]) == (1, pytest.approx(131.0, abs=0.01))
+    assert by_reason["Planned maintenance"]["previous_minutes"] == pytest.approx(121.0, abs=0.01)
+    assert (by_reason["Other"]["stops"], by_reason["Other"]["minutes"]) == (14, pytest.approx(21.95, abs=0.01))
+    assert next(iter(by_reason)) == "Planned maintenance" and by_reason["Missed splice"]["cumulative_pct"] == pytest.approx(55.64, abs=0.01)
     assert all(st.reason == "Planned maintenance" for st in data["stops"] if st.kind == "PM")
     assert all(st.kind == "PM" for st in data["stops"] if st.reason == "Planned maintenance")
     by_count = store.get_downtime_pareto({"period": "week", "anchor": "2026-09-09"}, group_by="reason", measure="count")

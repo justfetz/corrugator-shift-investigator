@@ -26,19 +26,21 @@ from .fixture import GRADES
 
 CHOP_LENGTH_IN = 34                       # one full-web shear chop
 MIN_RUN_SECONDS = 60                      # smallest running time of a record
-CREW_SPEED_FACTOR = {"Crew A": 0.94, "Crew B": 0.91, "Crew C": 0.88}
+CREW_SPEED_FACTOR = {"Crew A": 0.97, "Crew B": 0.94, "Crew C": 0.91}
 SHIFT_SPEED_FACTOR = {1: 1.0, 2: 1.0, 3: 0.97}
 SPEED_NOISE = (0.94, 1.04)
-TRAVEL_FT = (1800, 7200)                  # order travel per setup: lo + span*r^1.5
-ORDER_CHANGE_CHOPS = (9, 15)              # chops when the knife combination changes
-CONTINUATION_CHOPS = (5, 9)               # chops when only one knife changes
+TRAVEL_FT = (2800, 11500)                 # order travel per setup: lo + span*r^1.5 (about 7,000 lineal ft per setup)
+SETUPS_PER_WET_END = (2, 2, 3, 3, 4, 4, 5)  # drawn per non-single wet end (about 20,000 lineal ft per paper run)
+WEEK_SPEED_FACTOR = (0.95, 1.05)          # one draw per production week: week-to-week volume moves a few percent
+ORDER_CHANGE_CHOPS = (12, 20)             # chops when the knife combination changes
+CONTINUATION_CHOPS = (7, 12)              # chops when only one knife changes
 SPLICERS = tuple(f"Splicer {i}" for i in range(1, 6))
 KNIFE_PLACES = ("Upper knife", "Lower knife", "Shear knife", "Slitter/scorer")
 PM_WEEKDAY, PM_SHIFT = 3, 1               # Thursday, shift 1
 PM_MINUTES = (120, 135)
 PM_PLACES = ("Double backer", "Single facer", "Glue dams", "Steam system", "Stacker")
 POWER_OUTAGE_MINUTES = (10, 15)           # one per month
-MONDAY_MAINTENANCE, AUGUST_MAINTENANCE, MONDAY_OPERATOR = 1.25, 1.08, 1.10
+MONDAY_MAINTENANCE, AUGUST_MAINTENANCE, MONDAY_OPERATOR = 1.40, 1.08, 1.15
 RUN_MINUTES_PER_SHIFT = 460               # budget basis for the stop rates
 
 # Unplanned stop catalogue: reason, candidate places, expected minutes per
@@ -122,9 +124,18 @@ class _Context:
     trim_target_pct: float
     pm: tuple | None            # (minutes, place, note) for this shift's planned window
     outage: bool
+    week_factor: float = 1.0    # the production week's speed draw (WEEK_SPEED_FACTOR)
 
 
-def _context(slot, outage_slots):
+def _week_factors(days, seed):
+    """One speed factor per ISO production week, drawn from its own stream so the week-to-week
+    movement does not depend on how many setups the previous week produced."""
+    rng = random.Random(f"{seed}:weeks")
+    weeks = sorted({d.isocalendar()[:2] for d in days})
+    return {week: rng.uniform(*WEEK_SPEED_FACTOR) for week in weeks}
+
+
+def _context(slot, outage_slots, week_factors=None):
     day = slot.day
     rebuild = stories.SLITTER_REBUILD
     after = max(0, (day - rebuild["pm_date"]).days)
@@ -139,7 +150,8 @@ def _context(slot, outage_slots):
     splice = stories.SPLICER3_MISSED_SPLICE
     return _Context(slot, day.weekday() == 0, day.month, day > rebuild["pm_date"],
                     splice["start"] <= day <= splice["end"], trim_target, pm,
-                    (slot.day, slot.number) in outage_slots)
+                    (slot.day, slot.number) in outage_slots,
+                    (week_factors or {}).get(day.isocalendar()[:2], 1.0))
 
 
 def _poisson(rng, lam):
@@ -220,14 +232,14 @@ class _Planner:
 
     def _new_wet_end(self, ctx):
         rng = self.rng
-        width = rng.choice(R.WEB_WIDTHS)
+        width = rng.choices(R.WEB_WIDTHS, weights=R.WEB_WIDTH_WEIGHTS)[0]
         quality = self._grade()
         single = self.wet_count % 5 == 4
         self.wet_count += 1
         seq = self.wet_seq.get(ctx.slot.date_text, 0) + 1
         self.wet_seq[ctx.slot.date_text] = seq
         wet = {"id": f"WE{ctx.slot.date_text}{seq:03d}", "quality": quality, "width": width,
-               "single": single, "left": 1 if single else rng.choice((1, 2, 2, 3, 4)),
+               "single": single, "left": 1 if single else rng.choice(SETUPS_PER_WET_END),
                "index": 0, "knife1": None}
         if not single:
             while True:
@@ -273,7 +285,7 @@ class _Planner:
         wet["index"] += 1
         chops = rng.randint(*(CONTINUATION_CHOPS if code == "C" else ORDER_CHANGE_CHOPS))
         travel = TRAVEL_FT[0] + TRAVEL_FT[1] * rng.random() ** 1.5
-        fpm = (GRADES[quality] * CREW_SPEED_FACTOR[ctx.slot.crew]
+        fpm = (GRADES[quality] * CREW_SPEED_FACTOR[ctx.slot.crew] * ctx.week_factor
                * SHIFT_SPEED_FACTOR[ctx.slot.number] * rng.uniform(*SPEED_NOISE))
         run = max(MIN_RUN_SECONDS, round((travel + chops * CHOP_LENGTH_IN / 12) / fpm * 60))
         return {"quality": quality, "width": width, "trim_in": trim_in, "specs": specs,
@@ -386,10 +398,10 @@ def _machine_code(machine_id):
     return (text + "0000")[:4]
 
 
-def _layout(rng, slots, planner, machine_code, outage_slots):
+def _layout(rng, slots, planner, machine_code, outage_slots, week_factors=None):
     frames, pending, per_slot = [], None, {}
     for slot in slots:
-        ctx = _context(slot, outage_slots)
+        ctx = _context(slot, outage_slots, week_factors)
         cursor = slot.start
         while cursor < slot.end:
             if pending:
@@ -595,10 +607,11 @@ def generate_months(seed=2026, months=(("2026", 8), ("2026", 9)), machine_id="CO
     slots = _shift_slots(production_days(months))
     outage_slots = {rng.choice([(s.day, s.number) for s in slots
                                 if (str(s.day.year), s.day.month) == month]) for month in months}
-    frames = _layout(rng, slots, _Planner(rng), _machine_code(machine_id), outage_slots)
+    week_factors = _week_factors([s.day for s in slots], seed)
+    frames = _layout(rng, slots, _Planner(rng), _machine_code(machine_id), outage_slots, week_factors)
     setups, stops = [], []
     for frame in frames:
-        record, stop_records = _setup_record(rng, frame, _context(frame.slot, outage_slots), machine_id)
+        record, stop_records = _setup_record(rng, frame, _context(frame.slot, outage_slots, week_factors), machine_id)
         setups.append(record)
         stops.extend(stop_records)
     data = {"dry_end_setups": setups, "wet_ends": _wet_end_records(setups),

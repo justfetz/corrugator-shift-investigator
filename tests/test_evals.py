@@ -33,6 +33,8 @@ def test_offline_golden_case(case):
 @pytest.mark.parametrize('case, provider', RECORDED, ids=[f'{c["id"]}@{p}' for c, p in RECORDED])
 def test_recorded_live_case_replays(case, provider):
     outcome, failures, note = golden.run_case(case, provider)
+    if outcome == 'skip' and note.startswith('stale recording'):
+        pytest.skip(note)   # recorded against another dataset: re-record, never score
     assert outcome == 'pass', failures or note
 
 
@@ -156,6 +158,9 @@ def test_anthropic_fixture_replays_end_to_end(tmp_path, monkeypatch, capsys):
     (tmp_path / 'anthropic').mkdir()
     (tmp_path / 'anthropic' / f'{case["id"]}.json').write_text(json.dumps({'exchanges': exchanges}))
     outcome, failures, note = golden.run_case(case, 'anthropic')
+    assert outcome == 'skip' and note.startswith('stale recording: dataset unversioned')   # a recording without the dataset hash cannot be scored
+    (tmp_path / 'anthropic' / f'{case["id"]}.json').write_text(json.dumps({'dataset_version': golden.dataset_version(), 'exchanges': exchanges}))
+    outcome, failures, note = golden.run_case(case, 'anthropic')
     assert outcome == 'pass', failures
     assert note.startswith('complete, 3 model calls') and 'prompt changed' in note   # stale-digest warning is shown
     assert golden.main(['--only', case['id']]) == 0
@@ -163,6 +168,6 @@ def test_anthropic_fixture_replays_end_to_end(tmp_path, monkeypatch, capsys):
     assert f'{case["id"]}@anthropic' in out and 'live anthropic: refusal 1/1 (threshold 100%: ok)' in out
     # The same conversation claiming the shift was fine fails the live expectation.
     exchanges[2]['response']['content'][0]['input']['paragraphs'][0]['text'] = 'The shift was fine at {{0}} ft/min.'
-    (tmp_path / 'anthropic' / f'{case["id"]}.json').write_text(json.dumps({'exchanges': exchanges}))
+    (tmp_path / 'anthropic' / f'{case["id"]}.json').write_text(json.dumps({'dataset_version': golden.dataset_version(), 'exchanges': exchanges}))
     outcome, failures, _ = golden.run_case(case, 'anthropic')
     assert outcome == 'fail' and failures and all('matches forbidden' in f for f in failures)
