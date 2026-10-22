@@ -91,8 +91,12 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
 .layout{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(350px,1.15fr);gap:24px}
 .conversation,.results{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:var(--pad);min-width:0}
 .muted{color:var(--ink-3);font-size:.9rem;line-height:1.55}
-.examples{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}
-.examples button{background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--line);font-size:.85rem;padding:8px 11px;font-weight:500}
+.examples{display:flex;flex-direction:column;gap:10px;margin:18px 0}
+.chip-group{display:grid;grid-template-columns:86px 1fr;gap:8px;align-items:start}
+.chip-group h4{margin:0;padding-top:8px;font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{background:var(--brand-soft);color:var(--brand-ink);border:1px solid var(--line);font-size:.82rem;padding:7px 10px;font-weight:500;min-height:34px}
+.chips button:hover:not(:disabled){background:var(--surface-3);filter:none}
 #messages{min-height:150px;max-height:500px;overflow:auto;line-height:1.6;margin:20px 0}
 .empty{color:var(--ink-3);border-left:3px solid var(--line);padding:10px 16px}
 .message{border-bottom:1px solid var(--line-2);padding:14px 0;font-size:.92rem}
@@ -199,6 +203,7 @@ footer{font-size:.8rem;color:var(--ink-3);margin-top:22px}
  .guide-grid{grid-template-columns:1fr}
  .section-heading{align-items:start;flex-direction:column}
  .metrics,.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .chip-group{grid-template-columns:1fr;gap:4px}.chip-group h4{padding-top:4px}
  .tile .v{font-size:1.2rem}
  .heatmap-weekdays,.heatmap-grid{gap:4px}.heatmap-cell{padding:5px}
  #messages{max-height:350px}

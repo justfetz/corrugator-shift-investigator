@@ -115,7 +115,31 @@ function updateScope(){
  if(ranged)$('mode-help').textContent='Build a free deterministic period summary, output heatmap, recurring downtime comparison, daily matrix and notes. The exact date range is shown; missing days are disclosed.';
  else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
  $('submit').textContent=ranged?'Build period report':'Investigate';
- document.querySelectorAll('[data-question]').forEach(b=>b.disabled=busy||ranged);
+ for(const b of chipButtons)b.disabled=busy||ranged;
+}
+
+// ---- Example questions, grouped by intent. Daily chips run the day tools for the selected scope; the
+// period chips are the phrasings the offline planner routes to the record-store tools (docs/WORKBENCH.md).
+const QUESTION_GROUPS=[
+ ['Speed',[['Speed to target','Show speed to target'],['Setup matrix','Show setup matrix'],['Speed trend, 8 weeks','Trend of speed over eight weeks']]],
+ ['Downtime',[['Why was this shift slow?','Why was this shift slow? Chart downtime by reason.'],['Costliest reason this week','Which downtime reason cost the most minutes this week?'],['Stops per day this week','Stops per day this week'],['Read notes','Show shift and downtime notes']]],
+ ['Waste',[['Dry-end waste','Show dry-end quality waste'],['Bond or warp?','Is it bond or warp?'],['Trim trend, 8 weeks','Trend of trim over eight weeks']]],
+ ['Compare',[['Summary + charts','Summarize performance, downtime and waste. Show supporting charts.'],['This week vs last','How did this week go versus the previous one?'],['September vs August','How did September go versus August?'],['Compare shifts','Compare all shifts','day'],['Rank losses','Show rankings']]],
+ ['Orders',[['Orders + quantities','Show orders and quantities']]],
+];
+const chipButtons=[];
+function renderQuestionChips(){
+ const box=$('examples'); if(!box)return; box.replaceChildren(); chipButtons.length=0;
+ for(const [intent,chips] of QUESTION_GROUPS){
+  const group=node('div',undefined,'chip-group'); group.append(node('h4',intent));
+  const row=node('div',undefined,'chips');
+  for(const [label,question,scope] of chips){
+   const b=node('button',label); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; b.title=question;
+   b.addEventListener('click',()=>{ if(busy)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
+   row.append(b); chipButtons.push(b);
+  }
+  group.append(row); box.append(group);
+ }
 }
 function svgNode(tag, attrs, text) { const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text!==undefined)e.textContent=text;return e; }
 function showHeatmap(chart) {
@@ -383,7 +407,7 @@ function showResult(result) {
  updateScope();
 }
 const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key'];
-function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; document.querySelectorAll('[data-question]').forEach(b=>b.disabled=flag); const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
+function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; for(const b of chipButtons)b.disabled=flag; const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
 async function ask(question) {
  if(busy)throw new Error('An investigation is already running');
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
@@ -403,7 +427,6 @@ async function ask(question) {
  finally{setBusy(false);updateScope();}
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('period').value==='day'?$('question').value:`Build ${$('period').value} report`).catch(()=>{});});
-document.querySelectorAll('[data-question]').forEach(button=>button.addEventListener('click',()=>{ if(button.dataset.scope){$('scope').value=button.dataset.scope;reset();} $('question').value=button.dataset.question;ask(button.dataset.question).catch(()=>{}); }));
 function reset(){$('heatmaps').replaceChildren();$('kpis').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();primeKpis();}
 $('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
@@ -424,7 +447,7 @@ function applyPublicMode(){
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model on':'Synthetic data / Public demo';
 }
 async function init(){
- $('submit').disabled=true;renderSegments();
+ $('submit').disabled=true;renderSegments();renderQuestionChips();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
  applyPublicMode();updateScope(); $('submit').disabled=false;primeKpis();
