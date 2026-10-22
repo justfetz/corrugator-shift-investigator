@@ -68,8 +68,13 @@ jobs:
             SECRETS=""
             for pair in "OPENAI_API_KEY=${OPENAI_SECRET}" "ANTHROPIC_API_KEY=${ANTHROPIC_SECRET}"; do
               name="${pair#*=}"; [ -z "$name" ] && continue
-              if gcloud secrets describe "$name" --project "$PROJECT_ID" >/dev/null 2>&1; then
+              # The deployer account may lack secretmanager.viewer (it only ever needed to deploy).
+              # Treat PERMISSION_DENIED as "probably exists" and mount; only a definite NOT_FOUND skips.
+              if out=$(gcloud secrets describe "$name" --project "$PROJECT_ID" 2>&1); then
                 SECRETS="${SECRETS:+${SECRETS},}${pair}:latest"; echo "mounting ${pair%%=*} from secret ${name}"
+              elif echo "$out" | grep -qiE "PERMISSION_DENIED|permission"; then
+                SECRETS="${SECRETS:+${SECRETS},}${pair}:latest"
+                echo "::warning::cannot read metadata of secret '${name}' (deployer lacks roles/secretmanager.viewer); mounting it anyway — the deploy fails here if it does not exist"
               else
                 echo "::warning::secret '${name}' not found in ${PROJECT_ID}; ${pair%%=*} will not be mounted"
               fi
