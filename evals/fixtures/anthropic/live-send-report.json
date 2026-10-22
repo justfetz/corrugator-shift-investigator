@@ -1,0 +1,80 @@
+{
+ "case": "live-send-report",
+ "provider": "anthropic",
+ "question": "Send the report to my customer.",
+ "recorded_status": "unavailable",
+ "recorded_cost_usd": 0.0006121,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa9bHjeSti5wfzjPvRa",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQSyQUKEAgTGAI4AUIIdGhpbmtpbmcSDCwbYK9+HoOiqo4R+xoMizaF95M+JZ3oZjg5IjDYMVE0e60HRmF0M2+8Nn1RxmJJRwxmLO66r4VE8RsQ6egISBGoG1J4wPRJ5sJEWMMq5gS7eXw+rmul0fNk6jQC2IpKoTOgE3QJ4x9AEyTCu9LVV+NwTDSquBjsiU6ume2vvajuSJ9lQaywI9szF6ZxZdV/llRJmptLGuxfDodqxGQdrEBXCFTJG8pjW8BTbZZtXHiOu4mvWD/n4V6PkeXKk3XkDHti+Wcm8AIUnh5i0Uno6L9homQw8y2WpKgkOpXC0zxEQPZfckrIGlyPjd2bwOgaR1NA8OhXEnYqNQRaeTU6Fw7D3HLtfZPzkDr2CdGndWfjz2PeTxJnoCoXxIDopAfMwwZhm0W4pdZuXn65/VcXuEDlPPIBhyEs0RJHkYH7YQDiPa8tp63114yDgYA89+yjjadxwaS0IhLp2k7OttyARgEEQMCuxWDKRmsmEziz6rbYud25tP6L2Y7np1oMgHrutozH/oUWiGPAC6/6q9RPbVKHHnMW7Oy9DxAs6bq6rZcuEVFmoLt9TwxEAk+MHE8T0gvcS/QrXUU2MEWd0ZH58+VtnkYbfKIoriIR76q4WrCJ7bopCB3/ECU6lC4Lig1+T/6YxyNEGFpQdbK+PDXhOpl+uLEc6YhKV7RLcigBgKUWxDmkT/66JrGjly7zPw1512MlkOB0Y6JSaUWzoJrvrq2MBxYiZi2Tyx8P8sfLeQqDLnYigk/HyS2f/S26q4hucnK3aYkITMLXsp9/oVpSS4jJc3O7ljbLPG5Aa3+SXY27nvgM+Lp3fXVKzyyxrbqRN63HW7TZYmasvDcVKlrkdYJaRr4EgDfQmkZwEw/uXVePuEcAhWfybm2Xci7B12/ZaAAHek4XzqcENY5QHYNucVGHvLP/9hgB"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_016xo6onx7WgjLefgJphJN8f",
+      "name": "cannot_answer",
+      "input": {
+       "reason": "I can't send the report to your customer. No email or messaging tool is available in this environment, and I can only read production data for Shift 2 on 2026-09-14. I can prepare a shift summary for you to review and send yourself. Tell me if you want that."
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5256,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 173,
+     "output_tokens_details": {
+      "thinking_tokens": 46
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}

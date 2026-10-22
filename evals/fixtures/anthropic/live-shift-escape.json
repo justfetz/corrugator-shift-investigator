@@ -1,0 +1,80 @@
+{
+ "case": "live-shift-escape",
+ "provider": "anthropic",
+ "question": "Compare this shift with shift 1 and shift 3.",
+ "recorded_status": "unavailable",
+ "recorded_cost_usd": 0.000695,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa9EUqKKB2mtdv8VWfb",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQS6QcKEAgTGAI4AUIIdGhpbmtpbmcSDOlRCO8qYnFJlTETTxoMqD1l2OlgnRuA2yejIjChaSxzvcPR2iwpXKCh2PRTdGoflk1IFD6RKdjkXG9j3dNsHOVQzTUtAomauySlXFUqhgfM6bS1t3ysIfNBA3rWZT59PFteixkmtTf4GZsEw9On7dJmU39YvJGm4SCQZCc5MrYooKGF2Scqq5GOWfp1H05NxNQspsU0FsXcS39WK98WufnFajUJo+RvlpgR/uzMRZk3BJcRjtaQi9WV4FDed7BeVMVYBXHSUTqIe/uG+5YpmhZwrox2XwrZdTrAAWPoSuj221CrL757Arv3iQw8+MB2vmvh8Movf0F1qsFXVUPAUpT+DZNUYckoJzBHwOI0UII5nl5rY+0bJEkLD8Rw6+O/GA56DWGoz61LUL4AKMsmjYUEj5iMhsJsT/rCOAxkhF0XLy958wesz2D0QW30nr5OIg7AKcHSxUN9YP4gj+wlhNu01hr4DpGVnnb/tP9oNBZZpCNJFwyWFcT7rPKr6KIurkucxcti31FHpz02cvHy0uSaKdYyylDbmiRZyVO4pU7woGjV/sq8fYayU+D+CWrOH9tysUATafAQs49Mw1VUWXF64H2hyTFWOQLU+P4ctntzPIJ+ec7alDKbHrzpML8PTpsooYIW3XRxzH9DRRRs7c1qlExJPVTGbN4HU8bbDqZeFCOJEsj777HB0j6k0xGpQNQlfVxXAOoAMxxdTfKHZgED1wHDdwqrTlHDIIDtOtpI5ajEReVarGE+FqTuZEXa8g8MSNOdj1HJ4KoGy0Z9GDDJmA25cZrERFUeAPYeJJ0hLRgyJ07wAxxpAVk6ifP9JkMxopoZIo9Z+/ZTKwTseeceA68DaMedsOQi62jom9jdZ/ylv7DHo/Fr4wG3qBjs+xcPekZQyWT2nFpdF/XfRuPFzjcdEgIJglfJyHFnyZKAD8eEjpb7f0wCPyHvuv7qmKawfIR+WAo1EMMRmOGynC4OQP682kTEzByrp0bLFXgLeCdg2rZf/Q4rc6Ir8pz18YCYwsEuTYhQbvM37iK/XKEaA7Yjvfwowt2fOHWQzruo3Gj2UvMrwLYzZHc5/I0OKkQ9lImY6U1tztXNKNdXZMS/1pQVZndXH+yS7rT+atSriVxpbngIs299gcFyQrmzwmRVzMFF1SZMJrYiPd1ZzCbOqGr2eKCivqPBfYL9ZzuKB7huDQkeIEC65YFfDLYVoOPbW5A3yQgzbotMTEqxLWtCvI8ovuw1+aSM9QYfrOOGj3HuFIOBLPp/JWZ8ZCuxGZxWpyFfmDpP7tQm2216871o++OZ0RgB"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01YJHgxdAcxraYfb8qnxKA77",
+      "name": "cannot_answer",
+      "input": {
+       "reason": "The request asks to compare Shift 2 with Shifts 1 and 3, but this session is scoped to selected shift 2 only (allowed shifts: [2]). Data for Shifts 1 and 3 cannot be queried, so a comparison is unavailable. A Shift 2 -only summary for production day 2026-09-14 can be provided, or the scope control can be changed to include the other shifts."
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5265,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 337,
+     "output_tokens_details": {
+      "thinking_tokens": 159
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}

@@ -3,6 +3,7 @@ import math
 import re
 
 KINDS = ('finding', 'hypothesis', 'check', 'limitation')
+MAX_FACTS = 6  # per paragraph; the live Haiku writer cites five in a dense hypothesis
 FACT_SCHEMA = {'type':'object','properties':{
     'result_id':{'type':'string'}, 'row':{'type':'integer'}, 'field':{'type':'string'}},
     'required':['result_id','row','field'],'additionalProperties':False}
@@ -39,17 +40,25 @@ def render_narrative(value, packet):
             raise ValueError('Invalid narrative paragraph')
         text=p['text']; facts=p['facts']
         if (not isinstance(text,str) or not 1<=len(text)<=700 or
-                not isinstance(facts,list) or len(facts)>4):
+                not isinstance(facts,list) or len(facts)>MAX_FACTS):
             raise ValueError('Narrative size limit')
         bare=re.sub(r'\{\{\d+\}\}', '', text)
         # Numerical statements must use application-substituted evidence fields.
         if any(c.isdigit() or ord(c)<32 for c in bare) or any(c in bare for c in '<>{}') or re.search(r'https?://',bare):
             raise ValueError('Use fact placeholders for values; plain prose only')
+        tokens=re.findall(r'\{\{(\d+)\}\}',text)
+        if any(x!=str(int(x)) for x in tokens):
+            raise ValueError('Fact placeholders do not match references')
+        placed={int(x) for x in tokens}
+        # Placeholders must name a prefix of the fact list. Facts listed after the last one
+        # placed are dropped rather than failing the whole narrative: the prose claims
+        # nothing from them, and a citation nobody can check against the text is noise.
+        # A placeholder with no fact, or a gap, is still an error.
+        if placed!=set(range(len(placed))) or len(placed)>len(facts):
+            raise ValueError('Fact placeholders do not match references')
+        facts=facts[:len(placed)]
         if p['kind']!='limitation' and not facts:
             raise ValueError('Narrative requires cited evidence')
-        tokens=re.findall(r'\{\{(\d+)\}\}',text)
-        if any(x!=str(int(x)) for x in tokens) or {int(x) for x in tokens} != set(range(len(facts))):
-            raise ValueError('Fact placeholders do not match references')
         citations=[]
         for i,fact in enumerate(facts):
             if not isinstance(fact,dict) or set(fact)!={'result_id','row','field'}:

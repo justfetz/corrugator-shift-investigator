@@ -34,6 +34,30 @@ def test_bad_narratives_rejected(change):
     with pytest.raises(ValueError):render_narrative(value,PACKET)
 
 
+WIDE=[{'result_id':'e1','shift':2,'coverage':'complete','rows':[{'a':1.0,'b':2.0,'c':3.0,'d':4.0,'e':5.0,'f':6.0,'g':7.0}]}]
+
+
+def _facts(*fields):
+    return [{'result_id':'e1','row':0,'field':f} for f in fields]
+
+
+def test_five_placed_facts_render_and_seven_are_too_many():
+    five={'paragraphs':[{'kind':'hypothesis','text':'Uncertain: {{0}} {{1}} {{2}} {{3}} {{4}} units.','facts':_facts('a','b','c','d','e')}]}
+    assert render_narrative(five,WIDE)[0]['text']=='Uncertain: 1.00 2.00 3.00 4.00 5.00 units.'
+    seven={'paragraphs':[{'kind':'finding','text':'{{0}} {{1}} {{2}} {{3}} {{4}} {{5}} {{6}}','facts':_facts('a','b','c','d','e','f','g')}]}
+    with pytest.raises(ValueError,match='size limit'):render_narrative(seven,WIDE)
+
+
+def test_unplaced_trailing_facts_are_dropped_not_fatal():
+    value={'paragraphs':[{'kind':'check','text':'Ask the crew about the {{0}} percent operator time.','facts':_facts('a','b','c')}]}
+    p=render_narrative(value,WIDE)[0]
+    assert p['text']=='Ask the crew about the 1.00 percent operator time.' and len(p['citations'])==1
+    # A gap, a placeholder beyond the facts, or no placeholder at all on a cited paragraph still fail.
+    for text in ('{{0}} and {{2}}','{{0}} {{1}} {{2}} {{3}}','No placeholder here.'):
+        bad={'paragraphs':[{'kind':'finding','text':text,'facts':_facts('a','b','c')}]}
+        with pytest.raises(ValueError):render_narrative(bad,WIDE)
+
+
 def test_incomplete_evidence_only_supports_limitations():
     packet=deepcopy(PACKET);packet[0]['coverage']='incomplete'
     with pytest.raises(ValueError):render_narrative(VALID,packet)

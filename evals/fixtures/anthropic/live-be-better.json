@@ -1,0 +1,302 @@
+{
+ "case": "live-be-better",
+ "provider": "anthropic",
+ "question": "How can we be better?",
+ "recorded_status": "complete",
+ "recorded_cost_usd": 0.0026527,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa4iomxhhWEHiyx927Y",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQS7AYKEAgTGAI4AUIIdGhpbmtpbmcSDIRVHj7bcqvWBnpqFBoMss92CqHGidx735JMIjAI3MSZcWQEWhmTRPYUo+P9xLicDjtXCVX0GZVH2tW0pSWFZKSBNglkAlxkvBgpglEqiQZ4uLsTj1VoL5HMbsnSZ8LeJygxsyJdCsrRVnDXRxS/UyG47rDFeuuJxDukfTKG/gSIV+5rfDPL20D1rZvkaDqLCIh3jkMrIyz7uCMRjL3/hu5r16iSFZxlDhKS1Z4v2nVGEIbexY/9Eo27Pmzh1LD02qikWW8oVErnutpH1d1+wQC3QaWex0e5N/kEggPCEGiKTsKJ+9c5kzDy9QVqGICoxPnEiU5e8aRMJTuwBqqq+Xo0o0ixV3fu6UR/jb4CYyjyojXHT22s0ML8dfyBQoam4SggU8BYkq0dGOwIyPOEHBAJrv/i/kCVQevFHCNooPontA3bpFWMsgUjd8O6oWJ7EmL826RA/oAEiFBqdNtZfbgNk/1ZtJtXtNyyhBQBbNBUOCcpDyM4mj6WDRQfzoj9HwySMlJeoclvG04Dxlga4GK5BpcRzlQkKVAm97143Yv0koRPxEpdSd1PKALdu0rElsKA928pVrWxYVExnjg7t7e96ac1QuwUcDnmXxorKkrn4nQG4RbQgcazK7rL9kJTuaOy68HLG7k7AQ55n2ugT+h/UbSMYZ6haV+vD/lIXRL86UKhVsbwzTQVKCrE7LzUy1ozVbb5Z5UoQRTJdE5sw6TUWUQaE7DGKcXPlLCLzl1qxv4TGukg7YKxmVQKIzDyZC5AD0V6fQ2hdA2SWkvTKtMfA6TwSOsP6Ac3ohDXE82Z75IJCzJXZXBVXB3v3rlMX7IUves7CG6inovSwXMURT1nd4Sl/98/lIpux9ffQmUkl1tJ5yiAg7E4Q2FA/SMxRx+AqtWp2WC948VlWEDcuX0B1NF5Del15kriuo6BYM21x3cn+E3TfhlC07IeX9bD89pCLuGO+sQQ2QfCsug7R/bCdSWn7G5fUFAw/47ET5IfOaqUsQ58umlTQyglZi4e+axspNhDfN/p6zHe7ENBnF4fY4HnhtJNcXBlEFJPFSylHCnidqDLU+I8TqI54IYzi5lzHZDC/Szx/LkeKrdK56v3lRHcMIlMTwunIOYEQLGirXf+bXZwLboYAQ=="
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01MkzEzQbZ9jwXvoUBQwUNqH",
+      "name": "get_shift_overview",
+      "input": {
+       "shift": 2
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5253,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 150,
+     "output_tokens_details": {
+      "thinking_tokens": 99
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "1d14ae9ae7674e60a416fcadba99d6fb",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa4u7A7Fr8WdXtcoWnF",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQS6AgKEAgTGAI4AUIIdGhpbmtpbmcSDO1NR0fHfgMkPzzjZhoMdbEpZPg49ssSQ5PfIjAGlygULihNDQ6OboRX3x0qsaC/a+LzTsn6CC8dePbLcDeYxJ4cqXPPVeQWV2f+VvUqhQh5xRaf2joBJ5/jxR2WIKXjilz9jmBDv7c0YDUzPsl/cVGw+0u+t1XVFLqJnUTxGTOuooAcl9xvy6j8sUys4vv+6UURCGsdnCZUwAJ+4CMq4PsnNJbhLUt3lHPT26WenB/hR3XkmaRgu/r63K1NYN6/ROzctQtWNPXDgfhCwKLc8A9vMhgbXL/bwBJTD77d0eJQHDUbxgLUWFqzkrgVQsCV+r1RYPx+tx6mVbhfibI8SFxu0/xEQrg/Tz9m7oDTf84NIP9m7BHRrb4ixsnfIWt7u01VUWSW5fiuOGdyY3Zu8shJsNF1P8HRcwwTmunx2/fQUIkmn5IxH83auM0rfabdi9cW2WL+C0RF9NJfMEBvWP90rpdcsCoO3E3W5g1ppIqHQgcCNzQO5GfXtcVDhziJkyhLMganweQ7ow4onvCpN6dzS3PGCw6wW1qvgNjvepSjY4+v5ozZJYCk4HFI2R/5gsWjyKh4t4WLRlTpqoKldtgIuuZJpzdGE/Qte3JneTCpzEwDyxCyNv5zDeNxy/ir2SHOJTow/tjQd2GXMbuhyC0AYdjR2L8Qxvlgo1GBHoD2DkFXjRl2bjH968+ZoPFhx26Cp508pM96AsIx0MGQ03cpeHyWzvr5k0BNume5jXFl8nMh/2EOGm9PNTXf/6xPRtE6ZSIEWQ3Dn3OIn41uaDvvvE9Y8VIJsVBrseJKRZ0wZF3IhSbWl8kn/AtKV/LjvsiQ2HSEqpFNxd/S/zK+/CSNK+2QnDhZqLNPXQMzXgbFdzdqYDdS7cJUSHUunxvJjCV4t47UHr/G7IciviQlbJTfaKb4j/J3m1h5gnA3DlYw3c4jcjD4QZFu/xw3RD6cBvf7n+/2rX2rnABtvTtnQF2n+8zJWB/alYAqMDg92FBvaDFNewOpQbnChIbdonC1XCtoIMahsEQMqw1jhoHtLduSVQufs4lwt4EGC+MUt1Hoar+ySsO2wAHyhDW9lldgde7wYv3YvlvA0cHO6p6N0BBJkhvActs6m5sYf4BCz2vUV4IY8JLZ86uW5ZGanSEzWFHrnWnLinTOn75fGgX/KWHiw3O3xcpUvv2pbjvZl0dizJDDgUoKFvtst9L7wg3mIS8nFxzdeCIC+wc4kV81a33a3QBzvh8ml7Il8q5o6nw5C9+ty5UvqWabI3N0Knw02tWohYh9JVC8UsDCq4RbSbrdXcIUdmNJ7RKTeNjmcwjkP4VVe6NYjri61pSdblX2Mixq+UAJ93Y8jEGxCghD8LcL/E5Dg/YJ+ET/abct/h010yea8AmiGy9/ZkZS33Kc51gRcF25oz5PTj1dGoY4LpsJ9pfXS/0i9kFF1OJ/3LOdEmz9VQxhahgkFJdc7PNXDrM+J18YAQ=="
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_017r6QDiXTqe5zPjWZrmReED",
+      "name": "finish",
+      "input": {
+       "result_ids": [
+        "1d14ae9ae7674e60a416fcadba99d6fb:1"
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5974,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 284,
+     "output_tokens_details": {
+      "thinking_tokens": 209
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "1d14ae9ae7674e60a416fcadba99d6fb",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "1b8a7320abb8",
+   "tools": [
+    "write_narrative"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa59UM7PkLDV2G1N2gM",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "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"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01B1SBktkFRp9KTi2LcD9F93",
+      "name": "write_narrative",
+      "input": {
+       "paragraphs": [
+        {
+         "kind": "finding",
+         "text": "The question is how to improve. This evidence covers one shift only, and the line ran at {{0}} percent of target speed, averaging {{1}} feet per minute across the shift. That is the clearest gap to target in the record, so speed recovery is the first lever to examine.",
+         "facts": [
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "speed_to_target_pct"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "observed_shift_fpm"
+          }
+         ]
+        },
+        {
+         "kind": "finding",
+         "text": "Downtime was {{0}} percent of the shift. The largest recorded downtime reason was {{1}}, at {{2}} minutes. The shift also logged {{3}} paper changes, so changeover activity is visible in the record even though this preview does not show how much of the downtime each change accounted for.",
+         "facts": [
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "downtime_pct"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "largest_downtime_reason"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "largest_downtime_minutes"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "paper_changes"
+          }
+         ]
+        },
+        {
+         "kind": "finding",
+         "text": "Trim waste ran at {{0}} percent of gross output. The largest reject reason was {{1}}, with {{2}} square feet rejected. Wet-end runs below target numbered {{3}} of {{4}} observed runs, so nearly every observed run was under its speed target.",
+         "facts": [
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "trim_pct"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "largest_reject_reason"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "largest_reject_sqft"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "wet_end_runs_below_target"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "wet_end_runs_observed"
+          }
+         ]
+        },
+        {
+         "kind": "hypothesis",
+         "text": "Uncertain: the frequent order and paper changes may be one reason wet-end runs stayed below speed target, and speed loss may be linked to the trim and warp rejects. The record shows these things together but does not establish cause. Questions for the crew: did changeovers or warp-prone runs drive the slow running, and were settings adjusted after each change? A useful check is to compare speed and trim on setups with and without a changeover, using the crew's own notes, before changing any process.",
+         "facts": [
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "setups_above_trim_target"
+          },
+          {
+           "result_id": "1d14ae9ae7674e60a416fcadba99d6fb:1",
+           "row": 0,
+           "field": "speed_to_target_pct"
+          }
+         ]
+        },
+        {
+         "kind": "limitation",
+         "text": "This is a single-shift preview with one record, so it cannot rank causes, show trends across shifts, or prove what would improve results. Costs, profit, staffing and live machine state are not in the evidence, so no savings or intervention outcomes can be estimated. Any improvement should be tested by the crew under existing procedures.",
+         "facts": []
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 1510,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 2324,
+     "output_tokens_details": {
+      "thinking_tokens": 985
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}

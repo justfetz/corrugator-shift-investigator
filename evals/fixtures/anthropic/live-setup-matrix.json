@@ -1,0 +1,309 @@
+{
+ "case": "live-setup-matrix",
+ "provider": "anthropic",
+ "question": "Show the full setup matrix.",
+ "recorded_status": "complete",
+ "recorded_cost_usd": 0.0029523,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa9k26NWGyKz7QAoKmH",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_019HePTSGtJxHpfyT4mndDgH",
+      "name": "get_setup_matrix",
+      "input": {
+       "shift": 2
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5257,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 51,
+     "output_tokens_details": {
+      "thinking_tokens": 0
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "2d216a648642481b89ddef028f296623",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa9sP7KXguwoo2VDzQD",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQSpAcKEAgTGAI4AUIIdGhpbmtpbmcSDKfkjxNkTYq42P6/IRoMvq3jh7N7zsp3uEF8IjDt01kfQ/fjD4sCmn4v80PKlytnkdwKBssZ8XUXvuLeHE/NPlpSvoDW8juiHZD7lRoqwQbIVktDSjpL1MJvzNP9AbFi1a1d58wyZUCpT0VyFv+I/3HyrxsHtT6fuoQBKCajQaeMWl4+9KpqHI+eYBu+tDm6I9vdWukYoOvtYbTDUbKdQr+FIlGUGYk5OKGQ6XtbtKoQwLb+GzNsvIcF3qpOjylnv2oZ8r7DlfSSJhOTPIaSJ/iB84ebgpXLk6HyVfZ1i9ZYqFlaSPWDHdK2inGmZjNGCVvDX6X5Wtboh0LTS9ndTkpKCqq5PmARJ6pgVWTuZAHD7gBOsfy/ncdNrmKT0zuC5h3pYkCDSMRxlY76NcyZgjO9cfUxskTlV2ODaIeNgqYaVUZoFgRdb2rTpN5w6dfEiDv/aDdi3LzXxGxB3/XFsdY1hei9m/BbIxjELHe4mcR1/JyBtVBFGmMTwveQLJ3ZBUwaW1lY/Xaysw0N4p4z4h7+0J7tzfYNrXNNMFw7bvEG8iLiKxQVsEN70TYHT9VG8KVAzrXRXs5NIejzUpYUy3W/hEIYs7hd/JR/0uMUtuzNqt/is+lVHkl+2twnB2g30bCtvqLb6aw7VbxJ4M0ux16zg0LKEz32BNtPBmaZJAhs6kMMXRK4Gt7U8LA3GMlVU+Uo307+zY8Ejc2u9vm+RcwCeIpJ1cW/UD/onBr3JkbgpH+LMupesoMrCbwn37indAm5mfy5PDcY/FugKNwQU/I8At75TG8iYFSYMTCFlce7z0k0ZAJjZXfTUr7qzeyxH3ZcAW/rpIHFjmbydcvjjiPwgbiXTr9Woj6wjNty3o2YotlBX/dWiCPU4qxiJM324TMrdqvuJthBIQmIGsELnatuyWiMdemVQyaFNaE0xduS+Ew1rlWQZyRuU9wpkQhMbuzfeNQsnbEymLgqt7vfWdg7B2szWGfZz2ckHZA0MoB902nCtV6WYs+w8tIm7XIGIrQYFy3CWdu5WW08Gt8RyuMPjfPzdjzjCxLmXJE8mgltczBB+Y9khTBSwtqLJwuu52mgsYTx2ec+l/UK1i6WTPD9oasjqa/0bv0AtU96P/+3s/pYV66Kg4bc2Cwvp+ZURzr88mTLJwkR/Sjn3pJJQyUWqQAIH4Wlv4vopVPFW67+25bfUj8V7p+PJ23dl1pbTxgB"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_019Ue6XqSF4qTJEjev7GJcYZ",
+      "name": "finish",
+      "input": {
+       "result_ids": [
+        "2d216a648642481b89ddef028f296623:1"
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 7749,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 182,
+     "output_tokens_details": {
+      "thinking_tokens": 114
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "2d216a648642481b89ddef028f296623",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "1b8a7320abb8",
+   "tools": [
+    "write_narrative"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHaA28Dm9CxvRHXKPAbx",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "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"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_011yRt7m2FMtep2nMVzUga2U",
+      "name": "write_narrative",
+      "input": {
+       "paragraphs": [
+        {
+         "kind": "limitation",
+         "text": "This is not the full setup matrix. The response reports coverage as complete, but it contains only a preview of the setups, and the total row count is larger than the preview row count. I can only interpret the rows shown, so no plant-wide ranking, total, or full-shift comparison is supported by this evidence.",
+         "facts": [
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 0,
+           "field": "total_rows"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 0,
+           "field": "preview_rows"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 0,
+           "field": "coverage"
+          }
+         ]
+        },
+        {
+         "kind": "finding",
+         "text": "In the previewed setups, every run ran below its target speed. The first setup on the lowest-speed grade ran at about 92 percent of target, while the weakest previewed run fell to about 78 percent of target. That weakest run is the one with a recorded stop, so the speed gap in this preview is concentrated in one setup rather than spread evenly.",
+         "facts": [
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 0,
+           "field": "speed_to_target_pct"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 7,
+           "field": "speed_to_target_pct"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 7,
+           "field": "stop_count"
+          }
+         ]
+        },
+        {
+         "kind": "finding",
+         "text": "The same weakest previewed setup also logged downtime and the highest reject count among the narrower BC-type runs in this preview. It recorded about 2.2 minutes of down time and about 388 square feet of rejected board. Other previewed setups with no stops show no down time, but several still carried reject counts in the hundreds of square feet.",
+         "facts": [
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 7,
+           "field": "down_minutes"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 7,
+           "field": "rejected_sqft"
+          }
+         ]
+        },
+        {
+         "kind": "finding",
+         "text": "Rejected square footage is not limited to the stopped run. The longest previewed run had the highest reject count in the preview, at about 765 square feet, with no recorded stop or down time. Reject volume therefore does not track stops alone in this evidence.",
+         "facts": [
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 11,
+           "field": "rejected_sqft"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 11,
+           "field": "lineal_ft"
+          }
+         ]
+        },
+        {
+         "kind": "hypothesis",
+         "text": "Uncertain: the slow run with the stop may have been affected by a disruption that also drove its rejects, while the long high-reject run may reflect volume or a quality issue unrelated to downtime. These are possibilities only; the records do not show the cause of any stop, slowdown, or reject.",
+         "facts": [
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 7,
+           "field": "stop_count"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 11,
+           "field": "rejected_sqft"
+          }
+         ]
+        },
+        {
+         "kind": "check",
+         "text": "Ask the crew what happened during the stop on the slowest previewed run, and whether the rejects on the long run were logged for a known quality reason. Also request the remaining setup rows so the full matrix can be compared before drawing any conclusion about speed, downtime, or waste patterns across the shift.",
+         "facts": [
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 7,
+           "field": "down_minutes"
+          },
+          {
+           "result_id": "2d216a648642481b89ddef028f296623:1",
+           "row": 0,
+           "field": "total_rows"
+          }
+         ]
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 3347,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 2401,
+     "output_tokens_details": {
+      "thinking_tokens": 1078
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}

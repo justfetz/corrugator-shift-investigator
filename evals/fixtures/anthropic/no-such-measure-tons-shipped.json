@@ -1,0 +1,151 @@
+{
+ "case": "no-such-measure-tons-shipped",
+ "provider": "anthropic",
+ "question": "How many tons did we ship?",
+ "recorded_status": "unavailable",
+ "recorded_cost_usd": 0.0013165,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa2pW2u21gw5KStzgoY",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQSvgYKEAgTGAI4AUIIdGhpbmtpbmcSDAxeDyDi1n5YU/zQ/BoMiG5uIrAyKT2sjgNqIjChZHNU4hwnojblSTS/zKxxwyOJ7hleE6psmx7RkT4fkOkCLtlsfxj/Yv/+ftFUbeIq2wWwdN25mTxbvNcktuswuWC9wdSzya4fCJ+mqcAMo6SVlfq3iII5TX5HxkqFQKcPSIob7wFKQhpXqzvpr9qSSUnuYDqKXhtGiiR0F4rsBL6AYz+B2/qZY8lCm7mnfkbU+p0eJAfXi37ieevM/KZJVXYO67oL4Dpj5I5h9FhbetL8myWnut34dRmvxcx4q4WL1xMRGaM4iX0pnBQY+7G0/dSReTxGOKPeJe35sWBj4XrZr3DFjB+O/i49ouf+5JebhWSchhlHP0bxnYpmh2x9NI6YG5+Yxr7Y/IKyC+R2wEruDSI8XapjliH3N0qKeVr17MQgeXcbJGaIHiuHftHfcQ1g95KxMd1IUOWnNR8mVskFkL3LhOGAWhQlQi7kUpu7/4t2TTDvjnArh/V0Fu3WlK7El4ww97hknKgECnwb7T3Ogy1ukXyke1byy7Ox78sLK4utgZOZ+jNAQt9FqVyF/d177aQSC7pUKM6ScdbV/MybH6Kgn/XznvdTAELtphztF8n0nS2xTN9/Biz+gdp+Y66QndqXvM9kgR0yx6raoUn0A6DcRE03OcDjAo5RR4xZlWLzbntF3gsRvMo6toMyw3ESA9c9k8rhEsmGf4tlFhU6LfDsbR2pcqTJ52dyElscA017UObuqTzN1C+FqsCFtaBW8DOQp/jSeSehOkyg2wtPiI/Stk/0jcpR4cl47KkO9J6p+LLRUw5c4Xc0EnTrmAhfEbc0Q9czUh6XpRGlglIroF2cfg2G2Emn7mRTBtLiIuG+fv1KbgPCGw7cyoMeARVPcniLzeuF1WayrX+hKzPWwRpK7yN8KIx8L/KbOeuTK3B+rfncnYSFtBGZb6A6YCAorrsC66YCHQUQC2p3KJrTVU+r8Hnyqg8qLo2yYtlFDQR7UiS5e+Uu45DqNsB6aGv5xTpToepQtrWKATC0IpqTXRF3E/ERNlNmEYnvhlmeJPVvj+tl4MGz+oJzLxgB"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01Y6kfaAXrNAEWU9zgSFNk1L",
+      "name": "get_shift_kpis",
+      "input": {
+       "shift": 2
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5256,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 152,
+     "output_tokens_details": {
+      "thinking_tokens": 100
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "ffa7dac69c7b4332b3734be514a7431f",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa2yqr6Qgk1rXmti4Ei",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQS5QYKEAgTGAI4AUIIdGhpbmtpbmcSDCrYgbf9QGEdYK6kZhoMZbPVnk2zi4OY0tAKIjD58Rxufw3p1k1u9BROPoKu3fpNqhYTu2RwoQbcX6ltZjSIaNum4SYBdOSFM6ATMMcqgga98+umB83rbqzZErWpy7WSoHubZFm4Pn2I0IzfZVeTcJG8SjvRJ/ci+qG0pdUle4kdfUZq2au1aS88MUR6JFdrb6vpIVQe/mQhTnSr5HdC30+EbjZdC7Gz2voS2ldObwc/yr2IwqhU3Y9P+8d5WJeGTNB7cqOyboe+PsWYnk8blSTSso8YNntCsMyulRs3vrlWwbl1qveu25Z8qwE5zQUAsf4JmwgTpicrVTbQxMBzIZh/0CqGF3q7O8vHSdDfL3rka40MSs7W1h2Xr949NlIAXI2/CSsRsGD6uKTMMLECS79ACJE22krrx+nTAHd7JBRYUA2cu3zjTF9ZSfUxw0o0QPmbROLXqmBVsLBbAvSlUu1eeMQSB9z3NvgauBHUJan73GxvBxuxzeYhEZdAKMVb5Iz0+r3QkTr/+l+4mirVHQ6Kap7ZwkfNpX0eLe8jbEMuoVpTFdeCiFoiYwo8wauM48WgWnT0mBG1JBoDphgP/eASMRXclLOO4QCALqzLyfGtZsHGb5pQC78tK/e179dvCcFLq+yI9Q5y+hiPPI2Ksc18pIkr42JEJwBu41Hys3lnZmqTu+4fWYCE/09jswxSnntfsfXDHSWjzj2xbbGk+VAxo+b2ImqxLZtBKPkt9Tq9EdWBaP+HuwORqVmK1LNC5M3P8x/iRgiAkiQXNn7Q/TVZV6+hnH2ZQD3aU7POWwR/1T8CDJvU9iOsF9HxzOJT1fT5R+CwyHjteqGzAF//uQ3qqEdD/yspCmsZTno4xmZMnWvKB5AVEIAI1AmNsjr/kAe/ONbmMpgpn0W6XUzLQcXxmcwpB9KcK9bQ0tobvL7W3ATEqY8WdrT5cyY3szOrA92IYbTu1rUJzfi6TeW6zfSje6Cg1v+hBrHDRxxBgi5yMRDGAYu8DUcRym+ELv+pnC1F0VPfgOZ6q6k5AyBqH0QPcF/OpY3kDuDmZQyuj8yeoX/JMipyUFiCzNY7q/CdK3TQd3zecj/vejGfvODTzbn3VArfQtpDczt1ipH2lLNQhBgB"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01F4TYJ9ytdfSgT626wyRcQW",
+      "name": "cannot_answer",
+      "input": {
+       "reason": "The shift 2 data for 2026-09-14 has no tonnage or shipped-weight field. The KPI record only gives area and length: gross sq ft 2,252,174, estimated good sq ft 2,140,202, and observed lineal ft 291,063. Converting area to tons would need a basis weight or caliper per product, and none is in the available tools, so I have not estimated a figure."
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5879,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 254,
+     "output_tokens_details": {
+      "thinking_tokens": 80
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}

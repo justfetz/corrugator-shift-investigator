@@ -1,0 +1,80 @@
+{
+ "case": "not-measured-glue-temperature",
+ "provider": "anthropic",
+ "question": "What was the glue temperature on shift 3?",
+ "recorded_status": "unavailable",
+ "recorded_cost_usd": 0.0007638,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "2adcaecfa841",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa2aDo7WvjojDhycsfL",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQSxAoKEAgTGAI4AUIIdGhpbmtpbmcSDA+ERUOZ1nV4X2P02BoMfqW08S94AnWjSU1XIjBq+2gq+FtHkXeATGholG8+rEFdaqTxVzpO7AWuac9ofiUH2IReegzFESPfuOwUjmMq4Qlk1IyW/qWphynPFdZ5dh/HyHtHNCMdkXo6KhLUI4y4V+pRYT+oPNTN47rq5yjSps3roqzdtdUk2vTM3egIrtZsj15AjtnFny9R0SgYRnbxSnx6jB9SqFG53cTxvjZ4XH7aR2nTVGV9ETnll8RCNllS4pCJmmDldt36zBF7gJ1HdtBr+I1k7+Ua7h4vcRZ1L3PphzzDHhLQRQiycP58lg07BwvZl/xUepdIAkByT48ij74d5SwnBNNw5Xnct31rOYEuWLBIKdYuj6AU9YyAFpf89yx89zhcmTx2bbMgB7tXDuOOK5xEOgsKo5HwH/XgozBBrbEggxmwGTLHDj3JWJZbI/PBL6Ipq8LcUF5ljxO4GbyF/FTG9eOuJfJJNnGribxnovR8aFc+5+hno8rb49ihRb+D5w7vTFM1vvn1wsOaz+qNxO3f1RtUMiw6gGgKAJ49OwNyJY5EBKApuK49+8kwF2GN5o3CujE8PTKlvFSRj/669vFFwZlD6ov8f8EzrO/JubU7g+sbin1BoC/tLj7ffsY0SSnG4xUn0spUzR4tTMyozny/QQW2f95HbUXPD0Ff8zONbR/l98Ed1kLbTlPZ/ebj9ukpp6TxT1PHfMhh1W7UfkDa/JXKuzrZJ2e3GEvYZup65IHenXOg8qSF8TMwNcHOF1ycGFYK0LFQmdnFswjbB1+jRUMHruvI/t/cUy7D+Uo5VEbortL07nFSjshDkB6/KcoX1WHAswRlG+B8slq2pppjFGACxIQqOzdxcmhrDDNZl2KLoyJtTl23oixOPvwmBAG/wehd9jNd+OsDZvdnmsYEOOMV2p1jOY3t50NWe+e5S0hM9kmLaobZq+GDSLVQnoa5iquuksgOYqhUnpRA4QjkgQ9AkEwWnVdARtUcKuy5gObWoL8apyF72o3q1bC0UQgWAhzlr+EWQlcQcpOTm8lqGtoIWvHevtOwKvig4aasJUaRtuZFhkPH/8vqfIlJvr5RafpMgn+bLSBR9XGgq8/FwNE7eoCbLTLwXuh7Om6EgkfMQ4OsPQ2xkTSNwYw4aXEKyNEkyTT16d9hWcRfcLWcUhRuRc2C7Ag2LkGyBMXbb6LIUANgSprKLim3HHbEzYWlBdLuX7GIBQhxCX/oY8rcWrOpp+vOnAaG8R/xBbjM+oiHje0x8gbsx9HTnEr2ZA1GP4GPD7FV8CHFAn7a0foVuW2ipM/fE5Qgd8Elwgf3pYgb6J/2jOFBlLbAqQt8ZjhHLncaidUCdolQ9kLay9Y1IQUz5cFmgzZXNxPshqkmKav2X7JOtsKPS/hXgsYzEaYI7DxoO6Z2+NNeDQ6A+QWy/jejBNxjwEuMV5Q9No+EbOjF4qi1ToaS86Jg33lugbWOOYuhZeHkNHDdL7bdjudaEgIi92mMo5PyWFpQ5TYn2vut3pXkFhBQHrhSqf/6/+r1ztNbGyGmAzGAR2S3ou4dh2yWPQPnAn1HoC5JSt5pTpaXZENI7GaPAggsLG+Zs/g5BVpt+Kq8C+gdVYDJstKDUXUIdAA/Wc75FKVuoClnKpTgDxvwRS46JFYLlDL+18vImtQ/Xe//zITDggfJ45beXpheWs5NZGsDFEwGUJDSUHkNGpWtF0KYgR1n205aaN9U6TWv68oNKU43G2rUE4X0ZJq6lTW8jYGJuuiaGAE="
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_017d8NiW12KXhHKEkdAZvysL",
+      "name": "cannot_answer",
+      "input": {
+       "reason": "No available tool records glue temperature. The metrics I can query cover shift KPIs, downtime, wet-end speed and grade targets, quality/waste, setups, orders, trends and shift notes, and none of these include glue temperature. The shift notes are unverified observations, so I did not treat them as a measurement. To answer this, the glue temperature log or a process-data source for shift 3 on 2026-09-14 would need to be connected."
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5288,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 470,
+     "output_tokens_details": {
+      "thinking_tokens": 282
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}

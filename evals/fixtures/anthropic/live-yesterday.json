@@ -1,0 +1,80 @@
+{
+ "case": "live-yesterday",
+ "provider": "anthropic",
+ "question": "Compare with yesterday.",
+ "recorded_status": "unavailable",
+ "recorded_cost_usd": 0.0007701,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa8v35bPjh4hszDW4zg",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "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"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01RVGsbJfhLqof56JoP2D1LX",
+      "name": "cannot_answer",
+      "input": {
+       "reason": "The dataset contains only the selected production day (2026-09-14, Monday). \"Yesterday\" would be 2026-09-13, a Sunday, which is not a Mon-Fri production day and is not in the dataset, so a comparison cannot be made. To compare Shift 2 with another production day, please change the day control to that Mon-Fri date and ask again."
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5256,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 489,
+     "output_tokens_details": {
+      "thinking_tokens": 326
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}

@@ -1,0 +1,457 @@
+{
+ "case": "live-why-slow",
+ "provider": "anthropic",
+ "question": "Why was this shift slow? Chart downtime by reason.",
+ "recorded_status": "complete",
+ "recorded_cost_usd": 0.0044408,
+ "exchanges": [
+  {
+   "run_id": null,
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa3CR9kNLc3cP5a3ir9",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_01Ara8ab3hNygkR4j4dbi2bU",
+      "name": "get_shift_overview",
+      "input": {
+       "shift": 2
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5266,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 50,
+     "output_tokens_details": {
+      "thinking_tokens": 0
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "94dc30d1a419477bbc315792fea00259",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa3GmaVEmdmXN6NvJb3",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_01494Nsw38Gx1dLAa9fWGgtK",
+      "name": "get_downtime_breakdown",
+      "input": {
+       "shift": 2,
+       "kind": null,
+       "group_by": "reason"
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 5882,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 99,
+     "output_tokens_details": {
+      "thinking_tokens": 0
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "94dc30d1a419477bbc315792fea00259",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa3NfY8d3ceXUPmNeuw",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "tool_use",
+      "id": "toolu_017TW4CUrLYkBPQueKYwjtGo",
+      "name": "render_chart",
+      "input": {
+       "result_id": "94dc30d1a419477bbc315792fea00259:2"
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 6387,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 67,
+     "output_tokens_details": {
+      "thinking_tokens": 0
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "94dc30d1a419477bbc315792fea00259",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "05f325a4c742",
+   "tools": [
+    "get_shift_kpis",
+    "get_shift_overview",
+    "get_downtime_breakdown",
+    "get_wet_end_performance",
+    "get_quality_breakdown",
+    "get_setup_matrix",
+    "get_order_matrix",
+    "get_shift_notes",
+    "get_rankings",
+    "get_period_kpis",
+    "compare_periods",
+    "get_downtime_pareto",
+    "get_waste_breakdown",
+    "get_stops_profile",
+    "get_trend",
+    "render_chart",
+    "finish",
+    "cannot_answer"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa3TyGpPnhbwmh7jDWT",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "CAQSiAgKEAgTGAI4AUIIdGhpbmtpbmcSDJunRbYwqqtJHpjPVRoM1qBD56NQmPBDfXG8IjBc+ayZzaCxtz7b/N/x8C2PxBrCnyN3gM0FZho0kyQ2RoVM4Bl9mEtvQupe86DuO68qpQeeGFRunHMXnICPM+jQFHYH/TqUIkaj1y8geBfSzGN6gfPxpjHka2dofmvh+gJRn4c9HFKUXhveRRdQU6wr0OJlpnZTf+XLQ/yOK+857bhZBC8bWD1EoyS5fnFGacuEkdjeW8KoMhnyQTixtsw7fONU81VL2m3HfHzFnRdTKgt58eeKWhGq0JM9R+OvaKGDM+643JI27VUthgxuq+HVh30pAhFi08+4UJqviZ2ag19NYprkZrLgVE6DoHMkE2oipckdTa4kcRGsYi67Ls7nbxVAYYTyGBt7ALiD5m3/tXtJfKjhp9v1GNlew/jemo9RXkczbng4i7PV4kt5/LeXa0jaJ9RB/4dUSJ4etyTxYzjdbzcpPdQm1rMIxPRM+D6WEB4FAb87yhwtfHvR2PgPsaX3XmPRN6efTSr8qwHzH7fSP8Q5riPpox56bXNNzrf2X2Vo62PBWCNIN7MQ+YhAq+55NmZuxSVyDkWS2Y5o/xryao/uCygz1OuQKSQblz1ktb+lmW4VDShmNJmWpQn1PqwzNBXWuRCBTRreQvEkF+S3cfK0pB6vCeM+gl+fg+WA/koH8z4UMhfYhzB9KwrmKgROd1WEJfQxvYEnnUfshKo9wwUuBtzZsdLmIm5Pxho+gOCVfKL+IF7mc2q3Eguzzw10Y+6Q605lKbfiYU0GMLM4uFJi6RBEDzrp4nrOv/M4PdwMFbF0FL6acms+EF01LQ3gNcRdKzL88ux4kEsA+Z3Qr53Hd1BIP8UtT96fYL9RFIaDoWyIRdRoQtzj2zJwngKcwBpSSaNyUix17xY1VsHXSDQW9QZbsIYJrTcRW2KtAdLKHtJEsPvWZ3OGRDPolqgngXcTHs0Bho8+rEmI++rFmo4OjBIRRsSo5VHMLvBsKSekvbfbl3A4giE7wlER0uatSf2efiQk5vu58kVd/BkUduANpSMFIMGfNOgT68gCzGGcYwTql3QfKZReS8K0dBEi0RRVdDSyoiL/SEAocVMDLohfBgGZ0Py9g2hMnxITdrZneY01EbxvJfDtAZXlzrDb/MYMhKz0ykqBmsFqDyWzT4uOVGgrmA/DXutcIMtLk4qTf6JuxGpCh6xeRZgQXSdivwc6l66EvIxyQ4gUbGmgAPkrMZ+kS1wR4DNgMPVcarKDE9r/i2MgmAqVBaxlCyrw4I0CkjCZGdJSmbwtRYY2e5KcCB3xvsHmLxMpSXn16fSopcmHn6P0+i0dkMwmYDc6umnmp3UYAQ=="
+     },
+     {
+      "type": "text",
+      "text": "Shift 2 on 2026-09-14 ran at 88.4% of wet-end speed target, and downtime explains only a small part of that.\n\n**Downtime by reason (chart rendered):**\n- Order change: 3.25 min (0.68% of shift)\n- Raw material (roll): 2.60 min (0.54%)\n- Missed splice: 2.23 min (0.47%)\n- Knife / slitter jam: 1.07 min (0.22%)\n- Stacker: 0.97 min (0.20%)\n\nTotal recorded downtime is 2.11% of the shift. Operator stops are 1.89% and maintenance is 0.22%, both under the 2.5% targets. Order change is the largest single reason, but the stops are short.\n\n**What else drives the slowdown:**\n- **Speed vs. target:** All 24 wet-end runs were below their grade target, so the shortfall is spread across the shift rather than caused by a few stops. Stops alone do not account for the 88.4% attainment. Grade-target performance is the next thing to look at.\n- **Trim:** 3.22% overall, just under the 3.25% flag, but 23 of 24 setups were above the trim target.\n- **Dry-end rejects:** 1.12% of gross area, above the 1% flag. Warp is the largest reject reason at about 9,439 sq ft.\n- **Shear:** 0.63%, within the 0.4\u20131% guidance band.\n\nDowntime is a minor contributor. The more likely drivers are the grade-specific speed targets and the trim and warp losses. I have not checked the setup-level or grade-level detail, so those causes are not confirmed."
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01Q5ffvKef1xN19YwoRR3ybN",
+      "name": "finish",
+      "input": {
+       "result_ids": [
+        "94dc30d1a419477bbc315792fea00259:1",
+        "94dc30d1a419477bbc315792fea00259:2"
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 6631,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 818,
+     "output_tokens_details": {
+      "thinking_tokens": 189
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  },
+  {
+   "run_id": "94dc30d1a419477bbc315792fea00259",
+   "model": "claude-haiku-5-5",
+   "prompt_digest": "1b8a7320abb8",
+   "tools": [
+    "write_narrative"
+   ],
+   "response": {
+    "model": "claude-haiku-5-5",
+    "id": "msg_011CgHa3oAgMeDDbGxco1UBw",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "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"
+     },
+     {
+      "type": "tool_use",
+      "id": "toolu_01JMPntFPKaLD1B6PSF4vzpv",
+      "name": "write_narrative",
+      "input": {
+       "paragraphs": [
+        {
+         "kind": "finding",
+         "text": "Short answer: this shift ran at {{0}} percent of its speed target, with an observed average of {{1}} feet per minute, but recorded downtime was only {{2}} percent of the shift. Downtime is therefore a real contributor but not the whole gap, and the preview does not show a single dominant stop that explains the slowdown.",
+         "facts": [
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "speed_to_target_pct"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "observed_shift_fpm"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "downtime_pct"
+          }
+         ]
+        },
+        {
+         "kind": "finding",
+         "text": "Charted by reason, the downtime breakdown lists Order change as the largest stop at {{0}} minutes, or {{1}} percent of the shift. Raw material (roll) follows at {{2}} minutes, and Missed splice at {{3}} minutes. Knife or slitter jams and Stacker stops are smaller. This breakdown is marked complete with all five reasons shown, so the ranking is for this shift only.",
+         "facts": [
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:2",
+           "row": 0,
+           "field": "down_minutes"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:2",
+           "row": 0,
+           "field": "shift_percent"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:2",
+           "row": 1,
+           "field": "down_minutes"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:2",
+           "row": 2,
+           "field": "down_minutes"
+          }
+         ]
+        },
+        {
+         "kind": "hypothesis",
+         "text": "Uncertain: the slowdown may be linked to frequent reel and order transitions rather than to the stops themselves. The shift logged {{0}} paper changes and {{1}} valid setups, with {{2}} setups above the trim target, and trim ran at {{3}} percent. Trim and wet-end run quality may be adding waste and slowing the line, but the records do not show that cause. The largest reject reason was WARP at {{4}} square feet, which could be tied to these transitions; that link is not confirmed.",
+         "facts": [
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "paper_changes"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "valid_setups"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "setups_above_trim_target"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "trim_pct"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "largest_reject_sqft"
+          }
+         ]
+        },
+        {
+         "kind": "check",
+         "text": "Ask the crew how the order changes and roll loads were sequenced, and whether the missed splices and roll replacements happened during the same transitions that pushed trim above target. Also check the knife or slitter jam and stacker stop records against the operator time entries, which show {{0}} percent operator time, to see whether small stops are being under-recorded. These are questions for the crew to answer, not machine adjustments.",
+         "facts": [
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "operator_pct"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:2",
+           "row": 3,
+           "field": "down_minutes"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:2",
+           "row": 4,
+           "field": "down_minutes"
+          }
+         ]
+        },
+        {
+         "kind": "limitation",
+         "text": "The evidence does not include profit, costs, staffing decisions, live machine state, or a plant-wide optimal improvement, so no savings or outcome can be stated. Preventive maintenance recorded {{0}} percent and maintenance {{1}} percent of the shift, so those are not evident contributors here. The downtime minutes do not reconcile directly to the downtime percentage in this preview, so the reason ranking should be read as indicative only.",
+         "facts": [
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "pm_pct"
+          },
+          {
+           "result_id": "94dc30d1a419477bbc315792fea00259:1",
+           "row": 0,
+           "field": "maintenance_pct"
+          }
+         ]
+        }
+       ]
+      },
+      "caller": {
+       "type": "direct"
+      }
+     }
+    ],
+    "container": null,
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "stop_details": null,
+    "usage": {
+     "input_tokens": 1827,
+     "cache_creation_input_tokens": 0,
+     "cache_read_input_tokens": 0,
+     "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+     },
+     "output_tokens": 2649,
+     "output_tokens_details": {
+      "thinking_tokens": 1070
+     },
+     "service_tier": "standard",
+     "inference_geo": "global",
+     "speed": "standard"
+    },
+    "diagnostics": null
+   },
+   "status": 200
+  }
+ ]
+}
