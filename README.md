@@ -8,6 +8,7 @@ For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics
 
 | I want to… | Start here |
 | --- | --- |
+| Read how the whole thing is built, in pipeline order, in ten minutes | [How this is built](docs/HOW_THIS_IS_BUILT.md) |
 | Install, run, ask questions, and read reports | [Workbench how-to](docs/WORKBENCH.md) |
 | Check a formula, target, calendar boundary, or heatmap color | [Metrics and interpretation](docs/METRICS.md) |
 | Understand the agent, tools, context and data flow | [Execution walkthrough](docs/AGENT_EXECUTION.md) and [agent contract](docs/AGENT_CONTRACT.md) |
@@ -122,6 +123,8 @@ Planned delivery controls: verified email, unsubscribe, private recipient storag
 Test known-answer calculations, order continuation, unequal cut lengths, width fit, midnight boundaries, overlapping downtime, corrupt numeric values and waste reconciliation. Test questions that lack evidence, prompt-injection attempts, forbidden tool calls, chart/data agreement and delivery isolation.
 
 Measure tool accuracy, evidence-supported answers, latency and cost per investigation. Enforce server-side usage budgets and keep saved examples available when live usage is exhausted. OpenAI is available as an optional daily planner; hosting remains open; no running-cost promise has been validated.
+
+The golden set (`evals/`, [how it is scored](evals/README.md)) has seven case types. Its value cases are generated, not typed: with synthetic data we own the truth, so `evals/make_value_goldens.py` computes every expected number by plain Python sums over the record families and stamps the file with the dataset hash; the runner refuses stale goldens. Investigation cases ask about the three seeded stories as a superintendent would and are scored by application rules: the evidence that covers the story window, its numbers present in the answer, and no cause asserted that the evidence lacks.
 
 ## 10. Build in reviewable stages
 
