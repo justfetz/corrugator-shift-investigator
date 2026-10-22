@@ -342,7 +342,8 @@ def make_server(port=8765, public=None, host=None, guards=None):
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
                                        'demo_guards': app.guards.summary})
             files = {'/': ('index.html', 'text/html; charset=utf-8'), '/guide': ('guide.html', 'text/html; charset=utf-8'),
-                     '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/style.css': ('style.css', 'text/css; charset=utf-8')}
+                     '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
+                     '/style.css': ('style.css', 'text/css; charset=utf-8')}
             if self.path not in files:
                 return self._send(404, {'error': 'Not found'})
             filename, content_type = files[self.path]

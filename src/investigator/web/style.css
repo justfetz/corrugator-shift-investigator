@@ -42,6 +42,9 @@ header{padding:22px 4vw;background:var(--header);color:var(--header-ink);display
 .eyebrow{font-size:.75rem;letter-spacing:.14em;color:var(--header-sub)}
 h1{font-size:1.75rem;margin:6px 0 0;font-weight:650}
 h2{font-size:1.1rem;margin:0 0 14px}
+.header-right{display:flex;align-items:center;gap:10px}
+.theme-toggle{background:transparent;color:var(--header-ink);border:1px solid var(--header-badge-line);border-radius:var(--radius-s);padding:8px 12px;font:inherit;font-size:.82rem;font-family:var(--mono);cursor:pointer}
+.theme-toggle:hover{background:var(--header-badge)}.theme-toggle:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .badge{background:var(--header-badge);border:1px solid var(--header-badge-line);padding:8px 12px;border-radius:var(--radius-s);font-size:.82rem;font-family:var(--mono);white-space:nowrap}
 main{max-width:1500px;margin:auto;padding:24px 4vw}
 .mono{font-family:var(--mono)}
