@@ -90,7 +90,7 @@ def render_narrative(value, packet):
                 raise ValueError('Unknown narrative source')
             source=sources[rid]
             if not 0<=index<len(source['rows']):
-                raise ValueError('Unknown narrative field')
+                raise ValueError(f'Narrative cites row {index} of {rid}; only the {len(source["rows"])} preview rows may be cited')
             if field in source['rows'][index]:
                 val=source['rows'][index][field]
             elif field=='shift' and source.get('shift') is not None:
@@ -99,9 +99,11 @@ def render_narrative(value, packet):
                 raise ValueError('Unknown narrative field')
             if source['coverage']!='complete' and p['kind']!='limitation':
                 raise ValueError('Incomplete evidence is not a performance finding')
-            if val is None or isinstance(val,(bool,list,dict)) or isinstance(val,float) and not math.isfinite(val):
+            if isinstance(val,(bool,list,dict)) or isinstance(val,float) and not math.isfinite(val):
                 raise ValueError('Unavailable narrative value')
-            formatted=f'{val:,.2f}' if isinstance(val,float) else str(val)
+            # A null field (an order's requested sheets, a withheld delta) renders as the word, never
+            # as a number: the paragraph survives and says plainly that the value is not recorded.
+            formatted='unavailable' if val is None else f'{val:,.2f}' if isinstance(val,float) else str(val)
             if len(formatted)>200:
                 raise ValueError('Narrative field too long')
             text=text.replace('{{'+str(i)+'}}',formatted)

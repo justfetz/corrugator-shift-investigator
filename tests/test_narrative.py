@@ -23,7 +23,7 @@ def test_values_are_substituted_from_evidence():
 @pytest.mark.parametrize('change',[
     {'text':'We can save 999 dollars.'}, {'text':'<script>run()</script>'},
     {'facts':[{'result_id':'foreign','row':0,'field':'down_minutes'}]},
-    {'facts':[{'result_id':'e1','row':99,'field':'down_minutes'}]},
+    {'facts':[{'result_id':'e1','row':99,'field':'down_minutes'}]},   # beyond the preview rows
     {'facts':[{'result_id':'e1','row':0,'field':'profit'}]},
     {'facts':[{'result_id':'e1','row':True,'field':'down_minutes'}]},
     {'text':'Uncited assertion.','facts':[]}, {'kind':'execute'},
@@ -194,3 +194,13 @@ def test_period_findings_rest_on_the_rows_that_exist():
             corrupt.close()
     finally:
         day.close()
+
+
+def test_null_field_renders_as_the_word_unavailable():
+    packet=[{'result_id':'o1','shift':2,'coverage':'complete','rows':[{'order_id':'SO-1','requested_sheets':None,'produced_sheets':120}]}]
+    value={'paragraphs':[{'kind':'finding','text':'Order {{0}} produced {{1}} sheets against a requested quantity of {{2}}.',
+                         'facts':[{'result_id':'o1','row':0,'field':'order_id'},{'result_id':'o1','row':0,'field':'produced_sheets'},{'result_id':'o1','row':0,'field':'requested_sheets'}]}]}
+    p=render_narrative(value,packet)[0]
+    assert p['text']=='Order SO-1 produced 120 sheets against a requested quantity of unavailable.'
+    beyond={'paragraphs':[{'kind':'finding','text':'{{0}}','facts':[{'result_id':'o1','row':12,'field':'order_id'}]}]}
+    with pytest.raises(ValueError,match='only the 1 preview rows'):render_narrative(beyond,packet)

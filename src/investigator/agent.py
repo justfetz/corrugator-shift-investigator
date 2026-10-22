@@ -458,6 +458,10 @@ class Agent:
                     sections=['Model interpretation — review with the evidence; hypotheses are not proven causes.',
                         *[p['kind'].capitalize()+': '+p['text']+(' Evidence: '+'; '.join(p['citations']) if p['citations'] else '') for p in narrative],
                         'Calculated evidence',*sections]
+                except ValueError as exc:
+                    # Our own validator / provider message (never model text): say which rule refused it.
+                    reason=getattr(exc,'public_message',None) or str(exc)
+                    sections.insert(0,f'The model narrative failed validation ({reason[:160]}). Calculated evidence and charts are retained.')
                 except Exception:
                     sections.insert(0,'The model narrative is unavailable or failed validation. Calculated evidence and charts are retained.')
         if failure_message:
