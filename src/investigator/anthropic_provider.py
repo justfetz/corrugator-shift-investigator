@@ -1,0 +1,204 @@
+"""Anthropic Messages adapter for the hosted demo: no SDK, no retries, no saved keys.
+
+Same Planner.next_step contract as OpenAIPlanner. The server holds the key in public
+mode; locally a visitor key arrives through the X-Anthropic-Key header for one request.
+"""
+from copy import deepcopy
+import http.client
+import json
+import time
+
+from .openai_provider import (Budget, NARRATIVE_INSTRUCTIONS, PLANNER_INSTRUCTIONS,  # noqa: F401 (Budget re-exported)
+                              ProviderError, compact_result)
+
+API_HOST = 'api.anthropic.com'
+API_PATH = '/v1/messages'
+API_VERSION = '2023-06-01'
+DEFAULT_MODEL = 'claude-haiku-5-5'
+# USD per million tokens, first-party API list prices read on 2026-10-22. Display estimates
+# only: the Anthropic console spend limit is the hard stop. Haiku 5.5 is the <=100K-token
+# prompt rate card; this adapter never sends more than 24 KB per request.
+PRICING = {
+    'claude-haiku-5-5': {'input': 0.10, 'output': 0.50, 'reserve_micro_usd': 10000},   # $0.01 guard per call
+    'claude-sonnet-5-5': {'input': 2.00, 'output': 10.00, 'reserve_micro_usd': 30000},  # $0.03 guard per call
+}
+MAX_TOKENS = 1024          # thinking (adaptive, on by default) counts toward this cap
+MAX_REQUEST_BYTES = 24000  # same serialized request ceiling as the OpenAI adapter
+MAX_RESPONSE_BYTES = 512000
+MAX_CALLS = 10
+LIFETIME_SECONDS = 60
+SOCKET_TIMEOUT = 20
+
+CONTROL_TOOLS = [
+    {'name': 'finish', 'description': 'Finish with successful evidence result IDs.', 'strict': True,
+     'input_schema': {'type': 'object', 'properties': {'result_ids': {'type': 'array', 'items': {'type': 'string'}}},
+                      'required': ['result_ids'], 'additionalProperties': False}},
+    {'name': 'cannot_answer', 'description': 'Explain that the requested evidence or capability is unavailable.', 'strict': True,
+     'input_schema': {'type': 'object', 'properties': {'reason': {'type': 'string'}}, 'required': ['reason'], 'additionalProperties': False}},
+]
+TOOL_RULE = ('\nRespond only by calling exactly one tool per turn: an investigation tool, finish, or cannot_answer. '
+             'Plain text without a tool call ends the investigation with the evidence gathered so far.')
+
+
+def resolve_model(name):
+    """Validate the configured model; only the two priced models are allowed."""
+    if name in (None, ''):
+        return DEFAULT_MODEL
+    if name not in PRICING:
+        raise ProviderError('ANTHROPIC_MODEL must be one of: ' + ', '.join(sorted(PRICING)))
+    return name
+
+
+def anthropic_tools(schemas):
+    """Map the application's tool schemas (OpenAI-style parameters) to Anthropic input_schema."""
+    tools = []
+    for schema in schemas:
+        parameters = deepcopy(schema['parameters'])
+        parameters['required'] = list(parameters['properties'])
+        tools.append({'name': schema['name'], 'description': schema['description'], 'input_schema': parameters, 'strict': True})
+    tools.extend(deepcopy(CONTROL_TOOLS))
+    return tools
+
+
+def transport(payload, key, timeout):
+    """POST to the fixed Messages endpoint; return (status, body bytes). Never raises with secrets."""
+    connection = http.client.HTTPSConnection(API_HOST, timeout=timeout)
+    try:
+        connection.request('POST', API_PATH, body=json.dumps(payload).encode(),
+                           headers={'x-api-key': key, 'anthropic-version': API_VERSION, 'content-type': 'application/json'})
+        response = connection.getresponse()
+        return response.status, response.read(MAX_RESPONSE_BYTES+1)
+    except OSError:
+        # Never expose headers, keys or exception details from the socket layer.
+        raise ProviderError('Anthropic request failed or timed out; retry deliberately') from None
+    finally:
+        connection.close()
+
+
+class AnthropicPlanner:
+    def __init__(self, key, budget, send=None, model=None):
+        if (not isinstance(key, str) or not key.startswith('sk-ant-') or not 20 <= len(key) <= 512
+                or not key.isascii() or any(c.isspace() for c in key)):
+            raise ProviderError('Enter a valid Anthropic API key through the local key field or server environment')
+        self.model = resolve_model(model)
+        self.mode = f'Anthropic ({self.model}) investigation and narrative; calculated evidence'
+        self._key = key
+        self._budget = budget
+        self._send = send or transport
+        self._messages = []
+        self._system = None
+        self._pending = None
+        self._start = time.monotonic()
+        self.usage = {'model_calls': 0, 'input_tokens': 0, 'output_tokens': 0, 'cost_usd': 0.0, 'reserved_usd': 0.0, 'model': self.model}
+
+    def close(self):
+        self._key = None
+        self._messages.clear()
+        self._pending = None
+
+    def next_step(self, context):
+        self._check_limits()
+        if not self._messages:
+            self._system = context['process'] + PLANNER_INSTRUCTIONS + TOOL_RULE
+            self._messages = [{'role': 'user', 'content': json.dumps({
+                'question': context['question'], 'production_day': context['production_day'],
+                'selected_shift': context['shifts'][0], 'history': context['history']})}]
+        elif self._pending:
+            compact = compact_result(context['results'][-1])
+            self._messages.append({'role': 'user', 'content': [
+                {'type': 'tool_result', 'tool_use_id': self._pending, 'content': json.dumps(compact)}]})
+            self._pending = None
+        payload = {'model': self.model, 'max_tokens': MAX_TOKENS, 'system': self._system,
+                   'tools': anthropic_tools(context['tools']),
+                   'tool_choice': {'type': 'auto', 'disable_parallel_tool_use': True},
+                   'output_config': {'effort': 'low'}, 'messages': self._messages}
+        response, call = self._request(payload)
+        if call is None:
+            # Text-only reply: finish with the successful evidence gathered so far, if any.
+            ids = [r['result_id'] for r in context['results'] if r['ok'] and r['tool'] != 'render_chart']
+            if ids:
+                return {'final': ids}
+            return {'unavailable': 'The model ended without requesting evidence.'}
+        args = call['input']
+        if call['name'] == 'finish':
+            if set(args) != {'result_ids'}:
+                raise ProviderError('Invalid finish arguments')
+            return {'final': args['result_ids']}
+        if call['name'] == 'cannot_answer':
+            return {'unavailable': 'The requested information or action is outside the available tools. Try another question or select the relevant production day.'}
+        # Echo the assistant turn unchanged (thinking blocks included) so the tool result can follow it.
+        self._messages.append({'role': 'assistant', 'content': response['content']})
+        self._pending = call['id']
+        return {'tool': call['name'], 'arguments': args}
+
+    def summarize(self, question, evidence):
+        from .narrative import NARRATIVE_SCHEMA, evidence_packet, render_narrative
+        packet = evidence_packet(evidence)
+        payload = {'model': self.model, 'max_tokens': MAX_TOKENS,
+                   'system': NARRATIVE_INSTRUCTIONS + '\nRespond only by calling write_narrative.',
+                   'tools': [{'name': 'write_narrative', 'description': 'Return a concise evidence-linked interpretation.',
+                              'strict': True, 'input_schema': deepcopy(NARRATIVE_SCHEMA)}],
+                   'tool_choice': {'type': 'auto', 'disable_parallel_tool_use': True},
+                   'output_config': {'effort': 'low'},
+                   'messages': [{'role': 'user', 'content': json.dumps({'question': question, 'evidence': packet})}]}
+        _, call = self._request(payload)
+        if call is None or call['name'] != 'write_narrative':
+            raise ProviderError('Unexpected narrative response')
+        return render_narrative(call['input'], packet)
+
+    def _check_limits(self):
+        remaining = LIFETIME_SECONDS-(time.monotonic()-self._start)
+        if remaining <= 0 or self.usage['model_calls'] >= MAX_CALLS:
+            raise ProviderError('Live investigation model-call/time limit reached')
+        return remaining
+
+    def _request(self, payload):
+        remaining = self._check_limits()
+        if len(json.dumps(payload).encode()) > MAX_REQUEST_BYTES:
+            raise ProviderError('Model context byte limit reached')
+        reserve = PRICING[self.model]['reserve_micro_usd']
+        self._budget.reserve(reserve)  # Commit before the network call; never refund uncertain usage.
+        self.usage['reserved_usd'] += reserve/1_000_000
+        self.usage['model_calls'] += 1
+        status, body = self._send(payload, self._key, min(SOCKET_TIMEOUT, remaining))
+        if status in (401, 403):
+            raise ProviderError('The model provider rejected the key (misconfigured key); no automatic retry')
+        if status in (429, 529):
+            raise ProviderError('The model is busy; retry in a minute')
+        if status != 200:
+            raise ProviderError(f'Upstream model error (HTTP {status}); no automatic retry')
+        if not isinstance(body, (bytes, bytearray)) or len(body) > MAX_RESPONSE_BYTES:
+            raise ProviderError('Anthropic response exceeds size limit')
+        try:
+            response = json.loads(body)
+        except ValueError:
+            raise ProviderError('Anthropic response was not valid JSON') from None
+        if not isinstance(response, dict):
+            raise ProviderError('Anthropic response was not an object')
+        usage = response.get('usage') or {}
+        for name in ('input_tokens', 'output_tokens'):
+            value = usage.get(name)
+            if type(value) is not int or value < 0:
+                raise ProviderError('Missing or invalid provider usage; reservation retained')
+            self.usage[name] += value
+        rates = PRICING[self.model]
+        self.usage['cost_usd'] = (self.usage['input_tokens']*rates['input']+self.usage['output_tokens']*rates['output'])/1_000_000
+        stop = response.get('stop_reason')
+        content = response.get('content')
+        if not isinstance(content, list):
+            raise ProviderError('Anthropic response has no content')
+        if stop == 'refusal':
+            raise ProviderError('The model declined this request; no action executed')
+        if stop not in ('tool_use', 'end_turn'):
+            raise ProviderError('Model response incomplete; no action executed')
+        calls = [b for b in content if isinstance(b, dict) and b.get('type') == 'tool_use']
+        if len(calls) > 1:
+            raise ProviderError('Expected at most one model tool call')
+        if not calls:
+            if stop == 'tool_use':
+                raise ProviderError('Model reported a tool call without one')
+            return response, None
+        call = calls[0]
+        if not isinstance(call.get('id'), str) or not isinstance(call.get('name'), str) or not isinstance(call.get('input'), dict):
+            raise ProviderError('Invalid model tool call')
+        return response, call
