@@ -8,7 +8,7 @@ KINDS = ('finding', 'hypothesis', 'check', 'limitation')
 NUMBER_WORDS = re.compile(r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen)\b"
                           r"|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|half|quarter)"
                           r"[- ]?(percent|per cent|points?|minutes?|hours?|seconds?|feet|foot|ft|fpm|msf|sq(uare)? ?f(ee)?t|stops?|setups?|runs?|sheets?|cuts?|orders?|weeks?|days?|shifts?)\b", re.I)
-MAX_FACTS = 6  # per paragraph; the live Haiku writer cites five in a dense hypothesis
+MAX_FACTS = 8  # per paragraph; a four-reason ranking cites a (category, minutes) pair per reason
 FACT_SCHEMA = {'type':'object','properties':{
     'result_id':{'type':'string'}, 'row':{'type':'integer'}, 'field':{'type':'string'}},
     'required':['result_id','row','field'],'additionalProperties':False}
@@ -67,6 +67,9 @@ def render_narrative(value, packet):
                 not isinstance(facts,list) or len(facts)>MAX_FACTS):
             raise ValueError('Narrative size limit')
         bare=re.sub(r'\{\{\d+\}\}', '', text)
+        # "Shift 2" is the selected scope, a known truth, when it names a shift the evidence carries.
+        known_shifts={str(r['shift']) for r in packet if r.get('shift') is not None}
+        bare=re.sub(r'\b[Ss]hift\s+([123])\b', lambda m: 'shift' if m.group(1) in known_shifts else m.group(0), bare)
         # Numerical statements must use application-substituted evidence fields.
         if any(c.isdigit() or ord(c)<32 for c in bare) or any(c in bare for c in '<>{}') or re.search(r'https?://',bare) or NUMBER_WORDS.search(bare):
             raise ValueError('Use fact placeholders for values; plain prose only (numbers written as words count)')
@@ -74,16 +77,12 @@ def render_narrative(value, packet):
         if any(x!=str(int(x)) for x in tokens):
             raise ValueError('Fact placeholders do not match references')
         placed={int(x) for x in tokens}
-        # Placeholders must name a prefix of the fact list; a placeholder with no fact, or a
-        # gap, is an error. When some facts are placed, the ones listed after the last placed
-        # fact are dropped: the prose claims nothing from them. When NONE are placed the prose
-        # carries no numbers at all (the digit check above), so every listed fact stays as a
-        # citation: it is the pointer to the evidence the paragraph talks about, and the live
-        # writer regularly describes a ranking or a category in words and cites the rows.
-        if placed!=set(range(len(placed))) or len(placed)>len(facts):
+        # Every placeholder must name a listed fact. A fact that is listed but not placed stays
+        # as a citation: the prose carries no number from it (the digit and number-word checks
+        # above), and the live writer regularly names a category in words while placing only
+        # its value, or describes a ranking and cites the rows.
+        if any(x>=len(facts) for x in placed):
             raise ValueError('Fact placeholders do not match references')
-        if placed:
-            facts=facts[:len(placed)]
         if p['kind']!='limitation' and not facts:
             raise ValueError('Narrative requires cited evidence')
         citations=[]

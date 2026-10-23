@@ -43,21 +43,38 @@ def _facts(*fields):
     return [{'result_id':'e1','row':0,'field':f} for f in fields]
 
 
-def test_five_placed_facts_render_and_seven_are_too_many():
+def test_five_placed_facts_render_and_nine_are_too_many():
     five={'paragraphs':[{'kind':'hypothesis','text':'Uncertain: {{0}} {{1}} {{2}} {{3}} {{4}} units.','facts':_facts('a','b','c','d','e')}]}
     assert render_narrative(five,WIDE)[0]['text']=='Uncertain: 1.00 2.00 3.00 4.00 5.00 units.'
-    seven={'paragraphs':[{'kind':'finding','text':'{{0}} {{1}} {{2}} {{3}} {{4}} {{5}} {{6}}','facts':_facts('a','b','c','d','e','f','g')}]}
-    with pytest.raises(ValueError,match='size limit'):render_narrative(seven,WIDE)
+    nine={'paragraphs':[{'kind':'finding','text':'{{0}} {{1}} {{2}} {{3}} {{4}} {{5}} {{6}} {{7}} {{8}}','facts':_facts('a','b','c','d','e','f','g','a','b')}]}
+    with pytest.raises(ValueError,match='size limit'):render_narrative(nine,WIDE)
 
 
-def test_unplaced_trailing_facts_are_dropped_not_fatal():
+def test_ranking_in_words_places_only_the_values():
+    """The live writer names each reason in words and places its minutes: placeholders 1, 3, 5
+    with the category facts 0, 2, 4 kept as citations."""
+    value={'paragraphs':[{'kind':'finding','text':'Order change leads at {{1}} minutes, ahead of jams at {{3}} and stacker stops at {{5}}.',
+                         'facts':_facts('a','b','c','d','e','f')}]}
+    p=render_narrative(value,WIDE)[0]
+    assert p['text']=='Order change leads at 2.00 minutes, ahead of jams at 4.00 and stacker stops at 6.00.' and len(p['citations'])==6
+
+
+def test_literal_shift_number_is_allowed_when_it_matches_the_evidence():
+    ok={'paragraphs':[{'kind':'finding','text':'Shift 2 recorded {{0}} minutes of downtime.','facts':_facts('a')}]}
+    assert render_narrative(ok,WIDE)[0]['text']=='Shift 2 recorded 1.00 minutes of downtime.'
+    other={'paragraphs':[{'kind':'finding','text':'Shift 3 recorded {{0}} minutes of downtime.','facts':_facts('a')}]}
+    with pytest.raises(ValueError,match='placeholders'):render_narrative(other,WIDE)   # no shift-3 evidence in the packet
+
+
+def test_unplaced_facts_stay_as_citations():
     value={'paragraphs':[{'kind':'check','text':'Ask the crew about the {{0}} percent operator time.','facts':_facts('a','b','c')}]}
     p=render_narrative(value,WIDE)[0]
-    assert p['text']=='Ask the crew about the 1.00 percent operator time.' and len(p['citations'])==1
-    # A gap or a placeholder beyond the facts still fails.
-    for text in ('{{0}} and {{2}}','{{0}} {{1}} {{2}} {{3}}'):
-        bad={'paragraphs':[{'kind':'finding','text':text,'facts':_facts('a','b','c')}]}
-        with pytest.raises(ValueError):render_narrative(bad,WIDE)
+    assert p['text']=='Ask the crew about the 1.00 percent operator time.' and len(p['citations'])==3   # unplaced facts stay as pointers
+    # A placeholder beyond the facts still fails; a gap is allowed (the unplaced fact stays a citation).
+    bad={'paragraphs':[{'kind':'finding','text':'{{0}} {{1}} {{2}} {{3}}','facts':_facts('a','b','c')}]}
+    with pytest.raises(ValueError):render_narrative(bad,WIDE)
+    gap={'paragraphs':[{'kind':'finding','text':'{{0}} and {{2}} units.','facts':_facts('a','b','c')}]}
+    assert len(render_narrative(gap,WIDE)[0]['citations'])==3
 
 
 def test_shift_is_answered_from_result_metadata():
