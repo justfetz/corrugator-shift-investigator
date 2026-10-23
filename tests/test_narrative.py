@@ -229,3 +229,14 @@ def test_small_counts_in_plain_prose_are_still_allowed():
     value={'paragraphs':[{'kind':'finding','text':'One knife carried the order while the other two ran short sheets; downtime totals {{0}} minutes.',
                          'facts':[{'result_id':'e1','row':0,'field':'down_minutes'}]}]}
     assert render_narrative(value,PACKET)[0]['text'].endswith('12.50 minutes.')
+
+
+def test_one_bad_paragraph_is_omitted_and_disclosed_not_fatal():
+    good={'kind':'finding','text':'Recorded downtime totals {{0}} minutes.','facts':[{'result_id':'e1','row':0,'field':'down_minutes'}]}
+    bad={'kind':'finding','text':'Order change led at {{1}} ahead of jams at {{7}}.','facts':[{'result_id':'e1','row':0,'field':'down_minutes'}]}   # {{7}} has no fact
+    out=render_narrative({'paragraphs':[good,bad]},PACKET)
+    assert [p['kind'] for p in out]==['finding','limitation']
+    assert out[0]['text']=='Recorded downtime totals 12.50 minutes.'
+    assert out[1]['text'].startswith('One paragraph of the interpretation was omitted') and 'placeholders' in out[1]['text'] and out[1]['citations']==[]
+    assert 'Order change' not in out[1]['text']   # nothing from the omitted text is shown
+    with pytest.raises(ValueError):render_narrative({'paragraphs':[bad]},PACKET)   # nothing survives: still a failure

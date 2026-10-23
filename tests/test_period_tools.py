@@ -370,7 +370,9 @@ def test_speed_opportunity_best_fifth_is_a_ratio_of_sums(store, data):
             short += 1
             continue
         cells[(s.quality_id, f"{s.web_width_in:g} in")].append((s.lineal_ft / run, s.lineal_ft, run, s.kqf_sqft, s.total_produced_sqft))
-    assert result["excluded_short_setups"] == short and len(result["rows"]) == len(cells)
+    thin = {key for key, rows in cells.items() if len(rows) < 10}
+    assert result["excluded_short_setups"] == short and len(result["rows"]) == len(cells) - len(thin)
+    assert {(c["grade"], c["slice"]) for c in result["thin_cells"]} == thin and all(c["setups"] < 10 for c in result["thin_cells"])
     assert [r["opportunity_hours"] for r in result["rows"]] == sorted((r["opportunity_hours"] for r in result["rows"]), reverse=True)
     for row in result["rows"]:
         rows = sorted(cells[(row["grade"], row["slice"])], key=lambda r: -r[0])

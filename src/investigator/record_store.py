@@ -815,12 +815,15 @@ class RecordStore:
                          "best_fifth_dry_end_pct": best_pct, "rest_dry_end_pct": rest_pct,
                          "reject_penalty_points": round(best_pct - rest_pct, 4) if best_pct is not None and rest_pct is not None else None,
                          "status": "ok" if enough else f"insufficient: fewer than {SPEED_MIN_SETUPS} setups"})
-        rows.sort(key=lambda x: (-(x["opportunity_hours"] or -1), x["grade"], x["slice"]))
-        total = round(sum(x["opportunity_hours"] or 0 for x in rows), 2)
+        # Cells too thin for a best fifth are listed beside the rows, never charted or ranked.
+        thin = [{"label": x["label"], "grade": x["grade"], "slice": x["slice"], "setups": x["setups"]} for x in rows if x["status"] != "ok"]
+        rows = [x for x in rows if x["status"] == "ok"]
+        rows.sort(key=lambda x: (-x["opportunity_hours"], x["grade"], x["slice"]))
+        total = round(sum(x["opportunity_hours"] for x in rows), 2)
         source = {"setups_included": sum(r["setups"] for r in fetched), "setups_excluded_short": short}
         return self._envelope("get_speed_opportunity", current, None, shift, rows, trace, started, source,
                               min_run_minutes=SPEED_MIN_RUN_MINUTES, min_setups=SPEED_MIN_SETUPS,
-                              excluded_short_setups=short, total_opportunity_hours=total,
+                              excluded_short_setups=short, total_opportunity_hours=total, thin_cells=thin,
                               method_note=("Best fifth = the fastest fifth of the cell's setups by speed without stops, as a ratio of sums; "
                                            "opportunity hours = running minutes now minus the minutes the same feet take at the best-fifth speed. "
                                            "Peak speeds are never used. A positive reject penalty means the fast setups rejected more than the rest: "

@@ -456,7 +456,7 @@ def speed_case(plain, id, period, anchor, slice_by="width", shift=None, *, day="
             continue
         key = (s.quality_id, f"{s.web_width_in:g} in" if slice_by == "width" else crews[(s.production_date, s.shift_number)])
         cells[key].append((s.lineal_ft / run_min, s.lineal_ft, run_min, s.kqf_sqft, s.total_produced_sqft))
-    values, total = {}, 0.0
+    values, total, thin = {}, 0.0, 0
     for (grade, slc), rows in cells.items():
         rows.sort(key=lambda r: -r[0])
         feet, run = sum(r[1] for r in rows), sum(r[2] for r in rows)
@@ -477,13 +477,13 @@ def speed_case(plain, id, period, anchor, slice_by="width", shift=None, *, day="
                           "opportunity_hours": num(hours, 2), "best_fifth_dry_end_pct": num(best_pct, 4),
                           "rest_dry_end_pct": num(rest_pct, 4), "reject_penalty_points": [round(best_pct - rest_pct, 6), 1.02e-4],
                           "status": exact("ok")})
+            values[f"label={grade} · {slc}"] = entry
         else:
-            entry.update({"best_fifth_fpm": exact(None), "opportunity_hours": exact(None), "status": exact("insufficient: fewer than 10 setups")})
-        values[f"label={grade} · {slc}"] = entry
+            thin += 1   # listed in thin_cells, never a row
     values["$"] = {"excluded_short_setups": exact(short), "min_run_minutes": exact(2.0), "min_setups": exact(10),
                    "total_opportunity_hours": [round(total, 6), 0.02 * max(1, len(cells))]}
     return case(id, "get_speed_opportunity", {"window": {"period": period, "anchor": anchor}, "slice_by": slice_by, "shift": shift},
-                {"coverage": plain.coverage(*cur), "row_count": len(cells), "values": values}, day=day, note=note)
+                {"coverage": plain.coverage(*cur), "row_count": len(cells) - thin, "values": values}, day=day, note=note)
 
 
 def trend_case(plain, id, metric, weeks, anchor, shift=None, *, day="2026-09-14", note=""):

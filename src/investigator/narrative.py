@@ -58,8 +58,24 @@ def render_narrative(value, packet):
     if not isinstance(paragraphs,list) or not 1<=len(paragraphs)<=6:
         raise ValueError('Narrative needs one to six paragraphs')
     sources={r['result_id']:r for r in packet}
-    rendered=[]
+    rendered,omitted=[],[]
     for p in paragraphs:
+        try:
+            rendered.append(_render_paragraph(p,sources,packet))
+        except ValueError as exc:
+            # One paragraph's bookkeeping slip (a placeholder with no fact, a field that is not
+            # in the preview) omits that paragraph, not the whole interpretation; the reader is
+            # told, and nothing from the omitted text is shown.
+            omitted.append(str(exc))
+    if not rendered:
+        raise ValueError(omitted[0] if omitted else 'Invalid narrative paragraph')
+    for reason in omitted:
+        rendered.append({'kind':'limitation','text':f'One paragraph of the interpretation was omitted because it failed validation ({reason}).','citations':[]})
+    return rendered
+
+
+def _render_paragraph(p,sources,packet):
+    if True:
         if not isinstance(p,dict) or set(p)!={'kind','text','facts'} or p['kind'] not in KINDS:
             raise ValueError('Invalid narrative paragraph')
         text=p['text']; facts=p['facts']
@@ -113,5 +129,4 @@ def render_narrative(value, packet):
             text=text.replace('{{'+str(i)+'}}',formatted)
             scope = f"Shift {source['shift']}" if source['shift'] is not None else 'All shifts'
             citations.append(f"{scope}, {field}, {rid}, row {index}")
-        rendered.append({'kind':p['kind'],'text':text,'citations':citations})
-    return rendered
+        return {'kind':p['kind'],'text':text,'citations':citations}

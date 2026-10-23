@@ -581,8 +581,10 @@ class Agent:
         elif tool == 'get_speed_opportunity':
             lines.append(f'Speed opportunity by grade and {data["rows"][0]["slice_by"] if data["rows"] else "width"} ({num(data["total_opportunity_hours"])} hours in total if every cell ran at its best-fifth speed; {num(data["excluded_short_setups"])} setups under {num(data["min_run_minutes"])} running minutes excluded): ' + ('; '.join(
                 f'{r["label"]}: typical {num(r["typical_fpm"])} ft/min ({num(r["typical_pct_of_target"])}% of target) vs best fifth {num(r["best_fifth_fpm"])} ({num(r["best_fifth_pct_of_target"])}%), gap {num(r["gap_fpm"])} ft/min = {num(r["opportunity_hours"])} hours over {num(r["setups"])} setups; '
-                f'dry-end {num(r["best_fifth_dry_end_pct"])}% on the fast fifth vs {num(r["rest_dry_end_pct"])}% on the rest' + (f' ({r["status"]})' if r['status'] != 'ok' else '')
-                for r in data['rows']) or 'no setups long enough in this window') + '. ' + data['method_note'] + ' ' + data['temperature_note'])
+                f'dry-end {num(r["best_fifth_dry_end_pct"])}% on the fast fifth vs {num(r["rest_dry_end_pct"])}% on the rest'
+                for r in data['rows']) or 'no cell has enough setups in this window') +
+                (f'. {num(len(data["thin_cells"]))} cells with fewer than {num(data["min_setups"])} setups are listed but not ranked: ' + ', '.join(f'{c["label"]} ({num(c["setups"])})' for c in data['thin_cells']) if data.get('thin_cells') else '') +
+                '. ' + data['method_note'] + ' ' + data['temperature_note'])
         elif tool == 'get_overrun':
             lines.append(f'Over/under-run by knife (+-{num(data["band_pct"])}% band): ' + ('; '.join(
                 f'{r["knife"]}: {num(r["actual_cuts"])} actual vs {num(r["nominal_cuts"])} nominal cuts = {num(r["overrun_pct"], signed=True)}%, '
