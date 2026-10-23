@@ -415,3 +415,32 @@ def test_reserve_scales_with_request_size_and_model():
     assert worst == pytest.approx(2*((MAX_REQUEST_BYTES/3)*0.10 + 4096*0.50), abs=1)
     assert reserve_micro_usd('claude-sonnet-5-5', 14000, 2048) == pytest.approx(2*((14000/3)*2.0 + 2048*10.0), abs=1)
     assert reserve_micro_usd(DEFAULT_MODEL, 1, 1) == RESERVE_FLOOR_MICRO_USD
+
+
+def test_charts_are_drawn_for_every_chartable_evidence_result(tmp_path, analysis):
+    """The model never calls render_chart; the application still draws a chart for each chartable
+    result the answer rests on, and the narrative paragraph names the chart that supports it."""
+    calls = []
+    def send(payload, key, timeout):
+        calls.append(payload)
+        if payload['tools'][0]['name'] == 'write_narrative':
+            packet = json.loads(payload['messages'][-1]['content'])['evidence']
+            down = next(r for r in packet if r['tool'] == 'get_downtime_breakdown')
+            return reply(tool_use('write_narrative', {'paragraphs': [{'kind': 'finding',
+                'text': 'The leading recorded stop is {{0}} at {{1}} minutes.',
+                'facts': [{'result_id': down['result_id'], 'row': 0, 'field': 'category'}, {'result_id': down['result_id'], 'row': 0, 'field': 'down_minutes'}]}]}))
+        if len(calls) == 1:
+            return reply(tool_use('get_downtime_breakdown', {'shift': 2, 'kind': None, 'group_by': 'reason'}))
+        if len(calls) == 2:
+            return reply(tool_use('get_quality_breakdown', {'shift': 2}, 'toolu_2'))
+        ids = [json.loads(m['content'][0]['content'])['result_id'] for m in payload['messages'] if m['role'] == 'user' and isinstance(m['content'], list)]
+        return reply(tool_use('finish', {'result_ids': ids}, 'toolu_3'))
+    planner = AnthropicPlanner(KEY, Budget(tmp_path/'budget.db'), send)
+    try:
+        result = Agent(analysis, planner, max_calls=10, max_seconds=60).ask('What stopped us and what was rejected?', Context(analysis.day))
+        assert result['status'] == 'complete' and 'render_chart' not in [t['tool'] for t in result['trace']]
+        assert [c['title'] for c in result['charts']] == ['Shift 2 · Recorded downtime', 'Shift 2 · Dry-end rejects by reason']
+        assert result['narrative'][0]['charts'] == ['Shift 2 · Recorded downtime']
+        assert any('Charts: Shift 2 · Recorded downtime' in line for line in result['sections'])
+    finally:
+        planner.close()

@@ -296,6 +296,32 @@ def parse_request(text, current):
             "ranking_metrics": (['downtime'] if re.search(r'downtime|jam|stops', lower) else ['quality'] if re.search(r'waste|quality|reject', lower) else ['speed'] if 'speed' in lower else ['speed', 'downtime', 'quality'])}
 
 
+DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_end_performance': 'Wet-end speed vs grade target',
+                      'get_quality_breakdown': 'Dry-end rejects by reason'}
+
+
+def chart_for(rid, result):
+    """The chart envelope for a chartable tool result: rows copied from the result, never supplied.
+    Charts are application output; the agent draws one for every chartable piece of evidence the
+    answer rests on, whether or not the model asked for it."""
+    data = result['data']
+    x, y, unit, kind, y2 = CHARTABLE[result['tool']]
+    y, unit, y2 = (v(data) if callable(v) else v for v in (y, unit, y2))
+    chart = {'type': kind, 'source_result_id': rid, 'shift': data['shift'], 'coverage': data['coverage'],
+             'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
+    if result['tool'] in PERIOD_TOOLS:
+        chart['title'] = f"{CHART_TITLES.get(result['tool'], result['tool'].replace('_', ' '))}: {data['window']['label']}" + \
+            (f" vs {data['previous_window']['label']}" if data.get('previous_window') else '') + \
+            (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)')
+        if y2:
+            chart['y2'] = y2  # paired bars: current beside previous
+    elif result['tool'] in DAILY_CHART_TITLES:
+        chart['title'] = f"Shift {data['shift']} · {DAILY_CHART_TITLES[result['tool']]}"
+    if kind == 'range':
+        chart['band_pct'] = data['band_pct']  # the shaded +-band the bullet chart draws
+    return chart
+
+
 class Agent:
     def __init__(self, analysis, planner=None, max_calls=20, max_seconds=10, max_turns=4, store=None):
         self.analysis = analysis
@@ -325,20 +351,7 @@ class Agent:
             result = store[rid]
             if not result['ok'] or result['tool'] not in CHARTABLE:
                 raise ValueError('Result cannot be charted')
-            data = result['data']
-            x, y, unit, kind, y2 = CHARTABLE[result['tool']]
-            y, unit, y2 = (v(data) if callable(v) else v for v in (y, unit, y2))
-            chart = {'type': kind, 'source_result_id': rid, 'shift': data['shift'], 'coverage': data['coverage'],
-                     'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
-            if result['tool'] in PERIOD_TOOLS:
-                chart['title'] = f"{CHART_TITLES.get(result['tool'], result['tool'].replace('_', ' '))}: {data['window']['label']}" + \
-                    (f" vs {data['previous_window']['label']}" if data.get('previous_window') else '') + \
-                    (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)')
-                if y2:
-                    chart['y2'] = y2  # paired bars: current beside previous
-            if kind == 'range':
-                chart['band_pct'] = data['band_pct']  # the shaded +-band the bullet chart draws
-            return chart
+            return chart_for(rid, result)
         if name in PERIOD_TOOLS:
             if self.store is None:
                 raise ValueError('Period tools need the record store; this dataset is a single-day fixture')
@@ -433,14 +446,21 @@ class Agent:
         evidence = [store[r] for r in final_ids]
         sections = self._summarize(evidence)
         charts=[v['data'] for v in store.values() if v['ok'] and v['tool']=='render_chart']
+        charted={c['source_result_id'] for c in charts}
+        # Charts are application output: every chartable piece of evidence the answer rests on is
+        # drawn, whether or not the model asked for it, so the interpretation is never shown alone.
+        for result in evidence:
+            if result['tool'] in CHARTABLE and result['result_id'] not in charted:
+                charts.append(chart_for(result['result_id'],result))
+                charted.add(result['result_id'])
         # Broad live overviews carry trusted chart rows in one bounded tool call.
         for result in evidence:
             if result['tool']=='get_shift_overview':
-                for component,(x,y,unit) in zip(result['data']['components'],
-                        (('category','down_minutes','minutes'),('wet_end_id','actual_fpm','ft/min'),('reason','rejected_sqft','sq ft'))):
+                for component,(x,y,unit,title) in zip(result['data']['components'],
+                        (('category','down_minutes','minutes','Recorded downtime'),('wet_end_id','actual_fpm','ft/min','Wet-end speed vs grade target'),('reason','rejected_sqft','sq ft','Dry-end rejects by reason'))):
                     charts.append({'type':'bar','source_result_id':result['result_id'],
                         'shift':component['shift'],'coverage':component['coverage'],
-                        'x':x,'y':y,'unit':unit,'rows':deepcopy(component['rows'])})
+                        'x':x,'y':y,'unit':unit,'rows':deepcopy(component['rows']),'title':f"Shift {component['shift']} · {title}"})
         if status=='complete' and re.search(r'\b(chart|charts|graph|plot)\b',text,re.I) and not charts:
             status='partial'
             sections.insert(0,'The requested chart was not produced. The evidence below is available; try a specific speed, downtime or waste chart.')
@@ -455,8 +475,11 @@ class Agent:
                 try:
                     narrative=self.planner.summarize(text,evidence)
                     narrative_status='available'
+                    for p in narrative:
+                        cited={c.split(', ')[2] for c in p['citations'] if len(c.split(', '))>=4}
+                        p['charts']=list(dict.fromkeys(c.get('title') or f"Shift {c['shift']} chart" for c in charts if c['source_result_id'] in cited))
                     sections=['Model interpretation — review with the evidence; hypotheses are not proven causes.',
-                        *[p['kind'].capitalize()+': '+p['text']+(' Evidence: '+'; '.join(p['citations']) if p['citations'] else '') for p in narrative],
+                        *[p['kind'].capitalize()+': '+p['text']+(' Evidence: '+'; '.join(p['citations']) if p['citations'] else '')+(' Charts: '+'; '.join(p['charts']) if p.get('charts') else '') for p in narrative],
                         'Calculated evidence',*sections]
                 except ValueError as exc:
                     # Our own validator / provider message (never model text): say which rule refused it.
