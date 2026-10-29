@@ -79,9 +79,12 @@ def test_legacy_fixture_and_analysis_are_untouched():
 
 
 def test_no_generated_record_files_are_tracked():
+    """Generated synthetic record files live under artifacts/ and are never committed. The one
+    committed .jsonl is the eval ledger, evals/history.jsonl: one line per `evals/run.py --track`
+    run, which is a result, not a record file."""
     try:
         tracked = subprocess.run(["git", "ls-files", "*.jsonl", "**/manifest.json"], cwd=REPO,
                                  capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.TimeoutExpired):
         pytest.skip("git unavailable")
-    assert tracked.stdout.strip() == ""
+    assert set(tracked.stdout.split()) - {"evals/history.jsonl"} == set()
