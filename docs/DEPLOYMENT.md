@@ -1,6 +1,6 @@
 # Deployment readiness and low-cost path
 
-The current application is a local learning workbench. It is suitable for a local demonstration with the documented defects and is not ready to expose directly to the internet. The proposed first public release is the deterministic synthetic-data experience with OpenAI mode disabled, after completing the remaining calibration, live-quality and hosting requirements in [the September 7 review](REVIEW_2026-09-07.md). Period export and history defects are repaired in the working tree.
+The application runs two ways: the loopback learning workbench, and the hosted synthetic demo on Google Cloud Run with the Anthropic planner behind the guards below (the OpenAI key is never mounted there). What remains before anything beyond a demo is the release sequence further down; the September 7 review's calibration and export defects are repaired.
 
 ## Implemented: hosted public-demo mode (offline planner)
 
@@ -69,7 +69,7 @@ Cloud Run requires the container to listen on `0.0.0.0` and the injected `PORT`;
 
 1. Replace the built-in HTTP server with a production ASGI application and server if traffic ever warrants it. Preserve the existing request schemas, response shapes and tests. (Public-demo mode uses the standard-library threading server with a serialized investigation lock, which is enough for a demo.)
 2. Container with a non-root user, a health endpoint and `0.0.0.0:$PORT` binding: done (`Dockerfile`, `/api/health`; `/healthz` also answers, but Google's front end reserves that path on `*.run.app` and never forwards it, so the smoke test and container healthcheck use `/api/health`).
-3. Offline-only public configuration: done (`PUBLIC_DEMO_ORIGIN` without `PUBLIC_DEMO_LIVE_MODEL`). Server-held Anthropic live mode with per-IP and daily round guards: implemented behind `DEMO_*` variables, not yet exercised against the real endpoint.
+3. Offline-only public configuration: done (`PUBLIC_DEMO_ORIGIN` without `PUBLIC_DEMO_LIVE_MODEL`). Server-held Anthropic live mode with per-IP and daily round guards: done, behind the `DEMO_*` variables, and exercised against the real endpoint by the recorded live goldens.
 4. Configured canonical origins instead of the loopback Host/Origin rules: done. The static-file allowlist, content-security policy, bounded JSON and text-only rendering are unchanged.
 5. Make PDF generation stateless or use a durable, short-lived report reference. The present report cache is process memory; another instance or a restart will not have it.
 6. Put a durable edge or datastore-backed rate limit in front of `/api/ask` and `/api/report`. The current in-memory 60-request window is per process and is not a public abuse control.
@@ -101,7 +101,7 @@ The local BYOK field is a learning feature. Do not carry browser-entered visitor
 - Choose the final host, region, domain and acceptable monthly cost ceiling.
 - Decide whether PDF reports must survive restarts and multiple instances.
 - Select an email provider, verify a sender/domain, and define consent, unsubscribe and retention rules before adding delivery.
-- Run one deliberate live OpenAI evaluation and record observed quality, latency and cost before enabling it for anyone else.
+- Run one deliberate live OpenAI evaluation (`evals/run.py --live --provider openai`) and record its fixtures before offering that provider anywhere but the local workbench.
 - Expand synthetic scenario calibration and add more than one month before treating trends as representative.
 - Define a privacy and retention policy before connecting real production data. No private plant records belong in the public demo.
 
@@ -112,5 +112,5 @@ The local BYOK field is a learning feature. Do not carry browser-entered visitor
 - The data covers September 2026 only. Prior calendar/accounting periods are correctly shown as unavailable.
 - The synthetic paper-run-size distribution is plausible demo behavior supplied by code, not a measured plant distribution.
 - Notes and reason codes are synthetic observations; recurrence does not prove causation.
-- Email is not implemented. Live OpenAI access is implemented locally but has not been validated with a real key.
+- Email is not implemented. Live OpenAI access is implemented locally and has no recorded fixtures; the Anthropic path is the one scored by the golden set.
 - Local browser checks verified calendar-month and 4-4-5 heatmap shading, complete day details, daily offline investigation, OpenAI mode controls, and the question-guidance link on September 6, 2026. Broader browser and assistive-technology QA remains before public release. The implementation follow-up records the newer test and browser results.

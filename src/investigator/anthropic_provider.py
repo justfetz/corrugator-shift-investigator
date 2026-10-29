@@ -190,10 +190,12 @@ class AnthropicPlanner:
             self._system = context['process'] + PLANNER_INSTRUCTIONS + TOOL_RULE
             allowed = context.get('allowed_shifts') or context['shifts']
             selected = context['shifts'][0] if context.get('scope', 'shift') == 'shift' or len(allowed) == 1 else None
-            self._messages = [{'role': 'user', 'content': json.dumps({
-                'question': context['question'], 'production_day': context['production_day'],
-                'scope': 'selected shift only' if selected is not None else 'production day: all three shifts (pass shift null unless the user names one)',
-                'selected_shift': selected, 'allowed_shifts': allowed, 'history': context['history']})}]
+            opening = {'question': context['question'], 'production_day': context['production_day'],
+                       'scope': 'selected shift only' if selected is not None else 'production day: all three shifts (pass shift null unless the user names one)',
+                       'selected_shift': selected, 'allowed_shifts': allowed, 'history': context['history']}
+            if context.get('period', 'day') != 'day':   # a week, month or 4-4-5 window selected: the period tools' default window
+                opening['selected_window'] = {'period': context['period'], 'anchor': context['production_day']}
+            self._messages = [{'role': 'user', 'content': json.dumps(opening)}]
         elif self._pending:
             compact = compact_result(context['results'][-1])
             self._messages.append({'role': 'user', 'content': [

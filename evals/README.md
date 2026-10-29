@@ -113,9 +113,20 @@ Live results are scored by pass rate per type (`THRESHOLDS`): routing ≥ 0.9,
 faithfulness, grounding, refusal, value and data_quality 1.0, investigation ≥
 0.8. Offline cases stay pass / fail one by one. The exit status counts failed
 offline cases plus live (provider, type) pairs under their threshold.
-Thirteen live rows cost roughly a cent each with `gpt-4.1-mini`, a fraction of
-that with `claude-haiku-5-5`; the table prints the measured cost per case. No
-fixture is recorded in this repository yet.
+A live row costs a fraction of a cent with `claude-haiku-5-5` and roughly a
+cent with `gpt-4.1-mini`; the table prints the measured cost per case. Fifteen
+Anthropic recordings are committed under `fixtures/anthropic/`; none for OpenAI.
+
+## Tracking runs over time
+
+`python3 evals/run.py --track` appends one JSON line to `evals/history.jsonl`
+after the score table: the UTC time, the git commit, the dataset hash, the
+case count, pass / fail / skip per type for the offline cases, and per provider
+the model its recordings were made with, pass / fail / skip per type and the
+recorded cost. A run is comparable with the one before it when the dataset hash
+and the model match; a changed prompt is flagged by the replay warning. The
+file is the answer to "did that change make the agent better or worse": read
+the two lines, not the vibes.
 
 ## Known defects
 

@@ -36,6 +36,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import datetime, timezone
+import subprocess
 import math
 import os
 import re
@@ -692,6 +694,7 @@ def run_case(case, provider=None, live=False, record=False):
         analysis = dataset(day, case.get('corrupt', False))
         context = Context(day, shift)
         context.scope = scope
+        context.period = case.get('period', 'day')   # the Period control: week, month or fiscal routes to the period tools
         for text in turns:
             results.append(make_agent(analysis).ask(text, context))
     except ValueError as exc:
@@ -759,6 +762,7 @@ def main(argv=None):
     parser.add_argument('--no-record', action='store_true', help='with --live: do not overwrite fixtures')
     parser.add_argument('--only', action='append', help='run only this case id (repeatable)')
     parser.add_argument('--json', type=Path, help='write results here')
+    parser.add_argument('--track', action='store_true', help='append one line per run to evals/history.jsonl (commit, dataset, model, pass rate per type, cost)')
     args = parser.parse_args(argv)
 
     provider = args.provider or default_provider()
@@ -826,7 +830,47 @@ def main(argv=None):
           + (f', {xfailed} known defect' if xfailed else '') + (f', {live_failed} live failed' if live_failed else ''))
     if args.json:
         args.json.write_text(json.dumps(rows, indent=1))
+    if args.track:
+        line = history_line(rows, failed + breaches)
+        HISTORY.parent.mkdir(parents=True, exist_ok=True)
+        with HISTORY.open('a') as out:
+            out.write(json.dumps(line, separators=(',', ':')) + '\n')
+        print(f'tracked in {HISTORY.relative_to(ROOT)}: ' + ', '.join(f'{k} {v["pass"]}/{v["pass"] + v["fail"]}' for k, v in line['offline'].items())
+              + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items()))
     return failed + breaches
+
+
+HISTORY = ROOT / 'evals' / 'history.jsonl'
+
+
+def history_line(rows, exit_status):
+    """One record per run: enough to tell whether a change in the planner, the prompt or the
+    data moved the score. Live rows are scored against the recordings' model."""
+    def tally(subset):
+        out = {}
+        for r in subset:
+            counts = out.setdefault(r['type'], {'pass': 0, 'fail': 0, 'skip': 0})
+            counts[r['outcome'] if r['outcome'] in counts else 'skip'] += 1   # xfail counts as a skip
+        return out
+    try:
+        commit = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], cwd=ROOT, capture_output=True, text=True, timeout=5).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        commit = None
+    live = {}
+    for provider in sorted({r['provider'] for r in rows if r['provider']}):
+        models, cost = set(), 0.0
+        for r in rows:
+            if r['provider'] != provider:
+                continue
+            path = fixture_path(r['case'], provider)
+            if path.exists():
+                recording = json.loads(path.read_text())
+                cost += float(recording.get('recorded_cost_usd') or 0)
+                models.update(e.get('model') for e in recording.get('exchanges', []) if e.get('model'))
+        live[provider] = {'model': '/'.join(sorted(models)) or None, 'recorded_cost_usd': round(cost, 5),
+                          'types': tally(r for r in rows if r['provider'] == provider)}
+    return {'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ'), 'commit': commit, 'dataset': dataset_version()[:12],
+            'cases': len(rows), 'offline': tally(r for r in rows if not r['provider']), 'live': live, 'exit': exit_status}
 
 
 if __name__ == '__main__':

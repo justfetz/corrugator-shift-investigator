@@ -101,7 +101,7 @@ function selectShift(value){
  else { if($('scope').value==='shift'&&$('shift').value===value)return; $('scope').value='shift'; $('shift').value=value; }
  reset();
 }
-function periodChanged(){ if($('period').value!=='day')$('mode').value='offline'; reset(); }
+function periodChanged(){ renderQuestionChips(); reset(); }
 let acceptedDay=null;
 function dayChanged(){
  const value=$('day').value, reason=dayRejection(value,storeDays());
@@ -114,37 +114,44 @@ function stepDay(direction){
  if(next<0||next>=days.length)return;
  $('day').value=days[next]; dayChanged();
 }
+const PERIOD_NOUN={day:'day',week:'week',month:'month',accounting:'4-4-5 period'};
 function updateScope(){
  const ranged=$('period').value!=='day', live=isLive();
  $('scope-help').textContent=scopeSentence(currentScope());
- $('mode').disabled=busy||ranged;$('question').disabled=ranged;syncKeyLabel();syncSegments();
+ $('mode').disabled=busy;$('question').disabled=busy;syncKeyLabel();syncSegments();
  const days=storeDays(), index=days?days.indexOf($('day').value):-1;
  $('day-prev').disabled=busy||!days||index<=0; $('day-next').disabled=busy||!days||index<0||index>=days.length-1;
  $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
- if(ranged)$('mode-help').textContent='Build a free deterministic period summary, output heatmap, recurring downtime comparison, daily matrix and notes. The exact date range is shown; missing days are disclosed.';
+ const noun=PERIOD_NOUN[$('period').value]||'period';
+ if(ranged)$('mode-help').textContent=`Ask about the selected ${noun}: KPIs against the previous one, the downtime Pareto, waste, stops per day, trends, totals by grade, over/under-run, the speed opportunity.${live?' '+liveHelp():' No model calls or API charges.'} Period report builds the output heatmap, daily matrix, recurring downtime and notes without a model.`;
  else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
- $('submit').textContent=ranged?'Build period report':'Investigate';
- for(const b of chipButtons)b.disabled=busy||ranged;
+ $('submit').textContent='Investigate'; $('report').hidden=!ranged; $('report').disabled=busy;
+ for(const b of chipButtons)b.disabled=busy||(ranged&&b.dataset.period==='day');   // the per-shift matrices have no period form
 }
 
 // ---- Example questions, grouped by intent. Daily chips run the day tools for the selected scope; the
 // period chips are the phrasings the offline planner routes to the record-store tools (docs/WORKBENCH.md).
+// "{period}" is the window word of the Period control (week under Day, as before); a fourth entry 'day' marks
+// a question the period tools cannot answer (the per-shift matrices), disabled under Week, Month and 4-4-5.
 const QUESTION_GROUPS=[
- ['Speed',[['Speed to target','Show speed to target'],['Setup matrix','Show setup matrix'],['Speed trend, 8 weeks','Trend of speed over eight weeks']]],
- ['Downtime',[['Why was this shift slow?','Why was this shift slow? Chart downtime by reason.'],['Costliest reason this week','Which downtime reason cost the most minutes this week?'],['Stops per day this week','Stops per day this week'],['Read notes','Show shift and downtime notes']]],
+ ['Speed',[['Speed to target','Show speed to target'],['Setup matrix','Show setup matrix',null,'day'],['Speed trend, 8 weeks','Trend of speed over eight weeks']]],
+ ['Downtime',[['Why was this shift slow?','Why was this shift slow? Chart downtime by reason.'],['Costliest reason this {period}','Which downtime reason cost the most minutes this {period}?'],['Stops per day this {period}','Stops per day this {period}'],['Read notes','Show shift and downtime notes',null,'day']]],
  ['Waste',[['Dry-end waste','Show dry-end quality waste'],['Bond or warp?','Is it bond or warp?'],['Trim trend, 8 weeks','Trend of trim over eight weeks']]],
- ['Compare',[['Summary + charts','Summarize performance, downtime and waste. Show supporting charts.'],['This week vs last','How did this week go versus the previous one?'],['September vs August','How did September go versus August?'],['Compare shifts','Compare all shifts','day'],['Rank losses','Show rankings']]],
- ['Orders',[['Orders + quantities','Show orders and quantities']]],
+ ['Compare',[['Summary + charts','Summarize performance, downtime and waste. Show supporting charts.'],['This {period} vs last','How did this {period} go versus the previous one?'],['September vs August','How did September go versus August?'],['Compare shifts','Compare all shifts','day','day'],['Rank losses','Show rankings',null,'day']]],
+ ['Orders',[['Orders + quantities','Show orders and quantities',null,'day']]],
 ];
 const chipButtons=[];
+function periodWord(){ return {day:'week',week:'week',month:'month',accounting:'period'}[$('period').value]||'week'; }
 function renderQuestionChips(){
  const box=$('examples'); if(!box)return; box.replaceChildren(); chipButtons.length=0;
+ const word=periodWord();
  for(const [intent,chips] of QUESTION_GROUPS){
   const group=node('div',undefined,'chip-group'); group.append(node('h4',intent));
   const row=node('div',undefined,'chips');
-  for(const [label,question,scope] of chips){
-   const b=node('button',label); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; b.title=question;
-   b.addEventListener('click',()=>{ if(busy)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
+  for(const [label,text,scope,period] of chips){
+   const question=text.replaceAll('{period}',word);
+   const b=node('button',label.replaceAll('{period}',word)); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question;
+   b.addEventListener('click',()=>{ if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
    row.append(b); chipButtons.push(b);
   }
   group.append(row); box.append(group);
@@ -401,12 +408,12 @@ function renderKpiTiles(data,caption){
 // get_period_kpis call (the offline planner; no model, no key). Skipped when a per-visitor rate limit
 // is on, so a visitor's rounds are not spent on priming, and for the 4-4-5 view (its report has no tool).
 let primeToken=0;
-function primeQuestion(){ return {day:'How did this shift go compared with the previous one?',week:'How did this week go versus the previous one?',month:'Compare this month to last'}[$('period').value]||null; }
+function primeQuestion(){ return {day:'How did this shift go compared with the previous one?',week:'How did this week go versus the previous one?',month:'Compare this month to last',accounting:'Compare this period to the previous period'}[$('period').value]||null; }
 async function primeKpis(){
  const token=++primeToken, question=primeQuestion();
  if(!config||!question||busy||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;
  try{
-  const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:'day'})});
+  const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:$('period').value})});
   const result=await response.json();
   if(token!==primeToken||!response.ok||!Array.isArray(result.trace))return;
   const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
@@ -454,7 +461,8 @@ function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool ca
 function showResult(result) {
  $('heatmaps').replaceChildren();
  latest=result; $('download').disabled=false; $('pdf').disabled=false;
- try{const fold=document.querySelector('.examples-fold'); if(fold&&fold.open)fold.open=false;}catch(e){}  // the first answer folds the examples so the conversation has the room $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();
+ try{const fold=document.querySelector('.examples-fold'); if(fold&&fold.open)fold.open=false;}catch(e){}  // the first answer folds the examples so the conversation has the room
+ $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();   // each answer replaces the last one's evidence
  const kpiEntry=result.trace.find(e=>e.ok&&(e.tool==='get_period_kpis'||e.tool==='compare_periods'));
  if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`);
  for(const entry of result.trace) {
@@ -472,19 +480,21 @@ function showResult(result) {
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
 }
-const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key'];
+const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key','report'];
 function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; for(const b of chipButtons)b.disabled=flag; const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
-async function ask(question) {
+async function ask(question,{report=false}={}) {
  if(busy)throw new Error('An investigation is already running');
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
- setBusy(true);$('status').textContent=$('period').value==='day'?'Querying evidence…':'Preparing validated daily records; the first period report can take a minute…';
+ setBusy(true);$('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Querying evidence…';
  const empty=$('messages').querySelector('.empty');if(empty)empty.remove();message('You',[question],'user');
  try{
   const headers={'Content-Type':'application/json','X-Workbench-Token':config.token};
   const p=provider();
   if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
   $('api-key').value='';
-  const pending=fetch('/api/ask',{method:'POST',headers,body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:$('mode').value,scope:$('scope').value,period:$('period').value})});
+  const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:report?'offline':$('mode').value,scope:$('scope').value,period:$('period').value};
+  if(report)body.report=true;
+  const pending=fetch('/api/ask',{method:'POST',headers,body:JSON.stringify(body)});
   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
   const response=await pending;
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');sessionId=result.session_id;
@@ -492,7 +502,8 @@ async function ask(question) {
  }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
  finally{setBusy(false);updateScope();}
 }
-$('ask').addEventListener('submit',event=>{event.preventDefault();ask($('period').value==='day'?$('question').value:`Build ${$('period').value} report`).catch(()=>{});});
+$('ask').addEventListener('submit',event=>{event.preventDefault();ask($('question').value).catch(()=>{});});
+$('report').addEventListener('click',()=>{ if(busy)return; ask(`Build ${PERIOD_NOUN[$('period').value]||'period'} report`,{report:true}).catch(()=>{}); });
 function reset(){$('heatmaps').replaceChildren();$('kpis').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();primeKpis();}
 $('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
@@ -509,7 +520,7 @@ function applyPublicMode(){
   if(modes.includes(value))option.textContent=`${entry.name} / server key`;else option.remove();
  }
  if(!modes.length){$('mode').value='offline';$('mode').disabled=true;$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';}
- else{if($('period').value==='day')$('mode').value=modes.includes('anthropic')?'anthropic':modes[0];$('mode-help').textContent=`Public demo: the model (${PROVIDERS[$('mode').value]?.name||'server'}) chooses which bounded tools to run and writes the interpretation; every number is calculated by fixed queries and inserted by code. Uses this site's own key under a spend cap; no visitor key is accepted. Switch to Offline to see the same tools without a model.`;}
+ else{$('mode').value=modes.includes('anthropic')?'anthropic':modes[0];$('mode-help').textContent=`Public demo: the model (${PROVIDERS[$('mode').value]?.name||'server'}) chooses which bounded tools to run and writes the interpretation; every number is calculated by fixed queries and inserted by code. Uses this site's own key under a spend cap; no visitor key is accepted. Switch to Offline to see the same tools without a model.`;}
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model on':'Synthetic data / Public demo';
 }
 async function init(){
@@ -518,7 +529,7 @@ async function init(){
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
  applyPublicMode();updateScope(); $('submit').disabled=false;primeKpis();
  const context=document.modelContext;
- if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline'||$('period').value!=='day')throw new Error('Browser question tool is available only for offline daily investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
+ if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}
 }
 init();

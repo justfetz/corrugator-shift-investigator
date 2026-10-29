@@ -108,6 +108,9 @@ anchored on the selected production day. Their shift argument is null for all sh
 """
 
 
+PERIOD_WORDS = {"day": "production day", "week": "Mon-Fri production week", "month": "calendar month", "fiscal": "4-4-5 accounting period"}
+
+
 @dataclass
 class Context:
     production_day: str
@@ -115,6 +118,23 @@ class Context:
     history: list = field(default_factory=list)
     dataset_version: str = ""
     scope: str = "day"
+    period: str = "day"   # the Period control: day | week | month | fiscal; a ranged period routes to the period tools
+
+
+def period_window(context):
+    """The window the Period control selects, or None under Day."""
+    period = getattr(context, "period", "day")
+    return None if period == "day" else {"period": period, "anchor": context.production_day}
+
+
+def period_scope_text(context):
+    """One sentence for the planner when a week, month or 4-4-5 period is selected; empty under Day,
+    so the day prompts (and the recorded live fixtures) are unchanged."""
+    window = period_window(context)
+    if window is None:
+        return ""
+    return (f' Selected period: the {PERIOD_WORDS[window["period"]]} containing {window["anchor"]}. Use the period tools with '
+            f'window {json.dumps(window)} unless the user names another window; the daily tools are refused in this scope.')
 
 
 class Planner(Protocol):
@@ -203,10 +223,13 @@ def parse_period_request(lower, current, shifts):
     anchor = current.production_day
     year = anchor[:4]
     shift = current.shift if current.scope == 'shift' else shifts[0] if len(shifts) == 1 else None
-    window = {"period": period or 'day', "anchor": anchor}
+    # A question that names no window gets the Period control's window (week, month, 4-4-5), else the day.
+    selected = getattr(current, 'period', 'day')
+    selected = None if selected == 'day' else selected
+    window = {"period": period or selected or 'day', "anchor": anchor}
     if speed_opp:
         slice_by = 'crew' if re.search(r"\bcrews?\b|\bteams?\b", lower) else 'width'
-        plan = [("get_speed_opportunity", {"window": {"period": period or 'month', "anchor": anchor}, "slice_by": slice_by, "shift": shift})]
+        plan = [("get_speed_opportunity", {"window": {"period": period or selected or 'month', "anchor": anchor}, "slice_by": slice_by, "shift": shift})]
         intent = 'period_speed_opportunity'
     elif overrun:
         plan = [("get_overrun", {"window": window, "shift": shift})]
@@ -230,7 +253,7 @@ def parse_period_request(lower, current, shifts):
         plan = [("get_downtime_pareto", {"window": window, "group_by": group_by, "measure": measure, "shift": shift})]
         intent = 'period_pareto'
     elif profile:
-        plan = [("get_stops_profile", {"window": {"period": period or 'week', "anchor": anchor}, "shift": shift})]
+        plan = [("get_stops_profile", {"window": {"period": period or selected or 'week', "anchor": anchor}, "shift": shift})]
         intent = 'period_stops'
     elif waste:
         plan = [("get_waste_breakdown", {"window": window, "shift": shift})]
@@ -272,8 +295,9 @@ def parse_request(text, current):
     compare = bool(re.search(r"\b(compare|comparison|versus|vs)\b", lower))
     if compare and len(shifts) == 1 and shifts[0] != current.shift:
         shifts.insert(0, current.shift)
+    named = list(shifts)                      # shifts the question itself names, before the scope default
     if 'all shifts' in lower or 'production day' in lower:
-        shifts = [1, 2, 3]
+        shifts = named = [1, 2, 3]
         compare = True
     shifts = shifts or ([1,2,3] if current.scope=='day' else [current.shift])
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
@@ -290,10 +314,42 @@ def parse_request(text, current):
         kind = 'Maintenance'
     elif 'operator' in lower and 'maintenance' not in lower:
         kind = 'Operator'
-    return {"intent": intent, "shifts": shifts, "kind": kind,
-            "group_by": 'place' if 'equipment' in lower or 'place' in lower else 'kind' if 'maintenance' in lower and 'operator' in lower else 'reason',
-            "want_chart": True,
+    group_by = 'place' if 'equipment' in lower or 'place' in lower else 'kind' if 'maintenance' in lower and 'operator' in lower else 'reason'
+    window = period_window(current)
+    if window is not None:
+        return period_plan(intent, window, named, group_by, current)
+    return {"intent": intent, "shifts": shifts, "kind": kind, "group_by": group_by, "want_chart": True,
             "ranking_metrics": (['downtime'] if re.search(r'downtime|jam|stops', lower) else ['quality'] if re.search(r'waste|quality|reject', lower) else ['speed'] if 'speed' in lower else ['speed', 'downtime', 'quality'])}
+
+
+DAY_ONLY_INTENTS = {'matrix': 'the setup matrix', 'orders': 'the order matrix', 'notes': 'the shift and downtime notes', 'ranking': 'the rankings'}
+
+
+def period_plan(intent, window, named, group_by, current):
+    """A day-shaped question asked with Week, Month or 4-4-5 selected: the same intent over the
+    selected window, answered by the period tools. The per-shift matrices have no period form."""
+    if intent in DAY_ONLY_INTENTS:
+        raise ValueError(f"Switch Period to Day for {DAY_ONLY_INTENTS[intent]}; that evidence is per shift and per production day. "
+                         f"For the selected {PERIOD_WORDS[window['period']]} ask for the KPIs against the previous one, the downtime "
+                         "Pareto, the waste breakdown, stops per day, a trend, totals by grade, over/under-run or the speed opportunity.")
+    if current.scope == 'shift':
+        per_shift = [current.shift]        # selected shift only
+    elif named:
+        per_shift = named                  # a named shift narrows the window; "compare all shifts" runs the tiles once per shift
+    else:
+        per_shift = [None]                 # all three shifts together
+    plan = []
+    for shift in per_shift:
+        if intent in ('summary', 'overview', 'compare', 'speed'):
+            plan.append(("get_period_kpis", {"window": window, "compare": True, "shift": shift}))
+        if intent in ('summary', 'overview', 'downtime'):
+            plan.append(("get_downtime_pareto", {"window": window, "group_by": group_by, "measure": "minutes", "shift": shift}))
+        if intent in ('summary', 'overview', 'quality'):
+            plan.append(("get_waste_breakdown", {"window": window, "shift": shift}))
+        if intent == 'speed':
+            plan.append(("get_grade_totals", {"window": window, "shift": shift}))
+    return {"intent": "period_" + intent, "shifts": [s for s in per_shift if s], "kind": None, "group_by": group_by, "want_chart": True,
+            "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
 
 DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_end_performance': 'Wet-end speed vs grade target',
@@ -378,6 +434,7 @@ class Agent:
             context.history.clear()
         context.dataset_version = self.analysis.version
         allowed_shifts = [context.shift] if context.scope == 'shift' else [1, 2, 3]
+        period = getattr(context, 'period', 'day')
         run_id = uuid4().hex
         store = OrderedDict()
         traces = []
@@ -390,7 +447,8 @@ class Agent:
                 status = 'timeout'
                 break
             planner_context = {**request, 'question': text, 'production_day': context.production_day,
-                'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.', 'scope': context.scope, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
+                'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context),
+                'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
                 'history': deepcopy(context.history[-self.max_turns:]), 'results': deepcopy(list(store.values()))}
             if len(json.dumps(planner_context)) > 200000:
                 status = 'context_limit'
@@ -423,6 +481,9 @@ class Agent:
                             raise ValueError('Tool shift is outside the selected scope')
                         if action['tool'] in PERIOD_TOOLS and context.scope == 'shift' and arguments.get('shift') is None:
                             raise ValueError('Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts')
+                        if period != 'day' and action['tool'] not in PERIOD_TOOLS and action['tool'] != 'render_chart':
+                            raise ValueError(f'Daily tools read one production day; the selected period is the {PERIOD_WORDS[period]} containing '
+                                             f'{context.production_day}. Use the period tools with window {json.dumps(period_window(context))}, or switch Period to Day')
                     data = self._execute(action['tool'], action['arguments'], store)
                     result = {'result_id': rid, **action, 'ok': True, 'data': data}
                 except (ValueError, TypeError, KeyError) as exc:
@@ -494,15 +555,28 @@ class Agent:
         result_shifts = list(dict.fromkeys(r['data']['shift'] for r in evidence if r['data']['shift'] is not None)) or request['shifts']
         context.history.append({'question': text, 'shifts': result_shifts, 'intent': request['intent']})
         context.history = context.history[-self.max_turns:]
+        context_out = {'production_day': context.production_day, 'shift': context.shift, 'dataset_version': context.dataset_version, 'scope': context.scope, 'history': deepcopy(context.history)}
+        if period != 'day':
+            context_out['period'] = period
         return {'run_id': run_id, 'mode': getattr(self.planner, 'mode', 'offline rule-based planner; no language model'), 'status': status,
-                'production_day': context.production_day, 'selected_shifts': result_shifts,
+                'production_day': context.production_day, 'selected_shifts': result_shifts, **self._period_label(context),
                 'sections': sections, 'evidence_ids': final_ids,
                 'narrative':narrative,'narrative_status':narrative_status,
                 'charts': charts,
                 'tables': [dict(title=v['tool'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings',*PERIOD_TOOLS)],
-                'trace': traces, 'context': {'production_day': context.production_day, 'shift': context.shift, 'dataset_version': context.dataset_version, 'scope': context.scope, 'history': deepcopy(context.history)},
+                'trace': traces, 'context': context_out,
                 'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0})},
                 'limitations': 'Synthetic data. Setup counts are shift records: a continuing setup appears in both shifts. Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled. Recorded reasons are observations, not proven root causes. Model prose is interpretation requiring human review; reference validation does not prove causality. Offline mode understands only supported question patterns; live mode depends on provider access.'}
+
+    @staticmethod
+    def _period_label(context):
+        """The selected window's label for the report title; nothing under Day, so day answers are unchanged."""
+        window = period_window(context)
+        if window is None:
+            return {}
+        from .record_store import parse_window, window_label
+        period, _, start, end = parse_window(window)
+        return {'period_label': window_label(period, start, end)}
 
     @staticmethod
     def _summarize(evidence):

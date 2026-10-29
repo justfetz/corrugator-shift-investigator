@@ -89,10 +89,27 @@ def test_config_reports_the_production_calendar_and_refuses_other_days(running):
     result=json.loads(body)
     assert status==200 and result['trace'][0]['tool']=='compare_periods' and result['charts'][0]['y2']=='previous'
     assert result['context']['dataset_version']==running.app.datasets[('2026-09-14',False)].version
-    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-08-12','shift':2,'period':'month','question':'period'}),headers)
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-08-12','shift':2,'period':'month','question':'Build month report','report':True}),headers)
     result=json.loads(body)
     assert status==200 and result['period_label']=='2026-08-01 to 2026-08-31' and result['status']=='complete'
     assert any('Full comparison unavailable' in s for s in result['sections'])   # July is before the dataset
+    assert result['trace'][0]['tool']=='get_period_report'
+    # A question under Week is investigated over that week by the period tools (no longer the canned report).
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'period':'week','question':'Why was this shift slow? Chart downtime by reason.'}),headers)
+    result=json.loads(body)
+    assert status==200 and result['status']=='complete' and result['period_label']=='Week 2026-09-14 to 2026-09-18 (Mon-Fri)', body[:300]
+    assert [t['tool'] for t in result['trace'] if t['tool']!='render_chart']==['get_period_kpis','get_downtime_pareto','get_waste_breakdown']
+    assert all(t['arguments']['window']=={'period':'week','anchor':'2026-09-14'} and t['arguments']['shift']==2 for t in result['trace'] if t['tool']!='render_chart')
+    assert result['context']['period']=='week' and result['charts']
+    # 4-4-5 is 'accounting' in the interface and 'fiscal' in the tools; the report flag needs a period.
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'period':'accounting','scope':'day','question':'Which downtime reason cost the most minutes?'}),headers)
+    result=json.loads(body)
+    assert status==200 and result['trace'][0]['arguments']['window']=={'period':'fiscal','anchor':'2026-09-14'} and result['trace'][0]['arguments']['shift'] is None
+    assert result['period_label'].startswith('4-4-5 P')
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'period':'week','question':'Show setup matrix'}),headers)
+    assert status==400 and 'Switch Period to Day' in json.loads(body)['error']
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'period':'day','question':'x','report':True}),headers)
+    assert status==400 and 'needs Week, Month or 4-4-5' in json.loads(body)['error']
 
 
 def test_interface_control_references_exist():

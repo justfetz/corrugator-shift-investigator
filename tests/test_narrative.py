@@ -174,9 +174,15 @@ def test_narrative_call_respects_shared_call_cap(tmp_path):
 def test_period_exports_are_free(period):
     app=Workbench()
     try:
-        result=app.ask({'day':'2026-09-29','shift':2,'scope':'day','period':period,'question':'Build report'})
-        assert result['usage']['model_calls']==0
+        result=app.ask({'day':'2026-09-29','shift':2,'scope':'day','period':period,'question':'Build report','report':True})
+        assert result['usage']['model_calls']==0 and result['trace'][0]['tool']=='get_period_report'
         pdf=app.pdf({'session_id':result['session_id'],'run_id':result['run_id']})
+        assert pdf.startswith(b'%PDF-') and pdf.rstrip().endswith(b'%%EOF')
+        # A question under the same period is answered by the period tools, titled by the window, and exports too.
+        asked=app.ask({'day':'2026-09-29','shift':2,'scope':'day','period':period,'question':'Which downtime reason cost the most minutes?'})
+        assert asked['usage']['model_calls']==0 and asked['trace'][0]['tool']=='get_downtime_pareto' and asked['period_label']
+        assert asked['report_markdown'].startswith('# Synthetic production investigation: '+asked['period_label'])
+        pdf=app.pdf({'session_id':asked['session_id'],'run_id':asked['run_id']})
         assert pdf.startswith(b'%PDF-') and pdf.rstrip().endswith(b'%%EOF')
     finally:app.close()
 

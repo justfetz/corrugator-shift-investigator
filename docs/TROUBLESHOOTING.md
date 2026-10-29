@@ -46,7 +46,7 @@ Daily report PDF byte-format and session checks pass automated tests. That does 
 
 Narrative unavailable means the writer call failed, reached a shared limit or returned invalid references/format. The calculated evidence and charts remain available. The writer shares the ten-call budget with planning. Numeric claims must use fact placeholders and known fields; prose still needs human review. No automatic retry occurs.
 
-No key is needed for offline or period reports. Select Production day before OpenAI. The key field clears on submit and mode/scope resets; a second investigation requires re-entry unless a server environment key is configured. The app does not load `.env` automatically.
+No key is needed for offline questions or period reports. A live mode works under any period: the daily tools answer under Day, the period tools under Week, Month and 4-4-5. The key field clears on submit and mode/scope resets; a second investigation requires re-entry unless a server environment key is configured. The app does not load `.env` automatically.
 
 If a live question fails, inspect the displayed error before retrying: there are no automatic provider retries, and a failed or uncertain attempt can retain its spending reservation. The application's local budget and your provider billing/account limits are different controls. Do not delete `artifacts/model-budget.sqlite3` to clear an exhausted budget. See [BYOK behavior](OPENAI_BYOK.md).
 

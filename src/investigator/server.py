@@ -183,7 +183,7 @@ class Workbench:
             analysis.close()
 
     def ask(self, payload, api_key=None, anthropic_key=None):
-        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period'}:
+        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period', 'report'}:
             raise ValueError('Invalid request fields')
         scope = payload.get('scope', 'shift')
         if scope not in ('shift', 'day'):
@@ -191,9 +191,12 @@ class Workbench:
         period = payload.get('period', 'day')
         if period not in ('day', 'week', 'month', 'accounting'):
             raise ValueError('Choose day, week, calendar month or accounting period')
+        report = payload.get('report', False)   # the deterministic period report (heatmap, daily matrix, notes) instead of a question
+        if type(report) is not bool:
+            raise ValueError('Invalid report option')
+        if report and period == 'day':
+            raise ValueError('The period report needs Week, Month or 4-4-5; a day is investigated with a question')
         mode = payload.get('mode', 'offline')
-        if period != 'day' and mode != 'offline':
-            raise ValueError('Week/month reports use the free deterministic tools; select Offline mode')
         if mode not in ('offline', *LIVE_MODES):
             raise ValueError('Choose offline, OpenAI or Anthropic mode')
         if self.public is not None:
@@ -218,20 +221,21 @@ class Workbench:
         session_id = payload.get('session_id')
         if session_id is not None and (not isinstance(session_id, str) or session_id not in self.sessions):
             raise ValueError('Session expired; reset the conversation')
-        if mode != 'offline':
+        if mode != 'offline' and not report:
             self.daily_round()  # counted before the model is asked; failed rounds still count
+        tool_period = 'fiscal' if period == 'accounting' else period   # the period tools' name for the 4-4-5 window
         if session_id is None:
             session_id = secrets.token_urlsafe(24)
             if len(self.sessions) >= 32:
                 self.sessions.popitem(last=False)
-            self.sessions[session_id] = Context(day, shift)
-        if period != 'day':
-            result = self.periods.investigate(day, shift, scope, period, corrupt)
+            self.sessions[session_id] = Context(day, shift, period=tool_period)
+        if report:
+            result = self.periods.investigate(day, shift, scope, period, corrupt)   # no model on this path, whatever the mode
             return self._retain(result, session_id)
         context = self.sessions[session_id]
-        # Visible date/shift controls own the scope; same-day follow-ups retain history.
-        if context.production_day != day or context.shift != shift or context.scope != scope:
-            context = Context(day, shift)
+        # Visible date/period/shift controls own the scope; follow-ups retain history while they stay unchanged.
+        if context.production_day != day or context.shift != shift or context.scope != scope or context.period != tool_period:
+            context = Context(day, shift, period=tool_period)
             self.sessions[session_id] = context
         context.shift = shift
         context.scope = scope

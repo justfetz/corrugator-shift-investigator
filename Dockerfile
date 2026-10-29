@@ -1,7 +1,8 @@
 # Hosted synthetic demo of the Shift Investigator (offline planner by default).
 # Listens on 0.0.0.0:$PORT (7860 by default, the Hugging Face Spaces convention).
 # Required env: PUBLIC_DEMO_ORIGIN (the site's own https origin). Optional:
-# PUBLIC_DEMO_EMBED_ORIGINS, PUBLIC_DEMO_LIVE_MODEL=1 + OPENAI_API_KEY (server key only).
+# PUBLIC_DEMO_EMBED_ORIGINS, PUBLIC_DEMO_LIVE_MODEL=1 + ANTHROPIC_API_KEY and/or
+# OPENAI_API_KEY (server keys only; Cloud Run mounts them from Secret Manager by name).
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=7860

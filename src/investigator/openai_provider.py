@@ -127,8 +127,10 @@ class OpenAIPlanner:
         if remaining<=0 or self.usage['model_calls']>=10:
             raise ProviderError('Live investigation model-call/time limit reached')
         if not self._input:
-            self._input=[{'role':'developer','content': context['process']+PLANNER_INSTRUCTIONS}, {'role':'user','content':json.dumps({'question':context['question'],'production_day':context['production_day'],
-                    'selected_shift':context['shifts'][0],'history':context['history']})}]
+            opening={'question':context['question'],'production_day':context['production_day'],'selected_shift':context['shifts'][0],'history':context['history']}
+            if context.get('period','day')!='day':   # a week, month or 4-4-5 window selected: the period tools' default window
+                opening['selected_window']={'period':context['period'],'anchor':context['production_day']}
+            self._input=[{'role':'developer','content': context['process']+PLANNER_INSTRUCTIONS}, {'role':'user','content':json.dumps(opening)}]
         elif self._pending:
             compact=compact_result(context['results'][-1])
             self._input.append({'type':'function_call_output','call_id':self._pending,'output':json.dumps(compact)})

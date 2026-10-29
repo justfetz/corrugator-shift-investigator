@@ -28,7 +28,7 @@
 <p id="day-note" class="day-note" role="alert" hidden></p>
 <div class="grid">
 <section class="card conversation" aria-label="Ask">
-<form id="ask"><label for="question">Ask about the selected scope</label><textarea id="question" rows="3" maxlength="2000" placeholder="Why was this shift slow? Which grade is eating the most downtime this month?"></textarea><div class="form-footer"><span id="status" role="status">Ready / no API costs</span><button id="submit" type="submit">Investigate</button></div></form>
+<form id="ask"><label for="question">Ask about the selected scope</label><textarea id="question" rows="3" maxlength="2000" placeholder="Why was this shift slow? Which downtime reason cost the most minutes this week? Which grade is eating the most downtime this month?"></textarea><div class="form-footer"><span id="status" role="status">Ready / no API costs</span><span class="form-actions"><button id="report" class="secondary" type="button" hidden title="The deterministic period report: output heatmap, daily matrix, recurring downtime and notes for the selected window">Period report</button><button id="submit" type="submit">Investigate</button></span></div></form>
 <p class="muted" id="mode-help">Ask about performance, downtime, speed or quality. Offline mode uses a small rule-based planner.</p>
 <details class="examples-fold" open><summary>Example questions</summary><div class="examples" id="examples" aria-label="Example questions by intent"></div></details>
 <div id="messages" aria-live="polite"><p class="empty">Answers appear here: the evidence lines, the model’s interpretation when a model is selected, and the charts on the right.</p></div>

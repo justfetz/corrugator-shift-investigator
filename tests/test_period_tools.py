@@ -482,6 +482,68 @@ def test_period_refusals(text, message):
         parse_request(text, Context(DAY, 2, scope="day"))
 
 
+PERIOD_SCOPE_ROUTES = [
+    # (period control, scope, question) -> the plan: (tool, window period, shift) per step
+    ("week", "shift", "Why was this shift slow? Chart downtime by reason.", [("get_period_kpis", "week", 2), ("get_downtime_pareto", "week", 2), ("get_waste_breakdown", "week", 2)]),
+    ("week", "day", "Why was this shift slow?", [("get_period_kpis", "week", None), ("get_downtime_pareto", "week", None), ("get_waste_breakdown", "week", None)]),
+    ("month", "day", "Which equipment caused the most downtime?", [("get_downtime_pareto", "month", None)]),
+    ("month", "day", "Show dry-end quality waste", [("get_waste_breakdown", "month", None)]),
+    ("week", "day", "Show speed to target", [("get_period_kpis", "week", None), ("get_grade_totals", "week", None)]),
+    ("week", "day", "Compare all shifts", [("get_period_kpis", "week", 1), ("get_period_kpis", "week", 2), ("get_period_kpis", "week", 3)]),
+    ("month", "day", "Compare shift 1 with shift 3", [("get_period_kpis", "month", 1), ("get_period_kpis", "month", 3)]),
+    ("fiscal", "day", "Is it bond or warp?", [("get_waste_breakdown", "fiscal", None)]),
+    ("fiscal", "day", "Stops per day this period", [("get_stops_profile", "fiscal", None)]),
+    ("month", "shift", "Which downtime reason cost the most minutes this week?", [("get_downtime_pareto", "week", 2)]),   # a named window wins over the control
+    ("week", "day", "How did September go versus August?", [("compare_periods", None, None)]),
+]
+
+
+@pytest.mark.parametrize("period, scope, text, plan", PERIOD_SCOPE_ROUTES, ids=[f"{r[0]}/{r[2][:28]}" for r in PERIOD_SCOPE_ROUTES])
+def test_a_selected_period_is_the_default_window(period, scope, text, plan):
+    """Week, Month or 4-4-5 in the Period control: a question that names no window gets that
+    window, a day-shaped question gets its period form, and the shift follows the scope."""
+    request = parse_request(text, Context(DAY, 2, scope=scope, period=period))
+    assert request["intent"].startswith("period_")
+    got = [(step["tool"], (step["arguments"].get("window") or {}).get("period"), step["arguments"]["shift"]) for step in request["plan"]]
+    assert got == plan
+    for step in request["plan"]:
+        if "window" in step["arguments"]:
+            assert step["arguments"]["window"]["anchor"] == DAY
+
+
+@pytest.mark.parametrize("text", ["Show setup matrix", "Show orders and quantities", "Show shift and downtime notes", "Show rankings"])
+def test_per_shift_matrices_are_refused_under_a_period(text):
+    with pytest.raises(ValueError, match="Switch Period to Day"):
+        parse_request(text, Context(DAY, 2, scope="shift", period="week"))
+
+
+def test_daily_tools_are_refused_by_the_agent_under_a_period(store):
+    """Whatever the planner proposes, a daily tool under Week is refused with the window to use instead."""
+    class DailyThenPeriod:
+        def __init__(self): self.n = 0
+        def next_step(self, context):
+            self.n += 1
+            if self.n == 1:
+                assert "Selected period: the Mon-Fri production week containing 2026-09-14" in context["process"]
+                return {"tool": "get_shift_kpis", "arguments": {"shift": 2}}
+            if self.n == 2:
+                return {"tool": "get_period_kpis", "arguments": {"window": {"period": "week", "anchor": DAY}, "compare": True, "shift": 2}}
+            return {"final": [r["result_id"] for r in context["results"] if r["ok"]]}
+    analysis = store.day_analysis(DAY)
+    try:
+        context = Context(DAY, 2, scope="shift", period="week")
+        result = Agent(analysis, planner=DailyThenPeriod(), max_calls=5).ask("Why was this shift slow?", context)
+        refused, used = result["trace"][0], result["trace"][1]
+        assert not refused["ok"] and "Daily tools read one production day" in refused["error"]["message"] and '"period": "week"' in refused["error"]["message"]
+        assert used["ok"] and result["status"] == "complete" and result["period_label"] == "Week 2026-09-14 to 2026-09-18 (Mon-Fri)"
+        assert result["context"]["period"] == "week"
+        # Under Day nothing changes: no period sentence, no label, no period key.
+        day = Agent(analysis).ask("Why was this shift slow?", Context(DAY, 2, scope="shift"))
+        assert "period_label" not in day and "period" not in day["context"]
+    finally:
+        analysis.close()
+
+
 def test_day_questions_still_route_to_the_day_tools():
     for text in ("Which equipment caused the most downtime?", "Show dry-end quality waste", "Why was this shift slow?",
                  "Was it maintenance or operator downtime?", "Show setup matrix", "Rank downtime losses"):
