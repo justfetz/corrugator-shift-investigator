@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(gcloud run services update:*)",
+      "Bash(gcloud run services delete:*)",
+      "Bash(gcloud billing:*)",
+      "Bash(gcloud projects delete:*)",
+      "Bash(gcloud iam:*)",
+      "Bash(gcloud secrets delete:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)"
+    ]
+  }
+}
