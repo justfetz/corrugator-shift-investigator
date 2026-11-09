@@ -369,3 +369,46 @@ def test_max_turns_bounds_conversation_history():
         assert len(last['context']['history'])==2
         assert [h['question'] for h in last['context']['history']]==['Show rankings','Show notes']
     finally:app.close()
+
+
+# ---- issue #17: the token and the sessions survive a second instance and a restart ----
+
+def test_public_token_is_shared_across_instances_and_restarts(public,monkeypatch):
+    """Cloud Run runs up to two instances and scales to zero. A visitor whose page loaded
+    on one instance must be accepted by the other, and by the next restart."""
+    from investigator.server import PublicDemo
+    monkeypatch.delenv('WORKBENCH_SECRET',raising=False)
+    demo=PublicDemo(('https://demo.example',),(),False)
+    assert Workbench._workbench_token(demo)==Workbench._workbench_token(demo)        # two instances agree
+    assert public.app.token==Workbench._workbench_token(public.app.public)           # and so does a live server
+    assert Workbench._workbench_token(PublicDemo(('https://other.example',),(),False))!=Workbench._workbench_token(demo)
+    monkeypatch.setenv('WORKBENCH_SECRET','rotate-me')
+    rotated=Workbench._workbench_token(demo)
+    assert rotated!=public.app.token and rotated==Workbench._workbench_token(demo)   # the secret rotates it, deterministically
+    assert Workbench._workbench_token(None)!=Workbench._workbench_token(None)        # the loopback workbench stays random per process
+    # over HTTP: a token computed by "another instance" is accepted, a wrong one is still refused
+    headers={'Content-Type':'application/json','Host':'anything.example','Origin':'https://demo.example'}
+    payload=json.dumps({'day':'2026-09-01','shift':2,'question':'Show speed'})
+    monkeypatch.delenv('WORKBENCH_SECRET',raising=False)
+    other_instance=Workbench._workbench_token(public.app.public)
+    assert request(public,'POST','/api/ask',payload,{**headers,'X-Workbench-Token':other_instance})[0]==200
+    assert request(public,'POST','/api/ask',payload,{**headers,'X-Workbench-Token':'x'*64})[0]==403
+    assert request(public,'POST','/api/ask',payload,headers)[0]==403
+
+
+def test_unknown_session_starts_a_fresh_conversation_and_says_so():
+    """A session id this process has never seen (the other instance answered the earlier
+    question, or the process restarted) is not an error: the request carries day, shift
+    and period, so a fresh conversation answers and the result flags the reset."""
+    app=Workbench()
+    try:
+        first=app.ask({'day':'2026-09-01','shift':2,'question':'Show downtime','scope':'day'})
+        assert first['session_reset'] is False
+        again=app.ask({'day':'2026-09-01','shift':2,'question':'Show speed','scope':'day','session_id':'issued-by-another-instance'})
+        assert again['status']=='complete' and again['session_reset'] is True
+        assert again['session_id']!='issued-by-another-instance' and again['session_id'] in app.sessions
+        follow=app.ask({'day':'2026-09-01','shift':2,'question':'Show downtime','scope':'day','session_id':again['session_id']})
+        assert follow['session_reset'] is False and follow['session_id']==again['session_id']
+        with pytest.raises(ValueError,match='Invalid session id'):
+            app.ask({'day':'2026-09-01','shift':2,'question':'Show downtime','session_id':42})
+    finally:app.close()

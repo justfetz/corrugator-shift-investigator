@@ -409,11 +409,26 @@ function renderKpiTiles(data,caption){
 // is on, so a visitor's rounds are not spent on priming, and for the 4-4-5 view (its report has no tool).
 let primeToken=0;
 function primeQuestion(){ return {day:'How did this shift go compared with the previous one?',week:'How did this week go versus the previous one?',month:'Compare this month to last',accounting:'Compare this period to the previous period'}[$('period').value]||null; }
+// Every POST goes through here. A 403 means the token we hold is not the one this
+// server instance expects (it restarted, or a second instance answered): refresh
+// /api/config once and resend, instead of showing "Missing session token" until
+// the visitor reloads the page.
+async function post(path,body,extraHeaders={}){
+ const extra={...extraHeaders};   // snapshot: the caller clears a visitor key from its object right after calling, and the resend must carry it too
+ const send=()=>fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token,...extra},body:JSON.stringify(body)});
+ let response=await send();
+ if(response.status===403){
+  const fresh=await fetch('/api/config');
+  if(fresh.ok){config=Object.assign(config||{},await fresh.json());response=await send();}
+ }
+ return response;
+}
+
 async function primeKpis(){
  const token=++primeToken, question=primeQuestion();
  if(!config||!question||busy||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;
  try{
-  const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:$('period').value})});
+  const response=await post('/api/ask',{question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:$('period').value});
   const result=await response.json();
   if(token!==primeToken||!response.ok||!Array.isArray(result.trace))return;
   const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
@@ -488,16 +503,18 @@ async function ask(question,{report=false}={}) {
  setBusy(true);$('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Querying evidence…';
  const empty=$('messages').querySelector('.empty');if(empty)empty.remove();message('You',[question],'user');
  try{
-  const headers={'Content-Type':'application/json','X-Workbench-Token':config.token};
+  const headers={};
   const p=provider();
   if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
   $('api-key').value='';
   const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:report?'offline':$('mode').value,scope:$('scope').value,period:$('period').value};
   if(report)body.report=true;
-  const pending=fetch('/api/ask',{method:'POST',headers,body:JSON.stringify(body)});
+  const pending=post('/api/ask',body,headers);
   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
   const response=await pending;
-  const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');sessionId=result.session_id;
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
+  if(result.session_reset&&sessionId)message('Note',['The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.']);
+  sessionId=result.session_id;
   message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
  }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
  finally{setBusy(false);updateScope();}
@@ -508,7 +525,7 @@ function reset(){$('heatmaps').replaceChildren();$('kpis').replaceChildren();$('
 $('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
-$('pdf').addEventListener('click',async()=>{if(!latest||busy)return;$('pdf').disabled=true;try{const response=await fetch('/api/report',{method:'POST',headers:{'Content-Type':'application/json','X-Workbench-Token':config.token},body:JSON.stringify({session_id:latest.session_id,run_id:latest.run_id})});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
+$('pdf').addEventListener('click',async()=>{if(!latest||busy)return;$('pdf').disabled=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
 function applyPublicMode(){
  // Hosted synthetic demo: no visitor keys, ever. A live option stays only when the server's own key for that provider and the cap are enabled.
  if(!config.public)return;

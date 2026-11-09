@@ -20,7 +20,7 @@ If dependencies cannot import, use the project virtual environment and run `pyth
 | `complete` but the question was not answered | Completion validates evidence references, not semantic fulfillment. Check the actual tools and results; see R4. |
 | `planner_error` | Provider, planner, or final-evidence validation failed with evidence or a provider message in play (an investigation whose every call was refused reads `unavailable` instead). Some failures have only a generic status. Review the trace and any displayed message; partial evidence is not a successful full answer. |
 | `budget_exhausted`, `timeout`, `context_limit` | A bounded investigation stopped. Narrow the request. Retained results, if any, are partial. |
-| Session expired | Restart, reset, or session eviction invalidated the session. Use Reset conversation and ask again. |
+| Note: the server restarted since your last question | Another instance answered, or the process restarted, so the earlier follow-up context is gone; the question was still answered in a fresh conversation. Nothing to do. (Before issue #17 this surfaced as "Session expired" or "Missing session token" and needed a page reload.) |
 | Follow-up forgets a comparison | History now persists with unchanged controls. Date/scope/mode changes, resets and dataset changes intentionally clear it. Report unexpected loss with a minimal reproduction. |
 | Prior charts remain after an error | A failed request leaves the previous retained result visible. It does not constitute evidence for the new question. Reset to clear it. |
 

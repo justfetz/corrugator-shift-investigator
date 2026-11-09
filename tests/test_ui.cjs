@@ -167,3 +167,33 @@ const msg=elements.messages.children[0];
 assert.equal(msg.children.length,4);   // label, paragraph, one note group, paragraph
 assert.equal(msg.children[2].className,'note-group');assert.equal(msg.children[2].children[0].textContent,'2 reported notes (synthetic, unverified — observations, not causes)');
 console.log('UI unit checks passed: scope sentence, weekend rejection, segments, chip groups, KPI tiles, charts, trail row, note folding, heatmap, PDF state.');
+
+// ---- issue #17: post() refreshes /api/config once on a 403 and resends with the new token; a second 403 is returned, not retried forever.
+(async()=>{
+ await new Promise(r=>setTimeout(r,50));   // let init()'s own primeKpis() finish against the original fetch stub before swapping it
+ const calls=[];
+ const record=(path,init)=>{if(path==='/api/config'||(init&&init.body&&init.body.includes('probe-17')))calls.push([path,init&&init.headers?init.headers['X-Workbench-Token']:undefined]);};
+ context.fetch=async(path,init)=>{
+  record(path,init);
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'fresh',days:['2026-09-01','2026-09-30']})};
+  const asks=calls.filter(c=>c[0]==='/api/ask').length;
+  return asks===1?{ok:false,status:403,json:async()=>({error:'Missing session token'})}:{ok:true,status:200,json:async()=>({session_id:'s2',session_reset:true})};
+ };
+ vm.runInContext("config={token:'stale',days:['2026-09-01','2026-09-30']}",context);
+ const response=await vm.runInContext("post('/api/ask',{question:'probe-17'})",context);
+ assert.equal(response.status,200);
+ assert.deepEqual(calls.map(c=>c[0]),['/api/ask','/api/config','/api/ask']);
+ assert.deepEqual([calls[0][1],calls[2][1]],['stale','fresh']);
+ assert.equal(vm.runInContext('config.token',context),'fresh');
+ assert.equal(vm.runInContext('config.days.length',context),2);       // the refreshed config merges, it does not drop fields
+ calls.length=0;
+ context.fetch=async(path,init)=>{record(path,init);return path==='/api/config'?{ok:true,status:200,json:async()=>({token:'fresh2'})}:{ok:false,status:403,json:async()=>({error:'Origin not allowed'})};};
+ const still=await vm.runInContext("post('/api/ask',{question:'probe-17'})",context);
+ assert.equal(still.status,403);assert.deepEqual(calls.map(c=>c[0]),['/api/ask','/api/config','/api/ask']);   // one refresh, one resend, then the error stands
+ // the resend carries the caller's extra headers (a loopback visitor key) even though ask() clears its own copy right after calling
+ const seen=[];
+ context.fetch=async(path,init)=>{if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'fresh3'})};seen.push(init.headers['X-OpenAI-Key']);return seen.length===1?{ok:false,status:403,json:async()=>({})}:{ok:true,status:200,json:async()=>({})};};
+ await vm.runInContext("(()=>{const h={'X-OpenAI-Key':'sk-visitor'};const p=post('/api/ask',{question:'probe-17'},h);delete h['X-OpenAI-Key'];return p;})()",context);
+ assert.deepEqual(seen,['sk-visitor','sk-visitor']);
+ console.log('UI issue-17 checks passed: 403 refreshes the token once and resends.');
+})().catch(error=>{console.error(error);process.exit(1);});
