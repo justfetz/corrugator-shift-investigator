@@ -5,14 +5,15 @@
    The fonts are stacks with system fallbacks: the page loads nothing from outside its own origin.
    Light is the default whatever the OS prefers (issue #36); the dark tokens apply only under
    [data-theme="dark"], which theme.js sets from the visitor's pinned choice. Light-theme series
-   colors are checked against the surface at 3:1 (WCAG 1.4.11): --s3 and --prev are darker than the
-   blog's values for that reason (#1baf7a was 2.7:1, #b9b9b3 was 1.9:1). */
+   colors are checked at 3:1 (WCAG 1.4.11) against the chart panel, --surface-2, where every chart
+   mark, legend swatch and heatmap cell is drawn: --s2, --s3 and --prev are darker than the blog's
+   values for that reason (on the panel #eb6834 was 2.9:1, #1baf7a 2.5:1, #b9b9b3 1.8:1). */
 :root{
  color-scheme:light;
  --bg:#fcfcfa;--surface:#fcfcfb;--surface-2:#f3f3f0;--surface-3:#ebebe6;
  --ink:#161616;--ink-2:#4a4a46;--ink-3:#8a8a84;--line:#e4e4df;--line-2:#ecece7;--rule:#e4e4df;
  --brand:#1f5f4e;--brand-ink:#1f5f4e;--brand-soft:#eaf1ee;--accent:#1f5f4e;
- --s1:#2a78d6;--s2:#eb6834;--s3:#159c6b;--s4:#8a5cc7;--prev:#8f8f89;--grid:#e6e6e2;--target:#eb6834;
+ --s1:#2a78d6;--s2:#e85318;--s3:#159c6b;--s4:#8a5cc7;--prev:#85857f;--grid:#e6e6e2;--target:#e85318;
  --good:#0ca30c;--good-soft:#e9f6e9;--bad:#d03b3b;--bad-soft:#fbeaea;--neutral:#8a8a84;--neutral-soft:#f3f3f0;
  --warn:#fab219;--warn-soft:#fff7e3;--warn-ink:#7a5200;
  --code-bg:#f1f1ec;--code-ink:#161616;--focus:#2a78d6;
