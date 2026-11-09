@@ -137,7 +137,7 @@ def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
     assert 'traffic does not sum to 100' in text, 'the smoke test asserts production traffic is unchanged'
     assert '-H "Origin: $PREVIEW_URL"' in text, 'the smoke test proves the allow-list change works'
     assert '--remove-tags "$TAG"' in text
-    assert 'cancel-in-progress: true' in text
+    assert "cancel-in-progress: ${{ github.event.action != 'closed' }}" in text, 'a close must queue, not be cancellable'
     assert 'ref: ${{ github.event.pull_request.head.sha }}' in text, 'cleanup must not depend on the merge ref'
     assert text.index('Post the URL on the pull request') < text.index("Delete this pull request's earlier preview revisions")
 

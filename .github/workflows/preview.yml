@@ -16,8 +16,10 @@ permissions:
   contents: read
   pull-requests: write
 concurrency:
+  # One run per PR at a time. A new push cancels the deploy it supersedes; the close job never
+  # cancels and is never skipped: it queues behind an in-flight deploy and then removes its tag.
   group: preview-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event.action != 'closed' }}
 env:
   PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   REGION: ${{ vars.GCP_REGION || 'us-central1' }}
