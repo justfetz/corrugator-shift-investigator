@@ -49,18 +49,39 @@ and holds the offline set to two budgets:
 
 - **per case**: `expect.max_ms`, default 250 ms for an offline case (`DEFAULT_MAX_MS`);
   a case over it fails with `<ms> ms, budget <max_ms> ms` whatever else it got right.
-  A live or replayed case has no default, since its time is the provider's.
+  A live or replayed run is never timed against it, since its time is the provider's
+  (a `live: true` case shares its `expect` with its live variant).
 - **per run**: the offline p50 must be at or under 100 ms and the p95 at or under
   250 ms (`LATENCY_BUDGET_MS`, nearest-rank percentiles). The summary prints
   `offline latency: p50 .. p95 ..` with a verdict per percentile, each breach
   adds one to the exit status, and `tests/test_evals.py::test_offline_latency_budget`
   applies the same gate in CI over the times the case tests just measured.
 
-A deliberately slow tool is the regression test for the budget
-(`test_slow_tool_fails_the_latency_budget`): a 300 ms stub around one daily
-tool fails `why-slow` on the time alone, and the same case with `max_ms: 10000`
-passes again. Baseline on the 2026-11-08 sandbox: offline questions 13–60 ms;
-the first tracked run with the budget measured p50 13 ms and p95 66 ms over 145 cases.
+Two tests pin the gate. `test_slow_tool_fails_the_latency_budget`: a 300 ms stub
+around one daily tool fails `why-slow` on the time alone, and the same case with
+`max_ms: 10000` passes again. `test_run_level_breach_raises_the_exit_status_and_fails_the_ci_gate`:
+with a percentile budget set below the fastest case, the CLI exit status rises by
+one per percentile over budget although every case passed, and
+`test_offline_latency_budget` fails on the same numbers.
+
+Baseline, 2026-11-09 sandbox (4 cores), four uncontended runs of the 145 offline
+cases: p50 11–13 ms, p95 60–65 ms; every case between 0 ms (a refusal that stops
+before its first tool call) and 116 ms (`story-monday-warp`, four turns and eight
+tool calls), half the set under 13 ms. That is wider than the 13–60 ms the issue
+quotes for single questions, because the set also holds the refusals and the
+multi-turn stories.
+
+Eleven cases carry an explicit `max_ms: 500`: the two multi-turn stories
+(`story-monday-warp`, `story-trim-creep`), the eight- and nine-week trends
+(`period-trend-minutes-per-stop`, `period-trim-trend`, `period-trend-warp-weekly`,
+`period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
+`value-trend-warp-8w`, `value-trend-stops-9w-missing-weeks`) and the three-shift
+compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
+other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
+four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
+418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,
+`period-trend-minutes-per-stop` 266 ms), all eleven stayed under 500 ms, the next
+slowest case reached 156 ms, and the run-level gate held at p50 26 ms, p95 232 ms.
 Raise a budget only with the number that justifies it in the PR; never to make
 a slow change pass.
 

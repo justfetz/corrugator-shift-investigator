@@ -227,3 +227,42 @@ def test_percentiles_are_nearest_rank():
     assert golden.percentiles(range(1, 101)) == {'p50': 50, 'p95': 95}
     assert golden.percentiles([30.0, 10.0, 20.0]) == {'p50': 20.0, 'p95': 30.0}
     assert golden.LATENCY_BUDGET_MS == {'p50': 100, 'p95': 250}
+
+
+HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-per-stop', 'period-trim-trend',
+               'period-trend-warp-weekly', 'period-control-compare-shifts', 'period-moisture-trend',
+               'period-run-length-trend', 'value-trend-trim-8w', 'value-trend-warp-8w', 'value-trend-stops-9w-missing-weeks'}
+
+
+def test_heavy_cases_carry_an_explicit_offline_budget():
+    """The eleven heaviest offline cases (the multi-turn stories, the eight- and nine-week trends, the
+    three-shift compare) run 50-110 ms uncontended and crossed the 250 ms default under 2x CPU
+    contention, so each carries expect.max_ms: 500 (evals/README.md has the numbers). The budget is
+    offline only: the live or replayed run of a live: true case shares its expect and is never timed
+    against it."""
+    assert {c['id'] for c in CASES if 'max_ms' in c['expect']} == HEAVY_CASES
+    assert all(c['expect']['max_ms'] == 500 for c in CASES if c['id'] in HEAVY_CASES)
+    assert golden.latency_failures({'max_ms': 500}, None, 499.4) == []
+    assert golden.latency_failures({'max_ms': 500}, None, 500.6) == ['501 ms, budget 500 ms']
+    assert golden.latency_failures({}, None, 250.6) == ['251 ms, budget 250 ms']
+    assert golden.latency_failures({'max_ms': 500}, 'anthropic', 12_000) == []
+    assert golden.latency_failures({}, 'anthropic', 12_000) == []
+
+
+def test_run_level_breach_raises_the_exit_status_and_fails_the_ci_gate(monkeypatch, capsys):
+    """The per-run gate on its own: with a percentile budget set below the fastest case, the CLI adds
+    one to the exit status per percentile over budget although every case passed, and
+    test_offline_latency_budget fails on the same numbers."""
+    case = next(c for c in CASES if c['id'] == 'why-slow')
+    monkeypatch.setattr(golden, 'load_cases', lambda: [case])   # the whole offline set, here one fast case
+    monkeypatch.setattr(golden, 'LATENCY_BUDGET_MS', {'p50': 0, 'p95': 10_000})
+    assert golden.main([]) == 1
+    out = capsys.readouterr().out
+    assert '1 passed, 0 failed' in out and '(budget 0: OVER)' in out and '(budget 10000: ok)' in out, out
+    monkeypatch.setattr(golden, 'LATENCY_BUDGET_MS', {'p50': 0, 'p95': 0})
+    assert golden.main([]) == 2
+    assert capsys.readouterr().out.count('OVER') == 2
+    # The CI gate reads the same percentiles from the times the case tests recorded.
+    monkeypatch.setitem(globals(), 'LATENCY_MS', {c['id']: 5.0 for c in OFFLINE} | {'why-slow': 20.0})
+    with pytest.raises(AssertionError, match=r"offline p50 5\.0 ms over the 0 ms budget; slowest \[\('why-slow', 20\.0\)"):
+        test_offline_latency_budget()

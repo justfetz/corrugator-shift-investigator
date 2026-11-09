@@ -39,6 +39,8 @@ from investigator.synth import generate_months  # noqa: E402
 OUT = ROOT / 'evals' / 'golden_values.json'
 SEED, MONTHS, MACHINE = 2026, (("2026", 8), ("2026", 9)), "CORR-1"
 CORRUPT_TRIM_SQFT = 99999999.0   # the fixture's bad-trim value the corrupt toggle injects
+HEAVY_MAX_MS = 500               # the eight- and nine-week trends run near 100 ms uncontended and crossed the runner's 250 ms
+                                 # default under 2x CPU contention; evals/README.md (Latency budget) has the numbers
 SCHEDULED_SECONDS = 28800
 
 # The dashboard tiles: key -> (better direction, display places). The direction is
@@ -222,12 +224,14 @@ def approx(value, rel=1e-6):
     return [round(value, 9), round(abs(value) * rel + 1e-6, 9)]
 
 
-def case(id, tool, arguments, expect, *, day="2026-09-14", corrupt=False, note=""):
+def case(id, tool, arguments, expect, *, day="2026-09-14", corrupt=False, note="", max_ms=None):
     entry = {"id": id, "type": "value", "mode": "offline", "day": day, "tool": tool, "arguments": arguments}
     if corrupt:
         entry["corrupt"] = True
     if note:
         entry["note"] = note
+    if max_ms is not None:
+        expect = {**expect, "max_ms": max_ms}   # the case's own latency budget where the runner's default is too tight
     entry["expect"] = expect
     return entry
 
@@ -486,7 +490,7 @@ def speed_case(plain, id, period, anchor, slice_by="width", shift=None, *, day="
                 {"coverage": plain.coverage(*cur), "row_count": len(cells) - thin, "values": values}, day=day, note=note)
 
 
-def trend_case(plain, id, metric, weeks, anchor, shift=None, *, day="2026-09-14", note=""):
+def trend_case(plain, id, metric, weeks, anchor, shift=None, *, day="2026-09-14", note="", max_ms=None):
     last_start, last_end = window("week", anchor)
     values, missing, rows = {}, [], 0
     for back in range(weeks - 1, -1, -1):
@@ -504,7 +508,8 @@ def trend_case(plain, id, metric, weeks, anchor, shift=None, *, day="2026-09-14"
     values["$"] = {"missing_weeks": exact(missing), "weeks_requested": exact(weeks), "metric": exact(metric)}
     all_complete = rows and not missing and all(v["partial"][0] is False for k, v in values.items() if k != "$")
     return case(id, "get_trend", {"metric": metric, "weeks": weeks, "anchor": anchor, "shift": shift},
-                {"coverage": "complete" if all_complete else "partial", "row_count": rows, "values": values}, day=day, note=note)
+                {"coverage": "complete" if all_complete else "partial", "row_count": rows, "values": values},
+                day=day, note=note, max_ms=max_ms)
 
 
 # ---------------------------------------------------------------- the daily tools, by hand
@@ -640,10 +645,11 @@ def build(data=None):
     cases.append(speed_case(plain, "value-speed-opportunity-september-width", "month", "2026-09-14",
                             note="Best fifth = the fastest fifth of each cell's setups by speed without stops (ntile 5, ratio of sums); setups under two running minutes excluded and counted."))
     cases.append(speed_case(plain, "value-speed-opportunity-week-0907-crew-shift-2", "week", "2026-09-09", "crew", 2))
-    # Trends for trim and warp, plus a series that starts before the dataset.
-    cases.append(trend_case(plain, "value-trend-trim-8w", "trim_pct", 8, "2026-09-30", day="2026-09-30"))
-    cases.append(trend_case(plain, "value-trend-warp-8w", "warp_pct", 8, "2026-09-14"))
-    cases.append(trend_case(plain, "value-trend-stops-9w-missing-weeks", "stops", 9, "2026-09-14",
+    # Trends for trim and warp, plus a series that starts before the dataset. The eight- and nine-week
+    # series carry the heavy-case budget; the four-week one runs well inside the default.
+    cases.append(trend_case(plain, "value-trend-trim-8w", "trim_pct", 8, "2026-09-30", day="2026-09-30", max_ms=HEAVY_MAX_MS))
+    cases.append(trend_case(plain, "value-trend-warp-8w", "warp_pct", 8, "2026-09-14", max_ms=HEAVY_MAX_MS))
+    cases.append(trend_case(plain, "value-trend-stops-9w-missing-weeks", "stops", 9, "2026-09-14", max_ms=HEAVY_MAX_MS,
                             note="Nine weeks back reaches July: two weeks are listed as missing, never as zero."))
     cases.append(trend_case(plain, "value-trend-msf-per-day-4w-shift-3", "msf_per_day", 4, "2026-09-14", 3))
     # The daily tools for three production days: the first day, a mid-September Monday, the last day.

@@ -63,7 +63,7 @@ TYPES = ('routing', 'faithfulness', 'grounding', 'refusal', 'value', 'investigat
 THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 1.0,
               'investigation': 0.8, 'value': 1.0, 'data_quality': 1.0}
 # Latency: an offline case fails above `expect.max_ms` (default DEFAULT_MAX_MS; a live or replayed
-# case has no default), and the run fails when the offline p50 or p95 is over LATENCY_BUDGET_MS.
+# run is never timed against it), and the run fails when the offline p50 or p95 is over LATENCY_BUDGET_MS.
 # The clock covers the agent's turns only: dataset build, fixture I/O and the checks are outside it.
 DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
@@ -749,9 +749,13 @@ def run_case(case, provider=None, live=False, record=False):
 
 
 def latency_failures(expect, provider, ms):
-    """The case's own budget: `expect.max_ms`, defaulting to DEFAULT_MAX_MS offline and to none live."""
-    budget = expect.get('max_ms', None if provider else DEFAULT_MAX_MS)
-    if budget is not None and ms > budget:
+    """The case's own budget, offline only: `expect.max_ms`, default DEFAULT_MAX_MS. A live or replayed
+    run is never timed against it: a `live: true` case shares its expect with its live variant, and
+    that time is the provider's."""
+    if provider:
+        return []
+    budget = expect.get('max_ms', DEFAULT_MAX_MS)
+    if ms > budget:
         return [f'{ms:.0f} ms, budget {budget} ms']
     return []
 
