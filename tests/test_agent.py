@@ -42,6 +42,17 @@ def test_chart_rows_exactly_match_evidence(analysis):
         assert source['arguments']['group_by']=='place'
 
 
+def test_tables_name_their_step(analysis):
+    # Issue #40: every table carries the result_id of the trace step that produced it (as charts do), so the
+    # page can link a table back to its query box; the id must resolve and the rows must be that step's rows.
+    result=Agent(analysis).ask('Why was second shift slow? Chart downtime by reason.',Context(analysis.day))
+    assert result['tables']
+    steps={t['result_id']:t for t in result['trace']}
+    for table in result['tables']:
+        source=steps[table['source_result_id']]
+        assert source['tool']==table['title'] and source['data']['rows']==table['rows']
+
+
 def test_filter_not_silently_maintenance(analysis):
     result=Agent(analysis).ask('Was it maintenance or operator downtime?',Context(analysis.day))
     calls=[t for t in result['trace'] if t['tool']=='get_downtime_breakdown']
