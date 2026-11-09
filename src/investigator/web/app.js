@@ -121,7 +121,8 @@ function reportUrl(){ const p=new URLSearchParams([['measure','report']]); if($(
 function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
 function bareUrl(url){ const [path,query='']=url.split('?'); const p=new URLSearchParams(query); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
 function priorsOf(url){ return new URLSearchParams(url.split('?')[1]||'').getAll('after'); }
-function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.max(0,(turns||4)-1); }
+const MAX_AFTER=8;   // the grammar carries at most eight prior views (urls.MAX_AFTER); the agent keeps its own max_turns
+function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.min(MAX_AFTER,Math.max(0,(turns||4)-1)); }
 function currentAddress(){ return nav?nav.location.pathname+nav.location.search:null; }
 // Set the controls from a canonical address; false when the address is not one.
 function applyUrl(url){
@@ -152,8 +153,9 @@ async function restore(url){
   try{
    const response=await fetch(url,{headers:{Accept:'application/json'}});
    const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-   $('messages').replaceChildren();message('You',[bareUrl(url)],'user');message(`Investigator · ${result.mode}`,result.sections);showResult(result);
-   views.set(result.url,{result,question:bareUrl(url)});conversation=[...priorsOf(result.url),bareUrl(result.url)].slice(-maxPriors());
+   $('messages').replaceChildren();message('You',[bareUrl(result.url||url)],'user');message(`Investigator · ${result.mode}`,result.sections);showResult(result);
+   views.set(result.url,{result,question:bareUrl(result.url||url)});conversation=[...priorsOf(result.url),bareUrl(result.url)].slice(-maxPriors());
+   if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url);   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
    $('status').textContent=`${result.status} · ${usageText(result.usage)}`;
   }catch(error){clearResults();$('messages').replaceChildren();message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';}
   finally{setBusy(false);updateScope();}
@@ -213,7 +215,9 @@ function renderQuestionChips(){
   for(const [label,text,scope,period] of chips){
    const question=text.replaceAll('{period}',word);
    const b=node('a',label.replaceAll('{period}',word),'chip'); b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question; b.setAttribute('role','button');
-   b.addEventListener('click',event=>{ if(event&&event.preventDefault)event.preventDefault(); if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
+   b.addEventListener('click',event=>{
+    if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return;   // a modifier click opens the link as the browser would (new tab, window)
+    if(event&&event.preventDefault)event.preventDefault(); if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
    row.append(b); chipButtons.push(b);
   }
   group.append(row); box.append(group);

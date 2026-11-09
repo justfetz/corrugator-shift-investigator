@@ -354,6 +354,29 @@ console.log('UI issue-36 checks passed: light by default, pinned theme wins, tog
  assert.deepEqual([elements.day.value,elements.period.value,elements.shift.value,elements.scope.value,elements.corrupt.checked],['2026-09-15','month','3','shift',true]);
  assert.equal(elements.messages.children[0].children[1].textContent,'/corr/1/month/2026-09-15/shift/3?measure=waste&corrupt=1');
  assert.equal(elements.pdf.disabled,false);
+ // Codex review on #62: a modifier click on a chip is left to the browser (it opens the link); a plain click asks here
+ fetched.length=0;
+ const anyChip=elements.examples.children[0].children[1].children[0]; let prevented=false;
+ anyChip.events.click({ctrlKey:true,preventDefault(){prevented=true;}});await new Promise(r=>setTimeout(r,20));
+ assert.equal(prevented,false);assert.equal(fetched.length,0);
+ anyChip.events.click({preventDefault(){prevented=true;}});await new Promise(r=>setTimeout(r,40));
+ assert.equal(prevented,true);assert.ok(fetched.some(f=>f[0].startsWith('/q?')));
+ // the retained priors never exceed the grammar's eight, whatever DEMO_MAX_TURNS says
+ vm.runInContext("config.demo_guards.max_turns=50",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),8);
+ vm.runInContext("config.demo_guards.max_turns=4",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),3);
+ // a pasted alias is replaced in the address bar by the canonical url the server returns
+ fetched.length=0;history.length=0;
+ const alias={pathname:'/corr/1/week/2026-09-14',search:'?measure=downtime'};
+ const win4={history:{pushState(state,_,url){history.push(['push',url]);},replaceState(state,_,url){history.push(['replace',url]);}},location:alias,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
+ const ctx4={...context,window:win4,location:alias};delete ctx4.requestAnimationFrame;
+ context.fetch=async(path,init)=>{fetched.push([path]);
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-14'],demo_guards:{max_turns:4,rate_limit_per_min:0}})};
+  return {ok:true,status:200,json:async()=>answer('/corr/1/week/2026-09-14?measure=pareto')};};
+ ctx4.fetch=context.fetch;
+ vm.createContext(ctx4);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx4);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(history,[['replace','/corr/1/week/2026-09-14?measure=pareto']]);
+ assert.equal(elements.messages.children[0].children[1].textContent,'/corr/1/week/2026-09-14?measure=pareto');
  clearTimeout(guard);
  console.log('UI issue-20 checks passed: /q GET, pushState, back/forward from memory, pasted address, chips as links, PDF by address.');
 })().catch(error=>{console.error(error);process.exit(1);});
