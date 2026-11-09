@@ -850,6 +850,57 @@
    }
   },
   {
+   "id": "period-rollstock-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "How much paper did we consume this month?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=rollstock&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_rollstock",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Paper consumed \\(.* ft = .* MSF over .* paper runs, .* ft per run; previous .* ft = .* MSF over .* runs"
+   }
+  },
+  {
+   "id": "period-rollstock-selected-shift-week",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Rollstock consumed this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=rollstock&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_rollstock",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Paper consumed \\(.* paper runs.*The setups shift 2 ran on each paper run"
+   }
+  },
+  {
    "id": "period-grade-named-week",
    "type": "routing",
    "mode": "offline",
