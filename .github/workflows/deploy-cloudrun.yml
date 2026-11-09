@@ -139,7 +139,14 @@ jobs:
           # The write goes through .github/scripts/cloud_run_update.sh: Cloud Run rejects it when
           # another run changed the service in the second between gcloud's re-read after the build
           # and its write, and the helper then runs the deploy again instead of failing main.
-          SUFFIX="main-${GITHUB_SHA:0:7}-${{ github.run_number }}-${{ github.run_attempt }}"
+          # Cloud Run caps a revision name at 63 characters (a service name at 49), so the suffix is sized to
+          # what the service name leaves, minus the "-urls" the allow-list step may append: the run number and
+          # attempt stay whole (they make the name unique per run and per re-run), the commit is shortened,
+          # and a service name that leaves no room at all fails here with the limit named, not in the API.
+          TAIL="-${{ github.run_number }}-${{ github.run_attempt }}"
+          SHA_LEN=$(( 63 - ${#SERVICE} - 1 - 5 - ${#TAIL} - 5 )); [ "$SHA_LEN" -gt 7 ] && SHA_LEN=7
+          if [ "$SHA_LEN" -lt 1 ]; then echo "::error::the service name $SERVICE (${#SERVICE} characters) leaves no room for a revision suffix inside Cloud Run's 63-character revision name"; exit 1; fi
+          SUFFIX="main-${GITHUB_SHA:0:$SHA_LEN}${TAIL}"
           echo "SUFFIX=${SUFFIX}" >> "$GITHUB_ENV"; echo "REVISION=${SERVICE}-${SUFFIX}" >> "$GITHUB_ENV"
           bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
             --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \

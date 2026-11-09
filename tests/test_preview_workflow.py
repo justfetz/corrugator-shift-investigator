@@ -193,7 +193,20 @@ def test_main_deploy_routes_the_traffic_to_the_revision_it_named_not_to_latest()
     text = MAIN_WORKFLOW.read_text()
     traffic_lines = [line for line in text.splitlines() if 'gcloud run services update-traffic' in line]
     assert len(traffic_lines) == 1 and '--to-latest' not in traffic_lines[0], traffic_lines
-    assert 'SUFFIX="main-${GITHUB_SHA:0:7}-${{ github.run_number }}-${{ github.run_attempt }}"' in text, 'unique per run and per re-run'
+    assert 'TAIL="-${{ github.run_number }}-${{ github.run_attempt }}"' in text, 'unique per run and per re-run'
+    assert 'SUFFIX="main-${GITHUB_SHA:0:$SHA_LEN}${TAIL}"' in text
+    # Cloud Run caps a revision name at 63 characters: the commit is cut to what the service name leaves
+    # (the "-urls" revision included), never the run number or attempt; no room at all fails with the limit named.
+    start, end = text.index('TAIL="-'), text.index('\n', text.index('SUFFIX="main-'))
+    sizing = text[start:end].replace('${{ github.run_number }}', '4321').replace('${{ github.run_attempt }}', '2')
+    for service, expect in [(SERVICE, 'main-c8e9d73-4321-2'), ('a' * 44, 'main-c-4321-2'), ('a' * 49, 'ERROR')]:
+        proc = subprocess.run(['bash', '-euo', 'pipefail', '-c', sizing + '\necho "$SUFFIX"'], capture_output=True, text=True,
+                              env={**os.environ, 'SERVICE': service, 'GITHUB_SHA': 'c8e9d73c5b312eab49962d5ba2ebf79c9cf2c21c'})
+        if expect == 'ERROR':
+            assert proc.returncode == 1 and '::error::' in proc.stdout and '63-character' in proc.stdout, proc.stdout
+        else:
+            assert proc.returncode == 0 and proc.stdout.strip() == expect, proc.stdout + proc.stderr
+            assert len(f'{service}-{expect}-urls') <= 63
     assert text.count('--revision-suffix') == 2, 'the deploy and the allow-list update both name the revision they make'
     assert '--revision-suffix "${SUFFIX}-urls"' in text and 'REVISION=${SERVICE}-${SUFFIX}-urls' in text
     assert '--to-revisions "${REVISION}=100"' in text
