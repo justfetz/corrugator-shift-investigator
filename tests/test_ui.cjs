@@ -215,6 +215,15 @@ assert.match(css,/:root\[data-theme="dark"\]\{/);                   // the dark 
 assert.ok(html.includes('<script src="/theme.js"></script><meta charset'),'theme.js loads first in <head> so a pinned theme applies before first paint');
 assert.match(html,/<button type="button" id="theme" class="theme-toggle"/);
 assert.ok(/\.heatmap-scale\{[^}]*rgb\(8 127 117/.test(css)&&!css.includes('42 120 214'),'the legend ramp is the cell colour');
+// Every light-theme series colour reads at 3:1 or better on the surface (WCAG 1.4.11), and chart text inks at 4.5:1.
+const lightTokens=Object.fromEntries([...css.slice(css.indexOf(':root{'),css.indexOf(':root[data-theme="dark"]')).matchAll(/--([a-z0-9-]+):(#[0-9a-f]{6})/g)].map(m=>[m[1],m[2]]));
+const lum=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+const contrast=(a,b)=>{const [hi,lo]=[lum(a),lum(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
+const onSurface=Object.fromEntries(['s1','s2','s3','s4','prev','ink','ink-2'].map(k=>[k,Number(contrast(lightTokens[k],lightTokens.surface).toFixed(2))]));
+for(const k of ['s1','s2','s3','s4','prev'])assert.ok(onSurface[k]>=3,`${k} ${lightTokens[k]} is ${onSurface[k]}:1 on the light surface`);
+for(const k of ['ink','ink-2'])assert.ok(onSurface[k]>=4.5,`${k} is ${onSurface[k]}:1`);   // chart labels, ticks, captions and legend text
+assert.match(css,/\.chart \.tick\{[^}]*fill:var\(--ink-2\)/);assert.match(css,/\.chart \.muted,\.heatmap \.muted\{color:var\(--ink-2\)\}/);
+console.log('light-theme contrast on the surface:',JSON.stringify(onSurface));
 console.log('UI issue-36 checks passed: light by default, pinned theme wins, toggle present, heatmap ink flip.');
 
 // ---- issue #17: post() refreshes /api/config once on a 403 and resends with the new token; a second 403 is returned, not retried forever.
