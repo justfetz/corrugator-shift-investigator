@@ -171,6 +171,8 @@ def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
     assert "cancel-in-progress: ${{ github.event.action != 'closed' }}" in text, 'a close must queue, not be cancellable'
     assert 'ref: ${{ github.event.pull_request.head.sha }}' in text, 'cleanup must not depend on the merge ref'
     assert text.index('Post the URL on the pull request') < text.index('Delete orphaned preview revisions')
+    assert 'git fetch --depth=1 origin "refs/pull/$PR/merge"' in text, 'a run queued for an older head deploys the current one'
+    assert text.index('refs/pull/$PR/merge') < text.index('google-github-actions/auth@v2'), 'the head check comes before any deploy step'
 
 
 def test_main_deploy_rebinds_traffic_to_latest_after_a_preview():

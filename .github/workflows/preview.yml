@@ -35,6 +35,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4   # the PR merged onto main (refs/pull/<n>/merge): what would ship
+      - name: Deploy the pull request as it is now, even if this run was queued for an older head
+        # Two events for one PR can arrive seconds apart (a reopen carries the head GitHub knew at close
+        # time, then a synchronize carries the new one) and the run for the OLDER head can be the one
+        # that survives the concurrency group. So every run checks the live head and, when it moved,
+        # fetches the current merge ref; whichever run survives deploys the PR as it stands.
+        run: |
+          set -euo pipefail
+          CURRENT=$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq .head.sha)
+          if [ "$CURRENT" != "$HEAD_SHA" ]; then
+            echo "::notice::the pull request's head moved from ${HEAD_SHA:0:7} to ${CURRENT:0:7} after this run was queued; deploying the current head"
+            git fetch --depth=1 origin "refs/pull/$PR/merge" && git checkout --quiet --detach FETCH_HEAD
+            echo "HEAD_SHA=${CURRENT}" >> "$GITHUB_ENV"
+          fi
+          git log -1 --format='deploying %h (%s)'
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
