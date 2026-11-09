@@ -16,10 +16,25 @@ For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics
 | Run the hosted demo on Anthropic with the server's key, rate limit and daily cap | [Anthropic demo](docs/ANTHROPIC_DEMO.md) |
 | Recover from an error or unexpected answer | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Verify the app or evaluate live question quality | [Testing and evaluation](docs/TESTING.md) |
-| Review defects and choose the next repair | [September 7 review](docs/REVIEW_2026-09-07.md) |
-| Prepare for public deployment | [Deployment readiness](docs/DEPLOYMENT.md) |
+| Deploy it, and read why the service is shaped the way it is | [Deployment](docs/DEPLOYMENT.md) (keyless deploy, decisions on record) |
+| Read the September 7 defect review, now historical | [archive](docs/archive/REVIEW_2026-09-07.md) |
 
-**Where it runs.** The public demo runs on Google Cloud Run with the planner on Anthropic's Messages API (`claude-haiku-5-5`) under a key the server holds, a per-visitor rate limit, a daily cap on model rounds and a console spend limit ([Anthropic demo](docs/ANTHROPIC_DEMO.md), [deployment](docs/DEPLOYMENT.md)). OpenAI is a bring-your-own-key option on the local workbench only. Either model chooses which bounded tools to run and writes a short interpretation whose numbers application code fills from cited evidence; every number is calculated by fixed queries. The free offline planner answers the supported question shapes with no model at all. Fifteen live Anthropic recordings are replayed in CI by the golden set ([evals](evals/README.md)); visual PDF layout is still checked by hand.
+## Run it
+
+The public demo is on Google Cloud Run: <https://corrugator-shift-investigator-65612311806.us-central1.run.app>. It is synthetic data, read-only tools, and the offline planner by default. Locally:
+
+```bash
+pip install -e . pytest                              # Python >= 3.11; the dependencies are duckdb and reportlab
+python -m investigator.server --port 7860            # the workbench at http://127.0.0.1:7860
+python -m pytest -q                                  # 479 tests, about a minute
+node --check src/investigator/web/app.js && node tests/test_ui.cjs
+python3 evals/run.py                                 # the golden set: 160 cases offline in a few seconds; the regression gate
+python3 evals/run.py --live --provider anthropic     # the live cases against a real model; needs ANTHROPIC_API_KEY, costs cents
+```
+
+**Offline versus live.** Offline is a small router (`parse_request` in `agent.py`) that maps the supported question shapes to the same parameterized DuckDB tools; it makes no model call, costs nothing, and answers in tens of milliseconds. Live hands the tool choice and the one-paragraph interpretation to a model, Anthropic on the hosted demo under the server's key and guards, Anthropic or OpenAI with your own key on the local workbench. In both, every number is computed by a tool and inserted by code; a narrative that states a number no tool returned is a bug and becomes a golden case. The [evals](evals/README.md) folder is how we know: 145 offline cases and 15 recorded Anthropic rounds replayed in CI (`python3 evals/run.py`), value cases generated from the records rather than typed, and one line per run in `evals/history.jsonl`.
+
+**Where it runs.** The public demo runs on Google Cloud Run, deployed from `main` by GitHub Actions through Workload Identity Federation, with no stored key once the cutover in [deployment](docs/DEPLOYMENT.md) is done. It answers with the free offline planner by default. Choosing Anthropic in the Agent control runs the planner on the Messages API (`claude-haiku-5-5`) under a key the server holds, a per-visitor rate limit, a daily cap on model rounds and a console spend limit ([Anthropic demo](docs/ANTHROPIC_DEMO.md)); OpenAI is a bring-your-own-key option on the local workbench only. Either model chooses which bounded tools to run and writes a short interpretation whose numbers application code fills from cited evidence; every number is calculated by fixed queries. Fifteen live Anthropic recordings are replayed in CI by the golden set ([evals](evals/README.md)); visual PDF layout is still checked by hand.
 
 **Status: local learning workbench and hosted public demo.** Set `PUBLIC_DEMO_ORIGIN` (see [deployment](docs/DEPLOYMENT.md)) to run the synthetic demo in a container with no visitor keys; a `Dockerfile` and deploy workflows for Google Cloud Run (the live demo) and Hugging Face Spaces are included. The scope bar selects a production day, a period (Day, Week, Month or 4-4-5) and a shift (or all three); a question is answered over that window by the daily tools (Day) or the period tools (Week, Month, 4-4-5), and the Period report button builds the deterministic heatmap, daily matrix, recurring downtime and notes for the window. 43 selectable production days (Monday to Friday, August and September 2026, one seed), tested SQL tools, a bounded offline planner, follow-up context, evidence-linked charts, PDF export. Email delivery is not connected. See [Run the workbench](docs/WORKBENCH.md), the user-facing `/guide` page, and the [deployment readiness plan](docs/DEPLOYMENT.md).
 
@@ -116,13 +131,13 @@ Build chat with example questions, bar/trend/timeline charts and an analysis-ste
 
 Subscribers can select reports for shift 1, 2 and/or 3, a production-day comparison, or both. Daily reports compare shifts and explain grade mix, losses and data-quality exceptions.
 
-Planned delivery controls: verified email, unsubscribe, private recipient storage, rate limits and idempotent delivery records. The agent prepares content; application code selects verified recipients and dispatches it. No email sending, paid provider or public deployment is enabled yet.
+Planned delivery controls: verified email, unsubscribe, private recipient storage, rate limits and idempotent delivery records. The agent prepares content; application code selects verified recipients and dispatches it. No email sending is enabled; the public deployment exists and runs the offline planner by default, with the paid provider as an opt-in behind the guards in [ANTHROPIC_DEMO.md](docs/ANTHROPIC_DEMO.md).
 
 ## 9. Evaluate correctness and cost
 
 Test known-answer calculations, order continuation, unequal cut lengths, width fit, midnight boundaries, overlapping downtime, corrupt numeric values and waste reconciliation. Test questions that lack evidence, prompt-injection attempts, forbidden tool calls, chart/data agreement and delivery isolation.
 
-Measure tool accuracy, evidence-supported answers, latency and cost per investigation. Enforce server-side usage budgets and keep saved examples available when live usage is exhausted. The hosted planner is Anthropic (`claude-haiku-5-5`, about $0.002 a round at list prices); OpenAI is the optional bring-your-own-key planner on the local workbench. Each eval run can append one line to `evals/history.jsonl` (commit, dataset hash, model, pass rate per case type, offline p50 and p95 latency, recorded cost), so a change in the planner, the prompt or the data shows up as a change in the score or the clock, not a feeling. Every offline golden case has a latency budget (250 ms by default) and the run fails when the offline p50 passes 100 ms or the p95 passes 250 ms.
+Measure tool accuracy, evidence-supported answers, latency and cost per investigation. Enforce server-side usage budgets and keep saved examples available when live usage is exhausted. The hosted demo's optional model is Anthropic (`claude-haiku-5-5`, about $0.002 a round at list prices), chosen per question; OpenAI is the optional bring-your-own-key planner on the local workbench. Each eval run can append one line to `evals/history.jsonl` (commit, dataset hash, model, pass rate per case type, offline p50 and p95 latency, recorded cost), so a change in the planner, the prompt or the data shows up as a change in the score or the clock, not a feeling. Every offline golden case has a latency budget (250 ms by default) and the run fails when the offline p50 passes 100 ms or the p95 passes 250 ms.
 
 The golden set (`evals/`, [how it is scored](evals/README.md)) has seven case types. Its value cases are generated, not typed: with synthetic data we own the truth, so `evals/make_value_goldens.py` computes every expected number by plain Python sums over the record families and stamps the file with the dataset hash; the runner refuses stale goldens. Investigation cases ask about the three seeded stories as a superintendent would and are scored by application rules: the evidence that covers the story window, its numbers present in the answer, and no cause asserted that the evidence lacks.
 

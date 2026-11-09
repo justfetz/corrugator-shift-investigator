@@ -30,20 +30,17 @@ The implementation follow-up passed 106 backend tests plus UI, syntax and whites
 | `test_period_tools.py` | Known-answer values for the period tools computed by hand over `generate_months()` (pinned goldens for September versus August), window semantics, withheld deltas, Pareto shares, waste, stops profile, trend, and every new offline phrasing |
 | `test_evals.py` + `evals/golden.json` + `evals/golden_values.json` | The golden regression gate over the record store: routing, faithfulness, grounding, refusal, value, investigation and data-quality cases, the stale-golden guard, the investigation rule evaluator on a synthetic trace, an Anthropic fixture replayed end to end through the real planner with no network, and the latency budget: each offline case within `expect.max_ms` (default 250 ms; the eleven heaviest carry 500 ms, measured in `evals/README.md`; live and replayed runs are not timed), the offline p50 at or under 100 ms and p95 at or under 250 ms over the whole set (an `--only` run reports them without gating), a deliberately slow stub tool shown to fail a case and a refusal but never a replay, and a run-level breach shown to raise the exit status and fail the CI gate |
 | `test_goldens_values.py` | The value goldens are generated, not typed: the committed file equals what `evals/make_value_goldens.py` produces for the live store's content hash, every KPI tile and every named tool is covered, and the generator's own calendar arithmetic agrees with the store's windows |
+| `test_repo_hygiene.py` | The Cloud Run workflows (`deploy-cloudrun.yml` and both `preview.yml` jobs) carry one identical credential block that prefers Workload Identity Federation, falls back to the stored key with a warning and fails only without both; the block's shell is run under bash for each case. Every relative Markdown link resolves; the September review is archived |
 
-As of the period-scope change (the Period control is part of the question's scope) the suite is 477 tests (477 passed, none skipped, no expected failures); `python3 evals/run.py` reports 160 passed, 0 skipped: 145 offline cases plus the 15 Anthropic recordings under `evals/fixtures/anthropic/` replayed without a key, no known defect (`evals/README.md`); `python3 evals/make_value_goldens.py --check` confirms the committed value goldens match the generator. The value cases run in a few seconds against the shared default store.
+As of the period-scope change (the Period control is part of the question's scope) the suite is 485 tests (485 passed, none skipped, no expected failures, with PyYAML installed; CI installs only `-e . pytest` and skips the one test that parses the workflow YAML); `python3 evals/run.py` reports 160 passed, 0 skipped: 145 offline cases plus the 15 Anthropic recordings under `evals/fixtures/anthropic/` replayed without a key, no known defect (`evals/README.md`); `python3 evals/make_value_goldens.py --check` confirms the committed value goldens match the generator. The value cases run in a few seconds against the shared default store.
 
 How the golden set is made is written up in [HOW_THIS_IS_BUILT](HOW_THIS_IS_BUILT.md) and `evals/README.md`: expected numbers come from a second, plain computation over the record families, never from the tools under test, and the file carries the dataset hash so a stale golden fails loudly.
 
 The UI stub reads the stylesheet's light tokens only to compute WCAG contrast ratios for the chart colours and inks on the chart panel (issue #36); it does not apply CSS, enforce CSP, download a real file, or execute in a browser. PDF signatures do not prove page layout. Provider mocks do not prove that a live model chooses useful tools. Keep these distinctions in test reports.
 
-## Reproduce the review findings
+## The September 7 review probes, archived
 
-```powershell
-.\.venv\Scripts\python.exe docs/_scratch/review-2026-09-07/probes.py
-```
-
-The probe uses synthetic in-memory datasets and scripted planners, prints observations, and makes no provider call or persisted budget reservation. It records observations from the original review cases; some defects are now repaired, so the current output differs from the original report. Its exit code is not a product acceptance gate. The corresponding proposed regression criteria are in [the review](REVIEW_2026-09-07.md).
+The review that first listed the PDF, history and guidance defects, and the read-only probe script that reproduced them, are kept as history under `docs/archive/` ([the review](archive/REVIEW_2026-09-07.md), `archive/review-2026-09-07/probes.py`). Every R item is repaired and the probe was written against the September router, so it no longer runs unchanged; the regression gate for those behaviors is the golden set (`python3 evals/run.py`) and the suites above, not the probe.
 
 ## Browser acceptance walkthrough
 

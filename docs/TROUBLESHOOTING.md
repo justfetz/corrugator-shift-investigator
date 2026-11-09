@@ -1,6 +1,6 @@
 # Troubleshooting and known limitations
 
-Review date: September 7, 2026. Read this alongside [the workbench how-to](WORKBENCH.md) and [the review findings](REVIEW_2026-09-07.md). Do not paste API keys, environment dumps, or private production records into issue reports.
+Review date: September 7, 2026. Read this alongside [the workbench how-to](WORKBENCH.md) and [the archived review findings](archive/REVIEW_2026-09-07.md). Do not paste API keys, environment dumps, or private production records into issue reports.
 
 ## Start or reconnect
 

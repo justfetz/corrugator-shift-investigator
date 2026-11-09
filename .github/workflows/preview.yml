@@ -8,6 +8,11 @@
 # The preview revision inherits the serving template (scaling, guards, mounted secrets) and
 # changes one thing: PUBLIC_DEMO_ORIGIN gains the tag form of every production origin, because
 # the server's Origin check is an exact match (.github/scripts/preview_origins.py explains).
+#
+# Both jobs authenticate like deploy-cloudrun.yml (issue #28): Workload Identity Federation when the
+# repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT are set, the
+# GCP_SA_KEY secret with a warning until then. The credential block is identical in the three jobs
+# and tests/test_repo_hygiene.py keeps it so.
 name: Preview
 on:
   pull_request:
@@ -15,6 +20,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write   # the OIDC token Workload Identity Federation exchanges; a fork's run gets none
 concurrency:
   # One run per PR at a time. A new push cancels the deploy it supersedes; the close job never
   # cancels and is never skipped: it queues behind an in-flight deploy and then removes its tag.
@@ -22,6 +28,8 @@ concurrency:
   cancel-in-progress: ${{ github.event.action != 'closed' }}
 env:
   PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}   # keyless auth (issue #28); the key is the fallback until both are set
+  DEPLOYER_SA: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
   REGION: ${{ vars.GCP_REGION || 'us-central1' }}
   SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
   PR: ${{ github.event.pull_request.number }}
@@ -30,7 +38,7 @@ env:
   GH_TOKEN: ${{ github.token }}
 jobs:
   deploy:
-    # Same-repository PRs only: a fork cannot read GCP_SA_KEY and must not get a revision.
+    # Same-repository PRs only: a fork gets neither the GCP_SA_KEY secret nor an OIDC token, and must not get a revision.
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +57,37 @@ jobs:
             echo "HEAD_SHA=${CURRENT}" >> "$GITHUB_ENV"
           fi
           git log -1 --format='deploying %h (%s)'
+      - name: Choose the Google credential (keyless when the WIF variables are set; the stored key until then)
+        id: gcp_auth
+        # Workload Identity Federation when both repository variables are set. Otherwise the GCP_SA_KEY
+        # secret, with a warning in the run's annotations, so main stays deployable through the cutover
+        # (docs/DEPLOYMENT.md, 'Keyless deploy'). Neither available fails here with the instruction,
+        # instead of inside the auth step with a generic error. The two auth steps below are the only
+        # readers of a credential; this step learns whether the secret exists, never its value.
+        env:
+          HAVE_KEY: ${{ secrets.GCP_SA_KEY != '' }}
+        run: |
+          set -euo pipefail
+          MISSING=""
+          if [ -z "$WIF_PROVIDER" ]; then MISSING="GCP_WORKLOAD_IDENTITY_PROVIDER"; fi
+          if [ -z "$DEPLOYER_SA" ]; then MISSING="${MISSING:+$MISSING and }GCP_DEPLOYER_SERVICE_ACCOUNT"; fi
+          if [ -z "$MISSING" ]; then
+            echo "mode=wif" >> "$GITHUB_OUTPUT"
+            echo "deploying as ${DEPLOYER_SA} through ${WIF_PROVIDER}"
+          elif [ "$HAVE_KEY" = "true" ]; then
+            echo "mode=key" >> "$GITHUB_OUTPUT"
+            echo "::warning::deploying with the stored GCP_SA_KEY secret (unset: ${MISSING}). Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT to deploy keyless (docs/DEPLOYMENT.md, 'Keyless deploy'); once a run logs 'deploying as ... through ...', delete the secret and the key."
+          else
+            echo "::error::no Google credential (unset: ${MISSING}; no GCP_SA_KEY secret either). Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT (docs/DEPLOYMENT.md, 'Keyless deploy')."
+            exit 1
+          fi
       - uses: google-github-actions/auth@v2
+        if: steps.gcp_auth.outputs.mode == 'wif'
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/auth@v2
+        if: steps.gcp_auth.outputs.mode == 'key'
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
@@ -134,7 +172,37 @@ jobs:
           # The helper script is tooling, not PR content: a branch cut before preview.yml existed
           # has no .github/scripts/, and refs/pull/<n>/merge may not exist for a closed PR. main always has it.
           ref: ${{ github.event.repository.default_branch }}
+      - name: Choose the Google credential (keyless when the WIF variables are set; the stored key until then)
+        id: gcp_auth
+        # Workload Identity Federation when both repository variables are set. Otherwise the GCP_SA_KEY
+        # secret, with a warning in the run's annotations, so main stays deployable through the cutover
+        # (docs/DEPLOYMENT.md, 'Keyless deploy'). Neither available fails here with the instruction,
+        # instead of inside the auth step with a generic error. The two auth steps below are the only
+        # readers of a credential; this step learns whether the secret exists, never its value.
+        env:
+          HAVE_KEY: ${{ secrets.GCP_SA_KEY != '' }}
+        run: |
+          set -euo pipefail
+          MISSING=""
+          if [ -z "$WIF_PROVIDER" ]; then MISSING="GCP_WORKLOAD_IDENTITY_PROVIDER"; fi
+          if [ -z "$DEPLOYER_SA" ]; then MISSING="${MISSING:+$MISSING and }GCP_DEPLOYER_SERVICE_ACCOUNT"; fi
+          if [ -z "$MISSING" ]; then
+            echo "mode=wif" >> "$GITHUB_OUTPUT"
+            echo "deploying as ${DEPLOYER_SA} through ${WIF_PROVIDER}"
+          elif [ "$HAVE_KEY" = "true" ]; then
+            echo "mode=key" >> "$GITHUB_OUTPUT"
+            echo "::warning::deploying with the stored GCP_SA_KEY secret (unset: ${MISSING}). Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT to deploy keyless (docs/DEPLOYMENT.md, 'Keyless deploy'); once a run logs 'deploying as ... through ...', delete the secret and the key."
+          else
+            echo "::error::no Google credential (unset: ${MISSING}; no GCP_SA_KEY secret either). Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT (docs/DEPLOYMENT.md, 'Keyless deploy')."
+            exit 1
+          fi
       - uses: google-github-actions/auth@v2
+        if: steps.gcp_auth.outputs.mode == 'wif'
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/auth@v2
+        if: steps.gcp_auth.outputs.mode == 'key'
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2

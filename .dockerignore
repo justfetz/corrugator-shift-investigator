@@ -2,5 +2,5 @@
 .git
 artifacts
 tests
-docs/_scratch
+docs/archive
 **/__pycache__
