@@ -169,7 +169,8 @@ def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
     assert text.count('preview_origins.py orphans "$SERVICE" /tmp/service.json') == 2, 'both jobs sweep orphaned preview revisions'
     assert "if [ \"$FLAG\" = \"latest\" ]" in text, 'the latest created revision is reported, not a failure'
     assert "cancel-in-progress: ${{ github.event.action != 'closed' }}" in text, 'a close must queue, not be cancellable'
-    assert 'ref: ${{ github.event.pull_request.head.sha }}' in text, 'cleanup must not depend on the merge ref'
+    assert 'ref: ${{ github.event.repository.default_branch }}' in text, 'cleanup takes the helper script from main, not from a PR head that may predate it (#53)'
+    assert 'ref: ${{ github.event.pull_request.head.sha }}' not in text
     assert text.index('Post the URL on the pull request') < text.index('Delete orphaned preview revisions')
     assert 'git fetch --depth=1 origin "refs/pull/$PR/merge"' in text, 'a run queued for an older head deploys the current one'
     assert text.index('refs/pull/$PR/merge') < text.index('google-github-actions/auth@v2'), 'the head check comes before any deploy step'
