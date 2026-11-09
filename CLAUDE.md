@@ -40,7 +40,7 @@ python -m investigator.server --port 7860            # local workbench at http:/
 - To catch a branch up with `main`, merge `main` into it and push; never rebase a pushed branch. Force pushes are denied by `.claude/settings.json`, so a rebase strands the work on a branch nobody can update.
 - Start by reading this file and the issue, then run the tests and evals before changing anything so the baseline is known.
 - Done when: tests pass; `python3 evals/run.py` passes with no case removed or weakened; each acceptance criterion in the issue is demonstrated in the PR description with the command and its output; docs the change touches are updated in the same PR.
-- PR description: what changed, how it was tested (paste the eval table), and the eval and latency delta. A few minutes after the PR opens, the Preview workflow comments a URL where that PR runs; look at it in a browser for any change a visitor would see, and quote what you checked.
+- PR description: what changed, how it was tested (paste the eval table), and the eval and latency delta. A few minutes after the PR opens, the Preview workflow comments a URL where that PR runs; the owner looks at it during `/review-pr` (it is not reachable from a cloud session), so render locally and quote what you checked.
 - Before opening the PR, have the `reviewer` subagent check the diff against the issue. Fix correctness gaps; ignore style nits.
 - Use `/issues` (the ordered backlog with a status per issue), `/fix-issue <n>`, `/add-golden-case <what>`, `/run-evals`, `/review-pr <n>` and `/approve-pr <n>` for the repeatable parts. Sessions label an issue `waiting-on-owner` when they ask the owner something in it.
 
