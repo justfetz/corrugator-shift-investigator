@@ -4,7 +4,8 @@ The deploy of `main` and the per-pull-request preview authenticate to Google the
 Workload Identity Federation when the two repository variables are set, the stored `GCP_SA_KEY`
 secret with a warning until then, and a failure with the instruction only when neither is
 available. The docs must not link to files that were moved. Plain text checks, plus the
-credential-choice step's own shell run under bash, so no YAML dependency.
+credential-choice step's own shell run under bash for all eight combinations of the two variables
+and the secret, so no YAML dependency.
 """
 import os
 import re
@@ -100,6 +101,8 @@ def test_credential_choice_prefers_wif_even_while_the_key_still_exists(tmp_path)
     assert (code, output) == (0, 'mode=wif\n')
     assert f'deploying as {ACCOUNT} through {PROVIDER}' in log
     assert '::warning::' not in log and '::error::' not in log
+    code, log, output = choose(tmp_path, PROVIDER, ACCOUNT, key=False)   # after the cutover: the key is gone
+    assert (code, output) == (0, 'mode=wif\n') and '::warning::' not in log
 
 
 def test_credential_choice_falls_back_to_the_key_with_a_warning(tmp_path):
@@ -110,6 +113,8 @@ def test_credential_choice_falls_back_to_the_key_with_a_warning(tmp_path):
     code, log, output = choose(tmp_path, provider=PROVIDER, key=True)   # half-configured WIF is not WIF
     assert (code, output) == (0, 'mode=key\n')
     assert 'unset: GCP_DEPLOYER_SERVICE_ACCOUNT' in log and 'unset: GCP_WORKLOAD_IDENTITY_PROVIDER' not in log
+    code, log, output = choose(tmp_path, account=ACCOUNT, key=True)
+    assert (code, output) == (0, 'mode=key\n') and 'unset: GCP_WORKLOAD_IDENTITY_PROVIDER)' in log
 
 
 def test_credential_choice_fails_only_when_neither_is_available(tmp_path):
@@ -118,6 +123,8 @@ def test_credential_choice_fails_only_when_neither_is_available(tmp_path):
     assert '::error::' in log and 'GCP_SA_KEY' in log and "'Keyless deploy'" in log
     code, log, output = choose(tmp_path, account=ACCOUNT, key=False)
     assert (code, output) == (1, '') and 'unset: GCP_WORKLOAD_IDENTITY_PROVIDER' in log
+    code, log, output = choose(tmp_path, provider=PROVIDER, key=False)
+    assert (code, output) == (1, '') and 'unset: GCP_DEPLOYER_SERVICE_ACCOUNT' in log
 
 
 def test_relative_markdown_links_resolve():
