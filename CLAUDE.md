@@ -10,9 +10,9 @@ A bounded agent that investigates why a corrugator shift was bad, on synthetic d
 
 ```bash
 pip install -e . pytest                              # Python >= 3.11; deps are duckdb and reportlab
-python -m pytest -q                                  # 485 tests, about 70 s
+python -m pytest -q                                  # 608 tests, about 100 s
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
-python3 evals/run.py                                 # 160 golden cases offline, about 6 s; the regression gate
+python3 evals/run.py                                 # 160 golden cases offline, each also over its URL, about 10 s; the regression gate
 python3 evals/run.py --live --provider anthropic     # needs ANTHROPIC_API_KEY; records fixtures under evals/fixtures/
 python3 evals/make_value_goldens.py                  # only after an intended generator change
 python -m investigator.server --port 7860            # local workbench at http://127.0.0.1:7860
@@ -20,10 +20,10 @@ python -m investigator.server --port 7860            # local workbench at http:/
 
 ## Layout
 
-- `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`) · `agent.py` (bounded tool loop and the offline `parse_request`) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `web/` (`app.js`, `index.html`, `style.css`)
+- `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`, and the URL path `/q` and `/corr/…`) · `urls.py` (the URL grammar: `canonical_url` of a parsed request and its inverse `resolve_url`) · `agent.py` (bounded tool loop and the offline `parse_request`) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `web/` (`app.js`, `index.html`, `style.css`)
 - `evals/`: `golden.json` (87 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl`, `README.md` (the seven case types)
 - `tests/`: pytest suites and `test_ui.cjs`
-- `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md` · `archive/` (historical reviews, not current)
+- `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md`, `URLS.md` (the public URL grammar; keep `urls.py` and it in step) · `archive/` (historical reviews, not current)
 - `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run), `preview.yml` (each PR gets a no-traffic tagged revision; its URL is a PR comment); `.github/scripts/` holds their helpers
 
 ## Rules

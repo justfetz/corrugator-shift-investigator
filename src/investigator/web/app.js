@@ -101,6 +101,66 @@ function selectShift(value){
  else { if($('scope').value==='shift'&&$('shift').value===value)return; $('scope').value='shift'; $('shift').value=value; }
  reset();
 }
+// ---- Addresses (issue #20): every offline view is one URL and the address bar always equals it. The path is
+// the controls (/corr/<machine>/<day|week|month|period>/<date>[/shift/<n>]), the query is the question's plan;
+// a typed question goes to /q?...&q= and the server redirects to the canonical URL (docs/URLS.md).
+const GRAIN={day:'day',week:'week',month:'month',accounting:'period'}, GRAIN_PERIOD={day:'day',week:'week',month:'month',period:'accounting'};
+const CANONICAL=/^\/corr\/[^/]+\/(day|week|month|period)\/(\d{4}-\d{2}-\d{2})(?:\/shift\/([123]))?(?:\.json)?$/;
+const nav=(typeof window!=='undefined'&&window.history&&window.location)?window:null;
+const views=new Map();   // canonical page URL -> {result, question}: back/forward re-render without a request
+let conversation=[];     // this conversation's earlier views, carried as after= so offline follow-ups need no session
+let navigating=false;    // restoring a view from the address: controls follow the URL, nothing is pushed
+function machine(){ return (config&&config.machine)||'1'; }
+function scopeUrl(scope=$('scope').value){ return `/corr/${machine()}/${GRAIN[$('period').value]||'day'}/${$('day').value}`+(scope==='shift'?`/shift/${$('shift').value}`:''); }
+function afterParams(p){ for(const a of conversation)p.append('after',a); }
+function questionUrl(question,scope=$('scope').value){
+ const p=new URLSearchParams([['day',$('day').value],['shift',$('shift').value],['scope',scope],['period',$('period').value]]);
+ if($('corrupt').checked)p.append('corrupt','1'); p.append('q',question); afterParams(p); return '/q?'+p.toString();
+}
+function reportUrl(){ const p=new URLSearchParams([['measure','report']]); if($('corrupt').checked)p.append('corrupt','1'); afterParams(p); return scopeUrl()+'?'+p.toString(); }
+function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
+function bareUrl(url){ const [path,query='']=url.split('?'); const p=new URLSearchParams(query); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
+function priorsOf(url){ return new URLSearchParams(url.split('?')[1]||'').getAll('after'); }
+function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.max(0,(turns||4)-1); }
+function currentAddress(){ return nav?nav.location.pathname+nav.location.search:null; }
+// Set the controls from a canonical address; false when the address is not one.
+function applyUrl(url){
+ const m=CANONICAL.exec(url.split('?')[0]); if(!m)return false;
+ const query=new URLSearchParams(url.split('?')[1]||'');
+ $('period').value=GRAIN_PERIOD[m[1]]; $('day').value=m[2]; acceptedDay=m[2];
+ if(m[3]){$('scope').value='shift';$('shift').value=m[3];} else $('scope').value='day';
+ $('corrupt').checked=query.get('corrupt')==='1';
+ return true;
+}
+function pushAddress(url,replace=false){ if(!nav||navigating||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
+function rememberView(result,question,{follow=true}={}){   // follow=false: the period report is a view, not a question in the conversation
+ views.set(result.url,{result,question}); while(views.size>20)views.delete(views.keys().next().value);
+ conversation=[...priorsOf(result.url),...(follow?[bareUrl(result.url)]:[])].slice(-maxPriors());
+ pushAddress(result.url);
+}
+function clearResults(){ $('heatmaps').replaceChildren();$('kpis').replaceChildren();latest=null;$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true; }
+// Back, forward or a pasted address: the controls follow the URL; a view this page has shown is re-rendered
+// from memory without a request, any other is fetched as .json from the same address.
+async function restore(url){
+ if(!applyUrl(url))return false;
+ navigating=true;
+ try{
+  const held=views.get(url);
+  if(held){ $('messages').replaceChildren();message('You',[held.question],'user');message(`Investigator · ${held.result.mode}`,held.result.sections);showResult(held.result);conversation=[...priorsOf(url),bareUrl(url)].slice(-maxPriors());$('status').textContent=`${held.result.status} · ${usageText(held.result.usage)} · restored`;return true; }
+  if(!new URLSearchParams(url.split('?')[1]||'').has('measure')){ clearResults();$('messages').replaceChildren(node('p','Choose a question.','empty'));conversation=[];updateScope();primeKpis();return true; }
+  setBusy(true);$('status').textContent='Loading this address…';
+  try{
+   const response=await fetch(url,{headers:{Accept:'application/json'}});
+   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
+   $('messages').replaceChildren();message('You',[bareUrl(url)],'user');message(`Investigator · ${result.mode}`,result.sections);showResult(result);
+   views.set(result.url,{result,question:bareUrl(url)});conversation=[...priorsOf(result.url),bareUrl(result.url)].slice(-maxPriors());
+   $('status').textContent=`${result.status} · ${usageText(result.usage)}`;
+  }catch(error){clearResults();$('messages').replaceChildren();message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';}
+  finally{setBusy(false);updateScope();}
+  return true;
+ }finally{navigating=false;}
+}
+if(nav&&nav.addEventListener)nav.addEventListener('popstate',()=>{restore(currentAddress()).catch(()=>{});});
 function periodChanged(){ renderQuestionChips(); reset(); }
 let acceptedDay=null;
 function dayChanged(){
@@ -126,8 +186,10 @@ function updateScope(){
  if(ranged)$('mode-help').textContent=`Ask about the selected ${noun}: KPIs against the previous one, the downtime Pareto, waste, stops per day, trends, totals by grade, over/under-run, the speed opportunity.${live?' '+liveHelp():' No model calls or API charges.'} Period report builds the output heatmap, daily matrix, recurring downtime and notes without a model.`;
  else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
  $('submit').textContent='Investigate'; $('report').hidden=!ranged; $('report').disabled=busy;
- for(const b of chipButtons)b.disabled=busy||(ranged&&b.dataset.period==='day');   // the per-shift matrices have no period form
+ for(const b of chipButtons)chipState(b,busy||(ranged&&b.dataset.period==='day'));   // the per-shift matrices have no period form
 }
+// A chip is a link to its question in the current scope (/q?...&q=): copy or open it in a new tab, or click it here.
+function chipState(b,off){ b.disabled=off; b.setAttribute('aria-disabled',String(off)); b.tabIndex=off?-1:0; b.href=questionUrl(b.dataset.question,b.dataset.scope||undefined); }
 
 // ---- Example questions, grouped by intent. Daily chips run the day tools for the selected scope; the
 // period chips are the phrasings the offline planner routes to the record-store tools (docs/WORKBENCH.md).
@@ -150,8 +212,8 @@ function renderQuestionChips(){
   const row=node('div',undefined,'chips');
   for(const [label,text,scope,period] of chips){
    const question=text.replaceAll('{period}',word);
-   const b=node('button',label.replaceAll('{period}',word)); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question;
-   b.addEventListener('click',()=>{ if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
+   const b=node('a',label.replaceAll('{period}',word),'chip'); b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question; b.setAttribute('role','button');
+   b.addEventListener('click',event=>{ if(event&&event.preventDefault)event.preventDefault(); if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
    row.append(b); chipButtons.push(b);
   }
   group.append(row); box.append(group);
@@ -433,14 +495,15 @@ async function primeKpis(){
  const token=++primeToken, question=primeQuestion();
  if(!config||!question||busy||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;
  try{
-  const response=await post('/api/ask',{question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:$('period').value});
+  // The scope's tiles are the KPI measure of the scope's own address; the address bar is not moved for them.
+  const response=await fetch(withQuery(scopeUrl()+'.json','measure=kpis'+($('corrupt').checked?'&corrupt=1':'')),{headers:{Accept:'application/json'}});
   const result=await response.json();
   if(token!==primeToken||!response.ok||!Array.isArray(result.trace))return;
   const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
   if(!entry)return;
   if(!latest)$('metrics').replaceChildren();
   renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
-  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
+  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”, the address ${result.url||''}. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
 
@@ -506,7 +569,7 @@ function showResult(result) {
  updateScope();
 }
 const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key','report'];
-function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; for(const b of chipButtons)b.disabled=flag; const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
+function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; for(const b of chipButtons)chipState(b,flag); const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
 async function ask(question,{report=false}={}) {
  if(busy)throw new Error('An investigation is already running');
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
@@ -517,25 +580,33 @@ async function ask(question,{report=false}={}) {
   const p=provider();
   if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
   $('api-key').value='';
-  const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:report?'offline':$('mode').value,scope:$('scope').value,period:$('period').value};
-  if(report)body.report=true;
-  const pending=post('/api/ask',body,headers);
-  for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
-  const response=await pending;
+  const live=isLive()&&!report;
+  let response;
+  if(live){   // a model round: POST, the session carries the follow-up history, the answer is not an address
+   const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:$('mode').value,scope:$('scope').value,period:$('period').value};
+   const pending=post('/api/ask',body,headers);
+   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
+   response=await pending;
+  }else{      // offline: a GET of the question's address; the server redirects /q to the canonical URL and answers it
+   response=await fetch(report?reportUrl():questionUrl(question),{headers:{Accept:'application/json'}});
+  }
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-  if(result.session_reset&&sessionId)message('Note',['The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.']);
-  sessionId=result.session_id;
-  message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+  if(live){ if(result.session_reset&&sessionId)message('Note',['The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.']); sessionId=result.session_id; }
+  message(`Investigator · ${result.mode}`,result.sections);showResult(result);
+  if(!live&&result.url)rememberView(result,question,{follow:!report});
+  $('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts,url:result.url};
  }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
  finally{setBusy(false);updateScope();}
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('question').value).catch(()=>{});});
 $('report').addEventListener('click',()=>{ if(busy)return; ask(`Build ${PERIOD_NOUN[$('period').value]||'period'} report`,{report:true}).catch(()=>{}); });
-function reset(){$('heatmaps').replaceChildren();$('kpis').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();primeKpis();}
+function reset(){clearResults();$('api-key').value='';sessionId=null;conversation=[];$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';pushAddress(scopeUrl());updateScope();primeKpis();}
 $('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
-$('pdf').addEventListener('click',async()=>{if(!latest||busy)return;$('pdf').disabled=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
+$('pdf').addEventListener('click',async()=>{if(!latest||busy)return;
+ if(latest.url){const a=node('a');a.href=withQuery(latest.url,'format=pdf');a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();return;}   // an addressed answer: the PDF is the same address with format=pdf
+ $('pdf').disabled=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
 function applyPublicMode(){
  // Hosted synthetic demo: no visitor keys, ever. A live option stays only when the server's own key for that provider and the cap are enabled.
  if(!config.public)return;
@@ -560,7 +631,9 @@ async function init(){
  $('submit').disabled=true;renderSegments();renderQuestionChips();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
- applyPublicMode();updateScope(); $('submit').disabled=false;primeKpis();
+ applyPublicMode();updateScope(); $('submit').disabled=false;
+ const address=currentAddress();
+ if(!(address&&CANONICAL.test(address.split('?')[0])&&await restore(address))){pushAddress(scopeUrl(),true);primeKpis();}
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}

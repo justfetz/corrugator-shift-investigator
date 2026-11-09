@@ -1,0 +1,126 @@
+# URL-addressable questions: the grammar
+
+Every offline view of the workbench is one URL, the way a Datasette table view is (issue #20). The
+**where** is the path, the **what** is the query, and a typed question is a shortcut that resolves to a
+canonical URL. Paste the URL into another browser and you get the same answer; the back button, a
+bookmark and a shared link all work, because the server keeps no session for this path. Live model
+rounds stay on `POST /api/ask` with their session, since a model's choices are not reproducible from an
+address.
+
+The code is `src/investigator/urls.py` (`canonical_url` builds the address of a parsed request,
+`resolve_url` is its inverse) and the routes in `server.py`. The names here are the public API: keep
+them short and stable.
+
+## The address
+
+```
+/corr/<machine>/<grain>/<YYYY-MM-DD>[/shift/<n>]?measure=<what>&...
+```
+
+| Part | Values | Meaning |
+| --- | --- | --- |
+| `corr/<machine>` | `1` today (`RecordStore.machine_id` is `CORR-1`; the slug drops the `CORR-` prefix) | which corrugator; any other slug is a 404 |
+| `<grain>` | `day`, `week`, `month`, `period` | the **Period control**: `period` is the 4-4-5 accounting period (`accounting` in the UI, `fiscal` in the tools) |
+| `<YYYY-MM-DD>` | a Monday–Friday production day of the record store | the **Day control**; a weekend or out-of-range date is refused with the calendar reason, like `/api/ask` |
+| `/shift/<n>` | `1` (07–15), `2` (15–23), `3` (23–07); omitted | the **Shift control**: one shift, or all three (the production-day comparison) when omitted |
+
+The path is exactly the controls, so a URL reproduces the page a visitor saw, including the Period
+control they had set. A question's *own* window, when it names one ("this week" under Day, "August"),
+goes in the query as `window=`.
+
+## The question
+
+`measure=` names the plan the offline router would run. The day-shaped measures run the nine daily
+tools under the `day` grain and take their period form under a ranged grain (`agent.period_plan`); the
+store measures run one record-store tool over a window.
+
+| `measure=` | Under `day` | Under `week`, `month`, `period` |
+| --- | --- | --- |
+| `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
+| `summary` | `get_shift_overview` in one call, three charts | the same three store tools as `overview` |
+| `downtime` | KPIs and downtime by `by=` (`kind=` narrows) | the Pareto alone: an alias of `pareto` |
+| `fpm` | KPIs and wet-end speed against grade targets | KPI tiles and totals by grade |
+| `quality` | KPIs and dry-end rejects by reason | the waste breakdown alone: an alias of `waste` |
+| `compare` | KPIs, downtime and speed per shift (`shifts=` or all three) | KPI tiles per shift: an alias of `kpis` with `shifts=` |
+| `setups`, `orders`, `notes`, `rank` | the setup matrix, the order matrix, the notes, the rankings (`rank=` picks the metrics) | refused: "Switch Period to Day", as the question is |
+| `kpis` | `get_period_kpis` for the window with the previous window; `compare=` changes the base | the same |
+| `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |
+| `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
+| `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |
+| `report` | refused: a day is investigated with a question | the deterministic period report (heatmap, daily matrix, recurring downtime, notes) |
+
+Modifiers, each refused when it does not apply to the measure:
+
+| Field | Values | Default |
+| --- | --- | --- |
+| `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: July answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
+| `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity | `reason`; `width` |
+| `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`) | both |
+| `unit=` | `minutes`, `count` (Pareto) | `minutes` |
+| `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
+| `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`) | `prev` |
+| `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's) | all three for day plans, all shifts together for store tools |
+| `rank=` | `speed`, `downtime`, `quality` | all three |
+| `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
+| `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
+| `after=` | the earlier views of this conversation, each a canonical address without its own chain, at most 8; the agent keeps its `max_turns`. A period report in the chain is kept on the address but, as on the session path, enters no history | none |
+| `format=` | `json`, `pdf` | the page |
+
+One state has one spelling: the fields come in the order above, defaults are omitted, and a few
+aliases normalize (`downtime`, `quality` and `compare` under a ranged grain). `resolve_url` is tolerant
+of a hand-typed alias and strict about everything else: an unknown field, a repeated field, a modifier
+the measure does not read, or a shift outside the selected scope is a 400 with the reason.
+
+## Examples
+
+| Question, in the controls | Address |
+| --- | --- |
+| "Why was this shift slow? Chart downtime by reason." — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=overview` |
+| "Which equipment caused the most downtime?" | `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=place` |
+| "Which downtime reason cost the most minutes this week?" — Day | `/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week` |
+| the same question — Week | `/corr/1/week/2026-09-14/shift/2?measure=pareto` |
+| "How did September go versus August?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=kpis&window=2026-09&compare=2026-08` |
+| "Trend of lineal per setup over six weeks" | `/corr/1/day/2026-09-14?measure=trend&metric=lineal_per_setup&weeks=6` |
+| "Compare that with first shift", after "Why was second shift slow?" — all shifts | `/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2` |
+| the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
+| the scope's own KPI tiles (what the page primes on load) | `/corr/1/week/2026-09-14.json?measure=kpis` |
+
+Every routing case in `evals/golden.json` records its address as `expect.url`; `python3 evals/run.py`
+resolves each question through the server and fails the case when it lands elsewhere.
+
+## The routes
+
+| Request | Answer |
+| --- | --- |
+| `GET /q?day=&shift=&scope=&period=&corrupt=&q=&after=` | the `/api/ask` fields of an offline question (`period` is `day|week|month|accounting`); validated like `/api/ask`, the question parsed by the offline router, then **302** to the canonical URL. A refusal of the router is a 400 with the same text `/api/ask` would send. Every example chip is a link of this form. |
+| `GET /corr/…?measure=…` | the app page; `app.js` reads the address, sets the controls and fetches the `.json`. The bare scope address (no `measure`) is the page with the controls set. |
+| `GET /corr/….json?measure=…`, `…&format=json`, or `Accept: application/json` | the JSON `/api/ask` returns for the same state, plus `url` (the page address, with the `after=` chain) and no `session_id`; the bare scope address is a 400 asking for `measure=`. `Server-Timing: app;dur=<ms>` is the server's own time. |
+| `GET /corr/…?measure=…&format=pdf` | the PDF of that answer, rendered on request from the same state. No report cache, so any instance serves any PDF; `POST /api/report` remains for live answers, which have no address. |
+
+The URL path is offline only: no model, no key, no token (a GET changes nothing and carries nothing
+secret). It has the other guards of `/api/ask`: the loopback `Host` rule or the public mode's proxy,
+the per-process request window and the per-IP round limit when `DEMO_RATE_LIMIT_PER_MIN` is set (a
+`.json` or `format=pdf` answer is a round, since it recomputes the answer; the page and the `/q`
+redirect are not). Because a GET carries no token, a third-party page can make a visitor's browser
+fetch `.json` addresses and spend that visitor's own rounds; it reaches no key, no model and no shared
+cap. It
+takes its own lock (`Workbench.read_lock`) and keeps its own three-day analysis cache, so a URL answer
+never waits behind a live round that holds `Workbench.lock`. `POST /api/ask` answers in offline mode
+also carry `url`, the question's own address without a conversation chain.
+
+## What the browser does
+
+`app.js` sends an offline question as `GET /q…` with `Accept: application/json`, follows the redirect,
+renders the answer, remembers it under its `url`, and pushes that URL with `history.pushState`; a
+control change pushes the bare scope address; the Period report is `measure=report` of the scope. On
+`popstate`, the controls follow the address and a view this page has shown is re-rendered from memory
+without a request; any other address is fetched as `.json`. Opening a canonical URL in a fresh browser
+does the same on load. Follow-up context is the `after=` chain the page builds from its earlier views
+(at most `max_turns − 1`), so offline needs no `session_id`; the Download PDF button of an addressed
+answer is a link to `…&format=pdf`. Live mode keeps the session and the POST.
+
+## Room left in the grammar
+
+`measure=rollstock` (feet and MSF consumed, from `wet_ends`) is reserved for the small new tool the
+issue describes; it is not a measure until that tool exists with its value goldens. Dollars (#31) add
+`rates=` later; it is not a field today and is refused like any unknown field.
