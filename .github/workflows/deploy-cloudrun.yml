@@ -129,6 +129,16 @@ jobs:
               --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${MERGED}" --quiet
           fi
           echo "ORIGINS=${MERGED}" >> "$GITHUB_ENV"
+      - name: Route all traffic to the revision just deployed
+        # A pull-request preview (preview.yml) deploys with --no-traffic, and gcloud documents the
+        # side effect: from then on the service's traffic is pinned to a NAMED revision and later
+        # deploys without a traffic flag get 0%. main must always take the traffic, so re-bind it
+        # to LATEST explicitly and check. Tags on other PRs' previews are untouched (percentages only).
+        run: |
+          set -euo pipefail
+          gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --to-latest --quiet
+          gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json \
+            | python3 -c 'import json,sys; t=json.load(sys.stdin)["status"]["traffic"]; print(t); assert any(x.get("latestRevision") and x.get("percent")==100 for x in t), "LATEST does not carry 100% of the traffic"'
       - name: Smoke test
         run: |
           set -euo pipefail

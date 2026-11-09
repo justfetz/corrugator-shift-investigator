@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shift Investigator mockup — Phone: same card, rail behind a button (390×844)</title>
+<!-- Static mockup exported 2026-11-09 from the accepted design (issue #44). Not the app; see README.md. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:#1b1b1b;background:#f3f5f5}
+a{color:#0b6e66}a:hover{color:#084f4a}
+button{font:inherit}
+</style>
+</head>
+<body>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f3f5f5; font-family: Inter, system-ui, sans-serif; color: #1b1b1b; overflow: hidden; border-radius: 24px">
+
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px 10px; background: #ffffff; border-bottom: 1px solid #e3e7e7">
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em">Shift Investigator</div>
+      <div style="font-size: 11px; color: #5a5f5f">Mon 14 Sep 2026 · Shift 2 · Day</div>
+    </div>
+    <div style="display: flex; gap: 8px">
+      <button type="button" style="height: 36px; padding: 0 12px; border: 1px solid #d5dbdb; border-radius: 10px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">Questions</button>
+      <button type="button" aria-label="Change day, shift and window" style="height: 36px; padding: 0 12px; border: 1px solid #d5dbdb; border-radius: 10px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">Context</button>
+    </div>
+  </header>
+
+  <form style="display: flex; gap: 8px; align-items: center; margin: 12px 12px 0; background: #ffffff; border: 1px solid #e3e7e7; border-radius: 14px; padding: 6px 6px 6px 12px">
+    <label for="ask-m" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Ask about a shift</label>
+    <input id="ask-m" type="text" placeholder="Ask about this shift" style="flex: 1; min-width: 0; height: 40px; border: 0; font: inherit; font-size: 15px; color: #1b1b1b; background: transparent; outline: none">
+    <button type="submit" style="height: 40px; padding: 0 14px; border: 0; border-radius: 10px; background: #0b6e66; color: #ffffff; font-size: 14px; font-weight: 600; cursor: pointer">Ask</button>
+  </form>
+
+  <div style="display: flex; gap: 6px; overflow-x: auto; padding: 10px 12px 0">
+    <button type="button" style="flex: 0 0 auto; height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Why slow?</button>
+    <button type="button" style="flex: 0 0 auto; height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Where did the money go?</button>
+    <button type="button" style="flex: 0 0 auto; height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Missed splices?</button>
+    <button type="button" style="flex: 0 0 auto; height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Tough setups?</button>
+  </div>
+
+  <article aria-label="Answer: Why was shift 2 slow?" style="margin: 12px 12px 0; background: #ffffff; border: 1px solid #e3e7e7; border-radius: 14px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0">
+
+    <div style="display: flex; flex-direction: column; gap: 2px">
+      <h2 style="margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em">Why was shift 2 slow?</h2>
+      <div style="font-size: 11px; color: #5a5f5f">offline · 6 queries · 93 ms</div>
+    </div>
+
+    <button type="button" style="display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; border: 1px solid #e3e7e7; border-radius: 10px; background: #fbfcfc; padding: 8px 10px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; color: #3c4242; cursor: pointer">
+      <span><span style="color: #0b6e66; font-weight: 600">get_downtime_breakdown</span>(shift=2, by=reason) <span style="color: #8b9191">· 4 rows · 2 ms</span></span>
+      <span style="color: #8b9191">SQL ▸</span>
+    </button>
+
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.02em">≈ $6,900 <span style="font-size: 13px; font-weight: 500; color: #3c4242">recorded losses</span></div>
+      <div style="display: flex; flex-wrap: wrap; gap: 5px; font-size: 12px">
+        <span style="padding: 3px 9px; border-radius: 999px; background: #eef2f2">Trim <strong>$4,387</strong></span>
+        <span style="padding: 3px 9px; border-radius: 999px; background: #eef2f2">Dry-end <strong>$1,514</strong></span>
+        <span style="padding: 3px 9px; border-radius: 999px; background: #eef2f2">Shear <strong>$698</strong></span>
+        <span style="padding: 3px 9px; border-radius: 999px; background: #eef2f2">Downtime <strong>$299</strong></span>
+      </div>
+    </div>
+
+    <figure style="margin: 0; display: flex; flex-direction: column; gap: 8px">
+      <figcaption style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 13px; font-weight: 600">Downtime by reason</span><span style="font-size: 11px; color: #5a5f5f">14.9 min · 3.1%</span></figcaption>
+      <div style="display: grid; grid-template-columns: 104px minmax(0, 1fr) 92px; row-gap: 7px; column-gap: 8px; align-items: center; font-size: 12px">
+        <div>Order change</div><div style="height: 16px; border-radius: 4px; background: #c96a2c; width: 100%"></div><div style="text-align: right"><strong>$127</strong> <span style="color: #5a5f5f">6.4 m</span></div>
+        <div>Knife / slitter</div><div style="height: 16px; border-radius: 4px; background: #c96a2c; width: 73%"></div><div style="text-align: right"><strong>$93</strong> <span style="color: #5a5f5f">4.7 m</span></div>
+        <div>Stacker</div><div style="height: 16px; border-radius: 4px; background: #c96a2c; width: 36%"></div><div style="text-align: right"><strong>$46</strong> <span style="color: #5a5f5f">2.3 m</span></div>
+        <div>Raw material</div><div style="height: 16px; border-radius: 4px; background: #c96a2c; width: 26%"></div><div style="text-align: right"><strong>$33</strong> <span style="color: #5a5f5f">1.7 m</span></div>
+      </div>
+    </figure>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 8px 10px"><div style="font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Speed</div><div style="font-size: 17px; font-weight: 700">616</div><div style="font-size: 11px; color: #8a5a00">89% target</div></div>
+      <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 8px 10px"><div style="font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Trim</div><div style="font-size: 17px; font-weight: 700">3.33%</div><div style="font-size: 11px; color: #8a5a00">+0.08 pt</div></div>
+      <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 8px 10px"><div style="font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Dry-end</div><div style="font-size: 17px; font-weight: 700">1.15%</div><div style="font-size: 11px; color: #8a5a00">above 1%</div></div>
+    </div>
+
+    <div style="display: flex; gap: 6px; overflow-x: auto; margin-top: auto">
+      <button type="button" style="flex: 0 0 auto; height: 34px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Show the order changes</button>
+      <button type="button" style="flex: 0 0 auto; height: 34px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Compare with shift 1</button>
+      <button type="button" style="flex: 0 0 auto; height: 34px; padding: 0 12px; border: 1px solid #0b6e66; border-radius: 999px; background: #e6f2f1; color: #084f4a; font-size: 13px; font-weight: 600; cursor: pointer">Ask the analyst</button>
+    </div>
+  </article>
+
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 24px 14px; font-size: 12px; color: #5a5f5f">
+    <span>1 earlier answer</span>
+    <a href="#" style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px">permalink</a>
+  </div>
+</div>
+</body>
+</html>

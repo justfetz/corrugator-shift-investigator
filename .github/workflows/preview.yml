@@ -1,0 +1,165 @@
+# Preview URL per pull request (issue #41). Every push to a same-repository PR deploys the PR
+# (merged onto main, as it would ship) as a Cloud Run revision that is TAGGED and takes NO
+# traffic. Cloud Run serves it at https://pr-<n>---<service host>; the live demo keeps 100% of
+# the traffic on its own revision. The URL is posted as a PR comment and refreshed on every push;
+# closing the PR removes the tag and deletes the revisions. The production deploy
+# (deploy-cloudrun.yml, on main) is untouched. No-op without the GCP_PROJECT_ID variable.
+#
+# The preview revision inherits the serving template (scaling, guards, mounted secrets) and
+# changes one thing: PUBLIC_DEMO_ORIGIN gains the tag form of every production origin, because
+# the server's Origin check is an exact match (.github/scripts/preview_origins.py explains).
+name: Preview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  # One run per PR at a time. A new push cancels the deploy it supersedes; the close job never
+  # cancels and is never skipped: it queues behind an in-flight deploy and then removes its tag.
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: ${{ github.event.action != 'closed' }}
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+  SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
+  PR: ${{ github.event.pull_request.number }}
+  TAG: pr-${{ github.event.pull_request.number }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  deploy:
+    # Same-repository PRs only: a fork cannot read GCP_SA_KEY and must not get a revision.
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # the PR merged onto main (refs/pull/<n>/merge): what would ship
+      - name: Deploy the pull request as it is now, even if this run was queued for an older head
+        # Two events for one PR can arrive seconds apart (a reopen carries the head GitHub knew at close
+        # time, then a synchronize carries the new one) and the run for the OLDER head can be the one
+        # that survives the concurrency group. So every run checks the live head and, when it moved,
+        # fetches the current merge ref; whichever run survives deploys the PR as it stands.
+        run: |
+          set -euo pipefail
+          CURRENT=$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq .head.sha)
+          if [ "$CURRENT" != "$HEAD_SHA" ]; then
+            echo "::notice::the pull request's head moved from ${HEAD_SHA:0:7} to ${CURRENT:0:7} after this run was queued; deploying the current head"
+            git fetch --depth=1 origin "refs/pull/$PR/merge" && git checkout --quiet --detach FETCH_HEAD
+            echo "HEAD_SHA=${CURRENT}" >> "$GITHUB_ENV"
+          fi
+          git log -1 --format='deploying %h (%s)'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Allow-list the preview origins
+        run: |
+          set -euo pipefail
+          if ! gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json; then
+            echo "::error::service $SERVICE does not exist in $PROJECT_ID yet; the first deploy of main creates it, previews come after"
+            exit 1
+          fi
+          python3 .github/scripts/preview_origins.py origins "$TAG" < /tmp/service.json | tee -a "$GITHUB_ENV"
+      - name: Deploy the tagged revision with no traffic
+        run: |
+          set -euo pipefail
+          SUFFIX="${TAG}-$(echo "$HEAD_SHA" | cut -c1-7)-${{ github.run_number }}"   # unique per push, prefix exact for cleanup
+          echo "REVISION=${SERVICE}-${SUFFIX}" >> "$GITHUB_ENV"
+          gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
+            --no-traffic --tag "$TAG" --revision-suffix "$SUFFIX" \
+            --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}" --quiet
+      - name: Smoke-test the preview and check production traffic is unchanged
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json
+          PREVIEW_URL=$(python3 .github/scripts/preview_origins.py url "$TAG" < /tmp/service.json | cut -d= -f2-)
+          test -n "$PREVIEW_URL" || { echo "::error::Cloud Run reports no URL for tag $TAG"; exit 1; }
+          echo "PREVIEW_URL=${PREVIEW_URL}" >> "$GITHUB_ENV"
+          # No traffic on the tag; the revisions that carry traffic are not ours.
+          python3 - "$TAG" "$REVISION" /tmp/service.json <<'PY'
+          import json, sys
+          tag, revision = sys.argv[1], sys.argv[2]
+          traffic = json.load(open(sys.argv[3])).get('status', {}).get('traffic', [])
+          for t in traffic:
+              print(f"  {t.get('percent', 0):>3}%  tag={t.get('tag') or '-':<8} {t.get('revisionName') or ('LATEST' if t.get('latestRevision') else '?')}")
+          assert all(not t.get('percent') for t in traffic if t.get('tag') == tag), 'the preview tag carries traffic'
+          assert all(t.get('revisionName') != revision for t in traffic if t.get('percent')), 'the preview revision carries traffic'
+          assert sum(t.get('percent', 0) for t in traffic) == 100, 'traffic does not sum to 100'
+          PY
+          # The revision answers, and a POST from the preview origin passes the Origin allow-list.
+          for attempt in 1 2 3 4 5 6; do
+            CODE=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 60 "$PREVIEW_URL/api/health" || true)
+            echo "GET $PREVIEW_URL/api/health -> HTTP $CODE $(head -c 200 /tmp/health.json 2>/dev/null)"
+            [ "$CODE" = "200" ] && break
+            sleep 10
+          done
+          test "$CODE" = "200"
+          CFG=$(curl -sS --max-time 30 "$PREVIEW_URL/api/config")
+          TOKEN=$(echo "$CFG" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          DAY=$(echo "$CFG" | python3 -c 'import json,sys; print(json.load(sys.stdin)["last_day"])')
+          CODE=$(curl -sS -o /tmp/ask.json -w '%{http_code}' --max-time 60 -X POST "$PREVIEW_URL/api/ask" \
+                 -H "Origin: $PREVIEW_URL" -H "X-Workbench-Token: $TOKEN" -H 'Content-Type: application/json' \
+                 --data "{\"question\":\"Why was this shift slow? Chart downtime by reason.\",\"day\":\"$DAY\",\"shift\":2}")
+          echo "POST $PREVIEW_URL/api/ask (Origin: preview) -> HTTP $CODE"
+          test "$CODE" = "200"
+          python3 -c 'import json,sys; r=json.load(open("/tmp/ask.json")); print("  status:", r.get("status"), " tool calls:", len(r.get("tool_calls") or r.get("trace") or []), " elapsed_ms:", r.get("elapsed_ms"))'
+      - name: Post the URL on the pull request
+        run: |
+          set -euo pipefail
+          BODY="$(printf '<!-- preview-url -->\n**Preview** of %s: %s\n\nTagged Cloud Run revision `%s`, no traffic. Refreshed on every push; removed when the pull request closes.' "$HEAD_SHA" "$PREVIEW_URL" "$REVISION")"
+          echo "$BODY" >> "$GITHUB_STEP_SUMMARY"
+          ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- preview-url -->"))][0].id // empty' | head -n1)
+          if [ -n "$ID" ]; then gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$ID" -f body="$BODY" --silent
+          else gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" -f body="$BODY" --silent; fi
+      - name: Delete orphaned preview revisions (this PR's earlier ones and any closed PR's leftovers)
+        # Cloud Run refuses to delete a service's latest created revision, which a fresh preview
+        # is until the next deploy; such a revision is reported and swept by the next run.
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json
+          gcloud run revisions list --service "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/revisions.json
+          python3 .github/scripts/preview_origins.py orphans "$SERVICE" /tmp/service.json "$REVISION" < /tmp/revisions.json | while IFS=$'\t' read -r NAME FLAG; do
+            if [ "$FLAG" = "latest" ]; then echo "::notice::$NAME has no tag and no traffic but is the service's latest created revision; Cloud Run refuses to delete it until another revision exists, so the next deploy (main or any preview) sweeps it"; continue; fi
+            echo "deleting $NAME"
+            gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet \
+              || echo "::warning::could not delete $NAME; the next run retries"
+          done
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}   # refs/pull/<n>/merge may not exist for a closed PR; the head always does
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Remove the tag and delete the preview revisions
+        run: |
+          set -euo pipefail
+          if ! gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json 2> /tmp/describe.err; then
+            cat /tmp/describe.err
+            if grep -qiE 'NOT_FOUND|could not be found|not found' /tmp/describe.err; then echo "service $SERVICE not found; nothing to clean up"; exit 0; fi
+            echo "::error::could not describe $SERVICE; a leaked preview would go unnoticed, so this fails"; exit 1
+          fi
+          if [ -n "$(python3 .github/scripts/preview_origins.py url "$TAG" < /tmp/service.json | cut -d= -f2-)" ]; then
+            gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --remove-tags "$TAG" --quiet
+            echo "tag $TAG removed; the preview URL no longer serves"
+          else
+            echo "tag $TAG was not serving"
+          fi
+          gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json
+          gcloud run revisions list --service "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/revisions.json
+          python3 .github/scripts/preview_origins.py orphans "$SERVICE" /tmp/service.json < /tmp/revisions.json | while IFS=$'\t' read -r NAME FLAG; do
+            if [ "$FLAG" = "latest" ]; then echo "::notice::$NAME has no tag and no traffic but is the service's latest created revision; Cloud Run refuses to delete it until another revision exists, so the next deploy (main or any preview) sweeps it"; continue; fi
+            echo "deleting $NAME"
+            gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet
+          done
+      - name: Note it on the pull request
+        run: |
+          set -euo pipefail
+          BODY="$(printf '<!-- preview-url -->\nPreview removed: tag `%s` was removed when the pull request closed, so the URL no longer serves. Its revision is deleted now or by the next deploy (Cloud Run keeps the latest created revision of a service).' "$TAG")"
+          ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- preview-url -->"))][0].id // empty' | head -n1)
+          if [ -n "$ID" ]; then gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$ID" -f body="$BODY" --silent; fi

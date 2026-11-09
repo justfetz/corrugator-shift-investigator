@@ -10,7 +10,7 @@ A bounded agent that investigates why a corrugator shift was bad, on synthetic d
 
 ```bash
 pip install -e . pytest                              # Python >= 3.11; deps are duckdb and reportlab
-python -m pytest -q                                  # 456 tests, about 70 s
+python -m pytest -q                                  # 469 tests, about 65 s
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
 python3 evals/run.py                                 # 160 golden cases offline, about 6 s; the regression gate
 python3 evals/run.py --live --provider anthropic     # needs ANTHROPIC_API_KEY; records fixtures under evals/fixtures/
@@ -24,7 +24,7 @@ python -m investigator.server --port 7860            # local workbench at http:/
 - `evals/`: `golden.json` (87 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl`, `README.md` (the seven case types)
 - `tests/`: pytest suites and `test_ui.cjs`
 - `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md` · `archive/` (historical reviews, not current)
-- `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run)
+- `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run), `preview.yml` (each PR gets a no-traffic tagged revision; its URL is a PR comment); `.github/scripts/` holds their helpers
 
 ## Rules
 
@@ -36,12 +36,12 @@ python -m investigator.server --port 7860            # local workbench at http:/
 
 ## How sessions work
 
-- One issue, one session, one PR. Branch `issue-<n>-<slug>`. Claude never merges; the owner reviews and merges.
+- One issue, one session, one PR. Branch `issue-<n>-<slug>`. Claude never merges on its own; the owner reviews with `/review-pr <n>` and merges by running `/approve-pr <n>`, which checks CI, the eval diff and the review verdict first.
 - Start by reading this file and the issue, then run the tests and evals before changing anything so the baseline is known.
 - Done when: tests pass; `python3 evals/run.py` passes with no case removed or weakened; each acceptance criterion in the issue is demonstrated in the PR description with the command and its output; docs the change touches are updated in the same PR.
-- PR description: what changed, how it was tested (paste the eval table), and the eval and latency delta.
+- PR description: what changed, how it was tested (paste the eval table), and the eval and latency delta. A few minutes after the PR opens, the Preview workflow comments a URL where that PR runs; look at it in a browser for any change a visitor would see, and quote what you checked.
 - Before opening the PR, have the `reviewer` subagent check the diff against the issue. Fix correctness gaps; ignore style nits.
-- Use `/fix-issue <n>`, `/add-golden-case <what>` and `/run-evals` for the repeatable parts.
+- Use `/issues` (the ordered backlog with a status per issue), `/fix-issue <n>`, `/add-golden-case <what>`, `/run-evals`, `/review-pr <n>` and `/approve-pr <n>` for the repeatable parts. Sessions label an issue `waiting-on-owner` when they ask the owner something in it.
 
 ## Permissions and safety
 
