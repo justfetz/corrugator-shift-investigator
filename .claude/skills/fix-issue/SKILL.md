@@ -12,3 +12,4 @@ Work issue #$ARGUMENTS on justfetz/corrugator-shift-investigator.
 5. Run the tests, the evals, and `node --check src/investigator/web/app.js && node tests/test_ui.cjs`.
 6. Ask the `reviewer` subagent to check the diff against the issue. Fix correctness gaps.
 7. Commit, push, and `gh pr create` with: what changed; how it was tested (paste the eval table); each acceptance criterion with the command and output that demonstrates it; `Closes #$ARGUMENTS`. Do not merge.
+8. If the change touches `web/`, the server or the Dockerfile: wait for the Preview workflow's comment (3–5 min), open the URL, ask a question, and add what you saw to the PR description. The preview is a tagged Cloud Run revision with no traffic; it is removed when the PR closes.

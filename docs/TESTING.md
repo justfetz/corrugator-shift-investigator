@@ -85,3 +85,5 @@ Score evidence correctness, question fulfillment, scope, uncertainty/causal rest
 ## Public-demo mode
 
 `tests/test_server.py` also covers the hosted mode: `PublicDemo.from_env` parsing and rejection of non-https origins, foreign `Host` accepted, `frame-ancestors` from `PUBLIC_DEMO_EMBED_ORIGINS`, `/api/health`, `POST` refused without an allow-listed `Origin`, visitor `X-OpenAI-Key` ignored, and live mode requiring both `PUBLIC_DEMO_LIVE_MODEL=1` and a server key. The container image itself is not built in CI.
+
+The browser walkthrough above has a hosted counterpart: every pull request gets a preview URL (`.github/workflows/preview.yml`, a tagged Cloud Run revision with no traffic, see [DEPLOYMENT.md](DEPLOYMENT.md)), so what a visitor would see is checked there before merge. `tests/test_preview_workflow.py` covers the origin arithmetic that workflow relies on (`.github/scripts/preview_origins.py`): production origins kept in order, tag URLs dropped, the `pr-<n>---` form appended, the tag's URL read from the service status, and only this PR's revisions named for deletion.
