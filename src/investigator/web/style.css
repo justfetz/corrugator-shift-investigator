@@ -159,7 +159,7 @@ textarea{display:block;width:100%;resize:vertical;margin-top:7px;font-size:15px}
 /* Charts */
 .chart{margin-top:10px;padding:12px 14px;background:var(--surface-2);border-radius:10px}
 #charts:empty+#heatmaps:empty+#kpis:empty+#metrics{margin-top:0}
-.chart h3{font-size:13.5px;font-weight:600;margin:0 0 8px;letter-spacing:0}
+.chart h3{font-size:13.5px;font-weight:600;margin:0 0 8px;letter-spacing:0}.chart .muted,.heatmap .muted{color:var(--ink-2)}   /* chart captions read at 4.5:1 on light (#36) */
 .chart svg{width:100%;height:auto;display:block}
 .chart text{font-family:var(--mono);font-size:11.5px;fill:var(--ink-2)}
 .chart .bar,.chart .bar.cur{fill:var(--s1)}.chart .bar.prev{fill:var(--prev)}.chart .bar.vital{fill:var(--s1)}.chart .bar.rest{fill:var(--prev)}.chart .incomplete,.chart .bar.incomplete{fill:var(--neutral)}
