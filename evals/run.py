@@ -28,9 +28,9 @@ by pass rate (`THRESHOLDS`), an offline case passes or fails on its own.
     python3 evals/run.py --json out.json              # machine-readable results
 
 Exit status is the number of failed offline cases plus the number of live
-(provider, type) pairs under their pass-rate threshold, plus one per offline
-latency percentile (p50, p95) over its budget. Skips and known
-defects do not count.
+(provider, type) pairs under their pass-rate threshold, plus, when the run
+covers the whole offline set (no --only), one per offline latency percentile
+(p50, p95) over its budget. Skips and known defects do not count.
 """
 from __future__ import annotations
 
@@ -63,7 +63,8 @@ TYPES = ('routing', 'faithfulness', 'grounding', 'refusal', 'value', 'investigat
 THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 1.0,
               'investigation': 0.8, 'value': 1.0, 'data_quality': 1.0}
 # Latency: an offline case fails above `expect.max_ms` (default DEFAULT_MAX_MS; a live or replayed
-# run is never timed against it), and the run fails when the offline p50 or p95 is over LATENCY_BUDGET_MS.
+# run is never timed against it), and a whole-set run fails when the offline p50 or p95 is over
+# LATENCY_BUDGET_MS (an --only subset prints its percentiles and is not gated: they are just those cases' times).
 # The clock covers the agent's turns only: dataset build, fixture I/O and the checks are outside it.
 DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
@@ -856,7 +857,9 @@ def main(argv=None):
         if parts:
             print(f'live {name}: ' + '  '.join(parts))
     latency = offline_latency(rows)
-    if latency['p50'] is not None:
+    if latency['p50'] is not None and args.only:   # a subset's percentiles are those cases' own times: reported, not gated
+        print('offline latency: ' + '  '.join(f'{k} {latency[k]:.0f} ms' for k in ('p50', 'p95')) + ' (not gated under --only)')
+    elif latency['p50'] is not None:
         verdicts = [f'{k} {latency[k]:.0f} ms (budget {LATENCY_BUDGET_MS[k]}: {"ok" if latency[k] <= LATENCY_BUDGET_MS[k] else "OVER"})'
                     for k in ('p50', 'p95')]
         breaches += sum(latency[k] > LATENCY_BUDGET_MS[k] for k in ('p50', 'p95'))

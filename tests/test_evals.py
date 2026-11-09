@@ -236,7 +236,7 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
 
 def test_heavy_cases_carry_an_explicit_offline_budget():
     """The eleven heaviest offline cases (the multi-turn stories, the eight- and nine-week trends, the
-    three-shift compare) run 50-110 ms uncontended and crossed the 250 ms default under 2x CPU
+    three-shift compare) run 52-116 ms uncontended and crossed the 250 ms default under 2x CPU
     contention, so each carries expect.max_ms: 500 (evals/README.md has the numbers). The budget is
     offline only: the live or replayed run of a live: true case shares its expect and is never timed
     against it."""
@@ -262,7 +262,29 @@ def test_run_level_breach_raises_the_exit_status_and_fails_the_ci_gate(monkeypat
     monkeypatch.setattr(golden, 'LATENCY_BUDGET_MS', {'p50': 0, 'p95': 0})
     assert golden.main([]) == 2
     assert capsys.readouterr().out.count('OVER') == 2
+    # An --only subset reports its percentiles and is not gated: they are just those cases' own times.
+    assert golden.main(['--only', 'why-slow']) == 0
+    out = capsys.readouterr().out
+    assert 'offline latency: p50' in out and 'not gated under --only' in out and 'OVER' not in out, out
     # The CI gate reads the same percentiles from the times the case tests recorded.
     monkeypatch.setitem(globals(), 'LATENCY_MS', {c['id']: 5.0 for c in OFFLINE} | {'why-slow': 20.0})
     with pytest.raises(AssertionError, match=r"offline p50 5\.0 ms over the 0 ms budget; slowest \[\('why-slow', 20\.0\)"):
         test_offline_latency_budget()
+
+
+def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
+    """The raises path is timed like any other: a refusal that takes 300 ms fails on time alone.
+    A replayed recording slowed the same way still passes, since a live or replayed run is never timed."""
+    real_ask = golden.Agent.ask
+
+    def slow_ask(self, text, context):
+        time.sleep(0.3)
+        return real_ask(self, text, context)
+    monkeypatch.setattr(golden.Agent, 'ask', slow_ask)
+    refusal = next(c for c in CASES if c['id'] == 'shift-escape')   # refuses inside ask, so the clock covers it
+    outcome, failures, note, ms = golden.run_case(refusal)
+    assert outcome == 'fail' and note.startswith('refused') and ms > 250, (failures, note, ms)
+    assert failures == [f'{ms:.0f} ms, budget 250 ms']
+    replay = next(c for c in CASES if c['id'] == 'live-setup-matrix')   # a committed Anthropic recording
+    outcome, failures, note, ms = golden.run_case(replay, 'anthropic')
+    assert outcome == 'pass' and ms > 250, (failures, note, ms)

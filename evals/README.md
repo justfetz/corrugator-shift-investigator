@@ -55,17 +55,24 @@ and holds the offline set to two budgets:
   250 ms (`LATENCY_BUDGET_MS`, nearest-rank percentiles). The summary prints
   `offline latency: p50 .. p95 ..` with a verdict per percentile, each breach
   adds one to the exit status, and `tests/test_evals.py::test_offline_latency_budget`
-  applies the same gate in CI over the times the case tests just measured.
+  applies the same gate in CI over the times the case tests just measured. The gate
+  is over the whole offline set: a filtered `--only` run prints its percentiles and
+  is not gated, since a subset's p50 is just those cases' own time.
 
-Two tests pin the gate. `test_slow_tool_fails_the_latency_budget`: a 300 ms stub
-around one daily tool fails `why-slow` on the time alone, and the same case with
-`max_ms: 10000` passes again. `test_run_level_breach_raises_the_exit_status_and_fails_the_ci_gate`:
+Three tests pin the gate. `test_slow_tool_fails_the_latency_budget`: a 300 ms delay
+on every daily tool call pushes `why-slow` past a second and fails it on the time
+alone, and the same case with `max_ms: 10000` passes again.
+`test_latency_budget_times_a_refusal_but_never_a_replay`: a refusal that takes
+300 ms fails on time alone, and a replayed recording slowed the same way still
+passes. `test_run_level_breach_raises_the_exit_status_and_fails_the_ci_gate`:
 with a percentile budget set below the fastest case, the CLI exit status rises by
-one per percentile over budget although every case passed, and
-`test_offline_latency_budget` fails on the same numbers.
+one per percentile over budget although every case passed,
+`test_offline_latency_budget` fails on the same numbers, and an `--only` run under
+the same budget exits 0.
 
-Baseline, 2026-11-09 sandbox (4 cores), four uncontended runs of the 145 offline
-cases: p50 11–13 ms, p95 60–65 ms; every case between 0 ms (a refusal that stops
+Baseline, 2026-11-09 sandbox (4 cores), five uncontended runs of the 145 offline
+cases (the tracked `history.jsonl` line and four re-measurements): p50 11–13 ms,
+p95 60–66 ms; every case between 0 ms (a refusal that stops
 before its first tool call) and 116 ms (`story-monday-warp`, four turns and eight
 tool calls), half the set under 13 ms. That is wider than the 13–60 ms the issue
 quotes for single questions, because the set also holds the refusals and the
