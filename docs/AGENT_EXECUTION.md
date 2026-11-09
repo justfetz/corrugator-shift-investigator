@@ -109,6 +109,6 @@ Heatmap rows contain the date, availability, output, percentages, counts, and he
 
 ## Delivery and limitations
 
-The server retains the latest result for up to 32 sessions. Save text contains narrative sections and limitations, not all evidence tables. PDF uses the retained session/run reference and adds summary tables; no model call is made for export. The heatmap title fallback is repaired; daily and period PDF byte/access regression tests pass. Visual layout certification remains pending.
+The server retains the latest result for up to 32 sessions. The Markdown export contains narrative sections and limitations, not all evidence tables. PDF uses the retained session/run reference and adds summary tables; no model call is made for export. The heatmap title fallback is repaired; daily and period PDF byte/access regression tests pass. Visual layout certification remains pending.
 
 No email, schedule write, equipment action, web search or external market feed exists. Public deployment requires a separate implementation pass. The current local server, tokens, cache and rate limit are not a multi-user production service.

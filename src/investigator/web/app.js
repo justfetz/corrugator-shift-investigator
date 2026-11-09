@@ -1,6 +1,13 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let config, sessionId = null, latest = null, busy = false;
+let config, sessionId = null, latest = null;
+// ---- The thread (issue #63): one answer card that fills in place, earlier answers one line each below
+// it, newest on top. In memory only; permalinks are #20. An entry is made at submit and keeps the scope
+// it was asked under, so a card reads the same after the rail has moved on. Nothing here disables a
+// control while a question is out: a second question simply becomes the open card.
+const thread=[];
+let openEntry=null, entrySeq=0, sessionEpoch=0, railOpen=false;
+const now=()=>typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
 const PROVIDERS={openai:{name:'OpenAI',header:'X-OpenAI-Key'},anthropic:{name:'Anthropic',header:'X-Anthropic-Key'}};
 function provider(){ return PROVIDERS[$('mode').value]||null; }
 function isLive(){ return provider()!==null; }
@@ -9,6 +16,9 @@ function liveModes(){ // modes the server's own key enables; older servers repor
  if(Array.isArray(config.live_modes))return config.live_modes.filter(m=>PROVIDERS[m]);
  return config.live_model_available?['openai']:[];
 }
+// "Ask the analyst" runs the agent chosen under "Agent and advanced", or else the one the server's own key
+// offers (Anthropic first). Null when neither exists: the button is hidden and every question is offline.
+function analystMode(){ const chosen=$('mode').value; if(PROVIDERS[chosen])return chosen; const modes=liveModes(); return modes.includes('anthropic')?'anthropic':(modes[0]||null); }
 function syncKeyLabel(){
  const p=provider();
  $('key-label').hidden=!p||!!(config&&config.public);
@@ -17,13 +27,13 @@ function syncKeyLabel(){
 function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
 const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 function message(label, paragraphs, cls='') {
- const e=node('div',undefined,'message '+cls);e.append(node('strong',label));
+ const e=node('div',undefined,'message '+cls);if(label)e.append(node('strong',label));
  let notes=null; // consecutive shift-note lines fold into one disclosure instead of a dump
  for(const p of paragraphs){
   if(NOTE_LINE.test(p)){ if(!notes){notes=node('details',undefined,'note-group');notes.append(node('summary'));e.append(notes);} notes.append(node('p',p)); notes.children[0].textContent=`${notes.children.length-1} reported note${notes.children.length-1===1?'':'s'} (synthetic, unverified — observations, not causes)`; continue; }
   notes=null; e.append(node('p',p));
  }
- $('messages').append(e);$('messages').scrollTop=$('messages').scrollHeight;
+ $('messages').append(e);
 }
 
 // ---- Scope: the hidden selects (#day, #period, #shift, #scope, #mode) hold the state the
@@ -32,7 +42,8 @@ const WEEKDAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Sat
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTHS_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SHIFT_HOURS={1:'07:00–15:00',2:'15:00–23:00',3:'23:00–07:00 next day'};
-const SEGMENTS={period:[['day','Day'],['week','Week'],['month','Month'],['accounting','4-4-5']],shift:[['1','1'],['2','2'],['3','3'],['all','All shifts']]};
+const SEGMENTS={period:[['day','Day'],['week','Week'],['month','Month'],['accounting','4-4-5']],shift:[['1','1 · 7–3'],['2','2 · 3–11'],['3','3 · 11–7'],['all','All']]};
+const SEGMENT_NAMES={1:'Shift 1, 07:00 to 15:00',2:'Shift 2, 15:00 to 23:00',3:'Shift 3, 23:00 to 07:00 the next day',all:'All three shifts'};
 const segButtons={period:[],shift:[]};
 const utc=iso=>new Date(iso+'T00:00:00Z');
 const iso=d=>d.toISOString().slice(0,10);
@@ -83,7 +94,8 @@ function renderSegments(){
   const box=$(group+'-seg'); if(!box)continue; box.replaceChildren(); segButtons[group]=[];
   for(const [value,label] of options){
    const b=node('button',label,'seg-btn'); b.type='button'; b.dataset.value=value; b.setAttribute('aria-pressed','false');
-   b.addEventListener('click',()=>{ if(busy)return; if(group==='period')selectPeriod(value); else selectShift(value); });
+   if(group==='shift')b.setAttribute('aria-label',SEGMENT_NAMES[value]);
+   b.addEventListener('click',()=>{ if(group==='period')selectPeriod(value); else selectShift(value); });
    box.append(b); segButtons[group].push(b);
   }
  }
@@ -91,21 +103,21 @@ function renderSegments(){
 }
 function syncSegments(){
  const period=$('period').value, shiftValue=$('scope').value==='day'?'all':$('shift').value;
- for(const b of segButtons.period){b.setAttribute('aria-pressed',String(b.dataset.value===period));b.disabled=busy;}
- for(const b of segButtons.shift){b.setAttribute('aria-pressed',String(b.dataset.value===shiftValue));b.disabled=busy;}
+ for(const b of segButtons.period)b.setAttribute('aria-pressed',String(b.dataset.value===period));
+ for(const b of segButtons.shift)b.setAttribute('aria-pressed',String(b.dataset.value===shiftValue));
 }
 function selectPeriod(value){ if($('period').value===value)return; $('period').value=value; periodChanged(); }
 function selectShift(value){
  if(value==='all'){ if($('scope').value==='day')return; $('scope').value='day'; }
  else { if($('scope').value==='shift'&&$('shift').value===value)return; $('scope').value='shift'; $('shift').value=value; }
- reset();
+ rescope();
 }
-function periodChanged(){ renderQuestionChips(); reset(); }
+function periodChanged(){ renderQuestionChips(); rescope(); }
 let acceptedDay=null;
 function dayChanged(){
  const value=$('day').value, reason=dayRejection(value,storeDays());
  if(reason){ $('day-note').textContent=reason; $('day-note').hidden=false; if(acceptedDay)$('day').value=acceptedDay; updateScope(); return reason; }
- acceptedDay=value; $('day-note').hidden=true; $('day-note').textContent=''; reset(); return null;
+ acceptedDay=value; $('day-note').hidden=true; $('day-note').textContent=''; rescope(); return null;
 }
 function stepDay(direction){
  const days=storeDays(); if(!days)return;
@@ -114,18 +126,34 @@ function stepDay(direction){
  $('day').value=days[next]; dayChanged();
 }
 const PERIOD_NOUN={day:'day',week:'week',month:'month',accounting:'4-4-5 period'};
+// What a card's title line and an earlier answer's line say about the scope it was asked under.
+function whoText(scope){ return scope.scope==='day'?'All shifts':`Shift ${scope.shift}`; }
+function windowText(scope){
+ const d=utc(scope.day); if(Number.isNaN(d.getTime()))return String(scope.day);
+ if(scope.period==='day')return dayText(d);
+ if(scope.period==='week'){const [a,b]=weekOf(d);return `Week of ${spanText(a,b)}`;}
+ if(scope.period==='month')return `${MONTHS_LONG[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+ return `4-4-5 period containing ${dayText(d)}`;
+}
+function scopeLabel(scope){ return `${whoText(scope)} · ${windowText(scope)}`; }
+function askNoun(){ return $('period').value!=='day'?(PERIOD_NOUN[$('period').value]||'period'):$('scope').value==='day'?'day':'shift'; }
 function updateScope(){
- const ranged=$('period').value!=='day', live=isLive();
- $('scope-help').textContent=scopeSentence(currentScope());
- $('mode').disabled=busy;$('question').disabled=busy;syncKeyLabel();syncSegments();
+ const ranged=$('period').value!=='day', live=isLive(), scope=currentScope();
+ $('scope-help').textContent=scopeSentence(scope); $('scope-chip').textContent=scopeLabel(scope);
+ syncKeyLabel();syncSegments();
  const days=storeDays(), index=days?days.indexOf($('day').value):-1;
- $('day-prev').disabled=busy||!days||index<=0; $('day-next').disabled=busy||!days||index<0||index>=days.length-1;
+ $('day-prev').disabled=!days||index<=0; $('day-next').disabled=!days||index<0||index>=days.length-1;   // the ends of the store; nothing waits on a request
  $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
  const noun=PERIOD_NOUN[$('period').value]||'period';
  if(ranged)$('mode-help').textContent=`Ask about the selected ${noun}: KPIs against the previous one, the downtime Pareto, waste, stops per day, trends, totals by grade, over/under-run, the speed opportunity.${live?' '+liveHelp():' No model calls or API charges.'} Period report builds the output heatmap, daily matrix, recurring downtime and notes without a model.`;
  else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
- $('submit').textContent='Investigate'; $('report').hidden=!ranged; $('report').disabled=busy;
- for(const b of chipButtons)b.disabled=busy||(ranged&&b.dataset.period==='day');   // the per-shift matrices have no period form
+ $('submit').textContent='Ask'; $('report').hidden=!ranged;
+ const analyst=analystMode(); $('analyst').hidden=!analyst;
+ if(analyst)$('analyst').title=`${PROVIDERS[analyst].name} chooses the queries and writes the interpretation; every number still comes from the queries. It takes several seconds and ${config&&config.public?'uses this site’s own key under a spend cap':'incurs API charges'}.`;
+ $('question').placeholder=ranged?`Ask about this ${noun}: KPIs against the previous one, downtime, waste, trends, grades`:`Ask about this ${askNoun()}: speed, downtime, waste, setups, notes, orders`;
+ for(const b of chipButtons)b.disabled=ranged&&b.dataset.period==='day';   // the per-shift matrices have no period form
+ if(!openEntry){ $('card-question').textContent=`Ask about this ${askNoun()}`; $('status').textContent=`${scopeLabel(scope)} · no question yet`; }
+ renderThread();   // an earlier answer's line names its window once the rail has moved off it
 }
 
 // ---- Example questions, grouped by intent. Daily chips run the day tools for the selected scope; the
@@ -150,7 +178,7 @@ function renderQuestionChips(){
   for(const [label,text,scope,period] of chips){
    const question=text.replaceAll('{period}',word);
    const b=node('button',label.replaceAll('{period}',word)); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question;
-   b.addEventListener('click',()=>{ if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
+   b.addEventListener('click',()=>{ if(b.disabled)return; if(b.dataset.scope&&$('scope').value!==b.dataset.scope){$('scope').value=b.dataset.scope;rescope();} setRail(false); $('question').value=question; ask(question).catch(()=>{}); });   // a canned question is a fixed query: always the offline planner
    row.append(b); chipButtons.push(b);
   }
   group.append(row); box.append(group);
@@ -183,7 +211,12 @@ function showHeatmap(chart) {
 }
 // ---- Charts: plain SVG, one axis per chart, text in ink tokens, series color on the marks only.
 // Every chart is drawn from a tool result's rows; the same rows sit in the evidence tables.
-const CHART_W=()=>(typeof window!=='undefined'&&window.innerWidth&&window.innerWidth<850)?420:690;
+// The viewBox width follows where the chart is drawn: 420 on a phone, 480 for each of two charts side by
+// side in a desktop card (issue #63: both charts above the fold), 690 for a chart with the card to itself.
+let chartPair=false;
+function wideWidth(){ try{return typeof matchMedia==='function'&&matchMedia('(min-width:1320px)').matches;}catch(e){return false;} }
+const CHART_W=()=>(typeof window!=='undefined'&&window.innerWidth&&window.innerWidth<850)?420:chartPair?480:690;
+const ROW_H=()=>chartPair?26:30;
 const niceCeil=v=>{ if(!(v>0))return 1; const p=10**Math.floor(Math.log10(v)); const m=v/p; return (m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*p; };
 const fmtTick=(v,unit)=>v>=1000?`${(v/1000).toLocaleString(undefined,{maximumFractionDigits:1})}K`:Number.isInteger(v)?String(v):v.toFixed(v<1?2:1);
 const fmtVal=(v,unit)=>v===null||v===undefined?'unavailable':`${Number(v).toLocaleString(undefined,{maximumFractionDigits:Math.abs(v)>=100?0:Math.abs(v)>=10?1:2})}${unit&&unit!=='count'?' '+unitShort(unit):''}`;
@@ -193,49 +226,50 @@ function barPath(x,y,w,h,cls,r=4){ // square at the baseline, 4px rounded data e
  const d=w<=0?`M${x} ${y}h0v${h}h0Z`:`M${x} ${y}h${w-r}a${r} ${r} 0 0 1 ${r} ${r}v${h-2*r}a${r} ${r} 0 0 1 ${-r} ${r}H${x}Z`;
  return svgNode('path',{d,class:cls});
 }
-function chartCard(title,notes=[]){ const wrap=node('div',undefined,'chart');wrap.append(node('h3',title));for(const n of notes)if(n)wrap.append(node('p',n.text||n,n.cls||'muted'));return wrap; }
+function chartCard(title,notes=[]){ const wrap=node('div',undefined,'chart'), head=node('div',undefined,'chart-head');head.append(node('h3',title));wrap.append(head);wrap.head=head;for(const n of notes)if(n)wrap.append(node('p',n.text||n,n.cls||'muted'));return wrap; }   // the head row takes the link back to the query (#63)
 function legend(items){ const box=node('div',undefined,'lg');for(const [cls,label] of items){const item=node('span');item.append(node('i',undefined,'sw '+cls),node('span',label));box.append(item);}return box; }
 // Horizontal axis along the bottom: hairline gridlines at 0, ½ and the nice maximum, labels beneath.
 function xAxis(svg,x0,x1,yTop,yBottom,max,unit){
  for(const t of [0,.5,1]){const x=x0+(x1-x0)*t;svg.append(svgNode('line',{x1:x,x2:x,y1:yTop,y2:yBottom,class:'grid'+(t===0?' base':'')}));svg.append(svgNode('text',{x,y:yBottom+16,'text-anchor':t===0?'start':t===1?'end':'middle',class:'tick'},fmtTick(max*t,unit)));}
 }
-function frame(W,rows,rowH,top=8,wideValues=false){ const H=top+rows*rowH+28; const labelW=W<500?110:160, valueW=wideValues?(W<500?130:215):(W<500?96:150); return {W,H,labelW,valueW,x0:labelW+8,x1:W-valueW-8,top,chars:W<500?14:21}; }
+function frame(W,rows,rowH,top=8,wideValues=false){ const H=top+rows*rowH+28; const labelW=W<440?110:W<500?138:160, valueW=wideValues?(W<500?130:215):(W<500?96:150); return {W,H,labelW,valueW,x0:labelW+8,x1:W-valueW-8,top,chars:W<440?14:W<500?19:21}; }
 function labelText(svg,text,x,y,maxChars){ const t=String(text); svg.append(svgNode('text',{x,y,'text-anchor':'end',class:'lbl'},t.length>maxChars?t.slice(0,maxChars-1)+'…':t)); }
 // Generic single-series horizontal bars (downtime by reason, dry-end rejects, stops per day).
 function barChart(chart,wrap){
- const rows=chart.rows, W=CHART_W(), f=frame(W,rows.length,30), max=niceCeil(Math.max(...rows.map(r=>Number(r[chart.y])||0)));
+ const rows=chart.rows, W=CHART_W(), rh=ROW_H(), f=frame(W,rows.length,rh), max=niceCeil(Math.max(...rows.map(r=>Number(r[chart.y])||0)));
  const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':`${chart.title||'Shift '+chart.shift} ${chart.unit} chart`});
- xAxis(svg,f.x0,f.x1,f.top,f.top+rows.length*30,max,chart.unit);
- rows.forEach((r,i)=>{const y=f.top+i*30, v=Number(r[chart.y])||0, label=r.weekday?`${r.weekday} ${shortDay(r[chart.x])}`:r[chart.x];
-  labelText(svg,label,f.x0-8,y+19,f.chars);
-  svg.append(barPath(f.x0,y+7,(v/max)*(f.x1-f.x0),16,chart.coverage==='complete'?'bar cur':'bar incomplete'));
+ xAxis(svg,f.x0,f.x1,f.top,f.top+rows.length*rh,max,chart.unit);
+ rows.forEach((r,i)=>{const y=f.top+i*rh, v=Number(r[chart.y])||0, label=r.weekday?`${r.weekday} ${shortDay(r[chart.x])}`:r[chart.x];
+  labelText(svg,label,f.x0-8,y+rh/2+4,f.chars);
+  svg.append(barPath(f.x0,y+(rh-16)/2,(v/max)*(f.x1-f.x0),16,chart.coverage==='complete'?'bar cur':'bar incomplete'));
   const detail=`${label}: ${fmtVal(v,chart.unit)}`+(r.minutes_per_stop!==undefined?`; ${fmtVal(r.minutes,'min')}, ${fmtVal(r.minutes_per_stop,'min/stop')}`:'');
-  const t=svgNode('text',{x:f.x1+8,y:y+19,tabindex:0,'aria-label':detail,class:'val'},fmtVal(v,chart.unit));t.append(svgNode('title',{},detail));svg.append(t);});
+  const t=svgNode('text',{x:f.x1+8,y:y+rh/2+4,tabindex:0,'aria-label':detail,class:'val'},fmtVal(v,chart.unit));t.append(svgNode('title',{},detail));svg.append(t);});
  wrap.append(svg);
 }
-// Wet-end speed: bars with the grade-target mark; long lists show the five best and five worst by % of target.
+// Wet-end speed: bars with the grade-target mark; long lists show the best and worst by % of target: five
+// of each with the card to itself, three of each beside another chart, the rest behind "Show all".
 function speedChart(chart,wrap){
- const all=chart.rows, long=all.length>10; let showAll=!long;
+ const all=chart.rows, W=CHART_W(), rh=ROW_H(), keep=chartPair?3:5, word=keep===3?'three':'five', long=all.length>2*keep; let showAll=!long;
  const box=node('div'); wrap.append(box);
  const draw=()=>{
   box.replaceChildren();
   let rows=all, divider=-1;
-  if(!showAll){const sorted=[...all].sort((a,b)=>(b.speed_to_target_pct??0)-(a.speed_to_target_pct??0));rows=[...sorted.slice(0,5),...sorted.slice(-5)];divider=5;}
-  const W=CHART_W(), f=frame(W,rows.length+(divider>0?1:0),30), max=niceCeil(Math.max(...rows.map(r=>Math.max(Number(r[chart.y])||0,Number(r.target_fpm)||0))));
+  if(!showAll){const sorted=[...all].sort((a,b)=>(b.speed_to_target_pct??0)-(a.speed_to_target_pct??0));rows=[...sorted.slice(0,keep),...sorted.slice(-keep)];divider=keep;}
+  const slots=rows.length+(divider>0?1:0), f=frame(W,slots,rh), max=niceCeil(Math.max(...rows.map(r=>Math.max(Number(r[chart.y])||0,Number(r.target_fpm)||0))));
   const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':`Shift ${chart.shift} ${chart.unit} chart`});
-  xAxis(svg,f.x0,f.x1,f.top,f.top+(rows.length+(divider>0?1:0))*30,max,chart.unit);
+  xAxis(svg,f.x0,f.x1,f.top,f.top+slots*rh,max,chart.unit);
   let slot=0;
   rows.forEach((r,i)=>{
-   if(i===divider){svg.append(svgNode('text',{x:f.x0,y:f.top+slot*30+19,class:'tick'},`… ${all.length-10} more between the best five and the worst five …`));slot++;}
-   const y=f.top+slot*30; slot++;
-   labelText(svg,r[chart.x],f.x0-8,y+19,f.chars);
-   svg.append(barPath(f.x0,y+7,(Number(r[chart.y])/max)*(f.x1-f.x0),16,chart.coverage==='complete'?'bar cur':'bar incomplete'));
-   if(r.target_fpm){const x=f.x0+r.target_fpm/max*(f.x1-f.x0);svg.append(svgNode('line',{x1:x,x2:x,y1:y+4,y2:y+26,class:'target'}));}
+   if(i===divider){svg.append(svgNode('text',{x:f.x0,y:f.top+slot*rh+rh/2+4,class:'tick'},W<500?`… ${all.length-2*keep} more in between …`:`… ${all.length-2*keep} more between the best ${word} and the worst ${word} …`));slot++;}
+   const y=f.top+slot*rh; slot++;
+   labelText(svg,r[chart.x],f.x0-8,y+rh/2+4,f.chars);
+   svg.append(barPath(f.x0,y+(rh-16)/2,(Number(r[chart.y])/max)*(f.x1-f.x0),16,chart.coverage==='complete'?'bar cur':'bar incomplete'));
+   if(r.target_fpm){const x=f.x0+r.target_fpm/max*(f.x1-f.x0);svg.append(svgNode('line',{x1:x,x2:x,y1:y+(rh-22)/2,y2:y+(rh+22)/2,class:'target'}));}
    const detail=r.target_fpm?`${r[chart.x]} / ${r.grade||'grade-weighted'}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. Includes downtime.`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;
-   const value=svgNode('text',{x:f.x1+8,y:y+19,tabindex:0,'aria-label':detail,class:'val'},r.target_fpm?`${Number(r[chart.y]).toFixed(1)} / ${r.speed_to_target_pct.toFixed(1)}%`:Number(r[chart.y]).toFixed(1));value.append(svgNode('title',{},detail));svg.append(value);
+   const value=svgNode('text',{x:f.x1+8,y:y+rh/2+4,tabindex:0,'aria-label':detail,class:'val'},r.target_fpm?`${Number(r[chart.y]).toFixed(1)} / ${r.speed_to_target_pct.toFixed(1)}%`:Number(r[chart.y]).toFixed(1));value.append(svgNode('title',{},detail));svg.append(value);
   });
   box.append(svg);
-  if(long){const toggle=node('button',showAll?'Show the five best and five worst':`Show all ${all.length}`,'secondary more');toggle.type='button';toggle.addEventListener('click',()=>{showAll=!showAll;draw();});box.append(toggle);}
+  if(long){const toggle=node('button',showAll?`Show the ${word} best and ${word} worst`:`Show all ${all.length}`,'secondary more');toggle.type='button';toggle.addEventListener('click',()=>{showAll=!showAll;draw();});box.append(toggle);}
  };
  draw();
 }
@@ -334,7 +368,7 @@ function showChart(chart) {
  const title=chart.title||`Shift ${chart.shift} · ${chart.unit==='minutes'?'Recorded downtime':isSpeed?'Wet-end speed (bars) / grade target (marks)':'Dry-end rejects'}`;
  const notes=[];
  if(chart.coverage!=='complete')notes.push({text:'Incomplete data: observed values only.',cls:'warning-note'});
- if(isSpeed)notes.push('Value = ft/min / % of target. Hover or focus a value for grade and target details. 100% meets target; elapsed time includes downtime.');
+ if(isSpeed)notes.push(chartPair?'ft/min / % of grade target; elapsed time includes stops.':'Value = ft/min / % of target. Hover or focus a value for grade and target details. 100% meets target; elapsed time includes downtime.');
  const wrap=chartCard(title,notes);
  if(!rows.length)wrap.append(node('p','No records match this filter.','muted'));
  else if(chart.type==='line')lineChart(chart,wrap);
@@ -344,7 +378,7 @@ function showChart(chart) {
  else if(chart.y2)pairedChart(chart,wrap);
  else if(isSpeed)speedChart(chart,wrap);
  else barChart(chart,wrap);
- const link=queryLink(chart.source_result_id);if(link)wrap.append(link);
+ const link=queryLink(chart.source_result_id);if(link)wrap.head.append(link);
  $('charts').append(wrap);
 }
 const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'Speed w/o stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status'};
@@ -431,14 +465,13 @@ async function post(path,body,extraHeaders={}){
 
 async function primeKpis(){
  const token=++primeToken, question=primeQuestion();
- if(!config||!question||busy||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;
+ if(!config||!question||openEntry||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;
  try{
   const response=await post('/api/ask',{question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:$('period').value});
   const result=await response.json();
-  if(token!==primeToken||!response.ok||!Array.isArray(result.trace))return;
+  if(token!==primeToken||openEntry||!response.ok||!Array.isArray(result.trace))return;   // a question was asked meanwhile: the card is its answer now
   const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
   if(!entry)return;
-  if(!latest)$('metrics').replaceChildren();
   renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
   const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
@@ -459,8 +492,9 @@ function copyText(text,button){
  const done=label=>{const was=button.textContent;button.textContent=label;setTimeout(()=>{button.textContent=was;},1500);};
  try{ if(typeof navigator!=='undefined'&&navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>done('Copied'),()=>done('Copy failed')); else done('Copy unavailable'); }catch(e){done('Copy failed');}
 }
-function revealStep(i){ try{ $('execution').open=true; const fold=document.querySelector?.('.supporting-fold'); if(fold)fold.open=true; const step=document.getElementById(`step-${i}`); if(step)step.open=true; }catch(e){} }
-function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; return a; }
+function revealStep(i){ try{ $('execution').open=true; const step=document.getElementById(`step-${i}`); if(step)step.open=true; }catch(e){} }
+let revealQueries=()=>{};   // unfolds the query lines behind "N more queries"; set by renderQueries for the answer on screen
+function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; a.addEventListener('click',()=>revealQueries()); return a; }
 function queryBox(entry,i){
  const d=node('details',undefined,'query '+(entry.ok?'ok':'failed')); d.id=`query-${i}`;
  const sum=node('summary',undefined,'query-sum');
@@ -477,18 +511,23 @@ function queryBox(entry,i){
  d.append(foot);
  return d;
 }
+const VISIBLE_QUERIES=3;
 function renderQueries(result){
- const box=$('queries'); box.replaceChildren(); stepIndex=new Map();
+ const box=$('queries'); box.replaceChildren(); stepIndex=new Map(); revealQueries=()=>{};
  const steps=result.trace||[]; if(!steps.length)return;
  steps.forEach((e,i)=>{if(e.result_id)stepIndex.set(e.result_id,i);});
- const total=steps.reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
- const head=node('div',undefined,'queries-head'); head.append(node('span','Queries that produced this answer'),node('span',`${steps.length} ${steps.length===1?'query':'queries'} · ${total.toFixed(0)} ms`,'mono')); box.append(head);
- const phone=phoneWidth(), boxes=steps.map((entry,i)=>{const d=queryBox(entry,i);d.open=!phone&&i===0;box.append(d);return d;});   // step 1 open; the rest, and all on a phone, one line with the SQL on tap
+ const total=steps.reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);   // the count and the wall time are on the card's title line; the server's own time is in the foot
+ // Step 1 open; the rest, and all on a phone, one line with the SQL on tap. The first three lines show (one on
+ // a phone) and the others wait behind "N more queries", so the card's charts stay above the fold (#63).
+ const phone=phoneWidth(), visible=phone?1:VISIBLE_QUERIES, boxes=steps.map((entry,i)=>{const d=queryBox(entry,i);d.open=!phone&&i===0;d.hidden=i>=visible;box.append(d);return d;});
  const foot=node('div',undefined,'queries-foot');
- const all=node('button','Expand all','secondary');all.type='button';all.addEventListener('click',()=>{const open=!boxes.every(b=>b.open);for(const b of boxes)b.open=open;all.textContent=open?'Collapse all':'Expand all';});foot.append(all);
+ const all=node('button',undefined,'secondary');all.type='button';
+ const label=()=>{const more=boxes.filter(b=>b.hidden).length;all.textContent=more?`${more} more ${more===1?'query':'queries'}`:boxes.every(b=>b.open)?'Collapse all':'Expand all';};
+ revealQueries=()=>{for(const b of boxes)b.hidden=false;label();};
+ all.addEventListener('click',()=>{if(boxes.some(b=>b.hidden))return revealQueries();const open=!boxes.every(b=>b.open);for(const b of boxes)b.open=open;label();});label();foot.append(all);
  const sqls=steps.map((e,i)=>[e,i,sqlText(e)]).filter(x=>x[2]);
  if(sqls.length){const copy=node('button','Copy all SQL','secondary');copy.type='button';const text=sqls.map(([e,i,sql])=>`-- query ${i+1}: ${e.tool}(${argText(e.arguments)})\n${sql}`).join('\n\n');copy.dataset.copy=text;copy.addEventListener('click',()=>copyText(text,copy));foot.append(copy);}
- foot.append(node('span','Fixed, parameterized queries. Visitors cannot edit them.'));
+ foot.append(node('span',`${steps.length} ${steps.length===1?'query':'queries'} · ${total.toFixed(0)} ms on the server. Fixed, parameterized queries. Visitors cannot edit them.`,'queries-note'));
  box.append(foot);
 }
 function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool calls · ${usage.model_calls} model call${usage.model_calls===1?'':'s'} · estimated $${Number(usage.cost_usd||0).toFixed(4)}`+(usage.reserved_usd!==undefined?` · reserved $${Number(usage.reserved_usd).toFixed(2)}`:''):`${usage.tool_calls} tool call${usage.tool_calls===1?'':'s'} · $0 model cost`; }
@@ -497,60 +536,156 @@ function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool ca
 // runs *before* its frame paints, so the work is queued for the frame after: two frames deep.
 // Without a frame scheduler (tests), it renders synchronously.
 function afterPaint(f){if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>requestAnimationFrame(f));else f();}
+// ---- Shift KPI tiles (issue #63): the eleven numbers of a shift's KPI row on six tiles, one row under the
+// charts. Each tile leads with one number and carries its companion beneath; every value is the tool's own.
+function shiftTiles(entry,result,prefix){
+ const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete', who=entry.data.shift?'Shift '+entry.data.shift:result.period_label;
+ const fixed=(v,places)=>Number(v).toFixed(places), count=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
+ const tiles=[
+  ['Speed',fixed(r.observed_shift_fpm,1),'ft/min',`${fixed(r.speed_to_target_pct,1)}% of target`,r.speed_to_target_pct<100,'Speed / target = lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.'],
+  ['Maintenance',fixed(r.maintenance_pct,2),'%',`operator ${fixed(r.operator_pct,2)}%`,r.maintenance_pct>2.5||r.operator_pct>2.5,'Recorded stop time by kind, as a share of the shift. Each is flagged above 2.5%.'],
+  ['Trim',fixed(r.trim_pct,2),'%',`shear ${fixed(r.shear_pct,2)}%`,false,'Side trim and shear waste, % of gross area.'],
+  ['Dry-end waste',fixed(r.dry_end_pct,2),'%',r.dry_end_pct>1?'above the 1% flag':'not above the 1% flag',r.dry_end_pct>1,'Dry-end rejects, % of gross area.'],
+  ['Dry-end setups',count(r.valid_setups),'',`${count(r.paper_changes)} paper changes`,false,'Paper changes: the count of distinct wet-end runs, as defined by the plant expert.'],
+  ['Throughput',fixed(r.throughput_in,1),'in',`${count(r.lineal_per_setup)} ft lineal / setup`,false,''],
+ ];
+ for(const [label,value,unit,sub,bad,title] of tiles){
+  const card=node('div',undefined,'metric'+(bad||incomplete?' warning':''));
+  card.append(node('div',prefix?`${who} · ${label}`:label,'label'));
+  const v=node('div',undefined,'value');v.append(node('span',incomplete?'Incomplete':value));if(unit&&!incomplete)v.append(node('small',unit,unit==='%'?'pct':undefined));card.append(v);
+  card.append(node('div',incomplete?`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`:sub,'sub'));
+  if(title)card.title=title;
+  $('metrics').append(card);
+ }
+}
 function showResult(result) {
- $('heatmaps').replaceChildren();
- latest=result; $('download').disabled=false; $('pdf').disabled=false;
- try{const fold=document.querySelector('.examples-fold'); if(fold&&fold.open)fold.open=false;}catch(e){}  // the first answer folds the examples so the conversation has the room
- $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();   // each answer replaces the last one's evidence
+ latest=result; $('foot-note').textContent='';   // the exports sit on the card's footer line, which only a finished answer shows
+ for(const id of ['heatmaps','kpis','tables','charts','metrics','trace'])$(id).replaceChildren();   // each answer replaces the last one's evidence
  renderQueries(result);   // the query box: first below the question, built in the first paint (#40)
  const kpiEntry=result.trace.find(e=>e.ok&&(e.tool==='get_period_kpis'||e.tool==='compare_periods'));
  if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`);
- for(const entry of result.trace) {
-   if(entry.ok && (entry.tool==='get_shift_kpis'||entry.tool==='get_shift_overview'||entry.tool==='get_period_report')){
-   const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete';
-   for(const [label,value,unit,bad] of [['Speed',r.observed_shift_fpm,'ft/min',false],['Speed / target',r.speed_to_target_pct,'%',r.speed_to_target_pct<100],['Dry-end setups',r.valid_setups,'',false],['Paper changes',r.paper_changes,'',false],['Maintenance',r.maintenance_pct,'%',r.maintenance_pct>2.5],['Operator',r.operator_pct,'%',r.operator_pct>2.5],['Dry-end waste',r.dry_end_pct,'%',r.dry_end_pct>1],['Trim',r.trim_pct,'%',false],['Shear',r.shear_pct,'%',false],['Throughput',r.throughput_in,'in',false],['Lineal / setup',r.lineal_per_setup,'ft',false]]){
-    const card=node('div',undefined,'metric '+(bad||incomplete?'warning':''));card.append(node('div',`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · ${label}`,'label'));if(label==='Speed / target')card.title='Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.';if(label==='Paper changes')card.title='Count of distinct wet-end runs, as defined by the plant expert.';card.append(node('div',incomplete?'Incomplete':`${Number(value).toFixed(1)} ${unit}`,'value'));if(incomplete)card.append(node('small',`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`));$('metrics').append(card);
-   }
-  }
- }
+ const shiftRows=result.trace.filter(e=>e.ok&&(e.tool==='get_shift_kpis'||e.tool==='get_shift_overview'||e.tool==='get_period_report'));
+ for(const entry of shiftRows)shiftTiles(entry,result,shiftRows.length>1);   // all shifts: one row of tiles per shift, each named
+ const plain=result.charts.filter(c=>c.type!=='calendar_heatmap').length;
+ chartPair=plain>=2&&wideWidth(); $('charts').className=plain>=2?'pair':'';   // two charts or more sit side by side on a desktop (#63)
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
  afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip
  $('calls').textContent=' · '+usageText(result.usage);
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
- updateScope();
 }
-const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key','report'];
-function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; for(const b of chipButtons)b.disabled=flag; const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
-async function ask(question,{report=false}={}) {
- if(busy)throw new Error('An investigation is already running');
+
+// ---- The answer card and the thread (issue #63). The card is one element with four states: idle (no
+// question yet; the scope tiles), skeleton (asked, nothing back yet), done and failed. Submitting paints
+// the skeleton in the same task as the click, and the answer fills that same card when it arrives.
+const EMPTY_TEXT='Type a question above or pick one on the left. An answer shows its queries first, then the summary, the charts and the numbers.';
+function clearEvidence(){
+ latest=null; stepIndex=new Map(); revealQueries=()=>{};
+ for(const id of ['queries','messages','charts','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren();
+ $('calls').textContent=''; $('foot-note').textContent=''; $('execution').open=false;
+}
+function entryMeta(entry){
+ const parts=[scopeLabel(entry.scope)]; if(entry.corrupt)parts.push('bad trim record included'); parts.push(entry.modeWord);
+ if(entry.state==='pending')parts.push(entry.report?'building the report; the first one can take a minute…':'querying…');
+ else if(entry.state==='failed')parts.push('could not complete');
+ else{
+  const r=entry.result, n=(r.trace||[]).length, u=r.usage||{};
+  if(r.status&&r.status!=='complete')parts.push(r.status);
+  parts.push(`${n} ${n===1?'query':'queries'}`);
+  if(u.model_calls)parts.push(`${u.model_calls} model call${u.model_calls===1?'':'s'} · est. $${Number(u.cost_usd||0).toFixed(4)}`);
+  if(entry.ms!==null)parts.push(`${Math.round(entry.ms)} ms`);
+ }
+ return parts.join(' · ');
+}
+// The title line: <question> · Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 93 ms. The ms is the wall
+// time in this browser from submit to the rendered card; the server's own time is on the tooltip.
+function paintStatus(){
+ const entry=openEntry; if(!entry)return;
+ $('status').textContent=entryMeta(entry);
+ if(entry.state!=='done'||entry.ms===null){$('status').title='';return;}
+ const r=entry.result, server=typeof r.elapsed_ms==='number'?r.elapsed_ms:(r.trace||[]).reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
+ $('status').title=`${Math.round(entry.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${r.mode}.`;
+}
+function paintCard(){
+ const entry=openEntry, card=$('card');
+ clearEvidence();
+ if(!entry){
+  card.className='card answer idle'; card.setAttribute('aria-busy','false'); card.setAttribute('aria-label','Answer'); $('status').title='';
+  $('messages').append(node('p',EMPTY_TEXT,'empty')); updateScope(); return;   // updateScope writes the idle title for the selected scope
+ }
+ card.setAttribute('aria-label',`Answer: ${entry.question}`); $('card-question').textContent=entry.question;
+ if(entry.state==='pending'){ card.className='card answer skeleton'; card.setAttribute('aria-busy','true'); paintStatus(); return; }
+ card.setAttribute('aria-busy','false');
+ if(entry.state==='failed'){ card.className='card answer failed'; message('Could not complete',[entry.error],'error'); paintStatus(); return; }
+ card.className='card answer done';
+ if(entry.note)message('Note',[entry.note]);
+ message(null,entry.result.sections||[]);
+ showResult(entry.result); paintStatus();
+}
+// Earlier answers, newest on top, one line each: <question> · Shift 2 · 52 ms · Open. The window is named
+// only when it is not the one the rail shows now.
+function entryLine(entry){
+ const current=currentScope(), parts=[whoText(entry.scope)];
+ if(entry.scope.day!==current.day||entry.scope.period!==current.period)parts.push(windowText(entry.scope));
+ parts.push(entry.state==='pending'?'querying…':entry.state==='failed'?'could not complete':`${Math.round(entry.ms??0)} ms`);
+ return parts.join(' · ');
+}
+function renderThread(){
+ $('thread').replaceChildren(...thread.filter(entry=>entry!==openEntry).map(entry=>{
+  const row=node('article',undefined,'card earlier'+(entry.state==='failed'?' failed':'')); row.setAttribute('aria-label',`Earlier answer: ${entry.question}`);
+  const open=node('button','Open','secondary open'); open.type='button'; open.setAttribute('aria-label',`Open the answer to: ${entry.question}`); open.addEventListener('click',()=>openCard(entry));
+  row.append(node('span',entry.question,'q'),node('span',entryLine(entry),'meta'),open); return row;
+ }));
+}
+function toCard(){ try{if(window.scrollY>0)window.scrollTo({top:0});}catch(e){} }   // the open card is always at the top of the main column
+function openCard(entry){ openEntry=entry; primeToken++; paintCard(); renderThread(); toCard(); }
+function setRail(open){ railOpen=!!open; try{document.body.classList.toggle('rail-open',railOpen);}catch(e){} $('rail-toggle').setAttribute('aria-expanded',String(railOpen)); $('rail-toggle').textContent=railOpen?'Close':'Questions'; }
+// Ask is the deterministic path: the offline planner, whatever agent is chosen. "Ask the analyst" passes the
+// live agent as `mode`. Either way the request is the same /api/ask payload as before.
+async function ask(question,{report=false,mode='offline'}={}) {
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
- setBusy(true);$('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Querying evidence…';
- const empty=$('messages').querySelector('.empty');if(empty)empty.remove();message('You',[question],'user');
+ const live=report?null:(PROVIDERS[mode]||null), epoch=sessionEpoch;
+ const entry={id:++entrySeq,question:question.trim(),scope:{day:$('day').value,period:$('period').value,shift:Number($('shift').value),scope:$('scope').value},corrupt:$('corrupt').checked,modeWord:live?live.name:'offline',report,state:'pending',started:now(),ms:null,result:null,error:null,note:null};
+ thread.unshift(entry); openEntry=entry; primeToken++;
+ paintCard(); renderThread(); toCard();   // the skeleton card is in the DOM before this function first yields: the same task as the click
  try{
+  if(!config){await boot;if(!config)throw new Error('Workbench unavailable');}
   const headers={};
-  const p=provider();
-  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
+  if(live && $('api-key').value && !(config&&config.public))headers[live.header]=$('api-key').value;
   $('api-key').value='';
-  const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:report?'offline':$('mode').value,scope:$('scope').value,period:$('period').value};
+  const body={question,day:entry.scope.day,shift:entry.scope.shift,corrupt:entry.corrupt,session_id:sessionId,mode:live?mode:'offline',scope:entry.scope.scope,period:entry.scope.period};
   if(report)body.report=true;
-  const pending=post('/api/ask',body,headers);
-  for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
-  const response=await pending;
+  const sent=post('/api/ask',body,headers);
+  for(const p of Object.values(PROVIDERS))delete headers[p.header];
+  const response=await sent;
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-  if(result.session_reset&&sessionId)message('Note',['The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.']);
-  sessionId=result.session_id;
-  message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
- }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
- finally{setBusy(false);updateScope();}
+  if(result.session_reset&&body.session_id)entry.note='The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.';
+  if(epoch===sessionEpoch)sessionId=result.session_id;   // the rail moved on while this was out: its conversation is not the current one
+  entry.result=result; entry.state='done';
+  if(openEntry===entry)paintCard();
+  entry.ms=now()-entry.started;
+  return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+ }catch(error){
+  entry.state='failed'; entry.error=error.message; entry.ms=now()-entry.started;
+  if(openEntry===entry)paintCard();
+  throw error;
+ }finally{ if(openEntry===entry)paintStatus(); renderThread(); }
 }
-$('ask').addEventListener('submit',event=>{event.preventDefault();ask($('question').value).catch(()=>{});});
-$('report').addEventListener('click',()=>{ if(busy)return; ask(`Build ${PERIOD_NOUN[$('period').value]||'period'} report`,{report:true}).catch(()=>{}); });
-function reset(){$('heatmaps').replaceChildren();$('kpis').replaceChildren();$('queries').replaceChildren();stepIndex=new Map();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();primeKpis();}
-$('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
-$('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
+function submitQuestion(mode){ const question=$('question').value; if(!question.trim()){$('question').focus?.();return;} ask(question,mode?{mode}:{}).catch(()=>{}); }
+$('ask').addEventListener('submit',event=>{event.preventDefault();submitQuestion(null);});
+$('analyst').addEventListener('click',()=>{const mode=analystMode();if(mode)submitQuestion(mode);});
+$('report').addEventListener('click',()=>{ setRail(false); $('question').value=''; ask(`Build ${PERIOD_NOUN[$('period').value]||'period'} report`,{report:true}).catch(()=>{}); });
+$('rail-toggle').addEventListener('click',()=>setRail(!railOpen));
+$('came-back').addEventListener('click',()=>{$('execution').open=true;});
+// A scope change starts a fresh conversation and puts the open answer on the thread with the scope it was
+// asked under; the card goes back to idle for the new scope. "Clear answers" also empties the thread.
+function rescope(){ sessionId=null; sessionEpoch++; $('api-key').value=''; openEntry=null; paintCard(); primeKpis(); }
+function reset(){ thread.length=0; rescope(); }
+$('mode').addEventListener('change',()=>{const p=provider();$('api-key').value='';updateScope();$('mode-help').textContent=p?(config&&config.public?`Public demo: Ask the analyst has ${p.name} choose which bounded tools to run and write the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`Ask the analyst sends ${p.name} your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges. Ask and the canned questions stay offline.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
+$('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',rescope);$('shift').addEventListener('change',rescope);$('scope').addEventListener('change',rescope);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
-$('pdf').addEventListener('click',async()=>{if(!latest||busy)return;$('pdf').disabled=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
+let pdfPending=false;   // one PDF at a time, without disabling the control
+$('pdf').addEventListener('click',async()=>{if(!latest||pdfPending)return;const result=latest;pdfPending=true;$('foot-note').textContent='Building the PDF…';try{const response=await post('/api/report',{session_id:result.session_id,run_id:result.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${result.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);if(latest===result)$('foot-note').textContent='';}catch(error){if(latest===result)$('foot-note').textContent=error.message;}finally{pdfPending=false;}});
 function applyPublicMode(){
  // Hosted synthetic demo: no visitor keys, ever. A live option stays only when the server's own key for that provider and the cap are enabled.
  if(!config.public)return;
@@ -567,19 +702,19 @@ function applyPublicMode(){
   // milliseconds; the model path takes seconds and spends the site's budget. The model is a choice.
   if(!modes.includes($('mode').value))$('mode').value='offline';
   const live=modes.includes('anthropic')?'anthropic':modes[0];
-  $('mode-help').textContent=`Public demo: Offline answers instantly with fixed queries over synthetic records. Choose ${PROVIDERS[live]?.name||'the model'} to have a model pick the tools and write the interpretation; that takes several seconds and uses this site's own key under a spend cap. Every number comes from the queries either way; no visitor key is accepted.`;
+  $('mode-help').textContent=`Public demo: Ask answers instantly with fixed queries over synthetic records. Ask the analyst has ${PROVIDERS[live]?.name||'the model'} pick the tools and write the interpretation; that takes several seconds and uses this site's own key under a spend cap. Every number comes from the queries either way; no visitor key is accepted.`;
  }
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model available':'Synthetic data / Public demo';
 }
 async function init(){
- $('submit').disabled=true;renderSegments();renderQuestionChips();
+ renderSegments();renderQuestionChips();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
- applyPublicMode();updateScope(); $('submit').disabled=false;primeKpis();
+ applyPublicMode();updateScope();primeKpis();
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
  if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
  const context=document.modelContext;
- if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
+ if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}   // ask() is the offline planner whatever agent is chosen
  }catch(error){$('status').textContent=error.message;}
 }
-init();
+const boot=init();   // a question asked before /api/config has answered waits for it instead of finding a disabled button

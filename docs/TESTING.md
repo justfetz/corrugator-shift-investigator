@@ -23,7 +23,7 @@ The implementation follow-up passed 106 backend tests plus UI, syntax and whites
 | `test_archive.py` | Synthetic archive dates, manifests, reproducibility and run/setup counts |
 | `test_openai_provider.py` | Scripted provider responses, schema/payload handling, key hygiene, time/call limits and budget reservations |
 | `test_server.py` | Local HTTP protections, daily round trip, retained-report access, control references, `/api/config` calendar fields, weekend and out-of-range day refusals |
-| `test_ui.cjs` | DOM-stub rendering, direct density colors and the deep-cell ink flip, day detail events, legend, reset and controls, the light-by-default theme and the pinned toggle (issue #36), the query box first below the question and in the first paint with the per-step data deferred, its copy text equal to the SQL with bound values, the links between boxes, charts, tables and steps, and one line per step at phone width (issue #40) |
+| `test_ui.cjs` | The layout shell (issue #63): the rail, ask bar and card frame in order in the page source, the skeleton card in the same task as the submit, the measured ms on the title line, three canned questions making one open card and two collapsed lines, no control disabled while a question is out, the unchanged `/api/ask` payload, Ask offline and Ask the analyst live, two charts side by side in 480-wide boxes. Also DOM-stub rendering, direct density colors and the deep-cell ink flip, day detail events, legend, reset and controls, the light-by-default theme and the pinned toggle (issue #36), the query box first below the question and in the first paint with the per-step data deferred, its copy text equal to the SQL with bound values, the links between boxes, charts, tables and steps, and one line per step at phone width (issue #40) |
 | `test_evalboard.py` | The `/evals` page (issue #26): every golden case listed exactly once, counts and badge equal to the newest `history.jsonl` line, `last_run.json` in step with it, plain-words expectations for every `expect` key in use, one-case and whole-set runs, recorded cases replayed with every provider transport patched to fail, POST protections, the image layout (`INVESTIGATOR_EVALS`) and a build without the set |
 | `test_synth_determinism.py` | Same seed gives byte-identical record families; the pinned content hash of the default two months |
 | `test_records_invariants.py` | Physics and accounting invariants of every record, the seeded effects visible in the data, and the rule that no tool layer imports the answer keys |
@@ -37,6 +37,8 @@ As of the `/evals` page (issue #26) the suite is 498 tests (498 passed, none ski
 
 How the golden set is made is written up in [HOW_THIS_IS_BUILT](HOW_THIS_IS_BUILT.md) and `evals/README.md`: expected numbers come from a second, plain computation over the record families, never from the tools under test, and the file carries the dataset hash so a stale golden fails loudly.
 
+Where the fold falls is a browser question, so `tests/browser_layout.cjs` asks a browser: with a local server running, `node tests/browser_layout.cjs [http://127.0.0.1:7860] [--shots <folder>]` loads the page in headless Chromium through Playwright and asserts that at 1440×1040, with "Why was this shift slow?" answered, the summary's top, the second chart's bottom, the tiles and the footer line are all inside the viewport without scrolling and the rail fits; that the skeleton is in the DOM in the same task as the submit; that three canned questions make three cards with no reload and no disabled control; that the payload and routes are unchanged; and that 390×844 is one column with the rail behind "Questions". It is not in CI (no browser there): run it after any change to `index.html`, `style.css` or the card code, and attach its `--shots` pictures to the PR.
+
 The UI stub reads the stylesheet's light tokens only to compute WCAG contrast ratios for the chart colours and inks on the chart panel (issue #36); it does not apply CSS, enforce CSP, download a real file, or execute in a browser. PDF signatures do not prove page layout. Provider mocks do not prove that a live model chooses useful tools. Keep these distinctions in test reports.
 
 ## The September 7 review probes, archived
@@ -47,7 +49,7 @@ The review that first listed the PDF, history and guidance defects, and the read
 
 Start the server using [WORKBENCH](WORKBENCH.md). Reload after frontend changes. Use September 14, shift 2 unless specified.
 
-1. Production day / Offline / Selected shift only: click Why was this shift slow? Expect numeric evidence, downtime and speed charts, and $0 model cost.
+1. Day / shift 2: click Why was this shift slow? Expect a skeleton card at once, then the title line with `offline · 6 queries · N ms`, numeric evidence, the downtime and speed charts side by side and six tiles, all above the fold at 1440×1040.
 2. Ask about shift 1 without changing selected-shift scope. Expect a scope error. Choose All shifts / comparison explicitly to compare.
 3. Compare all shifts, then ask Show speed with the same controls. Inspect history in the execution panel. History must retain both questions; the selected control shift stays unchanged.
 4. Calendar month: click Period report. Expect September 1–30, 30 numbered cells of which 22 production days carry color and the 8 weekend cells are hatched plant-down, visible color variation, and a real August comparison (July, by contrast, is unavailable). Then ask "Why was this shift slow?" with Month still selected: expect the month's KPI tiles against August, a downtime Pareto and a waste breakdown for the selected shift, no daily tool in the trail, and the Setup matrix chip disabled.
@@ -55,7 +57,7 @@ Start the server using [WORKBENCH](WORKBENCH.md). Reload after frontend changes.
 6. 4-4-5 at September 14: expect September 1–28 and 28 cells. At September 29: expect September 29–October 26, two available dates, hatched missing dates, partial status, and no rankings.
 7. Enable the bad-trim option for shift 2 and rebuild. Expect incomplete evidence, hatched cells and withheld rankings. Disable it afterward.
 8. Download PDF after a period report. Require a successful HTTP response; regression checks cover week/month/accounting and partial windows. Parsing and visual layout review remain part of release QA.
-9. Select OpenAI (locally) without submitting. Expect the key field and cost notice under Day and under Week alike; the Period report button never calls a model. No live call is needed for this control test.
+9. Open Agent and advanced and select OpenAI (locally) without submitting. Expect the key field, the cost notice and the Ask the analyst button under Day and under Week alike; Ask, the canned questions and the Period report button never call a model. No live call is needed for this control test.
 10. Open the guide link; check the question guidance, metric definitions, and known-issues notice. Inspect at a narrow and wide viewport, including scrolling and keyboard focus.
 
 Record results as pass, fail, or not tested. A report that appears is not proof that its totals reconcile; use the calculation tests too.

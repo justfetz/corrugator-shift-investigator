@@ -22,7 +22,7 @@ If dependencies cannot import, use the project virtual environment and run `pyth
 | `budget_exhausted`, `timeout`, `context_limit` | A bounded investigation stopped. Narrow the request. Retained results, if any, are partial. |
 | Note: the server restarted since your last question | Another instance answered, or the process restarted, so the earlier follow-up context is gone; the question was still answered in a fresh conversation. Nothing to do. (Before issue #17 this surfaced as "Session expired" or "Missing session token" and needed a page reload.) |
 | Follow-up forgets a comparison | History now persists with unchanged controls. Date/scope/mode changes, resets and dataset changes intentionally clear it. Report unexpected loss with a minimal reproduction. |
-| Prior charts remain after an error | A failed request leaves the previous retained result visible. It does not constitute evidence for the new question. Reset to clear it. |
+| A question failed | A failed question is its own card: the reason is in the card and its line on the thread reads "could not complete". Earlier answers stay on the thread under it; they are not evidence for the failed question. **Clear answers** under Agent and advanced empties the thread. |
 
 The offline router is not a reliable intent classifier. For example, “How can we be better?” is rejected, but appending “on this shift” can trigger a generic production overview. This does not establish that improvement, profit, or safety advice was answered. OpenAI mode also needs evaluation of intent fulfillment; its instructions are not an application-enforced completion check.
 
@@ -38,7 +38,7 @@ The numbered day cells provide details by mouse, click, and keyboard focus. Keyb
 
 ## Downloads
 
-The period heatmap title error is repaired. If an old server still displays `'shift'`, restart it with the current code. Week/month/accounting exports pass byte/access regressions. Save text contains narrative sections, not every table or chart.
+The period heatmap title error is repaired. If an old server still displays `'shift'`, restart it with the current code. Week/month/accounting exports pass byte/access regressions. The Markdown export contains narrative sections, not every table or chart.
 
 Daily report PDF byte-format and session checks pass automated tests. That does not establish full visual PDF quality. PDF tables are summaries, with disclosed row limits; exports are not a screen capture or full evidence archive. A stale/foreign session-and-run reference is rejected. Reports live in memory and disappear on restart or eviction. Each session retains only its latest result.
 

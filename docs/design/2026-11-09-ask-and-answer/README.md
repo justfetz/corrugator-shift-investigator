@@ -39,6 +39,7 @@ Every number on the mockup is real: production day 2026-09-14, shift 2, from the
 
 | Part of the picture | Issue |
 | --- | --- |
+| The shell: rail, ask bar, card frame with its title line, skeleton on submit, earlier answers as lines, phone layout | #63 (built; `built-desktop.png` and `built-phone.png` are the app at 1440×1040 and 390×844) |
 | Query box at the top of the card; trace folded below | #40 |
 | Permalink, URL as state, rail controls re-ask | #20 |
 | Bars, tiles and rows link to their next question; follow-up chips | #21 |

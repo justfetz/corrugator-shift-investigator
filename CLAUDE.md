@@ -16,13 +16,14 @@ python3 evals/run.py                                 # 160 golden cases offline,
 python3 evals/run.py --live --provider anthropic     # needs ANTHROPIC_API_KEY; records fixtures under evals/fixtures/
 python3 evals/make_value_goldens.py                  # only after an intended generator change
 python -m investigator.server --port 7860            # local workbench at http://127.0.0.1:7860
+node tests/browser_layout.cjs                        # needs that server and Playwright; the fold, skeleton and phone checks no stub can make
 ```
 
 ## Layout
 
 - `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`, `/evals`, `/evals.json`, `/api/evals/run`) · `agent.py` (bounded tool loop and the offline `parse_request`) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `evalboard.py` (the `/evals` page's data; runs a case offline or replays its fixture, never a model) · `web/` (`app.js`, `index.html`, `evals.js`, `evals.html`, `trail.js`, `style.css`)
 - `evals/`: `golden.json` (87 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl` and `last_run.json` (written together by `--track`, shipped in the image, shown on `/evals`), `README.md` (the seven case types)
-- `tests/`: pytest suites and `test_ui.cjs`
+- `tests/`: pytest suites, `test_ui.cjs` and `browser_layout.cjs` (headless Chromium, not in CI)
 - `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md` · `archive/` (historical reviews, not current)
 - `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run), `preview.yml` (each PR gets a no-traffic tagged revision; its URL is a PR comment); `.github/scripts/` holds their helpers
 
