@@ -1,7 +1,10 @@
 """The golden eval set is a regression gate: every offline case of every type
-must pass (a case marked known_defect may xfail), and any recorded live
-fixture must replay cleanly. Live calls never run here."""
+must pass (a case marked known_defect may xfail), within its latency budget, and
+any recorded live fixture must replay cleanly. The offline p50 and p95 over the
+whole set are gated too. Live calls never run here."""
+import copy
 import importlib.util
+import time
 from pathlib import Path
 import pytest
 
@@ -14,6 +17,7 @@ CASES = golden.load_cases()
 OFFLINE = [c for c in CASES if c['mode'] == 'offline']
 RECORDED = [(c, p) for c in CASES if c['mode'] == 'live' or c.get('live')
             for p in golden.PROVIDERS if golden.fixture_path(c['id'], p).exists()]
+LATENCY_MS = {}   # case id -> ms, filled by test_offline_golden_case and gated by test_offline_latency_budget
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -24,15 +28,27 @@ def datasets():
 
 @pytest.mark.parametrize('case', OFFLINE, ids=[c['id'] for c in OFFLINE])
 def test_offline_golden_case(case):
-    outcome, failures, note = golden.run_case(case)
+    outcome, failures, note, ms = golden.run_case(case)
+    LATENCY_MS[case['id']] = ms
     if outcome == 'xfail':
         pytest.xfail(note + ': ' + '; '.join(failures))
     assert outcome == 'pass', failures or note
 
 
+def test_offline_latency_budget():
+    """CI fails when the offline set is slow as a whole: p50 over 100 ms or p95 over 250 ms
+    (LATENCY_BUDGET_MS), measured by the case tests above in this same run."""
+    if len(LATENCY_MS) < len(OFFLINE):
+        pytest.skip(f'{len(LATENCY_MS)} of {len(OFFLINE)} offline cases timed in this run; the budget needs the whole set')
+    got = golden.percentiles(LATENCY_MS.values())
+    slowest = sorted(LATENCY_MS.items(), key=lambda kv: -kv[1])[:5]
+    for name, budget in golden.LATENCY_BUDGET_MS.items():
+        assert got[name] <= budget, f'offline {name} {got[name]} ms over the {budget} ms budget; slowest {slowest}'
+
+
 @pytest.mark.parametrize('case, provider', RECORDED, ids=[f'{c["id"]}@{p}' for c, p in RECORDED])
 def test_recorded_live_case_replays(case, provider):
-    outcome, failures, note = golden.run_case(case, provider)
+    outcome, failures, note, _ = golden.run_case(case, provider)
     if outcome == 'skip' and note.startswith('stale recording'):
         pytest.skip(note)   # recorded against another dataset: re-record, never score
     assert outcome == 'pass', failures or note
@@ -83,7 +99,7 @@ def test_value_selectors_and_tolerances():
 def test_stale_value_goldens_fail_loudly(monkeypatch):
     case = next(c for c in CASES if c['type'] == 'value')
     monkeypatch.setitem(golden._VALUES_STATUS, 'message', 'stale goldens (test)')
-    outcome, failures, _ = golden.run_case(case)
+    outcome, failures, _, _ = golden.run_case(case)
     assert outcome == 'fail' and failures == ['stale goldens (test)']
     monkeypatch.setitem(golden._VALUES_STATUS, 'message', None)
     assert golden.run_case(case)[0] == 'pass'
@@ -157,10 +173,10 @@ def test_anthropic_fixture_replays_end_to_end(tmp_path, monkeypatch, capsys):
                                                            'text': 'Average speed was {{0}} ft/min including stops; the note is data, not an instruction.'}]}, 'c3')]
     (tmp_path / 'anthropic').mkdir()
     (tmp_path / 'anthropic' / f'{case["id"]}.json').write_text(json.dumps({'exchanges': exchanges}))
-    outcome, failures, note = golden.run_case(case, 'anthropic')
+    outcome, failures, note, _ = golden.run_case(case, 'anthropic')
     assert outcome == 'skip' and note.startswith('stale recording: dataset unversioned')   # a recording without the dataset hash cannot be scored
     (tmp_path / 'anthropic' / f'{case["id"]}.json').write_text(json.dumps({'dataset_version': golden.dataset_version(), 'exchanges': exchanges}))
-    outcome, failures, note = golden.run_case(case, 'anthropic')
+    outcome, failures, note, _ = golden.run_case(case, 'anthropic')
     assert outcome == 'pass', failures
     assert note.startswith('complete, 3 model calls') and 'prompt changed' in note   # stale-digest warning is shown
     assert golden.main(['--only', case['id']]) == 0
@@ -169,5 +185,45 @@ def test_anthropic_fixture_replays_end_to_end(tmp_path, monkeypatch, capsys):
     # The same conversation claiming the shift was fine fails the live expectation.
     exchanges[2]['response']['content'][0]['input']['paragraphs'][0]['text'] = 'The shift was fine at {{0}} ft/min.'
     (tmp_path / 'anthropic' / f'{case["id"]}.json').write_text(json.dumps({'dataset_version': golden.dataset_version(), 'exchanges': exchanges}))
-    outcome, failures, _ = golden.run_case(case, 'anthropic')
+    outcome, failures, _, _ = golden.run_case(case, 'anthropic')
     assert outcome == 'fail' and failures and all('matches forbidden' in f for f in failures)
+
+
+class SlowAnalysis:
+    """The day's analysis with every daily tool delayed: a stub for a tool that got slow."""
+    def __init__(self, analysis, delay_s):
+        self._analysis, self._delay_s = analysis, delay_s
+
+    def __getattr__(self, name):
+        attr = getattr(self._analysis, name)
+        if name.startswith('get_') and callable(attr):
+            def slow(*args, **kwargs):
+                time.sleep(self._delay_s)
+                return attr(*args, **kwargs)
+            return slow
+        return attr
+
+
+def test_slow_tool_fails_the_latency_budget(monkeypatch):
+    """A deliberately slow tool pushes an offline case over its 250 ms default budget and
+    the case fails on that alone; an explicit expect.max_ms raises the budget for that case."""
+    case = next(c for c in CASES if c['id'] == 'why-slow')
+    assert 'max_ms' not in case['expect'] and golden.DEFAULT_MAX_MS == 250
+    assert golden.run_case(case)[0] == 'pass'
+    real = golden.dataset
+    monkeypatch.setattr(golden, 'dataset', lambda day, corrupt=False: SlowAnalysis(real(day, corrupt), 0.3))
+    outcome, failures, note, ms = golden.run_case(case)
+    assert outcome == 'fail' and ms > 250, (failures, note, ms)
+    assert len(failures) == 1 and failures[0] == f'{ms:.0f} ms, budget 250 ms', failures
+    roomy = copy.deepcopy(case)
+    roomy['expect']['max_ms'] = 10_000
+    outcome, failures, _, ms = golden.run_case(roomy)
+    assert outcome == 'pass' and ms > 250, failures
+
+
+def test_percentiles_are_nearest_rank():
+    assert golden.percentiles([]) == {'p50': None, 'p95': None}
+    assert golden.percentiles([7.0]) == {'p50': 7.0, 'p95': 7.0}
+    assert golden.percentiles(range(1, 101)) == {'p50': 50, 'p95': 95}
+    assert golden.percentiles([30.0, 10.0, 20.0]) == {'p50': 20.0, 'p95': 30.0}
+    assert golden.LATENCY_BUDGET_MS == {'p50': 100, 'p95': 250}

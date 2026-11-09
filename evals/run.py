@@ -28,7 +28,8 @@ by pass rate (`THRESHOLDS`), an offline case passes or fails on its own.
     python3 evals/run.py --json out.json              # machine-readable results
 
 Exit status is the number of failed offline cases plus the number of live
-(provider, type) pairs under their pass-rate threshold. Skips and known
+(provider, type) pairs under their pass-rate threshold, plus one per offline
+latency percentile (p50, p95) over its budget. Skips and known
 defects do not count.
 """
 from __future__ import annotations
@@ -43,6 +44,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -60,6 +62,11 @@ TYPES = ('routing', 'faithfulness', 'grounding', 'refusal', 'value', 'investigat
 # Pass rate a live provider must reach per type; offline cases pass or fail one by one.
 THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 1.0,
               'investigation': 0.8, 'value': 1.0, 'data_quality': 1.0}
+# Latency: an offline case fails above `expect.max_ms` (default DEFAULT_MAX_MS; a live or replayed
+# case has no default), and the run fails when the offline p50 or p95 is over LATENCY_BUDGET_MS.
+# The clock covers the agent's turns only: dataset build, fixture I/O and the checks are outside it.
+DEFAULT_MAX_MS = 250
+LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
 RULE_CONSTANTS = {'2.5', '1', '3.25', '0.4', '480', '12', '0'}
@@ -633,7 +640,8 @@ def default_provider():
 # ---------------------------------------------------------------- running one case
 
 def run_case(case, provider=None, live=False, record=False):
-    """Return (outcome, failures, note) with outcome in pass/fail/skip/xfail.
+    """Return (outcome, failures, note, ms) with outcome in pass/fail/skip/xfail and
+    ms the wall time of the agent's turns (0 when the case did not run).
 
     provider None runs the case offline (OfflinePlanner, or ScriptedPlanner for a
     value case). A provider name runs it live when `live` is set, else replays the
@@ -655,7 +663,7 @@ def run_case(case, provider=None, live=False, record=False):
         if case['type'] == 'value':
             stale = stale_values()
             if stale:
-                return 'fail', [stale], ''
+                return 'fail', [stale], '', 0.0
 
             def make_agent(analysis):
                 return Agent(analysis, planner=ScriptedPlanner(case['tool'], case['arguments']))
@@ -668,7 +676,7 @@ def run_case(case, provider=None, live=False, record=False):
         if live:
             key = os.environ.get(spec['env'])
             if not key:
-                return 'skip', [], f'{spec["env"]} not set'
+                return 'skip', [], f'{spec["env"]} not set', 0.0
             send = spec['record'](exchanges)
         elif fixture.exists():
             recording = json.loads(fixture.read_text())
@@ -678,34 +686,39 @@ def run_case(case, provider=None, live=False, record=False):
             recorded_dataset, live_dataset = recording.get('dataset_version'), dataset_version()
             if recorded_dataset != live_dataset:
                 return 'skip', [], (f'stale recording: dataset {str(recorded_dataset)[:12] if recorded_dataset else "unversioned"} '
-                                    f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}')
+                                    f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}'), 0.0
             exchanges = recording['exchanges']
             send = spec['replay'](exchanges, warnings)
             key = spec['replay_key']
         else:
-            return 'skip', [], f'no {provider} fixture; run --live --provider {provider} to record'
+            return 'skip', [], f'no {provider} fixture; run --live --provider {provider} to record', 0.0
         ledger = Path(tempfile.mkdtemp()) / 'budget.sqlite3'
 
         def make_agent(analysis):
             return Agent(analysis, planner=spec['planner'](key, ledger, send), max_calls=10, max_seconds=60)
 
-    results, analysis = [], None
+    results, analysis, ms = [], None, 0.0
     try:
         analysis = dataset(day, case.get('corrupt', False))
         context = Context(day, shift)
         context.scope = scope
         context.period = case.get('period', 'day')   # the Period control: week, month or fiscal routes to the period tools
-        for text in turns:
-            results.append(make_agent(analysis).ask(text, context))
+        started = time.perf_counter()
+        try:
+            for text in turns:
+                results.append(make_agent(analysis).ask(text, context))
+        finally:
+            ms = (time.perf_counter() - started) * 1000
     except ValueError as exc:
         want = expect.get('raises')
         if want and re.search(want, str(exc), re.I):
-            return 'pass', [], f'refused: {str(exc)[:60]}'
-        return 'fail', [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], ''
+            slow = latency_failures(expect, provider, ms)
+            return ('fail' if slow else 'pass'), slow, f'refused: {str(exc)[:60]}', ms
+        return 'fail', [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], '', ms
     if expect.get('raises'):
-        return 'fail', [f'did not raise; status {results[-1]["status"]}'], ''
+        return 'fail', [f'did not raise; status {results[-1]["status"]}'], '', ms
 
-    failures = []
+    failures = latency_failures(expect, provider, ms)
     for result in results:
         failures.extend(invariants(mode, result, analysis, allowed))
     if case['type'] == 'investigation':
@@ -729,10 +742,26 @@ def run_case(case, provider=None, live=False, record=False):
     if warnings:
         note += '; ' + '; '.join(sorted(warnings))
     if failures and case.get('known_defect'):
-        return 'xfail', failures, 'known defect: ' + case['known_defect']
+        return 'xfail', failures, 'known defect: ' + case['known_defect'], ms
     if not failures and case.get('known_defect'):
         note += '; known_defect marker is stale: the case passes, remove the marker'
-    return ('fail' if failures else 'pass'), failures, note
+    return ('fail' if failures else 'pass'), failures, note, ms
+
+
+def latency_failures(expect, provider, ms):
+    """The case's own budget: `expect.max_ms`, defaulting to DEFAULT_MAX_MS offline and to none live."""
+    budget = expect.get('max_ms', None if provider else DEFAULT_MAX_MS)
+    if budget is not None and ms > budget:
+        return [f'{ms:.0f} ms, budget {budget} ms']
+    return []
+
+
+def percentiles(values):
+    """Nearest-rank p50 and p95 of the case times, in ms; None when there are no values."""
+    ordered = sorted(values)
+    if not ordered:
+        return {'p50': None, 'p95': None}
+    return {name: round(ordered[max(math.ceil(q * len(ordered)), 1) - 1], 1) for name, q in (('p50', 0.5), ('p95', 0.95))}
 
 
 # ---------------------------------------------------------------- score table
@@ -776,28 +805,28 @@ def main(argv=None):
     try:
         for case, case_provider in plan_rows(cases, args.live, provider):
             if case_provider == '?':
-                outcome, failures, note = 'skip', [], 'no fixture; run --live to record'
+                outcome, failures, note, ms = 'skip', [], 'no fixture; run --live to record', 0.0
                 case_provider = None
                 label = f'{case["id"]}@live'
             else:
-                outcome, failures, note = run_case(case, case_provider, args.live, not args.no_record)
+                outcome, failures, note, ms = run_case(case, case_provider, args.live, not args.no_record)
                 label = case['id'] + (f'@{case_provider}' if case_provider else '')
             rows.append({'id': label, 'case': case['id'], 'type': case['type'], 'provider': case_provider,
                          'mode': 'live' if case_provider or label.endswith('@live') else 'offline',
-                         'outcome': outcome, 'failures': failures, 'note': note})
+                         'outcome': outcome, 'failures': failures, 'note': note, 'ms': round(ms, 1)})
     finally:
         close_datasets()
 
     width = max(len(r['id']) for r in rows) + 2
-    print(f'{"case":{width}}{"type":15}{"mode":9}{"result":8}note')
-    print('-' * (width + 32 + 40))
+    print(f'{"case":{width}}{"type":15}{"mode":9}{"result":8}{"ms":>6}  note')
+    print('-' * (width + 40 + 40))
     for r in rows:
-        print(f'{r["id"]:{width}}{r["type"]:15}{r["mode"]:9}{r["outcome"]:8}{r["note"]}')
+        print(f'{r["id"]:{width}}{r["type"]:15}{r["mode"]:9}{r["outcome"]:8}{r["ms"]:6.0f}  {r["note"]}')
         for failure in r['failures'][:6]:
             print(f'{"":{width}}  - {failure}')
         if len(r['failures']) > 6:
             print(f'{"":{width}}  - ... {len(r["failures"]) - 6} more')
-    print('-' * (width + 32 + 40))
+    print('-' * (width + 40 + 40))
     totals = Counter((r['type'], r['mode'], r['outcome']) for r in rows)
     summary = []
     for kind in TYPES:
@@ -822,6 +851,12 @@ def main(argv=None):
             parts.append(f'{stale} stale recording(s): re-record with --live --provider {name}')
         if parts:
             print(f'live {name}: ' + '  '.join(parts))
+    latency = offline_latency(rows)
+    if latency['p50'] is not None:
+        verdicts = [f'{k} {latency[k]:.0f} ms (budget {LATENCY_BUDGET_MS[k]}: {"ok" if latency[k] <= LATENCY_BUDGET_MS[k] else "OVER"})'
+                    for k in ('p50', 'p95')]
+        breaches += sum(latency[k] > LATENCY_BUDGET_MS[k] for k in ('p50', 'p95'))
+        print('offline latency: ' + '  '.join(verdicts))
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)
     skipped = sum(r['outcome'] == 'skip' for r in rows)
     xfailed = sum(r['outcome'] == 'xfail' for r in rows)
@@ -836,6 +871,7 @@ def main(argv=None):
         with HISTORY.open('a') as out:
             out.write(json.dumps(line, separators=(',', ':')) + '\n')
         print(f'tracked in {HISTORY.relative_to(ROOT)}: ' + ', '.join(f'{k} {v["pass"]}/{v["pass"] + v["fail"]}' for k, v in line['offline'].items())
+              + (f'; latency p50 {line["latency_ms"]["p50"]:.0f} ms, p95 {line["latency_ms"]["p95"]:.0f} ms' if line['latency_ms']['p50'] is not None else '')
               + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items()))
     return failed + breaches
 
@@ -843,9 +879,15 @@ def main(argv=None):
 HISTORY = ROOT / 'evals' / 'history.jsonl'
 
 
+def offline_latency(rows):
+    """p50 and p95 of the offline cases that ran (skips did not run, so they carry no time)."""
+    return percentiles(r['ms'] for r in rows if not r['provider'] and r['outcome'] != 'skip')
+
+
 def history_line(rows, exit_status):
     """One record per run: enough to tell whether a change in the planner, the prompt or the
-    data moved the score. Live rows are scored against the recordings' model."""
+    data moved the score, and whether it moved the clock. Live rows are scored against the
+    recordings' model; `latency_ms` is the offline p50 / p95."""
     def tally(subset):
         out = {}
         for r in subset:
@@ -870,7 +912,8 @@ def history_line(rows, exit_status):
         live[provider] = {'model': '/'.join(sorted(models)) or None, 'recorded_cost_usd': round(cost, 5),
                           'types': tally(r for r in rows if r['provider'] == provider)}
     return {'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ'), 'commit': commit, 'dataset': dataset_version()[:12],
-            'cases': len(rows), 'offline': tally(r for r in rows if not r['provider']), 'live': live, 'exit': exit_status}
+            'cases': len(rows), 'offline': tally(r for r in rows if not r['provider']), 'latency_ms': offline_latency(rows),
+            'live': live, 'exit': exit_status}
 
 
 if __name__ == '__main__':
