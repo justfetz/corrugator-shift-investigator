@@ -8,6 +8,10 @@ KINDS = ('finding', 'hypothesis', 'check', 'limitation')
 NUMBER_WORDS = re.compile(r"\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen)\b"
                           r"|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|half|quarter)"
                           r"[- ]?(percent|per cent|points?|minutes?|hours?|seconds?|feet|foot|ft|fpm|msf|sq(uare)? ?f(ee)?t|stops?|setups?|runs?|sheets?|cuts?|orders?|weeks?|days?|shifts?)\b", re.I)
+SMALL_NUMBER_WORDS = frozenset('zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen half quarter'.split())
+# A value glued to a letter, a digit or another value reads as a number no tool returned
+# ("Shift 2{{0}}", "{{0}}{{1}}", "{{0}}.{{1}}"): a placeholder stands alone.
+GLUED_FACT = re.compile(r'[A-Za-z0-9}]\{\{|\}\}[A-Za-z0-9{]|\}\}[.,]\{\{')
 MAX_FACTS = 8  # per paragraph; a four-reason ranking cites a (category, minutes) pair per reason
 FACT_SCHEMA = {'type':'object','properties':{
     'result_id':{'type':'string'}, 'row':{'type':'integer'}, 'field':{'type':'string'}},
@@ -82,6 +86,8 @@ def _render_paragraph(p,sources,packet):
         if (not isinstance(text,str) or not 1<=len(text)<=700 or
                 not isinstance(facts,list) or len(facts)>MAX_FACTS):
             raise ValueError('Narrative size limit')
+        if GLUED_FACT.search(text):
+            raise ValueError('A fact placeholder must stand alone, not touch a letter, a digit or another placeholder')
         bare=re.sub(r'\{\{\d+\}\}', '', text)
         # "Shift 2" is the selected scope, a known truth, when it names a shift the evidence carries.
         known_shifts={str(r['shift']) for r in packet if r.get('shift') is not None}
@@ -177,6 +183,7 @@ class NarrativeStream:
         self._shown = 0         # characters of _line already checked and emitted
         self._dead = False      # the current line failed a check; the rest of it is ignored
         self._started = False   # a delta for the current line has been emitted
+        self._prose = ''        # the plain prose of the current line shown so far, placeholders as a space
 
     def feed(self, text):
         for part in re.split(r'(\n)', text):
@@ -228,6 +235,9 @@ class NarrativeStream:
             rest = self._line[self._shown:]
             brace = rest.find('{')
             if brace == 0:
+                before = self._line[self._shown - 1] if self._shown else ' '
+                if before.isalnum() or before == '}' or (before in '.,' and self._line[max(0, self._shown - 3):self._shown - 1] == '}}'):
+                    return self._flush(out, 'A fact placeholder must stand alone, not touch a letter, a digit or another placeholder')
                 found = STREAM_REF.match(rest)
                 if not found:
                     if '}}' in rest or len(rest) > 120:
@@ -236,7 +246,18 @@ class NarrativeStream:
                 value = self._value(found.group(1), int(found.group(2)), found.group(3))
                 if value is None:
                     return self._flush(out, 'Unknown narrative source')
+                after = rest[found.end():found.end() + 1]
+                if not after:
+                    break   # what follows decides whether the value stands alone: wait for it
+                if after in '.,':
+                    beyond = rest[found.end() + 1:found.end() + 2]
+                    if not beyond:
+                        break   # "{{a}}." may be the end of a sentence or the start of "{{a}}.{{b}}"
+                    after = '{' if beyond == '{' else after
+                if after.isalnum() or after == '{':
+                    return self._flush(out, 'A fact placeholder must stand alone, not touch a letter, a digit or another placeholder')
                 out.append(value)
+                self._prose += ' '
                 self._shown += found.end()
                 continue
             plain = rest if brace < 0 else rest[:brace]
@@ -251,12 +272,19 @@ class NarrativeStream:
                     if cut < 0:
                         break
                 plain = plain[:cut + 1]
+                # A small number word counts only with the unit after it ("two stops"): keep it back with that word.
+                words = plain.rstrip().rsplit(' ', 1)
+                if re.sub(r'[^a-z]', '', words[-1].lower()) in SMALL_NUMBER_WORDS:
+                    plain = plain[:len(words[0]) + 1] if len(words) > 1 else ''
             if not plain:
                 break
             bare = re.sub(r'\b[Ss]hift\s+([123])\b', lambda m: 'shift' if m.group(1) in self.known_shifts else m.group(0), plain)
-            if any(c.isdigit() for c in bare):
+            prose = self._prose + plain
+            if (any(c.isdigit() or ord(c) < 32 for c in bare) or any(c in plain for c in '<>}') or re.search(r'https?://', prose)
+                    or NUMBER_WORDS.search(prose)):
                 return self._flush(out, 'Use fact placeholders for values; plain prose only (numbers written as words count)')
             out.append(plain)
+            self._prose = prose
             self._shown += len(plain)
         self._flush(out)
 
@@ -270,7 +298,7 @@ class NarrativeStream:
 
     def _end_line(self, truncated=False):
         line, dead, started = self._line, self._dead, self._started
-        self._line, self._kind, self._shown, self._dead, self._started = '', None, 0, False, False
+        self._line, self._kind, self._shown, self._dead, self._started, self._prose = '', None, 0, False, False, ''
         if not line.strip():
             return
         if len(self.rendered) >= MAX_PARAGRAPHS:

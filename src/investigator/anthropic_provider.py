@@ -373,9 +373,13 @@ class Cancelled(ProviderError):
 def stream_transport(payload, key, timeout):
     """POST with stream: true to the fixed Messages endpoint; return (status, events).
 
+    `timeout` is the budget for the whole call, not for one read: every read gets what is left
+    of it, so a stream that stalls after its first event still ends on time.
+
     `events` yields each server-sent event's JSON object as it arrives. Closing the generator
     closes the connection, which is how a cancelled round stops paying for tokens. A non-200
     answer yields nothing; the provider's body is never read into a message."""
+    deadline = time.monotonic()+timeout
     connection = http.client.HTTPSConnection(API_HOST, timeout=timeout)
     try:
         connection.request('POST', API_PATH, body=json.dumps(payload).encode(),
@@ -385,14 +389,20 @@ def stream_transport(payload, key, timeout):
     except OSError:
         connection.close()
         raise ProviderError('Anthropic request failed or timed out; retry deliberately') from None
+    if response.status != 200:
+        connection.close()   # the provider's error body is never read
+        return response.status, iter(())
 
     def events():
         try:
-            if response.status != 200:
-                return
             received = 0
             while True:
                 try:
+                    left = deadline-time.monotonic()
+                    if left <= 0:
+                        raise OSError('deadline')
+                    if connection.sock is not None:
+                        connection.sock.settimeout(left)
                     line = response.readline(65537)
                 except OSError:
                     raise ProviderError('Anthropic stream failed or timed out; retry deliberately') from None

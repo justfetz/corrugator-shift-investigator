@@ -397,6 +397,25 @@ def scope_violation(tool, arguments, allowed_shifts, scope, period, production_d
     return None
 
 
+def schema_mismatch(value, schema):
+    """True when a planned argument value does not fit its declared schema: type, enum and, for an
+    object, its properties. Covers exactly what TOOL_SCHEMAS uses; a non-finite number fits nothing."""
+    if 'enum' in schema and not any(value == member and type(value) is type(member) for member in schema['enum']):
+        return True
+    kinds = schema.get('type')
+    if kinds is not None:
+        kinds = kinds if isinstance(kinds, list) else [kinds]
+        fits = {'integer': type(value) is int, 'string': isinstance(value, str), 'boolean': type(value) is bool,
+                'null': value is None, 'object': isinstance(value, dict)}
+        if not any(fits.get(kind, False) for kind in kinds):
+            return True
+    if isinstance(value, dict) and 'properties' in schema:
+        if set(value) - set(schema['properties']) or any(key not in value for key in schema.get('required', [])):
+            return True
+        return any(schema_mismatch(item, schema['properties'][key]) for key, item in value.items())
+    return False
+
+
 def validate_plan(plan, allowed_shifts, scope, period, production_day):
     """Check a one-call plan against the tool allowlist before anything runs.
 
@@ -419,6 +438,8 @@ def validate_plan(plan, allowed_shifts, scope, period, production_day):
         schema = PLAN_TOOLS[tool]['parameters']
         if not isinstance(arguments, dict) or set(arguments) - set(schema['properties']) or any(k not in arguments for k in schema['required']):
             return [], f'{tool} has missing or unexpected arguments'
+        if schema_mismatch(arguments, schema):
+            return [], f'{tool} has an argument value its schema does not allow'
         problem = scope_violation(tool, arguments, allowed_shifts, scope, period, production_day)
         if problem:
             return [], f'{tool} is outside the selected scope'

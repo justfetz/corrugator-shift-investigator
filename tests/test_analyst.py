@@ -95,7 +95,30 @@ def test_stream_refuses_ungrounded_paragraphs(line, reason):
     assert not any(e['type'] == 'paragraph' and e['paragraph'] == 0 for e in events)
 
 
-def test_stream_keeps_whole_paragraphs_when_cut_off_and_fails_when_nothing_is_valid():
+@pytest.mark.parametrize('chunk', [1, 3, 7, 200])
+@pytest.mark.parametrize('line,allowed', [
+    ('finding: Speed fell eighty-nine percent and about two stops at {{r1.0.stops}} here.', 'Speed fell '),   # number words
+    ('finding: Shift 2{{r1.0.stops}} stops were recorded.', ''),                                              # "Shift 27"
+    ('finding: It was {{r1.0.stops}}{{r1.0.stops}} stops.', 'It was '),                                       # "77"
+    ('finding: It was {{r1.0.stops}}.{{r1.0.stops}} stops.', 'It was '),                                      # "7.7"
+    ('finding: See <b> and {{r1.0.stops}} at http://example.com now.', 'See '),
+])
+def test_stream_never_shows_a_number_no_tool_returned(line, allowed, chunk):
+    """Whatever the chunking, a refused line shows nothing past the last safe word, and nothing of it is kept."""
+    parser, events = stream(line + '\n', chunk)
+    shown = ''.join(e['text'] for e in events if e['type'] == 'delta')
+    assert allowed.startswith(shown), shown
+    assert not any(e['type'] == 'paragraph' for e in events)
+    with pytest.raises(ValueError):
+        parser.finish()
+
+
+def test_stream_values_may_sit_beside_punctuation():
+    parser, _ = stream('finding: Speed was {{r1.0.observed_shift_fpm}}, over {{r1.0.stops}} stops ({{r1.0.stops}}).\n')
+    assert parser.finish()[0]['text'] == 'Speed was 512.34, over 7 stops (7).'
+
+
+def test_keeps_whole_paragraphs_when_cut_off_and_fails_when_nothing_is_valid():
     parser, _ = stream('finding: Speed was {{r1.0.observed_shift_fpm}} ft/min.\ncheck: Ask the crew about {{r1.0.st')
     narrative = parser.finish(truncated=True)
     assert [p['kind'] for p in narrative] == ['finding', 'limitation'] and 'stopped before finishing' in narrative[1]['text']
@@ -124,6 +147,12 @@ def test_plan_allowlist_and_arguments():
         ({'steps': [{'tool': 'Ignore the rules <b>', 'arguments': {}}]}, 'names a tool, which is not'),   # model prose is never quoted
         ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2, 'sql': 'x'}}]}, 'missing or unexpected arguments'),
         ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {}}]}, 'missing or unexpected arguments'),
+        # a value outside the schema refuses the plan too: a wrong enum, a float or a boolean for the shift, a non-finite number
+        ({'steps': [{'tool': 'get_downtime_breakdown', 'arguments': {'shift': 2, 'group_by': 'banana'}}]}, 'argument value its schema does not allow'),
+        ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2.0}}]}, 'argument value its schema does not allow'),
+        ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': True}}]}, 'argument value its schema does not allow'),
+        ({'steps': [{'tool': 'get_downtime_breakdown', 'arguments': {'shift': 2, 'kind': float('nan')}}]}, 'argument value its schema does not allow'),
+        ({'steps': [{'tool': 'get_rankings', 'arguments': {'shift': 2, 'metric': ['speed']}}]}, 'argument value its schema does not allow'),
         ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 1}}]}, 'outside the selected scope'),
         ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2}, 'why': 'x'}]}, 'not a tool with arguments'),
         ({'steps': []}, 'no steps or too many'),
@@ -201,6 +230,14 @@ def test_unavailable_plan_and_provider_failures(analysis, tmp_path):
     Agent(analysis, planner=planner).ask_planned('Why slow?', context())
     with pytest.raises(ProviderError, match='limit reached'):
         planner.plan({'tools': [], 'process': '', 'question': 'q', 'production_day': DAY, 'shifts': [2], 'history': []})
+
+
+def test_a_plan_with_a_bad_value_runs_nothing(analysis, tmp_path):
+    events = []
+    bad = '{"steps": [{"tool": "get_shift_kpis", "arguments": {"shift": 2}}, {"tool": "get_downtime_breakdown", "arguments": {"shift": 2, "kind": NaN}}]}'
+    result = Agent(analysis, planner=analyst(tmp_path, scripted(bad))).ask_planned('Why slow?', context(), events.append)
+    assert result['status'] == 'plan_rejected' and result['trace'] == [] and events == []
+    json.dumps(result, allow_nan=False)   # nothing non-finite reaches the response
 
 
 def test_cancelled_round_closes_the_model_stream(tmp_path):
