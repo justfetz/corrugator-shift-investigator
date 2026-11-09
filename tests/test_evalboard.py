@@ -95,6 +95,15 @@ def test_last_run_file_is_the_newest_history_line_and_covers_every_run(running):
     assert sum(r['last']['outcome'] == 'pass' for r in runs) == board['last_run']['passed']
 
 
+def test_a_subset_run_cannot_be_tracked(running, capsys):
+    """The newest history line is the set's score on /evals and on the badge, so `--only` with `--track` is refused."""
+    runner = running.app.evals.runner
+    before = (runner.HISTORY.read_bytes(), runner.LAST_RUN.read_bytes())
+    assert runner.main(['--only', 'why-slow', '--track']) == 2
+    assert 'cannot be combined with --only' in capsys.readouterr().out
+    assert (runner.HISTORY.read_bytes(), runner.LAST_RUN.read_bytes()) == before
+
+
 def test_expectations_read_in_plain_words():
     assert describe_call('get_downtime_breakdown', {'shift': 2, 'group_by': 'reason', 'kind': None}) == 'get_downtime_breakdown for shift 2 by reason'
     assert describe_call('get_period_kpis', {'window': {'period': 'month', 'anchor': '2026-09-14'}, 'compare': True, 'shift': None}) == \

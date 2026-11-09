@@ -175,7 +175,7 @@ Anthropic recordings are committed under `fixtures/anthropic/`; none for OpenAI.
 after the score table: the UTC time, the git commit, the dataset hash, the
 case count, pass / fail / skip per type for the offline cases, `latency_ms`
 (the offline p50 and p95 of that run, in ms), and per provider the model its
-recordings were made with, pass / fail / skip per type and the recorded cost. The same
+recordings were made with, pass / fail / skip per type and the recorded cost. `--track` records whole-set runs only and refuses `--only`. The same
 flag rewrites `evals/last_run.json`: one row per run of that newest line (id,
 outcome, ms, note), stamped with the line's time and commit. Commit the two
 files together; `tests/test_evalboard.py` fails when they disagree. A

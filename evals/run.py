@@ -818,6 +818,11 @@ def main(argv=None):
     parser.add_argument('--track', action='store_true', help='append one line per run to evals/history.jsonl (commit, dataset, model, pass rate per type, cost)')
     args = parser.parse_args(argv)
 
+    if args.track and args.only:
+        # history.jsonl and last_run.json describe whole-set runs: the /evals page and the main page's badge
+        # read the newest line as the score of the set, so a subset must never be appended.
+        print('--track records a whole-set run; it cannot be combined with --only')
+        return 2
     provider = args.provider or default_provider()
     if args.live and provider is None:
         print('--live needs exactly one of ' + ' / '.join(s['env'] for s in PROVIDERS.values()) + ' set, or --provider')
