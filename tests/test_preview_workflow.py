@@ -103,6 +103,25 @@ def test_preview_revisions_match_this_tag_only_oldest_first_minus_keep():
     assert po.preview_revisions(revisions, SERVICE, 'pr-7') == []
 
 
+def test_orphaned_preview_revisions_span_all_prs_but_spare_tagged_serving_and_latest():
+    svc = service_json(traffic=[{'percent': 100, 'revisionName': f'{SERVICE}-00046-7t5'},
+                                {'tag': 'pr-50', 'url': 'https://pr-50---x.run.app', 'revisionName': f'{SERVICE}-pr-50-1111111-9'}])
+    svc['status']['latestCreatedRevisionName'] = f'{SERVICE}-pr-47-e524061-4'
+    svc['status']['latestReadyRevisionName'] = f'{SERVICE}-pr-47-e524061-4'
+    revisions = [
+        {'metadata': {'name': f'{SERVICE}-00046-7t5', 'creationTimestamp': '2026-11-08T08:00:00Z'}},          # production: not a preview
+        {'metadata': {'name': f'{SERVICE}-pr-47-8104617-1', 'creationTimestamp': '2026-11-09T17:10:00Z'}},   # closed PR, untagged: orphan
+        {'metadata': {'name': f'{SERVICE}-pr-47-e524061-4', 'creationTimestamp': '2026-11-09T17:25:00Z'}},   # orphan, but latest created
+        {'metadata': {'name': f'{SERVICE}-pr-50-1111111-9', 'creationTimestamp': '2026-11-09T17:30:00Z'}},   # tagged: an open PR, keep
+        {'metadata': {'name': f'{SERVICE}-pr-39-2222222-2', 'creationTimestamp': '2026-11-09T09:00:00Z'}},   # older closed PR: orphan
+        {'metadata': {'name': f'other-service-pr-3-3333333-1', 'creationTimestamp': '2026-11-09T09:00:00Z'}},  # another service
+    ]
+    assert po.orphaned_preview_revisions(revisions, svc, SERVICE) == [
+        (f'{SERVICE}-pr-39-2222222-2', False), (f'{SERVICE}-pr-47-8104617-1', False), (f'{SERVICE}-pr-47-e524061-4', True)]
+    assert po.orphaned_preview_revisions(revisions, svc, SERVICE, keep=f'{SERVICE}-pr-47-e524061-4') == [
+        (f'{SERVICE}-pr-39-2222222-2', False), (f'{SERVICE}-pr-47-8104617-1', False)]
+
+
 def test_cli_prints_github_env_lines():
     out = subprocess.run([sys.executable, '-I', str(SCRIPT), 'origins', 'pr-41'], input=json.dumps(service_json()),
                          capture_output=True, text=True, check=True).stdout.splitlines()
@@ -112,6 +131,16 @@ def test_cli_prints_github_env_lines():
     url = subprocess.run([sys.executable, '-I', str(SCRIPT), 'url', 'pr-41'], input=json.dumps(service_json()),
                          capture_output=True, text=True, check=True).stdout
     assert url == 'PREVIEW_URL=\n'
+    svc_path = ROOT / 'tests' / '_tmp_service.json'
+    svc = service_json(); svc['status']['latestCreatedRevisionName'] = f'{SERVICE}-pr-9-aaaaaaa-1'
+    svc_path.write_text(json.dumps(svc))
+    try:
+        orphans = subprocess.run([sys.executable, '-I', str(SCRIPT), 'orphans', SERVICE, str(svc_path)],
+                                 input=json.dumps([{'metadata': {'name': f'{SERVICE}-pr-9-aaaaaaa-1'}}, {'metadata': {'name': f'{SERVICE}-pr-8-bbbbbbb-1'}}]),
+                                 capture_output=True, text=True, check=True).stdout
+    finally:
+        svc_path.unlink()
+    assert orphans == f'{SERVICE}-pr-8-bbbbbbb-1\n{SERVICE}-pr-9-aaaaaaa-1\tlatest\n'
     bad = subprocess.run([sys.executable, '-I', str(SCRIPT), 'nonsense'], input='{}', capture_output=True, text=True)
     assert bad.returncode == 2
 
@@ -137,9 +166,11 @@ def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
     assert 'traffic does not sum to 100' in text, 'the smoke test asserts production traffic is unchanged'
     assert '-H "Origin: $PREVIEW_URL"' in text, 'the smoke test proves the allow-list change works'
     assert '--remove-tags "$TAG"' in text
+    assert text.count('preview_origins.py orphans "$SERVICE" /tmp/service.json') == 2, 'both jobs sweep orphaned preview revisions'
+    assert "if [ \"$FLAG\" = \"latest\" ]" in text, 'the latest created revision is reported, not a failure'
     assert "cancel-in-progress: ${{ github.event.action != 'closed' }}" in text, 'a close must queue, not be cancellable'
     assert 'ref: ${{ github.event.pull_request.head.sha }}' in text, 'cleanup must not depend on the merge ref'
-    assert text.index('Post the URL on the pull request') < text.index("Delete this pull request's earlier preview revisions")
+    assert text.index('Post the URL on the pull request') < text.index('Delete orphaned preview revisions')
 
 
 def test_main_deploy_rebinds_traffic_to_latest_after_a_preview():

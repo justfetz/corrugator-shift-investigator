@@ -98,14 +98,18 @@ jobs:
           ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- preview-url -->"))][0].id // empty' | head -n1)
           if [ -n "$ID" ]; then gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$ID" -f body="$BODY" --silent
           else gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" -f body="$BODY" --silent; fi
-      - name: Delete this pull request's earlier preview revisions
+      - name: Delete orphaned preview revisions (this PR's earlier ones and any closed PR's leftovers)
+        # Cloud Run refuses to delete a service's latest created revision, which a fresh preview
+        # is until the next deploy; such a revision is reported and swept by the next run.
         run: |
           set -euo pipefail
+          gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json
           gcloud run revisions list --service "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/revisions.json
-          for NAME in $(python3 .github/scripts/preview_origins.py revisions "$SERVICE" "$TAG" "$REVISION" < /tmp/revisions.json); do
+          python3 .github/scripts/preview_origins.py orphans "$SERVICE" /tmp/service.json "$REVISION" < /tmp/revisions.json | while IFS=$'\t' read -r NAME FLAG; do
+            if [ "$FLAG" = "latest" ]; then echo "::notice::$NAME has no tag and no traffic but is the service's latest created revision; Cloud Run refuses to delete it until another revision exists, so the next deploy (main or any preview) sweeps it"; continue; fi
             echo "deleting $NAME"
             gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet \
-              || echo "::warning::could not delete $NAME; the close job retries by name prefix"
+              || echo "::warning::could not delete $NAME; the next run retries"
           done
   cleanup:
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
@@ -128,15 +132,20 @@ jobs:
           fi
           if [ -n "$(python3 .github/scripts/preview_origins.py url "$TAG" < /tmp/service.json | cut -d= -f2-)" ]; then
             gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --remove-tags "$TAG" --quiet
+            echo "tag $TAG removed; the preview URL no longer serves"
+          else
+            echo "tag $TAG was not serving"
           fi
+          gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json
           gcloud run revisions list --service "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/revisions.json
-          for NAME in $(python3 .github/scripts/preview_origins.py revisions "$SERVICE" "$TAG" < /tmp/revisions.json); do
+          python3 .github/scripts/preview_origins.py orphans "$SERVICE" /tmp/service.json < /tmp/revisions.json | while IFS=$'\t' read -r NAME FLAG; do
+            if [ "$FLAG" = "latest" ]; then echo "::notice::$NAME has no tag and no traffic but is the service's latest created revision; Cloud Run refuses to delete it until another revision exists, so the next deploy (main or any preview) sweeps it"; continue; fi
             echo "deleting $NAME"
             gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet
           done
       - name: Note it on the pull request
         run: |
           set -euo pipefail
-          BODY="$(printf '<!-- preview-url -->\nPreview removed: tag `%s` and its revisions were deleted when the pull request closed.' "$TAG")"
+          BODY="$(printf '<!-- preview-url -->\nPreview removed: tag `%s` was removed when the pull request closed, so the URL no longer serves. Its revision is deleted now or by the next deploy (Cloud Run keeps the latest created revision of a service).' "$TAG")"
           ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- preview-url -->"))][0].id // empty' | head -n1)
           if [ -n "$ID" ]; then gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$ID" -f body="$BODY" --silent; fi

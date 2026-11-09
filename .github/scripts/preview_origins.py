@@ -10,6 +10,9 @@ reads the JSON on stdin and prints ``NAME=value`` lines for ``$GITHUB_ENV``.
     preview_origins.py origins pr-41   -> BASE_ORIGINS=..., PREVIEW_ORIGINS=..., ORIGINS=...
     preview_origins.py url pr-41       -> PREVIEW_URL=...   (empty when the tag is not serving)
     preview_origins.py revisions SERVICE pr-41 [KEEP]  -> one revision name per line, oldest first
+    preview_origins.py orphans SERVICE SERVICE_JSON [KEEP] < revisions.json
+                                       -> every pr-* revision with no tag and no traffic, oldest first,
+                                          "name" or "name<TAB>latest" when Cloud Run will refuse to delete it yet
 
 Runs on the GitHub runner's python3 with the standard library only.
 """
@@ -94,6 +97,31 @@ def preview_revisions(revisions: list[dict], service: str, tag: str, keep: str =
     return [name for _, name in sorted(named)]
 
 
+PREVIEW_NAME = re.compile(r'^(?P<service>.+)-pr-\d+-')
+
+
+def orphaned_preview_revisions(revisions: list[dict], service: dict, service_name: str, keep: str = '') -> list[tuple[str, bool]]:
+    """Every preview revision of any pull request that nothing references any more.
+
+    A revision is an orphan when its name is ``<service>-pr-<n>-...``, no traffic target names it
+    (no tag, no percent), and it is not ``keep`` (the one just deployed). Cloud Run refuses to
+    delete a service's latest created (or latest ready) revision, which a fresh preview always is
+    until the next deploy of any kind; those are returned flagged ``True`` so the workflow can
+    say so instead of failing, and the next run deletes them. Oldest first."""
+    status = service.get('status') or {}
+    referenced = {t.get('revisionName') for t in status.get('traffic') or [] if t.get('tag') or t.get('percent')}
+    latest = {status.get('latestCreatedRevisionName'), status.get('latestReadyRevisionName')} - {None}
+    out = []
+    for revision in revisions:
+        meta = revision.get('metadata') or {}
+        name = meta.get('name') or ''
+        m = PREVIEW_NAME.match(name)
+        if not m or m.group('service') != service_name or name == keep or name in referenced:
+            continue
+        out.append((meta.get('creationTimestamp') or '', name, name in latest))
+    return [(name, is_latest) for _, name, is_latest in sorted(out)]
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(__doc__, file=sys.stderr)
@@ -114,6 +142,14 @@ def main(argv: list[str]) -> int:
         keep = args[2] if len(args) == 3 else ''
         for name in preview_revisions(payload, service, tag, keep):
             print(name)
+        return 0
+    if command == 'orphans' and 2 <= len(args) <= 3:
+        service_name, service_path = args[0], args[1]
+        keep = args[2] if len(args) == 3 else ''
+        with open(service_path) as fh:
+            service = json.load(fh)
+        for name, is_latest in orphaned_preview_revisions(payload, service, service_name, keep):
+            print(f'{name}\tlatest' if is_latest else name)
         return 0
     print(__doc__, file=sys.stderr)
     return 2
