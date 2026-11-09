@@ -542,8 +542,14 @@ function applyPublicMode(){
   if(modes.includes(value))option.textContent=`${entry.name} / server key`;else option.remove();
  }
  if(!modes.length){$('mode').value='offline';$('mode').disabled=true;$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';}
- else{$('mode').value=modes.includes('anthropic')?'anthropic':modes[0];$('mode-help').textContent=`Public demo: the model (${PROVIDERS[$('mode').value]?.name||'server'}) chooses which bounded tools to run and writes the interpretation; every number is calculated by fixed queries and inserted by code. Uses this site's own key under a spend cap; no visitor key is accepted. Switch to Offline to see the same tools without a model.`;}
- $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model on':'Synthetic data / Public demo';
+ else{
+  // Offline is the default even when the site has a key (issue #42): it answers in tens of
+  // milliseconds; the model path takes seconds and spends the site's budget. The model is a choice.
+  if(!modes.includes($('mode').value))$('mode').value='offline';
+  const live=modes.includes('anthropic')?'anthropic':modes[0];
+  $('mode-help').textContent=`Public demo: Offline answers instantly with fixed queries over synthetic records. Choose ${PROVIDERS[live]?.name||'the model'} to have a model pick the tools and write the interpretation; that takes several seconds and uses this site's own key under a spend cap. Every number comes from the queries either way; no visitor key is accepted.`;
+ }
+ $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model available':'Synthetic data / Public demo';
 }
 async function init(){
  $('submit').disabled=true;renderSegments();renderQuestionChips();
