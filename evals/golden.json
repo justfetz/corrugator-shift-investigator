@@ -935,7 +935,8 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly lineal_per_setup \\(ft/setup\\)"
+    "sections_match": "Weekly lineal_per_setup \\(ft/setup\\)",
+    "max_ms": 500
    }
   },
   {
@@ -1008,7 +1009,8 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly moisture_pct"
+    "sections_match": "Weekly moisture_pct",
+    "max_ms": 500
    }
   },
   {
@@ -1135,7 +1137,8 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly trim_pct \\(% of gross\\), [0-9]+ weeks available: week of 2026-07-27|Weeks without records: 2026-07-27"
+    "sections_match": "Weekly trim_pct \\(% of gross\\), [0-9]+ weeks available: week of 2026-07-27|Weeks without records: 2026-07-27",
+    "max_ms": 500
    }
   },
   {
@@ -1182,7 +1185,8 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly minutes_per_stop \\(min/stop\\)"
+    "sections_match": "Weekly minutes_per_stop \\(min/stop\\)",
+    "max_ms": 500
    }
   },
   {
@@ -1205,7 +1209,8 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly warp_pct \\(% of gross\\), 7 weeks available: .*Weeks without records: 2026-07-27"
+    "sections_match": "Weekly warp_pct \\(% of gross\\), 7 weeks available: .*Weeks without records: 2026-07-27",
+    "max_ms": 500
    }
   },
   {
@@ -1396,7 +1401,8 @@
       }
      }
     ],
-    "charts": 3
+    "charts": 3,
+    "max_ms": 500
    }
   },
   {
@@ -1595,7 +1601,8 @@
      "\\b(slitter|rebuild|rebuilt)\\b[^.;]*\\b(caused|causes|causing|cause of|the cause|root cause|due to|because of|explains|explained|to blame|blamed|responsible for|attributable to)\\b",
      "\\b(caused by|due to|because of|root cause|explained by|blamed on|attributable to|result of)\\b[^.;]*\\b(slitter|rebuild|rebuilt)\\b"
     ],
-    "max_cost_usd": 0.05
+    "max_cost_usd": 0.05,
+    "max_ms": 500
    }
   },
   {
@@ -1815,7 +1822,8 @@
      "\\b(weekend|monday|mondays|humidity|moisture|damp|dampness|cold|temperature|warehouse)\\b[^.;]*\\b(caused|causes|causing|cause of|the cause|root cause|due to|because of|explains|explained|to blame|blamed|responsible for|attributable to)\\b",
      "\\b(caused by|due to|because of|root cause|explained by|blamed on|attributable to|result of)\\b[^.;]*\\b(weekend|monday|mondays|humidity|moisture|damp|dampness|cold|temperature)\\b"
     ],
-    "max_cost_usd": 0.05
+    "max_cost_usd": 0.05,
+    "max_ms": 500
    }
   },
   {
