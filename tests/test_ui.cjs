@@ -168,6 +168,27 @@ assert.equal(msg.children.length,4);   // label, paragraph, one note group, para
 assert.equal(msg.children[2].className,'note-group');assert.equal(msg.children[2].children[0].textContent,'2 reported notes (synthetic, unverified — observations, not causes)');
 console.log('UI unit checks passed: scope sentence, weekend rejection, segments, chip groups, KPI tiles, charts, trail row, note folding, heatmap, PDF state.');
 
+// ---- issue #33: with a frame scheduler, tables and charts paint before the trace is built; a newer answer cancels a stale trace.
+{
+ const frames=[];
+ context.requestAnimationFrame=f=>{frames.push(f);return frames.length;};
+ vm.runInContext("result={run_id:'a',session_id:'s',production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',context:{},usage:{tool_calls:1,model_calls:0},sections:[],trace:[{tool:'get_shift_notes',ok:true,elapsed_ms:1,arguments:{shift:2},data:{shift:2,coverage:'complete',rows:[]}}],tables:[{title:'get_shift_notes',shift:2,coverage:'complete',rows:[{notes:'x'}]}],charts:[{shift:2,coverage:'complete',unit:'ft/min',x:'wet_end_id',y:'actual_fpm',rows:[{wet_end_id:'W2-01',actual_fpm:600,target_fpm:800,speed_to_target_pct:75,grade:'200-C'}]}]}",context);
+ vm.runInContext('showResult(result)',context);
+ assert.equal(elements.charts.children.length,1);assert.equal(elements.tables.children.length,1);
+ assert.equal(elements.trace.children.length,0);              // not yet: first paint carries the evidence, not the trail
+ const drain=()=>{while(frames.length)frames.shift()();};      // a rAF callback runs before its frame paints, so the trace is two frames deep
+ assert.equal(frames.length,1);frames.shift()();
+ assert.equal(elements.trace.children.length,0);              // first frame: still nothing, the paint happens after this callback
+ assert.equal(frames.length,1);frames.shift()();
+ assert.equal(elements.trace.children.length,1);              // second frame, after the paint: the trail is built
+ vm.runInContext('showResult(result)',context);const stale=frames.shift();
+ vm.runInContext('showResult(Object.assign({},result,{run_id:"newer"}))',context);const fresh=frames.shift();
+ stale();drain();assert.equal(elements.trace.children.length,0);   // the stale chain sees a newer answer and does nothing
+ fresh();drain();assert.equal(elements.trace.children.length,1);
+ delete context.requestAnimationFrame;                         // later checks run synchronously again
+ console.log('UI issue-33 checks passed: tables and charts paint before the trace; a stale frame is skipped.');
+}
+
 // ---- issue #17: post() refreshes /api/config once on a 403 and resends with the new token; a second 403 is returned, not retried forever.
 (async()=>{
  await new Promise(r=>setTimeout(r,50));   // let init()'s own primeKpis() finish against the original fetch stub before swapping it

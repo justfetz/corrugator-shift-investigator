@@ -473,6 +473,11 @@ function traceRow(entry){
  return d;
 }
 function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool calls · ${usage.model_calls} model call${usage.model_calls===1?'':'s'} · estimated $${Number(usage.cost_usd||0).toFixed(4)}`+(usage.reserved_usd!==undefined?` · reserved $${Number(usage.reserved_usd).toFixed(2)}`:''):`${usage.tool_calls} tool call${usage.tool_calls===1?'':'s'} · $0 model cost`; }
+// Paint the answer, tables and charts first; the trace table (the largest part of the page)
+// is built after that paint so it never delays it (issue #33). A requestAnimationFrame callback
+// runs *before* its frame paints, so the work is queued for the frame after: two frames deep.
+// Without a frame scheduler (tests), it renders synchronously.
+function afterPaint(f){if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>requestAnimationFrame(f));else f();}
 function showResult(result) {
  $('heatmaps').replaceChildren();
  latest=result; $('download').disabled=false; $('pdf').disabled=false;
@@ -487,10 +492,10 @@ function showResult(result) {
     const card=node('div',undefined,'metric '+(bad||incomplete?'warning':''));card.append(node('div',`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · ${label}`,'label'));if(label==='Speed / target')card.title='Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.';if(label==='Paper changes')card.title='Count of distinct wet-end runs, as defined by the plant expert.';card.append(node('div',incomplete?'Incomplete':`${Number(value).toFixed(1)} ${unit}`,'value'));if(incomplete)card.append(node('small',`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`));$('metrics').append(card);
    }
   }
-  $('trace').append(traceRow(entry));
  }
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
+ afterPaint(()=>{if(latest!==result)return;for(const entry of result.trace)$('trace').append(traceRow(entry));});   // a newer answer already replaced the evidence: skip
  $('calls').textContent=' · '+usageText(result.usage);
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();

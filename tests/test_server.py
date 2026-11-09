@@ -1,5 +1,6 @@
 import http.client
 import json
+from pathlib import Path
 from threading import Thread
 import pytest
 from investigator.server import make_server, Workbench
@@ -414,3 +415,54 @@ def test_unknown_session_starts_a_fresh_conversation_and_says_so():
         with pytest.raises(ValueError,match='Invalid session id'):
             app.ask({'day':'2026-09-01','shift':2,'question':'Show downtime','session_id':42})
     finally:app.close()
+
+
+# ---- issue #33: compressed answers, revalidated static files, trace after first paint ----
+
+def test_json_responses_are_gzipped_when_accepted(running):
+    import gzip
+    plain_status,plain_headers,plain=request(running,'GET','/api/config')
+    assert plain_status==200 and 'Content-Encoding' not in plain_headers and plain_headers['Vary']=='Accept-Encoding'
+    status,headers,body=request(running,'GET','/api/config',headers={'Accept-Encoding':'gzip, deflate, br'})
+    assert status==200 and headers['Content-Encoding']=='gzip' and int(headers['Content-Length'])==len(body)
+    assert gzip.decompress(body)==plain                      # the same bytes, smaller on the wire
+    assert len(body)<len(plain)/3                            # TOOL_SCHEMAS compresses well
+    assert headers['Cache-Control']=='no-store'
+    # an answer: the biggest payloads shrink the most
+    token=json.loads(plain)['token']
+    payload=json.dumps({'day':'2026-09-14','shift':2,'question':'Show the full setup matrix','scope':'day'})
+    base={'Content-Type':'application/json','X-Workbench-Token':token}
+    _,_,raw=request(running,'POST','/api/ask',payload,base)
+    status,headers,small=request(running,'POST','/api/ask',payload,{**base,'Accept-Encoding':'gzip'})
+    assert status==200 and headers['Content-Encoding']=='gzip'
+    assert json.loads(gzip.decompress(small))['status']==json.loads(raw)['status']
+    assert len(raw)>100_000 and len(small)<=25_600          # #33 acceptance: setup matrix <= 25 KB on the wire (145 KB raw, 21 KB measured)
+    payload=json.dumps({'day':'2026-09-14','shift':2,'question':'Show the downtime breakdown','scope':'day'})
+    status,headers,small=request(running,'POST','/api/ask',payload,{**base,'Accept-Encoding':'gzip'})
+    assert status==200 and headers['Content-Encoding']=='gzip' and len(small)<=6_144   # #33 acceptance: downtime breakdown <= 6 KB (3.9 KB measured)
+    # q=0 means no gzip; x-gzip is gzip
+    status,headers,body=request(running,'GET','/api/config',headers={'Accept-Encoding':'gzip;q=0, identity'})
+    assert status==200 and 'Content-Encoding' not in headers
+    status,headers,body=request(running,'GET','/api/config',headers={'Accept-Encoding':'x-gzip'})
+    assert status==200 and headers['Content-Encoding']=='gzip'
+    # small bodies are sent as they are
+    status,headers,body=request(running,'GET','/api/health',headers={'Accept-Encoding':'gzip'})
+    assert status==200 and 'Content-Encoding' not in headers and json.loads(body)['ok'] is True
+
+
+def test_static_files_revalidate_with_an_etag(running):
+    status,headers,body=request(running,'GET','/app.js')
+    assert status==200 and headers['ETag'].startswith('"') and headers['Cache-Control']=='no-cache'
+    assert body==(Path(__file__).resolve().parent.parent/'src'/'investigator'/'web'/'app.js').read_bytes()
+    etag=headers['ETag']
+    status,headers,body=request(running,'GET','/app.js',headers={'If-None-Match':etag})
+    assert status==304 and body==b'' and 'Content-Length' not in headers and 'Content-Type' not in headers   # unchanged: no download; RFC 9110 8.6
+    # the gzip representation carries its own validator, and either one revalidates
+    status,headers,body=request(running,'GET','/app.js',headers={'Accept-Encoding':'gzip'})
+    assert status==200 and headers['Content-Encoding']=='gzip' and headers['ETag']==etag[:-1]+'-gzip"'
+    status,headers,body=request(running,'GET','/app.js',headers={'If-None-Match':f'"other", {headers["ETag"]}'})
+    assert status==304
+    status,_,body=request(running,'GET','/app.js',headers={'If-None-Match':'"stale"'})
+    assert status==200 and len(body)>1000
+    status,headers,body=request(running,'GET','/style.css',headers={'Accept-Encoding':'gzip'})
+    assert status==200 and headers['Content-Encoding']=='gzip'  # static files compress too

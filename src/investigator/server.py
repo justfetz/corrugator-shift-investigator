@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import argparse
+import gzip
+import hashlib
 import hmac
 import json
 import math
@@ -320,15 +322,39 @@ def make_server(port=8765, public=None, host=None, guards=None):
         def log_message(self, *args):
             pass  # Do not retain visitor prompts or session identifiers in access logs.
 
+        def _accepts_gzip(self):
+            """True when Accept-Encoding lists gzip with a non-zero q (RFC 9110 12.5.3)."""
+            for token in self.headers.get('Accept-Encoding', '').lower().split(','):
+                coding, _, params = token.strip().partition(';')
+                if coding in ('gzip', 'x-gzip'):
+                    q = params.strip().removeprefix('q=').strip() if params.strip().startswith('q=') else '1'
+                    try:
+                        return float(q) > 0
+                    except ValueError:
+                        return True
+            return False
+
         def _send(self, status, body, content_type='application/json; charset=utf-8', extra=None):
             if not isinstance(body, bytes):
                 body = json.dumps(body, allow_nan=False).encode()
+            headers = dict(extra or {})
+            # gzip anything a browser can wait on (issue #33): an answer is 20-145 KB raw and
+            # 3-21 KB compressed, and the trace is half of it. Small bodies and the PDF are left alone.
+            if status != 304 and len(body) >= 1024 and content_type != 'application/pdf' and self._accepts_gzip():
+                body = gzip.compress(body, compresslevel=6)
+                headers['Content-Encoding'] = 'gzip'
+                if 'ETag' in headers:   # a strong validator names one representation; the gzip one gets its own
+                    headers['ETag'] = headers['ETag'][:-1] + '-gzip"'
+            headers.setdefault('Cache-Control', 'no-store')   # static files set their own (revalidated with an ETag)
             self.send_response(status)
-            for name, value in (extra or {}).items():
+            for name, value in headers.items():
                 self.send_header(name, value)
+            self.send_header('Vary', 'Accept-Encoding')
+            if status == 304:   # RFC 9110 8.6: no Content-Length, and no body, on a 304
+                self.end_headers()
+                return
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
-            self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
             self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors "+frame_ancestors+"; form-action 'self'")
@@ -378,7 +404,14 @@ def make_server(port=8765, public=None, host=None, guards=None):
             if self.path not in files:
                 return self._send(404, {'error': 'Not found'})
             filename, content_type = files[self.path]
-            self._send(200, (WEB/filename).read_bytes(), content_type)
+            data = (WEB/filename).read_bytes()
+            # Revalidate, never re-download: the browser keeps app.js and style.css and asks with
+            # If-None-Match on each load; an unchanged file is a 304 with no body (issue #33).
+            etag = '"' + hashlib.sha256(data).hexdigest()[:16] + '"'
+            held = [v.strip() for v in self.headers.get('If-None-Match', '').split(',')]
+            if etag in held or etag[:-1] + '-gzip"' in held:   # either representation the browser may hold
+                return self._send(304, b'', content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
+            self._send(200, data, content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
 
         def do_POST(self):
             # Consume bounded bodies before a rejection so Windows clients receive

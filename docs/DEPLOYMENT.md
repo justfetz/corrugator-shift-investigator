@@ -47,6 +47,8 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${
 gcloud iam service-accounts keys create key.json --iam-account "$SA" && cat key.json
 ```
 
+Responses over 1 KB are gzipped when the client accepts it (an answer is 20–145 KB raw, 3–21 KB on the wire; the PDF is left alone), and `app.js`, `style.css` and the pages carry an `ETag` with `Cache-Control: no-cache`, so a returning visitor's browser revalidates them with `If-None-Match` and gets a 304 instead of a download (issue #33). API responses stay `no-store`. The page builds the trace table two animation frames after the answer, so the tables and charts paint first (a frame callback runs before its own paint).
+
 The image builds the two synthetic months once (`python -m investigator.prebuilt /app/prebuilt` in the Dockerfile, issue #19) and the server loads them at start in about 150 ms instead of generating for about 2 s; `GET /api/health` reports `store.source` (`prebuilt` or `generated`) and `store.boot_ms`. A prebuilt folder that does not match the code or the inputs is ignored, so a stale image falls back to generating rather than serving wrong data.
 
 Paste the key file's contents into the GitHub secret `GCP_SA_KEY`, set the variable `GCP_PROJECT_ID`, delete `key.json`, then merge or run **Deploy Cloud Run**. The service-account key is a shortcut for a one-person project; Workload Identity Federation is the keyless alternative when this matters. Set a billing budget alert on the project regardless.
