@@ -13,7 +13,7 @@
 #   ERROR: (gcloud.run.deploy) ABORTED: Conflict for resource '<service>': version '...' was
 #   specified but current version is '...'.
 #
-# and gcloud exits 1 without retrying. The main deploy and every pull request's preview runs
+# and gcloud exits 1 without retrying. That message, and nothing else, is what is retried. The main deploy and every pull request's preview runs
 # (deploy and close) write the one service, and GitHub serializes runs only within one pull
 # request, so runs of two pull requests do cross: PR #50's preview failed this way after its
 # build while PR #54's close job was removing its tag. A rejected write changed nothing, so the
@@ -36,7 +36,7 @@ while :; do
   "$@" 2>&1 | tee "$log"
   status=${PIPESTATUS[0]}
   if [ "$status" -eq 0 ]; then exit 0; fi
-  if ! grep -qE 'ABORTED|Conflict for resource' "$log"; then exit "$status"; fi
+  if ! grep -qE 'ABORTED: Conflict for resource|was specified but current version is' "$log"; then exit "$status"; fi
   if [ "$attempt" -ge "$attempts" ]; then
     echo "::warning::attempt ${attempt} of ${attempts} was still rejected: another run kept changing the Cloud Run service; re-run this job"
     exit "$status"

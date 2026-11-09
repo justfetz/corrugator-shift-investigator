@@ -256,6 +256,10 @@ def test_the_retry_is_bounded_and_only_for_a_rejected_write(tmp_path):
     stub, calls = fake_gcloud(tmp_path, failures=99)
     proc = run_helper(stub, 'run', 'deploy', SERVICE, attempts=1)
     assert proc.returncode == 1 and len(calls.read_text().splitlines()) == 1
+    aborted = "ERROR: (gcloud.run.deploy) ABORTED: the operation was aborted"   # the word alone is not the rejected write
+    stub, calls = fake_gcloud(tmp_path, failures=99, message=aborted)
+    proc = run_helper(stub, 'run', 'deploy', SERVICE)
+    assert proc.returncode == 1 and len(calls.read_text().splitlines()) == 1 and '::notice::' not in proc.stdout
     denied = "ERROR: (gcloud.run.services.update-traffic) PERMISSION_DENIED: Permission 'run.services.update' denied"
     stub, calls = fake_gcloud(tmp_path, failures=99, message=denied, status=7)
     proc = run_helper(stub, 'run', 'services', 'update-traffic', SERVICE, '--to-revisions', 'r=100')
@@ -280,7 +284,8 @@ def test_every_write_to_the_service_goes_through_the_retry_helper(workflow, writ
     assert read_lines and not any('cloud_run_update.sh' in line for line in read_lines)
     if workflow is WORKFLOW:
         assert text.count('is already gone; another run deleted it first') == 2, 'both sweeps'
-        assert text.count('if gcloud run revisions describe "$NAME"') == 2
+        assert text.count('if ! gcloud run revisions describe "$NAME"') == 2
+        assert text.count("&& grep -qiE 'NOT_FOUND|could not be found|not found' /tmp/revision.err") == 2, 'gone means NOT_FOUND, not any failed describe'
         assert 'cancel-in-progress: false' not in text and text.count('group:') == 1, 'no repository-wide group: GitHub keeps one pending run per group'
 
 
