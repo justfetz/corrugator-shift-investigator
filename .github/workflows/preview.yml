@@ -88,14 +88,6 @@ jobs:
           echo "POST $PREVIEW_URL/api/ask (Origin: preview) -> HTTP $CODE"
           test "$CODE" = "200"
           python3 -c 'import json,sys; r=json.load(open("/tmp/ask.json")); print("  status:", r.get("status"), " tool calls:", len(r.get("tool_calls") or r.get("trace") or []), " elapsed_ms:", r.get("elapsed_ms"))'
-      - name: Delete this pull request's earlier preview revisions
-        run: |
-          set -euo pipefail
-          gcloud run revisions list --service "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/revisions.json
-          for NAME in $(python3 .github/scripts/preview_origins.py revisions "$SERVICE" "$TAG" "$REVISION" < /tmp/revisions.json); do
-            echo "deleting $NAME"
-            gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet
-          done
       - name: Post the URL on the pull request
         run: |
           set -euo pipefail
@@ -104,11 +96,22 @@ jobs:
           ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- preview-url -->"))][0].id // empty' | head -n1)
           if [ -n "$ID" ]; then gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$ID" -f body="$BODY" --silent
           else gh api -X POST "repos/${{ github.repository }}/issues/$PR/comments" -f body="$BODY" --silent; fi
+      - name: Delete this pull request's earlier preview revisions
+        run: |
+          set -euo pipefail
+          gcloud run revisions list --service "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/revisions.json
+          for NAME in $(python3 .github/scripts/preview_origins.py revisions "$SERVICE" "$TAG" "$REVISION" < /tmp/revisions.json); do
+            echo "deleting $NAME"
+            gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet \
+              || echo "::warning::could not delete $NAME; the close job retries by name prefix"
+          done
   cleanup:
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}   # refs/pull/<n>/merge may not exist for a closed PR; the head always does
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
@@ -116,8 +119,10 @@ jobs:
       - name: Remove the tag and delete the preview revisions
         run: |
           set -euo pipefail
-          if ! gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json; then
-            echo "service $SERVICE not found; nothing to clean up"; exit 0
+          if ! gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json > /tmp/service.json 2> /tmp/describe.err; then
+            cat /tmp/describe.err
+            if grep -qiE 'NOT_FOUND|could not be found|not found' /tmp/describe.err; then echo "service $SERVICE not found; nothing to clean up"; exit 0; fi
+            echo "::error::could not describe $SERVICE; a leaked preview would go unnoticed, so this fails"; exit 1
           fi
           if [ -n "$(python3 .github/scripts/preview_origins.py url "$TAG" < /tmp/service.json | cut -d= -f2-)" ]; then
             gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --remove-tags "$TAG" --quiet

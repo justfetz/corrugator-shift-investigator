@@ -61,6 +61,8 @@ The preview revision inherits the serving template (scaling, demo guards, mounte
 
 The smoke test proves three things or fails the run: the tag carries 0% and traffic still sums to 100% on the production revisions; `GET /api/health` answers; and a `POST /api/ask` sent with `Origin: <preview URL>` and the session token returns 200, so the allow-list change works. Previews deploy from source like `main` (Cloud Build), about three to five minutes per push. `gcloud run deploy --tag` with a tag already on another revision moves it; if two pushes race, the per-PR concurrency group cancels the older run. A cancelled run can leave a revision that the next push or the close job deletes, since cleanup goes by the `<service>-pr-<n>-` name prefix.
 
+**The one change previews force on the `main` deploy.** gcloud documents that after any `--no-traffic` deploy the service's traffic is pinned to a *named* revision, and later deploys without a traffic flag get 0% — the live demo would freeze on the revision that was serving when the first preview ran, and the health check would keep passing against it. So `deploy-cloudrun.yml` now runs `gcloud run services update-traffic --to-latest` after each deploy (after the allow-list `services update`, which also creates a revision) and asserts that LATEST carries 100%. Percentages only: other PRs' tags survive. If a `main` deploy ever fails on that assertion, `gcloud run services describe <service> --format='yaml(status.traffic)'` shows what is serving.
+
 ### Deploy to a Hugging Face Space (Docker Spaces require a PRO subscription since July 2026)
 
 1. Create a Space with the **Docker** SDK (e.g. `justfetz/corrugator-shift-investigator`), public visibility.

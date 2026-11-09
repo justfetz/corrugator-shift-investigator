@@ -116,16 +116,45 @@ def test_cli_prints_github_env_lines():
     assert bad.returncode == 2
 
 
+def test_base_origins_learn_the_tag_host_form_from_a_live_tag_url():
+    # Status only shows the deterministic URL, but a live tag uses the legacy hash host: the
+    # untagged base of that tag URL is kept, so the pr-41--- form matches what the browser sends.
+    svc = service_json(env_origins=DETERMINISTIC, status_url=DETERMINISTIC,
+                       traffic=[{'percent': 100, 'latestRevision': True},
+                                {'tag': 'pr-40', 'url': f'https://pr-40---{SERVICE}-abc123xyz-uc.a.run.app', 'revisionName': 'r'}])
+    assert po.base_origins(svc) == [DETERMINISTIC, LEGACY]
+    assert f'https://pr-41---{SERVICE}-abc123xyz-uc.a.run.app' in po.preview_origins(svc, 'pr-41')
+
+
 def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
+    # Plain text checks, so CI (which installs only `-e . pytest`, no PyYAML) runs them too.
+    text = WORKFLOW.read_text()
+    assert 'types: [opened, synchronize, reopened, closed]' in text
+    assert text.count('head.repo.full_name == github.repository') == 2, 'both jobs must refuse fork PRs'
+    assert "github.event.action != 'closed'" in text and "github.event.action == 'closed'" in text
+    assert '--no-traffic --tag "$TAG" --revision-suffix "$SUFFIX"' in text
+    assert '--update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}"' in text
+    assert 'traffic does not sum to 100' in text, 'the smoke test asserts production traffic is unchanged'
+    assert '-H "Origin: $PREVIEW_URL"' in text, 'the smoke test proves the allow-list change works'
+    assert '--remove-tags "$TAG"' in text
+    assert 'cancel-in-progress: true' in text
+    assert 'ref: ${{ github.event.pull_request.head.sha }}' in text, 'cleanup must not depend on the merge ref'
+    assert text.index('Post the URL on the pull request') < text.index("Delete this pull request's earlier preview revisions")
+
+
+def test_main_deploy_rebinds_traffic_to_latest_after_a_preview():
+    # gcloud: after any --no-traffic deploy the service is pinned to a named revision and later
+    # deploys get 0% unless traffic is re-bound. main must always take the traffic.
+    text = (ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml').read_text()
+    assert '--to-latest' in text
+    assert text.index('--to-latest') > text.index('gcloud run deploy "$SERVICE" --source .')
+    assert text.index('--to-latest') > text.index('Add any URL the first deploy created'), 'services update also makes a revision'
+    assert text.index('--to-latest') < text.index('- name: Smoke test')
+    assert 'LATEST does not carry 100% of the traffic' in text
+
+
+def test_workflow_yaml_parses_when_pyyaml_is_available():
     yaml = pytest.importorskip('yaml')
     wf = yaml.safe_load(WORKFLOW.read_text())
-    assert set(wf[True]['pull_request']['types']) == {'opened', 'synchronize', 'reopened', 'closed'}
-    deploy, cleanup = wf['jobs']['deploy'], wf['jobs']['cleanup']
-    for job in (deploy, cleanup):
-        assert 'head.repo.full_name == github.repository' in job['if'], 'forks must never reach GCP'
-    runs = '\n'.join(step.get('run', '') for step in deploy['steps'])
-    assert '--no-traffic' in runs and '--tag "$TAG"' in runs and '--revision-suffix' in runs
-    assert '--update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}"' in runs
-    assert 'traffic does not sum to 100' in runs, 'the smoke test asserts production traffic is unchanged'
-    assert '--remove-tags "$TAG"' in '\n'.join(step.get('run', '') for step in cleanup['steps'])
-    assert wf['concurrency']['cancel-in-progress'] is True
+    assert set(wf['jobs']) == {'deploy', 'cleanup'}
+    assert yaml.safe_load((ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml').read_text())['jobs']['deploy']

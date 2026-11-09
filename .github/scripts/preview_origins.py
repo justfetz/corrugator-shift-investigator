@@ -47,6 +47,11 @@ def base_origins(service: dict) -> list[str]:
         if item and item not in ordered:
             ordered.append(item)
     for item in sorted(set(RUN_APP.findall(json.dumps(service.get('status') or {})))):
+        scheme, _, host = item.partition('://')
+        if TAG_SEPARATOR in host:
+            # A live tag URL names the host form Cloud Run actually uses for tags; keep its
+            # untagged base so the pr-<n>--- form we add matches what the browser will send.
+            item = f'{scheme}://{host.split(TAG_SEPARATOR, 1)[1]}'
         if item not in ordered:
             ordered.append(item)
     return [o for o in ordered if TAG_SEPARATOR not in o.split('://', 1)[-1]]
