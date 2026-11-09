@@ -114,7 +114,7 @@ class Workbench:
         self.guards = guards or DemoGuards()
         self.anthropic_model = resolve_model(os.environ.get('ANTHROPIC_MODEL'))  # an unsupported value fails at boot
         self.lock = threading.Lock()  # investigations and PDFs run one at a time; static files do not wait
-        self.token = secrets.token_urlsafe(32)
+        self.token = self._workbench_token(public)
         self.sessions = OrderedDict()
         self.datasets = OrderedDict()
         self.requests = deque()
@@ -124,6 +124,23 @@ class Workbench:
         self.store = default_store()  # the two synthetic months, built once per process
         from .periods import PeriodReports
         self.periods = PeriodReports(self.store)
+
+    @staticmethod
+    def _workbench_token(public):
+        """The X-Workbench-Token every POST must carry.
+
+        Loopback workbench: a random value per process, so nothing outside this
+        browser can guess it. Hosted demo: every instance and every restart must
+        agree, or a visitor whose page loaded on one instance is refused by the
+        next (Cloud Run runs up to two instances and scales to zero). The value is
+        not a secret there anyway: `/api/config` hands it to any GET, and the CSRF
+        defence is the Origin allowlist plus the custom header (which forces a
+        CORS preflight). So derive it from WORKBENCH_SECRET when set, else from
+        the demo's own origin; rotate it by changing the secret."""
+        if public is None:
+            return secrets.token_urlsafe(32)
+        seed = os.environ.get('WORKBENCH_SECRET') or public.origins[0]
+        return hmac.new(seed.encode('utf-8'), b'workbench-token-v1', 'sha256').hexdigest()
 
     @property
     def live_modes(self):
@@ -219,8 +236,15 @@ class Workbench:
         if type(corrupt) is not bool:
             raise ValueError('Invalid data-quality option')
         session_id = payload.get('session_id')
-        if session_id is not None and (not isinstance(session_id, str) or session_id not in self.sessions):
-            raise ValueError('Session expired; reset the conversation')
+        if session_id is not None and not isinstance(session_id, str):
+            raise ValueError('Invalid session id')
+        # Sessions live in this process. An id this instance has never seen (another
+        # instance answered the earlier question, or the process restarted) starts a
+        # fresh conversation instead of failing: the request carries day, shift and
+        # period itself, so only the follow-up history is lost, and the answer says so.
+        session_reset = session_id is not None and session_id not in self.sessions
+        if session_reset:
+            session_id = None
         if mode != 'offline' and not report:
             self.daily_round()  # counted before the model is asked; failed rounds still count
         tool_period = 'fiscal' if period == 'accounting' else period   # the period tools' name for the 4-4-5 window
@@ -231,7 +255,7 @@ class Workbench:
             self.sessions[session_id] = Context(day, shift, period=tool_period)
         if report:
             result = self.periods.investigate(day, shift, scope, period, corrupt)   # no model on this path, whatever the mode
-            return self._retain(result, session_id)
+            return self._retain(result, session_id, session_reset)
         context = self.sessions[session_id]
         # Visible date/period/shift controls own the scope; follow-ups retain history while they stay unchanged.
         if context.production_day != day or context.shift != shift or context.scope != scope or context.period != tool_period:
@@ -262,10 +286,11 @@ class Workbench:
                 result = Agent(self.datasets[key], planner=planner, max_calls=10, max_seconds=60, max_turns=self.guards.max_turns).ask(question, context)
             finally:
                 planner.close()
-        return self._retain(result, session_id)
+        return self._retain(result, session_id, session_reset)
 
-    def _retain(self, result, session_id):
+    def _retain(self, result, session_id, session_reset=False):
         result['session_id'] = session_id
+        result['session_reset'] = session_reset   # True: the id the client sent was unknown here; a fresh conversation answered
         result['report_markdown'] = '\n\n'.join([
             f'# Synthetic production investigation: {result.get("period_label", result["production_day"])}',
             result['mode'] + '. No email delivery.',
