@@ -92,9 +92,16 @@ jobs:
             LIVE_FLAGS=(--clear-secrets)   # the service holds no other secrets; idempotent when none exist
             ENV_VARS="${ENV_VARS}|PUBLIC_DEMO_LIVE_MODEL=0"
           fi
-          gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
+          # The revision is named here so the traffic step below can route to it BY NAME: a preview
+          # (preview.yml) can create a newer revision at any moment, so "latest" is not this deploy.
+          # The write goes through .github/scripts/cloud_run_update.sh: Cloud Run rejects it when
+          # another run changed the service in the second between gcloud's re-read after the build
+          # and its write, and the helper then runs the deploy again instead of failing main.
+          SUFFIX="main-${GITHUB_SHA:0:7}-${{ github.run_number }}-${{ github.run_attempt }}"
+          echo "SUFFIX=${SUFFIX}" >> "$GITHUB_ENV"; echo "REVISION=${SERVICE}-${SUFFIX}" >> "$GITHUB_ENV"
+          bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
             --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
-            --concurrency 20 --timeout 180 \
+            --concurrency 20 --timeout 180 --revision-suffix "$SUFFIX" \
             --set-env-vars "$ENV_VARS" "${LIVE_FLAGS[@]}" --quiet
       - name: Add any URL the first deploy created to the allow-list
         run: |
@@ -104,20 +111,26 @@ jobs:
           MERGED=$(python3 -c 'import sys; print(",".join(sorted(set(sys.argv[1].split(",")) | set(sys.argv[2].split(",")))))' "$ORIGINS" "$ALL")
           if [ "$MERGED" != "$(python3 -c 'import sys; print(",".join(sorted(set(sys.argv[1].split(",")))))' "$ORIGINS")" ]; then
             echo "new URL after deploy; allow-listing ${MERGED}"
-            gcloud run services update "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
-              --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${MERGED}" --quiet
+            # This makes one more revision; it is named too, and it is the one the traffic step routes to.
+            bash .github/scripts/cloud_run_update.sh gcloud run services update "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
+              --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${MERGED}" --revision-suffix "${SUFFIX}-urls" --quiet
+            echo "REVISION=${SERVICE}-${SUFFIX}-urls" >> "$GITHUB_ENV"
           fi
           echo "ORIGINS=${MERGED}" >> "$GITHUB_ENV"
       - name: Route all traffic to the revision just deployed
         # A pull-request preview (preview.yml) deploys with --no-traffic, and gcloud documents the
         # side effect: from then on the service's traffic is pinned to a NAMED revision and later
-        # deploys without a traffic flag get 0%. main must always take the traffic, so re-bind it
-        # to LATEST explicitly and check. Tags on other PRs' previews are untouched (percentages only).
+        # deploys without a traffic flag get 0%. main must always take the traffic, so bind it to
+        # the revision this run named, and check. Not --to-latest: LATEST follows whichever revision
+        # became ready last, and a preview can land between the deploy above and this step (the
+        # runs are not serialized), which would have put production's traffic on a pull request's
+        # revision until the next deploy of main. Tags on other PRs' previews are untouched
+        # (percentages only).
         run: |
           set -euo pipefail
-          gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --to-latest --quiet
+          bash .github/scripts/cloud_run_update.sh gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --to-revisions "${REVISION}=100" --quiet
           gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json \
-            | python3 -c 'import json,sys; t=json.load(sys.stdin)["status"]["traffic"]; print(t); assert any(x.get("latestRevision") and x.get("percent")==100 for x in t), "LATEST does not carry 100% of the traffic"'
+            | python3 -c 'import json,sys; t=json.load(sys.stdin)["status"]["traffic"]; print(t); assert any(x.get("revisionName")==sys.argv[1] and x.get("percent")==100 for x in t), sys.argv[1]+" does not carry 100% of the traffic"' "$REVISION"
       - name: Smoke test
         run: |
           set -euo pipefail
