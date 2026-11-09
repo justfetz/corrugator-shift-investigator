@@ -548,6 +548,7 @@ function showResult(result) {
 // the answer fills that card in place; nothing on the page is disabled while a question is out. The thread
 // lives in this page's memory only (permalinks are issue #20).
 let thread=[], openId=null, seq=0, sessionEpoch=0;
+let queue=Promise.resolve();   // questions go to the server one at a time, in the order asked, so each carries the session the one before it left
 const latestRun=new Map();   // session id -> its latest run id: the only run /api/report can still print
 const clock=()=>typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
 const msText=ms=>ms>=10000?`${(ms/1000).toFixed(1)} s`:`${Math.max(1,Math.round(ms))} ms`;
@@ -609,12 +610,14 @@ async function ask(question,{report=false,mode,title}={}) {
  thread.push(rec);openId=rec.id;renderCard();   // the skeleton card is in the DOM before this task yields: within one frame of the submit
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
  const settle=()=>{ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)$('card-meta').textContent=cardMeta(rec); else{renderEarlier();syncPdf();} };   // the ms is submit to rendered
+ // What the visitor chose is read now; the request itself waits its turn. Two questions out at once would both carry
+ // the session as it was before either was answered (or none, and open two), and the follow-up context would lose one.
+ const headers={}, p=PROVIDERS[rec.mode]||null, corrupt=$('corrupt').checked, turn=queue; let release; queue=new Promise(resolve=>{release=resolve;});
+ if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
+ $('api-key').value='';
  try{
-  const headers={};
-  const p=PROVIDERS[rec.mode]||null;
-  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
-  $('api-key').value='';
-  const body={question,day:scope.day,shift:scope.shift,corrupt:$('corrupt').checked,session_id:sessionId,mode:rec.mode,scope:scope.scope,period:scope.period};
+  await turn;
+  const body={question,day:scope.day,shift:scope.shift,corrupt,session_id:epoch===sessionEpoch?sessionId:null,mode:rec.mode,scope:scope.scope,period:scope.period};
   if(report)body.report=true;
   const pending=post('/api/ask',body,headers);
   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
@@ -629,7 +632,7 @@ async function ask(question,{report=false,mode,title}={}) {
   $('status').textContent=readyText();
   return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
  }catch(error){rec.error=error.message;rec.state='error';settle();$('status').textContent='Ready to retry';throw error;}
- finally{updateScope();}
+ finally{release();updateScope();}
 }
 function readyText(){ return isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs'; }
 function analystMode(){ const modes=liveModes(); return isLive()?$('mode').value:modes.includes('anthropic')?'anthropic':modes[0]; }

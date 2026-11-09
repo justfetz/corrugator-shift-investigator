@@ -377,6 +377,7 @@ issue17.then(async()=>{
  assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · asking…');
  assert.ok(walk(elements.queries).some(e=>/^skel\b/.test(e.className))&&elements.charts.children.length===2&&elements.charts.children.every(e=>/skel-chart/.test(e.className)));
  assert.deepEqual(disabled(),[]);                                              // nothing is disabled while the question is out
+ await tick();
  assert.deepEqual(bodies[0],{question:'Why was this shift slow? Chart downtime by reason.',day:'2026-09-14',shift:2,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});   // the /api/ask payload is unchanged
  wall=1093;gates[0].ok();await tick();
  assert.equal(card.className,'card answer');assert.equal(card['aria-busy'],'false');
@@ -389,15 +390,18 @@ issue17.then(async()=>{
  // 2. Two more in a row, the third clicked while the second is still out: three cards, one open, two collapsed.
  canned[1].events.click();
  elements.mode.value='anthropic';canned[2].events.click();elements.mode.value='offline';
- assert.equal(bodies.length,3);assert.deepEqual(bodies.map(b=>b.mode),['offline','offline','offline']);   // a canned question never calls a model, whatever the agent select says
+ await tick();assert.equal(bodies.length,2);                                   // the third waits for the second: one request at a time, so each carries the session the last one left
  assert.equal(bodies[1].session_id,'s1');                                      // the thread continues the server conversation
  assert.equal(card.className,'card answer skeleton');assert.equal(elements['card-title'].textContent,'Dry-end waste');
  assert.deepEqual(earlier.children.map(l=>l.children[0].children.map(text)),[['Speed to target','Shift 2 · asking…'],['Why was this shift slow?','Shift 2 · 93 ms']]);
  assert.deepEqual(disabled(),[]);
- wall=1200;gates[2].ok();await tick();wall=1300;gates[1].ok();await tick();
+ wall=1200;gates[1].ok();await tick();
+ assert.equal(bodies.length,3);assert.equal(bodies[2].session_id,'s1');assert.deepEqual(bodies.map(b=>b.mode),['offline','offline','offline']);   // a canned question never calls a model, whatever the agent select says
+ assert.equal(card.className,'card answer skeleton');assert.equal(earlier.children[0].children[0].children[1].textContent,'Shift 2 · 107 ms');   // the collapsed line fills in while the open card is still out
+ wall=1300;gates[2].ok();await tick();
  assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(card.className,'card answer');
  assert.ok(walk(elements.messages).some(e=>e.textContent==='Shift 2 answer 3.'));   // each card keeps its own answer, whatever order they landed in
- assert.deepEqual(earlier.children.map(l=>l.children[0].children.map(text)),[['Speed to target','Shift 2 · 207 ms'],['Why was this shift slow?','Shift 2 · 93 ms']]);   // newest on top
+ assert.deepEqual(earlier.children.map(l=>l.children[0].children.map(text)),[['Speed to target','Shift 2 · 107 ms'],['Why was this shift slow?','Shift 2 · 93 ms']]);   // newest on top
  assert.ok(earlier.children.every(l=>l.children[1].tag==='button'&&l.children[1].textContent==='Open'&&/^card earlier/.test(l.className)));
  assert.deepEqual(disabled(),[]);
 
@@ -407,20 +411,19 @@ issue17.then(async()=>{
  assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 2 queries · 93 ms');
  assert.deepEqual(earlier.children.map(l=>l.children[0].children[0].textContent),['Dry-end waste','Speed to target']);
  assert.equal(elements.pdf.hidden,true);
- earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);   // run 2 landed last
+ earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,true);
+ earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,false);   // run 3 landed last
 
  // 3b. An answer that lands while an earlier card is open takes the PDF away from that card (the server prints the latest run only).
- earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,true);
- earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);
- canned[3].events.click();earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);
- gates[3].ok();await tick();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,true);
+ canned[3].events.click();earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,false);
+ await tick();gates[3].ok();await tick();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,true);
  elements.question.value='  ';elements.ask.events.submit({preventDefault(){}});assert.equal(bodies.length,4);assert.equal(elements.status.textContent,'Type a question first');   // an empty Ask says so and sends nothing
 
  // 4. A scope change keeps the thread and starts a new server conversation; the new card carries its own scope.
  elements['shift-seg'].children.find(b=>b.dataset.value==='1').events.click();
- assert.equal(earlier.children.length,3);assert.equal(elements['card-title'].textContent,'Speed to target');
+ assert.equal(earlier.children.length,3);assert.equal(elements['card-title'].textContent,'Dry-end waste');
  elements.question.value='How many setups?';elements.ask.events.submit({preventDefault(){}});
- assert.deepEqual(bodies[4],{question:'How many setups?',day:'2026-09-14',shift:1,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});
+ await tick();assert.deepEqual(bodies[4],{question:'How many setups?',day:'2026-09-14',shift:1,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});
  assert.equal(elements['card-title'].textContent,'How many setups?');assert.equal(elements['card-meta'].textContent,'Shift 1 · Mon 14 Sep 2026 · offline · asking…');
  wall=1350;gates[4].fail('That question is not supported');await tick();
  assert.equal(card.className,'card answer failed');assert.match(elements['card-meta'].textContent,/ · failed · 50 ms$/);assert.equal(elements['card-foot'].hidden,true);
@@ -430,9 +433,9 @@ issue17.then(async()=>{
  // 5. Ask the analyst is the live mode, offered only when the server has a key for one; Ask stays offline.
  vm.runInContext("config.live_modes=['anthropic'];updateScope()",context);assert.equal(elements.analyst.hidden,false);
  elements.question.value='Why slow?';elements.analyst.events.click();
- assert.equal(bodies[5].mode,'anthropic');assert.match(elements['card-meta'].textContent,/ · anthropic · asking…$/);
- elements.ask.events.submit({preventDefault(){}});assert.equal(bodies[6].mode,'offline');
- gates[5].ok();gates[6].ok();await tick();
+ assert.match(elements['card-meta'].textContent,/ · anthropic · asking…$/);await tick();assert.equal(bodies[5].mode,'anthropic');
+ elements.ask.events.submit({preventDefault(){}});await tick();assert.equal(bodies.length,6);
+ gates[5].ok();await tick();assert.equal(bodies[6].mode,'offline');gates[6].ok();await tick();
 
  // 6. "Clear the thread" empties it.
  elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);
