@@ -49,6 +49,9 @@ const heatmap=elements.heatmaps.children[0];
 const cells=heatmap.children.find(e=>e.className==='heatmap-grid').children.filter(e=>e.tag==='button');
 assert.deepEqual(cells.slice(0,3).map(e=>e.style.backgroundColor),['rgba(8, 127, 117, 0.220)','rgba(8, 127, 117, 0.610)','rgba(8, 127, 117, 1.000)']);
 assert.equal(cells[3].style.backgroundColor,undefined);assert.match(cells[3].className,/missing/);
+// issue #36: the day number flips to white only on cells deep enough for white to read better than black (alpha 1 here, not .61).
+assert.deepEqual(cells.slice(0,3).map(e=>/\bdeep\b/.test(e.className)),[false,false,true]);
+assert.ok(vm.runInContext('heatLuminance(.96)',context)>.179&&vm.runInContext('heatLuminance(.965)',context)<.179);   // the flip sits where both inks clear 4.5:1
 for(const phrase of ['estimated good','gross','speed','downtime','maintenance','operator','dry-end','trim','shear','27 paper changes','Dry-end setups: 60','heavy hitter Upper knife / Knife jam'])assert.ok(cells[0].title.includes(phrase),phrase);
 assert.equal(cells[0]['aria-label'],cells[0].title);
 const tip=heatmap.children.find(e=>e.className==='heatmap-tip');
@@ -188,6 +191,31 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  delete context.requestAnimationFrame;                         // later checks run synchronously again
  console.log('UI issue-33 checks passed: tables and charts paint before the trace; a stale frame is skipped.');
 }
+
+// ---- issue #36: light by default whatever the OS prefers; a pinned choice in localStorage wins; the toggle stays.
+const themeSrc=fs.readFileSync('src/investigator/web/theme.js','utf8'), css=fs.readFileSync('src/investigator/web/style.css','utf8');
+function visit({saved,osDark,withButton=true}={}){   // one page load: theme.js runs in <head>, then the header button exists
+ const root=new Element('html'), button=new Element('button'), store=saved?{'csi-theme':saved}:{};
+ const ctx={document:{documentElement:root,readyState:'complete',getElementById:id=>id==='theme'&&withButton?button:null,addEventListener(){}},
+  localStorage:{getItem:k=>k in store?store[k]:null,setItem:(k,v)=>{store[k]=v;}},window:{matchMedia:()=>({matches:!!osDark})}};
+ vm.createContext(ctx);vm.runInContext(themeSrc,ctx);return {root,button,store};
+}
+const fresh=visit({osDark:true});                                   // first visit with a dark OS theme renders light
+assert.equal(fresh.root.dataset.theme,undefined);assert.equal(fresh.button.textContent,'Dark');assert.equal(fresh.button['aria-pressed'],'false');
+fresh.button.events.click();                                        // toggling to dark pins it
+assert.equal(fresh.root.dataset.theme,"dark");assert.equal(fresh.store["csi-theme"],"dark");assert.equal(fresh.button.textContent,"Light");assert.equal(fresh.button['aria-pressed'],'true');
+const reload=visit({saved:'dark',osDark:false});                    // and a reload stays dark, even on a light OS
+assert.equal(reload.root.dataset.theme,'dark');assert.equal(reload.button.textContent,'Light');
+reload.button.events.click();assert.equal(reload.root.dataset.theme,'light');assert.equal(reload.store['csi-theme'],'light');
+assert.equal(visit({saved:'light',osDark:true}).root.dataset.theme,'light');
+assert.equal(visit({saved:'sepia',osDark:true}).root.dataset.theme,undefined);   // an unknown pinned value is ignored
+assert.doesNotThrow(()=>visit({osDark:true,withButton:false}));     // the guide page without a button, or a page before the header, still loads
+assert.ok(!css.includes('prefers-color-scheme'),'the stylesheet must not follow the OS theme');
+assert.match(css,/:root\[data-theme="dark"\]\{/);                   // the dark tokens still exist for the pinned choice
+assert.ok(html.includes('<script src="/theme.js"></script><meta charset'),'theme.js loads first in <head> so a pinned theme applies before first paint');
+assert.match(html,/<button type="button" id="theme" class="theme-toggle"/);
+assert.ok(/\.heatmap-scale\{[^}]*rgb\(8 127 117/.test(css)&&!css.includes('42 120 214'),'the legend ramp is the cell colour');
+console.log('UI issue-36 checks passed: light by default, pinned theme wins, toggle present, heatmap ink flip.');
 
 // ---- issue #17: post() refreshes /api/config once on a 403 and resends with the new token; a second 403 is returned, not retried forever.
 (async()=>{

@@ -2,28 +2,23 @@
    near-white surfaces, near-black ink, hairline rules, Inter Tight + JetBrains Mono, the blog's
    series colors (blue / orange / green, purple for the fourth dry-end family). Status colors
    (--good/--bad/--neutral/--warn) are reserved for deltas and notes, never used as a series.
-   The fonts are stacks with system fallbacks: the page loads nothing from outside its own origin. */
+   The fonts are stacks with system fallbacks: the page loads nothing from outside its own origin.
+   Light is the default whatever the OS prefers (issue #36); the dark tokens apply only under
+   [data-theme="dark"], which theme.js sets from the visitor's pinned choice. Light-theme series
+   colors are checked against the surface at 3:1 (WCAG 1.4.11): --s3 and --prev are darker than the
+   blog's values for that reason (#1baf7a was 2.7:1, #b9b9b3 was 1.9:1). */
 :root{
  color-scheme:light;
  --bg:#fcfcfa;--surface:#fcfcfb;--surface-2:#f3f3f0;--surface-3:#ebebe6;
  --ink:#161616;--ink-2:#4a4a46;--ink-3:#8a8a84;--line:#e4e4df;--line-2:#ecece7;--rule:#e4e4df;
  --brand:#1f5f4e;--brand-ink:#1f5f4e;--brand-soft:#eaf1ee;--accent:#1f5f4e;
- --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#8a5cc7;--prev:#b9b9b3;--grid:#e6e6e2;--target:#eb6834;
+ --s1:#2a78d6;--s2:#eb6834;--s3:#159c6b;--s4:#8a5cc7;--prev:#8f8f89;--grid:#e6e6e2;--target:#eb6834;
  --good:#0ca30c;--good-soft:#e9f6e9;--bad:#d03b3b;--bad-soft:#fbeaea;--neutral:#8a8a84;--neutral-soft:#f3f3f0;
  --warn:#fab219;--warn-soft:#fff7e3;--warn-ink:#7a5200;
  --code-bg:#f1f1ec;--code-ink:#161616;--focus:#2a78d6;
  --radius:12px;--radius-s:8px;--gap:12px;--pad:18px;
  --sans:'Inter Tight',Inter,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
  font-family:var(--sans);color:var(--ink);background:var(--bg);font-size:16px;-webkit-font-smoothing:antialiased}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
- color-scheme:dark;
- --bg:#121212;--surface:#1a1a19;--surface-2:#222221;--surface-3:#2a2a28;
- --ink:#ecece8;--ink-2:#b5b5af;--ink-3:#7a7a74;--line:#2a2a28;--line-2:#262624;--rule:#2a2a28;
- --brand:#8fd1bb;--brand-ink:#8fd1bb;--brand-soft:#1b2a25;--accent:#8fd1bb;
- --s1:#3987e5;--s2:#f0784a;--s3:#2ec48a;--s4:#a988df;--prev:#56564f;--grid:#2e2e2c;--target:#f0784a;
- --good:#3fbf6a;--good-soft:#163424;--bad:#ef6a5e;--bad-soft:#3b1f1c;--neutral:#8a8a84;--neutral-soft:#262624;
- --warn:#fab219;--warn-soft:#3a2c0e;--warn-ink:#f1c66a;
- --code-bg:#1b1b1a;--code-ink:#ecece8;--focus:#3987e5}}
 :root[data-theme="dark"]{
  color-scheme:dark;
  --bg:#121212;--surface:#1a1a19;--surface-2:#222221;--surface-3:#2a2a28;
@@ -171,8 +166,8 @@ textarea{display:block;width:100%;resize:vertical;margin-top:7px;font-size:15px}
 .chart .target{stroke:var(--target);stroke-width:3}
 .chart .band{fill:var(--surface-3)}.chart .bar.out{fill:var(--s2)}.chart .dot.out{fill:var(--s2)}.lg .sw.out{background:var(--s2)}.lg .sw.band{background:var(--surface-3);border:1px solid var(--grid)}
 .chart .grid{stroke:var(--grid);stroke-width:1}.chart .grid.base{stroke:var(--ink-3)}
-.chart .tick{font-size:11px;fill:var(--ink-3)}.chart .val.small{font-size:11px}.chart .lbl{fill:var(--ink-2)}.chart .val{fill:var(--ink)}
-.chart .seg.s1{fill:var(--s1)}.chart .seg.s2{fill:var(--s2)}.chart .seg.s3{fill:var(--s3)}.chart .seg.s4{fill:var(--s4)}.chart .inseg{fill:#fff;font-size:11px}
+.chart .tick{font-size:11px;fill:var(--ink-2)}.chart .val.small{font-size:11px}.chart .lbl{fill:var(--ink-2)}.chart .val{fill:var(--ink)}
+.chart .seg.s1{fill:var(--s1)}.chart .seg.s2{fill:var(--s2)}.chart .seg.s3{fill:var(--s3)}.chart .seg.s4{fill:var(--s4)}.chart .inseg{fill:#000;font-size:11px}.chart .inseg.s4{fill:#fff}
 .chart .line{fill:none;stroke:var(--s1);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .chart .dot{fill:var(--s1);stroke:var(--surface);stroke-width:2}.chart .dot.partial{fill:var(--surface);stroke:var(--s1);stroke-width:2}
 .chart text[tabindex]:focus-visible,.chart circle:focus-visible{outline:2px solid var(--focus)}
@@ -214,16 +209,18 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
 
 /* Heatmap */
 .heatmap-weekdays,.heatmap-grid{display:grid;grid-template-columns:repeat(7,minmax(38px,1fr));gap:7px}
-.heatmap-weekdays{margin:14px 0 7px;color:var(--ink-3);font-size:.78rem;text-align:center;font-family:var(--mono)}
-.heatmap-cell{aspect-ratio:1.2;padding:8px;border:1px solid var(--line);background:rgb(42 120 214 / var(--density));color:#0b2340;font-weight:700;min-width:0;border-radius:4px}
-.heatmap-cell:hover,.heatmap-cell:focus-visible{filter:none;outline:3px solid var(--warn);outline-offset:2px}
-.heatmap-cell.missing{background:repeating-linear-gradient(135deg,var(--bg),var(--bg) 6px,var(--surface-3) 6px,var(--surface-3) 12px);color:var(--ink-3)}
+.heatmap-weekdays{margin:14px 0 7px;color:var(--ink-2);font-size:.78rem;text-align:center;font-family:var(--mono)}
+/* Cells: app.js sets the teal background's alpha from the day's output (0.22 to 1) and adds .deep where the
+   blended cell is dark enough that white reads better than black; both inks clear 4.5:1 at every alpha. */
+.heatmap-cell{aspect-ratio:1.2;padding:8px;border:1px solid var(--line);background:rgb(8 127 117 / .22);color:#000;font-weight:700;min-width:0;border-radius:4px}
+.heatmap-cell.deep{color:#fff}
+.heatmap-cell:hover,.heatmap-cell:focus-visible{filter:none;outline:3px solid var(--focus);outline-offset:2px}
+.heatmap-cell.missing{background:repeating-linear-gradient(135deg,var(--bg),var(--bg) 6px,var(--surface-3) 6px,var(--surface-3) 12px);color:var(--ink-2)}
 .heatmap-blank{aspect-ratio:1.2}
-.heatmap-legend{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px;font-size:.78rem;color:var(--ink-3);font-family:var(--mono)}
-.heatmap-scale{width:120px;height:12px;background:linear-gradient(90deg,rgb(42 120 214 / .22),rgb(42 120 214));border-radius:2px}
+.heatmap-legend{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px;font-size:.78rem;color:var(--ink-2);font-family:var(--mono)}
+.heatmap-scale{width:120px;height:12px;background:linear-gradient(90deg,rgb(8 127 117 / .22),rgb(8 127 117));border-radius:2px}
 .heatmap-tip{min-height:3.1em;background:var(--code-bg);color:var(--code-ink);border:1px solid var(--rule);padding:11px 13px;border-radius:8px;font-size:.85rem;line-height:1.45;font-family:var(--mono)}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .heatmap-cell{color:#f5fbfb}}
-:root[data-theme="dark"] .heatmap-cell{color:#f5fbfb}
+:root[data-theme="dark"] .heatmap-cell{color:#fff}:root[data-theme="dark"] .chart .inseg.s4{fill:#000}
 
 /* Guide page */
 .guide-page{max-width:760px;font-size:17px;line-height:1.65}

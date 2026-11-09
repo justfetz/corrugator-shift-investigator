@@ -159,7 +159,7 @@ Each available cell is a production date aggregated over the selected shift scop
 
 If all available values are equal, alpha is 1 for every available cell. Missing/incomplete dates are hatched and excluded from scaling. Blank positions before the first date align the weekday columns; they are not missing production records.
 
-Colors are relative to the current report. The same shade in another report need not mean the same output. Darker means more estimated output, not better efficiency or target attainment. Width, grade mix, shift scope, and waste all affect comparisons. Read the tooltip values and speed attainment before judging a day. The legend currently has no numeric endpoints, and dark-cell day-number contrast still needs improvement; see the dated review.
+Colors are relative to the current report. The same shade in another report need not mean the same output. Darker means more estimated output, not better efficiency or target attainment. Width, grade mix, shift scope, and waste all affect comparisons. Read the tooltip values and speed attainment before judging a day. The legend has no numeric endpoints. Day numbers are black on light cells and white on the deepest ones: the flip is where the teal blended over the light surface crosses relative luminance 0.179, so both inks read at 4.5:1 or better at every alpha (issue #36); in the dark theme every cell's number is white.
 
 Hover, keyboard-focus, or click a day to read output, speed attainment, downtime by kind, waste, setup/paper-change totals, and the largest recorded downtime contributor. This is a detail selection, not navigation to a daily investigation. Choose Production day and its date explicitly to investigate that date.
 
