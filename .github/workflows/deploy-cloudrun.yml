@@ -7,7 +7,9 @@
 # credentials, and nothing long-lived is stored anywhere. Repository VARIABLES (never secrets):
 #   GCP_WORKLOAD_IDENTITY_PROVIDER  projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
 #   GCP_DEPLOYER_SERVICE_ACCOUNT    github-deployer@<project>.iam.gserviceaccount.com
-# One-time setup, and the cutover from the old GCP_SA_KEY secret, are in docs/DEPLOYMENT.md.
+# Until both are set the job falls back to the GCP_SA_KEY secret and says so in a warning, so main
+# stays deployable through the cutover. One-time setup, the cutover order and the key deletion are
+# in docs/DEPLOYMENT.md; preview.yml carries the same credential block (tests/test_repo_hygiene.py).
 name: Deploy Cloud Run
 on:
   push:
@@ -43,20 +45,39 @@ jobs:
       WORKBENCH_SECRET: ${{ vars.WORKBENCH_SECRET || '' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Require the keyless deploy variables
-        # A missing variable fails here with the fix, instead of failing inside the auth step with a
-        # generic error. There is deliberately no fallback to a stored key: see docs/DEPLOYMENT.md.
+      - name: Choose the Google credential (keyless when the WIF variables are set; the stored key until then)
+        id: gcp_auth
+        # Workload Identity Federation when both repository variables are set. Otherwise the GCP_SA_KEY
+        # secret, with a warning in the run's annotations, so main stays deployable through the cutover
+        # (docs/DEPLOYMENT.md, 'Keyless deploy'). Neither available fails here with the instruction,
+        # instead of inside the auth step with a generic error. The two auth steps below are the only
+        # readers of a credential; this step learns whether the secret exists, never its value.
+        env:
+          HAVE_KEY: ${{ secrets.GCP_SA_KEY != '' }}
         run: |
           set -euo pipefail
-          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOYER_SA" ]; then
-            echo "::error::Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT (docs/DEPLOYMENT.md, 'Keyless deploy'). This workflow no longer reads a GCP_SA_KEY secret."
+          MISSING=""
+          if [ -z "$WIF_PROVIDER" ]; then MISSING="GCP_WORKLOAD_IDENTITY_PROVIDER"; fi
+          if [ -z "$DEPLOYER_SA" ]; then MISSING="${MISSING:+$MISSING and }GCP_DEPLOYER_SERVICE_ACCOUNT"; fi
+          if [ -z "$MISSING" ]; then
+            echo "mode=wif" >> "$GITHUB_OUTPUT"
+            echo "deploying as ${DEPLOYER_SA} through ${WIF_PROVIDER}"
+          elif [ "$HAVE_KEY" = "true" ]; then
+            echo "mode=key" >> "$GITHUB_OUTPUT"
+            echo "::warning::deploying with the stored GCP_SA_KEY secret (unset: ${MISSING}). Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT to deploy keyless (docs/DEPLOYMENT.md, 'Keyless deploy'); once a run logs 'deploying as ... through ...', delete the secret and the key."
+          else
+            echo "::error::no Google credential (unset: ${MISSING}; no GCP_SA_KEY secret either). Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT (docs/DEPLOYMENT.md, 'Keyless deploy')."
             exit 1
           fi
-          echo "deploying as ${DEPLOYER_SA} through ${WIF_PROVIDER}"
       - uses: google-github-actions/auth@v2
+        if: steps.gcp_auth.outputs.mode == 'wif'
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/auth@v2
+        if: steps.gcp_auth.outputs.mode == 'key'
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Collect every URL the service answers on (PUBLIC_DEMO_ORIGIN allow-list)
         # Cloud Run gives a service a legacy "<service>-<hash>-<region code>.a.run.app" URL and, on
