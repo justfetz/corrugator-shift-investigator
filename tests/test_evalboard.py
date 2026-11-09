@@ -179,6 +179,29 @@ def test_run_endpoint_keeps_the_post_protections(running):
     assert request(running, 'GET', '/api/evals/run')[0] == 404          # running is a POST, never a link
 
 
+def test_eval_runs_have_their_own_window_and_spend_no_question_rounds(tmp_path):
+    from investigator.server import DemoGuards, EVAL_RUNS_PER_MIN
+    server = make_server(0, guards=DemoGuards(rate_limit_per_min=2, ledger=tmp_path / 'ledger.sqlite3'))
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        for _ in range(4):                                               # more than the per-IP question limit
+            assert run(server, {'id': 'period-ambiguous-last-week'})[0] == 200
+        assert len(server.app.requests) == 0 and len(server.app.eval_requests) == 4 and not server.app.rate_windows
+        ask = json.dumps({'question': 'Show speed', 'day': '2026-09-14', 'shift': 2})
+        headers = {'Content-Type': 'application/json', 'X-Workbench-Token': server.app.token}
+        assert request(server, 'POST', '/api/ask', ask, headers)[0] == 200   # the question window is untouched
+        server.app.eval_requests.extend([server.app.eval_requests[-1]] * (EVAL_RUNS_PER_MIN - 4))
+        status, limited = run(server, {'id': 'period-ambiguous-last-week'})
+        assert status == 429 and 'Golden-case run limit' in limited['error']
+        assert request(server, 'POST', '/api/ask', ask, headers)[0] == 200   # and a full eval window does not block questions
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+        server.app.close()
+
+
 def test_public_demo_serves_the_board_and_runs_only_from_its_own_origin(monkeypatch):
     no_model(monkeypatch)
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-must-never-be-used')
@@ -204,6 +227,7 @@ def test_the_image_layout_and_a_build_without_the_set(tmp_path, monkeypatch):
     assert evals_dir() == shipped
     board = EvalBoard(shipped, json.loads((shipped / 'golden_values.json').read_text())['content_hash'])
     assert board.board()['counts']['runs'] == HISTORY[-1]['cases'] and board.runner.GOLDEN == shipped / 'golden.json'
+    assert not (shipped / '__pycache__').exists()                       # loading the runner writes nothing into evals/
     dockerfile = (ROOT / 'Dockerfile').read_text()
     assert 'COPY evals ./evals' in dockerfile and 'INVESTIGATOR_EVALS=/app/evals' in dockerfile
     # Without the folder (a wheel installed on its own) the page, the data and the badge are simply absent.

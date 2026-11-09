@@ -11,6 +11,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import sys
 import threading
 import time
 
@@ -187,7 +188,11 @@ class EvalBoard:
         self.folder = Path(folder)
         spec = importlib.util.spec_from_file_location('investigator_golden_run', self.folder / 'run.py')
         self.runner = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.runner)
+        bytecode, sys.dont_write_bytecode = sys.dont_write_bytecode, True   # loading run.py must not leave a __pycache__ in evals/
+        try:
+            spec.loader.exec_module(self.runner)
+        finally:
+            sys.dont_write_bytecode = bytecode
         self.dataset_hash = dataset_hash
         self.cases = {case['id']: case for case in self.runner.load_cases()}
         self.plan = [(case, provider) for case, provider in self.runner.plan_rows(list(self.cases.values()), False, None)]

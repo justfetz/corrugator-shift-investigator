@@ -36,6 +36,7 @@ WEB = Path(__file__).with_name('web')
 DAYS = [d.isoformat() for d in production_days(DEFAULT_MONTHS)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
 LIVE_MODES = ('openai', 'anthropic')
+EVAL_RUNS_PER_MIN = 120   # POST /api/evals/run, container-wide: a case is 10-100 ms offline, the whole set about 3 s once a minute
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
 
 
@@ -121,6 +122,7 @@ class Workbench:
         self.sessions = OrderedDict()
         self.datasets = OrderedDict()
         self.requests = deque()
+        self.eval_requests = deque()  # /api/evals/run has its own window, so browsing the golden set never spends the question limits
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
         self.rate_lock = threading.Lock()
         self.reports = OrderedDict()
@@ -458,12 +460,16 @@ def make_server(port=8765, public=None, host=None, guards=None):
                 if not 0 < length <= 16000:
                     return self._send(413, {'error': 'Request too large or empty'})
                 now = time.monotonic()
-                while app.requests and app.requests[0] < now-60:
-                    app.requests.popleft()
-                if len(app.requests) >= 60:
-                    return self._send(429, {'error': 'Local request limit reached; retry in a minute'})
-                app.requests.append(now)
-                if self.path in ('/api/ask', '/api/evals/run'):
+                # Eval runs are counted apart from questions (EVAL_RUNS_PER_MIN for everyone together): a visitor
+                # opening cases on /evals must not use up the question window or their own per-IP rounds.
+                window, limit = (app.eval_requests, EVAL_RUNS_PER_MIN) if self.path == '/api/evals/run' else (app.requests, 60)
+                while window and window[0] < now-60:
+                    window.popleft()
+                if len(window) >= limit:
+                    return self._send(429, {'error': 'Golden-case run limit reached; retry in a minute' if window is app.eval_requests
+                                            else 'Local request limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
+                window.append(now)
+                if self.path == '/api/ask':
                     app.client_round(self._client_ip())  # a round is counted even if the question is later rejected
                 self.connection.settimeout(5)
                 payload = json.loads(raw_body)
