@@ -20,9 +20,13 @@ be found in the records.
 from calendar import monthrange
 from datetime import date, timedelta
 import hashlib
+import json
 import math
+import os
+import pickle
 import threading
 import time
+from pathlib import Path
 from threading import Timer
 
 import duckdb
@@ -35,6 +39,8 @@ from .synth import generate_months, production_days
 DEFAULT_SEED = 2026
 DEFAULT_MONTHS = (("2026", 8), ("2026", 9))
 DEFAULT_MACHINE = "CORR-1"
+PREBUILT_ENV = "INVESTIGATOR_PREBUILT"   # folder written by `python -m investigator.prebuilt`; unset = generate at boot
+PREBUILT_FORMAT = 1
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 WEEKDAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 PERIODS = ("day", "week", "month", "fiscal")
@@ -218,11 +224,20 @@ def window_label(period, start, end):
 
 
 class RecordStore:
-    def __init__(self, seed=DEFAULT_SEED, months=DEFAULT_MONTHS, machine_id=DEFAULT_MACHINE):
+    def __init__(self, seed=DEFAULT_SEED, months=DEFAULT_MONTHS, machine_id=DEFAULT_MACHINE, prebuilt=None):
+        """The two synthetic months in an in-memory DuckDB plus the record objects by day.
+
+        `prebuilt` (or the INVESTIGATOR_PREBUILT folder) holds what `build_prebuilt`
+        wrote for exactly these seed, months, machine and generator source: the record
+        objects and the six tables. Loading it takes a fraction of generating
+        (issue #19: generation plus the JSON inserts cost about two seconds per
+        process start, paid by every visitor after Cloud Run scaled to zero).
+        Anything missing, mismatched or unreadable falls back to generating, so the
+        folder is an accelerator, never a source of truth; `boot_source` says which
+        path ran. The folder is trusted like the code (its pickle executes what it
+        reads): it comes from our own image build or from the operator, never from a
+        visitor."""
         started = time.perf_counter()
-        data = generate_months(seed=seed, months=months, machine_id=machine_id)
-        self.content_hash = data["content_hash"]
-        self.manifest = data["manifest"]
         self.seed, self.months, self.machine_id = seed, tuple(months), machine_id
         self._days = {d.isoformat(): d for d in production_days(months)}
         self.production_days = list(self._days)
@@ -233,7 +248,19 @@ class RecordStore:
         self._db = duckdb.connect(":memory:", config={"threads": 2})
         for table, columns in TABLES.items():
             self._db.execute(f"CREATE TABLE {table} ({columns})")
-        self._load(data)
+        folder = prebuilt_folder(prebuilt)
+        loaded = read_prebuilt(folder, seed, months, machine_id) if folder else None
+        data = None
+        if loaded is not None and self._load_prebuilt_tables(folder, loaded[1]):
+            self.boot_source = "prebuilt"
+            data = loaded[0]
+            self._index(data)
+        if data is None:
+            self.boot_source = "generated"
+            data = generate_months(seed=seed, months=months, machine_id=machine_id)
+            self._load(data)
+        self.content_hash = data["content_hash"]
+        self.manifest = data["manifest"]
         self._db.execute("SET enable_external_access=false")
         self.boot_seconds = time.perf_counter() - started
 
@@ -243,11 +270,53 @@ class RecordStore:
     def _iso(text):
         return f"{text[:4]}-{text[4:6]}-{text[6:]}"
 
+    def _index(self, data):
+        """The record objects by production day; the per-day Analysis reads these."""
+        for s in data["dry_end_setups"]:
+            self._by_day[self._iso(s.production_date)]["setups"].append(s)
+        for sh in data["shifts"]:
+            self._by_day[self._iso(sh.production_date)]["shifts"].append(sh)
+        for st in data["stops"]:
+            self._by_day[self._iso(st.production_date)]["stops"].append(st)
+
+    def _load_prebuilt_tables(self, folder, expected_counts):
+        """Copy the six tables out of the prebuilt file. False (and empty tables) when the
+        file is unreadable, its schema no longer matches TABLES, or its counts differ
+        from the manifest: the caller then generates. Never raises."""
+        # ATTACH takes no bound parameter; the path is ours (env or argument), quoted as a literal.
+        literal = str(Path(folder) / "store.duckdb").replace("'", "''")
+        attached = False
+        try:
+            self._db.execute(f"ATTACH '{literal}' AS prebuilt (READ_ONLY)")
+            attached = True
+            for table in TABLES:
+                self._db.execute(f"INSERT INTO {table} SELECT * FROM prebuilt.{table}")
+            counts = {table: self._db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] for table in TABLES}
+            if counts != expected_counts:
+                raise ValueError(f"prebuilt counts {counts} differ from the manifest {expected_counts}")
+            self.counts = counts
+            return True
+        except Exception:
+            for table in TABLES:
+                self._db.execute(f"DELETE FROM {table}")
+            return False
+        finally:
+            if attached:
+                self._db.execute("DETACH prebuilt")
+
     def _load(self, data):
+        self._index(data)
+        tables = self._rows(data)
+        for table, rows in tables.items():
+            load_rows(self._db, table, rows)
+        self.counts = {table: len(rows) for table, rows in tables.items()}
+
+    @classmethod
+    def _rows(cls, data):
+        """The six tables as positional rows, in TABLES order."""
         setups, customers, rejects, wet_ends, shifts, stops = [], [], [], [], [], []
         for s in data["dry_end_setups"]:
-            day = self._iso(s.production_date)
-            self._by_day[day]["setups"].append(s)
+            day = cls._iso(s.production_date)
             setups.append([s.setup_id, day, s.shift_number, s.wet_end_id, s.quality_id, GRADES[s.quality_id],
                            s.start, s.end, float(s.elapsed_seconds), float(s.stop_time_sec), s.number_of_stops,
                            s.lineal_ft, s.total_produced_sqft, s.trim_sqft, s.chop_sqft, s.kqf_sqft,
@@ -259,25 +328,20 @@ class RecordStore:
             for r in s.rejects:
                 rejects.append([s.setup_id, day, s.shift_number, r.reason, r.detail, r.cutoff_allocation, r.sheets, r.sqft])
         for w in data["wet_ends"]:
-            wet_ends.append([w.wet_end_id, self._iso(w.production_date), w.quality_id, float(w.web_width_in), w.start, w.end,
+            wet_ends.append([w.wet_end_id, cls._iso(w.production_date), w.quality_id, float(w.web_width_in), w.start, w.end,
                              w.lineal_ft, w.total_produced_sqft, w.side_trim_sqft, w.max_speed_fpm, w.avg_speed_fpm,
                              len(w.setup_ids)])
         for sh in data["shifts"]:
-            day = self._iso(sh.production_date)
-            self._by_day[day]["shifts"].append(sh)
+            day = cls._iso(sh.production_date)
             shifts.append([day, sh.shift_number, sh.group_name, sh.total_lineal_ft, sh.total_produced_sqft, sh.side_trim_sqft,
                            sh.chop_sqft, sh.reject_sqft, sh.bale_sqft, sh.max_speed_fpm, sh.avg_speed_fpm,
                            sh.scheduled_minutes, len(sh.wet_end_ids)])
         for st in data["stops"]:
-            day = self._iso(st.production_date)
-            self._by_day[day]["stops"].append(st)
+            day = cls._iso(st.production_date)
             stops.append([st.stop_id, day, st.shift_number, st.setup_id, st.kind, st.place, st.reason,
                           float(st.duration_sec), st.start, st.end, st.user_info])
-        for table, rows in (("setups", setups), ("customers", customers), ("rejects", rejects),
-                            ("wet_ends", wet_ends), ("shifts", shifts), ("stops", stops)):
-            load_rows(self._db, table, rows)
-        self.counts = {"setups": len(setups), "customers": len(customers), "rejects": len(rejects),
-                       "wet_ends": len(wet_ends), "shifts": len(shifts), "stops": len(stops)}
+        return {"setups": setups, "customers": customers, "rejects": rejects,
+                "wet_ends": wet_ends, "shifts": shifts, "stops": stops}
 
     def close(self):
         with self._lock:
@@ -860,6 +924,91 @@ class RecordStore:
 
 _DEFAULT = None
 _DEFAULT_LOCK = threading.Lock()
+
+
+# ------------------------------------------------------------------ prebuilt store
+
+def generator_fingerprint():
+    """A hash of every Python source file in this package. A prebuilt folder is only
+    trusted while the code that would regenerate it (the generator, its seeded answer
+    keys, the record dataclasses the pickle lays out, the grade table, TABLES and the
+    row builder here) is byte-identical to the code that built it. Hashing the whole
+    package rather than a named list means a new module can never slip past the check;
+    the image builds and reads with the same code, and a stale folder on a developer
+    machine is simply ignored."""
+    here = Path(__file__).parent
+    digest = hashlib.sha256()
+    for path in sorted(here.glob("*.py")):
+        digest.update(path.name.encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def prebuilt_folder(explicit=None):
+    """The folder to try: the argument, else INVESTIGATOR_PREBUILT, else none."""
+    value = explicit if explicit is not None else os.environ.get(PREBUILT_ENV, "")
+    return Path(value) if value else None
+
+
+def build_prebuilt(folder, seed=DEFAULT_SEED, months=DEFAULT_MONTHS, machine_id=DEFAULT_MACHINE):
+    """Generate the months once and write what a RecordStore needs to boot without
+    generating: the record objects (`records.pkl`) and the six tables in DuckDB's
+    own file format (`store.duckdb`, attached read-only at boot: about 40 ms where
+    Parquet costs 250 ms for the reader's first use), plus a manifest naming the
+    inputs and the generator fingerprint. Run at image build time; see Dockerfile."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    data = generate_months(seed=seed, months=months, machine_id=machine_id)
+    rows = RecordStore._rows(data)
+    store = folder / "store.duckdb"
+    for stale in (store, folder / "store.duckdb.wal"):
+        if stale.exists():
+            stale.unlink()
+    db = duckdb.connect(str(store))
+    try:
+        for table, columns in TABLES.items():
+            db.execute(f"CREATE TABLE {table} ({columns})")
+            load_rows(db, table, rows[table])
+        db.execute("CHECKPOINT")
+    finally:
+        db.close()
+    (folder / "records.pkl").write_bytes(pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL))
+    manifest = {"format": PREBUILT_FORMAT, "seed": seed, "months": [list(m) for m in months], "machine_id": machine_id,
+                "generator_fingerprint": generator_fingerprint(), "content_hash": data["content_hash"],
+                "counts": {table: len(r) for table, r in rows.items()}}
+    (folder / "manifest.json").write_text(json.dumps(manifest, indent=1))
+    return manifest
+
+
+def read_prebuilt(folder, seed, months, machine_id):
+    """(record objects, manifest counts) from a prebuilt folder, or None when anything
+    about it does not match these inputs and this generator source. Never raises: a
+    bad folder means generating, not failing to start. The folder is trusted like the
+    code: it is written by our own image build, or named by the operator through
+    INVESTIGATOR_PREBUILT. Never point that variable at an uploaded or shared folder,
+    because `records.pkl` is loaded with pickle, which executes what it reads."""
+    folder = Path(folder)
+    try:
+        manifest = json.loads((folder / "manifest.json").read_text())
+    except (OSError, ValueError):
+        return None
+    expected = {"format": PREBUILT_FORMAT, "seed": seed, "months": [list(m) for m in months], "machine_id": machine_id,
+                "generator_fingerprint": generator_fingerprint()}
+    if not isinstance(manifest, dict) or any(manifest.get(key) != value for key, value in expected.items()):
+        return None
+    if not (folder / "store.duckdb").is_file():
+        return None
+    counts = manifest.get("counts")
+    if not isinstance(counts, dict) or set(counts) != set(TABLES):
+        return None
+    try:
+        # pickle executes what it reads: this file came from our own build (see the docstring).
+        data = pickle.loads((folder / "records.pkl").read_bytes())
+    except Exception:   # a truncated or foreign file: generate instead
+        return None
+    if not isinstance(data, dict) or data.get("content_hash") != manifest.get("content_hash"):
+        return None
+    return data, counts
 
 
 def default_store():

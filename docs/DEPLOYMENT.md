@@ -47,6 +47,8 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${
 gcloud iam service-accounts keys create key.json --iam-account "$SA" && cat key.json
 ```
 
+The image builds the two synthetic months once (`python -m investigator.prebuilt /app/prebuilt` in the Dockerfile, issue #19) and the server loads them at start in about 150 ms instead of generating for about 2 s; `GET /api/health` reports `store.source` (`prebuilt` or `generated`) and `store.boot_ms`. A prebuilt folder that does not match the code or the inputs is ignored, so a stale image falls back to generating rather than serving wrong data.
+
 Paste the key file's contents into the GitHub secret `GCP_SA_KEY`, set the variable `GCP_PROJECT_ID`, delete `key.json`, then merge or run **Deploy Cloud Run**. The service-account key is a shortcut for a one-person project; Workload Identity Federation is the keyless alternative when this matters. Set a billing budget alert on the project regardless.
 
 ### Deploy to a Hugging Face Space (Docker Spaces require a PRO subscription since July 2026)
@@ -55,7 +57,7 @@ Paste the key file's contents into the GitHub secret `GCP_SA_KEY`, set the varia
 2. In the Space's Settings → Variables add `PUBLIC_DEMO_ORIGIN` = the Space's direct URL (`https://<owner>-<space>.hf.space`) and `PUBLIC_DEMO_EMBED_ORIGINS` = `https://huggingface.co,https://justfetz.github.io`.
 3. In this GitHub repository add the secret `HF_TOKEN` (a Hugging Face token with write access) and the repository variable `HF_SPACE` = `<owner>/<space>`.
 4. Push to `main` or run the **Deploy Space** workflow. It force-pushes the tree with `deploy/huggingface/README.md` as the Space README (the front matter tells the Space it is a Docker app on port 7860).
-5. Open the Space; `/api/health` returns `{"ok": true, "public": true}`.
+5. Open the Space; `/api/health` returns `{"ok": true, "public": true, "store": {"source": "prebuilt", "boot_ms": ..., "dataset_hash": "..."}}`.
 
 The same container runs on Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
 

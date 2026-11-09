@@ -360,7 +360,9 @@ def make_server(port=8765, public=None, host=None, guards=None):
             if not self._host_ok():
                 return self._send(403, {'error': 'Local host only'})
             if self.path in ('/api/health', '/healthz'):  # /healthz is reserved by Google's front end on *.run.app; /api/health reaches the container everywhere
-                return self._send(200, {'ok': True, 'public': public is not None})
+                return self._send(200, {'ok': True, 'public': public is not None,
+                                        'store': {'source': app.store.boot_source, 'boot_ms': round(app.store.boot_seconds * 1000),
+                                                  'dataset_hash': app.store.content_hash[:12]}})
             if self.path == '/api/config':
                 return self._send(200, {'days': app.store.production_days, 'first_day': app.store.first_day,
                                        'last_day': app.store.last_day, 'production_calendar': 'Mon-Fri',

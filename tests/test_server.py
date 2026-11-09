@@ -159,7 +159,9 @@ def test_public_mode_hostname_embed_and_health(public):
     assert request(public,'GET','/../../README.md')[0]==404
     for path in ('/api/health','/healthz'):
         code,_,health=request(public,'GET',path)
-        assert code==200 and json.loads(health)=={'ok':True,'public':True}
+        health=json.loads(health)
+        assert code==200 and health['ok'] is True and health['public'] is True
+        assert health['store']['source'] in ('prebuilt','generated') and health['store']['boot_ms']>=0 and len(health['store']['dataset_hash'])==12   # issue #19
     config=json.loads(request(public,'GET','/api/config')[2])
     assert config['public'] is True and config['live_model_available'] is False
 

@@ -11,7 +11,11 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install --no-cache-dir . && mkdir -p /app/artifacts && chown -R app:app /app
+# Generate the two synthetic months once here, not at every container start (issue #19):
+# the server loads /app/prebuilt in about 150 ms instead of generating for about 2 s.
+RUN pip install --no-cache-dir . && python -m investigator.prebuilt /app/prebuilt \
+    && mkdir -p /app/artifacts && chown -R app:app /app
+ENV INVESTIGATOR_PREBUILT=/app/prebuilt
 
 USER app
 EXPOSE 7860
