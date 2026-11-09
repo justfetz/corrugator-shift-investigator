@@ -273,11 +273,12 @@ def test_daily_cap_counts_live_rounds_persistently(tmp_path,monkeypatch):
     monkeypatch.setenv('ANTHROPIC_API_KEY','sk-ant-server-key-for-tests-only-0001')
     monkeypatch.delenv('OPENAI_API_KEY',raising=False)
     calls=[]
-    def stub(payload,key,timeout):
+    def stub(payload,key,timeout):   # the analyst's planning call answers "unavailable": one model call per round
         calls.append(payload)
-        return 200,json.dumps({'stop_reason':'tool_use','usage':{'input_tokens':1,'output_tokens':1},
-            'content':[{'type':'tool_use','id':'toolu_1','name':'cannot_answer','input':{'reason':'test'}}]}).encode()
-    monkeypatch.setattr('investigator.anthropic_provider.transport',stub)
+        return 200,iter([{'type':'message_start','message':{'usage':{'input_tokens':1,'output_tokens':0}}},
+            {'type':'content_block_delta','delta':{'type':'text_delta','text':'{"unavailable": "test"}'}},
+            {'type':'message_delta','delta':{'stop_reason':'end_turn'},'usage':{'output_tokens':1}}])
+    monkeypatch.setattr('investigator.anthropic_provider.stream_transport',stub)
     guards=DemoGuards(daily_cap=2,ledger=tmp_path/'ledger.sqlite3')
     server,thread=serve(guards=guards)
     try:

@@ -147,6 +147,29 @@ class ScriptedPlanner:
         return {'unavailable': result['error']['message']}
 
 
+class ScriptedAnalyst:
+    """Returns one fixed plan and writes no narrative: a `plan` case puts a plan a model might
+    return through the real plan check and tool execution (`Agent.ask_planned`) without a model."""
+    planned = True
+    mode = 'scripted plan (golden); no language model'
+
+    def __init__(self, plan):
+        self._plan = plan
+
+    def plan(self, context):
+        return json.loads(json.dumps(self._plan))
+
+    def narrate(self, question, evidence, emit=None):
+        raise ValueError('a scripted plan has no narrative')
+
+
+def run_turn(agent, text, context):
+    """One question through the agent: the planned round for an analyst, the loop for everything else."""
+    if getattr(agent.planner, 'planned', False):
+        return agent.ask_planned(text, context)
+    return agent.ask(text, context)
+
+
 # ---------------------------------------------------------------- checks
 
 def renderings(value):
@@ -548,7 +571,7 @@ def prompt_digest(payload):
 def exchange_record(payload, response, status=None):
     seen = RUN_ID.search(json.dumps(payload))
     record = {'run_id': seen.group(0).split(':')[0] if seen else None, 'model': payload['model'],
-              'prompt_digest': prompt_digest(payload), 'tools': [t['name'] for t in payload['tools']], 'response': response}
+              'prompt_digest': prompt_digest(payload), 'tools': [t['name'] for t in payload.get('tools', [])], 'response': response}
     if status is not None:
         record['status'] = status
     return record
@@ -609,6 +632,50 @@ def anthropic_replay(exchanges, warnings):
         exchange = pending.pop(0)
         return exchange.get('status', 200), replay_body(exchange, payload, warnings).encode()
     return send
+
+
+# The analyst (issue #23) makes two streamed calls with no tools. A recording of that shape is
+# stamped `shape: "plan"` and stores each call's stream events; it replays through AnthropicAnalyst.
+# A recording without the stamp was made by the tool loop and replays through AnthropicPlanner
+# until it is re-recorded (`--live --provider anthropic`), which always records the new shape.
+ANALYST_SHAPE = 'plan'
+
+
+def analyst_record(exchanges):
+    from investigator.anthropic_provider import stream_transport
+
+    def send(payload, key, timeout):
+        status, events = stream_transport(payload, key, timeout)
+        seen = []
+        exchanges.append(exchange_record(payload, {'events': seen}, status))
+
+        def relay():
+            try:
+                for event in events:
+                    seen.append(event)
+                    yield event
+            finally:
+                events.close()
+        return status, relay()
+    return send
+
+
+def analyst_replay(exchanges, warnings):
+    pending = list(exchanges)
+
+    def send(payload, key, timeout):
+        from investigator.openai_provider import ProviderError
+        if not pending:
+            raise ProviderError('Recorded fixture has no more responses')
+        exchange = pending.pop(0)
+        return exchange.get('status', 200), iter(json.loads(replay_body(exchange, payload, warnings))['events'])
+    return send
+
+
+def analyst_planner(key, ledger, send):
+    from investigator.anthropic_provider import AnthropicAnalyst, Budget
+    # Replays run as fast as the events can be read; a live round keeps the product's own ten-second ceiling.
+    return AnthropicAnalyst(key, Budget(ledger), send, model=os.environ.get('ANTHROPIC_MODEL') or None)
 
 
 def openai_planner(key, ledger, send):
@@ -686,17 +753,21 @@ def _run_case(case, provider, live, record, scratch):
 
             def make_agent(analysis):
                 return Agent(analysis, planner=ScriptedPlanner(case['tool'], case['arguments']))
+        elif case.get('plan') is not None:
+            def make_agent(analysis):
+                return Agent(analysis, planner=ScriptedAnalyst(case['plan']))
         else:
             def make_agent(analysis):
                 return Agent(analysis)
     else:
         spec = PROVIDERS[provider]
         fixture = fixture_path(case['id'], provider)
+        planned = provider == 'anthropic'   # what a live run records; a replay follows the recording's own shape
         if live:
             key = os.environ.get(spec['env'])
             if not key:
                 return 'skip', [], f'{spec["env"]} not set', 0.0, results
-            send = spec['record'](exchanges)
+            send = analyst_record(exchanges) if planned else spec['record'](exchanges)
         elif fixture.exists():
             recording = json.loads(fixture.read_text())
             # A recording replays the model's choices against the live store's data. Made against
@@ -707,7 +778,8 @@ def _run_case(case, provider, live, record, scratch):
                 return 'skip', [], (f'stale recording: dataset {str(recorded_dataset)[:12] if recorded_dataset else "unversioned"} '
                                     f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}'), 0.0, results
             exchanges = recording['exchanges']
-            send = spec['replay'](exchanges, warnings)
+            planned = recording.get('shape') == ANALYST_SHAPE
+            send = analyst_replay(exchanges, warnings) if planned else spec['replay'](exchanges, warnings)
             key = spec['replay_key']
         else:
             return 'skip', [], f'no {provider} fixture; run --live --provider {provider} to record', 0.0, results
@@ -715,6 +787,8 @@ def _run_case(case, provider, live, record, scratch):
         ledger = Path(scratch[-1]) / 'budget.sqlite3'
 
         def make_agent(analysis):
+            if planned:
+                return Agent(analysis, planner=analyst_planner(key, ledger, send), max_calls=2, max_seconds=10)
             return Agent(analysis, planner=spec['planner'](key, ledger, send), max_calls=10, max_seconds=60)
 
     analysis, ms = None, 0.0
@@ -726,7 +800,7 @@ def _run_case(case, provider, live, record, scratch):
         started = time.perf_counter()
         try:
             for text in turns:
-                results.append(make_agent(analysis).ask(text, context))
+                results.append(run_turn(make_agent(analysis), text, context))
         finally:
             ms = (time.perf_counter() - started) * 1000
     except ValueError as exc:
@@ -748,13 +822,20 @@ def _run_case(case, provider, live, record, scratch):
         if case['type'] == 'value':
             failures.extend(value_failures(expect, results[-1]))
     last = results[-1]
+    if provider and planned:
+        # The analyst is two model calls at most: one plan, one narrative. An answer with a narrative used exactly two.
+        calls = [r['usage']['model_calls'] for r in results]
+        if any(c > 2 for c in calls) or any(r['narrative_status'] == 'available' and c != 2 for r, c in zip(results, calls)):
+            failures.append(f'analyst made {calls} model calls; a round is one plan and one narrative')
     if provider and live and record:
         fixture = fixture_path(case['id'], provider)
         fixture.parent.mkdir(parents=True, exist_ok=True)
         fixture.write_text(json.dumps(
             {'case': case['id'], 'provider': provider, 'question': turns[-1], 'recorded_status': last['status'],
-             'recorded_cost_usd': last['usage']['cost_usd'], 'dataset_version': dataset_version(), 'exchanges': exchanges}, indent=1))
-        note = f'recorded {len(exchanges)} exchanges, ${last["usage"]["cost_usd"]:.4f}'
+             'recorded_cost_usd': last['usage']['cost_usd'], 'dataset_version': dataset_version(),
+             **({'shape': ANALYST_SHAPE} if planned else {}), 'exchanges': exchanges}, indent=1))
+        note = (f'recorded {len(exchanges)} exchanges, {last["usage"]["model_calls"]} model calls, ${last["usage"]["cost_usd"]:.4f}'
+                + (f', first token {last["usage"]["first_token_ms"]:.0f} ms' if 'first_token_ms' in last['usage'] else ''))
     elif provider:
         note = f'{last["status"]}, {last["usage"]["model_calls"]} model calls'
     else:
@@ -834,15 +915,18 @@ def main(argv=None):
     try:
         for case, case_provider in plan_rows(cases, args.live, provider):
             if case_provider == '?':
-                outcome, failures, note, ms = 'skip', [], 'no fixture; run --live to record', 0.0
+                outcome, failures, note, ms, usage = 'skip', [], 'no fixture; run --live to record', 0.0, {}
                 case_provider = None
                 label = f'{case["id"]}@live'
             else:
-                outcome, failures, note, ms = run_case(case, case_provider, args.live, not args.no_record)
+                outcome, failures, note, ms, turn_results = run_case_detail(case, case_provider, args.live, not args.no_record)
                 label = case['id'] + (f'@{case_provider}' if case_provider else '')
+                usage = turn_results[-1]['usage'] if turn_results else {}
             rows.append({'id': label, 'case': case['id'], 'type': case['type'], 'provider': case_provider,
                          'mode': 'live' if case_provider or label.endswith('@live') else 'offline',
                          'outcome': outcome, 'failures': failures, 'note': note, 'ms': round(ms, 1)})
+            if args.live and case_provider and outcome != 'skip':   # a real provider answered: its clock is worth keeping
+                rows[-1].update(called=True, model_calls=usage.get('model_calls'), first_token_ms=usage.get('first_token_ms'))
     finally:
         close_datasets()
 
@@ -888,6 +972,10 @@ def main(argv=None):
                     for k in ('p50', 'p95')]
         breaches += sum(latency[k] > LATENCY_BUDGET_MS[k] for k in ('p50', 'p95'))
         print('offline latency: ' + '  '.join(verdicts))
+    timed = live_latency(rows)
+    if timed:
+        print('live latency: ' + '  '.join(f'{k} {v:.0f} ms' for k, v in timed.items() if isinstance(v, (int, float)) and k != 'model_calls_max')
+              + f'  model calls per case: at most {timed["model_calls_max"]}')
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)
     skipped = sum(r['outcome'] == 'skip' for r in rows)
     xfailed = sum(r['outcome'] == 'xfail' for r in rows)
@@ -927,6 +1015,21 @@ def offline_latency(rows):
     return percentiles(r['ms'] for r in rows if not r['provider'] and r['outcome'] != 'skip')
 
 
+def live_latency(rows):
+    """Wall time of the rounds a real provider answered in this run (`--live`): p50 and p95 of the whole
+    round, the median time to the first narrative token, and the most model calls any case made.
+    None when no provider was called; replays are never timed."""
+    called = [r for r in rows if r.get('called')]
+    if not called:
+        return None
+    out = dict(percentiles(r['ms'] for r in called))
+    first = [r['first_token_ms'] for r in called if isinstance(r.get('first_token_ms'), (int, float))]
+    if first:
+        out['first_token_p50'] = percentiles(first)['p50']
+    out['model_calls_max'] = max((r.get('model_calls') or 0) for r in called)
+    return out
+
+
 def history_line(rows, exit_status):
     """One record per run: enough to tell whether a change in the planner, the prompt or the
     data moved the score, and whether it moved the clock. Live rows are scored against the
@@ -956,7 +1059,7 @@ def history_line(rows, exit_status):
                           'types': tally(r for r in rows if r['provider'] == provider)}
     return {'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ'), 'commit': commit, 'dataset': dataset_version()[:12],
             'cases': len(rows), 'offline': tally(r for r in rows if not r['provider']), 'latency_ms': offline_latency(rows),
-            'live': live, 'exit': exit_status}
+            'live': live, **({'live_ms': live_latency(rows)} if live_latency(rows) else {}), 'exit': exit_status}
 
 
 if __name__ == '__main__':

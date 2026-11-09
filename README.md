@@ -28,7 +28,7 @@ pip install -e . pytest                              # Python >= 3.11; the depen
 python -m investigator.server --port 7860            # the workbench at http://127.0.0.1:7860
 python -m pytest -q                                  # 479 tests, about a minute
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
-python3 evals/run.py                                 # the golden set: 160 cases offline in a few seconds; the regression gate
+python3 evals/run.py                                 # the golden set: 161 cases offline in a few seconds; the regression gate
 python3 evals/run.py --live --provider anthropic     # the live cases against a real model; needs ANTHROPIC_API_KEY, costs cents
 ```
 

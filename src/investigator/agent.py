@@ -4,6 +4,7 @@ The optional model adapter implements Planner.next_step. OfflinePlanner is rule-
 it is a teaching/test driver, not an LLM or general natural-language understanding.
 """
 from collections import OrderedDict
+from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import json
@@ -378,8 +379,56 @@ def chart_for(rid, result):
     return chart
 
 
+MAX_PLAN_STEPS = 6
+PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] != 'render_chart'}
+PLAN_REJECTED = "The analyst's plan was rejected ({reason}); no query was run for it. The offline answer stands on its own."
+
+
+def scope_violation(tool, arguments, allowed_shifts, scope, period, production_day):
+    """Why a tool call falls outside the selected scope, or None. Shared by the loop and the plan check."""
+    if arguments.get('shift') is not None and arguments['shift'] not in allowed_shifts:
+        return 'Tool shift is outside the selected scope'
+    if tool in PERIOD_TOOLS and scope == 'shift' and arguments.get('shift') is None:
+        return 'Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts'
+    if period != 'day' and tool not in PERIOD_TOOLS and tool != 'render_chart':
+        window = {"period": period, "anchor": production_day}
+        return (f'Daily tools read one production day; the selected period is the {PERIOD_WORDS[period]} containing '
+                f'{production_day}. Use the period tools with window {json.dumps(window)}, or switch Period to Day')
+    return None
+
+
+def validate_plan(plan, allowed_shifts, scope, period, production_day):
+    """Check a one-call plan against the tool allowlist before anything runs.
+
+    Returns (steps, None) for a usable plan, ([], reason) for one that is refused whole. The
+    reason is application text: a tool name the model wrote is quoted only when it looks like
+    an identifier, so a plan cannot smuggle prose into the answer, and it carries no digits:
+    the answer's numbers come from tool output only."""
+    if not isinstance(plan, dict) or set(plan) != {'steps'} or not isinstance(plan['steps'], list):
+        return [], 'it was not a JSON object with a list of steps'
+    if not 1 <= len(plan['steps']) <= MAX_PLAN_STEPS:
+        return [], 'it has no steps or too many; one to six are allowed'
+    steps = []
+    for step in plan['steps']:
+        if not isinstance(step, dict) or set(step) != {'tool', 'arguments'} or not isinstance(step['tool'], str):
+            return [], 'a step is not a tool with arguments'
+        tool, arguments = step['tool'], step['arguments']
+        if tool not in PLAN_TOOLS:
+            shown = f'"{tool}"' if re.fullmatch(r'[a-z_]{1,40}', tool) else 'a tool'
+            return [], f'it names {shown}, which is not one of the permitted tools'
+        schema = PLAN_TOOLS[tool]['parameters']
+        if not isinstance(arguments, dict) or set(arguments) - set(schema['properties']) or any(k not in arguments for k in schema['required']):
+            return [], f'{tool} has missing or unexpected arguments'
+        problem = scope_violation(tool, arguments, allowed_shifts, scope, period, production_day)
+        if problem:
+            return [], f'{tool} is outside the selected scope'
+        if {'tool': tool, 'arguments': arguments} not in steps:
+            steps.append({'tool': tool, 'arguments': arguments})
+    return steps, None
+
+
 class Agent:
-    def __init__(self, analysis, planner=None, max_calls=20, max_seconds=10, max_turns=4, store=None):
+    def __init__(self, analysis, planner=None, max_calls=20, max_seconds=10, max_turns=4, store=None, guard=None):
         self.analysis = analysis
         self.planner = planner or OfflinePlanner()
         # Period tools read the whole record store; a day Analysis built by the
@@ -390,6 +439,10 @@ class Agent:
         if type(max_turns) is not int or not 1 <= max_turns <= 50:
             raise ValueError('Conversation history length must be 1-50 turns')
         self.max_turns = max_turns  # question/scope entries carried to the next question
+        # Held only while a tool reads the database or the conversation context changes, never
+        # across a model call: the server passes its shared lock so a live round does not make
+        # other visitors wait (issue #23). Offline callers hold that lock themselves and pass nothing.
+        self.guard = guard if guard is not None else nullcontext()
 
     def _execute(self, name, arguments, store):
         if not isinstance(arguments, dict):
@@ -420,21 +473,18 @@ class Agent:
             raise ValueError('Shift must be 1, 2 or 3')
         return getattr(self.analysis, name)(**arguments)
 
-    def ask(self, text, context):
+    def ask(self, text, context, emit=None):
+        emit = emit or (lambda event: None)
         if not isinstance(text, str):
             raise ValueError('Question must be text')
         if not text.strip() or len(text) > 2000:
             raise ValueError('Enter a question of 1-2000 characters')
-        request = parse_request(text, context) if isinstance(self.planner, OfflinePlanner) else {
-            'intent': 'model', 'shifts': [context.shift], 'kind': None,
-            'group_by': 'reason', 'want_chart': True}
-        if context.production_day != self.analysis.day:
-            raise ValueError('Context does not match dataset')
-        if context.dataset_version and context.dataset_version != self.analysis.version:
-            context.history.clear()
-        context.dataset_version = self.analysis.version
-        allowed_shifts = [context.shift] if context.scope == 'shift' else [1, 2, 3]
-        period = getattr(context, 'period', 'day')
+        with self.guard:
+            request = parse_request(text, context) if isinstance(self.planner, OfflinePlanner) else {
+                'intent': 'model', 'shifts': [context.shift], 'kind': None,
+                'group_by': 'reason', 'want_chart': True}
+            allowed_shifts, period = self._enter(context)
+            history = deepcopy(context.history[-self.max_turns:])
         run_id = uuid4().hex
         store = OrderedDict()
         traces = []
@@ -449,7 +499,7 @@ class Agent:
             planner_context = {**request, 'question': text, 'production_day': context.production_day,
                 'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context),
                 'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
-                'history': deepcopy(context.history[-self.max_turns:]), 'results': deepcopy(list(store.values()))}
+                'history': deepcopy(history), 'results': deepcopy(list(store.values()))}
             if len(json.dumps(planner_context)) > 200000:
                 status = 'context_limit'
                 break
@@ -476,24 +526,109 @@ class Agent:
                 tick = time.perf_counter()
                 try:
                     arguments = action['arguments']
+                    emit({'type': 'step', 'phase': 'start', 'index': len(traces), 'tool': action['tool'], 'arguments': arguments})
                     if isinstance(arguments, dict):
-                        if arguments.get('shift') is not None and arguments['shift'] not in allowed_shifts:
-                            raise ValueError('Tool shift is outside the selected scope')
-                        if action['tool'] in PERIOD_TOOLS and context.scope == 'shift' and arguments.get('shift') is None:
-                            raise ValueError('Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts')
-                        if period != 'day' and action['tool'] not in PERIOD_TOOLS and action['tool'] != 'render_chart':
-                            raise ValueError(f'Daily tools read one production day; the selected period is the {PERIOD_WORDS[period]} containing '
-                                             f'{context.production_day}. Use the period tools with window {json.dumps(period_window(context))}, or switch Period to Day')
-                    data = self._execute(action['tool'], action['arguments'], store)
+                        problem = scope_violation(action['tool'], arguments, allowed_shifts, context.scope, period, context.production_day)
+                        if problem:
+                            raise ValueError(problem)
+                    with self.guard:
+                        data = self._execute(action['tool'], action['arguments'], store)
                     result = {'result_id': rid, **action, 'ok': True, 'data': data}
                 except (ValueError, TypeError, KeyError) as exc:
                     result = {'result_id': rid, **action, 'ok': False, 'error': {'code': 'invalid_tool_call', 'message': str(exc)}}
                 store[rid] = result
                 traces.append({**deepcopy(result), 'elapsed_ms': (time.perf_counter()-tick)*1000})
+                emit(self._step_event(traces[-1], len(traces)-1))
             except Exception as exc:
                 failure_message = getattr(exc, 'public_message', None)
                 status = 'planner_error'
                 break
+        narrate = self.planner.summarize if hasattr(self.planner, 'summarize') else None
+        return self._assemble(text, context, request, run_id, store, traces, status, final_ids, failure_message, period, narrate)
+
+    def _enter(self, context):
+        """Check the context against the dataset; return (allowed shifts, period). Called under the guard."""
+        if context.production_day != self.analysis.day:
+            raise ValueError('Context does not match dataset')
+        if context.dataset_version and context.dataset_version != self.analysis.version:
+            context.history.clear()
+        context.dataset_version = self.analysis.version
+        return ([context.shift] if context.scope == 'shift' else [1, 2, 3]), getattr(context, 'period', 'day')
+
+    @staticmethod
+    def _context_out(context, period):
+        out = {'production_day': context.production_day, 'shift': context.shift, 'dataset_version': context.dataset_version, 'scope': context.scope, 'history': deepcopy(context.history)}
+        if period != 'day':
+            out['period'] = period
+        return out
+
+    @staticmethod
+    def _step_event(entry, index):
+        """A finished step as the live stream reports it: name, arguments, rows and milliseconds."""
+        data = entry.get('data') if entry['ok'] else None
+        rows = len(data['rows']) if isinstance(data, dict) and isinstance(data.get('rows'), list) else None
+        return {'type': 'step', 'phase': 'finish', 'index': index, 'tool': entry['tool'], 'arguments': entry['arguments'],
+                'ok': entry['ok'], 'rows': rows, 'ms': round(entry['elapsed_ms'], 1), 'result_id': entry['result_id']}
+
+    def ask_planned(self, text, context, emit=None):
+        """The analyst round (issue #23): one planning call, the plan checked against the allowlist,
+        the tools run here, then one narrative call. No loop; the model never sees a tool result
+        before the narrative, and never supplies a number."""
+        emit = emit or (lambda event: None)
+        if not isinstance(text, str):
+            raise ValueError('Question must be text')
+        if not text.strip() or len(text) > 2000:
+            raise ValueError('Enter a question of 1-2000 characters')
+        request = {'intent': 'model', 'shifts': [context.shift], 'kind': None, 'group_by': 'reason', 'want_chart': True}
+        with self.guard:
+            allowed_shifts, period = self._enter(context)
+            history = deepcopy(context.history[-self.max_turns:])
+        run_id = uuid4().hex
+        store, traces = OrderedDict(), []
+        started = time.monotonic()
+        status, failure_message, steps = 'complete', None, []
+        planner_context = {**request, 'question': text, 'production_day': context.production_day,
+            'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context),
+            'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
+            'history': history, 'results': []}
+        try:
+            plan = self.planner.plan(planner_context)
+        except Exception as exc:
+            plan, status, failure_message = None, 'planner_error', getattr(exc, 'public_message', None)
+        if status == 'complete':
+            if isinstance(plan, dict) and set(plan) == {'unavailable'} and isinstance(plan['unavailable'], str):
+                status = 'unavailable'
+                failure_message = 'The requested evidence or capability is unavailable. Ask about recorded speed, downtime, waste or orders in the selected scope.'
+            else:
+                steps, reason = validate_plan(plan, allowed_shifts, context.scope, period, context.production_day)
+                if reason:
+                    status, failure_message = 'plan_rejected', PLAN_REJECTED.format(reason=reason)
+        if steps:
+            emit({'type': 'plan', 'steps': deepcopy(steps)})
+        for number, action in enumerate(steps, 1):
+            if time.monotonic()-started >= self.max_seconds:
+                status = 'timeout'
+                break
+            rid = f'{run_id}:{number}'
+            emit({'type': 'step', 'phase': 'start', 'index': number-1, **deepcopy(action)})
+            tick = time.perf_counter()
+            try:
+                with self.guard:
+                    data = self._execute(action['tool'], action['arguments'], store)
+                result = {'result_id': rid, **action, 'ok': True, 'data': data}
+            except (ValueError, TypeError, KeyError) as exc:
+                result = {'result_id': rid, **action, 'ok': False, 'error': {'code': 'invalid_tool_call', 'message': str(exc)}}
+            store[rid] = result
+            traces.append({**deepcopy(result), 'elapsed_ms': (time.perf_counter()-tick)*1000})
+            emit(self._step_event(traces[-1], number-1))
+        if steps and status == 'complete' and not any(v['ok'] for v in store.values()):
+            status = 'unavailable'   # every planned call was refused by its tool: the refusals are the answer
+        narrate = (lambda question, evidence: self.planner.narrate(question, evidence, emit)) if status == 'complete' else None
+        return self._assemble(text, context, request, run_id, store, traces, status, [], failure_message, period, narrate)
+
+    def _assemble(self, text, context, request, run_id, store, traces, status, final_ids, failure_message, period, narrate):
+        """Turn the gathered results into the answer: evidence lines, charts, tables, the optional
+        narrative (the only model call here, made outside the guard) and the context for the next question."""
         refusals = [v['error']['message'] for v in store.values() if not v['ok']]
         if store and len(refusals) == len(store) and (status == 'unavailable' or (status == 'planner_error' and failure_message is None)):
             # Every tool call was refused (a window outside the dataset, a shift outside the
@@ -530,11 +665,11 @@ class Agent:
             sections.insert(0,'The requested financial objective is unavailable: these records contain no costs, revenue or measured intervention outcomes. Production evidence alone cannot establish profit or achievable savings.')
         narrative=[]
         narrative_status='not_requested'
-        if hasattr(self.planner,'summarize'):
+        if narrate is not None:
             narrative_status='unavailable'
             if status in ('complete','partial') and evidence:
                 try:
-                    narrative=self.planner.summarize(text,evidence)
+                    narrative=narrate(text,evidence)
                     narrative_status='available'
                     for p in narrative:
                         cited={c.split(', ')[2] for c in p['citations'] if len(c.split(', '))>=4}
@@ -553,11 +688,10 @@ class Agent:
         if status != 'complete':
             sections.insert(0, f'Investigation stopped: {status}. Any results below are partial.')
         result_shifts = list(dict.fromkeys(r['data']['shift'] for r in evidence if r['data']['shift'] is not None)) or request['shifts']
-        context.history.append({'question': text, 'shifts': result_shifts, 'intent': request['intent']})
-        context.history = context.history[-self.max_turns:]
-        context_out = {'production_day': context.production_day, 'shift': context.shift, 'dataset_version': context.dataset_version, 'scope': context.scope, 'history': deepcopy(context.history)}
-        if period != 'day':
-            context_out['period'] = period
+        with self.guard:
+            context.history.append({'question': text, 'shifts': result_shifts, 'intent': request['intent']})
+            context.history = context.history[-self.max_turns:]
+            context_out = self._context_out(context, period)
         return {'run_id': run_id, 'mode': getattr(self.planner, 'mode', 'offline rule-based planner; no language model'), 'status': status,
                 'production_day': context.production_day, 'selected_shifts': result_shifts, **self._period_label(context),
                 'sections': sections, 'evidence_ids': final_ids,
@@ -565,7 +699,7 @@ class Agent:
                 'charts': charts,
                 'tables': [dict(title=v['tool'], source_result_id=v['result_id'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings',*PERIOD_TOOLS)],
                 'trace': traces, 'context': context_out,
-                'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0})},
+                'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0}), **getattr(self.planner, 'timings', {})},
                 'limitations': 'Synthetic data. Setup counts are shift records: a continuing setup appears in both shifts. Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled. Recorded reasons are observations, not proven root causes. Model prose is interpretation requiring human review; reference validation does not prove causality. Offline mode understands only supported question patterns; live mode depends on provider access.'}
 
     @staticmethod

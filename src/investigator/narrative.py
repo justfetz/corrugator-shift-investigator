@@ -130,3 +130,186 @@ def _render_paragraph(p,sources,packet):
             scope = f"Shift {source['shift']}" if source['shift'] is not None else 'All shifts'
             citations.append(f"{scope}, {field}, {rid}, row {index}")
         return {'kind':p['kind'],'text':text,'citations':citations}
+
+
+# ---------------------------------------------------------------- streamed narrative (issue #23)
+# The analyst writes the interpretation as plain lines, one paragraph per line:
+#
+#     finding: Shift 2 ran at {{r1.0.observed_shift_fpm}} ft/min ...
+#
+# A placeholder names an evidence result by its short alias (r1, r2, ...), a zero-based
+# preview row and a field. Application code substitutes the value as the text streams, so
+# the reader never sees a number the model typed: prose with a digit outside a placeholder
+# stops that paragraph at once and withdraws it. When a line ends it goes through the same
+# `_render_paragraph` rules as the structured narrative; `finish()` returns only validated
+# paragraphs, and that list (not the preview) is what the answer keeps.
+STREAM_REF = re.compile(r'\{\{(r\d+)\.(\d+)\.([A-Za-z_][A-Za-z0-9_]*)\}\}')
+STREAM_KIND = re.compile(r'\s*(finding|hypothesis|check|limitation)\s*:\s*', re.I)
+MAX_PARAGRAPHS = 6
+MAX_LINE = 1200   # raw characters of one line, placeholders included; rendered text is capped at 700 by the paragraph rules
+
+
+def stream_aliases(packet):
+    """(alias -> result_id, packet as the model sees it): short ids keep the placeholders short."""
+    aliases = {f'r{i + 1}': entry['result_id'] for i, entry in enumerate(packet)}
+    return aliases, [{**entry, 'result_id': alias} for alias, entry in zip(aliases, packet)]
+
+
+class NarrativeStream:
+    """Incremental parser and validator for the line format above.
+
+    feed(text) takes model text as it arrives and calls `emit` with
+    {'type': 'delta', 'paragraph': n, 'kind': kind, 'text': substituted text} while a line is
+    written, then {'type': 'paragraph', 'paragraph': n, kind, text, citations} when it passed
+    validation or {'type': 'retract', 'paragraph': n, 'reason': why} when it did not. finish() validates what is left and
+    returns the rendered paragraphs in `render_narrative`'s shape."""
+
+    def __init__(self, packet, emit=None):
+        self.packet = packet
+        self.sources = {r['result_id']: r for r in packet}
+        self.aliases = {f'r{i + 1}': entry['result_id'] for i, entry in enumerate(packet)}
+        self.known_shifts = {str(r['shift']) for r in packet if r.get('shift') is not None}
+        self.emit = emit or (lambda event: None)
+        self.rendered, self.omitted = [], []
+        self.index = 0          # paragraph number of the line being read
+        self._line = ''         # raw text of the current line
+        self._kind = None
+        self._shown = 0         # characters of _line already checked and emitted
+        self._dead = False      # the current line failed a check; the rest of it is ignored
+        self._started = False   # a delta for the current line has been emitted
+
+    def feed(self, text):
+        for part in re.split(r'(\n)', text):
+            if part == '\n':
+                self._end_line()
+            elif part:
+                self._line += part
+                self._advance()
+
+    def _retract(self, reason):
+        if not self._dead:
+            self._dead = True
+            self.omitted.append(reason)
+            if self._started:
+                self.emit({'type': 'retract', 'paragraph': self.index, 'reason': reason})
+
+    def _value(self, alias, row, field):
+        """The formatted evidence value for a preview placeholder, or None when it does not resolve."""
+        source = self.sources.get(self.aliases.get(alias))
+        if source is None or not 0 <= row < len(source['rows']):
+            return None
+        if field in source['rows'][row]:
+            val = source['rows'][row][field]
+        elif field == 'shift' and source.get('shift') is not None:
+            val = source['shift']
+        else:
+            return None
+        if isinstance(val, (bool, list, dict)) or isinstance(val, float) and not math.isfinite(val):
+            return None
+        return 'unavailable' if val is None else f'{val:,.2f}' if isinstance(val, float) else str(val)
+
+    def _advance(self):
+        """Emit the part of the current line that is safe to show: whole words and whole placeholders."""
+        if self._dead or len(self.rendered) + 1 > MAX_PARAGRAPHS:
+            return
+        if len(self._line) > MAX_LINE:
+            return self._retract('Narrative size limit')
+        if self._kind is None:
+            found = STREAM_KIND.match(self._line)
+            if not found:
+                if len(self._line) > 24 and self._line.strip():
+                    self._retract('Invalid narrative paragraph')
+                return
+            if found.end() == len(self._line):
+                return      # the text has not started; wait so the prefix match cannot grow
+            self._kind, self._shown = found.group(1).lower(), found.end()
+        out = []
+        while self._shown < len(self._line):
+            rest = self._line[self._shown:]
+            brace = rest.find('{')
+            if brace == 0:
+                found = STREAM_REF.match(rest)
+                if not found:
+                    if '}}' in rest or len(rest) > 120:
+                        return self._flush(out, 'Fact placeholders do not match references')
+                    break   # an unfinished placeholder: wait for the rest
+                value = self._value(found.group(1), int(found.group(2)), found.group(3))
+                if value is None:
+                    return self._flush(out, 'Unknown narrative source')
+                out.append(value)
+                self._shown += found.end()
+                continue
+            plain = rest if brace < 0 else rest[:brace]
+            if brace < 0:
+                # Hold back the last, possibly unfinished word so "Shift 2" is judged whole.
+                cut = max(plain.rfind(' '), plain.rfind('\t'))
+                if cut < 0:
+                    break
+                tail = plain[:cut].rstrip().rsplit(' ', 1)[-1].lower()
+                if tail == 'shift':   # the shift number may be next: keep "Shift" back with it
+                    cut = plain[:cut].rstrip().rfind(' ')
+                    if cut < 0:
+                        break
+                plain = plain[:cut + 1]
+            if not plain:
+                break
+            bare = re.sub(r'\b[Ss]hift\s+([123])\b', lambda m: 'shift' if m.group(1) in self.known_shifts else m.group(0), plain)
+            if any(c.isdigit() for c in bare):
+                return self._flush(out, 'Use fact placeholders for values; plain prose only (numbers written as words count)')
+            out.append(plain)
+            self._shown += len(plain)
+        self._flush(out)
+
+    def _flush(self, out, failure=None):
+        text = ''.join(out)
+        if text and not failure:
+            self._started = True
+            self.emit({'type': 'delta', 'paragraph': self.index, 'kind': self._kind, 'text': text})
+        if failure:
+            self._retract(failure)
+
+    def _end_line(self, truncated=False):
+        line, dead, started = self._line, self._dead, self._started
+        self._line, self._kind, self._shown, self._dead, self._started = '', None, 0, False, False
+        if not line.strip():
+            return
+        if len(self.rendered) >= MAX_PARAGRAPHS:
+            return                      # extra paragraphs are dropped silently, like an over-long list
+        index, self.index = self.index, self.index + 1
+        if dead:
+            return                      # already withdrawn and recorded
+        reason = None
+        found = STREAM_KIND.match(line)
+        if truncated:
+            reason = 'the model stopped before finishing it'
+        elif not found:
+            reason = 'Invalid narrative paragraph'
+        else:
+            facts, order = [], {}
+            def place(match):
+                key = (match.group(1), int(match.group(2)), match.group(3))
+                if key not in order:
+                    order[key] = len(facts)
+                    facts.append({'result_id': self.aliases.get(key[0], key[0]), 'row': key[1], 'field': key[2]})
+                return '{{' + str(order[key]) + '}}'
+            text = STREAM_REF.sub(place, line[found.end():].strip())
+            try:
+                paragraph = _render_paragraph({'kind': found.group(1).lower(), 'text': text, 'facts': facts}, self.sources, self.packet)
+                self.rendered.append(paragraph)
+                self.emit({'type': 'paragraph', 'paragraph': index, **paragraph})   # the validated text replaces the preview
+                return
+            except ValueError as exc:
+                reason = str(exc)
+        self.omitted.append(reason)
+        if started:
+            self.emit({'type': 'retract', 'paragraph': index, 'reason': reason})
+
+    def finish(self, truncated=False):
+        """Validated paragraphs, with one limitation line per omitted paragraph; ValueError when none survived."""
+        self._end_line(truncated=truncated and bool(self._line.strip()))
+        if not self.rendered:
+            raise ValueError(self.omitted[0] if self.omitted else 'The model wrote no interpretation')
+        out = list(self.rendered)
+        for reason in dict.fromkeys(self.omitted):
+            out.append({'kind': 'limitation', 'text': f'One paragraph of the interpretation was omitted because it failed validation ({reason}).', 'citations': []})
+        return out
