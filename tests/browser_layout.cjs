@@ -29,7 +29,8 @@ const PAYLOAD=['question','day','shift','corrupt','session_id','mode','scope','p
  // ---- desktop, 1440x1040
  let {page,seen}=await open({width:1440,height:1040},shots?2:1);
  assert.equal(await page.inputValue('#mode'),'offline','offline is the default agent');
- assert.deepEqual(await disabled(page),['rates-change'],'idle: only the rates placeholder is disabled');
+ // Change rates is a placeholder; a keyless public demo also has its agent select fixed on offline. Neither changes with a question.
+ const fixed=await disabled(page);assert.ok(fixed.includes('rates-change')&&fixed.every(id=>['rates-change','mode'].includes(id)),`idle: ${fixed}`);
  seen.asks.length=0;
  await page.fill('#question','Why was this shift slow?');
  // the skeleton: submit and read the card in the same task, before the browser can paint a frame
@@ -37,7 +38,7 @@ const PAYLOAD=['question','day','shift','corrupt','session_id','mode','scope','p
   return {cls:card.className,ms:performance.now()-t0,title:document.getElementById('card-question').textContent,status:document.getElementById('status').textContent,skeleton:getComputedStyle(document.getElementById('skeleton')).display,disabled:[...document.querySelectorAll('button,input,select')].filter(e=>e.disabled).map(e=>e.id)};});
  assert.equal(submit.cls,'card answer skeleton');assert.equal(submit.title,'Why was this shift slow?');assert.match(submit.status,/ · offline · querying…$/);assert.equal(submit.skeleton,'flex');
  assert.ok(submit.ms<16,`the skeleton took ${submit.ms.toFixed(1)} ms of script, inside one 16 ms frame`);
- assert.deepEqual(submit.disabled,['rates-change'],'nothing is disabled while the question is out');
+ assert.deepEqual(submit.disabled,fixed,'nothing is disabled while the question is out');
  await page.waitForSelector('#card.done');await page.waitForTimeout(250);   // the trace table is built two frames after the answer (#33)
  const fold=await page.evaluate(()=>{const box=e=>{const b=e.getBoundingClientRect();return {top:Math.round(b.top),bottom:Math.round(b.bottom)};};const charts=[...document.querySelectorAll('#charts .chart')];
   return {viewport:innerHeight,scrollY:scrollY,title:box(document.querySelector('.card-title')),queries:box(document.getElementById('queries')),messages:box(document.getElementById('messages')),charts:charts.map(box),columns:new Set(charts.map(c=>Math.round(c.getBoundingClientRect().left))).size,tiles:box(document.getElementById('metrics')),tileCount:document.querySelectorAll('#metrics .metric').length,foot:box(document.querySelector('.card-foot')),status:document.getElementById('status').textContent,rail:{scroll:document.getElementById('rail').scrollHeight,client:document.getElementById('rail').clientHeight,bottom:Math.round(document.getElementById('rail').getBoundingClientRect().bottom)}};});
@@ -57,7 +58,7 @@ const PAYLOAD=['question','day','shift','corrupt','session_id','mode','scope','p
  console.log('after three canned questions:',JSON.stringify(thread));
  assert.equal(thread.open,'Is it bond or warp?');assert.equal(thread.earlier.length,3);   // the two canned answers before it, and the typed question under them
  assert.match(thread.earlier[0],/^Show speed to target · Shift 2 · \d+ ms · Open$/);assert.match(thread.earlier[1],/^Show dry-end quality waste · Shift 2 · \d+ ms · Open$/);assert.match(thread.earlier[2],/^Why was this shift slow\? · Shift 2 · \d+ ms · Open$/);
- assert.deepEqual(await disabled(page),['rates-change']);assert.equal(seen.loads,1,'one page load');
+ assert.deepEqual(await disabled(page),fixed);assert.equal(seen.loads,1,'one page load');
  assert.equal(seen.asks.length,4);for(const body of seen.asks){assert.deepEqual(Object.keys(body),PAYLOAD);assert.equal(body.mode,'offline');}
  assert.deepEqual([...seen.paths].filter(p=>p.startsWith('POST')||p.includes('/api/')).sort(),['GET /api/config','POST /api/ask'],'no new server route');
  await shot(page,'desktop-thread');

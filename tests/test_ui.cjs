@@ -45,8 +45,8 @@ const first=context.result.charts[0].rows[0];
 context.result.charts[0].rows.push({...first,day:'2026-09-15',estimated_good_sqft:1500000},{...first,day:'2026-09-16',estimated_good_sqft:2000000},{day:'2026-09-17',available:false});
 vm.runInContext('showResult(result)',context);assert.equal(elements.tables.children.length,1);assert.equal(elements.charts.children.length,1);
 // issue #63: the eleven numbers of the shift KPI row sit on six tiles, each leading with one number and carrying its companion beneath.
-assert.deepEqual(elements.metrics.children.map(t=>t.children.map(c=>c.children.length?c.children.map(x=>x.textContent).join(' '):c.textContent)),[['Speed','600.0 ft/min','75.0% of target'],['Maintenance','3.00 %','operator 1.00%'],['Trim','2.00 %','shear 0.50%'],['Dry-end waste','1.20 %','above the 1% flag'],['Dry-end setups','60','30 paper changes'],['Throughput','94.0 in','4,800 ft lineal / setup']]);
-assert.deepEqual(elements.metrics.children.map(t=>/\bwarning\b/.test(t.className)),[true,true,false,true,false,false]);   // below target, above 2.5%, above the 1% flag
+assert.deepEqual(elements.metrics.children.map(t=>t.children.map(c=>c.children.length?c.children.map(x=>x.textContent).join(' '):c.textContent)),[['Speed','600.0 ft/min','75.0% of target'],['Maintenance','3.00 %','operator 1.00%'],['Trim','2.00 %','shear 0.50%'],['Dry-end waste','1.20 %','above its flag'],['Dry-end setups','60','30 paper changes'],['Throughput','94.0 in','4,800 ft lineal / setup']]);
+assert.deepEqual(elements.metrics.children.map(t=>/\bwarning\b/.test(t.className)),[true,true,false,true,false,false]);   // below target, maintenance above its target, dry-end above its flag; the tile text prints no threshold
 vm.runInContext('showResult(result)',context);assert.equal(elements.charts.children.length,1);assert.equal(elements.tables.children.length,1);assert.equal(elements.trace.children.length,1);   // a second answer replaces the first one's evidence, never stacks on it
 const heatmap=elements.heatmaps.children[0];
 const cells=heatmap.children.find(e=>e.className==='heatmap-grid').children.filter(e=>e.tag==='button');
@@ -350,10 +350,10 @@ async function issue63(){
  assert.match(css,/body\.shell\{background:var\(--page\)/);assert.match(css,/:root\[data-theme="dark"\]\{[^}]*--page:#121212/);   // the shell has its page colour in both themes
 
  // a clean page: Monday 14 September, shift 2, offline, no key on the server, priming off so only questions are sent
- const sent=[]; let hold=null;
+ const sent=[], gate={}, sessions={}; let hold=null, nextTrace=null;   // gate[question]: a promise that answer waits for; sessions[question]: the session id it comes back with
  const kpiStep={result_id:'x:1',tool:'get_shift_kpis',arguments:{shift:2},ok:true,elapsed_ms:3,data:{shift:2,coverage:'complete',rows:[row]}};
- const answer=()=>({run_id:'run'+sent.length,session_id:'s63',session_reset:false,production_day:'2026-09-14',selected_shifts:[2],mode:'offline rule-based planner; no language model',status:'complete',context:{},usage:{tool_calls:1,model_calls:0},sections:['Shift 2: 616.2 ft/min.'],trace:[kpiStep],tables:[],charts:[],report_markdown:'#'});
- context.fetch=async(path,init)=>{if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t'})};sent.push({body:JSON.parse(init.body),headers:init.headers});if(hold)await hold;return {ok:true,status:200,json:async()=>answer()};};
+ const answer=question=>({run_id:'run'+sent.length,session_id:sessions[question]||'s63',session_reset:false,production_day:'2026-09-14',selected_shifts:[2],mode:'offline rule-based planner; no language model',status:'complete',context:{},usage:{tool_calls:1,model_calls:0},sections:['Shift 2: 616.2 ft/min.'],trace:nextTrace||[kpiStep],tables:[],charts:[],report_markdown:'#'});
+ context.fetch=async(path,init)=>{if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t'})};const body=JSON.parse(init.body);sent.push({body,headers:init.headers});if(hold)await hold;if(gate[body.question])await gate[body.question];return {ok:true,status:200,json:async()=>answer(body.question)};};
  const tick=()=>new Promise(r=>setTimeout(r,5));
  Object.assign(elements.day,{value:'2026-09-14'});elements.period.value='day';elements.shift.value='2';elements.scope.value='shift';elements.mode.value='offline';elements.mode.disabled=false;elements.corrupt.checked=false;elements['api-key'].value='';
  vm.runInContext("config={token:'t',days:['2026-09-11','2026-09-14','2026-09-15'],live_modes:[],demo_guards:{rate_limit_per_min:5}};acceptedDay='2026-09-14';renderSegments();renderQuestionChips();reset()",context);
@@ -431,8 +431,10 @@ async function issue63(){
  elements.question.value='Why was this shift slow?';elements['api-key'].value='sk-visitor';
  elements.ask.events.submit({preventDefault(){}});await tick();
  assert.equal(sent[0].body.mode,'offline');assert.equal(sent[0].headers['X-OpenAI-Key'],undefined);assert.match(elements.status.textContent,/ · offline · 1 query · /);
- elements['api-key'].value='sk-visitor';elements.analyst.events.click();
+ assert.equal(elements['api-key'].value,'sk-visitor');                                                             // an offline question leaves the key for the analyst
+ elements.analyst.events.click();elements.analyst.events.click();                                                   // a double click is one request, not two paid rounds
  assert.equal(elements.status.textContent,'Shift 2 · Mon 14 Sep 2026 · OpenAI · querying…');await tick();
+ assert.equal(sent.length,2);assert.equal(elements.thread.children.length,1);
  assert.equal(sent[1].body.mode,'openai');assert.equal(sent[1].headers['X-OpenAI-Key'],'sk-visitor');assert.equal(elements['api-key'].value,'');
  assert.deepEqual(Object.keys(sent[1].body),Object.keys(sent[0].body));
  elements.mode.value='offline';vm.runInContext('updateScope()',context);assert.equal(elements.analyst.hidden,true);    // no agent chosen, no server key: hidden
@@ -440,6 +442,26 @@ async function issue63(){
  elements['api-key'].value='sk-ignored';elements.analyst.events.click();await tick();
  assert.equal(sent[2].body.mode,'anthropic');assert.equal(sent[2].headers['X-Anthropic-Key'],undefined);             // Anthropic first; public mode never sends a visitor key
  vm.runInContext("config.live_modes=[];config.public=false;reset()",context);
+
+ // the conversation follows the newest question, whichever answer lands last: A is held, B answers first, then A
+ let letA;gate['question A']=new Promise(r=>{letA=r;});sessions['question A']='session-A';sessions['question B']='session-B';sent.length=0;
+ const a=vm.runInContext("ask('question A')",context), b=vm.runInContext("ask('question B')",context);
+ await b;letA();await a;await vm.runInContext("ask('question C')",context);
+ assert.deepEqual(sent.map(s=>s.body.session_id),[null,null,'session-B']);
+ // a question that names its own window: the title line and the collapsed line say what the query ran over, in the tool's words
+ const september={period:'month',anchor:'2026-09-01',start:'2026-09-01',end:'2026-09-30',label:'September 2026 (2026-09-01 to 2026-09-30)',coverage:'complete'};
+ nextTrace=[{result_id:'w:1',tool:'get_downtime_pareto',arguments:{window:{period:'month',anchor:'2026-09-01'},shift:null},ok:true,elapsed_ms:2,data:{window:september,shift:null,coverage:'complete',rows:[]}}];
+ await vm.runInContext("ask('Which downtime reason cost the most minutes in September?')",context);
+ assert.match(elements.status.textContent,/^All shifts · September 2026 \(2026-09-01 to 2026-09-30\) · offline · 1 query · \d+ ms$/);   // the rail says shift 2, 14 Sep; the query ran all shifts over the month
+ nextTrace=[{result_id:'w:1',tool:'get_waste_breakdown',arguments:{window:{period:'day',anchor:'2026-09-14'},shift:2},ok:true,elapsed_ms:2,data:{window:{period:'day',anchor:'2026-09-14',start:'2026-09-14',end:'2026-09-14',label:'2026-09-14 (Mon)',coverage:'complete'},shift:2,coverage:'complete',rows:[]}}];
+ await vm.runInContext("ask('Is it bond or warp?')",context);nextTrace=null;
+ assert.match(elements.status.textContent,/^Shift 2 · Mon 14 Sep 2026 · offline · 1 query · \d+ ms$/);              // the rail's own window keeps the rail's wording
+ assert.match(lines()[0][1],/^All shifts · September 2026 \(2026-09-01 to 2026-09-30\) · \d+ ms$/);
+ // a card reopened before its frames ran builds its per-query rows once
+ {const frames=[];context.requestAnimationFrame=f=>{frames.push(f);return frames.length;};
+  const open=i=>elements.thread.children[i].children[2].events.click();open(0);open(0);open(0);while(frames.length)frames.shift()();
+  assert.equal(elements.trace.children.length,1);assert.deepEqual(elements.trace.children.map(e=>e.id),['step-0']);delete context.requestAnimationFrame;}
+ vm.runInContext('reset()',context);
 
  // the rail on a phone sits behind the Questions button; a canned question closes it again
  elements['rail-toggle'].events.click();assert.equal(elements['rail-toggle']['aria-expanded'],'true');assert.equal(elements['rail-toggle'].textContent,'Close');

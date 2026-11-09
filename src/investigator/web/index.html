@@ -46,7 +46,7 @@
 <main class="shell-main">
 <form id="ask" class="ask-bar"><label class="sr-only" for="question">Ask about the selected scope</label><input id="question" type="text" maxlength="2000" autocomplete="off" placeholder="Ask about this shift: speed, downtime, waste, setups, notes, orders"><button id="submit" type="submit" class="primary">Ask</button><button id="analyst" type="button" class="secondary analyst" hidden>Ask the analyst</button></form>
 <article id="card" class="card answer idle" aria-label="Answer" aria-busy="false">
-<header class="card-title"><h2 id="card-question">Ask about this shift</h2><p id="status" class="card-meta" role="status">Ready / no API costs</p></header>
+<header class="card-title"><h2 id="card-question" tabindex="-1">Ask about this shift</h2><p id="status" class="card-meta" role="status">Ready / no API costs</p></header>
 <div id="skeleton" class="sk-body" aria-hidden="true"><i class="sk sk-box"></i><i class="sk sk-line"></i><i class="sk sk-line short"></i><div class="sk-row"><i class="sk sk-chart"></i><i class="sk sk-chart"></i></div><div class="sk-row tiles"><i class="sk sk-tile"></i><i class="sk sk-tile"></i><i class="sk sk-tile"></i><i class="sk sk-tile"></i><i class="sk sk-tile"></i><i class="sk sk-tile"></i></div></div>
 <section id="queries" class="queries" aria-label="Queries that produced this answer"></section>
 <div id="messages" aria-live="polite"><p class="empty">Type a question above or pick one on the left. An answer shows its queries first, then the summary, the charts and the numbers.</p></div>

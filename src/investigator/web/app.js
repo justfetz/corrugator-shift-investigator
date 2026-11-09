@@ -6,7 +6,7 @@ let config, sessionId = null, latest = null;
 // it was asked under, so a card reads the same after the rail has moved on. Nothing here disables a
 // control while a question is out: a second question simply becomes the open card.
 const thread=[];
-let openEntry=null, entrySeq=0, sessionEpoch=0, railOpen=false;
+let openEntry=null, entrySeq=0, sessionEpoch=0, sessionOwner=0, paintSeq=0, railOpen=false;
 const now=()=>typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
 const PROVIDERS={openai:{name:'OpenAI',header:'X-OpenAI-Key'},anthropic:{name:'Anthropic',header:'X-Anthropic-Key'}};
 function provider(){ return PROVIDERS[$('mode').value]||null; }
@@ -136,6 +136,25 @@ function windowText(scope){
  return `4-4-5 period containing ${dayText(d)}`;
 }
 function scopeLabel(scope){ return `${whoText(scope)} · ${windowText(scope)}`; }
+// A question can name its own window or shift ("How did September go versus August?" with the rail on a
+// day): the card then says what the first windowed query actually ran over, in the tool's own words.
+function railRange(scope){
+ const d=utc(scope.day); if(Number.isNaN(d.getTime()))return null;
+ if(scope.period==='day')return [scope.day,scope.day];
+ if(scope.period==='week'){const [a,b]=weekOf(d);return [iso(a),iso(b)];}
+ if(scope.period==='month')return [iso(new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),1))),iso(new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)))];
+ return null;
+}
+function answeredScope(scope,result){
+ const step=(result.trace||[]).find(e=>e.ok&&e.data&&e.data.window&&e.data.window.label), out={who:null,window:null}; if(!step)return out;
+ const w=step.data.window, period=w.period==='fiscal'?'accounting':w.period, range=railRange(scope);
+ if(period!==scope.period||(range?(w.start!==range[0]||w.end!==range[1]):w.anchor!==scope.day))out.window=w.label;
+ const who=step.data.shift===null?'All shifts':typeof step.data.shift==='number'?`Shift ${step.data.shift}`:null;
+ if(who&&who!==whoText(scope))out.who=who;
+ return out;
+}
+function entryWho(entry){ return (entry.answered&&entry.answered.who)||whoText(entry.scope); }
+function entryLabel(entry){ return `${entryWho(entry)} · ${(entry.answered&&entry.answered.window)||windowText(entry.scope)}`; }
 function askNoun(){ return $('period').value!=='day'?(PERIOD_NOUN[$('period').value]||'period'):$('scope').value==='day'?'day':'shift'; }
 function updateScope(){
  const ranged=$('period').value!=='day', live=isLive(), scope=currentScope();
@@ -538,14 +557,15 @@ function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool ca
 function afterPaint(f){if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>requestAnimationFrame(f));else f();}
 // ---- Shift KPI tiles (issue #63): the eleven numbers of a shift's KPI row on six tiles, one row under the
 // charts. Each tile leads with one number and carries its companion beneath; every value is the tool's own.
+// The thresholds only decide the warning edge, as they did before; the tile prints no number a tool did not return.
 function shiftTiles(entry,result,prefix){
  const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete', who=entry.data.shift?'Shift '+entry.data.shift:result.period_label;
  const fixed=(v,places)=>Number(v).toFixed(places), count=v=>Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
  const tiles=[
   ['Speed',fixed(r.observed_shift_fpm,1),'ft/min',`${fixed(r.speed_to_target_pct,1)}% of target`,r.speed_to_target_pct<100,'Speed / target = lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.'],
-  ['Maintenance',fixed(r.maintenance_pct,2),'%',`operator ${fixed(r.operator_pct,2)}%`,r.maintenance_pct>2.5||r.operator_pct>2.5,'Recorded stop time by kind, as a share of the shift. Each is flagged above 2.5%.'],
+  ['Maintenance',fixed(r.maintenance_pct,2),'%',`operator ${fixed(r.operator_pct,2)}%`,r.maintenance_pct>2.5||r.operator_pct>2.5,'Recorded stop time by kind, as a share of the shift. The tile is edged when either is above its target.'],
   ['Trim',fixed(r.trim_pct,2),'%',`shear ${fixed(r.shear_pct,2)}%`,false,'Side trim and shear waste, % of gross area.'],
-  ['Dry-end waste',fixed(r.dry_end_pct,2),'%',r.dry_end_pct>1?'above the 1% flag':'not above the 1% flag',r.dry_end_pct>1,'Dry-end rejects, % of gross area.'],
+  ['Dry-end waste',fixed(r.dry_end_pct,2),'%',r.dry_end_pct>1?'above its flag':'within its flag',r.dry_end_pct>1,'Dry-end rejects, % of gross area. The summary line states the flag.'],
   ['Dry-end setups',count(r.valid_setups),'',`${count(r.paper_changes)} paper changes`,false,'Paper changes: the count of distinct wet-end runs, as defined by the plant expert.'],
   ['Throughput',fixed(r.throughput_in,1),'in',`${count(r.lineal_per_setup)} ft lineal / setup`,false,''],
  ];
@@ -570,7 +590,8 @@ function showResult(result) {
  chartPair=plain>=2&&wideWidth(); $('charts').className=plain>=2?'pair':'';   // two charts or more sit side by side on a desktop (#63)
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
- afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip
+ const paint=++paintSeq;   // one trace per paint: a card reopened before its frames ran does not build the rows twice
+ afterPaint(()=>{if(latest!==result||paint!==paintSeq)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip
  $('calls').textContent=' · '+usageText(result.usage);
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
 }
@@ -585,7 +606,7 @@ function clearEvidence(){
  $('calls').textContent=''; $('foot-note').textContent=''; $('execution').open=false;
 }
 function entryMeta(entry){
- const parts=[scopeLabel(entry.scope)]; if(entry.corrupt)parts.push('bad trim record included'); parts.push(entry.modeWord);
+ const parts=[entryLabel(entry)]; if(entry.corrupt)parts.push('bad trim record included'); parts.push(entry.modeWord);
  if(entry.state==='pending')parts.push(entry.report?'building the report; the first one can take a minute…':'querying…');
  else if(entry.state==='failed')parts.push('could not complete');
  else{
@@ -623,36 +644,46 @@ function paintCard(){
  showResult(entry.result); paintStatus();
 }
 // Earlier answers, newest on top, one line each: <question> · Shift 2 · 52 ms · Open. The window is named
-// only when it is not the one the rail shows now.
+// only when it is not the one the rail shows now. Rebuilding the lines keeps keyboard focus on the Open
+// button it was on.
 function entryLine(entry){
- const current=currentScope(), parts=[whoText(entry.scope)];
- if(entry.scope.day!==current.day||entry.scope.period!==current.period)parts.push(windowText(entry.scope));
+ const current=currentScope(), parts=[entryWho(entry)];
+ if(entry.answered&&entry.answered.window)parts.push(entry.answered.window);
+ else if(entry.scope.day!==current.day||entry.scope.period!==current.period)parts.push(windowText(entry.scope));
  parts.push(entry.state==='pending'?'querying…':entry.state==='failed'?'could not complete':`${Math.round(entry.ms??0)} ms`);
  return parts.join(' · ');
 }
 function renderThread(){
+ let focused=null, again=null; try{focused=document.activeElement&&document.activeElement.dataset?document.activeElement.dataset.entry:null;}catch(e){}
  $('thread').replaceChildren(...thread.filter(entry=>entry!==openEntry).map(entry=>{
   const row=node('article',undefined,'card earlier'+(entry.state==='failed'?' failed':'')); row.setAttribute('aria-label',`Earlier answer: ${entry.question}`);
-  const open=node('button','Open','secondary open'); open.type='button'; open.setAttribute('aria-label',`Open the answer to: ${entry.question}`); open.addEventListener('click',()=>openCard(entry));
+  const open=node('button','Open','secondary open'); open.type='button'; open.dataset.entry=String(entry.id); open.setAttribute('aria-label',`Open the answer to: ${entry.question}`); open.addEventListener('click',()=>openCard(entry,true));
+  if(focused&&focused===open.dataset.entry)again=open;
   row.append(node('span',entry.question,'q'),node('span',entryLine(entry),'meta'),open); return row;
  }));
+ if(again)again.focus?.();
 }
 function toCard(){ try{if(window.scrollY>0)window.scrollTo({top:0});}catch(e){} }   // the open card is always at the top of the main column
-function openCard(entry){ openEntry=entry; primeToken++; paintCard(); renderThread(); toCard(); }
+function openCard(entry,focus=false){ openEntry=entry; primeToken++; paintCard(); renderThread(); toCard(); if(focus)$('card-question').focus?.(); }   // from an Open button, focus follows to the card it opened
 function setRail(open){ railOpen=!!open; try{document.body.classList.toggle('rail-open',railOpen);}catch(e){} $('rail-toggle').setAttribute('aria-expanded',String(railOpen)); $('rail-toggle').textContent=railOpen?'Close':'Questions'; }
 // Ask is the deterministic path: the offline planner, whatever agent is chosen. "Ask the analyst" passes the
 // live agent as `mode`. Either way the request is the same /api/ask payload as before.
 async function ask(question,{report=false,mode='offline'}={}) {
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
  const live=report?null:(PROVIDERS[mode]||null), epoch=sessionEpoch;
- const entry={id:++entrySeq,question:question.trim(),scope:{day:$('day').value,period:$('period').value,shift:Number($('shift').value),scope:$('scope').value},corrupt:$('corrupt').checked,modeWord:live?live.name:'offline',report,state:'pending',started:now(),ms:null,result:null,error:null,note:null};
+ const entry={id:++entrySeq,question:question.trim(),scope:{day:$('day').value,period:$('period').value,shift:Number($('shift').value),scope:$('scope').value},corrupt:$('corrupt').checked,mode:live?mode:'offline',modeWord:live?live.name:'offline',report,epoch,state:'pending',started:now(),ms:null,result:null,error:null,note:null,answered:null};
+ // The same question, still out, asked again (a double click): it is the card already waiting, not a second
+ // request. Nothing is disabled to prevent it, so this is what keeps a second paid round from going out.
+ const twin=thread.find(e=>e.state==='pending'&&e.epoch===epoch&&e.question===entry.question&&e.mode===entry.mode&&e.report===report&&e.corrupt===entry.corrupt&&['day','period','shift','scope'].every(k=>e.scope[k]===entry.scope[k]));
+ if(twin){ entrySeq--; if(openEntry!==twin)openCard(twin); return twin.done; }
+ entry.done=new Promise((resolve,reject)=>{entry.settle={resolve,reject};}); entry.done.catch(()=>{});
  thread.unshift(entry); openEntry=entry; primeToken++;
  paintCard(); renderThread(); toCard();   // the skeleton card is in the DOM before this function first yields: the same task as the click
  try{
   if(!config){await boot;if(!config)throw new Error('Workbench unavailable');}
   const headers={};
   if(live && $('api-key').value && !(config&&config.public))headers[live.header]=$('api-key').value;
-  $('api-key').value='';
+  if(live)$('api-key').value='';   // the key is cleared when it is sent; an offline question leaves it for the analyst
   const body={question,day:entry.scope.day,shift:entry.scope.shift,corrupt:entry.corrupt,session_id:sessionId,mode:live?mode:'offline',scope:entry.scope.scope,period:entry.scope.period};
   if(report)body.report=true;
   const sent=post('/api/ask',body,headers);
@@ -660,15 +691,18 @@ async function ask(question,{report=false,mode='offline'}={}) {
   const response=await sent;
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
   if(result.session_reset&&body.session_id)entry.note='The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.';
-  if(epoch===sessionEpoch)sessionId=result.session_id;   // the rail moved on while this was out: its conversation is not the current one
-  entry.result=result; entry.state='done';
+  // The conversation follows the newest question of the current scope, whichever answer lands last; an
+  // answer that arrives after the rail has moved on belongs to a conversation that is over.
+  if(epoch===sessionEpoch&&entry.id>sessionOwner){sessionId=result.session_id;sessionOwner=entry.id;}
+  entry.result=result; entry.answered=answeredScope(entry.scope,result); entry.state='done';
   if(openEntry===entry)paintCard();
   entry.ms=now()-entry.started;
-  return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+  const brief={status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+  entry.settle.resolve(brief); return brief;
  }catch(error){
   entry.state='failed'; entry.error=error.message; entry.ms=now()-entry.started;
   if(openEntry===entry)paintCard();
-  throw error;
+  entry.settle.reject(error); throw error;
  }finally{ if(openEntry===entry)paintStatus(); renderThread(); }
 }
 function submitQuestion(mode){ const question=$('question').value; if(!question.trim()){$('question').focus?.();return;} ask(question,mode?{mode}:{}).catch(()=>{}); }
@@ -679,7 +713,7 @@ $('rail-toggle').addEventListener('click',()=>setRail(!railOpen));
 $('came-back').addEventListener('click',()=>{$('execution').open=true;});
 // A scope change starts a fresh conversation and puts the open answer on the thread with the scope it was
 // asked under; the card goes back to idle for the new scope. "Clear answers" also empties the thread.
-function rescope(){ sessionId=null; sessionEpoch++; $('api-key').value=''; openEntry=null; paintCard(); primeKpis(); }
+function rescope(){ sessionId=null; sessionEpoch++; sessionOwner=0; $('api-key').value=''; openEntry=null; paintCard(); primeKpis(); }
 function reset(){ thread.length=0; rescope(); }
 $('mode').addEventListener('change',()=>{const p=provider();$('api-key').value='';updateScope();$('mode-help').textContent=p?(config&&config.public?`Public demo: Ask the analyst has ${p.name} choose which bounded tools to run and write the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`Ask the analyst sends ${p.name} your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges. Ask and the canned questions stay offline.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',rescope);$('shift').addEventListener('change',rescope);$('scope').addEventListener('change',rescope);$('period').addEventListener('change',periodChanged);
