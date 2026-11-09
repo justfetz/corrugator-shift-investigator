@@ -10,7 +10,7 @@ A bounded agent that investigates why a corrugator shift was bad, on synthetic d
 
 ```bash
 pip install -e . pytest                              # Python >= 3.11; deps are duckdb and reportlab
-python -m pytest -q                                  # 485 tests, about 70 s
+python -m pytest -q                                  # 495 tests, about 80 s
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
 python3 evals/run.py                                 # 160 golden cases offline, about 6 s; the regression gate
 python3 evals/run.py --live --provider anthropic     # needs ANTHROPIC_API_KEY; records fixtures under evals/fixtures/
@@ -20,8 +20,8 @@ python -m investigator.server --port 7860            # local workbench at http:/
 
 ## Layout
 
-- `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`) · `agent.py` (bounded tool loop and the offline `parse_request`) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `web/` (`app.js`, `index.html`, `style.css`)
-- `evals/`: `golden.json` (87 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl`, `README.md` (the seven case types)
+- `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`, `/evals`, `/evals.json`, `/api/evals/run`) · `agent.py` (bounded tool loop and the offline `parse_request`) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `evalboard.py` (the `/evals` page's data; runs a case offline or replays its fixture, never a model) · `web/` (`app.js`, `index.html`, `evals.js`, `evals.html`, `trail.js`, `style.css`)
+- `evals/`: `golden.json` (87 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl` and `last_run.json` (written together by `--track`, shipped in the image, shown on `/evals`), `README.md` (the seven case types)
 - `tests/`: pytest suites and `test_ui.cjs`
 - `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md` · `archive/` (historical reviews, not current)
 - `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run), `preview.yml` (each PR gets a no-traffic tagged revision; its URL is a PR comment); `.github/scripts/` holds their helpers

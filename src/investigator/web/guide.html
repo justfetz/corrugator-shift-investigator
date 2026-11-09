@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>How the Shift Investigator Works</title><link rel="stylesheet" href="/style.css"></head>
-<body><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>how this agent is built</span></div><a class="nav-btn" href="/">Back to the investigator</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
+<body><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>how this agent is built</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/evals">Golden evals</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
 <div class="title"><p class="meta">field guide</p><h1>How this agent is built</h1></div>
 <main class="guide-page"><article>
 <p>This project starts with process rules supplied by a manufacturing expert, turns those rules into consistent synthetic records, and gives an agent a small set of read-only calculation tools. The language model may decide what to inspect. It never owns the math, SQL permissions, charts, or production actions.</p>
@@ -15,7 +15,7 @@
 <li><strong>Invariants, each with a test.</strong> Gross area equals lineal feet times web width; knives share travel; wet-end and shift totals are exact sums of their setups; setups tile every shift with no gap; stops sit inside one setup and never overlap.</li>
 <li><strong>A store and bounded tools.</strong> The records load once into an in-memory database. Nine daily tools and six period tools answer fixed, parameterized queries; every percentage is a ratio of sums over the window, never an average of averages, and each tile says which direction is better.</li>
 <li><strong>A planner that only chooses.</strong> The offline rule-based planner, or Anthropic with the server's key, or your OpenAI key, picks the next permitted tool. Application code validates every call, owns the math, bounds calls, time and spend, and keeps the trail.</li>
-<li><strong>A golden set that owns the truth.</strong> Expected numbers are computed a second way, by plain sums over the record families, and stamped with the dataset hash; investigation cases find the seeded stories and may not assert a cause the evidence lacks.</li>
+<li><strong>A golden set that owns the truth.</strong> Expected numbers are computed a second way, by plain sums over the record families, and stamped with the dataset hash; investigation cases find the seeded stories and may not assert a cause the evidence lacks. <a href="/evals">Browse every case and run it</a>.</li>
 </ul>
 
 <h2>1. Define the process before the prompt</h2>

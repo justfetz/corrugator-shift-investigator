@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Golden evals · Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/trail.js" defer></script><script src="/evals.js" defer></script></head>
+<body><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>the golden set, case by case</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/guide">How it’s built</a><span class="badge">Synthetic data / no model calls</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
+<div class="title"><p class="meta">golden evals</p><h1>How the numbers are checked</h1><p class="lede">Every case below is a question with a written expectation: which tools must run with which arguments, what the answer must and must not say, and for the value cases what each number must equal when computed a second way. Open a case to run it on this server and see the tool trail it actually produced.</p></div>
+<main class="wrap evals-page">
+<section class="card" aria-label="Score">
+<div class="section-heading"><h2>Score</h2><div class="report-actions"><button id="run-all" type="button">Run all</button><a class="nav-btn" href="/evals.json">JSON</a></div></div>
+<p id="summary" class="evals-summary" role="status">Loading the golden set…</p>
+<p id="run-status" class="muted" role="status" aria-live="polite"></p>
+<div class="table-scroll" id="score-wrap" tabindex="0" role="region" aria-label="Score by case type"><table id="score-table"></table></div>
+<p class="muted">Offline cases pass or fail one by one. A live case is a recording of a real model’s tool choices, replayed here through the same agent, tools and validators; its type passes by pass rate. This page never calls a model: “Run” executes the offline planner or replays the recording.</p>
+</section>
+<section class="card evals-trend" aria-label="Trend">
+<div class="section-heading"><h2>Trend</h2><span class="muted mono" id="trend-note"></span></div>
+<div id="trend-charts"></div>
+<p class="muted">One point per tracked run, from <code>evals/history.jsonl</code> as shipped with this build. The file changes only through a pull request; nothing on this page writes to it.</p>
+</section>
+<section class="card" aria-label="Cases">
+<div class="section-heading"><h2>Cases</h2><span class="muted mono" id="case-count"></span></div>
+<div class="evals-filter"><div class="seg" id="type-filter" role="group" aria-label="Case type"></div><input id="search" type="text" maxlength="80" placeholder="Filter by id or question" aria-label="Filter cases by id or question"></div>
+<div id="cases"></div>
+</section>
+<footer>Synthetic data · offline planner or recorded replay only · <a href="https://github.com/justfetz/corrugator-shift-investigator/blob/main/evals/README.md">How the set is scored</a> · <a href="/">Ask your own question</a></footer>
+</main></body></html>

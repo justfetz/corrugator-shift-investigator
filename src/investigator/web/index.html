@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/trail.js" defer></script><script src="/app.js" defer></script></head>
 <body>
 <header class="app"><div class="wrap">
 <div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>a corrugator’s shift, week, month or 4-4-5 period, from synthetic records</span></div>
@@ -29,6 +29,7 @@
 <div class="grid">
 <section class="card conversation" aria-label="Ask">
 <form id="ask"><label for="question">Ask about the selected scope</label><textarea id="question" rows="3" maxlength="2000" placeholder="Why was this shift slow? Which downtime reason cost the most minutes this week? Which grade is eating the most downtime this month?"></textarea><div class="form-footer"><span id="status" role="status">Ready / no API costs</span><span class="form-actions"><button id="report" class="secondary" type="button" hidden title="The deterministic period report: output heatmap, daily matrix, recurring downtime and notes for the selected window">Period report</button><button id="submit" type="submit">Investigate</button></span></div></form>
+<a id="evals-badge" class="evals-badge" href="/evals" hidden></a>
 <p class="muted" id="mode-help">Ask about performance, downtime, speed or quality. Offline mode uses a small rule-based planner.</p>
 <details class="examples-fold" open><summary>Example questions</summary><div class="examples" id="examples" aria-label="Example questions by intent"></div></details>
 <div id="messages" aria-live="polite"><p class="empty">Answers appear here: the evidence lines, the model’s interpretation when a model is selected, and the charts on the right.</p></div>
@@ -37,5 +38,5 @@
 <section class="card results" aria-live="polite" aria-busy="false"><div class="section-heading"><h2>Evidence</h2><div class="report-actions"><button id="pdf" class="secondary" disabled>Download PDF</button><button id="download" class="secondary" disabled>Save text</button></div></div><div id="charts"></div><div id="heatmaps" aria-label="Period output heatmap"></div><div id="kpis" class="kpis" aria-label="Period KPI tiles"></div><div id="metrics" class="metrics"><p class="muted">Calculated metrics appear here.</p></div></section>
 </div>
 <section class="card supporting"><details class="supporting-fold" open><summary>Supporting data and how the agent got here</summary><div id="tables"></div><details id="execution"><summary>Tool trail <span id="calls"></span></summary><p class="muted">An execution trace of tools, SQL and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details></details></section>
-<footer>43 synthetic production days (Mon–Fri, 3 Aug – 30 Sep 2026) · 07:00 production-day boundary · PDF downloads only; email not connected · <a href="/guide">How this agent is built</a></footer>
+<footer>43 synthetic production days (Mon–Fri, 3 Aug – 30 Sep 2026) · 07:00 production-day boundary · PDF downloads only; email not connected · <a href="/guide">How this agent is built</a><span id="evals-foot" hidden> · <a href="/evals">Golden evals: every case and the score history</a></span></footer>
 </main></body></html>
