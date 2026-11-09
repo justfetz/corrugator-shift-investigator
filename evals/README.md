@@ -40,6 +40,30 @@ Every case, whatever its type, also checks:
 - tables shown to the user are complete (row count equals an independent tool call);
 - narrative numbers and citations are faithful, as above.
 
+## Latency budget
+
+Target behavior is Datasette-fast: a question answers in tens of milliseconds.
+The runner times every case (the agent's turns only; the dataset build, fixture
+I/O and the checks are outside the clock), prints the ms column in the table,
+and holds the offline set to two budgets:
+
+- **per case**: `expect.max_ms`, default 250 ms for an offline case (`DEFAULT_MAX_MS`);
+  a case over it fails with `<ms> ms, budget <max_ms> ms` whatever else it got right.
+  A live or replayed case has no default, since its time is the provider's.
+- **per run**: the offline p50 must be at or under 100 ms and the p95 at or under
+  250 ms (`LATENCY_BUDGET_MS`, nearest-rank percentiles). The summary prints
+  `offline latency: p50 .. p95 ..` with a verdict per percentile, each breach
+  adds one to the exit status, and `tests/test_evals.py::test_offline_latency_budget`
+  applies the same gate in CI over the times the case tests just measured.
+
+A deliberately slow tool is the regression test for the budget
+(`test_slow_tool_fails_the_latency_budget`): a 300 ms stub around one daily
+tool fails `why-slow` on the time alone, and the same case with `max_ms: 10000`
+passes again. Baseline on the 2026-11-08 sandbox: offline questions 13–60 ms;
+the first tracked run with the budget measured p50 13 ms and p95 66 ms over 145 cases.
+Raise a budget only with the number that justifies it in the PR; never to make
+a slow change pass.
+
 ## How the value goldens are made
 
 `make_value_goldens.py` generates every number in `golden_values.json` from plain
@@ -121,10 +145,11 @@ Anthropic recordings are committed under `fixtures/anthropic/`; none for OpenAI.
 
 `python3 evals/run.py --track` appends one JSON line to `evals/history.jsonl`
 after the score table: the UTC time, the git commit, the dataset hash, the
-case count, pass / fail / skip per type for the offline cases, and per provider
-the model its recordings were made with, pass / fail / skip per type and the
-recorded cost. A run is comparable with the one before it when the dataset hash
-and the model match; a changed prompt is flagged by the replay warning. The
+case count, pass / fail / skip per type for the offline cases, `latency_ms`
+(the offline p50 and p95 of that run, in ms), and per provider the model its
+recordings were made with, pass / fail / skip per type and the recorded cost. A
+run is comparable with the one before it when the dataset hash and the model
+match, and the latency with the one before it when the machine does too; a changed prompt is flagged by the replay warning. The
 file is the answer to "did that change make the agent better or worse": read
 the two lines, not the vibes.
 
