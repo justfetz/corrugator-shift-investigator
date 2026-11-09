@@ -22,7 +22,7 @@ elements.mode.value='openai';vm.runInContext('updateScope()',context);assert.equ
 // A week, month or 4-4-5 period keeps the question box, the agent select and the live key: the period tools answer
 // questions about the selected window; the deterministic report moves to its own button.
 elements.period.value='month';elements.period.events.change();assert.equal(elements.mode.value,'openai');assert.equal(elements['key-label'].hidden,false);
-elements.period.value='week';vm.runInContext('updateScope()',context);assert.equal(elements.question.disabled,false);assert.equal(elements.mode.disabled,false);assert.equal(elements.report.hidden,false);assert.equal(elements.submit.textContent,'Investigate');assert.match(elements['mode-help'].textContent,/^Ask about the selected week/);
+elements.period.value='week';vm.runInContext('updateScope()',context);assert.equal(elements.question.disabled,false);assert.equal(elements.mode.disabled,false);assert.equal(elements.report.hidden,false);assert.equal(elements.submit.textContent,'Ask');assert.match(elements['mode-help'].textContent,/^Ask about the selected week/);
 elements.period.value='day';vm.runInContext('updateScope()',context);assert.equal(elements.question.disabled,false);assert.equal(elements.report.hidden,true);
 elements.mode.value='offline';
 // Anthropic locally: the key label and badge follow the selected provider, and the key travels under its own header name.
@@ -43,7 +43,10 @@ const row={observed_shift_fpm:600,speed_to_target_pct:75,valid_setups:60,paper_c
 context.result={run_id:'test',session_id:'session',production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',context:{shift:2},usage:{tool_calls:1,model_calls:0},trace:[{tool:'get_shift_kpis',ok:true,elapsed_ms:1,data:{shift:2,coverage:'complete',rows:[row]}}],tables:[{title:'get_shift_notes',shift:2,coverage:'complete',rows:[{notes:'<script>untrusted</script>'}]}],charts:[{title:'Output heatmap',type:'calendar_heatmap',coverage:'complete',unit:'estimated good sq ft',rows:[{day:'2026-09-14',available:true,estimated_good_sqft:1000000,gross_sqft:1020000,speed_to_target_pct:75,downtime_pct:4,maintenance_pct:3,operator_pct:1,dry_end_pct:1.2,trim_pct:2,shear_pct:.5,paper_changes:27,valid_setups:60,heavy_hitter:'Upper knife / Knife jam',heavy_hitter_minutes:12,heavy_hitter_stops:3}]},{shift:2,coverage:'complete',unit:'ft/min',x:'wet_end_id',y:'actual_fpm',rows:[{wet_end_id:'W2-01',actual_fpm:600,target_fpm:800,speed_to_target_pct:75,grade:'200-C'}]}]};
 const first=context.result.charts[0].rows[0];
 context.result.charts[0].rows.push({...first,day:'2026-09-15',estimated_good_sqft:1500000},{...first,day:'2026-09-16',estimated_good_sqft:2000000},{day:'2026-09-17',available:false});
-vm.runInContext('showResult(result)',context);assert.equal(elements.metrics.children.length,11);assert.equal(elements.pdf.disabled,false);assert.equal(elements.tables.children.length,1);assert.equal(elements.charts.children.length,1);
+vm.runInContext('showResult(result)',context);assert.equal(elements.metrics.children.length,7);assert.equal(elements.tables.children.length,1);assert.equal(elements.charts.children.length,1);
+// issue #63: the eleven numbers of the KPI row sit on seven tiles, one row of the card (value, unit, and a second number beneath)
+assert.deepEqual(elements.metrics.children.map(t=>[t.children[0].textContent,t.children[1].children.map(c=>c.textContent).join(' '),t.children[2].textContent]),[['Speed','600.0 ft/min','75.0% of target'],['Maintenance','3.00 %','target 2.5%'],['Operator','1.00 %','target 2.5%'],['Dry-end waste','1.20 %','above 1%'],['Trim','2.00 %','shear 0.50%'],['Setups','60','30 paper changes'],['Throughput','94.0 in','4,800 ft / setup']]);
+assert.deepEqual(elements.metrics.children.filter(t=>/flag/.test(t.children[2].className)).map(t=>t.children[0].textContent),['Speed','Maintenance','Dry-end waste']);   // under target, over 2.5%, over 1%
 vm.runInContext('showResult(result)',context);assert.equal(elements.charts.children.length,1);assert.equal(elements.tables.children.length,1);assert.equal(elements.trace.children.length,1);   // a second answer replaces the first one's evidence, never stacks on it
 const heatmap=elements.heatmaps.children[0];
 const cells=heatmap.children.find(e=>e.className==='heatmap-grid').children.filter(e=>e.tag==='button');
@@ -61,7 +64,7 @@ assert.ok(html.indexOf('id="heatmaps"')<html.indexOf('id="metrics"'));
 context.result.charts[0].rows=[first];vm.runInContext('showResult(result)',context);
 assert.equal(elements.heatmaps.children.length,1);
 assert.equal(elements.heatmaps.children[0].children.find(e=>e.className==='heatmap-grid').children.find(e=>e.tag==='button').style.backgroundColor,'rgba(8, 127, 117, 1.000)');
-vm.runInContext('reset()',context);assert.equal(elements.pdf.disabled,true);assert.equal(elements.tables.children.length,0);
+vm.runInContext('reset()',context);assert.equal(elements['card-foot'].hidden,true);assert.equal(elements.tables.children.length,0);   // no answer, no exports: the footer is hidden, never a disabled button
 assert.equal(elements.heatmaps.children.length,0);
 
 // ---- Scope sentence: the plain-English read-back for each period, with the comparison base or its absence.
@@ -87,24 +90,28 @@ assert.match(rejection,/Sunday 13 Sep 2026 is a Sunday/);assert.equal(elements.d
 elements.day.value='2026-09-11';assert.equal(elements.day.events.change(),null);assert.equal(elements['day-note'].hidden,true);assert.match(elements['scope-help'].textContent,/^Friday 11 Sep 2026/);
 elements.day.value='2026-09-14';elements.day.events.change();
 
-// ---- Segmented buttons mirror the hidden selects; chips are grouped by intent.
+// ---- Segmented buttons mirror the hidden selects; the canned questions are a short list plus "More questions".
 vm.runInContext('renderSegments();renderQuestionChips()',context);
 const pressed=group=>elements[group+'-seg'].children.filter(b=>b['aria-pressed']==='true').map(b=>b.dataset.value);
 assert.deepEqual(elements['period-seg'].children.map(b=>b.dataset.value),['day','week','month','accounting']);
+assert.deepEqual(elements['shift-seg'].children.map(b=>b.textContent),['1 · 7–3','2 · 3–11','3 · 11–7','All']);   // the rail's shift buttons carry the hours (#63)
 assert.deepEqual(pressed('period'),['day']);assert.deepEqual(pressed('shift'),['2']);
 elements['shift-seg'].children.find(b=>b.dataset.value==='all').events.click();assert.equal(elements.scope.value,'day');assert.deepEqual(pressed('shift'),['all']);
 elements['shift-seg'].children.find(b=>b.dataset.value==='1').events.click();assert.equal(elements.scope.value,'shift');assert.equal(elements.shift.value,'1');
 elements['shift-seg'].children.find(b=>b.dataset.value==='2').events.click();
 elements['period-seg'].children.find(b=>b.dataset.value==='month').events.click();assert.equal(elements.period.value,'month');assert.equal(elements.question.disabled,false);
-// Under a period the chips follow the window word and the per-shift matrices are disabled; under Day everything is live.
-const chipList=()=>elements.examples.children.flatMap(g=>g.children[1].children);
-assert.ok(chipList().some(b=>b.textContent==='Costliest reason this month'&&b.dataset.question==='Which downtime reason cost the most minutes this month?'&&!b.disabled));
+// Under a period the questions follow the window word and the per-shift matrices are hidden; under Day everything shows.
+const chipList=()=>[...elements.examples.children,...elements['examples-more'].children];
+assert.ok(chipList().some(b=>b.textContent==='Costliest reason this month'&&b.dataset.question==='Which downtime reason cost the most minutes this month?'&&!b.hidden));
 assert.ok(chipList().some(b=>b.textContent==='This month vs last'&&b.dataset.question==='How did this month go versus the previous one?'));
-assert.deepEqual(chipList().filter(b=>b.disabled).map(b=>b.textContent),['Setup matrix','Read notes','Compare shifts','Rank losses','Orders + quantities']);
+assert.deepEqual(chipList().filter(b=>b.hidden).map(b=>b.textContent),['Setup matrix','Read notes','Compare shifts','Rank losses','Orders + quantities']);
+assert.equal(chipList().filter(b=>b.disabled).length,0);
+assert.equal(elements.report.hidden,false);
 elements['period-seg'].children.find(b=>b.dataset.value==='accounting').events.click();assert.ok(chipList().some(b=>b.dataset.question==='Stops per day this period'));
-elements['period-seg'].children.find(b=>b.dataset.value==='day').events.click();assert.equal(elements.period.value,'day');assert.equal(chipList().filter(b=>b.disabled).length,0);assert.ok(chipList().some(b=>b.textContent==='Costliest reason this week'));
-assert.deepEqual(elements.examples.children.map(g=>g.children[0].textContent),['Speed','Downtime','Waste','Compare','Orders']);
-const chips=elements.examples.children.flatMap(g=>g.children[1].children);
+elements['period-seg'].children.find(b=>b.dataset.value==='day').events.click();assert.equal(elements.period.value,'day');assert.equal(chipList().filter(b=>b.hidden).length,0);assert.ok(chipList().some(b=>b.textContent==='Costliest reason this week'));
+assert.deepEqual(elements.examples.children.map(b=>b.textContent),['Why was this shift slow?','Speed to target','Dry-end waste','Bond or warp?','Costliest reason this week','This week vs last','Summary + charts']);   // the short list; the other nine sit under "More questions"
+assert.equal(elements['examples-more'].children.length,9);
+const chips=chipList();
 for(const q of ['How did September go versus August?','Which downtime reason cost the most minutes this week?','Is it bond or warp?','Stops per day this week','Trend of trim over eight weeks','Compare all shifts','Show orders and quantities'])assert.ok(chips.some(b=>b.dataset.question===q),q);
 assert.equal(chips.find(b=>b.dataset.question==='Compare all shifts').dataset.scope,'day');
 
@@ -197,7 +204,7 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
 // bound values; charts and tables link back to their query box; on a phone every box is one line with the SQL on tap.
 {
  const at=id=>html.indexOf(`id="${id}"`);
- assert.ok(at('mode-help')<at('examples')&&at('examples')<at('ask')&&at('ask')<at('queries')&&at('queries')<at('messages'),'help and examples above the form; the query box directly under it; then the narrative');
+ assert.ok(at('ask')<at('card-title')&&at('card-title')<at('queries')&&at('queries')<at('messages'),'the ask bar, the title line, the query box directly under it, then the narrative');
  assert.ok(at('queries')<at('charts')&&at('charts')<at('tables')&&at('tables')<at('trace'),'queries, then the evidence, then the per-step data');
  assert.ok(html.includes('<details id="execution"><summary>What came back, per query'));
  const frames=[]; context.requestAnimationFrame=f=>{frames.push(f);return frames.length;};
@@ -211,10 +218,11 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
   charts:[{type:'bar',source_result_id:'r:1',shift:2,coverage:'complete',unit:'minutes',x:'category',y:'down_minutes',rows:[{category:'Order change',down_minutes:9.2},{category:'Knife jam',down_minutes:5.7}]}]}`,context);
  vm.runInContext('showResult(result)',context);
  const q=elements.queries.children, boxes=q.filter(e=>/^query\b/.test(e.className));
- assert.equal(q[0].className,'queries-head');assert.equal(q[0].children[1].textContent,'3 queries · 4 ms');
+ assert.ok(walk(q[q.length-1]).some(e=>e.textContent==='3 queries · 4 ms in the tools'));   // the tools' own time; the title line carries the wall time (#63)
  assert.deepEqual(boxes.map(b=>b.id),['query-0','query-1','query-2']);       // one block per tool step, in order, right after the head
  assert.deepEqual(boxes.map(b=>b.open),[true,false,false]);                   // step 1 open; the others one line with the SQL on tap
  assert.equal(q[q.length-1].className,'queries-foot');
+ boxes[1].open=true;boxes[1].events.toggle();assert.deepEqual(boxes.map(b=>b.open),[false,true,false]);boxes[1].open=false;boxes[0].open=true;boxes[0].events.toggle();   // one open at a time: at desktop width its SQL sits in the pane beside the list (#63)
  assert.equal(elements.trace.children.length,0);                              // first paint: the boxes are there, the per-step data is not (#33)
  assert.equal(elements.charts.children.length,1);
  assert.deepEqual(boxes[0].children[0].children.map(c=>c.textContent),['get_downtime_breakdown','(shift=2, group_by=reason)','· 2 rows · 2.1 ms']);
@@ -243,6 +251,10 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  delete context.matchMedia;
  const phoneCss=fs.readFileSync('src/investigator/web/style.css','utf8');const phoneBlock=phoneCss.slice(phoneCss.indexOf('@media(max-width:850px)'));
  assert.ok(phoneBlock.includes('.query>summary .args{display:none}')&&phoneBlock.includes('.query>summary{flex-wrap:nowrap;overflow:hidden}'),'at 390 px each step is tool · rows · ms on one line; the SQL is on tap');
+ // #63: more than four steps fold behind "N more queries"; the button shows them
+ vm.runInContext('showResult(Object.assign({},result,{trace:[...result.trace,...result.trace].map((e,i)=>Object.assign({},e,{result_id:"x:"+i}))}))',context);
+ const six=elements.queries.children.filter(e=>/^query\b/.test(e.className));assert.deepEqual(six.map(b=>!!b.hidden),[false,false,false,false,true,true]);
+ const moreQ=walk(elements.queries).find(e=>e.textContent==='2 more queries');moreQ.events.click();assert.ok(six.every(b=>!b.hidden));assert.equal(moreQ.textContent,'Show fewer');assert.equal(moreQ['aria-expanded'],'true');
  vm.runInContext('reset()',context);assert.equal(elements.queries.children.length,0);
  delete context.requestAnimationFrame;delete context.navigator;
  console.log('UI issue-40 checks passed: query box first and open in the first paint; copy text is the SQL with bound values; links both ways; one line per step on a phone.');
@@ -278,8 +290,8 @@ const lum=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.0392
 const contrast=(a,b)=>{const [hi,lo]=[lum(a),lum(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
 assert.match(css,/\n\.chart\{[^}]*background:var\(--surface-2\)/,'chart marks are drawn on --surface-2');
 const panel=lightTokens['surface-2'];
-const onPanel=Object.fromEntries(['s1','s2','s3','s4','prev','target','ink','ink-2'].map(k=>[k,Number(contrast(lightTokens[k],panel).toFixed(2))]));
-for(const k of ['s1','s2','s3','s4','prev','target'])assert.ok(contrast(lightTokens[k],panel)>=3,`${k} ${lightTokens[k]} is ${onPanel[k]}:1 on the chart panel ${panel}`);
+const onPanel=Object.fromEntries(['s1','s2','s3','s4','prev','target','bar','bar-2','ink','ink-2'].map(k=>[k,Number(contrast(lightTokens[k],panel).toFixed(2))]));
+for(const k of ['s1','s2','s3','s4','prev','target','bar','bar-2'])assert.ok(contrast(lightTokens[k],panel)>=3,`${k} ${lightTokens[k]} is ${onPanel[k]}:1 on the chart panel ${panel}`);
 for(const k of ['ink','ink-2'])assert.ok(contrast(lightTokens[k],panel)>=4.5,`${k} is ${onPanel[k]}:1`);   // chart labels, ticks, captions and legend text
 for(const k of ['s1','s2'])assert.ok(contrast(lightTokens[k],lightTokens['surface-3'])>=3,`${k} on the target band ${lightTokens['surface-3']}`);   // range-chart bars run from zero across the --surface-3 band
 assert.match(css,/\.chart \.inseg\{fill:#000;/);assert.match(css,/\.chart \.inseg\.s4\{fill:#fff\}/);   // segment labels: black on s1..s3, white on s4
@@ -291,7 +303,7 @@ console.log('light-theme contrast on the chart panel (--surface-2):',JSON.string
 console.log('UI issue-36 checks passed: light by default, pinned theme wins, toggle present, heatmap ink flip.');
 
 // ---- issue #17: post() refreshes /api/config once on a 403 and resends with the new token; a second 403 is returned, not retried forever.
-(async()=>{
+const issue17=(async()=>{
  await new Promise(r=>setTimeout(r,50));   // let init()'s own primeKpis() finish against the original fetch stub before swapping it
  const calls=[];
  const record=(path,init)=>{if(path==='/api/config'||(init&&init.body&&init.body.includes('probe-17')))calls.push([path,init&&init.headers?init.headers['X-Workbench-Token']:undefined]);};
@@ -318,7 +330,108 @@ console.log('UI issue-36 checks passed: light by default, pinned theme wins, tog
  await vm.runInContext("(()=>{const h={'X-OpenAI-Key':'sk-visitor'};const p=post('/api/ask',{question:'probe-17'},h);delete h['X-OpenAI-Key'];return p;})()",context);
  assert.deepEqual(seen,['sk-visitor','sk-visitor']);
  console.log('UI issue-17 checks passed: 403 refreshes the token once and resends.');
-})().catch(error=>{console.error(error);process.exit(1);});
+})();issue17.catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #63: the layout shell. A rail (scope, canned questions, rates, agent under a disclosure), an ask bar,
+// one open answer card with a title line, earlier answers as one line each. A submit draws the skeleton card
+// before the task yields; nothing is disabled while a question is out; the payload to /api/ask is unchanged.
+issue17.then(async()=>{
+ const at=id=>html.indexOf(`id="${id}"`), text=e=>e.textContent;
+ const order=['rail','day','shift-seg','period-seg','examples','rates-change','advanced','mode','reset','ask','question','submit','analyst','card','card-title','card-meta','queries','messages','charts','kpis','metrics','card-foot','earlier'];
+ assert.deepEqual([...order].sort((a,b)=>at(a)-at(b)),order,'rail, then the ask bar, then the card (title line, queries, summary, charts, tiles, footer), then the earlier answers');
+ assert.ok(order.every(id=>at(id)>0));
+ for(const phrase of ['Looking at','Ask in one click','Every canned question is a fixed query. No model, no wait.','Your rates','$55 / MSF','$1,200 / hr','not set'])assert.ok(html.includes(phrase),phrase);
+ assert.match(html,/<button id="rates-change"[^>]*disabled[^>]*>Change rates<\/button>/);          // the rates panel is a placeholder until #31
+ assert.ok(html.indexOf('</details>',at('advanced'))>at('reset'),'agent choice and Advanced sit inside the disclosure');
+ assert.match(html,/<select id="mode"><option value="offline">/);                                 // offline is the first option, so the default
+ assert.ok(!/id="(examples-fold|scope-bar)"|class="grid"/.test(html),'the old form / help / examples block is gone');
+ // the stylesheet: charts two-up and tiles seven-up at desktop width; on a phone the rail is a sheet behind the Questions button
+ const desktopCss=css.slice(css.indexOf('@media(min-width:1180px)'),css.indexOf('}\n',css.indexOf('@media(min-width:1180px)')+200)+800);
+ assert.ok(desktopCss.includes('#charts{grid-template-columns:repeat(2,minmax(0,1fr))}')&&desktopCss.includes('.metrics{grid-template-columns:repeat(7,minmax(0,1fr))}'));
+ const phoneCss=css.slice(css.indexOf('@media(max-width:850px)'));
+ assert.ok(phoneCss.includes('.rail{display:none}')&&phoneCss.includes('.rail.open{display:flex;position:fixed;inset:0'));
+ assert.ok(/\n\.rail-toggle,\.rail-close\{display:none\}/.test(css)&&phoneCss.includes('.rail-toggle,.rail-close{display:inline-flex'));
+ elements['rail-toggle'].events.click();assert.equal(elements.rail.className,'rail open');assert.equal(elements['rail-toggle']['aria-expanded'],'true');
+ elements['rail-close'].events.click();assert.equal(elements.rail.className,'rail');
+
+ const storeDays=['2026-09-11','2026-09-14','2026-09-15'];
+ const answer=n=>({run_id:'run'+n,session_id:'s1',session_reset:false,mode:'offline rule-based planner; no language model',status:'complete',production_day:'2026-09-14',selected_shifts:[2],sections:[`Shift 2 answer ${n}.`],context:{},usage:{tool_calls:2,model_calls:0},report_markdown:'# r',
+  trace:[{result_id:'a:1',tool:'get_shift_kpis',arguments:{shift:2},ok:true,elapsed_ms:3,data:{shift:2,coverage:'complete',rows:[row],trace:{sql:'SELECT 1',parameters:[2]}}},{result_id:'a:2',tool:'get_downtime_breakdown',arguments:{shift:2,group_by:'reason'},ok:true,elapsed_ms:2,data:{shift:2,coverage:'complete',rows:[{category:'Order change',down_minutes:6.4}]}}],tables:[],
+  charts:[{type:'bar',source_result_id:'a:2',shift:2,coverage:'complete',unit:'minutes',x:'category',y:'down_minutes',rows:[{category:'Order change',down_minutes:6.4}]},{shift:2,coverage:'complete',unit:'ft/min',x:'wet_end_id',y:'actual_fpm',rows:[{wet_end_id:'W2-01',actual_fpm:600,target_fpm:800,speed_to_target_pct:75,grade:'200-C'}]}]});
+ const bodies=[], gates=[]; let wall=1000;
+ context.performance={now:()=>wall};
+ context.fetch=(path,init)=>new Promise((resolve,reject)=>{const n=bodies.push(JSON.parse(init.body));gates.push({ok:()=>resolve({ok:true,status:200,json:async()=>answer(n)}),fail:message=>resolve({ok:false,status:400,json:async()=>({error:message})})});});
+ const tick=()=>new Promise(r=>setTimeout(r,0));
+ vm.runInContext(`config={days:${JSON.stringify(storeDays)},first_day:'2026-09-11',token:'t',live_modes:[],demo_guards:{rate_limit_per_min:30}};acceptedDay='2026-09-14'`,context);   // a rate limit: no priming call
+ elements.day.value='2026-09-14';elements.period.value='day';elements.scope.value='shift';elements.shift.value='2';elements.mode.value='offline';elements.corrupt.checked=false;
+ vm.runInContext('renderQuestionChips();reset()',context);
+ const card=elements.card, earlier=elements.earlier, canned=elements.examples.children;
+ assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);assert.equal(earlier.children.length,0);
+ assert.equal(elements.analyst.hidden,true);                                   // no server key: Ask the analyst is not offered
+ const disabled=()=>[...Object.entries(elements).filter(([,e])=>e.disabled).map(([id])=>id),...canned.filter(b=>b.disabled).map(text)];
+
+ // 1. A canned question: the skeleton is in the DOM in the same task as the click, before any answer exists.
+ canned[0].events.click();
+ assert.equal(card.className,'card answer skeleton');assert.equal(card['aria-busy'],'true');
+ assert.equal(elements['card-title'].textContent,'Why was this shift slow?');
+ assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · asking…');
+ assert.ok(walk(elements.queries).some(e=>/^skel\b/.test(e.className))&&elements.charts.children.length===2&&elements.charts.children.every(e=>/skel-chart/.test(e.className)));
+ assert.deepEqual(disabled(),[]);                                              // nothing is disabled while the question is out
+ assert.deepEqual(bodies[0],{question:'Why was this shift slow? Chart downtime by reason.',day:'2026-09-14',shift:2,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});   // the /api/ask payload is unchanged
+ wall=1093;gates[0].ok();await tick();
+ assert.equal(card.className,'card answer');assert.equal(card['aria-busy'],'false');
+ assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 2 queries · 93 ms');   // the measured wall time, submit to rendered
+ assert.equal(elements.queries.children.filter(e=>/^query\b/.test(e.className)).length,2);
+ assert.ok(walk(elements.messages).some(e=>e.textContent==='Shift 2 answer 1.'));
+ assert.equal(elements.charts.children.length,2);assert.equal(elements.metrics.children.length,7);assert.equal(elements['card-foot'].hidden,false);assert.equal(elements.pdf.hidden,false);
+ assert.match(walk(elements.charts.children[0]).find(e=>/^bar\b/.test(e.class||'')).class,/minutes/);   // downtime minutes take the second bar colour
+
+ // 2. Two more in a row, the third clicked while the second is still out: three cards, one open, two collapsed.
+ canned[1].events.click();
+ elements.mode.value='anthropic';canned[2].events.click();elements.mode.value='offline';
+ assert.equal(bodies.length,3);assert.deepEqual(bodies.map(b=>b.mode),['offline','offline','offline']);   // a canned question never calls a model, whatever the agent select says
+ assert.equal(bodies[1].session_id,'s1');                                      // the thread continues the server conversation
+ assert.equal(card.className,'card answer skeleton');assert.equal(elements['card-title'].textContent,'Dry-end waste');
+ assert.deepEqual(earlier.children.map(l=>l.children[0].children.map(text)),[['Speed to target','Shift 2 · asking…'],['Why was this shift slow?','Shift 2 · 93 ms']]);
+ assert.deepEqual(disabled(),[]);
+ wall=1200;gates[2].ok();await tick();wall=1300;gates[1].ok();await tick();
+ assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(card.className,'card answer');
+ assert.ok(walk(elements.messages).some(e=>e.textContent==='Shift 2 answer 3.'));   // each card keeps its own answer, whatever order they landed in
+ assert.deepEqual(earlier.children.map(l=>l.children[0].children.map(text)),[['Speed to target','Shift 2 · 207 ms'],['Why was this shift slow?','Shift 2 · 93 ms']]);   // newest on top
+ assert.ok(earlier.children.every(l=>l.children[1].tag==='button'&&l.children[1].textContent==='Open'&&/^card earlier/.test(l.className)));
+ assert.deepEqual(disabled(),[]);
+
+ // 3. Open an earlier answer: it becomes the open card, the other two are the lines; the PDF is offered for the session's latest run only.
+ earlier.children[1].children[1].events.click();
+ assert.equal(elements['card-title'].textContent,'Why was this shift slow?');assert.ok(walk(elements.messages).some(e=>e.textContent==='Shift 2 answer 1.'));
+ assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 2 queries · 93 ms');
+ assert.deepEqual(earlier.children.map(l=>l.children[0].children[0].textContent),['Dry-end waste','Speed to target']);
+ assert.equal(elements.pdf.hidden,true);
+ earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);   // run 2 landed last
+
+ // 4. A scope change keeps the thread and starts a new server conversation; the new card carries its own scope.
+ elements['shift-seg'].children.find(b=>b.dataset.value==='1').events.click();
+ assert.equal(earlier.children.length,2);assert.equal(elements['card-title'].textContent,'Speed to target');
+ elements.question.value='How many setups?';elements.ask.events.submit({preventDefault(){}});
+ assert.deepEqual(bodies[3],{question:'How many setups?',day:'2026-09-14',shift:1,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});
+ assert.equal(elements['card-title'].textContent,'How many setups?');assert.equal(elements['card-meta'].textContent,'Shift 1 · Mon 14 Sep 2026 · offline · asking…');
+ wall=1350;gates[3].fail('That question is not supported');await tick();
+ assert.equal(card.className,'card answer failed');assert.match(elements['card-meta'].textContent,/ · failed · 50 ms$/);assert.equal(elements['card-foot'].hidden,true);
+ assert.ok(walk(elements.messages).some(e=>e.textContent==='That question is not supported'));
+ assert.equal(earlier.children.length,3);                                      // a failed question is a card too; the others are untouched
+
+ // 5. Ask the analyst is the live mode, offered only when the server has a key for one; Ask stays offline.
+ vm.runInContext("config.live_modes=['anthropic'];updateScope()",context);assert.equal(elements.analyst.hidden,false);
+ elements.question.value='Why slow?';elements.analyst.events.click();
+ assert.equal(bodies[4].mode,'anthropic');assert.match(elements['card-meta'].textContent,/ · anthropic · asking…$/);
+ elements.ask.events.submit({preventDefault(){}});assert.equal(bodies[5].mode,'offline');
+ gates[4].ok();gates[5].ok();await tick();
+
+ // 6. "Clear the thread" empties it.
+ elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);
+ delete context.performance;
+ console.log('UI issue-63 checks passed: shell order, skeleton in the same task as the submit, measured ms on the title line, three cards from three questions with nothing disabled, payload unchanged, offline default.');
+}).catch(error=>{console.error(error);process.exit(1);});
 
 // ---- issue #26: the /evals page. Every case is listed once, the score and trend come from the board, opening a case
 // runs it through POST /api/evals/run and draws the trail with the main page's traceRow, and the page fetches nothing else.
