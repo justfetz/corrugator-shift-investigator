@@ -60,7 +60,7 @@ Optional WebMCP registration invokes the same visible investigation action and v
 
 Tests exercise a full investigation, follow-up scope, all-shift comparison, exact chart/evidence equality, missing evidence, forbidden tools, call/deadline limits, incomplete records, history retention, date changes and HTTP protections. Unit/HTTP tests and JavaScript syntax checks do not replace visual browser QA or live-model evaluation.
 
-Still pending: live-provider validation, public service-wide budget infrastructure, email provider and verified subscriptions, plant timezone/DST, overlapping-stop and cross-shift allocation, production security/deployment and broader scenario calibration. Read the implementation follow-up in REVIEW_2026-09-07.md for repaired PDF/history/guidance defects and remaining semantic-evaluation work.
+Still pending: live-provider validation, public service-wide budget infrastructure, email provider and verified subscriptions, plant timezone/DST, overlapping-stop and cross-shift allocation, production security/deployment and broader scenario calibration. The implementation follow-up on the repaired PDF/history/guidance defects is in the archived review, `archive/REVIEW_2026-09-07.md`; semantic evaluation is the golden set's job now (`evals/README.md`).
 
 
 ## Evidence-reporting extension

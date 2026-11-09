@@ -1,6 +1,6 @@
 # How a question becomes evidence and a chart
 
-This describes the implemented code as reviewed September 7, 2026. It replaces the original proposed first-slice design. See [the agent contract](AGENT_CONTRACT.md) for permissions, [metrics](METRICS.md) for formulas, and [the review](REVIEW_2026-09-07.md) for known defects.
+This describes the implemented code as reviewed September 7, 2026. It replaces the original proposed first-slice design. See [the agent contract](AGENT_CONTRACT.md) for permissions, [metrics](METRICS.md) for formulas, and [the archived September 7 review](archive/REVIEW_2026-09-07.md) for the defects it found, all since repaired.
 
 ## Three execution paths
 
@@ -105,7 +105,7 @@ The model's process instructions discourage unsupported claims and scope changes
 
 PeriodReports reads daily KPI and note snapshots, closes each Analysis database, then caches at most 60 snapshots for the clean/corrupt demo month. It constructs weighted totals, recurrence tables, shift ranks, daily rows, notes and charts. Missing dates never enter totals as zero. Comparison deltas and ranks are withheld when the necessary coverage is incomplete.
 
-Heatmap rows contain the date, availability, output, percentages, counts, and heavy hitter. The browser normalizes available estimated-good output into alpha 0.22–1 and sets a direct rgba background. Mouse, keyboard focus and click show the same detail text. It does not navigate to the clicked production date.
+Heatmap rows contain the date, availability, output, percentages, counts, and heavy hitter. The browser normalizes available estimated-good output into alpha 0.22–1, sets a direct rgba background, and marks a cell `deep` (white day number) when the blended colour's relative luminance over the light surface falls below 0.179. Mouse, keyboard focus and click show the same detail text. It does not navigate to the clicked production date.
 
 ## Delivery and limitations
 

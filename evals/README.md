@@ -40,6 +40,58 @@ Every case, whatever its type, also checks:
 - tables shown to the user are complete (row count equals an independent tool call);
 - narrative numbers and citations are faithful, as above.
 
+## Latency budget
+
+Target behavior is Datasette-fast: a question answers in tens of milliseconds.
+The runner times every case (the agent's turns only; the dataset build, fixture
+I/O and the checks are outside the clock), prints the ms column in the table,
+and holds the offline set to two budgets:
+
+- **per case**: `expect.max_ms`, default 250 ms for an offline case (`DEFAULT_MAX_MS`);
+  a case over it fails with `<ms> ms, budget <max_ms> ms` whatever else it got right.
+  A live or replayed run is never timed against it, since its time is the provider's
+  (a `live: true` case shares its `expect` with its live variant).
+- **per run**: the offline p50 must be at or under 100 ms and the p95 at or under
+  250 ms (`LATENCY_BUDGET_MS`, nearest-rank percentiles). The summary prints
+  `offline latency: p50 .. p95 ..` with a verdict per percentile, each breach
+  adds one to the exit status, and `tests/test_evals.py::test_offline_latency_budget`
+  applies the same gate in CI over the times the case tests just measured. The gate
+  is over the whole offline set: a filtered `--only` run prints its percentiles and
+  is not gated, since a subset's p50 is just those cases' own time.
+
+Three tests pin the gate. `test_slow_tool_fails_the_latency_budget`: a 300 ms delay
+on every daily tool call pushes `why-slow` past a second and fails it on the time
+alone, and the same case with `max_ms: 10000` passes again.
+`test_latency_budget_times_a_refusal_but_never_a_replay`: a refusal that takes
+300 ms fails on time alone, and a replayed recording slowed the same way still
+passes. `test_run_level_breach_raises_the_exit_status_and_fails_the_ci_gate`:
+with a percentile budget set below the fastest case, the CLI exit status rises by
+one per percentile over budget although every case passed,
+`test_offline_latency_budget` fails on the same numbers, and an `--only` run under
+the same budget exits 0.
+
+Baseline, 2026-11-09 sandbox (4 cores), five uncontended runs of the 145 offline
+cases (the tracked `history.jsonl` line and four re-measurements): p50 11–13 ms,
+p95 60–66 ms; every case between 0 ms (a refusal that stops
+before its first tool call) and 116 ms (`story-monday-warp`, four turns and eight
+tool calls), half the set under 13 ms. That is wider than the 13–60 ms the issue
+quotes for single questions, because the set also holds the refusals and the
+multi-turn stories.
+
+Eleven cases carry an explicit `max_ms: 500`: the two multi-turn stories
+(`story-monday-warp`, `story-trim-creep`), the eight- and nine-week trends
+(`period-trend-minutes-per-stop`, `period-trim-trend`, `period-trend-warp-weekly`,
+`period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
+`value-trend-warp-8w`, `value-trend-stops-9w-missing-weeks`) and the three-shift
+compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
+other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
+four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
+418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,
+`period-trend-minutes-per-stop` 266 ms), all eleven stayed under 500 ms, the next
+slowest case reached 156 ms, and the run-level gate held at p50 26 ms, p95 232 ms.
+Raise a budget only with the number that justifies it in the PR; never to make
+a slow change pass.
+
 ## How the value goldens are made
 
 `make_value_goldens.py` generates every number in `golden_values.json` from plain
@@ -121,10 +173,11 @@ Anthropic recordings are committed under `fixtures/anthropic/`; none for OpenAI.
 
 `python3 evals/run.py --track` appends one JSON line to `evals/history.jsonl`
 after the score table: the UTC time, the git commit, the dataset hash, the
-case count, pass / fail / skip per type for the offline cases, and per provider
-the model its recordings were made with, pass / fail / skip per type and the
-recorded cost. A run is comparable with the one before it when the dataset hash
-and the model match; a changed prompt is flagged by the replay warning. The
+case count, pass / fail / skip per type for the offline cases, `latency_ms`
+(the offline p50 and p95 of that run, in ms), and per provider the model its
+recordings were made with, pass / fail / skip per type and the recorded cost. A
+run is comparable with the one before it when the dataset hash and the model
+match, and the latency with the one before it when the machine does too; a changed prompt is flagged by the replay warning. The
 file is the answer to "did that change make the agent better or worse": read
 the two lines, not the vibes.
 

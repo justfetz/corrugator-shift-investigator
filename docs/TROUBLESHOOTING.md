@@ -1,6 +1,6 @@
 # Troubleshooting and known limitations
 
-Review date: September 7, 2026. Read this alongside [the workbench how-to](WORKBENCH.md) and [the review findings](REVIEW_2026-09-07.md). Do not paste API keys, environment dumps, or private production records into issue reports.
+Review date: September 7, 2026. Read this alongside [the workbench how-to](WORKBENCH.md) and [the archived review findings](archive/REVIEW_2026-09-07.md). Do not paste API keys, environment dumps, or private production records into issue reports.
 
 ## Start or reconnect
 
@@ -34,7 +34,7 @@ Hatching means missing or incomplete evidence. For September 29 in 4-4-5 mode, o
 
 Identical colors can be legitimate when all available outputs are equal. Colors are normalized within one report and have no shared scale across periods. See [metric and color formulas](METRICS.md). If different tooltip outputs still show identical backgrounds, reload the page and inspect browser console errors. The renderer should set a direct `rgba` background property; weakening CSP is not the remedy.
 
-The numbered day cells provide details by mouse, click, and keyboard focus. Keyboard Tab advances through the buttons. Color contrast on the darkest cell needs refinement; this review is not a full accessibility certification.
+The numbered day cells provide details by mouse, click, and keyboard focus. Keyboard Tab advances through the buttons. Since issue #36 the darkest cells carry white day numbers (class `deep`) and the lighter cells black, each at 4.5:1 or better; this is a measured contrast check, not a full accessibility certification.
 
 ## Downloads
 
