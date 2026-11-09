@@ -192,6 +192,62 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  console.log('UI issue-33 checks passed: tables and charts paint before the trace; a stale frame is skipped.');
 }
 
+// ---- issue #40: the query box is the first thing below the question, step 1 open, built in the first paint; the
+// per-step data ("What came back") stays below and keeps #33's two-frame deferral; the copy text is the SQL with its
+// bound values; charts and tables link back to their query box; on a phone every box is one line with the SQL on tap.
+{
+ const at=id=>html.indexOf(`id="${id}"`);
+ assert.ok(at('mode-help')<at('examples')&&at('examples')<at('ask')&&at('ask')<at('queries')&&at('queries')<at('messages'),'help and examples above the form; the query box directly under it; then the narrative');
+ assert.ok(at('queries')<at('charts')&&at('charts')<at('tables')&&at('tables')<at('trace'),'queries, then the evidence, then the per-step data');
+ assert.ok(html.includes('<details id="execution"><summary>What came back, per query'));
+ const frames=[]; context.requestAnimationFrame=f=>{frames.push(f);return frames.length;};
+ const copied=[]; context.navigator={clipboard:{writeText:async t=>{copied.push(t);}}};
+ const sql='SELECT reason, sum(seconds)/60 AS minutes\nFROM stops WHERE shift = ?\nGROUP BY reason';
+ vm.runInContext(`result={run_id:'q',session_id:'s',production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',context:{},usage:{tool_calls:3,model_calls:0},sections:['Shift 2 lost 14.9 minutes.'],
+  trace:[{result_id:'r:1',tool:'get_downtime_breakdown',arguments:{shift:2,group_by:'reason',kind:null},ok:true,elapsed_ms:2.14,data:{shift:2,coverage:'complete',rows:[{category:'Order change',down_minutes:9.2},{category:'Knife jam',down_minutes:5.7}],trace:{sql:${JSON.stringify(sql)},parameters:[2]}}},
+         {result_id:'r:2',tool:'get_shift_notes',arguments:{shift:2},ok:true,elapsed_ms:1.8,data:{shift:2,coverage:'complete',rows:[{notes:'n'}],trace:{sql:'SELECT notes FROM notes WHERE shift = ?',parameters:[2]}}},
+         {result_id:'r:3',tool:'render_chart',arguments:{result_id:'r:1'},ok:true,elapsed_ms:0.05,data:{shift:2,coverage:'complete',rows:[{category:'Order change',down_minutes:9.2}],type:'bar',x:'category',y:'down_minutes',unit:'minutes',source_result_id:'r:1'}}],
+  tables:[{title:'get_shift_notes',shift:2,coverage:'complete',source_result_id:'r:2',rows:[{notes:'n'}]}],
+  charts:[{type:'bar',source_result_id:'r:1',shift:2,coverage:'complete',unit:'minutes',x:'category',y:'down_minutes',rows:[{category:'Order change',down_minutes:9.2},{category:'Knife jam',down_minutes:5.7}]}]}`,context);
+ vm.runInContext('showResult(result)',context);
+ const q=elements.queries.children, boxes=q.filter(e=>/^query\b/.test(e.className));
+ assert.equal(q[0].className,'queries-head');assert.equal(q[0].children[1].textContent,'3 queries · 4 ms');
+ assert.deepEqual(boxes.map(b=>b.id),['query-0','query-1','query-2']);       // one block per tool step, in order, right after the head
+ assert.deepEqual(boxes.map(b=>b.open),[true,false,false]);                   // step 1 open; the others one line with the SQL on tap
+ assert.equal(q[q.length-1].className,'queries-foot');
+ assert.equal(elements.trace.children.length,0);                              // first paint: the boxes are there, the per-step data is not (#33)
+ assert.equal(elements.charts.children.length,1);
+ assert.deepEqual(boxes[0].children[0].children.map(c=>c.textContent),['get_downtime_breakdown','(shift=2, group_by=reason)','· 2 rows · 2.1 ms']);
+ assert.equal(boxes[0].children[1].className,'sql');
+ const copyBtn=walk(boxes[0]).find(e=>e.tag==='button');assert.equal(copyBtn.textContent,'Copy SQL');copyBtn.events.click();
+ assert.deepEqual(copied,[sql+'\n\n-- bound values\n[2]']);                   // the copy text equals the SQL with its bound values
+ assert.equal(vm.runInContext("sqlText({ok:true,data:{trace:{sql:'SELECT a,\\n        b FROM t\\n        WHERE x = ?',parameters:[1]}}})",context),'SELECT a,\nb FROM t\nWHERE x = ?\n\n-- bound values\n[1]');   // the Python string's indentation is dropped, nothing else
+ assert.deepEqual(boxes[2].children[0].children.map(c=>c.textContent).slice(0,2),['render_chart','(result_id=query 1)']);   // a result id reads as the query it names
+ assert.equal(vm.runInContext("sqlText({ok:true,data:{daily_sql:'SELECT 1 WHERE shift = ?',daily_parameters:[2]}})",context),'SELECT 1 WHERE shift = ?\n\n-- bound values\n[2]');   // the period report's per-day query carries its bound values too
+ assert.equal(walk(boxes[0]).find(e=>e.className==='came-back').href,'#step-0');
+ assert.ok(walk(boxes[2]).some(e=>e.tag==='a'&&e.href==='#query-0'));          // a render_chart step names the query it drew
+ assert.ok(walk(elements.charts).some(e=>e.className==='query-link'&&e.href==='#query-0'));   // the chart links back to its query box
+ assert.ok(walk(elements.tables).some(e=>e.className==='query-link'&&e.href==='#query-1'));   // so does the table
+ vm.runInContext("showTable({title:'get_rankings',shift:2,coverage:'incomplete',source_result_id:'r:2',rows:[]})",context);   // an empty (withheld) table still links back
+ assert.ok(walk(elements.tables.children[elements.tables.children.length-1]).some(e=>e.className==='query-link'&&e.href==='#query-1'));
+ const copyAll=walk(q[q.length-1]).find(e=>e.textContent==='Copy all SQL');copyAll.events.click();
+ assert.match(copied[1],/^-- query 1: get_downtime_breakdown\(shift=2, group_by=reason\)\nSELECT reason/);assert.match(copied[1],/\n\n-- query 2: get_shift_notes\(shift=2\)\nSELECT notes/);
+ while(frames.length)frames.shift()();                                        // after the paint: the per-step rows exist, with the ids the boxes point at
+ assert.deepEqual(elements.trace.children.map(e=>e.id),['step-0','step-1','step-2']);
+ const byId=document.getElementById;document.getElementById=id=>id==='step-0'?elements.trace.children[0]:byId(id);
+ elements.execution.open=false;walk(boxes[0]).find(e=>e.className==='came-back').events.click();
+ assert.equal(elements.execution.open,true);assert.equal(elements.trace.children[0].open,true);   // "What came back" unfolds the trail and the step
+ document.getElementById=byId;
+ context.matchMedia=()=>({matches:true});vm.runInContext('showResult(result)',context);   // a phone: every box is one line
+ assert.deepEqual(elements.queries.children.filter(e=>/^query\b/.test(e.className)).map(b=>b.open),[false,false,false]);
+ delete context.matchMedia;
+ const phoneCss=fs.readFileSync('src/investigator/web/style.css','utf8');const phoneBlock=phoneCss.slice(phoneCss.indexOf('@media(max-width:850px)'));
+ assert.ok(phoneBlock.includes('.query>summary .args{display:none}')&&phoneBlock.includes('.query>summary{flex-wrap:nowrap;overflow:hidden}'),'at 390 px each step is tool · rows · ms on one line; the SQL is on tap');
+ vm.runInContext('reset()',context);assert.equal(elements.queries.children.length,0);
+ delete context.requestAnimationFrame;delete context.navigator;
+ console.log('UI issue-40 checks passed: query box first and open in the first paint; copy text is the SQL with bound values; links both ways; one line per step on a phone.');
+}
+
 // ---- issue #36: light by default whatever the OS prefers; a pinned choice in localStorage wins; the toggle stays.
 const themeSrc=fs.readFileSync('src/investigator/web/theme.js','utf8'), css=fs.readFileSync('src/investigator/web/style.css','utf8');
 function visit({saved,osDark,withButton=true}={}){   // one page load: theme.js runs in <head>, then the header button exists

@@ -5,6 +5,9 @@ function node(tag, text, cls) { const e=document.createElement(tag); if(text!==u
 // ---- The tool trail: one row per tool call. Arguments, row count, coverage and timing on the row;
 // the exact SQL with its bound values and the full result JSON behind disclosures.
 const compactJson=value=>JSON.stringify(value,(k,v)=>v===null?null:v)||'';
+// SQL as shown to visitors: the tool's recorded statement, dedented, plus its bound values (#40).
+function dedent(sql){ const lines=String(sql).trim().split('\n'); const indent=Math.min(...lines.slice(1).filter(l=>l.trim()).map(l=>l.match(/^ */)[0].length),Infinity); return indent===Infinity?lines.join('\n'):[lines[0],...lines.slice(1).map(l=>l.slice(indent))].join('\n'); }   // the source's own indentation, not its Python string's
+function sqlText(entry){ const data=entry.ok?entry.data:null, sql=data&&(data.trace?.sql||data.daily_sql); if(!sql)return null; const params=data.trace?.parameters??data.daily_parameters; return dedent(sql)+(params?`\n\n-- bound values\n${JSON.stringify(params)}`:''); }
 function traceRow(entry){
  const d=node('details',undefined,'trace-step '+(entry.ok?'ok':'failed')), data=entry.ok?entry.data:null;
  const rows=data?Array.isArray(data.rows)?data.rows.length:null:null;
@@ -28,8 +31,8 @@ function traceRow(entry){
   if(entry.tool==='render_chart')add('Chart',`${data.type}; x=${data.x}; y=${data.y}${data.y2?'; y2='+data.y2:''}; unit=${data.unit}; from ${data.source_result_id}`);
   if(data.dataset_version)add('Dataset',String(data.dataset_version).slice(0,16)+'…');
   if(meta.children.length)d.append(meta);
-  const sql=data.trace?.sql||data.daily_sql; const params=data.trace?.parameters;
-  if(sql){const q=node('details',undefined,'trace-sql');q.append(node('summary','SQL and bound values'));q.append(node('pre',String(sql).trim()+(params?`\n\n-- bound values\n${JSON.stringify(params)}`:'')));d.append(q);}
+  const sql=sqlText(entry);
+  if(sql){const q=node('details',undefined,'trace-sql');q.append(node('summary','SQL and bound values'));q.append(node('pre',sql));d.append(q);}
   else if(entry.tool!=='render_chart'){d.append(node('p','No SQL: this tool composes other results.','muted'));}
  }
  const full=node('details',undefined,'trace-json');full.append(node('summary','Full result JSON'));full.append(node('pre',JSON.stringify(entry,null,2)));d.append(full);

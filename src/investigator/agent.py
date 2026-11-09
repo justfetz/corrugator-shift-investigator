@@ -563,7 +563,7 @@ class Agent:
                 'sections': sections, 'evidence_ids': final_ids,
                 'narrative':narrative,'narrative_status':narrative_status,
                 'charts': charts,
-                'tables': [dict(title=v['tool'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings',*PERIOD_TOOLS)],
+                'tables': [dict(title=v['tool'], source_result_id=v['result_id'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings',*PERIOD_TOOLS)],
                 'trace': traces, 'context': context_out,
                 'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0})},
                 'limitations': 'Synthetic data. Setup counts are shift records: a continuing setup appears in both shifts. Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled. Recorded reasons are observations, not proven root causes. Model prose is interpretation requiring human review; reference validation does not prove causality. Offline mode understands only supported question patterns; live mode depends on provider access.'}

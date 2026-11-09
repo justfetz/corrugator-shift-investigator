@@ -203,6 +203,30 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;line-height:1.6
 .trace-sql summary,.trace-json summary,.trace-context summary{font-size:.78rem;font-family:var(--mono);color:var(--ink-3);font-weight:500}
 .trace-sql pre,.trace-json pre,.trace-context pre{margin-top:6px}
 code{font-family:var(--mono)}
+
+/* Query box (#40): the compact trace at the top of the answer, Datasette-style. One block per tool step:
+   tool(arguments) · rows · ms on the summary, the SQL with its bound values and a copy button inside. Step 1
+   is open; the rest are one line each with the SQL on tap. Charts and tables carry a link back to their box. */
+.queries:empty{display:none}
+.queries{margin:12px 0 0;border:1px solid var(--rule);border-radius:10px;background:var(--surface-2);padding:8px 12px 10px;font-family:var(--mono);font-size:12px}
+.queries-head{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;align-items:baseline;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:500;padding-bottom:6px;border-bottom:1px solid var(--line-2)}
+.queries-head .mono{letter-spacing:0;text-transform:none;font-size:11.5px}
+.query{margin:0;border-top:0;padding:0}
+.query+.query{border-top:1px solid var(--line-2)}
+.query>summary{min-height:30px;padding:4px 0;gap:6px;font-size:12px;font-weight:500;flex-wrap:wrap;color:var(--ink-2)}
+.query>summary .tool{font-weight:600;color:var(--brand-ink)}
+.query>summary .args{font-weight:400;overflow-wrap:anywhere;min-width:0}
+.query>summary .facts{font-weight:400;color:var(--ink-3);white-space:nowrap;margin-left:auto}
+.query.failed>summary .tool{color:var(--bad)}
+.query pre.sql{margin:2px 0 6px 12px;padding:8px 10px;border:0;border-left:2px solid var(--grid);border-radius:0 6px 6px 0;background:var(--surface);font-size:12px;line-height:1.5;max-height:240px}   /* a long query scrolls inside its box; the copy button carries all of it */
+.query>.muted,.query>.warning-note{margin:2px 0 6px 12px;font-size:12px;line-height:1.5}
+.query-foot{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 8px 12px;font-size:11.5px}
+.query-foot .copy,.queries-foot button{min-height:26px;padding:0 9px;font-size:11.5px;font-family:var(--mono)}
+.query-foot a{color:var(--ink-2)}
+.queries-foot{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-2);color:var(--ink-3);font-size:11.5px}
+.query-link{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.chart .query-link{color:var(--ink-2)}   /* 4.5:1 on the chart panel, like the captions (#36) */
+.query a:focus-visible,.query-link:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 .note-group{margin:8px 0;border-top:0;padding:6px 10px;background:var(--surface-2);border-radius:8px}
 .note-group summary{font-size:.82rem;font-weight:500;color:var(--ink-2)}
 .note-group p{margin:8px 0 2px;font-size:.85rem;color:var(--ink-2)}
@@ -244,6 +268,7 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
  .metrics,.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .chip-group{grid-template-columns:1fr;gap:4px}.chip-group h4{padding-top:4px}
  .trace-meta{grid-template-columns:1fr}.trace-sum .facts{white-space:normal}
+ .queries{padding:6px 10px 8px}.queries-head{flex-direction:column;gap:2px}.query>summary{flex-wrap:nowrap;overflow:hidden}.query>summary .args{display:none}.query>summary .tool{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.query pre.sql,.query-foot,.query>.muted,.query>.warning-note{margin-left:0}
  .tile .v{font-size:1.2rem}
  .heatmap-weekdays,.heatmap-grid{gap:4px}.heatmap-cell{padding:5px}
  #messages{max-height:350px}
