@@ -37,13 +37,9 @@ How the golden set is made is written up in [HOW_THIS_IS_BUILT](HOW_THIS_IS_BUIL
 
 The UI stub does not parse CSS, calculate contrast, enforce CSP, download a real file, or execute in a browser. PDF signatures do not prove page layout. Provider mocks do not prove that a live model chooses useful tools. Keep these distinctions in test reports.
 
-## Reproduce the review findings
+## The September 7 review probes, archived
 
-```powershell
-.\.venv\Scripts\python.exe docs/_scratch/review-2026-09-07/probes.py
-```
-
-The probe uses synthetic in-memory datasets and scripted planners, prints observations, and makes no provider call or persisted budget reservation. It records observations from the original review cases; some defects are now repaired, so the current output differs from the original report. Its exit code is not a product acceptance gate. The corresponding proposed regression criteria are in [the review](REVIEW_2026-09-07.md).
+The review that first listed the PDF, history and guidance defects, and the read-only probe script that reproduced them, are kept as history under `docs/archive/` ([the review](archive/REVIEW_2026-09-07.md), `archive/review-2026-09-07/probes.py`). Every R item is repaired and the probe was written against the September router, so it no longer runs unchanged; the regression gate for those behaviors is the golden set (`python3 evals/run.py`) and the suites above, not the probe.
 
 ## Browser acceptance walkthrough
 

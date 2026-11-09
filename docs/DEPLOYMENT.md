@@ -1,6 +1,6 @@
 # Deployment readiness and low-cost path
 
-The application runs two ways: the loopback learning workbench, and the hosted synthetic demo on Google Cloud Run with the Anthropic planner behind the guards below (the OpenAI key is never mounted there). What remains before anything beyond a demo is the release sequence further down; the September 7 review's calibration and export defects are repaired.
+The application runs two ways: the loopback learning workbench, and the hosted synthetic demo on Google Cloud Run at <https://corrugator-shift-investigator-65612311806.us-central1.run.app>. The demo answers with the offline planner by default and offers the Anthropic planner as a choice behind the guards below (issue #42; the OpenAI key is never mounted there). The deploy is keyless: GitHub Actions authenticates to Google with Workload Identity Federation and no credential is stored in the repository (issue #28). The shape of the service (two instances, per-container ledgers, the prebuilt dataset) is written down under [Decisions on record](#decisions-on-record). What remains before anything beyond a demo is the release sequence further down; the September 7 review's calibration and export defects are repaired and the review itself is archived under [archive/](archive/REVIEW_2026-09-07.md).
 
 ## Implemented: hosted public-demo mode (offline planner)
 
@@ -26,9 +26,9 @@ Then set repository **variables** (not secrets): `ANTHROPIC_SECRET_NAME` = the S
 
 ### Deploy to Google Cloud Run (free tier, scale to zero) — recommended
 
-`.github/workflows/deploy-cloudrun.yml` deploys `main` from source (Cloud Build reads the `Dockerfile`) whenever the repository has the variable `GCP_PROJECT_ID` and the secret `GCP_SA_KEY`. It allow-lists every URL the service answers on — the legacy `<service>-<hash>-<region code>.a.run.app` form and the deterministic `<service>-<project number>.<region>.run.app` form, since which one `gcloud` reports as primary varies — as the comma-separated `PUBLIC_DEMO_ORIGIN`, sets `PUBLIC_DEMO_EMBED_ORIGINS` (variable, default `https://justfetz.github.io`), deploys with `--min-instances 0 --max-instances 2 --memory 1Gi --concurrency 20 --timeout 180`, and curls `/api/health` (and, when live mode is on, checks that `/api/config` reports a live mode). Optional variables: `WORKBENCH_SECRET` (any string; rotates the shared session token, see Current known limitations), `GCP_REGION` (default `us-central1`), `CLOUD_RUN_SERVICE` (default `corrugator-shift-investigator`), and the live-mode set above: `PUBLIC_DEMO_LIVE_MODEL`, `ANTHROPIC_SECRET_NAME`, `OPENAI_SECRET_NAME`, `ANTHROPIC_MODEL`, `DEMO_RATE_LIMIT_PER_MIN`, `DEMO_DAILY_CAP`, `DEMO_MAX_TURNS`. Secrets are mounted as `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` from Secret Manager (`<name>:latest`) at start-up; the only GitHub secret is `GCP_SA_KEY`.
+`.github/workflows/deploy-cloudrun.yml` deploys `main` from source (Cloud Build reads the `Dockerfile`) whenever the repository has the variable `GCP_PROJECT_ID`; it authenticates with Workload Identity Federation through the variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_DEPLOYER_SERVICE_ACCOUNT` (set-up below) and fails with that instruction when either is missing. It allow-lists every URL the service answers on — the legacy `<service>-<hash>-<region code>.a.run.app` form and the deterministic `<service>-<project number>.<region>.run.app` form, since which one `gcloud` reports as primary varies — as the comma-separated `PUBLIC_DEMO_ORIGIN`, sets `PUBLIC_DEMO_EMBED_ORIGINS` (variable, default `https://justfetz.github.io`), deploys with `--min-instances 0 --max-instances 2 --memory 1Gi --concurrency 20 --timeout 180`, and curls `/api/health` (and, when live mode is on, checks that `/api/config` reports a live mode). Optional variables: `WORKBENCH_SECRET` (any string; rotates the shared session token, see Current known limitations), `GCP_REGION` (default `us-central1`), `CLOUD_RUN_SERVICE` (default `corrugator-shift-investigator`), and the live-mode set above: `PUBLIC_DEMO_LIVE_MODEL`, `ANTHROPIC_SECRET_NAME`, `OPENAI_SECRET_NAME`, `ANTHROPIC_MODEL`, `DEMO_RATE_LIMIT_PER_MIN`, `DEMO_DAILY_CAP`, `DEMO_MAX_TURNS`. Secrets are mounted as `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` from Secret Manager (`<name>:latest`) at start-up. The Cloud Run path uses **no GitHub secret at all**; the optional Space mirror below still needs `HF_TOKEN`.
 
-One-time project setup (Cloud Shell):
+One-time project setup (Cloud Shell). Skip the first block on a project that already has the deployer account:
 
 ```bash
 PROJECT_ID=<globally-unique-id>          # e.g. corrugator-demo-<something>
@@ -44,14 +44,44 @@ done
 NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 gcloud projects add-iam-policy-binding "$PROJECT_ID" --member "serviceAccount:${NUMBER}-compute@developer.gserviceaccount.com" \
   --role roles/cloudbuild.builds.builder --quiet >/dev/null   # the build runs as the default compute service account
-gcloud iam service-accounts keys create key.json --iam-account "$SA" && cat key.json
 ```
+
+#### Keyless deploy (Workload Identity Federation)
+
+The workflow holds no credential. On each run GitHub issues a short-lived OIDC token that names this repository; a Workload Identity Pool in the project trusts GitHub's issuer for exactly this repository, and the deployer service account lets that identity impersonate it (`roles/iam.workloadIdentityUser`). `google-github-actions/auth@v2` does the exchange and the job's `id-token: write` permission is what allows it to request the token. Nothing long-lived exists to leak, rotate or delete. Create the pool and provider once:
+
+```bash
+PROJECT_ID=<the project>; REPO=justfetz/corrugator-shift-investigator
+gcloud config set project "$PROJECT_ID"
+gcloud services enable iamcredentials.googleapis.com sts.googleapis.com
+gcloud iam workload-identity-pools create github --location global --display-name "GitHub Actions"
+gcloud iam workload-identity-pools providers create-oidc github-oidc --location global --workload-identity-pool github \
+  --display-name "GitHub OIDC" --issuer-uri https://token.actions.githubusercontent.com \
+  --attribute-mapping "google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+  --attribute-condition "assertion.repository == '${REPO}'"
+SA="github-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+POOL=$(gcloud iam workload-identity-pools describe github --location global --format 'value(name)')
+gcloud iam service-accounts add-iam-policy-binding "$SA" --role roles/iam.workloadIdentityUser \
+  --member "principalSet://iam.googleapis.com/${POOL}/attribute.repository/${REPO}"
+gcloud iam workload-identity-pools providers describe github-oidc --location global --workload-identity-pool github --format 'value(name)'
+```
+
+The last line prints `projects/<number>/locations/global/workloadIdentityPools/github/providers/github-oidc`. Set two repository **variables** (Settings → Secrets and variables → Actions → Variables): `GCP_WORKLOAD_IDENTITY_PROVIDER` = that value and `GCP_DEPLOYER_SERVICE_ACCOUNT` = `github-deployer@<project>.iam.gserviceaccount.com`, next to the existing `GCP_PROJECT_ID`. The attribute condition is what keeps a fork or another repository from using the pool, so keep it exact. Run **Deploy Cloud Run** (workflow_dispatch) and read `Live at …` at the end of the smoke test.
+
+**Cutover from the stored key.** Deploys before issue #28 authenticated with a service-account key pasted into the GitHub secret `GCP_SA_KEY`. The order that never leaves `main` undeployable: create the pool and set the two variables first, merge the workflow change, watch one deploy succeed, then delete the GitHub secret `GCP_SA_KEY` and the key itself in Google:
+
+```bash
+gcloud iam service-accounts keys list --iam-account "$SA" --managed-by user
+gcloud iam service-accounts keys delete <KEY_ID> --iam-account "$SA"
+```
+
+The workflow has deliberately no fallback to a key: a missing variable fails the first step with the instruction above rather than silently deploying with a credential that was meant to be gone. After the cutover the project holds no user-managed key for the deployer, and `gcloud iam service-accounts keys list … --managed-by user` printing nothing is the check.
 
 Responses over 1 KB are gzipped when the client accepts it (an answer is 20–145 KB raw, 3–21 KB on the wire; the PDF is left alone), and `app.js`, `style.css` and the pages carry an `ETag` with `Cache-Control: no-cache`, so a returning visitor's browser revalidates them with `If-None-Match` and gets a 304 instead of a download (issue #33). API responses stay `no-store`. The page builds the trace table two animation frames after the answer, so the tables and charts paint first (a frame callback runs before its own paint).
 
 The image builds the two synthetic months once (`python -m investigator.prebuilt /app/prebuilt` in the Dockerfile, issue #19) and the server loads them at start in about 150 ms instead of generating for about 2 s; `GET /api/health` reports `store.source` (`prebuilt` or `generated`) and `store.boot_ms`. A prebuilt folder that does not match the code or the inputs is ignored, so a stale image falls back to generating rather than serving wrong data.
 
-Paste the key file's contents into the GitHub secret `GCP_SA_KEY`, set the variable `GCP_PROJECT_ID`, delete `key.json`, then merge or run **Deploy Cloud Run**. The service-account key is a shortcut for a one-person project; Workload Identity Federation is the keyless alternative when this matters. Set a billing budget alert on the project regardless.
+Set a billing budget alert on the project regardless of how small the demo is.
 
 ### Deploy to a Hugging Face Space (Docker Spaces require a PRO subscription since July 2026)
 
@@ -62,6 +92,20 @@ Paste the key file's contents into the GitHub secret `GCP_SA_KEY`, set the varia
 5. Open the Space; `/api/health` returns `{"ok": true, "public": true, "store": {"source": "prebuilt", "boot_ms": ..., "dataset_hash": "..."}}`.
 
 The same container runs on Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
+
+## Decisions on record
+
+Each of these was a choice, made with a measurement where there was one. Revisit them when the traffic or the backlog changes, not before.
+
+| Decision | Chosen | Why, and what it costs |
+| --- | --- | --- |
+| Instances: `--min-instances 0 --max-instances 2` | Scale to zero; at most two containers | Zero keeps an idle demo free; the first visitor after idle pays the container start plus the prebuilt-dataset load (issue #19; about 150 ms on a laptop, 864 ms on Cloud Run's single vCPU in the last deploy's `store.boot_ms`). Two, not one, because a deploy rolls a new revision beside the old one and a second container absorbs a burst while the first is inside the investigation lock. Two, not Google's suggested three, because every extra container is another independent ledger (next row) and the demo's traffic has never needed it. Issue #17 made two instances safe to run: the session token is derived, not minted per process, and an unknown conversation id starts a fresh conversation instead of failing. Still per instance: the PDF report cache (issue #20 removes it). |
+| Per-container ledgers | Accepted, documented, not fixed | The 60-requests-a-minute window, the per-IP `DEMO_RATE_LIMIT_PER_MIN`, the daily `DEMO_DAILY_CAP` and the $5 monthly budget all live in the container (`artifacts/model-budget.sqlite3` for the last two). With two instances a visitor can see up to twice the configured number, and a deploy resets all of them. The Anthropic console spend limit on a key used only by this demo is the hard stop, and the offline default (next row) means a visitor spends nothing unless they choose the model. A shared ledger (Firestore, Memorystore) is release-sequence work, not demo work. |
+| Planner default | Offline; the model is a choice (issue #42) | Measured from the owner's browser: "Why was shift 2 slow?" took 17,970 ms with five model calls in Anthropic mode and 93 ms offline. The dropdown keeps the model with help text saying what it adds and that it takes seconds under the site's spend cap. |
+| Dataset | Built into the image at `docker build` (issue #19) | `python -m investigator.prebuilt /app/prebuilt` runs once per image; the server loads it in about 150 ms instead of generating for about 2 s on every cold start. The generator stays the source of truth: a prebuilt folder whose fingerprint does not match the code or the inputs is ignored and the server generates instead, so a stale image serves slow data, never wrong data. `GET /api/health` reports `store.source` and `store.boot_ms`; the dataset hash in `evals/history.jsonl` did not change. |
+| Container size: `--cpu 1 --memory 1Gi --concurrency 20 --timeout 180` | One small container | The whole dataset is in-memory DuckDB and an answer takes tens of milliseconds offline. Concurrency 20 is fine because static files and `/api/health` never wait on the investigation lock; investigations and PDFs serialize per container. 180 s covers a live-model investigation with its ten tool calls. |
+| Deploy credential | Keyless, Workload Identity Federation (issue #28) | A pasted service-account key was the one long-lived secret in GitHub and the one thing a repository leak would have handed over. The pool trusts one repository and the job's OIDC token lives for one run. See "Keyless deploy" above. |
+| Where keys live | Secret Manager, mounted by **name** | The workflow passes secret names through repository variables; Cloud Run reads the value at start. No key value ever passes through GitHub. |
 
 ## Recommended first host
 
@@ -78,7 +122,7 @@ Cloud Run requires the container to listen on `0.0.0.0` and the injected `PORT`;
 5. Make PDF generation stateless or use a durable, short-lived report reference. The present report cache is process memory; another instance or a restart will not have it.
 6. Put a durable edge or datastore-backed rate limit in front of `/api/ask` and `/api/report`. The current in-memory 60-request window is per process and is not a public abuse control.
 7. If anonymous public querying is allowed, add an abuse challenge and validate it on the server. Cloudflare says Turnstile client tokens require server-side Siteverify validation, are single-use and expire after five minutes: <https://developers.cloudflare.com/turnstile/get-started/server-side-validation/>.
-8. Deploy staging with minimum instances zero and a small service-level maximum instance count. Google documents maximum instances as a cost guard and recommends starting at three, while noting that the limit can briefly be exceeded: <https://docs.cloud.google.com/run/docs/configuring/max-instances>.
+8. Deploy staging with minimum instances zero and a small service-level maximum instance count. Google documents maximum instances as a cost guard and recommends starting at three, while noting that the limit can briefly be exceeded: <https://docs.cloud.google.com/run/docs/configuring/max-instances>. The demo runs two; the reasoning is under Decisions on record.
 9. Add cloud billing alerts, request/error/latency dashboards, dependency and container scanning, deploy logs, and an immediate disable/rollback procedure. Load-test the period report and PDF endpoints with synthetic requests.
 10. Map the custom domain only after staging passes the security and behavior checks. Cloud Run terminates TLS for the service; keep the application HTTP-only behind that boundary as required by the container contract.
 
@@ -111,9 +155,9 @@ The local BYOK field is a learning feature. Do not carry browser-entered visitor
 
 ## Current known limitations
 
-- Automated checks pass, including quantity/time audits, narrative validation/fallback, period PDFs and retained comparison history. They do not certify model prose quality, all question semantics or visual PDF layout. See REVIEW_2026-09-07.md and TESTING.md.
+- Automated checks pass, including quantity/time audits, narrative validation/fallback, period PDFs and retained comparison history. They do not certify model prose quality, all question semantics or visual PDF layout. See TESTING.md; the September 7 review that first listed these gaps is archived under [archive/](archive/REVIEW_2026-09-07.md).
 - The web server, rate limit, report cache and model-budget database are single-process local implementations. Since issue #17 the session token is **shared across instances and restarts** in public mode (derived from `WORKBENCH_SECRET`, or from the demo origin when that is unset; the value is public by design, since `/api/config` serves it, and the CSRF defence is the Origin allowlist plus the custom header), the browser refreshes `/api/config` once and resends on a 403, and a conversation id this instance has never seen starts a fresh conversation (the answer carries `session_reset: true` and the page says so) instead of failing with "Session expired". The PDF report cache is still per instance: with two instances, a PDF requested from the instance that did not produce the answer returns 400 "Report expired; run the investigation again"; issue #20 makes the report a GET of the same URL state, which removes the cache.
-- The data covers September 2026 only. Prior calendar/accounting periods are correctly shown as unavailable.
+- The data covers August and September 2026 (43 production days, one seed). July and earlier calendar or accounting periods are correctly shown as unavailable, never as zero.
 - The synthetic paper-run-size distribution is plausible demo behavior supplied by code, not a measured plant distribution.
 - Notes and reason codes are synthetic observations; recurrence does not prove causation.
 - Email is not implemented. Live OpenAI access is implemented locally and has no recorded fixtures; the Anthropic path is the one scored by the golden set.

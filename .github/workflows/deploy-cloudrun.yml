@@ -1,6 +1,13 @@
 # Deploys main to Google Cloud Run as the public synthetic demo when the
-# repository has a GCP_PROJECT_ID variable and a GCP_SA_KEY secret. No-op otherwise.
+# repository has a GCP_PROJECT_ID variable. No-op otherwise.
 # Builds from source (Cloud Build uses the Dockerfile), scale-to-zero, two instances max.
+#
+# Keyless (issue #28): the job authenticates with Workload Identity Federation. GitHub mints a
+# short-lived OIDC token for this run, Google exchanges it for the deployer service account's
+# credentials, and nothing long-lived is stored anywhere. Repository VARIABLES (never secrets):
+#   GCP_WORKLOAD_IDENTITY_PROVIDER  projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+#   GCP_DEPLOYER_SERVICE_ACCOUNT    github-deployer@<project>.iam.gserviceaccount.com
+# One-time setup, and the cutover from the old GCP_SA_KEY secret, are in docs/DEPLOYMENT.md.
 name: Deploy Cloud Run
 on:
   push:
@@ -8,6 +15,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  id-token: write   # lets the run request the OIDC token that Workload Identity Federation exchanges
 concurrency: cloud-run-deploy
 jobs:
   deploy:
@@ -15,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      DEPLOYER_SA: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       REGION: ${{ vars.GCP_REGION || 'us-central1' }}
       SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
       EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
@@ -33,9 +43,20 @@ jobs:
       WORKBENCH_SECRET: ${{ vars.WORKBENCH_SECRET || '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require the keyless deploy variables
+        # A missing variable fails here with the fix, instead of failing inside the auth step with a
+        # generic error. There is deliberately no fallback to a stored key: see docs/DEPLOYMENT.md.
+        run: |
+          set -euo pipefail
+          if [ -z "$WIF_PROVIDER" ] || [ -z "$DEPLOYER_SA" ]; then
+            echo "::error::Set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT (docs/DEPLOYMENT.md, 'Keyless deploy'). This workflow no longer reads a GCP_SA_KEY secret."
+            exit 1
+          fi
+          echo "deploying as ${DEPLOYER_SA} through ${WIF_PROVIDER}"
       - uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Collect every URL the service answers on (PUBLIC_DEMO_ORIGIN allow-list)
         # Cloud Run gives a service a legacy "<service>-<hash>-<region code>.a.run.app" URL and, on

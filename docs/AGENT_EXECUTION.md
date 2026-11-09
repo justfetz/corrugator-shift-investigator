@@ -1,6 +1,6 @@
 # How a question becomes evidence and a chart
 
-This describes the implemented code as reviewed September 7, 2026. It replaces the original proposed first-slice design. See [the agent contract](AGENT_CONTRACT.md) for permissions, [metrics](METRICS.md) for formulas, and [the review](REVIEW_2026-09-07.md) for known defects.
+This describes the implemented code as reviewed September 7, 2026. It replaces the original proposed first-slice design. See [the agent contract](AGENT_CONTRACT.md) for permissions, [metrics](METRICS.md) for formulas, and [the archived September 7 review](archive/REVIEW_2026-09-07.md) for the defects it found, all since repaired.
 
 ## Three execution paths
 

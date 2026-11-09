@@ -23,7 +23,7 @@ python -m investigator.server --port 7860            # local workbench at http:/
 - `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`) · `agent.py` (bounded tool loop and the offline `parse_request`) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `web/` (`app.js`, `index.html`, `style.css`)
 - `evals/`: `golden.json` (87 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl`, `README.md` (the seven case types)
 - `tests/`: pytest suites and `test_ui.cjs`
-- `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md`, `TESTING.md`, `METRICS.md`
+- `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md` · `archive/` (historical reviews, not current)
 - `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run)
 
 ## Rules
