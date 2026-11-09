@@ -215,15 +215,21 @@ assert.match(css,/:root\[data-theme="dark"\]\{/);                   // the dark 
 assert.ok(html.includes('<script src="/theme.js"></script><meta charset'),'theme.js loads first in <head> so a pinned theme applies before first paint');
 assert.match(html,/<button type="button" id="theme" class="theme-toggle"/);
 assert.ok(/\.heatmap-scale\{[^}]*rgb\(8 127 117/.test(css)&&!css.includes('42 120 214'),'the legend ramp is the cell colour');
-// Every light-theme series colour reads at 3:1 or better on the surface (WCAG 1.4.11), and chart text inks at 4.5:1.
+// Every light-theme series colour reads at 3:1 or better on the chart panel (WCAG 1.4.11), and chart text inks at 4.5:1.
+// The panel is .chart's --surface-2, not the page surface: every chart SVG, legend swatch and heatmap cell is drawn on it.
 const lightTokens=Object.fromEntries([...css.slice(css.indexOf(':root{'),css.indexOf(':root[data-theme="dark"]')).matchAll(/--([a-z0-9-]+):(#[0-9a-f]{6})/g)].map(m=>[m[1],m[2]]));
 const lum=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
 const contrast=(a,b)=>{const [hi,lo]=[lum(a),lum(b)].sort((x,y)=>y-x);return (hi+.05)/(lo+.05);};
-const onSurface=Object.fromEntries(['s1','s2','s3','s4','prev','ink','ink-2'].map(k=>[k,Number(contrast(lightTokens[k],lightTokens.surface).toFixed(2))]));
-for(const k of ['s1','s2','s3','s4','prev'])assert.ok(onSurface[k]>=3,`${k} ${lightTokens[k]} is ${onSurface[k]}:1 on the light surface`);
-for(const k of ['ink','ink-2'])assert.ok(onSurface[k]>=4.5,`${k} is ${onSurface[k]}:1`);   // chart labels, ticks, captions and legend text
+assert.match(css,/\n\.chart\{[^}]*background:var\(--surface-2\)/,'chart marks are drawn on --surface-2');
+const panel=lightTokens['surface-2'];
+const onPanel=Object.fromEntries(['s1','s2','s3','s4','prev','target','ink','ink-2'].map(k=>[k,Number(contrast(lightTokens[k],panel).toFixed(2))]));
+for(const k of ['s1','s2','s3','s4','prev','target'])assert.ok(onPanel[k]>=3,`${k} ${lightTokens[k]} is ${onPanel[k]}:1 on the chart panel ${panel}`);
+for(const k of ['ink','ink-2'])assert.ok(onPanel[k]>=4.5,`${k} is ${onPanel[k]}:1`);   // chart labels, ticks, captions and legend text
+for(const k of ['s1','s2','s3'])assert.ok(contrast(lightTokens[k],'#000000')>=4.5,`black segment label on ${k}`);assert.ok(contrast(lightTokens.s4,'#ffffff')>=4.5,'white segment label on s4');   // .inseg inks
+const blend=(a,[r,g,b],bg)=>'#'+[r,g,b].map((v,i)=>Math.round(a*v+(1-a)*parseInt(bg.slice(1+2*i,3+2*i),16)).toString(16).padStart(2,'0')).join('');
+for(const a of [.96,.965]){const cell=blend(a,[8,127,117],panel);assert.ok(contrast(cell,'#000000')>=4.5&&contrast(cell,'#ffffff')>=4.5,`heatmap inks at alpha ${a} on the chart panel`);}   // the ink flip holds on the panel too
 assert.match(css,/\.chart \.tick\{[^}]*fill:var\(--ink-2\)/);assert.match(css,/\.chart \.muted,\.heatmap \.muted\{color:var\(--ink-2\)\}/);
-console.log('light-theme contrast on the surface:',JSON.stringify(onSurface));
+console.log('light-theme contrast on the chart panel (--surface-2):',JSON.stringify(onPanel));
 console.log('UI issue-36 checks passed: light by default, pinned theme wins, toggle present, heatmap ink flip.');
 
 // ---- issue #17: post() refreshes /api/config once on a 403 and resends with the new token; a second 403 is returned, not retried forever.
