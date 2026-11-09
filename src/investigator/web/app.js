@@ -161,7 +161,7 @@ function renderQuestionChips(){
  for(const [label,text,scope,period,primary] of QUESTIONS){
   const question=text.replaceAll('{period}',word), shown=label.replaceAll('{period}',word);
   const b=node('button',shown,'canned'); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question;
-  b.addEventListener('click',()=>{ if(b.dataset.scope&&$('scope').value!==b.dataset.scope){$('scope').value=b.dataset.scope;rescope();} closeRail(); ask(question,{mode:'offline',title:shown}).catch(()=>{}); });
+  b.addEventListener('click',()=>{ if(b.dataset.scope&&$('scope').value!==b.dataset.scope){$('scope').value=b.dataset.scope;rescope();} const sheet=railOpen(); closeRail(); ask(question,{mode:'offline',title:shown}).catch(()=>{}); if(sheet)focusCard(); });
   (primary?short:more).append(b); chipButtons.push(b);
  }
 }
@@ -579,10 +579,12 @@ function renderEarlier(){
  for(const rec of thread.filter(r=>r.id!==openId).sort((a,b)=>b.id-a.id)){
   const line=node('article',undefined,'card earlier'+(rec.state==='error'?' failed':''));line.setAttribute('aria-label',`Earlier answer: ${rec.title}`);
   const text=node('div',undefined,'earlier-text');text.append(node('strong',rec.title),node('span',`${rec.who} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':msText(rec.ms)}`));
-  const open=node('button','Open','secondary');open.type='button';open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);open.addEventListener('click',()=>{openId=rec.id;renderCard();});
+  const open=node('button','Open','secondary');open.type='button';open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);open.addEventListener('click',()=>{openId=rec.id;renderCard();focusCard();});
   line.append(text,open);box.append(line);
  }
 }
+function syncPdf(){ if(latest)$('pdf').hidden=latestRun.get(latest.session_id)!==latest.run_id; }   // the server prints a session's latest run only; re-checked when another answer lands
+function focusCard(){ try{$('card-title').focus?.();}catch(e){} }   // keyboard focus follows the card when the control that had it goes away
 function renderCard(){
  const rec=thread.find(r=>r.id===openId)||null, card=$('card');
  clearCard();
@@ -595,7 +597,7 @@ function renderCard(){
   card.className='card answer';
   if(rec.note)message('Note',[rec.note]);
   message('',rec.result.sections||[]);showResult(rec.result);
-  $('card-foot').hidden=false;$('pdf').hidden=latestRun.get(rec.result.session_id)!==rec.result.run_id;   // the server prints a session's latest run only
+  $('card-foot').hidden=false;syncPdf();
  }
  renderEarlier();
 }
@@ -606,7 +608,7 @@ async function ask(question,{report=false,mode,title}={}) {
  const rec={id:++seq,question,title:title||question.trim(),where:scopeLabel(scope),who:scopeWho(scope),mode:report?'offline':(mode||$('mode').value),state:'pending',t0:clock(),ms:null,result:null,error:null,note:null};
  thread.push(rec);openId=rec.id;renderCard();   // the skeleton card is in the DOM before this task yields: within one frame of the submit
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
- const settle=()=>{ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)$('card-meta').textContent=cardMeta(rec); else renderEarlier(); };   // the ms is submit to rendered
+ const settle=()=>{ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)$('card-meta').textContent=cardMeta(rec); else{renderEarlier();syncPdf();} };   // the ms is submit to rendered
  try{
   const headers={};
   const p=PROVIDERS[rec.mode]||null;
@@ -631,12 +633,15 @@ async function ask(question,{report=false,mode,title}={}) {
 }
 function readyText(){ return isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs'; }
 function analystMode(){ const modes=liveModes(); return isLive()?$('mode').value:modes.includes('anthropic')?'anthropic':modes[0]; }
+function railOpen(){ return /\bopen\b/.test($('rail').className); }
 function closeRail(){ $('rail').className='rail'; $('rail-toggle').setAttribute('aria-expanded','false'); }
-$('ask').addEventListener('submit',event=>{event.preventDefault();ask($('question').value).catch(()=>{});});
-$('analyst').addEventListener('click',()=>{ const mode=analystMode(); if(mode)ask($('question').value,{mode}).catch(()=>{}); });
+function typed(options){ const q=$('question').value; if(!q.trim()){$('status').textContent='Type a question first';return;} ask(q,options).catch(()=>{}); }
+$('ask').addEventListener('submit',event=>{event.preventDefault();typed();});
+$('analyst').addEventListener('click',()=>{ const mode=analystMode(); if(mode)typed({mode}); });
 $('report').addEventListener('click',()=>{ const noun=PERIOD_NOUN[$('period').value]||'period'; closeRail(); ask(`Build ${noun} report`,{report:true,title:`${noun[0].toUpperCase()+noun.slice(1)} report`}).catch(()=>{}); });
-$('rail-toggle').addEventListener('click',()=>{ const open=!/\bopen\b/.test($('rail').className); $('rail').className=open?'rail open':'rail'; $('rail-toggle').setAttribute('aria-expanded',String(open)); });
-$('rail-close').addEventListener('click',closeRail);
+$('rail-toggle').addEventListener('click',()=>{ const open=!railOpen(); $('rail').className=open?'rail open':'rail'; $('rail-toggle').setAttribute('aria-expanded',String(open)); if(open)$('rail-close').focus?.(); });
+$('rail-close').addEventListener('click',()=>{closeRail();$('rail-toggle').focus?.();});
+$('rail').addEventListener('keydown',event=>{ if(event.key==='Escape'&&railOpen()){closeRail();$('rail-toggle').focus?.();} });
 $('came-back').addEventListener('click',()=>{ $('execution').open=true; });
 // A scope change starts a new server conversation (the follow-up context belongs to the old scope) but keeps the
 // thread: every card carries its own scope in its title line. Only "Clear the thread" empties it.

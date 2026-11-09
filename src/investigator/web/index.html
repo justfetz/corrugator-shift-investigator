@@ -45,7 +45,7 @@
 <main>
 <form id="ask" class="askbar"><label for="question" class="sr-only">Ask about a shift</label><input id="question" type="text" maxlength="2000" autocomplete="off" placeholder="Ask about this shift: speed, downtime, waste, setups, orders, notes"><span id="status" role="status">Ready / no API costs</span><button id="submit" type="submit">Ask</button><button id="analyst" class="secondary analyst" type="button" hidden title="A model picks the tools and writes the interpretation; every number still comes from the queries"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Ask the analyst</button><button id="rail-toggle" class="secondary rail-toggle" type="button" aria-expanded="false" aria-controls="rail">Questions</button></form>
 <article id="card" class="card answer idle" aria-label="Answer" aria-busy="false">
-<header class="card-head"><h2 id="card-title">Ask about a shift</h2><div id="card-meta" class="card-meta"></div></header>
+<header class="card-head"><h2 id="card-title" tabindex="-1">Ask about a shift</h2><div id="card-meta" class="card-meta"></div></header>
 <section id="queries" class="queries" aria-label="Queries that produced this answer"></section>
 <div id="messages" aria-live="polite"><p class="empty">Pick a question on the left or type one above. The answer lands here as one card: the queries that ran, the summary, the charts and the KPI tiles.</p></div>
 <div id="charts"></div>

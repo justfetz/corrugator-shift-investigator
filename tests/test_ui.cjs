@@ -409,23 +409,30 @@ issue17.then(async()=>{
  assert.equal(elements.pdf.hidden,true);
  earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);   // run 2 landed last
 
+ // 3b. An answer that lands while an earlier card is open takes the PDF away from that card (the server prints the latest run only).
+ earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,true);
+ earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);
+ canned[3].events.click();earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);
+ gates[3].ok();await tick();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,true);
+ elements.question.value='  ';elements.ask.events.submit({preventDefault(){}});assert.equal(bodies.length,4);assert.equal(elements.status.textContent,'Type a question first');   // an empty Ask says so and sends nothing
+
  // 4. A scope change keeps the thread and starts a new server conversation; the new card carries its own scope.
  elements['shift-seg'].children.find(b=>b.dataset.value==='1').events.click();
- assert.equal(earlier.children.length,2);assert.equal(elements['card-title'].textContent,'Speed to target');
+ assert.equal(earlier.children.length,3);assert.equal(elements['card-title'].textContent,'Speed to target');
  elements.question.value='How many setups?';elements.ask.events.submit({preventDefault(){}});
- assert.deepEqual(bodies[3],{question:'How many setups?',day:'2026-09-14',shift:1,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});
+ assert.deepEqual(bodies[4],{question:'How many setups?',day:'2026-09-14',shift:1,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});
  assert.equal(elements['card-title'].textContent,'How many setups?');assert.equal(elements['card-meta'].textContent,'Shift 1 · Mon 14 Sep 2026 · offline · asking…');
- wall=1350;gates[3].fail('That question is not supported');await tick();
+ wall=1350;gates[4].fail('That question is not supported');await tick();
  assert.equal(card.className,'card answer failed');assert.match(elements['card-meta'].textContent,/ · failed · 50 ms$/);assert.equal(elements['card-foot'].hidden,true);
  assert.ok(walk(elements.messages).some(e=>e.textContent==='That question is not supported'));
- assert.equal(earlier.children.length,3);                                      // a failed question is a card too; the others are untouched
+ assert.equal(earlier.children.length,4);                                      // a failed question is a card too; the others are untouched
 
  // 5. Ask the analyst is the live mode, offered only when the server has a key for one; Ask stays offline.
  vm.runInContext("config.live_modes=['anthropic'];updateScope()",context);assert.equal(elements.analyst.hidden,false);
  elements.question.value='Why slow?';elements.analyst.events.click();
- assert.equal(bodies[4].mode,'anthropic');assert.match(elements['card-meta'].textContent,/ · anthropic · asking…$/);
- elements.ask.events.submit({preventDefault(){}});assert.equal(bodies[5].mode,'offline');
- gates[4].ok();gates[5].ok();await tick();
+ assert.equal(bodies[5].mode,'anthropic');assert.match(elements['card-meta'].textContent,/ · anthropic · asking…$/);
+ elements.ask.events.submit({preventDefault(){}});assert.equal(bodies[6].mode,'offline');
+ gates[5].ok();gates[6].ok();await tick();
 
  // 6. "Clear the thread" empties it.
  elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);
