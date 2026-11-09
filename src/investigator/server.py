@@ -26,6 +26,7 @@ import time
 
 from .agent import Agent, Context, TOOL_SCHEMAS
 from .anthropic_provider import resolve_model
+from .evalboard import EvalBoard, evals_dir
 from .record_store import DEFAULT_MONTHS, default_store
 from .synth import production_days
 
@@ -35,6 +36,7 @@ WEB = Path(__file__).with_name('web')
 DAYS = [d.isoformat() for d in production_days(DEFAULT_MONTHS)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
 LIVE_MODES = ('openai', 'anthropic')
+EVAL_RUNS_PER_MIN = 120   # POST /api/evals/run, container-wide: a case is 10-100 ms offline, the whole set about 3 s once a minute
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
 
 
@@ -120,12 +122,18 @@ class Workbench:
         self.sessions = OrderedDict()
         self.datasets = OrderedDict()
         self.requests = deque()
+        self.eval_requests = deque()  # /api/evals/run has its own window, so browsing the golden set never spends the question limits
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
         self.rate_lock = threading.Lock()
         self.reports = OrderedDict()
         self.store = default_store()  # the two synthetic months, built once per process
         from .periods import PeriodReports
         self.periods = PeriodReports(self.store)
+        # The golden set behind /evals, read from the shipped evals/ folder; None when it is not there
+        # (a wheel installed without the repository), and the page and the badge are then absent.
+        folder = evals_dir()
+        self.evals = EvalBoard(folder, self.store.content_hash) if folder else None
+        self.evals_json = json.dumps(self.evals.board(), allow_nan=False).encode() if self.evals else None
 
     @staticmethod
     def _workbench_token(public):
@@ -397,13 +405,24 @@ def make_server(port=8765, public=None, host=None, guards=None):
                                        'public': public is not None, 'server_key_available': app.live_model_available,
                                        'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
-                                       'demo_guards': app.guards.summary})
+                                       'demo_guards': app.guards.summary,
+                                       'evals': app.evals.summary if app.evals else None})
+            if self.path == '/evals.json':
+                # The scoreboard as data, Datasette-style: public, read-only, and readable from another
+                # origin (the blog embeds it), so this one response carries Access-Control-Allow-Origin.
+                if app.evals is None:
+                    return self._send(404, {'error': 'The golden set is not shipped with this build'})
+                return self._send(200, app.evals_json, extra={'Access-Control-Allow-Origin': '*'})
             files = {'/': ('index.html', 'text/html; charset=utf-8'), '/guide': ('guide.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
+                     '/trail.js': ('trail.js', 'text/javascript; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
                      '/style.css': ('style.css', 'text/css; charset=utf-8')}
-            if self.path not in files:
+            path = self.path
+            if app.evals is not None and path.split('?', 1)[0] == '/evals':   # /evals?case=<id> opens that case: the URL is the state
+                path, files = '/evals', {'/evals': ('evals.html', 'text/html; charset=utf-8')}
+            if path not in files:
                 return self._send(404, {'error': 'Not found'})
-            filename, content_type = files[self.path]
+            filename, content_type = files[path]
             data = (WEB/filename).read_bytes()
             # Revalidate, never re-download: the browser keeps app.js and style.css and asks with
             # If-None-Match on each load; an unchanged file is a 304 with no body (issue #33).
@@ -428,7 +447,7 @@ def make_server(port=8765, public=None, host=None, guards=None):
                     return self._send(400, {'error': 'Incomplete request body'})
             except (ValueError, TimeoutError):
                 return self._send(400, {'error': 'Invalid or timed-out request body'})
-            if not self._host_ok() or self.path not in ('/api/ask', '/api/report'):
+            if not self._host_ok() or self.path not in ('/api/ask', '/api/report', '/api/evals/run'):
                 return self._send(403, {'error': 'Request not allowed'})
             if not self._origin_ok():
                 return self._send(403, {'error': 'Origin not allowed'})
@@ -441,11 +460,15 @@ def make_server(port=8765, public=None, host=None, guards=None):
                 if not 0 < length <= 16000:
                     return self._send(413, {'error': 'Request too large or empty'})
                 now = time.monotonic()
-                while app.requests and app.requests[0] < now-60:
-                    app.requests.popleft()
-                if len(app.requests) >= 60:
-                    return self._send(429, {'error': 'Local request limit reached; retry in a minute'})
-                app.requests.append(now)
+                # Eval runs are counted apart from questions (EVAL_RUNS_PER_MIN for everyone together): a visitor
+                # opening cases on /evals must not use up the question window or their own per-IP rounds.
+                window, limit = (app.eval_requests, EVAL_RUNS_PER_MIN) if self.path == '/api/evals/run' else (app.requests, 60)
+                while window and window[0] < now-60:
+                    window.popleft()
+                if len(window) >= limit:
+                    return self._send(429, {'error': 'Golden-case run limit reached; retry in a minute' if window is app.eval_requests
+                                            else 'Local request limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
+                window.append(now)
                 if self.path == '/api/ask':
                     app.client_round(self._client_ip())  # a round is counted even if the question is later rejected
                 self.connection.settimeout(5)
@@ -453,6 +476,14 @@ def make_server(port=8765, public=None, host=None, guards=None):
                 api_key = anthropic_key = None
                 if public is None:
                     api_key, anthropic_key = self.headers.get('X-OpenAI-Key'), self.headers.get('X-Anthropic-Key')
+                if self.path == '/api/evals/run':
+                    # Offline, or a replay of a recorded fixture: never a model call, whatever the server's keys.
+                    # The board takes app.lock itself (per case), so a whole-set run does not starve questions.
+                    if app.evals is None:
+                        return self._send(404, {'error': 'The golden set is not shipped with this build'})
+                    if not isinstance(payload, dict) or set(payload) not in ({'id'}, {'all'}) or payload.get('all', True) is not True:
+                        raise ValueError('Send {"id": "<case>"} or {"all": true}')
+                    return self._send(200, app.evals.run_all(app.lock) if 'all' in payload else app.evals.run_one(payload['id'], app.lock))
                 with app.lock:
                     if self.path == '/api/report':
                         body = app.pdf(payload)

@@ -275,3 +275,39 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
  td,th{min-width:80px}
 }
 @media(prefers-reduced-motion:no-preference){button{transition:filter .15s}}
+
+/* Golden evals page (/evals) and its badge on the investigator's left rail */
+.evals-badge{display:inline-flex;align-items:center;margin-top:10px;min-height:30px;padding:0 10px;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--ink-2);text-decoration:none}
+.evals-badge:hover{color:var(--accent);border-color:var(--accent)}
+.evals-page .card+.card{margin-top:14px}
+.evals-summary{margin:0 0 6px;font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--ink);overflow-wrap:anywhere}
+.evals-page .report-actions{align-items:center}
+#score-table tr.total td{font-weight:600;color:var(--ink);border-bottom:0}
+#trend-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}#trend-charts .chart{margin-top:0}
+.evals-filter{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.evals-filter .seg{flex-wrap:wrap}.evals-filter input{flex:1 1 200px;min-height:34px;padding:6px 10px;font-size:.88rem}
+.case{margin-top:0;border-top:1px solid var(--line-2);padding:4px 0}
+.case-sum{flex-wrap:wrap;gap:4px 8px;padding:6px 0;min-height:36px;font-weight:400}
+.case-id{font-size:12.5px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.type-chip{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.case-q{flex:1 1 100%;font-family:var(--sans);font-size:.9rem;color:var(--ink-2);overflow-wrap:anywhere}
+.outcome{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--neutral-soft);color:var(--ink-2);white-space:nowrap}
+.outcome.pass{background:var(--good-soft);color:var(--good)}.outcome.fail{background:var(--bad-soft);color:var(--bad)}.outcome.none{font-weight:500}
+.case-body{padding:4px 0 12px}
+.case-grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:18px}
+.case-col{min-width:0}.case-col h3{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500;margin:6px 0 8px}
+.case-col h4{font-size:.85rem;margin:14px 0 6px;font-weight:600;color:var(--ink-2)}
+.case-col p,.case-col li{font-size:.88rem;line-height:1.55;overflow-wrap:anywhere}.case-col p{margin:6px 0}
+.case-col ul,.case-col ol{margin:6px 0;padding-left:20px}
+.case-setup{font-size:12px!important;color:var(--ink-3)}.case-question{font-weight:500}
+.failures{color:var(--bad)}
+.run-box{border:1px solid var(--line-2);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.run-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.85rem}.run-head button{min-height:30px;font-size:12px}
+.result-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}.result-line .mono,.turn-facts{font-size:12px!important;color:var(--ink-2)}
+.turn{margin-top:10px}.recorded .tool{background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:12px}.recorded span{font-size:12px}
+@media(max-width:850px){
+ #trend-charts,.case-grid{grid-template-columns:1fr}
+ .evals-page .card{padding:14px}
+ .evals-filter .seg-btn{flex:1 1 auto;padding:0 8px}
+ #score-table td:nth-child(2),#score-table th:nth-child(2){min-width:180px}
+}

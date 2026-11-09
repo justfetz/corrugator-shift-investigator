@@ -15,7 +15,6 @@ function syncKeyLabel(){
  if(p)$('key-label-text').textContent=`${p.name} API key (optional if configured on server)`;
 }
 function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
-function node(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 function message(label, paragraphs, cls='') {
  const e=node('div',undefined,'message '+cls);e.append(node('strong',label));
@@ -445,48 +444,14 @@ async function primeKpis(){
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
 
-// ---- The tool trail: one row per tool call. Arguments, row count, coverage and timing on the row;
-// the exact SQL with its bound values and the full result JSON behind disclosures.
-const compactJson=value=>JSON.stringify(value,(k,v)=>v===null?null:v)||'';
+// The tool trail row (traceRow), node(), compactJson, dedent and sqlText live in trail.js, shared with the /evals page.
 let stepIndex=new Map();   // result_id -> step number of the latest answer, for the links from charts, tables and render_chart steps (#40)
-function traceRow(entry){
- const d=node('details',undefined,'trace-step '+(entry.ok?'ok':'failed')), data=entry.ok?entry.data:null;
- const rows=data?Array.isArray(data.rows)?data.rows.length:null:null;
- const sum=node('summary',undefined,'trace-sum');
- sum.append(node('code',entry.tool,'tool'));
- sum.append(node('span',compactJson(entry.arguments||{}),'args mono'));
- const facts=[];
- if(rows!==null)facts.push(`${rows} row${rows===1?'':'s'}`);
- if(data&&data.coverage)facts.push(data.coverage);
- if(typeof entry.elapsed_ms==='number')facts.push(`${entry.elapsed_ms.toFixed(1)} ms`);
- facts.push(entry.ok?'OK':'error');
- sum.append(node('span',facts.join(' · '),'facts mono'));
- d.append(sum);
- if(!entry.ok){d.append(node('p',`${entry.error?.code||'error'}: ${entry.error?.message||'tool call rejected'}`,'warning-note'));}
- else{
-  const meta=node('dl',undefined,'trace-meta');const add=(k,v)=>{if(v===undefined||v===null||v==='')return;meta.append(node('dt',k),node('dd',String(v)));};
-  if(data.window)add('Window',`${data.window.label} (${data.window.coverage})`+(data.previous_window?`; previous ${data.previous_window.label} (${data.previous_window.coverage})`:''));
-  if(data.shift!==undefined)add('Shift',data.shift===null?'all shifts':data.shift);
-  if(data.source_rows)add('Source rows',compactJson(data.source_rows));
-  if(data.excluded_records?.length)add('Excluded records',data.excluded_records.map(r=>`${r.record_id}: ${r.error}`).join('; '));
-  if(entry.tool==='render_chart')add('Chart',`${data.type}; x=${data.x}; y=${data.y}${data.y2?'; y2='+data.y2:''}; unit=${data.unit}; from ${data.source_result_id}`);
-  if(data.dataset_version)add('Dataset',String(data.dataset_version).slice(0,16)+'…');
-  if(meta.children.length)d.append(meta);
-  const sql=sqlText(entry);
-  if(sql){const q=node('details',undefined,'trace-sql');q.append(node('summary','SQL and bound values'));q.append(node('pre',sql));d.append(q);}
-  else if(entry.tool!=='render_chart'){d.append(node('p','No SQL: this tool composes other results.','muted'));}
- }
- const full=node('details',undefined,'trace-json');full.append(node('summary','Full result JSON'));full.append(node('pre',JSON.stringify(entry,null,2)));d.append(full);
- return d;
-}
 // ---- The query box (issue #40): the compact trace at the top of the answer, Datasette-style. One block
 // per tool step in order: tool(arguments) · rows · ms, then the exact parameterized SQL with its bound
 // values and a copy button. A few hundred bytes per step, so it is built with the answer, in the first
 // paint; the full per-step result ("What came back") stays below and is built after the paint (#33).
 // Read-only by design: the tools are parameterized (docs/AGENT_CONTRACT.md), so visitors cannot edit
 // and re-run the SQL here; the copy button is how someone re-runs it themselves.
-function dedent(sql){ const lines=String(sql).trim().split('\n'); const indent=Math.min(...lines.slice(1).filter(l=>l.trim()).map(l=>l.match(/^ */)[0].length),Infinity); return indent===Infinity?lines.join('\n'):[lines[0],...lines.slice(1).map(l=>l.slice(indent))].join('\n'); }   // the source's own indentation, not its Python string's
-function sqlText(entry){ const data=entry.ok?entry.data:null, sql=data&&(data.trace?.sql||data.daily_sql); if(!sql)return null; const params=data.trace?.parameters??data.daily_parameters; return dedent(sql)+(params?`\n\n-- bound values\n${JSON.stringify(params)}`:''); }
 function argText(args){ return Object.entries(args||{}).filter(([,v])=>v!==null&&v!==undefined).map(([k,v])=>`${k}=${k==='result_id'&&stepIndex.has(v)?`query ${stepIndex.get(v)+1}`:typeof v==='object'?compactJson(v):String(v)}`).join(', '); }   // a result id reads as the query it names
 function stepFacts(entry){ const data=entry.ok?entry.data:null, rows=data&&Array.isArray(data.rows)?data.rows.length:null, facts=[]; if(rows!==null)facts.push(`${rows} row${rows===1?'':'s'}`); if(typeof entry.elapsed_ms==='number')facts.push(`${entry.elapsed_ms.toFixed(1)} ms`); if(!entry.ok)facts.push('error'); return facts; }
 function phoneWidth(){ try{return typeof matchMedia==='function'&&matchMedia('(max-width:850px)').matches;}catch(e){return false;} }
@@ -611,6 +576,8 @@ async function init(){
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
  applyPublicMode();updateScope(); $('submit').disabled=false;primeKpis();
+ // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
+ if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}

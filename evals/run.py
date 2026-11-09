@@ -42,6 +42,7 @@ import subprocess
 import math
 import os
 import re
+import shutil
 import sys
 import tempfile
 import time
@@ -641,6 +642,22 @@ def default_provider():
 # ---------------------------------------------------------------- running one case
 
 def run_case(case, provider=None, live=False, record=False):
+    """(outcome, failures, note, ms): `run_case_detail` without the turn results."""
+    return run_case_detail(case, provider, live, record)[:4]
+
+
+def run_case_detail(case, provider=None, live=False, record=False):
+    """`_run_case` plus the agent's result for each turn that ran (the /evals page draws its tool
+    trail from them). The temporary budget ledger of a live or replayed run is removed afterwards."""
+    scratch = []
+    try:
+        return _run_case(case, provider, live, record, scratch)
+    finally:
+        for folder in scratch:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def _run_case(case, provider, live, record, scratch):
     """Return (outcome, failures, note, ms) with outcome in pass/fail/skip/xfail and
     ms the wall time of the agent's turns (0 when the case did not run).
 
@@ -656,6 +673,7 @@ def run_case(case, provider=None, live=False, record=False):
     if provider and 'expect_live' in case:
         expect = case['expect_live']
     allowed = [shift] if scope == 'shift' else [1, 2, 3]
+    results = []
     turns = case.get('turns') or [case.get('question') or f'value golden: {case.get("tool")}']
     mode = 'live' if provider else 'offline'
     note, warnings, exchanges = '', set(), []
@@ -664,7 +682,7 @@ def run_case(case, provider=None, live=False, record=False):
         if case['type'] == 'value':
             stale = stale_values()
             if stale:
-                return 'fail', [stale], '', 0.0
+                return 'fail', [stale], '', 0.0, results
 
             def make_agent(analysis):
                 return Agent(analysis, planner=ScriptedPlanner(case['tool'], case['arguments']))
@@ -677,7 +695,7 @@ def run_case(case, provider=None, live=False, record=False):
         if live:
             key = os.environ.get(spec['env'])
             if not key:
-                return 'skip', [], f'{spec["env"]} not set', 0.0
+                return 'skip', [], f'{spec["env"]} not set', 0.0, results
             send = spec['record'](exchanges)
         elif fixture.exists():
             recording = json.loads(fixture.read_text())
@@ -687,18 +705,19 @@ def run_case(case, provider=None, live=False, record=False):
             recorded_dataset, live_dataset = recording.get('dataset_version'), dataset_version()
             if recorded_dataset != live_dataset:
                 return 'skip', [], (f'stale recording: dataset {str(recorded_dataset)[:12] if recorded_dataset else "unversioned"} '
-                                    f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}'), 0.0
+                                    f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}'), 0.0, results
             exchanges = recording['exchanges']
             send = spec['replay'](exchanges, warnings)
             key = spec['replay_key']
         else:
-            return 'skip', [], f'no {provider} fixture; run --live --provider {provider} to record', 0.0
-        ledger = Path(tempfile.mkdtemp()) / 'budget.sqlite3'
+            return 'skip', [], f'no {provider} fixture; run --live --provider {provider} to record', 0.0, results
+        scratch.append(tempfile.mkdtemp())
+        ledger = Path(scratch[-1]) / 'budget.sqlite3'
 
         def make_agent(analysis):
             return Agent(analysis, planner=spec['planner'](key, ledger, send), max_calls=10, max_seconds=60)
 
-    results, analysis, ms = [], None, 0.0
+    analysis, ms = None, 0.0
     try:
         analysis = dataset(day, case.get('corrupt', False))
         context = Context(day, shift)
@@ -714,10 +733,10 @@ def run_case(case, provider=None, live=False, record=False):
         want = expect.get('raises')
         if want and re.search(want, str(exc), re.I):
             slow = latency_failures(expect, provider, ms)
-            return ('fail' if slow else 'pass'), slow, f'refused: {str(exc)[:60]}', ms
-        return 'fail', [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], '', ms
+            return ('fail' if slow else 'pass'), slow, f'refused: {str(exc)[:60]}', ms, results
+        return 'fail', [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], '', ms, results
     if expect.get('raises'):
-        return 'fail', [f'did not raise; status {results[-1]["status"]}'], '', ms
+        return 'fail', [f'did not raise; status {results[-1]["status"]}'], '', ms, results
 
     failures = latency_failures(expect, provider, ms)
     for result in results:
@@ -743,10 +762,10 @@ def run_case(case, provider=None, live=False, record=False):
     if warnings:
         note += '; ' + '; '.join(sorted(warnings))
     if failures and case.get('known_defect'):
-        return 'xfail', failures, 'known defect: ' + case['known_defect'], ms
+        return 'xfail', failures, 'known defect: ' + case['known_defect'], ms, results
     if not failures and case.get('known_defect'):
         note += '; known_defect marker is stale: the case passes, remove the marker'
-    return ('fail' if failures else 'pass'), failures, note, ms
+    return ('fail' if failures else 'pass'), failures, note, ms, results
 
 
 def latency_failures(expect, provider, ms):
@@ -799,6 +818,11 @@ def main(argv=None):
     parser.add_argument('--track', action='store_true', help='append one line per run to evals/history.jsonl (commit, dataset, model, pass rate per type, cost)')
     args = parser.parse_args(argv)
 
+    if args.track and args.only:
+        # history.jsonl and last_run.json describe whole-set runs: the /evals page and the main page's badge
+        # read the newest line as the score of the set, so a subset must never be appended.
+        print('--track records a whole-set run; it cannot be combined with --only')
+        return 2
     provider = args.provider or default_provider()
     if args.live and provider is None:
         print('--live needs exactly one of ' + ' / '.join(s['env'] for s in PROVIDERS.values()) + ' set, or --provider')
@@ -877,13 +901,25 @@ def main(argv=None):
         HISTORY.parent.mkdir(parents=True, exist_ok=True)
         with HISTORY.open('a') as out:
             out.write(json.dumps(line, separators=(',', ':')) + '\n')
-        print(f'tracked in {HISTORY.relative_to(ROOT)}: ' + ', '.join(f'{k} {v["pass"]}/{v["pass"] + v["fail"]}' for k, v in line['offline'].items())
+        LAST_RUN.write_text(json.dumps(last_run(rows, line), indent=1) + '\n')
+        print(f'tracked in {HISTORY.relative_to(ROOT)} (rows in {LAST_RUN.relative_to(ROOT)}): ' + ', '.join(f'{k} {v["pass"]}/{v["pass"] + v["fail"]}' for k, v in line['offline'].items())
               + (f'; latency p50 {line["latency_ms"]["p50"]:.0f} ms, p95 {line["latency_ms"]["p95"]:.0f} ms' if line['latency_ms']['p50'] is not None else '')
               + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items()))
     return failed + breaches
 
 
 HISTORY = ROOT / 'evals' / 'history.jsonl'
+
+
+LAST_RUN = ROOT / 'evals' / 'last_run.json'
+
+
+def last_run(rows, line):
+    """The rows behind the newest history line: id, case, type, provider, outcome and ms per row.
+    `ran_at` and `commit` are that line's, so a reader can tell the two files belong together; the
+    /evals page shows each case's result from here without running anything."""
+    return {'ran_at': line['ran_at'], 'commit': line['commit'], 'dataset': line['dataset'],
+            'rows': [{k: r[k] for k in ('id', 'case', 'type', 'provider', 'mode', 'outcome', 'ms', 'note')} for r in rows]}
 
 
 def offline_latency(rows):

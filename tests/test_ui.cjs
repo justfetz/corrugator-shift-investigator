@@ -13,8 +13,8 @@ class Element {
 const elements=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
 Object.assign(elements.day,{value:'2026-09-14'});elements.period.value='day';elements.shift.value='2';elements.scope.value='shift';elements.mode.value='offline';
 const document={getElementById:id=>{assert.ok(elements[id],`Unknown control ${id}`);return elements[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[]};
-const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test'})}),window:{addEventListener(){}},console,setTimeout,URL,Blob,AbortController};
-vm.createContext(context);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),context);
+const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test',evals:{badge:'160/160 golden · 12 ms p50',ran_at:'2026-11-09T19:21Z',commit:'abc1234'}})}),window:{addEventListener(){}},console,setTimeout,URL,Blob,AbortController};
+vm.createContext(context);vm.runInContext(fs.readFileSync("src/investigator/web/trail.js","utf8"),context);vm.runInContext(fs.readFileSync("src/investigator/web/app.js","utf8"),context);   // trail.js first, as index.html loads them
 vm.runInContext('updateScope()',context);assert.equal(elements['scope-help'].textContent,'Monday 14 Sep 2026 · shift 2 · 15:00–23:00 · compared with Friday 11 Sep');
 elements.scope.value='day';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/all three shifts · 24 hours from 07:00 · compared with Friday 11 Sep/);
 elements.scope.value='shift';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/shift 2/);
@@ -318,4 +318,90 @@ console.log('UI issue-36 checks passed: light by default, pinned theme wins, tog
  await vm.runInContext("(()=>{const h={'X-OpenAI-Key':'sk-visitor'};const p=post('/api/ask',{question:'probe-17'},h);delete h['X-OpenAI-Key'];return p;})()",context);
  assert.deepEqual(seen,['sk-visitor','sk-visitor']);
  console.log('UI issue-17 checks passed: 403 refreshes the token once and resends.');
+})().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #26: the /evals page. Every case is listed once, the score and trend come from the board, opening a case
+// runs it through POST /api/evals/run and draws the trail with the main page's traceRow, and the page fetches nothing else.
+(async()=>{
+ const page=fs.readFileSync('src/investigator/web/evals.html','utf8'), src=fs.readFileSync('src/investigator/web/evals.js','utf8');
+ const els=Object.fromEntries([...page.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+ const run=(id,mode,provider,last,recording)=>({id,mode,provider,last,...(provider?{recording}:{})});
+ const kase=(id,type,runs,extra={})=>({id,type,mode:runs[0].mode,also_live:runs.length>1,question:'Why was this shift slow?',turns:['Why was this shift slow?'],call:null,day:'2026-09-14',scope:'shift',shift:2,period:'day',corrupt:false,note:null,known_defect:null,expected:['Ends with status "complete"','Calls get_downtime_breakdown for shift 2 by reason'],runs,...extra});
+ const rec={provider:'anthropic',models:['claude-haiku-5-5'],recorded_status:'complete',recorded_cost_usd:0.0047,model_responses:2,stale:false};
+ const hist=(ran_at,p50)=>({ran_at,commit:'abc1234',dataset:'d9143ff1d150',passed:4,failed:0,skipped:0,total:4,pass_rate_pct:100,p50_ms:p50,p95_ms:p50===null?null:50,recorded_cost_usd:0.04,models:['claude-haiku-5-5'],exit:0});
+ const board={badge:'4/4 golden · 12 ms p50',dataset_hash:'d9143ff1d15029b5',counts:{cases:3,runs:4,by_type:{routing:2,value:1},recordings:2},thresholds:{offline_latency_ms:{p50:100,p95:250}},types:['routing','faithfulness','value'],
+  history:[hist('2026-10-29T15:02Z',null),hist('2026-11-09T18:02Z',12.6),hist('2026-11-09T19:21Z',11.5)],last_run:hist('2026-11-09T19:21Z',11.5),
+  cases:[kase('why-slow','routing',[run('why-slow','offline',null,{outcome:'pass',ms:11,note:''}),run('why-slow@anthropic','live','anthropic',{outcome:'pass',ms:40,note:''},rec)]),
+   kase('live-why-slow','routing',[run('live-why-slow@anthropic','live','anthropic',null,rec)]),
+   kase('value-kpis','value',[run('value-kpis','offline',null,{outcome:'fail',ms:300,note:''})],{question:null,turns:[],call:'get_period_kpis for all shifts over the month containing 2026-09-14'})]};
+ const result=id=>({id,case:id.split('@')[0],type:'routing',mode:id.includes('@')?'live':'offline',provider:id.includes('@')?'anthropic':null,outcome:'pass',failures:[],note:'complete, 2 tool calls',ms:9.4,ran_at:'2026-11-09T20:00:00Z',model_called:false,
+  turns:[{question:'Why was this shift slow?',status:'complete',mode:'offline',sections:['Shift 2: 600 ft/min.'],narrative:[],usage:{tool_calls:2,model_calls:0},trace:[{tool:'get_shift_kpis',ok:true,elapsed_ms:1,arguments:{shift:2},data:{shift:2,coverage:'complete',rows:[{}]}},{tool:'get_downtime_breakdown',ok:true,elapsed_ms:1,arguments:{shift:2,group_by:'reason'},data:{shift:2,coverage:'complete',rows:[]}}]}],
+  ...(id.includes('@')?{recording:{...rec,exchanges:[{model:'claude-haiku-5-5',http_status:200,calls:[{tool:'get_shift_overview',arguments:{shift:2}}],text:''},{model:'claude-haiku-5-5',http_status:200,calls:[],text:'done'}]}}:{})});
+ const calls=[], urls=[];
+ const fetchStub=async(path,init)=>{
+  calls.push([init&&init.method||'GET',path,init&&init.body?JSON.parse(init.body):null,init&&init.headers?init.headers['X-Workbench-Token']:undefined]);
+  if(path==='/evals.json')return {ok:true,status:200,json:async()=>board};
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'tok'})};
+  const body=JSON.parse(init.body);
+  if(body.all)return {ok:true,status:200,json:async()=>({ran_at:'2026-11-09T20:01:00Z',total:4,passed:3,failed:1,skipped:0,latency_ms:{p50:10,p95:40},model_called:false,cached:false,rows:board.cases.flatMap(c=>c.runs).map(r=>({id:r.id,case:r.id.split('@')[0],type:'routing',provider:r.provider,outcome:r.id==='value-kpis'?'fail':'pass',failures:[],note:'',ms:10}))})};
+  return {ok:true,status:200,json:async()=>result(body.id)};
+ };
+ const doc={getElementById:id=>{assert.ok(els[id],`Unknown evals control ${id}`);return els[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag)};
+ const ctx={document:doc,fetch:fetchStub,window:{innerWidth:390,location:{search:'?case=why-slow%40anthropic'},history:{replaceState:(a,b,url)=>urls.push(url)}},console,URLSearchParams};
+ vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx);vm.runInContext(src,ctx);
+ await vm.runInContext('ready',ctx);
+ const all=(el,out=[])=>{for(const c of el.children||[]){out.push(c);all(c,out);}return out;};
+ // every case once, with the last tracked result on its chip
+ assert.deepEqual(els.cases.children.map(d=>d.id),['case-why-slow','case-live-why-slow','case-value-kpis']);
+ assert.match(els.summary.textContent,/^4\/4 golden · 12 ms p50 · 3 cases, 4 runs \(1 cases run both offline and against a recording\) · last tracked run 2026-11-09 19:21 UTC at commit abc1234 · dataset d9143ff1d150$/);
+ assert.equal(els['case-count'].textContent,'3 of 3 cases');
+ const chipTexts=d=>all(d.children[0]).filter(e=>/^outcome\b/.test(e.className)).map(e=>e.textContent);
+ assert.deepEqual(chipTexts(els.cases.children[2]),['offline · fail · 300 ms']);
+ assert.deepEqual(chipTexts(els.cases.children[1]),['anthropic replay · not in the last tracked run']);
+ // the score table: a row per type that has cases, then the total over runs
+ const scoreRows=els['score-table'].children[1].children.map(tr=>tr.children.map(td=>td.textContent));
+ assert.deepEqual(scoreRows.map(r=>[r[0],r[2],r[3],r[4]]),[['routing','2','2/2','—'],['value','1','0/1','—'],['all','3','2/3','—']]);
+ // the trend: one chart per measure; the run without a recorded p50 is left out of the latency line and said so
+ const [rate,latency]=els['trend-charts'].children;
+ assert.equal(all(rate).filter(e=>e.class==='dot').length,3);assert.equal(all(latency).filter(e=>e.class==='dot').length,2);
+ assert.equal(all(rate).filter(e=>e.class==='line').length,1);assert.ok(all(latency).some(e=>e.tag==='text'&&e.textContent==='11.5 ms'));
+ assert.ok(all(latency).some(e=>/1 earlier run did not record it/.test(e.textContent)));assert.equal(els['trend-note'].textContent,'3 tracked runs');
+ // ?case=why-slow@anthropic opened that case on load and ran both of its rows here, with the token
+ const first=els.cases.children[0];
+ assert.equal(first.open,true);
+ assert.deepEqual(calls.filter(c=>c[0]==='POST').map(c=>[c[1],c[2].id,c[3]]),[['/api/evals/run','why-slow','tok'],['/api/evals/run','why-slow@anthropic','tok']]);
+ assert.equal(all(first).filter(e=>/^trace-step ok$/.test(e.className)).length,4);          // two trail rows per run, drawn by the main page's traceRow
+ assert.ok(all(first).some(e=>e.className==='tool'&&e.textContent==='get_downtime_breakdown'));
+ assert.ok(all(first).some(e=>/Calls get_downtime_breakdown for shift 2 by reason/.test(e.textContent)));   // expected, in plain words, beside it
+ assert.ok(all(first).some(e=>/recorded cost \$0\.0047\. No model was called now/.test(e.textContent)));    // the recording and its cost
+ assert.deepEqual(chipTexts(first),['offline · pass · 9 ms','anthropic replay · pass · 9 ms']);
+ // opening a second case runs it once; reopening does not run it again; "Run again" does
+ const second=els.cases.children[1];second.open=true;await second.events.toggle();await second.events.toggle();
+ assert.equal(calls.filter(c=>c[2]&&c[2].id==='live-why-slow@anthropic').length,1);assert.equal(urls[urls.length-1],'/evals?case=live-why-slow');
+ await all(second).find(e=>e.tag==='button'&&e.textContent==='Run again').events.click();
+ assert.equal(calls.filter(c=>c[2]&&c[2].id==='live-why-slow@anthropic').length,2);
+ // the type filter hides the other cases and is carried in the URL
+ els['type-filter'].children.find(b=>b.dataset.value==='value').events.click();
+ assert.deepEqual(els.cases.children.map(d=>d.hidden),[true,true,false]);assert.equal(els['case-count'].textContent,'1 of 3 cases');assert.equal(urls[urls.length-1],'/evals?type=value');
+ els.search.value='nothing-matches';els.search.events.input();assert.equal(els['case-count'].textContent,'0 of 3 cases');
+ els.search.value='';els['type-filter'].children[0].events.click();assert.equal(els['case-count'].textContent,'3 of 3 cases');
+ // Run all: one POST, the chips and the "this server, now" column follow it
+ await els['run-all'].events.click();
+ assert.deepEqual(calls[calls.length-1].slice(0,3),['POST','/api/evals/run',{all:true}]);
+ assert.match(els['run-status'].textContent,/3\/4 passed, 1 failed \(value-kpis\) · offline p50 10 ms, p95 40 ms · no model called$/);
+ assert.deepEqual(els['score-table'].children[1].children.map(tr=>tr.children[4].textContent),['3/3','0/1','3/4']);
+ assert.equal(els['run-all'].disabled,false);
+ // no model calls from the page: it talks to these three paths on its own origin and nothing else
+ assert.deepEqual([...new Set(calls.map(c=>c[0]+' '+c[1]))].sort(),['GET /api/config','GET /evals.json','POST /api/evals/run']);
+ assert.deepEqual([...new Set([...src.matchAll(/fetch\(([^,)]+)/g)].map(m=>m[1]))].sort(),["'/api/config'","'/api/evals/run'","'/evals.json'"]);
+ assert.ok(!/https?:\/\//.test(src)||!/anthropic\.com|openai\.com/.test(src));assert.ok(!/X-(OpenAI|Anthropic)-Key/.test(src));
+ // the page is built for a phone: a viewport meta, a 420-wide chart box under 850 px, single-column grids in the stylesheet
+ assert.ok(page.includes('name="viewport" content="width=device-width, initial-scale=1"'));
+ assert.ok(all(rate).some(e=>e.tag==='svg'&&e.viewBox==='0 0 420 200'));
+ assert.match(css,/@media\(max-width:850px\)\{\s*#trend-charts,\.case-grid\{grid-template-columns:1fr\}/);
+ // and the main page carries the badge
+ assert.match(html,/<a id="evals-badge" class="evals-badge" href="\/evals" hidden><\/a>/);
+ assert.equal(elements['evals-badge'].textContent,'160/160 golden · 12 ms p50 →');assert.equal(elements['evals-badge'].hidden,false);assert.equal(elements['evals-foot'].hidden,false);   // set by init() from /api/config
+ assert.match(elements['evals-badge'].title,/last tracked run 2026-11-09T19:21Z at commit abc1234/);
+ console.log('UI issue-26 checks passed: every case once, score table, trend, case run with the shared trail row, filter, Run all, no fetch beyond the three paths.');
 })().catch(error=>{console.error(error);process.exit(1);});
