@@ -35,7 +35,7 @@ As of the period-scope change (the Period control is part of the question's scop
 
 How the golden set is made is written up in [HOW_THIS_IS_BUILT](HOW_THIS_IS_BUILT.md) and `evals/README.md`: expected numbers come from a second, plain computation over the record families, never from the tools under test, and the file carries the dataset hash so a stale golden fails loudly.
 
-The UI stub does not parse CSS, calculate contrast, enforce CSP, download a real file, or execute in a browser. PDF signatures do not prove page layout. Provider mocks do not prove that a live model chooses useful tools. Keep these distinctions in test reports.
+The UI stub reads the stylesheet's light tokens only to compute WCAG contrast ratios for the chart colours and inks on the chart panel (issue #36); it does not apply CSS, enforce CSP, download a real file, or execute in a browser. PDF signatures do not prove page layout. Provider mocks do not prove that a live model chooses useful tools. Keep these distinctions in test reports.
 
 ## Reproduce the review findings
 
