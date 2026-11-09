@@ -37,6 +37,7 @@ python -m investigator.server --port 7860            # local workbench at http:/
 ## How sessions work
 
 - One issue, one session, one PR. Branch `issue-<n>-<slug>`. Claude never merges on its own; the owner reviews with `/review-pr <n>` and merges by running `/approve-pr <n>`, which checks CI, the eval diff and the review verdict first.
+- To catch a branch up with `main`, merge `main` into it and push; never rebase a pushed branch. Force pushes are denied by `.claude/settings.json`, so a rebase strands the work on a branch nobody can update.
 - Start by reading this file and the issue, then run the tests and evals before changing anything so the baseline is known.
 - Done when: tests pass; `python3 evals/run.py` passes with no case removed or weakened; each acceptance criterion in the issue is demonstrated in the PR description with the command and its output; docs the change touches are updated in the same PR.
 - PR description: what changed, how it was tested (paste the eval table), and the eval and latency delta. A few minutes after the PR opens, the Preview workflow comments a URL where that PR runs; look at it in a browser for any change a visitor would see, and quote what you checked.
