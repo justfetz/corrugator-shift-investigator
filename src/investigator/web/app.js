@@ -158,6 +158,8 @@ function renderQuestionChips(){
  }
 }
 function svgNode(tag, attrs, text) { const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text!==undefined)e.textContent=text;return e; }
+const HEAT_RGB=[8,127,117], LIGHT_SURFACE=[252,252,251];
+const heatLuminance=alpha=>HEAT_RGB.map((c,i)=>(alpha*c+(1-alpha)*LIGHT_SURFACE[i])/255).map(v=>v<=.03928?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
 function showHeatmap(chart) {
  const wrap=node('div',undefined,'chart heatmap');wrap.append(node('h3','Output heatmap'),node('p',chart.title,'muted'));
  wrap.append(node('p','Darker cells mean more estimated good square feet. Hover or focus a day for output, downtime, KPIs and the largest recorded downtime contributor.','muted'));
@@ -168,9 +170,12 @@ function showHeatmap(chart) {
  const grid=node('div',undefined,'heatmap-grid');const first=new Date(chart.rows[0].day+'T00:00:00Z').getUTCDay();for(let i=0;i<first;i++)grid.append(node('span',undefined,'heatmap-blank'));
  const tip=node('p','Choose a day.','heatmap-tip');tip.setAttribute('aria-live','polite');
  for(const row of chart.rows){
-  const cell=node('button',String(Number(row.day.slice(-2))),'heatmap-cell'+(row.available?'':' missing'));cell.type='button';
+  const alpha=row.available?.22+(max===min?1:(row.estimated_good_sqft-min)/(max-min))*.78:0;
+  // The day number is black on light cells and white on deep ones: the flip is where the teal blended over the
+  // light surface crosses relative luminance 0.179, the point where black and white both read at 4.58:1 (#36).
+  const cell=node('button',String(Number(row.day.slice(-2))),'heatmap-cell'+(row.available?(heatLuminance(alpha)<.179?' deep':''):' missing'));cell.type='button';
   // Assign the CSS property directly: style attributes are blocked by our CSP.
-  if(row.available){const density=max===min?1:(row.estimated_good_sqft-min)/(max-min);cell.style.backgroundColor=`rgba(8, 127, 117, ${(.22+density*.78).toFixed(3)})`;}
+  if(row.available)cell.style.backgroundColor=`rgba(8, 127, 117, ${alpha.toFixed(3)})`;
   const detail=row.available?`${row.day}: estimated good ${row.estimated_good_sqft.toLocaleString(undefined,{maximumFractionDigits:0})} sq ft; gross ${row.gross_sqft.toLocaleString(undefined,{maximumFractionDigits:0})} sq ft; speed ${row.speed_to_target_pct.toFixed(1)}% of target; downtime ${row.downtime_pct.toFixed(2)}%; maintenance ${row.maintenance_pct.toFixed(2)}%; operator ${row.operator_pct.toFixed(2)}%; dry-end ${row.dry_end_pct.toFixed(2)}%; trim ${row.trim_pct.toFixed(2)}%; shear ${row.shear_pct.toFixed(2)}%; ${row.paper_changes} paper changes; heavy hitter ${row.heavy_hitter}, ${row.heavy_hitter_minutes.toFixed(1)} minutes across ${row.heavy_hitter_stops} stops.`:`${row.day}: no complete synthetic record available.`;
   const tooltip=row.available?detail+` Dry-end setups: ${row.valid_setups}.`:detail;
   cell.title=tooltip;cell.setAttribute('aria-label',tooltip);for(const event of ['mouseenter','focus','click'])cell.addEventListener(event,()=>{tip.textContent=tooltip;});grid.append(cell);
@@ -281,7 +286,7 @@ function wasteChart(chart,wrap){
    labelText(svg,s.name==='current'?'Dry-end now':'Dry-end previous',f.x0-8,y+18,f.chars);
    s.segments.forEach((seg,j)=>{const w=(seg.value/max)*(f.x1-f.x0); const gap=j<s.segments.length-1?2:0;
     const rect=svgNode('rect',{x,y:y+5,width:Math.max(0,w-gap),height:16,class:'seg '+seg.cls});rect.append(svgNode('title',{},`${seg.k}: ${fmtVal(seg.value,unit)}`));svg.append(rect);
-    const inside=`${seg.k} ${seg.value.toFixed(2)}`; if(w>inside.length*6.8+14)svg.append(svgNode('text',{x:x+6,y:y+17,class:'inseg'},inside));x+=w;});
+    const inside=`${seg.k} ${seg.value.toFixed(2)}`; if(w>inside.length*6.8+14)svg.append(svgNode('text',{x:x+6,y:y+17,class:'inseg '+seg.cls},inside));x+=w;});
    const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,class:'val','aria-label':`${s.name}: dry-end ${fmtVal(total,unit)} = `+s.segments.map(v=>`${v.k} ${fmtVal(v.value,unit)}`).join(', ')},fmtVal(total,unit));svg.append(t);});
   wrap.append(node('p',`Dry-end rejects split by recorded reason; the ${parts.length} segments add to the dry-end total.`,'muted'),svg,legend(parts.map(([k,cls])=>[cls,k])));
  }

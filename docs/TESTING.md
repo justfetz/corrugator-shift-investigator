@@ -23,7 +23,7 @@ The implementation follow-up passed 106 backend tests plus UI, syntax and whites
 | `test_archive.py` | Synthetic archive dates, manifests, reproducibility and run/setup counts |
 | `test_openai_provider.py` | Scripted provider responses, schema/payload handling, key hygiene, time/call limits and budget reservations |
 | `test_server.py` | Local HTTP protections, daily round trip, retained-report access, control references, `/api/config` calendar fields, weekend and out-of-range day refusals |
-| `test_ui.cjs` | DOM-stub rendering, direct density colors, day detail events, legend, reset and controls |
+| `test_ui.cjs` | DOM-stub rendering, direct density colors and the deep-cell ink flip, day detail events, legend, reset and controls, the light-by-default theme and the pinned toggle (issue #36) |
 | `test_synth_determinism.py` | Same seed gives byte-identical record families; the pinned content hash of the default two months |
 | `test_records_invariants.py` | Physics and accounting invariants of every record, the seeded effects visible in the data, and the rule that no tool layer imports the answer keys |
 | `test_record_store.py` | Per-day tool tables reconcile to the record families by plain Python sums: shift totals, split setups, stops/orders/rejects field by field, the corrupt flag, weekend refusal |
