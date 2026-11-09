@@ -13,8 +13,8 @@ class Element {
 const elements=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
 Object.assign(elements.day,{value:'2026-09-14'});elements.period.value='day';elements.shift.value='2';elements.scope.value='shift';elements.mode.value='offline';
 const document={getElementById:id=>{assert.ok(elements[id],`Unknown control ${id}`);return elements[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[]};
-const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test',evals:{badge:'160/160 golden · 12 ms p50',ran_at:'2026-11-09T19:21Z',commit:'abc1234'}})}),window:{addEventListener(){}},console,setTimeout,URL,Blob,AbortController};
-vm.createContext(context);vm.runInContext(fs.readFileSync("src/investigator/web/trail.js","utf8"),context);vm.runInContext(fs.readFileSync("src/investigator/web/app.js","utf8"),context);   // trail.js first, as index.html loads them
+const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test',evals:{badge:'160/160 golden · 12 ms p50',ran_at:'2026-11-09T19:21Z',commit:'abc1234'}})}),window:{addEventListener(){}},console,setTimeout,URL,URLSearchParams,Blob,AbortController};
+vm.createContext(context);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),context);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),context);   // trail.js first, as index.html loads them
 vm.runInContext('updateScope()',context);assert.equal(elements['scope-help'].textContent,'Monday 14 Sep 2026 · shift 2 · 15:00–23:00 · compared with Friday 11 Sep');
 elements.scope.value='day';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/all three shifts · 24 hours from 07:00 · compared with Friday 11 Sep/);
 elements.scope.value='shift';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/shift 2/);
@@ -318,6 +318,123 @@ console.log('UI issue-36 checks passed: light by default, pinned theme wins, tog
  await vm.runInContext("(()=>{const h={'X-OpenAI-Key':'sk-visitor'};const p=post('/api/ask',{question:'probe-17'},h);delete h['X-OpenAI-Key'];return p;})()",context);
  assert.deepEqual(seen,['sk-visitor','sk-visitor']);
  console.log('UI issue-17 checks passed: 403 refreshes the token once and resends.');
+})().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #20: the address bar is the state. Offline questions are GETs of /q (the server redirects to the canonical
+// URL and answers it), the page pushes that URL, back/forward re-render a shown view without a request, a pasted
+// address sets the controls and fetches its .json, and the example chips are links to their /q address.
+(async()=>{
+ const guard=setTimeout(()=>{console.error('UI issue-20 checks did not finish: a promise never settled');process.exit(1);},8000);
+ await new Promise(r=>setTimeout(r,80));
+ const history=[], fetched=[];
+ const location={pathname:'/',search:''};   // the home address: init() replaces it with the scope's own
+ const win={history:{pushState(state,_,url){history.push(['push',url]);const [p,q='']=url.split('?');location.pathname=p;location.search=q?'?'+q:'';},
+                      replaceState(state,_,url){history.push(['replace',url]);const [p,q='']=url.split('?');location.pathname=p;location.search=q?'?'+q:'';}},
+            location,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
+ const answer=(url,extra={})=>({run_id:'r-'+url,production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',url,sections:['Shift 2: 600.0 ft/min.'],context:{history:[]},usage:{tool_calls:2,model_calls:0},trace:[],tables:[],charts:[],report_markdown:'# x',...extra});
+ context.fetch=async(path,init)=>{fetched.push([path,init&&init.headers&&init.headers.Accept]);
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-11','2026-09-14','2026-09-15'],first_day:'2026-08-03',last_day:'2026-09-30',demo_guards:{max_turns:4,rate_limit_per_min:0}})};
+  if(path.startsWith('/q?')){const q=new URLSearchParams(path.slice(3));const url=`/corr/1/day/${q.get('day')}/shift/${q.get('shift')}?measure=${q.get('q').includes('slow')?'overview':'fpm'}`+q.getAll('after').map(a=>'&after='+encodeURIComponent(a)).join('');return {ok:true,status:200,url,json:async()=>answer(url)};}
+  if(path.startsWith('/corr/')){const page=path.replace('.json','');if(page.includes('measure=kpis'))return {ok:true,status:200,json:async()=>answer(page,{trace:[]})};return {ok:true,status:200,json:async()=>answer(page)};}
+  return {ok:false,status:404,json:async()=>({error:'no'})};
+ };
+ // a fresh page with the window stubs: init() replaces the home address with the bare scope address and primes the tiles
+ const ctx2={...context,window:win,document:context.document,location,requestAnimationFrame:undefined};delete ctx2.requestAnimationFrame;
+ vm.createContext(ctx2);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx2);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx2);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(history,[['replace','/corr/1/day/2026-09-14/shift/2']]);
+ assert.ok(fetched.some(f=>f[0]==='/corr/1/day/2026-09-14/shift/2.json?measure=kpis'&&f[1]==='application/json'),'the tiles are the kpis measure of the scope address: '+JSON.stringify(fetched));
+ // chips are links to their /q address in the current scope, disabled ones say so
+ const chip=elements.examples.children[1].children[1].children[0];
+ assert.equal(chip.tag,'a');assert.equal(chip['role'],'button');assert.equal(chip['aria-disabled'],'false');
+ assert.equal(chip.href,'/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F+Chart+downtime+by+reason.');
+ const compareChip=elements.examples.children.flatMap(g=>g.children[1].children).find(b=>b.dataset.question==='Compare all shifts');
+ assert.equal(compareChip.href,'/q?day=2026-09-14&shift=2&scope=day&period=day&q=Compare+all+shifts');   // its own scope override
+ // an offline question is a GET of /q with Accept: application/json; the answer's address is pushed and remembered
+ fetched.length=0;history.length=0;
+ const first=await vm.runInContext("ask('Why was this shift slow?')",ctx2);
+ assert.equal(first.url,'/corr/1/day/2026-09-14/shift/2?measure=overview');
+ assert.deepEqual(fetched[0],['/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F','application/json']);
+ assert.deepEqual(history,[['push','/corr/1/day/2026-09-14/shift/2?measure=overview']]);
+ assert.equal(ctx2.location.search,'?measure=overview');
+ assert.equal(elements.pdf.disabled,false);
+ // the follow-up carries the prior view as after=, and the chips' links do too
+ const second=await vm.runInContext("ask('Show speed to target')",ctx2);
+ assert.equal(second.url,'/corr/1/day/2026-09-14/shift/2?measure=fpm&after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Doverview');
+ assert.ok(fetched.some(f=>f[0].startsWith('/q?')&&f[0].includes('q=Show+speed+to+target')&&f[0].includes('after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Doverview')),JSON.stringify(fetched));
+ assert.ok(chip.href.includes('after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Doverview')&&chip.href.includes('after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Dfpm'),chip.href);
+ assert.equal(history.length,2);
+ // the PDF of an addressed answer is the same address with format=pdf, no POST
+ fetched.length=0;
+ const links=[];context.document.createElement=tag=>{const e=new Element(tag);if(tag==='a')links.push(e);return e;};
+ ctx2.document.createElement=context.document.createElement;
+ await vm.runInContext("$('pdf').events.click()",ctx2);
+ const pdfLink=links.find(l=>l.download&&l.download.endsWith('.pdf'));
+ assert.ok(pdfLink&&pdfLink.href===second.url+'&format=pdf',pdfLink&&pdfLink.href);
+ assert.equal(fetched.length,0);
+ // back: the earlier view is restored from memory, the controls follow the address, no request is made
+ fetched.length=0;
+ location.pathname='/corr/1/day/2026-09-14/shift/2';location.search='?measure=overview';
+ await win.listeners.popstate();await new Promise(r=>setTimeout(r,20));
+ assert.equal(fetched.length,0,'a shown view is re-rendered without a request');
+ assert.match(elements.status.textContent,/restored$/);
+ assert.equal(elements.messages.children[0].children[1].textContent,'Why was this shift slow?');
+ // forward to an address this page never showed: the controls follow it and its .json is fetched
+ location.pathname='/corr/1/day/2026-09-15';location.search='?measure=fpm';
+ await win.listeners.popstate();await new Promise(r=>setTimeout(r,20));
+ assert.deepEqual(fetched.map(f=>f[0]),['/corr/1/day/2026-09-15?measure=fpm']);
+ assert.equal(elements.day.value,'2026-09-15');assert.equal(elements.scope.value,'day');
+ assert.equal(elements.messages.children[0].children[1].textContent,'/corr/1/day/2026-09-15?measure=fpm');
+ // a bare scope address on popstate clears the view and primes; a control change pushes the new scope address
+ fetched.length=0;history.length=0;
+ location.pathname='/corr/1/week/2026-09-14/shift/1';location.search='';
+ await win.listeners.popstate();await new Promise(r=>setTimeout(r,20));
+ assert.equal(elements.period.value,'week');assert.equal(elements.shift.value,'1');assert.equal(history.length,0);
+ assert.deepEqual(fetched.map(f=>f[0]),['/corr/1/week/2026-09-14/shift/1.json?measure=kpis']);
+ vm.runInContext("selectShift('3')",ctx2);
+ assert.deepEqual(history,[['push','/corr/1/week/2026-09-14/shift/3']]);
+ // the period report is the report measure of the scope address
+ fetched.length=0;
+ await vm.runInContext("ask('Build week report',{report:true})",ctx2);
+ assert.deepEqual(fetched[0],['/corr/1/week/2026-09-14/shift/3?measure=report','application/json']);
+ // a fresh page opened on a pasted canonical address: the controls follow it and its .json is fetched on load (acceptance 1)
+ fetched.length=0;history.length=0;
+ const pasted={pathname:'/corr/1/month/2026-09-15/shift/3',search:'?measure=waste&corrupt=1'};
+ const win3={history:win.history,location:pasted,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
+ for(const [id,value] of [['day','2026-09-14'],['period','day'],['shift','2'],['scope','shift']])elements[id].value=value;elements.corrupt.checked=false;
+ const ctx3={...context,window:win3,location:pasted};delete ctx3.requestAnimationFrame;
+ vm.createContext(ctx3);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx3);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx3);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(fetched.map(f=>f[0]).filter(f=>f!=='/api/config'),['/corr/1/month/2026-09-15/shift/3?measure=waste&corrupt=1']);   // the address itself, as JSON; no priming, no push
+ assert.equal(history.length,0);
+ assert.deepEqual([elements.day.value,elements.period.value,elements.shift.value,elements.scope.value,elements.corrupt.checked],['2026-09-15','month','3','shift',true]);
+ assert.equal(elements.messages.children[0].children[1].textContent,'/corr/1/month/2026-09-15/shift/3?measure=waste&corrupt=1');
+ assert.equal(elements.pdf.disabled,false);
+ // Codex review on #62: a modifier click on a chip is left to the browser (it opens the link); a plain click asks here
+ fetched.length=0;
+ const anyChip=elements.examples.children[0].children[1].children[0]; let prevented=false;
+ anyChip.events.click({ctrlKey:true,preventDefault(){prevented=true;}});await new Promise(r=>setTimeout(r,20));
+ assert.equal(prevented,false);assert.equal(fetched.length,0);
+ anyChip.events.click({preventDefault(){prevented=true;}});await new Promise(r=>setTimeout(r,40));
+ assert.equal(prevented,true);assert.ok(fetched.some(f=>f[0].startsWith('/q?')));
+ // the retained priors never exceed the grammar's eight, whatever DEMO_MAX_TURNS says
+ vm.runInContext("config.demo_guards.max_turns=50",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),8);
+ vm.runInContext("config.demo_guards.max_turns=4",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),3);
+ // a pasted alias is replaced in the address bar by the canonical url the server returns
+ fetched.length=0;history.length=0;
+ const alias={pathname:'/corr/1/week/2026-09-14',search:'?measure=downtime'};
+ const win4={history:{pushState(state,_,url){history.push(['push',url]);},replaceState(state,_,url){history.push(['replace',url]);}},location:alias,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
+ const ctx4={...context,window:win4,location:alias};delete ctx4.requestAnimationFrame;
+ context.fetch=async(path,init)=>{fetched.push([path]);
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-14'],demo_guards:{max_turns:4,rate_limit_per_min:0}})};
+  return {ok:true,status:200,json:async()=>answer('/corr/1/week/2026-09-14?measure=pareto')};};
+ ctx4.fetch=context.fetch;
+ vm.createContext(ctx4);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx4);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx4);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(history,[['replace','/corr/1/week/2026-09-14?measure=pareto']]);
+ assert.equal(elements.messages.children[0].children[1].textContent,'/corr/1/week/2026-09-14?measure=pareto');
+ clearTimeout(guard);
+ console.log('UI issue-20 checks passed: /q GET, pushState, back/forward from memory, pasted address, chips as links, PDF by address.');
 })().catch(error=>{console.error(error);process.exit(1);});
 
 // ---- issue #26: the /evals page. Every case is listed once, the score and trend come from the board, opening a case

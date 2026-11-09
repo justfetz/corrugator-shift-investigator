@@ -288,3 +288,27 @@ def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
     replay = next(c for c in CASES if c['id'] == 'live-setup-matrix')   # a committed Anthropic recording
     outcome, failures, note, ms = golden.run_case(replay, 'anthropic')
     assert outcome == 'pass' and ms > 250, (failures, note, ms)
+
+
+def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it():
+    """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
+    a case whose question lands elsewhere, and every offline question is also answered over its URL."""
+    routing = [c for c in CASES if c['type'] == 'routing']
+    assert len(routing) == 54 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
+    outcome, failures, note, _ = golden.run_case(case)
+    assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)
+    case['expect']['url'] = '/corr/1/day/2026-09-14/shift/2?measure=downtime'
+    outcome, failures, _, _ = golden.run_case(case)
+    assert outcome == 'fail' and failures == ['URL: q= resolves to /corr/1/day/2026-09-14/shift/2?measure=overview, expected /corr/1/day/2026-09-14/shift/2?measure=downtime']
+    refusal = next(c for c in CASES if c['id'] == 'shift-escape')
+    results, error, failures, ms = golden.via_url(refusal, refusal['expect'], [refusal['question']])
+    assert results is None and 'Selected shift only' in error and failures == [] and ms == 0
+    assert golden.url_failures(refusal, refusal['expect'], [refusal['question']], None) == []
+    assert golden.url_failures(refusal, {'raises': 'Something else'}, [refusal['question']], None)[0].startswith('URL: GET refused with')
+    assert golden.bare_url('/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview') == '/corr/1/day/2026-09-14?measure=compare&shifts=2,1'
+    value = next(c for c in CASES if c['type'] == 'value')
+    assert golden.url_failures(value, value['expect'], ['value golden'], None) == []   # a value case has no question
+    live = next(c for c in CASES if c['id'] == 'live-setup-matrix')
+    assert golden.url_failures(live, live['expect'], [live['question']], 'anthropic') == []
+    assert golden.url_failures(live, {**live['expect'], 'url': '/corr/1/day/2026-09-14/shift/2?measure=orders'}, [live['question']], 'anthropic')[0].startswith('URL: q= resolves to')

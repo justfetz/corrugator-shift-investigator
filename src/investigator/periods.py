@@ -7,6 +7,7 @@ in it has three validated shifts.
 """
 from collections import OrderedDict, defaultdict
 from datetime import date, timedelta
+import threading
 import time
 from uuid import uuid4
 from .record_store import DEFAULT_MONTHS, FISCAL_START, default_store
@@ -67,20 +68,22 @@ class PeriodReports:
         self.first = date.fromisoformat(self.store.first_day)
         self.last = date.fromisoformat(self.store.last_day)
         self.cache = OrderedDict()
+        self.cache_lock = threading.Lock()   # the POST path and the URL path (issue #20) share one cache
 
     def snapshot(self, day, corrupt=False):
         key = (day.isoformat(), corrupt)
-        if key not in self.cache:
-            a = self.store.day_analysis(day.isoformat(), corrupt)
-            try:
-                self.cache[key] = {'version': a.version, 'shifts': {
-                    s: {'kpis': a.get_shift_kpis(s), 'notes': a.get_shift_notes(s)} for s in (1,2,3)}}
-            finally:
-                a.close()
-            if len(self.cache)>60:
-                self.cache.popitem(last=False)
-        self.cache.move_to_end(key)
-        return self.cache[key]
+        with self.cache_lock:
+            if key not in self.cache:
+                a = self.store.day_analysis(day.isoformat(), corrupt)
+                try:
+                    self.cache[key] = {'version': a.version, 'shifts': {
+                        s: {'kpis': a.get_shift_kpis(s), 'notes': a.get_shift_notes(s)} for s in (1,2,3)}}
+                finally:
+                    a.close()
+                if len(self.cache)>60:
+                    self.cache.popitem(last=False)
+            self.cache.move_to_end(key)
+            return self.cache[key]
 
     def investigate(self, day, shift, scope, period, corrupt=False):
         started = time.monotonic()
