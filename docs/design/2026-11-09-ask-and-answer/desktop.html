@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shift Investigator mockup — Desktop: rail + ask bar + answer card (1440×1040)</title>
+<!-- Static mockup exported 2026-11-09 from the accepted design (issue #44). Not the app; see README.md. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:#1b1b1b;background:#f3f5f5}
+a{color:#0b6e66}a:hover{color:#084f4a}
+button{font:inherit}
+</style>
+</head>
+<body>
+<div style="min-height: 1040px; display: flex; flex-direction: column; background: #f3f5f5; font-family: Inter, system-ui, sans-serif; color: #1b1b1b">
+
+  <header style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 28px; background: #ffffff; border-bottom: 1px solid #e3e7e7">
+    <div style="display: flex; align-items: center; gap: 14px">
+      <div style="font-size: 18px; font-weight: 700; letter-spacing: -0.01em">Corrugator Shift Investigator</div>
+      <span style="font-size: 12px; font-weight: 500; color: #5a5f5f; background: #eef2f2; border-radius: 999px; padding: 4px 10px">Synthetic data · public demo · offline · model available</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <a href="#" style="font-size: 13px; text-decoration: none">How it works</a>
+      <a href="#" style="font-size: 13px; text-decoration: none">Evals</a>
+      <button type="button" aria-label="Switch to the dark theme" style="height: 32px; padding: 0 12px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">Dark</button>
+    </div>
+  </header>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 28px 40px; max-width: 1440px; width: 100%; box-sizing: border-box; margin: 0 auto">
+
+    <aside aria-label="Context and canned questions" style="flex: 1 1 280px; max-width: 320px; display: flex; flex-direction: column; gap: 18px">
+
+      <section style="background: #ffffff; border: 1px solid #e3e7e7; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+        <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #5a5f5f">Looking at</div>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #3c4242">Production day
+          <input type="date" value="2026-09-14" style="height: 36px; border: 1px solid #d5dbdb; border-radius: 8px; padding: 0 10px; font: inherit; color: #1b1b1b; background: #ffffff">
+        </label>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="font-size: 13px; color: #3c4242">Shift</div>
+          <div style="display: flex; gap: 6px">
+            <button type="button" style="flex: 1; height: 34px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">1 · 7–3</button>
+            <button type="button" aria-pressed="true" style="flex: 1; height: 34px; border: 1px solid #0b6e66; border-radius: 8px; background: #0b6e66; color: #ffffff; font-size: 13px; font-weight: 600; cursor: pointer">2 · 3–11</button>
+            <button type="button" style="flex: 1; height: 34px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">3 · 11–7</button>
+            <button type="button" style="flex: 1; height: 34px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">All</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="font-size: 13px; color: #3c4242">Window</div>
+          <div style="display: flex; gap: 6px">
+            <button type="button" aria-pressed="true" style="flex: 1; height: 34px; border: 1px solid #0b6e66; border-radius: 8px; background: #e6f2f1; color: #084f4a; font-size: 13px; font-weight: 600; cursor: pointer">Day</button>
+            <button type="button" style="flex: 1; height: 34px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">Week</button>
+            <button type="button" style="flex: 1; height: 34px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">Month</button>
+            <button type="button" style="flex: 1; height: 34px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">4-4-5</button>
+          </div>
+        </div>
+      </section>
+
+      <section style="background: #ffffff; border: 1px solid #e3e7e7; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #5a5f5f">Ask in one click</div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <button type="button" style="text-align: left; min-height: 38px; padding: 8px 12px; border: 1px solid #e3e7e7; border-radius: 8px; background: #f8fafa; color: #1b1b1b; font-size: 13px; cursor: pointer">Why was shift 2 slow?</button>
+          <button type="button" style="text-align: left; min-height: 38px; padding: 8px 12px; border: 1px solid #e3e7e7; border-radius: 8px; background: #f8fafa; color: #1b1b1b; font-size: 13px; cursor: pointer">Where did the money go?</button>
+          <button type="button" style="text-align: left; min-height: 38px; padding: 8px 12px; border: 1px solid #e3e7e7; border-radius: 8px; background: #f8fafa; color: #1b1b1b; font-size: 13px; cursor: pointer">Did we miss splices?</button>
+          <button type="button" style="text-align: left; min-height: 38px; padding: 8px 12px; border: 1px solid #e3e7e7; border-radius: 8px; background: #f8fafa; color: #1b1b1b; font-size: 13px; cursor: pointer">Which setups were tough?</button>
+          <button type="button" style="text-align: left; min-height: 38px; padding: 8px 12px; border: 1px solid #e3e7e7; border-radius: 8px; background: #f8fafa; color: #1b1b1b; font-size: 13px; cursor: pointer">Any trouble on the discharge?</button>
+          <button type="button" style="text-align: left; min-height: 38px; padding: 8px 12px; border: 1px solid #e3e7e7; border-radius: 8px; background: #f8fafa; color: #1b1b1b; font-size: 13px; cursor: pointer">Waste by reason</button>
+          <button type="button" style="text-align: left; min-height: 38px; padding: 8px 12px; border: 1px solid #e3e7e7; border-radius: 8px; background: #f8fafa; color: #1b1b1b; font-size: 13px; cursor: pointer">This week against last</button>
+        </div>
+        <div style="font-size: 12px; color: #5a5f5f">Every canned question is a fixed query. No model, no wait.</div>
+      </section>
+
+      <section style="background: #ffffff; border: 1px solid #e3e7e7; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #5a5f5f">Your rates</div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 13px">
+          <div style="color: #3c4242">Paper</div><div style="text-align: right; font-weight: 600">$55 / MSF</div>
+          <div style="color: #3c4242">Machine time</div><div style="text-align: right; font-weight: 600">$1,200 / hr</div>
+          <div style="color: #3c4242">Board margin</div><div style="text-align: right; color: #8a5a00; font-weight: 600">not set</div>
+        </div>
+        <div style="font-size: 12px; color: #5a5f5f">Machine time is the bottleneck shadow price from the owner's cost structure. Set a board margin to price downtime by lost board instead of lost hours.</div>
+        <button type="button" style="height: 34px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 13px; cursor: pointer">Change rates</button>
+      </section>
+    </aside>
+
+    <main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+      <form style="display: flex; gap: 10px; align-items: center; background: #ffffff; border: 1px solid #e3e7e7; border-radius: 14px; padding: 10px 10px 10px 16px">
+        <label for="ask" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Ask about a shift</label>
+        <input id="ask" type="text" placeholder="Ask about this shift: speed, downtime, waste, setups, splices, discharges" style="flex: 1; min-width: 0; height: 40px; border: 0; font: inherit; font-size: 15px; color: #1b1b1b; background: transparent; outline: none">
+        <button type="submit" style="height: 40px; padding: 0 18px; border: 0; border-radius: 10px; background: #0b6e66; color: #ffffff; font-size: 14px; font-weight: 600; cursor: pointer">Ask</button>
+        <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #d5dbdb; border-radius: 10px; background: #ffffff; color: #1b1b1b; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0b6e66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
+          Ask the analyst
+        </button>
+      </form>
+
+      <article aria-label="Answer: Why was shift 2 slow?" style="background: #ffffff; border: 1px solid #e3e7e7; border-radius: 14px; padding: 20px 22px 18px; display: flex; flex-direction: column; gap: 16px">
+
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap">
+          <h2 style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em">Why was shift 2 slow?</h2>
+          <div style="font-size: 12px; color: #5a5f5f">Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 93 ms</div>
+        </div>
+
+        <section aria-label="Queries that produced this answer" style="border: 1px solid #e3e7e7; border-radius: 10px; background: #fbfcfc; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px">
+          <div style="display: flex; gap: 10px; align-items: center; color: #3c4242"><span style="color: #0b6e66; font-weight: 600">get_shift_kpis</span><span>(shift=2)</span><span style="color: #8b9191">· 1 row · 3 ms</span></div>
+          <div style="display: flex; gap: 10px; align-items: center; color: #3c4242"><span style="color: #0b6e66; font-weight: 600">get_downtime_breakdown</span><span>(shift=2, by=reason)</span><span style="color: #8b9191">· 4 rows · 2 ms</span></div>
+          <div style="margin: 2px 0 2px 12px; padding: 8px 10px; border-left: 2px solid #cfdcdb; background: #ffffff; color: #1b1b1b; white-space: pre-wrap; line-height: 1.5">SELECT reason AS category, sum(seconds)/60 AS down_minutes,
+       sum(seconds)/28800*100 AS shift_percent
+FROM stops WHERE production_date = ? AND shift = ?
+GROUP BY reason ORDER BY down_minutes DESC          -- [2026-09-14, 2]</div>
+          <div style="display: flex; gap: 10px; align-items: center; color: #3c4242"><span style="color: #0b6e66; font-weight: 600">get_quality_breakdown</span><span>(shift=2)</span><span style="color: #8b9191">· 4 rows · 2 ms</span></div>
+          <div style="display: flex; gap: 12px; align-items: center; margin-top: 2px">
+            <button type="button" style="height: 28px; padding: 0 10px; border: 1px solid #d5dbdb; border-radius: 6px; background: #ffffff; color: #1b1b1b; font: inherit; font-size: 12px; cursor: pointer">3 more queries</button>
+            <button type="button" style="height: 28px; padding: 0 10px; border: 1px solid #d5dbdb; border-radius: 6px; background: #ffffff; color: #1b1b1b; font: inherit; font-size: 12px; cursor: pointer">Copy all SQL</button>
+            <span style="color: #8b9191">Fixed, parameterized queries. Visitors cannot edit them.</span>
+          </div>
+        </section>
+
+        <section aria-label="Recorded losses in dollars" style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 18px">
+          <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.02em">≈ $6,900 <span style="font-size: 15px; font-weight: 500; color: #3c4242">recorded losses this shift</span></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px">
+            <span style="padding: 4px 10px; border-radius: 999px; background: #eef2f2; color: #1b1b1b">Trim <strong>$4,387</strong></span>
+            <span style="padding: 4px 10px; border-radius: 999px; background: #eef2f2; color: #1b1b1b">Dry-end rejects <strong>$1,514</strong></span>
+            <span style="padding: 4px 10px; border-radius: 999px; background: #eef2f2; color: #1b1b1b">Shear <strong>$698</strong></span>
+            <span style="padding: 4px 10px; border-radius: 999px; background: #eef2f2; color: #1b1b1b">Downtime <strong>$299</strong></span>
+          </div>
+          <div style="flex-basis: 100%; font-size: 12px; color: #5a5f5f">Paper at $55/MSF, machine time at $1,200/hr. Downtime is priced by lost hours until a board margin is set; the hour price is the bottleneck's shadow price, not a replacement cost.</div>
+        </section>
+
+        <section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+
+          <figure style="margin: 0; border: 1px solid #e3e7e7; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+            <figcaption style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline"><span style="font-size: 14px; font-weight: 600">Where the money went</span><span style="font-size: 12px; color: #5a5f5f">dollars · area or minutes</span></figcaption>
+            <div style="display: grid; grid-template-columns: 120px minmax(0, 1fr) 120px; row-gap: 8px; column-gap: 10px; align-items: center; font-size: 13px">
+              <div>Trim</div><div style="height: 18px; border-radius: 4px; background: #0b6e66; width: 100%"></div><div style="text-align: right"><strong>$4,387</strong> <span style="color: #5a5f5f">79.8 MSF</span></div>
+              <div>Dry-end rejects</div><div style="height: 18px; border-radius: 4px; background: #0b6e66; width: 35%"></div><div style="text-align: right"><strong>$1,514</strong> <span style="color: #5a5f5f">27.5 MSF</span></div>
+              <div>Shear</div><div style="height: 18px; border-radius: 4px; background: #0b6e66; width: 16%"></div><div style="text-align: right"><strong>$698</strong> <span style="color: #5a5f5f">12.7 MSF</span></div>
+              <div>Downtime</div><div style="height: 18px; border-radius: 4px; background: #6aa9a3; width: 7%"></div><div style="text-align: right"><strong>$299</strong> <span style="color: #5a5f5f">14.9 min</span></div>
+            </div>
+            <div style="font-size: 12px; color: #5a5f5f">Trim is 3.33% against a 3.25% target: 0.08 pt over ≈ <strong style="color: #1b1b1b">$79k a year</strong> on this machine at these volumes.</div>
+          </figure>
+
+          <figure style="margin: 0; border: 1px solid #e3e7e7; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+            <figcaption style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline"><span style="font-size: 14px; font-weight: 600">Downtime by reason</span><span style="font-size: 12px; color: #5a5f5f">14.9 min · 3.1% of the shift</span></figcaption>
+            <div style="display: grid; grid-template-columns: 130px minmax(0, 1fr) 110px; row-gap: 8px; column-gap: 10px; align-items: center; font-size: 13px">
+              <div>Order change</div><div style="height: 18px; border-radius: 4px; background: #c96a2c; width: 100%"></div><div style="text-align: right"><strong>$127</strong> <span style="color: #5a5f5f">6.4 min</span></div>
+              <div>Knife / slitter jam</div><div style="height: 18px; border-radius: 4px; background: #c96a2c; width: 73%"></div><div style="text-align: right"><strong>$93</strong> <span style="color: #5a5f5f">4.7 min</span></div>
+              <div>Stacker</div><div style="height: 18px; border-radius: 4px; background: #c96a2c; width: 36%"></div><div style="text-align: right"><strong>$46</strong> <span style="color: #5a5f5f">2.3 min</span></div>
+              <div>Raw material (roll)</div><div style="height: 18px; border-radius: 4px; background: #c96a2c; width: 26%"></div><div style="text-align: right"><strong>$33</strong> <span style="color: #5a5f5f">1.7 min</span></div>
+            </div>
+            <div style="font-size: 12px; color: #5a5f5f">Operator 2.15% · Maintenance 0.97% · no planned window. Each bar links to its stops.</div>
+          </figure>
+        </section>
+
+        <section aria-label="Shift KPIs" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+          <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Speed</div><div style="font-size: 20px; font-weight: 700">616 <span style="font-size: 12px; font-weight: 500; color: #5a5f5f">ft/min</span></div><div style="font-size: 12px; color: #8a5a00">89% of target</div></div>
+          <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Downtime</div><div style="font-size: 20px; font-weight: 700">14.9 <span style="font-size: 12px; font-weight: 500; color: #5a5f5f">min</span></div><div style="font-size: 12px; color: #5a5f5f">3.1% · $299</div></div>
+          <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Trim</div><div style="font-size: 20px; font-weight: 700">3.33<span style="font-size: 12px; font-weight: 500; color: #5a5f5f">%</span></div><div style="font-size: 12px; color: #8a5a00">+0.08 pt · $4,387</div></div>
+          <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Dry-end</div><div style="font-size: 20px; font-weight: 700">1.15<span style="font-size: 12px; font-weight: 500; color: #5a5f5f">%</span></div><div style="font-size: 12px; color: #8a5a00">above 1% · $1,514</div></div>
+          <div style="border: 1px solid #e3e7e7; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #5a5f5f">Setups</div><div style="font-size: 20px; font-weight: 700">44</div><div style="font-size: 12px; color: #5a5f5f">16 paper changes</div></div>
+        </section>
+
+        <section aria-label="Follow-up questions" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <span style="font-size: 12px; color: #5a5f5f; margin-right: 4px">Next:</span>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Show the order changes</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Which setups ran over trim?</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Compare with shift 1</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #cfdcdb; border-radius: 999px; background: #ffffff; color: #084f4a; font-size: 13px; cursor: pointer">Ask the analyst about this</button>
+        </section>
+
+        <footer style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; border-top: 1px solid #eef2f2; padding-top: 12px; font-size: 12px; color: #5a5f5f">
+          <div>Permalink: <a href="#" style="font-family: 'JetBrains Mono', ui-monospace, monospace">/corr/1/day/2026-09-14/shift/2?q=why-slow</a></div>
+          <div style="display: flex; gap: 14px"><a href="#">What came back, per query</a><a href="#">Markdown</a><a href="#">PDF</a></div>
+        </footer>
+      </article>
+
+      <article aria-label="Earlier answer: Show the downtime breakdown" style="background: #ffffff; border: 1px solid #e3e7e7; border-radius: 14px; padding: 12px 22px; display: flex; justify-content: space-between; align-items: center; gap: 16px; color: #5a5f5f">
+        <div style="display: flex; align-items: center; gap: 12px"><span style="font-size: 15px; font-weight: 600; color: #3c4242">Show the downtime breakdown</span><span style="font-size: 12px">Shift 2 · 52 ms · $299 downtime</span></div>
+        <button type="button" style="height: 30px; padding: 0 12px; border: 1px solid #d5dbdb; border-radius: 8px; background: #ffffff; color: #1b1b1b; font-size: 12px; cursor: pointer">Open</button>
+      </article>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>
