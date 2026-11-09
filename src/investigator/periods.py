@@ -163,10 +163,11 @@ class PeriodReports:
                 {'title':'Shift rankings: 1 = best in this period; no combined score','rows':rankings,'coverage':'complete' if complete else 'incomplete','source_result_id':rid},
                 {'title':'Daily shift matrix','rows':current,'coverage':'complete' if complete else 'incomplete','source_result_id':rid},
                 {'title':'Reported shift and downtime notes (synthetic, unverified)','rows':note_rows,'coverage':'complete' if complete else 'incomplete','source_result_id':rid}]
+        daily_trace=self.snapshot(date.fromisoformat(current[0]['day']),corrupt)['shifts'][shifts[0]]['kpis']['trace']
         trace={'result_id':rid,'tool':'get_period_report','arguments':{'day':day,'period':period,'scope':scope,'shift':shift},
                'ok':True,'elapsed_ms':(time.monotonic()-started)*1000,'data':{'range':label,'coverage':'complete' if complete else 'incomplete',
                'rows':[totals],'dataset_versions':versions,'calculation':'Sum raw numerators and denominators from validated daily SQL tools. Fixed 480 minutes per shift. Speed target weighted by elapsed grade time.',
-               'daily_sql':self.snapshot(date.fromisoformat(current[0]['day']),corrupt)['shifts'][shifts[0]]['kpis']['trace']['sql']}}
+               'daily_sql':daily_trace['sql'],'daily_parameters':daily_trace['parameters']}}   # the per-day KPI query with its bound values (#40)
         heatmap_rows=[]
         for n in range((end-start).days+1):
             moment = start+timedelta(days=n)

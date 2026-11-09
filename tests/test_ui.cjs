@@ -223,6 +223,7 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  assert.deepEqual(copied,[sql+'\n\n-- bound values\n[2]']);                   // the copy text equals the SQL with its bound values
  assert.equal(vm.runInContext("sqlText({ok:true,data:{trace:{sql:'SELECT a,\\n        b FROM t\\n        WHERE x = ?',parameters:[1]}}})",context),'SELECT a,\nb FROM t\nWHERE x = ?\n\n-- bound values\n[1]');   // the Python string's indentation is dropped, nothing else
  assert.deepEqual(boxes[2].children[0].children.map(c=>c.textContent).slice(0,2),['render_chart','(result_id=query 1)']);   // a result id reads as the query it names
+ assert.equal(vm.runInContext("sqlText({ok:true,data:{daily_sql:'SELECT 1 WHERE shift = ?',daily_parameters:[2]}})",context),'SELECT 1 WHERE shift = ?\n\n-- bound values\n[2]');   // the period report's per-day query carries its bound values too
  assert.equal(walk(boxes[0]).find(e=>e.className==='came-back').href,'#step-0');
  assert.ok(walk(boxes[2]).some(e=>e.tag==='a'&&e.href==='#query-0'));          // a render_chart step names the query it drew
  assert.ok(walk(elements.charts).some(e=>e.className==='query-link'&&e.href==='#query-0'));   // the chart links back to its query box
