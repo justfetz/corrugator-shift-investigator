@@ -131,7 +131,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}   # refs/pull/<n>/merge may not exist for a closed PR; the head always does
+          # The helper script is tooling, not PR content: a branch cut before preview.yml existed
+          # has no .github/scripts/, and refs/pull/<n>/merge may not exist for a closed PR. main always has it.
+          ref: ${{ github.event.repository.default_branch }}
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
