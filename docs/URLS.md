@@ -60,7 +60,7 @@ Modifiers, each refused when it does not apply to the measure:
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
 | `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
 | `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`); on other measures `prev` alone, as an alias (below) | `prev` |
-| `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's) | all three for day plans, all shifts together for store tools |
+| `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's); a store measure takes one, except `kpis`, and `pareto` and `waste` under a ranged grain, which run once per shift | all three for day plans, all shifts together for store tools |
 | `rank=` | `speed`, `downtime`, `quality` | all three |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
 | `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
@@ -77,10 +77,7 @@ An address that reads naturally but is not the canonical spelling still answers:
 the canonical address (as `/q` does), keeping the representation (`.json`, `format=json`, `format=pdf`), so
 the address bar ends on the one spelling (issue #70). The redirect runs no tool and is not a round. The
 server redirects only to an address that resolves to itself and runs the same plan over the same shifts, so
-nothing redirects twice or to a refusal: a ranged-grain `downtime` or `quality` split over named shifts
-(`…/week/…?measure=downtime&shifts=1,3`, one Pareto per shift) has no resolvable canonical spelling yet
-(`measure=pareto&shifts=1,3` is refused, since a store measure is not split by shift), so it answers at its
-own address as before. The rest of the query (`shifts=`, `window=`,
+nothing redirects twice or to a refusal. The rest of the query (`shifts=`, `window=`,
 `by=`, `unit=`, `want=`, `corrupt=`, `after=`) carries over. `compare=prev` asks for the previous window of the
 same grain, which these answers carry already or which their store form carries.
 
@@ -90,7 +87,7 @@ same grain, which these answers carry already or which their store form carries.
 | `measure=waste&by=setup` (Day) | `measure=setups` (the setup matrix) |
 | `compare=prev` on `kpis`, `pareto`, `waste`, `grade`, `rollstock` | the same address without it: `prev` is the default, the previous window is beside |
 | `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
-| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` (not `downtime` or `quality` with several `shifts=`: above) |
+| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` |
 | `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |
 | `measure=quality&compare=prev` under Day | `measure=waste` |
 | `measure=compare&compare=prev` under Day | `measure=kpis` (`shifts=` kept: the tiles per shift) |

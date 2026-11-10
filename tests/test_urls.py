@@ -274,9 +274,9 @@ def test_an_alias_resolves_to_its_canonical_state(typed, canonical):
 
 def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
     """A sweep of measures, grains, scopes and modifiers: a refused URL never redirects, and a redirect target
-    resolves, runs the same plan over the same shifts, and does not redirect again. A ranged-grain downtime or
-    quality split over named shifts has no resolvable canonical spelling (canonical_url writes
-    measure=pareto&shifts=1,3, which the grammar refuses), so it answers at its own address as before (review of #70)."""
+    resolves, runs the same plan over the same shifts, and does not redirect again. Every URL that resolves and is
+    not canonical redirects: none is left answering at its own address (issue #90 gave the last of them, a
+    ranged-grain downtime or quality split over named shifts, its resolvable spelling measure=pareto&shifts=1,3)."""
     store = default_store()
     tails = ['', 'compare=prev', 'shifts=1,3', 'shifts=2', 'shifts=1,3&compare=prev', 'by=place', 'by=place&compare=prev',
              'by=reason', 'by=grade', 'by=setup', 'by=grade&compare=prev', 'kind=operator&compare=prev', 'window=week',
@@ -301,9 +301,39 @@ def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
                     assert redirect_for(target, store) is None and page_url(landed) == target, url
                     assert ran(landed) == ran(resolved), url
                     redirected += 1
-    assert redirected > 500 and stayed == 12, (redirected, stayed)   # the 12: downtime and quality, shifts=1,3, three ranged grains, +-compare=prev
-    assert redirect_for(f'{W}?measure=downtime&shifts=1,3', store) is None
-    assert redirect_for(f'{M}?measure=quality&shifts=2,1&compare=prev', store) is None
+    assert redirected > 500 and stayed == 0, (redirected, stayed)
+    assert redirect_for(f'{W}?measure=downtime&shifts=1,3', store) == f'{W}?measure=pareto&shifts=1,3'
+    assert redirect_for(f'{M}?measure=quality&shifts=2,1&compare=prev', store) == f'{M}?measure=waste&shifts=2,1'
+
+
+# Issue #90: the twelve URLs the sweep used to leave at their own address (downtime and quality split over shifts 1
+# and 3, under the three ranged grains, with and without compare=prev), each with the canonical address it becomes.
+SPLIT = [(f'{base}?measure={measure}&shifts=1,3' + tail, f'{base}?measure={target}&shifts=1,3')
+         for base in (W, M, P) for measure, target in (('downtime', 'pareto'), ('quality', 'waste')) for tail in ('', '&compare=prev')]
+
+
+@pytest.mark.parametrize('typed, canonical', SPLIT)
+def test_a_split_shift_pareto_or_waste_breakdown_round_trips_under_a_ranged_grain(typed, canonical):
+    """One breakdown per named shift under Week, Month or 4-4-5: the day-shaped spelling redirects to the store measure
+    with shifts=, which resolves to the same plan and is its own canonical address (no 400, no second redirect). The
+    router's own question lands on it too, and under Day a store measure is still not split by shift."""
+    store = default_store()
+    typed_state, state = resolve_url(typed, store), resolve_url(canonical, store)
+    assert redirect_for(typed, store) == canonical and redirect_for(canonical, store) is None
+    assert page_url(state) == canonical and page_url(typed_state) == canonical
+    assert state['request']['plan'] == typed_state['request']['plan'] and state['request']['shifts'] == [1, 3]
+    assert [s['arguments']['shift'] for s in state['request']['plan']] == [1, 3]
+    grain = canonical.split('/')[3]
+    context = Context('2026-09-14', 2, period={'week': 'week', 'month': 'month', 'period': 'fiscal'}[grain])
+    context.scope = 'day'
+    question = ('Downtime by reason' if 'pareto' in canonical else 'Waste') + ' for first shift and third shift'
+    request = parse_request(question, context)
+    url = canonical_url(request, context)
+    assert url == canonical and canonical_url(resolve_url(url, store)['request'], context) == url
+    assert resolve_url(url, store)['request']['plan'] == request['plan']
+    day = canonical.replace(f'/{grain}/', '/day/')
+    with pytest.raises(ValueError, match='not split by shift under Day'):
+        resolve_url(day, store)
 
 
 @pytest.mark.parametrize('url, reason', [
@@ -319,7 +349,7 @@ def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
     (f'{D}/shift/2?measure=downtime&kind=maintenance&compare=prev', 'kind= does not apply to measure=downtime&compare=prev under Day'),
     (f'{D}/shift/2?measure=overview&by=place&compare=prev', 'by= does not apply to measure=overview&compare=prev under Day'),
     (f'{D}?measure=compare&kind=operator&compare=prev', 'kind= does not apply to measure=compare&compare=prev under Day'),
-    (f'{D}?measure=downtime&shifts=1,2&compare=prev', r'not split by shift \(measure=downtime&compare=prev becomes measure=pareto\)'),
+    (f'{D}?measure=downtime&shifts=1,2&compare=prev', r'not split by shift under Day \(measure=downtime&compare=prev becomes measure=pareto\)'),
     (f'{W}?measure=pareto&compare=none', 'compare= does not apply to measure=pareto: a comparison base'),
     (f'{M}?measure=waste&compare=2026-08', 'compare= does not apply to measure=waste'),
     (f'{D}?measure=waste&by=crew', 'by=crew does not apply to measure=waste'),
@@ -389,10 +419,12 @@ def test_the_issue_20_examples_redirect_in_every_representation(served):
     assert status == 400 and json.loads(body)['error'].startswith('kind= does not apply to measure=downtime&compare=prev')
     assert get(served, refused, accept='text/html')[0] == 200   # the page loads and shows the refusal of its .json
     assert get(served, f'{D}/shift/2?measure=pareto')[0] == 200   # a canonical address answers at once
-    # no resolvable canonical spelling: answered at its own address, as before #70, never a redirect to a 400
+    # a split-shift Pareto under a ranged grain (issue #90): a 302 to its canonical address, which answers with both shifts
     for url in (f'{W}?measure=downtime&shifts=1,3', f'{W}?measure=downtime&shifts=1,3&compare=prev'):
-        status, _, body = get(served, url)
-        assert status == 200 and len(json.loads(body)['selected_shifts']) == 2, url
+        status, headers, _ = get(served, url)
+        assert status == 302 and headers['Location'] == f'{W}?measure=pareto&shifts=1,3', url
+        status, _, body = get(served, headers['Location'])
+        assert status == 200 and json.loads(body)['selected_shifts'] == [1, 3], url
 
 
 def test_follow_up_context_rides_in_the_url():
