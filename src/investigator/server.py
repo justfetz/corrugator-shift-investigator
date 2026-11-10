@@ -41,7 +41,7 @@ from .anthropic_provider import resolve_model
 from .evalboard import EvalBoard, evals_dir
 from .record_store import DEFAULT_MONTHS, default_store
 from .synth import production_days
-from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, resolve_url, scope_url
+from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
 
 WEB = Path(__file__).with_name('web')
 # The record store's Monday-Friday production calendar (August and September 2026);
@@ -279,6 +279,11 @@ class Workbench:
         context.scope = scope
         request = parse_request(question, context)   # the refusals of the offline router, verbatim
         return canonical_url(request, context, corrupt == '1', self.store.machine_id, after)
+
+    def canonical_redirect(self, url):
+        """The canonical address a hand-typed alias of `url` redirects to (issue #70), or None: `url` is
+        canonical already, or the grammar refuses it and the caller answers with that refusal. No tool runs."""
+        return redirect_for(url, self.store, max_turns=self.guards.max_turns)
 
     def answer_url(self, url):
         """A canonical URL answered offline: the result `/api/ask` returns for the same state, plus `url`
@@ -676,10 +681,16 @@ def make_server(port=8765, public=None, host=None, guards=None):
             Offline only; the same guards as /api/ask except the token (a GET carries no key and changes
             nothing), and its own lock, so it never queues behind a live round."""
             pdf = 'format=pdf' in url.query.split('&')
-            if not pdf and not url.path.endswith('.json') and not self._wants_json(url.query):
-                if not URL_PATH.match(url.path):
-                    return self._send(404, {'error': 'Not found'})
-                return self._page()
+            page = not pdf and not url.path.endswith('.json') and not self._wants_json(url.query)
+            if page and not URL_PATH.match(url.path):
+                return self._send(404, {'error': 'Not found'})
+            # A hand-typed alias (docs/URLS.md) is a 302 to its canonical address, as /q is, so the address bar ends
+            # on the one spelling; like /q it runs no tool and is not a round. A refused URL is answered below.
+            target = app.canonical_redirect(self.path)
+            if target:
+                return self._send(302, {'url': target}, extra={'Location': target, 'Cache-Control': 'no-store'})
+            if page:
+                return self._page()   # a refused address still gets the page, which shows the refusal of its .json
             try:
                 if not self._count_request():
                     return self._send(429, {'error': 'Local request limit reached; retry in a minute'})
