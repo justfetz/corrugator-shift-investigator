@@ -339,7 +339,7 @@ const analystChecks=(async()=>{
   ev({type:'delta',paragraph:0,kind:'finding',text:'Shift 2 ran at '}),ev({type:'delta',paragraph:0,kind:'finding',text:'512.34 '}),ev({type:'delta',paragraph:1,kind:'hypothesis',text:'It lost '}),ev({type:'retract',paragraph:1,reason:'typed number'}),
   ev({type:'paragraph',paragraph:0,kind:'finding',text:'Shift 2 ran at 512.34 ft/min.',citations:[]}),ev({type:'done',result:done})];
  gated=true; offlineCard()[0].events.click();
- assert.equal(elements.card.className,'card answer skeleton');assert.match(elements['card-meta'].textContent,/^Shift 2 · .* · anthropic · asking…$/);   // its own card, in the task of the click
+ assert.equal(elements.card.className,'card answer skeleton');assert.match(elements['card-meta'].textContent,/^Shift 2 · .* · analyst · asking…$/);   // its own card, in the task of the click
  await tick();assert.equal(elements.card.className,'card answer streaming');assert.match(flat(elements.messages),/Planning the queries…/);   // the stream is open
  await release(2);   // start, plan
  assert.equal(elements.card.className,'card answer streaming');
@@ -353,7 +353,7 @@ const analystChecks=(async()=>{
  gated=false; await release(0); while(releases.length)releases.shift()(); await new Promise(r=>setTimeout(r,30));
  assert.equal(bodies[0].mode,'anthropic');assert.equal(bodies[0].session_id,null);assert.equal(keys[0],undefined);   // public: never a visitor key
  const text=flat(elements.messages);
- assert.equal(elements.card.className,'card answer');assert.match(elements['card-meta'].textContent,/ · anthropic · 1 query · /);
+ assert.equal(elements.card.className,'card answer');assert.match(elements['card-meta'].textContent,/ · analyst · 2 model calls · /);
  assert.match(text,/Finding: Shift 2 ran at 512\.34 ft\/min\./);assert.match(text,/Evidence: Shift 2, observed_shift_fpm, query 1, row 0/);
  assert.ok(!/It lost/.test(text));assert.match(text,/2 model calls/);assert.match(text,/first words after 1\.2 s/);
  assert.equal(vm.runInContext('sessionId',context),'s2');assert.equal(vm.runInContext('latest.session_id',context),'s2');
@@ -520,7 +520,7 @@ const issue63=issue17.then(async()=>{
  // 5. Ask the analyst is the live mode, offered only when the server has a key for one; Ask stays offline.
  vm.runInContext("config.live_modes=['anthropic'];updateScope()",context);assert.equal(elements.analyst.hidden,false);
  elements.question.value='Why slow?';elements.analyst.events.click();
- assert.match(elements['card-meta'].textContent,/ · anthropic · asking…$/);await tick();assert.equal(bodies[5].mode,'anthropic');
+ assert.match(elements['card-meta'].textContent,/ · analyst · asking…$/);await tick();assert.equal(bodies[5].mode,'anthropic');
  elements.analyst.events.click();await tick();assert.equal(bodies.length,6);   // a double click on the analyst is the card already waiting, not a second paid round
  assert.equal(earlier.children.filter(l=>l.children[0].children[0].textContent==='Why slow?').length,0);
  elements.ask.events.submit({preventDefault(){}});await tick();assert.equal(bodies.length,6);
@@ -769,4 +769,81 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(elements['evals-badge'].textContent,'160/160 golden · 12 ms p50 →');assert.equal(elements['evals-badge'].hidden,false);assert.equal(elements['evals-foot'].hidden,false);   // set by init() from /api/config
  assert.match(elements['evals-badge'].title,/last tracked run 2026-11-09T19:21Z at commit abc1234/);
  console.log('UI issue-26 checks passed: every case once, score table, trend, case run with the shared trail row, filter, Run all, no fetch beyond the three paths.');
+})().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #65: the reveal. The finished why-slow answer (tests/ui_fixtures/why_slow.json, the offline result of
+// its golden URL; tests/test_ui_fixtures.py keeps it in step) lands, and the card reveals it in the order of the
+// reasoning with a stubbed clock and frame scheduler: query lines tick in, the summary types word by word with its
+// first figure at once, the charts bloom after the first sentence, a key ends it. The text it shows is the result's.
+(async()=>{
+ const whySlow=JSON.parse(fs.readFileSync('tests/ui_fixtures/why_slow.json','utf8'));
+ const NOTE=/ - reported note \(synthetic, unverified\): /, visible=whySlow.sections.filter(s=>!NOTE.test(s)), notes=whySlow.sections.filter(s=>NOTE.test(s));
+ const setup=({reduced=false}={})=>{
+  const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+  Object.assign(els.day,{value:'2026-09-14'});els.period.value='day';els.shift.value='2';els.scope.value='shift';els.mode.value='offline';
+  const frames=[], listeners={}; let wall=0;
+  const doc={getElementById:id=>{assert.ok(els[id],`Unknown control ${id}`);return els[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[],addEventListener:(name,fn)=>{listeners[name]=fn;}};
+  let gate; const ctx={document:doc,fetch:()=>new Promise(resolve=>{gate=()=>resolve({ok:true,status:200,json:async()=>JSON.parse(JSON.stringify(whySlow))});}),window:{addEventListener(){}},console,setTimeout,URL,URLSearchParams,Blob,AbortController,
+   performance:{now:()=>wall},requestAnimationFrame:f=>frames.push(f),matchMedia:q=>({matches:reduced&&q==='(prefers-reduced-motion: reduce)'})};
+  vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx);
+  vm.runInContext(`config={days:['2026-09-11','2026-09-14'],first_day:'2026-09-11',token:'t',live_modes:[],demo_guards:{rate_limit_per_min:30}};acceptedDay='2026-09-14'`,ctx);
+  const at=async ms=>{ wall=ms; const due=frames.splice(0); for(const f of due)f(); await new Promise(r=>setTimeout(r,0)); };   // advance the clock and run one frame
+  return {els,ctx,listeners,at,setWall:ms=>{wall=ms;},open:()=>gate()};
+ };
+ const tick=()=>new Promise(r=>setTimeout(r,0));
+ const summaryOf=els=>els.messages.children.find(e=>/^message\b/.test(e.className));
+ const typedText=els=>summaryOf(els).children.filter(e=>e.tag==='p').map(e=>e.textContent);
+ const queryLines=els=>els.queries.children.filter(e=>/^query\b/.test(e.className));
+ const waiting=e=>/\bpace-wait\b/.test(e.className);
+ const ask=async t=>{ t.setWall(0); const done=vm.runInContext(`ask('Why was this shift slow? Chart downtime by reason.')`,t.ctx);
+  assert.equal(t.els.card.className,'card answer skeleton');   // 1. the skeleton is in the DOM in the task of the submit: within the first frame
+  assert.ok(walk(t.els.messages).some(e=>/^skel\b/.test(e.className)),'a pulsing line where the first sentence goes');
+  await tick(); t.setWall(40); t.open(); await done; };   // the offline answer is complete 40 ms after the submit
+
+ // Paced: at 40 ms the answer is in the DOM, the title line carries the real 40 ms, and the reveal starts.
+ let t=setup(); await ask(t);
+ assert.equal(t.els['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 40 ms');   // the time to the complete result, not to the end of the animation
+ assert.equal(t.els.card['data-reveal'],'running');
+ assert.deepEqual(queryLines(t.els).map(waiting),[false,true,true,true,true,true]);   // 2. query lines tick in one at a time
+ assert.ok(t.els.metrics.children.length===7&&!t.els.metrics.children.some(waiting));   // the tiles land at once, like a gauge
+ assert.equal(t.els.tables.children.length,1);assert.ok(!waiting(t.els.tables.children[0]));   // tables appear at once
+ assert.ok(t.els.charts.children.length===2&&t.els.charts.children.every(waiting));   // 4. the charts wait for the first sentence
+ assert.deepEqual(typedText(t.els),['','','']);
+ await t.at(40+120);assert.deepEqual(queryLines(t.els).map(waiting),[false,false,true,true,true,true]);   // 80 ms apart
+ // 3. the first figure of the first sentence is on screen within 400 ms of the submit (the bar is the 400 ms of the issue)
+ await t.at(40+170);
+ const firstFigure=/\d[\d,.]*/.exec(visible[0])[0];
+ assert.ok(t.els.messages&&typedText(t.els)[0].includes(firstFigure)&&visible[0].startsWith(typedText(t.els)[0]),`the first figure "${firstFigure}" by 400 ms: "${typedText(t.els)[0]}"`);
+ const measured=/\d[\d,]*\.\d+/.exec(visible[0])[0];assert.ok(typedText(t.els)[0].includes(measured),`the first measured figure "${measured}" too, not only the shift number`);
+ assert.ok(typedText(t.els)[0].length<visible[0].length,'and the rest is still typing');
+ // word-chunked: what is on screen always ends at a word boundary of the paragraph, never mid-word
+ for(const ms of [300,450,600,800]){ await t.at(ms); typedText(t.els).forEach((s,i)=>{ assert.ok(visible[i].startsWith(s)); if(s&&s.length<visible[i].length)assert.match(visible[i][s.length],/\s/); }); }
+ assert.ok(!t.els.charts.children.some(waiting)&&t.els.charts.children.every(e=>/\bbloom\b/.test(e.className)),'the charts bloomed once the first sentence was down');
+ assert.equal(summaryOf(t.els).children.find(e=>e.tag==='details').className,'note-group pace-wait');   // the folded notes arrive with the last word
+ // 5. the full summary is there by 1.5 s; the typed text equals the result's sections verbatim
+ await t.at(1500);
+ assert.equal(t.els.card['data-reveal'],'done');
+ assert.deepEqual(typedText(t.els),visible);
+ assert.deepEqual(summaryOf(t.els).children.find(e=>e.tag==='details').children.slice(1).map(e=>e.textContent),notes);
+ assert.deepEqual(walk(summaryOf(t.els)).filter(e=>e.tag==='p').map(e=>e.textContent),whySlow.sections);   // every section, in order, nothing added or paraphrased
+ assert.ok(![...queryLines(t.els),...t.els.charts.children,...walk(t.els.messages)].some(waiting));
+ assert.ok(!walk(t.els.messages).some(e=>/\btyping\b/.test(e.className)));
+ assert.equal(t.els['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 40 ms');   // the animation never moved the measured time
+
+ // A keypress completes it immediately (and a click: the same handler on pointerdown).
+ t=setup(); await ask(t); await t.at(40+100);
+ assert.ok(typedText(t.els).join('').length<visible.join('').length);
+ t.listeners.keydown({key:'x'});
+ assert.deepEqual(typedText(t.els),visible);assert.equal(t.els.card['data-reveal'],'done');
+ assert.ok(![...queryLines(t.els),...t.els.charts.children].some(waiting));
+ assert.equal(typeof t.listeners.pointerdown,'function');
+ // Reopening a card shows it settled; it is revealed once.
+ vm.runInContext('renderCard()',t.ctx);assert.deepEqual(typedText(t.els),visible);assert.notEqual(t.els.card['data-reveal'],'running');
+
+ // prefers-reduced-motion: everything is present at the first frame.
+ t=setup({reduced:true}); await ask(t);
+ assert.deepEqual(typedText(t.els),visible);assert.equal(t.els.card['data-reveal'],undefined);
+ assert.ok(![...queryLines(t.els),...t.els.charts.children,...walk(t.els.messages)].some(waiting));
+ assert.equal(t.els.charts.children.length,2);
+ console.log('UI issue-65 checks passed: skeleton in the submit task, query lines tick in, first figure by 400 ms, word-chunked typing, charts bloom after the first sentence, full summary by 1.5 s and verbatim, a key skips, reduced motion shows all at once, measured ms unchanged.');
 })().catch(error=>{console.error(error);process.exit(1);});
