@@ -27,7 +27,7 @@ The public demo is on Google Cloud Run: <https://corrugator-shift-investigator-6
 ```bash
 pip install -e . pytest                              # Python >= 3.11; the dependencies are duckdb and reportlab
 python -m investigator.server --port 7860            # the workbench at http://127.0.0.1:7860
-python -m pytest -q                                  # 885 tests, about two minutes
+python -m pytest -q                                  # 886 tests, about two minutes
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
 python3 evals/run.py                                 # the golden set: 210 cases offline in a few seconds; the regression gate
 python3 evals/run.py --live --provider anthropic     # the live cases against a real model; needs ANTHROPIC_API_KEY, costs cents
