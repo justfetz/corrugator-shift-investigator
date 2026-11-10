@@ -69,9 +69,11 @@ button:hover{filter:brightness(1.15)}button:disabled{opacity:.45;cursor:not-allo
 button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible,input:focus-visible,a:focus-visible,.table-scroll:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 #api-key{min-width:260px}
 
-/* ---- The shell (issue #63, docs/design/2026-11-09-ask-and-answer): a left rail that says what you are looking
-   at and offers the canned questions; an ask bar on top of the main column; one open answer card under it,
-   earlier answers as one line each below. At 1440x1040 the open card fits without scrolling. */
+/* ---- The shell (issues #63, #86; docs/design/2026-11-09-ask-and-answer): a left rail that says what you are
+   looking at and offers the canned questions; beside it a transcript of answer cards, oldest at the top, the open
+   (newest) card at the bottom, and the ask bar pinned under the transcript. The page itself never scrolls: the
+   header, the rail and the ask bar stay put and only the transcript pane does (the rail gets its own scroll only if
+   it is taller than the window, which a 720-px-tall window does not need). At 1440x1040 the open card fits. */
 .shell-page header.app{position:static;background:var(--surface)}
 .shell-page header.app .wrap{max-width:1440px;padding:10px 28px;gap:14px}
 .shell-page .brand{align-items:center;gap:14px}
@@ -82,6 +84,18 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
 .shell-page .theme-toggle{border-color:var(--line);border-radius:8px;color:var(--ink);font-family:var(--sans);font-size:13px;min-height:32px;background:var(--surface)}
 .shell{display:flex;gap:20px;align-items:flex-start;max-width:1440px;margin:0 auto;padding:14px 28px 40px}
 .shell>main{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:14px}
+body.shell-page{height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+.shell-page header.app{flex:0 0 auto}
+.shell-page .shell{flex:1 1 auto;min-height:0;width:100%;align-items:stretch;padding:14px 28px max(12px,env(safe-area-inset-bottom,0px))}
+.shell-page .shell>main{min-height:0;gap:10px}
+.shell-page .rail{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+/* The transcript pane: the one scroller. Earlier cards (DOM: after #card, newest first) stack above the open card,
+   oldest at the top; app.js keeps the open card in view while it fills, unless the reader has scrolled up (#86). */
+.transcript{order:1;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;overflow-anchor:auto;scrollbar-gutter:stable;position:relative;display:flex;flex-direction:column;gap:14px;padding:4px 6px 4px 4px;margin:-4px -6px -4px -4px}
+.transcript>*{flex-shrink:0}
+.transcript>#earlier{order:-1}
+.composer{order:2;flex:0 0 auto;position:relative}
+.new-pill{position:absolute;left:50%;bottom:calc(100% + 12px);transform:translateX(-50%);z-index:4;min-height:30px;padding:0 14px;border-radius:999px;font-family:var(--sans);font-size:13px;font-weight:600;box-shadow:0 4px 14px rgb(0 0 0 / .18)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* The rail */
@@ -125,13 +139,44 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
 .switch{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;margin:0;font-size:13px;font-weight:500}
 .switch small{grid-column:2;color:var(--ink-3);font-size:12px;line-height:1.45;font-weight:400}
 .rail-toggle,.rail-close{display:none}
+/* Shorter windows (#86): the same rail, packed so it fits beside the transcript without its own scroll. Below 1080 px
+   tall the header, the gaps and the rates panel tighten (its button moves onto its title row); below 830 px the
+   canned questions also sit two to a row, and the period report button takes the free cell after the last one.
+   At 1280x720 the whole rail fits under Day, Week and Month. Nothing is hidden. */
+@media(min-width:851px) and (max-height:1079px){
+ .shell-page header.app .wrap{padding-top:6px;padding-bottom:6px}
+ .shell-page .shell{padding-top:10px;padding-bottom:max(10px,env(safe-area-inset-bottom,0px))}
+ .rail{gap:6px}
+ .panel{padding:7px 12px;gap:5px}
+ .field{gap:2px}.field-label{line-height:1.25}
+ .day-picker input,.day-picker .step,.rail .seg-btn{min-height:30px}
+ .scope-sentence,.panel-note{line-height:1.3}
+ .canned-list{gap:4px}.rail .canned{min-height:28px}
+ .more-questions>summary{min-height:22px}
+ .rates{display:grid;grid-template-columns:1fr auto;align-items:center;gap:5px 8px}
+ .rates>.panel-title{grid-area:1/1}.rates>#rates-change{grid-area:1/2;min-height:24px;padding:0 9px;font-size:12px}
+ .rates>.rates-grid,.rates>.panel-note{grid-column:1/-1}
+ .rates-grid{grid-template-columns:repeat(3,auto);grid-template-rows:auto auto;grid-auto-flow:column;justify-content:space-between;gap:0 10px;font-size:12.5px}.rates-grid dd{text-align:left}
+ .advanced>summary{min-height:20px}
+}
+@media(min-width:851px) and (max-height:829px){
+ .shell-page .rail{flex-basis:288px}
+ .day-picker input,.day-picker .step,.rail .seg-btn{min-height:28px}
+ .asks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+ .asks>*{grid-column:1/-1}.asks>#examples{display:contents}
+ .asks>#report{grid-column:auto;order:1}.asks>.more-questions{order:2}.asks>.panel-note{order:3}
+ .more-questions .canned-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+ .rail .canned{padding:3px 7px;font-size:12.5px;line-height:1.15}
+}
 
 /* The ask bar */
-.askbar{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:8px 8px 8px 16px}
+.askbar{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--rule);border-radius:14px;padding:8px 8px 8px 16px;box-shadow:0 -6px 18px -12px rgb(0 0 0 / .25)}
+.askbar>#status{align-self:center}
 .askbar:has(#question:focus-visible){outline:3px solid var(--focus);outline-offset:3px}   /* the input's focus ring, drawn on the bar it fills */
 #card-title:focus-visible{outline-offset:4px}
-#question{flex:1;min-width:0;height:40px;border:0;border-radius:0;padding:0;background:transparent;font-size:15px}
+#question{flex:1;min-width:0;height:40px;min-height:40px;max-height:148px;border:0;border-radius:0;padding:9px 0;background:transparent;font-size:15px;line-height:22px;resize:none;overflow-y:auto;display:block}   /* a textarea: Enter sends, Shift+Enter is a new line, it grows to about six lines (#86) */
 #question:focus-visible{outline:none}
+#question::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}   /* one line in the empty box, however narrow */
 #status{font-size:12px;color:var(--ink-3);font-family:var(--mono);white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis}
 .askbar button{height:40px;min-height:40px;border-radius:10px;font-family:var(--sans);font-size:14px}
 #submit{padding:0 18px;font-weight:600}
@@ -160,12 +205,21 @@ button.analyst{display:inline-flex;align-items:center;gap:8px;padding:0 14px}but
 .answer #tables>details,.answer #execution{margin-top:0;border-top:1px solid var(--line-2);padding-top:6px}
 .answer #tables{display:flex;flex-direction:column;gap:6px}
 .answer #execution:not([open]){display:none}   /* opened from the footer link or a query's "What came back" */
-.earlier-list{display:flex;flex-direction:column;gap:8px}.earlier-list:empty{display:none}
+.earlier-list{display:flex;flex-direction:column-reverse;gap:14px}.earlier-list:empty{display:none}   /* newest first in the DOM, oldest at the top on screen (#86) */
 .earlier{display:flex;justify-content:space-between;align-items:center;gap:16px;border-radius:14px;padding:10px 22px;color:var(--ink-3)}
 .earlier-text{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap;min-width:0}
 .earlier-text strong{font-size:15px;font-weight:600;color:var(--ink-2);overflow-wrap:anywhere}.earlier-text span{font-size:12px}
 .earlier.failed .earlier-text span{color:var(--bad)}
 .earlier button{min-height:30px;font-family:var(--sans);font-size:12px}
+/* An earlier card keeps its whole answer under its title line (#86): the same parts as the open card, minus the
+   per-step data and the exports, which come back with Open. */
+.earlier.drawn{flex-wrap:wrap;padding:14px 22px;gap:10px 16px;color:var(--ink)}
+.earlier.drawn .earlier-text strong{font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.entry-body{flex:1 1 100%;min-width:0;display:flex;flex-direction:column;gap:10px}
+.entry-body>:empty{display:none}
+.entry-body .messages{line-height:1.5;font-size:13.5px}
+.entry-body .charts{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+.entry-body .tables{display:flex;flex-direction:column;gap:6px}.entry-body .tables>details{margin-top:0;border-top:1px solid var(--line-2);padding-top:6px}
 /* The skeleton: grey blocks where the query box, the summary and the charts will land; the answer fills in place */
 .skel-block{display:flex;flex-direction:column;gap:9px;padding:6px 0}
 .skel{display:block;height:11px;border-radius:6px;background:var(--surface-3)}
@@ -281,6 +335,7 @@ code{font-family:var(--mono)}
 @media(min-width:1180px){
  #charts{grid-template-columns:repeat(2,minmax(0,1fr))}
  .metrics{grid-template-columns:repeat(7,minmax(0,1fr))}
+ .entry-body .charts{grid-template-columns:repeat(2,minmax(0,1fr))}
  /* the split query box: the steps down the left, the open step's SQL beside them, its buttons in the foot row */
  .queries{min-height:148px;display:flex;flex-direction:column}.queries:empty{display:none}
  .queries-foot{margin-top:auto;padding-top:6px}
@@ -329,6 +384,7 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
  .title{padding:16px 16px 4px}
  main.wrap{padding-bottom:48px}
  .shell{display:block;padding:12px 12px 32px}
+ .shell-page .shell{display:flex;flex-direction:column;padding:8px 10px max(8px,env(safe-area-inset-bottom,0px))}.shell-page .shell>main{flex:1 1 auto}   /* the transcript takes the height between the header and the ask bar (#86) */
  .rail{display:none}
  .rail.open{display:flex;position:fixed;inset:0;z-index:20;overflow:auto;background:var(--bg);padding:12px}
  .rail-toggle,.rail-close{display:inline-flex;align-items:center}.rail-close{align-self:flex-end;min-height:36px}
@@ -347,7 +403,7 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
  .heatmap-weekdays,.heatmap-grid{gap:4px}.heatmap-cell{padding:5px}
  td,th{min-width:80px}
 }
-@media(min-width:851px) and (max-width:1179px){.rail{flex-basis:264px}.shell{padding:16px 16px 40px;gap:16px}}
+@media(min-width:851px) and (max-width:1179px){.rail{flex-basis:264px}.shell{padding:16px 16px 40px;gap:16px}.shell-page .shell{padding:12px 16px max(12px,env(safe-area-inset-bottom,0px))}}
 @media(prefers-reduced-motion:no-preference){.answer.skeleton .skel,.answer.skeleton .skel-chart{animation:skel 1.1s ease-in-out infinite alternate}}
 @keyframes skel{from{opacity:1}to{opacity:.55}}
 @media(prefers-reduced-motion:no-preference){button{transition:filter .15s}}

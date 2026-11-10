@@ -121,7 +121,10 @@ control change pushes the bare scope address; the Period report is `measure=repo
 without a request; any other address is fetched as `.json`. Opening a canonical URL in a fresh browser
 does the same on load. Follow-up context is the `after=` chain the page builds from its earlier views
 (at most `max_turns − 1`), so offline needs no `session_id`; the Download PDF button of an addressed
-answer is a link to `…&format=pdf`. Live mode keeps the session and the POST.
+answer is a link to `…&format=pdf`. Live mode keeps the session and the POST. On a reload of the tab the
+thread above the addressed card comes back the same way (issue #86): each card is kept in `sessionStorage` as
+its own address (an analyst's card as the offline address it was asked from) and fetched again as JSON;
+only same-origin `/corr/…` and `/q?…` paths are replayed.
 
 ## Room left in the grammar
 
