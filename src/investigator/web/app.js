@@ -655,15 +655,16 @@ function answeredScope(s,result){
 }
 function entryWho(rec){ return (rec.answered&&rec.answered.who)||scopeWho(rec.scope); }
 function entryLabel(rec){ return `${entryWho(rec)} · ${(rec.answered&&rec.answered.window)||windowText(rec.scope)}`; }
-function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 93 ms
- const parts=[entryLabel(rec),rec.mode];
+function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 93 ms, or … · analyst · 2 model calls · 1.8 s (#65)
+ const analyst=!!PROVIDERS[rec.mode], parts=[entryLabel(rec),analyst?'analyst':rec.mode];
  if(rec.state==='pending')parts.push('asking…');
  else if(rec.state==='error')parts.push('failed');
+ else if(analyst){const n=Number(rec.result.usage&&rec.result.usage.model_calls)||0;parts.push(`${n} model ${n===1?'call':'calls'}`);}
  else{const n=(rec.result.trace||[]).length;parts.push(`${n} ${n===1?'query':'queries'}`);}
- if(rec.ms!==null)parts.push(msText(rec.ms));
+ if(rec.ms!==null)parts.push(analyst&&rec.ms>=1000?`${(rec.ms/1000).toFixed(1)} s`:msText(rec.ms));   // a model round reads in seconds: analyst · 2 model calls · 1.8 s
  return parts.join(' · ');
 }
-function clearCard(){ for(const id of ['queries','messages','charts','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('calls').textContent=''; stepIndex=new Map(); }
+function clearCard(){ if(pace)finishReveal(); for(const id of ['queries','messages','charts','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('calls').textContent=''; stepIndex=new Map(); }
 function skeleton(){   // grey blocks where the query box, the summary and the two charts will land
  const q=node('div',undefined,'skel-block'); for(const w of ['w60','w45','w70','w45'])q.append(node('span',undefined,'skel '+w)); $('queries').append(q);
  const m=node('div',undefined,'skel-block'); for(const w of ['w90','w70'])m.append(node('span',undefined,'skel '+w)); $('messages').append(m);
@@ -684,7 +685,7 @@ function paintMeta(rec){
  const meta=$('card-meta'); meta.textContent=rec?cardMeta(rec):'';
  if(!rec||rec.state!=='done'||rec.ms===null){meta.title='';return;}
  const r=rec.result, server=typeof r.elapsed_ms==='number'?r.elapsed_ms:(r.trace||[]).reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
- meta.title=`${Math.round(rec.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${r.mode}.`;
+ meta.title=`${Math.round(rec.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${PROVIDERS[rec.mode]?PROVIDERS[rec.mode].name+' analyst, '+r.mode:r.mode}.`;
 }
 function syncPdf(){ if(latest)$('pdf').hidden=!latest.url&&latestRun.get(latest.session_id)!==latest.run_id; }   // an addressed answer prints from its address; a model's answer only while it is its session's latest run (re-checked when another lands)
 // Opening a card: an addressed answer of the current scope puts its address in the bar and the conversation follows
@@ -705,12 +706,76 @@ function renderCard(){
  else{
   card.className='card answer';
   if(rec.note)message('Note',[rec.note]);
-  message('',rec.result.sections||[]);showResult(rec.result);
+  const summary=message('',rec.result.sections||[]);showResult(rec.result);
   $('card-foot').hidden=false;syncPdf();
+  if(rec.state==='done'&&!rec.revealed){ rec.revealed=true; pendingReveal={summary,t0:rec.t0}; }   // first time this answer is drawn: it is revealed once, reopening shows it settled
  }
  if(rec.state!=='pending')analystOffer(rec);
  renderEarlier();
+ if(pendingReveal){ const {summary,t0}=pendingReveal; pendingReveal=null; reveal(summary,t0); }
 }
+// ---- The reveal (issue #65). The answer is complete and in the DOM before this runs: the pacing only changes
+// when the parts of it become visible, in the order of the reasoning. The query lines tick in about 80 ms apart;
+// the summary's visible paragraphs type word by word at reading speed (faster when the answer is long, so it is all
+// there by about 1.5 s), the first figure landing at once; the charts bloom once the first sentence is down; the
+// tiles and tables are there from the first frame, like a gauge. Nothing is typed that is not already the text of
+// the finished card: each paragraph shows a prefix of its own textContent, and the end state is that text. A click
+// or any key ends it at once; prefers-reduced-motion, or a page without a frame scheduler, shows everything at once.
+let pendingReveal=null, pace=null;
+const PACE={query_ms:80,queries_ms:480,type_after_ms:160,first_by_ms:400,frame_ms:17,cps:50,type_ms:1000};
+function reducedMotion(){ try{return typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;} }
+function addClass(e,c){ e.className=((e.className||'')+' '+c).trim(); }
+function dropClass(e,c){ e.className=(e.className||'').split(' ').filter(x=>x&&x!==c).join(' '); }
+// The end of the leading chunk of a paragraph: through its first figure, which lands with the first frame of typing.
+// A shift's number is its name, not its figure: "Shift 2: 616.2 ft/min" lands through 616.2.
+function firstFigureEnd(text){ const re=/\d[\d,.]*/g; let m; while((m=re.exec(text))&&/\bShift $/.test(text.slice(0,m.index))); if(!m)return 0; const end=m.index+m[0].length; const space=text.slice(end).search(/\s/); return space<0?text.length:end+space; }
+function sentenceEnd(text){ const m=/[.!?](\s|$)/.exec(text); return m?m.index+1:text.length; }
+function wordEnd(text,n){ if(n>=text.length)return text.length; if(n<=0)return 0; const space=text.slice(n).search(/\s/); return space<0?text.length:n+space; }
+function finishReveal(skipped=false){
+ const p=pace; if(!p)return; pace=null; p.done=true;
+ for(const q of p.queries)dropClass(q,'pace-wait');
+ for(const t of p.typed){ t.el.textContent=t.text; dropClass(t.el,'typing'); }
+ for(const e of p.later)dropClass(e,'pace-wait');
+ for(const e of p.blooms){ dropClass(e,'pace-wait'); if(skipped)dropClass(e,'bloom'); }   // skipped: the charts show drawn, no growth still to run
+ if(p.card)p.card.setAttribute('data-reveal','done');
+}
+function skipReveal(){ if(pace)finishReveal(true); }
+function reveal(summary,submitted){
+ if(pace)finishReveal();   // a newer card: the one before is settled first
+ if(reducedMotion()||typeof requestAnimationFrame!=='function'||!summary)return;
+ const queries=$('queries').children.filter?$('queries').children.filter(e=>/^query\b/.test(e.className||'')):[...$('queries').children].filter(e=>/^query\b/.test(e.className||''));
+ const kids=summary.children?[...summary.children]:[];
+ const typed=kids.filter(e=>e.tag==='p'||e.tagName==='P').map(el=>({el,text:el.textContent}));
+ const later=[...kids.filter(e=>!typed.some(t=>t.el===e)),...[...$('messages').children].filter(e=>e!==summary&&!/\bmessage\b/.test(e.className||''))];   // the note disclosure and the analyst offer arrive with the last word
+ const blooms=[...$('charts').children,...$('heatmaps').children];
+ const total=typed.reduce((n,t)=>n+t.text.length,0), step=queries.length?Math.min(PACE.query_ms,PACE.queries_ms/queries.length):0;
+ // The first figure is due 400 ms after the submit, not after the land: a slow land shortens the wait before the
+ // lead chunk (by a frame's margin), and past that point it lands on the reveal's first frame.
+ const now=clock(), since=typeof submitted==='number'?now-submitted:0;
+ const start=Math.max(0,Math.min(PACE.type_after_ms,queries.length*step,PACE.first_by_ms-PACE.frame_ms-since));
+ const p={t0:now,queries,typed,later,blooms,step,start,cps:Math.max(PACE.cps,total/(PACE.type_ms/1000)),lead:typed.length?firstFigureEnd(typed[0].text):0,first:typed.length?sentenceEnd(typed[0].text):0,bloomed:false,done:false,card:$('card')};
+ pace=p; p.card.setAttribute('data-reveal','running');
+ queries.forEach((q,i)=>{ if(i*step>0)addClass(q,'pace-wait'); });
+ for(const t of typed){ t.el.textContent=''; addClass(t.el,'typing'); }
+ for(const e of later)addClass(e,'pace-wait');
+ for(const e of blooms)addClass(e,'pace-wait');
+ const frame=()=>{ if(pace!==p)return; tickReveal(p); if(pace===p)requestAnimationFrame(frame); };
+ tickReveal(p); if(pace===p)requestAnimationFrame(frame);
+}
+function tickReveal(p){
+ const t=clock()-p.t0;
+ p.queries.forEach((q,i)=>{ if(t>=i*p.step)dropClass(q,'pace-wait'); });
+ if(t<p.start)return;
+ let budget=Math.max(p.lead,Math.floor((t-p.start)*p.cps/1000)), all=true;
+ p.typed.forEach((x,i)=>{
+  const n=wordEnd(x.text,budget); budget-=x.text.length;
+  if(n>0||i===0){ x.el.textContent=x.text.slice(0,Math.max(0,n)); }
+  if(n>=x.text.length)dropClass(x.el,'typing'); else all=false;
+  if(i===0&&!p.bloomed&&n>=p.first){ p.bloomed=true; for(const e of p.blooms){ dropClass(e,'pace-wait'); addClass(e,'bloom'); } }
+ });
+ if(all&&p.queries.every((q,i)=>t>=i*p.step))finishReveal();
+}
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function'){ document.addEventListener('keydown',skipReveal,true); document.addEventListener('pointerdown',skipReveal,true); }
 // ---- Ask the analyst (issues #23, #67). The model is opt-in per question: the ask bar's button for the typed
 // question, or the button under an offline answer for that answer's question. Either opens its own card. The
 // server streams newline-delimited JSON events: start, plan (the queries the model chose, in one call), a step
@@ -769,7 +834,7 @@ function analystOffer(rec){
 }
 // The one render entry for an answer, asked or opened from an address: the record takes the result and its card
 // (open or one line in the thread) is drawn again. The ms is submit to rendered.
-function settleCard(rec){ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} }
+function settleCard(rec){ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); else rec.revealed=true;   /* landed behind another card: it opens settled (#65) */ rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} }
 function land(rec,result){
  if(result.session_id)latestRun.set(result.session_id,result.run_id);
  rec.result=result; rec.answered=answeredScope(rec.scope,result); rec.state='done'; settleCard(rec);
