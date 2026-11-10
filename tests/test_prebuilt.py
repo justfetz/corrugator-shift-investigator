@@ -52,8 +52,9 @@ def test_prebuilt_store_is_identical_to_a_generated_one(folder, generated):
         assert store.content_hash == generated.content_hash
         assert store.counts == generated.counts
         assert store.production_days == generated.production_days
-        for table in TABLES:
+        for table in (*TABLES, "shift_kpis"):   # shift_kpis: built at image build, loaded, never recomputed (#34)
             assert _rows(store, table) == _rows(generated, table), table
+        assert store._db.execute("SELECT count(*) FROM shift_kpis").fetchone()[0] == 2 * len(store.production_days) * 3
         # the per-day objects drive the Analysis: an answer must be byte-identical either way
         day = "2026-09-14"
         a, b = store.day_analysis(day), generated.day_analysis(day)
@@ -148,7 +149,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
     db = duckdb.connect(str(drift / "store.duckdb"))
     try:
         db.execute(f"ATTACH '{folder / 'store.duckdb'}' AS good (READ_ONLY)")
-        for table in TABLES:
+        for table in (*TABLES, "shift_kpis"):
             db.execute(f"CREATE TABLE {table} AS SELECT * FROM good.{table}")
         db.execute("ALTER TABLE setups DROP COLUMN split_from")
         db.execute("CHECKPOINT")
@@ -168,7 +169,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
     db = duckdb.connect(str(short / "store.duckdb"))
     try:
         db.execute(f"ATTACH '{folder / 'store.duckdb'}' AS good (READ_ONLY)")
-        for table in TABLES:
+        for table in (*TABLES, "shift_kpis"):
             db.execute(f"CREATE TABLE {table} AS SELECT * FROM good.{table}")
         db.execute("DELETE FROM stops WHERE stop_id = (SELECT min(stop_id) FROM stops)")
         db.execute("CHECKPOINT")
@@ -179,6 +180,38 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
         assert store.boot_source == "generated"
     finally:
         store.close()
+    # issue #34: the derived shift_kpis table is checked like the six. A manifest that does not
+    # record its row count (an older format), a file without the table, or a row missing: generate,
+    # and the generated store builds its own shift_kpis.
+    unnumbered = tmp_path / "unnumbered"
+    unnumbered.mkdir()
+    for name in ("records.pkl", "store.duckdb"):
+        unnumbered.joinpath(name).write_bytes(folder.joinpath(name).read_bytes())
+    manifest = json.loads((folder / "manifest.json").read_text())
+    del manifest["shift_kpis_rows"]
+    (unnumbered / "manifest.json").write_text(json.dumps(manifest))
+    assert read_prebuilt(unnumbered, DEFAULT_SEED, DEFAULT_MONTHS, DEFAULT_MACHINE) is None
+    for name, damage in (("no_kpis", None), ("short_kpis", "DELETE FROM shift_kpis WHERE shift = 3 AND corrupt")):
+        bad = tmp_path / name
+        bad.mkdir()
+        for file in ("manifest.json", "records.pkl"):
+            bad.joinpath(file).write_bytes(folder.joinpath(file).read_bytes())
+        db = duckdb.connect(str(bad / "store.duckdb"))
+        try:
+            db.execute(f"ATTACH '{folder / 'store.duckdb'}' AS good (READ_ONLY)")
+            for table in (*TABLES, *(("shift_kpis",) if damage else ())):
+                db.execute(f"CREATE TABLE {table} AS SELECT * FROM good.{table}")
+            if damage:
+                db.execute(damage)
+            db.execute("CHECKPOINT")
+        finally:
+            db.close()
+        store = RecordStore(prebuilt=bad)
+        try:
+            assert store.boot_source == "generated", name
+            assert store._db.execute("SELECT count(*) FROM shift_kpis").fetchone()[0] == 2 * 3 * len(store.production_days), name
+        finally:
+            store.close()
     # the fingerprint covers every module in the package (the seeded answer keys and the
     # row builder included), so any source change invalidates a folder built before it
     from investigator import record_store as module
