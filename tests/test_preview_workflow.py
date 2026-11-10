@@ -1,20 +1,28 @@
-"""The per-pull-request preview deploy (issue #41): the origin arithmetic the workflow relies on.
+"""The per-pull-request preview deploy (issue #41): the origin arithmetic the workflow relies on,
+and the retry around every write to the Cloud Run service.
 
 `.github/scripts/preview_origins.py` turns `gcloud run services describe --format=json` into the
 PUBLIC_DEMO_ORIGIN allow-list for a tagged revision, finds the tag's URL, and names the revisions
-to delete. These are the pieces that would otherwise fail only in a live Cloud Run run.
+to delete. `.github/scripts/cloud_run_update.sh` runs a write again when Cloud Run rejected it
+because another pull request's run (or the main deploy) changed the service first. These are the
+pieces that would otherwise fail only in a live Cloud Run run.
 """
 import importlib.util
 import json
+import os
 import pathlib
+import re
 import subprocess
 import sys
+import textwrap
 
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / '.github' / 'scripts' / 'preview_origins.py'
+HELPER = ROOT / '.github' / 'scripts' / 'cloud_run_update.sh'
 WORKFLOW = ROOT / '.github' / 'workflows' / 'preview.yml'
+MAIN_WORKFLOW = ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml'
 
 spec = importlib.util.spec_from_file_location('preview_origins', SCRIPT)
 po = importlib.util.module_from_spec(spec)
@@ -176,15 +184,122 @@ def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
     assert text.index('refs/pull/$PR/merge') < text.index('google-github-actions/auth@v2'), 'the head check comes before any deploy step'
 
 
-def test_main_deploy_rebinds_traffic_to_latest_after_a_preview():
+def test_main_deploy_routes_the_traffic_to_the_revision_it_named_not_to_latest():
     # gcloud: after any --no-traffic deploy the service is pinned to a named revision and later
-    # deploys get 0% unless traffic is re-bound. main must always take the traffic.
-    text = (ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml').read_text()
-    assert '--to-latest' in text
-    assert text.index('--to-latest') > text.index('gcloud run deploy "$SERVICE" --source .')
-    assert text.index('--to-latest') > text.index('Add any URL the first deploy created'), 'services update also makes a revision'
-    assert text.index('--to-latest') < text.index('- name: Smoke test')
-    assert 'LATEST does not carry 100% of the traffic' in text
+    # deploys get 0% unless traffic is re-bound. main must always take the traffic, and it must be
+    # main's own revision: LATEST follows whichever revision became ready last, and a preview can
+    # land between the deploy and the traffic step (the runs are not serialized), so the deploy
+    # names its revision and routes to that name.
+    text = MAIN_WORKFLOW.read_text()
+    traffic_lines = [line for line in text.splitlines() if 'gcloud run services update-traffic' in line]
+    assert len(traffic_lines) == 1 and '--to-latest' not in traffic_lines[0], traffic_lines
+    assert 'TAIL="-${{ github.run_number }}-${{ github.run_attempt }}"' in text, 'unique per run and per re-run'
+    assert 'SUFFIX="main-${GITHUB_SHA:0:$SHA_LEN}${TAIL}"' in text
+    # Cloud Run caps a revision name at 63 characters: the commit is cut to what the service name leaves
+    # (the "-urls" revision included), never the run number or attempt; no room at all fails with the limit named.
+    start, end = text.index('TAIL="-'), text.index('\n', text.index('SUFFIX="main-'))
+    sizing = text[start:end].replace('${{ github.run_number }}', '4321').replace('${{ github.run_attempt }}', '2')
+    for service, expect in [(SERVICE, 'main-c8e9d73-4321-2'), ('a' * 44, 'main-c-4321-2'), ('a' * 49, 'ERROR')]:
+        proc = subprocess.run(['bash', '-euo', 'pipefail', '-c', sizing + '\necho "$SUFFIX"'], capture_output=True, text=True,
+                              env={**os.environ, 'SERVICE': service, 'GITHUB_SHA': 'c8e9d73c5b312eab49962d5ba2ebf79c9cf2c21c'})
+        if expect == 'ERROR':
+            assert proc.returncode == 1 and '::error::' in proc.stdout and '63-character' in proc.stdout, proc.stdout
+        else:
+            assert proc.returncode == 0 and proc.stdout.strip() == expect, proc.stdout + proc.stderr
+            assert len(f'{service}-{expect}-urls') <= 63
+    assert text.count('--revision-suffix') == 2, 'the deploy and the allow-list update both name the revision they make'
+    assert '--revision-suffix "${SUFFIX}-urls"' in text and 'REVISION=${SERVICE}-${SUFFIX}-urls' in text
+    assert '--to-revisions "${REVISION}=100"' in text
+    assert text.index('--to-revisions') > text.index('gcloud run deploy "$SERVICE" --source .')
+    assert text.index('--to-revisions') > text.index('Add any URL the first deploy created'), 'services update also makes a revision'
+    assert text.index('--to-revisions') < text.index('- name: Smoke test')
+    assert 'does not carry 100% of the traffic' in text
+
+
+# --- the retry around every write to the service (two pull requests' runs are not serialized) ---
+
+CONFLICT = ("ERROR: (gcloud.run.deploy) ABORTED: Conflict for resource 'corrugator-shift-investigator': "
+            "version '1794249923487033' was specified but current version is '1794250052170767'.")
+
+
+def fake_gcloud(tmp_path, failures, message=CONFLICT, status=1):
+    """A stand-in gcloud: fails `failures` times with `message` on stderr, then succeeds; logs every call."""
+    calls = tmp_path / 'calls'
+    calls.write_text('')
+    stub = tmp_path / 'gcloud'
+    stub.write_text(textwrap.dedent(f"""\
+        #!/usr/bin/env bash
+        echo "$*" >> "{calls}"
+        if [ "$(wc -l < "{calls}")" -le {failures} ]; then
+          echo "Building Container...done"; echo "Deployment failed"
+          echo "{message}" >&2
+          exit {status}
+        fi
+        echo "Service [corrugator-shift-investigator] revision [r] has been deployed."
+        """))
+    stub.chmod(0o755)
+    return stub, calls
+
+
+def run_helper(stub, *args, attempts=None):
+    env = {**os.environ, 'CLOUD_RUN_UPDATE_PAUSE': '0'}
+    if attempts is not None:
+        env['CLOUD_RUN_UPDATE_ATTEMPTS'] = str(attempts)
+    return subprocess.run(['bash', str(HELPER), str(stub), *args], env=env, capture_output=True, text=True)
+
+
+def test_a_write_another_run_collided_with_is_run_again_and_the_run_goes_green(tmp_path):
+    # The race of PR #50's Preview run 16: PR #54's close job wrote the service in the second
+    # between this deploy's re-read after its build and its write. Attempt 1 is rejected exactly
+    # as Cloud Run rejected it, attempt 2 is the same command again, and the step passes.
+    stub, calls = fake_gcloud(tmp_path, failures=1)
+    proc = run_helper(stub, 'run', 'deploy', SERVICE, '--source', '.', '--no-traffic', '--tag', 'pr-41')
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert calls.read_text().splitlines() == [f'run deploy {SERVICE} --source . --no-traffic --tag pr-41'] * 2, 'the same command, as it was'
+    assert proc.stdout.count('ABORTED: Conflict for resource') == 1 and 'has been deployed' in proc.stdout, 'the output streams through'
+    assert proc.stdout.count('::notice::') == 1 and 'attempt 1 of 4 was rejected' in proc.stdout
+    assert '::warning::' not in proc.stdout and '::error::' not in proc.stdout
+
+
+def test_the_retry_is_bounded_and_only_for_a_rejected_write(tmp_path):
+    stub, calls = fake_gcloud(tmp_path, failures=99)
+    proc = run_helper(stub, 'run', 'services', 'update-traffic', SERVICE, '--remove-tags', 'pr-41')
+    assert proc.returncode == 1 and len(calls.read_text().splitlines()) == 4, "four attempts in all, then the command's own status"
+    assert proc.stdout.count('::notice::') == 3 and 'attempt 4 of 4 was still rejected' in proc.stdout.split('::warning::')[1]
+    stub, calls = fake_gcloud(tmp_path, failures=99)
+    proc = run_helper(stub, 'run', 'deploy', SERVICE, attempts=1)
+    assert proc.returncode == 1 and len(calls.read_text().splitlines()) == 1
+    aborted = "ERROR: (gcloud.run.deploy) ABORTED: the operation was aborted"   # the word alone is not the rejected write
+    stub, calls = fake_gcloud(tmp_path, failures=99, message=aborted)
+    proc = run_helper(stub, 'run', 'deploy', SERVICE)
+    assert proc.returncode == 1 and len(calls.read_text().splitlines()) == 1 and '::notice::' not in proc.stdout
+    denied = "ERROR: (gcloud.run.services.update-traffic) PERMISSION_DENIED: Permission 'run.services.update' denied"
+    stub, calls = fake_gcloud(tmp_path, failures=99, message=denied, status=7)
+    proc = run_helper(stub, 'run', 'services', 'update-traffic', SERVICE, '--to-revisions', 'r=100')
+    assert proc.returncode == 7 and len(calls.read_text().splitlines()) == 1, 'any other failure is not retried'
+    assert 'PERMISSION_DENIED' in proc.stdout and '::notice::' not in proc.stdout and '::warning::' not in proc.stdout
+    stub, calls = fake_gcloud(tmp_path, failures=0)
+    proc = run_helper(stub, 'run', 'revisions', 'delete', 'r')
+    assert proc.returncode == 0 and len(calls.read_text().splitlines()) == 1 and '::notice::' not in proc.stdout
+
+
+@pytest.mark.parametrize('workflow, writes', [(WORKFLOW, 4), (MAIN_WORKFLOW, 3)])
+def test_every_write_to_the_service_goes_through_the_retry_helper(workflow, writes):
+    # Both workflows write the one service and GitHub serializes runs only per group (preview-pr-<n>
+    # per pull request, cloud-run-deploy for main): a write that lost the race is run again rather
+    # than failing the run. Reads are not retried. A sweep that loses a revision to another run's
+    # sweep treats gone as deleted instead of failing (the close job did fail on it).
+    text = workflow.read_text()
+    write_lines = [line for line in text.splitlines() if re.search(r'gcloud run (deploy|services update|services update-traffic|revisions delete)\b', line)]
+    assert len(write_lines) == writes, write_lines
+    assert all('bash .github/scripts/cloud_run_update.sh gcloud run ' in line for line in write_lines), write_lines
+    read_lines = [line for line in text.splitlines() if re.search(r'gcloud run (services describe|revisions list|revisions describe)\b', line)]
+    assert read_lines and not any('cloud_run_update.sh' in line for line in read_lines)
+    if workflow is WORKFLOW:
+        assert text.count('is already gone; another run deleted it first') == 2, 'both sweeps'
+        assert text.count('if ! gcloud run revisions describe "$NAME"') == 2
+        assert text.count("&& grep -qiE 'NOT_FOUND|could not be found|not found|Cannot find revision' /tmp/revision.err") == 2, 'gone means NOT_FOUND, not any failed describe'
+        assert 'cancel-in-progress: false' not in text and text.count('group:') == 1, 'no repository-wide group: GitHub keeps one pending run per group'
 
 
 def test_workflow_yaml_parses_when_pyyaml_is_available():
@@ -192,3 +307,22 @@ def test_workflow_yaml_parses_when_pyyaml_is_available():
     wf = yaml.safe_load(WORKFLOW.read_text())
     assert set(wf['jobs']) == {'deploy', 'cleanup'}
     assert yaml.safe_load((ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml').read_text())['jobs']['deploy']
+
+
+def test_the_already_gone_pattern_matches_what_gcloud_actually_prints():
+    """A revision another run's sweep deleted first is 'gone', not a failure. gcloud 570 prints
+    'Cannot find revision [NAME]' from `revisions describe` on a 404 (surface/run/revisions/describe.py),
+    and 'Revision [NAME] could not be found.' from `revisions delete`; the pattern must match both and
+    nothing that is a real failure. Run with grep, the same way the workflow does."""
+    import re
+    text = WORKFLOW.read_text()
+    patterns = set(re.findall(r"grep -qiE '([^']+)' /tmp/revision\.err", text))
+    assert len(patterns) == 1, patterns
+    pattern = patterns.pop()
+    def matches(line):
+        return subprocess.run(['grep', '-qiE', pattern], input=line, text=True).returncode == 0
+    assert matches('ERROR: (gcloud.run.revisions.describe) Cannot find revision [corrugator-shift-investigator-pr-47-abc1234-3].')
+    assert matches('ERROR: (gcloud.run.revisions.delete) Revision [corrugator-shift-investigator-pr-47-abc1234-3] could not be found.')
+    assert matches('ERROR: (gcloud.run.revisions.describe) NOT_FOUND: Resource not found')
+    assert not matches('ERROR: (gcloud.run.revisions.describe) PERMISSION_DENIED: The caller does not have permission')
+    assert not matches('ERROR: (gcloud.run.revisions.delete) ABORTED: Conflict for resource')

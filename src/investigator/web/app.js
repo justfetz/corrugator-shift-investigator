@@ -15,7 +15,6 @@ function syncKeyLabel(){
  if(p)$('key-label-text').textContent=`${p.name} API key (optional if configured on server)`;
 }
 function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
-function node(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 function message(label, paragraphs, cls='') {
  const e=node('div',undefined,'message '+cls);e.append(node('strong',label));
@@ -121,7 +120,8 @@ function reportUrl(){ const p=new URLSearchParams([['measure','report']]); if($(
 function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
 function bareUrl(url){ const [path,query='']=url.split('?'); const p=new URLSearchParams(query); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
 function priorsOf(url){ return new URLSearchParams(url.split('?')[1]||'').getAll('after'); }
-function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.max(0,(turns||4)-1); }
+const MAX_AFTER=8;   // the grammar carries at most eight prior views (urls.MAX_AFTER); the agent keeps its own max_turns
+function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.min(MAX_AFTER,Math.max(0,(turns||4)-1)); }
 function currentAddress(){ return nav?nav.location.pathname+nav.location.search:null; }
 // Set the controls from a canonical address; false when the address is not one.
 function applyUrl(url){
@@ -138,7 +138,7 @@ function rememberView(result,question,{follow=true}={}){   // follow=false: the 
  conversation=[...priorsOf(result.url),...(follow?[bareUrl(result.url)]:[])].slice(-maxPriors());
  pushAddress(result.url);
 }
-function clearResults(){ $('heatmaps').replaceChildren();$('kpis').replaceChildren();latest=null;$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true; }
+function clearResults(){ $('heatmaps').replaceChildren();$('kpis').replaceChildren();$('queries').replaceChildren();stepIndex=new Map();latest=null;$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true; }
 // Back, forward or a pasted address: the controls follow the URL; a view this page has shown is re-rendered
 // from memory without a request, any other is fetched as .json from the same address.
 async function restore(url){
@@ -152,8 +152,9 @@ async function restore(url){
   try{
    const response=await fetch(url,{headers:{Accept:'application/json'}});
    const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-   $('messages').replaceChildren();message('You',[bareUrl(url)],'user');message(`Investigator · ${result.mode}`,result.sections);showResult(result);
-   views.set(result.url,{result,question:bareUrl(url)});conversation=[...priorsOf(result.url),bareUrl(result.url)].slice(-maxPriors());
+   $('messages').replaceChildren();message('You',[bareUrl(result.url||url)],'user');message(`Investigator · ${result.mode}`,result.sections);showResult(result);
+   views.set(result.url,{result,question:bareUrl(result.url||url)});conversation=[...priorsOf(result.url),bareUrl(result.url)].slice(-maxPriors());
+   if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url);   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
    $('status').textContent=`${result.status} · ${usageText(result.usage)}`;
   }catch(error){clearResults();$('messages').replaceChildren();message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';}
   finally{setBusy(false);updateScope();}
@@ -213,7 +214,9 @@ function renderQuestionChips(){
   for(const [label,text,scope,period] of chips){
    const question=text.replaceAll('{period}',word);
    const b=node('a',label.replaceAll('{period}',word),'chip'); b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question; b.setAttribute('role','button');
-   b.addEventListener('click',event=>{ if(event&&event.preventDefault)event.preventDefault(); if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
+   b.addEventListener('click',event=>{
+    if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return;   // a modifier click opens the link as the browser would (new tab, window)
+    if(event&&event.preventDefault)event.preventDefault(); if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
    row.append(b); chipButtons.push(b);
   }
   group.append(row); box.append(group);
@@ -242,7 +245,7 @@ function showHeatmap(chart) {
   const tooltip=row.available?detail+` Dry-end setups: ${row.valid_setups}.`:detail;
   cell.title=tooltip;cell.setAttribute('aria-label',tooltip);for(const event of ['mouseenter','focus','click'])cell.addEventListener(event,()=>{tip.textContent=tooltip;});grid.append(cell);
  }
- wrap.append(grid);const legend=node('div',undefined,'heatmap-legend');legend.append(node('span','Lower output'),node('span',undefined,'heatmap-scale'),node('span','Higher output'));wrap.append(legend,tip);$('heatmaps').append(wrap);
+ wrap.append(grid);const legend=node('div',undefined,'heatmap-legend');legend.append(node('span','Lower output'),node('span',undefined,'heatmap-scale'),node('span','Higher output'));wrap.append(legend,tip);const link=queryLink(chart.source_result_id);if(link)wrap.append(link);$('heatmaps').append(wrap);
 }
 // ---- Charts: plain SVG, one axis per chart, text in ink tokens, series color on the marks only.
 // Every chart is drawn from a tool result's rows; the same rows sit in the evidence tables.
@@ -407,6 +410,7 @@ function showChart(chart) {
  else if(chart.y2)pairedChart(chart,wrap);
  else if(isSpeed)speedChart(chart,wrap);
  else barChart(chart,wrap);
+ const link=queryLink(chart.source_result_id);if(link)wrap.append(link);
  $('charts').append(wrap);
 }
 const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'Speed w/o stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF',paper_runs:'Paper runs',msf:'MSF',previous_msf:'Prev MSF',delta_msf:'Δ MSF',share_of_feet_pct:'Share of ft %',lineal_per_run:'Lineal / run',previous_paper_runs:'Prev runs',previous_lineal_ft:'Prev lineal (ft)',delta_lineal_ft:'Δ lineal (ft)',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status'};
@@ -414,12 +418,12 @@ function showTable(data){
  const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'Totals by grade',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
- if(!data.rows.length){box.append(node('p','No eligible rows.'));$('tables').append(box);return;}
+ if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
  const omitted=new Set(['source_ids','gross_sqft','observed_lineal_ft','throughput_in','lineal_per_setup','lineal_per_wet_end','setups_above_trim_target']);
  const columns=Object.keys(data.rows[0]).filter(k=>!omitted.has(k)&&!Array.isArray(data.rows[0][k]));
  const wrap=node('div',undefined,'table-scroll');wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',titles[data.title]||data.title);const table=node('table'),head=node('thead'),tr=node('tr');
  for(const key of columns){const th=node('th',labels[key]||key.replaceAll('_',' '));th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=node('tbody');
- for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);$('tables').append(box);
+ for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);
 }
 
 // ---- KPI strip: dashboard-style tiles from a get_period_kpis / compare_periods envelope.
@@ -507,38 +511,52 @@ async function primeKpis(){
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
 
-// ---- The tool trail: one row per tool call. Arguments, row count, coverage and timing on the row;
-// the exact SQL with its bound values and the full result JSON behind disclosures.
-const compactJson=value=>JSON.stringify(value,(k,v)=>v===null?null:v)||'';
-function traceRow(entry){
- const d=node('details',undefined,'trace-step '+(entry.ok?'ok':'failed')), data=entry.ok?entry.data:null;
- const rows=data?Array.isArray(data.rows)?data.rows.length:null:null;
- const sum=node('summary',undefined,'trace-sum');
- sum.append(node('code',entry.tool,'tool'));
- sum.append(node('span',compactJson(entry.arguments||{}),'args mono'));
- const facts=[];
- if(rows!==null)facts.push(`${rows} row${rows===1?'':'s'}`);
- if(data&&data.coverage)facts.push(data.coverage);
- if(typeof entry.elapsed_ms==='number')facts.push(`${entry.elapsed_ms.toFixed(1)} ms`);
- facts.push(entry.ok?'OK':'error');
- sum.append(node('span',facts.join(' · '),'facts mono'));
+// The tool trail row (traceRow), node(), compactJson, dedent and sqlText live in trail.js, shared with the /evals page.
+let stepIndex=new Map();   // result_id -> step number of the latest answer, for the links from charts, tables and render_chart steps (#40)
+// ---- The query box (issue #40): the compact trace at the top of the answer, Datasette-style. One block
+// per tool step in order: tool(arguments) · rows · ms, then the exact parameterized SQL with its bound
+// values and a copy button. A few hundred bytes per step, so it is built with the answer, in the first
+// paint; the full per-step result ("What came back") stays below and is built after the paint (#33).
+// Read-only by design: the tools are parameterized (docs/AGENT_CONTRACT.md), so visitors cannot edit
+// and re-run the SQL here; the copy button is how someone re-runs it themselves.
+function argText(args){ return Object.entries(args||{}).filter(([,v])=>v!==null&&v!==undefined).map(([k,v])=>`${k}=${k==='result_id'&&stepIndex.has(v)?`query ${stepIndex.get(v)+1}`:typeof v==='object'?compactJson(v):String(v)}`).join(', '); }   // a result id reads as the query it names
+function stepFacts(entry){ const data=entry.ok?entry.data:null, rows=data&&Array.isArray(data.rows)?data.rows.length:null, facts=[]; if(rows!==null)facts.push(`${rows} row${rows===1?'':'s'}`); if(typeof entry.elapsed_ms==='number')facts.push(`${entry.elapsed_ms.toFixed(1)} ms`); if(!entry.ok)facts.push('error'); return facts; }
+function phoneWidth(){ try{return typeof matchMedia==='function'&&matchMedia('(max-width:850px)').matches;}catch(e){return false;} }
+function copyText(text,button){
+ const done=label=>{const was=button.textContent;button.textContent=label;setTimeout(()=>{button.textContent=was;},1500);};
+ try{ if(typeof navigator!=='undefined'&&navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>done('Copied'),()=>done('Copy failed')); else done('Copy unavailable'); }catch(e){done('Copy failed');}
+}
+function revealStep(i){ try{ $('execution').open=true; const fold=document.querySelector?.('.supporting-fold'); if(fold)fold.open=true; const step=document.getElementById(`step-${i}`); if(step)step.open=true; }catch(e){} }
+function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; return a; }
+function queryBox(entry,i){
+ const d=node('details',undefined,'query '+(entry.ok?'ok':'failed')); d.id=`query-${i}`;
+ const sum=node('summary',undefined,'query-sum');
+ sum.append(node('code',entry.tool,'tool'),node('span',`(${argText(entry.arguments)})`,'args'),node('span','· '+stepFacts(entry).join(' · '),'facts'));
  d.append(sum);
- if(!entry.ok){d.append(node('p',`${entry.error?.code||'error'}: ${entry.error?.message||'tool call rejected'}`,'warning-note'));}
- else{
-  const meta=node('dl',undefined,'trace-meta');const add=(k,v)=>{if(v===undefined||v===null||v==='')return;meta.append(node('dt',k),node('dd',String(v)));};
-  if(data.window)add('Window',`${data.window.label} (${data.window.coverage})`+(data.previous_window?`; previous ${data.previous_window.label} (${data.previous_window.coverage})`:''));
-  if(data.shift!==undefined)add('Shift',data.shift===null?'all shifts':data.shift);
-  if(data.source_rows)add('Source rows',compactJson(data.source_rows));
-  if(data.excluded_records?.length)add('Excluded records',data.excluded_records.map(r=>`${r.record_id}: ${r.error}`).join('; '));
-  if(entry.tool==='render_chart')add('Chart',`${data.type}; x=${data.x}; y=${data.y}${data.y2?'; y2='+data.y2:''}; unit=${data.unit}; from ${data.source_result_id}`);
-  if(data.dataset_version)add('Dataset',String(data.dataset_version).slice(0,16)+'…');
-  if(meta.children.length)d.append(meta);
-  const sql=data.trace?.sql||data.daily_sql; const params=data.trace?.parameters;
-  if(sql){const q=node('details',undefined,'trace-sql');q.append(node('summary','SQL and bound values'));q.append(node('pre',String(sql).trim()+(params?`\n\n-- bound values\n${JSON.stringify(params)}`:'')));d.append(q);}
-  else if(entry.tool!=='render_chart'){d.append(node('p','No SQL: this tool composes other results.','muted'));}
- }
- const full=node('details',undefined,'trace-json');full.append(node('summary','Full result JSON'));full.append(node('pre',JSON.stringify(entry,null,2)));d.append(full);
+ const sql=sqlText(entry);
+ if(sql)d.append(node('pre',sql,'sql'));
+ else if(!entry.ok)d.append(node('p',`${entry.error?.code||'error'}: ${entry.error?.message||'tool call rejected'}`,'warning-note'));
+ else if(entry.tool==='render_chart'){ const p=node('p',undefined,'muted'); const src=queryLink(entry.arguments?.result_id); p.append('No SQL: draws the rows of '); p.append(src||'an earlier query'); p.append('.'); d.append(p); }
+ else d.append(node('p','No SQL: this tool composes other results.','muted'));
+ const foot=node('div',undefined,'query-foot');
+ if(sql){const copy=node('button','Copy SQL','secondary copy');copy.type='button';copy.dataset.copy=sql;copy.addEventListener('click',()=>copyText(sql,copy));foot.append(copy);}
+ const back=node('a','What came back ↓','came-back');back.href=`#step-${i}`;back.title='The full result of this step, below the charts';back.addEventListener('click',()=>revealStep(i));foot.append(back);
+ d.append(foot);
  return d;
+}
+function renderQueries(result){
+ const box=$('queries'); box.replaceChildren(); stepIndex=new Map();
+ const steps=result.trace||[]; if(!steps.length)return;
+ steps.forEach((e,i)=>{if(e.result_id)stepIndex.set(e.result_id,i);});
+ const total=steps.reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
+ const head=node('div',undefined,'queries-head'); head.append(node('span','Queries that produced this answer'),node('span',`${steps.length} ${steps.length===1?'query':'queries'} · ${total.toFixed(0)} ms`,'mono')); box.append(head);
+ const phone=phoneWidth(), boxes=steps.map((entry,i)=>{const d=queryBox(entry,i);d.open=!phone&&i===0;box.append(d);return d;});   // step 1 open; the rest, and all on a phone, one line with the SQL on tap
+ const foot=node('div',undefined,'queries-foot');
+ const all=node('button','Expand all','secondary');all.type='button';all.addEventListener('click',()=>{const open=!boxes.every(b=>b.open);for(const b of boxes)b.open=open;all.textContent=open?'Collapse all':'Expand all';});foot.append(all);
+ const sqls=steps.map((e,i)=>[e,i,sqlText(e)]).filter(x=>x[2]);
+ if(sqls.length){const copy=node('button','Copy all SQL','secondary');copy.type='button';const text=sqls.map(([e,i,sql])=>`-- query ${i+1}: ${e.tool}(${argText(e.arguments)})\n${sql}`).join('\n\n');copy.dataset.copy=text;copy.addEventListener('click',()=>copyText(text,copy));foot.append(copy);}
+ foot.append(node('span','Fixed, parameterized queries. Visitors cannot edit them.'));
+ box.append(foot);
 }
 function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool calls · ${usage.model_calls} model call${usage.model_calls===1?'':'s'} · estimated $${Number(usage.cost_usd||0).toFixed(4)}`+(usage.reserved_usd!==undefined?` · reserved $${Number(usage.reserved_usd).toFixed(2)}`:''):`${usage.tool_calls} tool call${usage.tool_calls===1?'':'s'} · $0 model cost`; }
 // Paint the answer, tables and charts first; the trace table (the largest part of the page)
@@ -551,6 +569,7 @@ function showResult(result) {
  latest=result; $('download').disabled=false; $('pdf').disabled=false;
  try{const fold=document.querySelector('.examples-fold'); if(fold&&fold.open)fold.open=false;}catch(e){}  // the first answer folds the examples so the conversation has the room
  $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();   // each answer replaces the last one's evidence
+ renderQueries(result);   // the query box: first below the question, built in the first paint (#40)
  const kpiEntry=result.trace.find(e=>e.ok&&(e.tool==='get_period_kpis'||e.tool==='compare_periods'));
  if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`);
  for(const entry of result.trace) {
@@ -563,7 +582,7 @@ function showResult(result) {
  }
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
- afterPaint(()=>{if(latest!==result)return;for(const entry of result.trace)$('trace').append(traceRow(entry));});   // a newer answer already replaced the evidence: skip
+ afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip
  $('calls').textContent=' · '+usageText(result.usage);
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
@@ -632,6 +651,8 @@ async function init(){
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
  applyPublicMode();updateScope(); $('submit').disabled=false;
+ // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
+ if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
  const address=currentAddress();
  if(!(address&&CANONICAL.test(address.split('?')[0])&&await restore(address))){pushAddress(scopeUrl(),true);primeKpis();}
  const context=document.modelContext;

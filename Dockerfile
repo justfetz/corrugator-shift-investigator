@@ -11,11 +11,13 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY src ./src
+# The golden set, its recorded fixtures and the tracked history, read-only, for the /evals page (issue #26).
+COPY evals ./evals
 # Generate the two synthetic months once here, not at every container start (issue #19):
 # the server loads /app/prebuilt in about 150 ms instead of generating for about 2 s.
 RUN pip install --no-cache-dir . && python -m investigator.prebuilt /app/prebuilt \
     && mkdir -p /app/artifacts && chown -R app:app /app
-ENV INVESTIGATOR_PREBUILT=/app/prebuilt
+ENV INVESTIGATOR_PREBUILT=/app/prebuilt INVESTIGATOR_EVALS=/app/evals
 
 USER app
 EXPOSE 7860
