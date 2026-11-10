@@ -1,8 +1,9 @@
 """PDFs are built from a retained server-side investigation, never visitor HTML."""
 from io import BytesIO
+import re
 from xml.sax.saxutils import escape
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
 from .pdf_charts import drawing_for
@@ -20,8 +21,24 @@ def report_pdf(result):
     story=[p('Corrugator Shift Investigator','Title'),p('SYNTHETIC PRODUCTION REPORT','Heading2'),
            p(f'Production scope: {result.get("period_label",result["production_day"])} | Shifts: '+', '.join(map(str,result['selected_shifts']))),
            p(f'Investigation status: {result["status"]} | {result["mode"]}'),Spacer(1,12)]
-    for line in result['sections']:
-        story.extend([p(line),Spacer(1,5)])
+    styles.add(ParagraphStyle('ShapeHeadline',parent=styles['BodyText'],fontSize=12,leading=16,spaceAfter=2))
+    styles.add(ParagraphStyle('ShapeBullet',parent=styles['BodyText'],leftIndent=12,bulletIndent=2))
+    styles.add(ParagraphStyle('ShapeLabel',parent=styles['BodyText'],fontSize=8,leading=11,textColor=colors.HexColor('#5a5f5f'),spaceBefore=4))
+    def shaped(line, style):
+        # The answer shape (#75): the section's `**figure**` in bold; every other character is the section's own, escaped.
+        return Paragraph(re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', escape(str(line))), styles[style], bulletText='•' if style=='ShapeBullet' else None)
+    headline=False
+    for i, line in enumerate(result['sections']):
+        following=result['sections'][i+1] if i+1<len(result['sections']) else ''
+        if line.startswith('- '):
+            story.extend([shaped(line[2:],'ShapeBullet'),Spacer(1,2)])
+        elif '**' in line and not headline:
+            headline=True
+            story.extend([shaped(line,'ShapeHeadline'),Spacer(1,4)])
+        elif following.startswith('- ') and not re.search(r'\d|[.:;!?]$',line) and len(line)<=48:
+            story.append(shaped(line.upper(),'ShapeLabel'))
+        else:
+            story.extend([shaped(line,'BodyText'),Spacer(1,5)])
     def table(title, rows, columns, limit=40):
         if not rows:return
         story.append(p(title,'Heading2'))

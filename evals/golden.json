@@ -178,7 +178,10 @@
     "chart_units": [
      "ft/min"
     ],
-    "sections_match": "^Speed by grade, without stops, against each grade target: .* ft/min = .*% of the .* target"
+    "sections_match": [
+     "^Slowest: .* at \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of its [0-9,]+ target",
+     "^- .*: \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of target · [0-9,]+ setups \\(query 1 · row [0-9]+\\)$"
+    ]
    }
   },
   {
@@ -332,7 +335,7 @@
      "get_grade_totals",
      "render_chart"
     ],
-    "sections_match": "speed with stops .* ft/min"
+    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* with stops · "
    }
   },
   {
@@ -372,7 +375,7 @@
      "get_grade_totals",
      "render_chart"
     ],
-    "sections_match": "speed with stops [0-9.,]+ ft/min \\([+-][0-9.,]+ vs [0-9.,]+ ft/min"
+    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* with stops · [0-9.,]+ ft/min without · [+-][0-9.,]+ vs [0-9.,]+ ft/min, (better|worse|same)"
    }
   },
   {
@@ -673,7 +676,7 @@
      "get_grade_totals",
      "render_chart"
     ],
-    "sections_match": "speed with stops .* ft/min"
+    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* with stops · "
    }
   },
   {
@@ -1547,7 +1550,10 @@
     "chart_units": [
      "ft/min"
     ],
-    "sections_match": "^Speed by grade, without stops, against each grade target: .* ft/min = .*% of the .* target"
+    "sections_match": [
+     "^Slowest: .* at \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of its [0-9,]+ target",
+     "^- .*: \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of target · [0-9,]+ setups \\(query 1 · row [0-9]+\\)$"
+    ]
    }
   },
   {
@@ -2014,7 +2020,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Volume .* MSF"
+    "sections_match": "^\\*\\*[0-9.,]+ MSF/day\\*\\* · [+-][0-9.,]+ vs [0-9.,]+ MSF/day"
    }
   },
   {
@@ -2135,7 +2141,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Downtime Pareto by reason \\(minutes\\): .*cumulative"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes",
+     "^- .*: \\*\\*[0-9.,]+ min\\*\\* over [0-9,]+ stops · [0-9.]+%, cumulative [0-9.]+%"
+    ]
    }
   },
   {
@@ -2190,7 +2199,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Downtime Pareto by place \\(count\\)"
+    "sections_match": "^\\*\\*[0-9,]+ stops\\*\\* at .*, the largest of [0-9]+ places · [0-9.]+% of the window's stops"
    }
   },
   {
@@ -2214,7 +2223,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Dry-end: bond .* sq ft = .*% of gross"
+    "sections_match": "^- Dry-end: bond: \\*\\*[0-9.]+%\\*\\* of gross · [0-9.,]+ sq ft"
    }
   },
   {
@@ -2264,7 +2273,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Waste breakdown: Side trim .* sq ft = .*% of gross \\(previous .*%, [-+][0-9.]+ points\\)"
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste · previous [0-9.]+%, [-+][0-9.]+ points",
+     "^- Shear chops: \\*\\*[0-9.]+%\\*\\* of gross · [0-9.,]+ sq ft · previous [0-9.]+%, [-+][0-9.]+ points"
+    ]
    }
   },
   {
@@ -2289,7 +2301,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekday profile: Mon: .* stops per day"
+    "sections_match": [
+     "^Weekday profile$",
+     "^- Mon: \\*\\*[0-9.]+ stops per day\\*\\*"
+    ]
    }
   },
   {
@@ -2314,7 +2329,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekday profile: Mon: .* over 4 day\\(s\\)"
+    "sections_match": [
+     "^Weekday profile$",
+     "^- Mon: \\*\\*[0-9.]+ stops per day\\*\\* · .* over 4 day\\(s\\)"
+    ]
    }
   },
   {
@@ -2339,7 +2357,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Totals by grade \\(.* MSF in the window\\): .*% of the .* target"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ MSF\\*\\* across [0-9]+ grades \\(query 1\\)$",
+     "^- .*: \\*\\*[0-9.,]+ MSF\\*\\* · [0-9.]+% of the volume · [+-][0-9.,]+ vs [0-9.,]+ MSF"
+    ]
    }
   },
   {
@@ -2364,7 +2385,11 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Paper consumed \\(.* ft = .* MSF over .* paper runs, .* ft per run; previous .* ft = .* MSF over .* runs"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ MSF\\*\\* of paper consumed · [0-9.,]+ ft over [0-9,]+ paper runs",
+     "^- Previous window: \\*\\*[0-9.,]+ MSF\\*\\* over [0-9,]+ paper runs",
+     "^[0-9.,]+ ft per paper run\\.$"
+    ]
    }
   },
   {
@@ -2390,7 +2415,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Paper consumed \\(.* paper runs.*The setups shift 2 ran on each paper run"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ MSF\\*\\* of paper consumed · .* paper runs",
+     "^The setups shift 2 ran on each paper run"
+    ]
    }
   },
   {
@@ -2440,7 +2468,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Over/under-run by knife \\(\\+-2.00% band\\): knife 1: .* all knives: "
+    "sections_match": [
+     "^\\*\\*[+-][0-9.]+%\\*\\* of nominal cuts across all knives · [0-9.]+% of lines inside the ±2\\.00% band",
+     "^- knife 1: \\*\\*[+-][0-9.]+%\\*\\* of nominal cuts"
+    ]
    }
   },
   {
@@ -2491,7 +2522,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "setup stops / .* min = .*% of its elapsed time"
+    "sections_match": "[0-9,]+ setup stops, [0-9.]+% of its elapsed time \\(query 1 · row [0-9]+\\)$"
    }
   },
   {
@@ -2515,7 +2546,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly lineal_per_setup \\(ft/setup\\)",
+    "sections_match": "^\\*\\*[0-9.,]+ ft/setup\\*\\* in the week of .*, the latest of [0-9]+ weeks of lineal per setup",
     "max_ms": 500
    }
   },
@@ -2543,7 +2574,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "lineal per paper change .* ft"
+    "sections_match": "^- Lineal per paper change \\(wet-end record\\): \\*\\*[0-9.,]+ ft/paper change\\*\\*"
    }
   },
   {
@@ -2568,7 +2599,11 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Dry-end by reported sub-reason: .*Up warp \\(warp\\) .* sq ft = .*% of dry-end rejects.*Twist warp"
+    "sections_match": [
+     "^Dry-end by reported sub-reason$",
+     "^- Up warp \\(warp\\): \\*\\*[0-9.]+%\\*\\* of dry-end rejects · [0-9.,]+ sq ft",
+     "^- Twist warp \\(warp\\): \\*\\*[0-9.]+%\\*\\* of dry-end rejects"
+    ]
    }
   },
   {
@@ -2592,7 +2627,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly moisture_pct",
+    "sections_match": "the latest of [0-9]+ weeks of moisture \\(query 1 · row [0-9]+\\)$",
     "max_ms": 500
    }
   },
@@ -2674,7 +2709,11 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Speed opportunity by grade and width \\(.* hours in total if every cell ran at its best-fifth speed.*Peak speeds are never used.*no temperatures"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ hours\\*\\* if every cell ran at its best-fifth speed",
+     "^Peak speeds are never used",
+     "no temperatures"
+    ]
    }
   },
   {
@@ -2701,7 +2740,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Speed opportunity by grade and crew .*Crew [ABC]: typical .* on the fast fifth vs .* on the rest"
+    "sections_match": "^- .* · Crew [ABC]: \\*\\*[0-9.]+ hours\\*\\* · typical .* on the fast fifth vs .* on the rest"
    }
   },
   {
@@ -2750,7 +2789,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly downtime_pct \\(% of scheduled minutes\\), 4 weeks available: week of 2026-08-24"
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in the week of .*, the latest of 4 weeks of downtime",
+     "^- Week of 2026-08-24: \\*\\*[0-9.]+%\\*\\* of scheduled minutes, the first week of the series"
+    ]
    }
   },
   {
@@ -2775,7 +2817,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly minutes_per_stop \\(min/stop\\)",
+    "sections_match": "^\\*\\*[0-9.]+ min/stop\\*\\* in the week of .*, the latest of [0-9]+ weeks of minutes per stop",
     "max_ms": 500
    }
   },
@@ -2800,7 +2842,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly warp_pct \\(% of gross\\), 7 weeks available: .*Weeks without records: 2026-07-27",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in the week of .*, the latest of 7 weeks of warp",
+     "^Weeks without records: 2026-07-27\\.$"
+    ],
     "max_ms": 500
    }
   },
@@ -3018,7 +3063,10 @@
    "question": "Why was this shift slow?",
    "expect": {
     "status": "complete",
-    "sections_match": "ft/min including downtime; .* lineal ft\\. Maintenance .*% and Operator .*%"
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of grade target · [0-9.,]+ ft/min including downtime · [0-9.]+% of the shift down",
+     "^- (Operator|Maintenance) downtime: \\*\\*[0-9.]+%\\*\\* of the shift, (over|under|at) the 2\\.5% target · (maintenance|operator) [0-9.]+%"
+    ]
    }
   },
   {
@@ -3028,7 +3076,10 @@
    "question": "Show downtime by reason",
    "expect": {
     "status": "complete",
-    "sections_match": "recorded downtime: .*: [0-9.]+ min"
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of the shift in recorded downtime · maintenance [0-9.]+% · operator [0-9.]+%",
+     "^- .*: \\*\\*[0-9.]+ min\\*\\*, [0-9.]+% of the shift \\(query 2 · row 0\\)$"
+    ]
    }
   },
   {
@@ -3051,7 +3102,10 @@
      "get_shift_kpis",
      "get_rankings"
     ],
-    "sections_match": "downtime ranking: 1\\. .*: [0-9.]+ minutes"
+    "sections_match": [
+     "^Most downtime$",
+     "^- 1\\. .*: \\*\\*[0-9.]+ min\\*\\* \\(query 2 · row 0\\)$"
+    ]
    }
   },
   {
@@ -3088,7 +3142,77 @@
      }
     ],
     "charts": 3,
-    "sections_match": "^Shift 3: [0-9]+ of [0-9]+ wet-end runs below their grade target"
+    "sections_match": "^- Shift 3 · Wet-end runs below their grade target: \\*\\*[0-9]+\\*\\* of [0-9]+"
+   }
+  },
+  {
+   "id": "why-slow-answer-shape",
+   "type": "grounding",
+   "mode": "offline",
+   "question": "Why was this shift slow?",
+   "note": "Issue #75: the answer is a shape, not a paragraph. One headline (speed attainment, the asked measure, with what it is held against), three to five finding bullets with one bold figure each, every figure a value of the row it cites (the global provenance invariant), and a where-to-look list of questions the offline router answers.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+%\\*\\* of grade target · [0-9.,]+ ft/min including downtime",
+     "bullets": [
+      3,
+      5
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest of [0-9]+ reasons \\(query 2 · row [0-9]+\\)$",
+     "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the slowest of [0-9]+ runs \\(query 3 · row [0-9]+\\)$"
+    ],
+    "sections_not_match": "ft/min including downtime; .* lineal ft\\. Maintenance"
+   }
+  },
+  {
+   "id": "period-slowest-grades-answer-shape",
+   "type": "grounding",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What grades ran slowest last week?",
+   "note": "Issue #75, the owner's example: the headline names the slowest grade by percent of its target with its speed, three bullets are the three slowest grades (grade, ft/min, % of target, setups), the totals by grade are a table rather than prose, and the answer ends with where to look.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tables": [
+     "get_grade_totals"
+    ],
+    "shape": {
+     "headline_match": "^Slowest: [0-9A-Z-]+ at \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of its [0-9,]+ target \\(query 1 · row [0-9]+\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_not_match": "Totals by grade|Speed by grade, without stops"
    }
   },
   {

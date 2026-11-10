@@ -49,6 +49,18 @@ These are local-demo controls. The synchronous planner deadline does not preempt
 
 Intended done condition: supported analysis has successful referenced evidence and any requested charts. Finish validates successful evidence IDs. Explicit chart/graph/plot requests without a chart return partial, and overview evidence automatically supplies its three charts. Semantic fulfillment is not guaranteed. See review R4. Incomplete data must be disclosed and must not be ranked as valid performance. A daily run can be complete while its evidence coverage is incomplete. Period status is partial when its window has missing/invalid contributions. A recorded symptom does not establish a mechanical cause.
 
+## Answer shapes
+
+An offline answer's `sections` are a shape per intent (issue #75, `shapes.py`), built from the tool rows the answer already has; no new number is computed, only rows chosen (the largest reason, the slowest run, the three slowest grades) and counted. They stay plain text with two markers, so the Markdown export, the PDF and `/evals` read them unchanged:
+
+- **Headline**: the first section with a `**figure**` that is not a bullet. The figure is the asked measure with its unit (speed against grade target for "why was this shift slow", the slowest grade for "what grades ran slowest", minutes at the top reason for a Pareto); the rest of the line is what it is held against: a target, the previous window, the other shifts.
+- **Findings**: `- ` bullets right under it, three to five for a diagnosis, each with exactly one `**figure**` and its evidence `(query N · row M)`: step N of the trace, as the query box numbers it, and the row of that result the figure is a value of (`detail M` and `weekday M` name a result's sub-reason and weekday lists; no row, a count of the result's rows or a total its envelope carries). A list of like items longer than three is bullets or a table, never one sentence; the client folds a sixth bullet under "more".
+- **Labels**: a short line without digits or final punctuation introduces the bullets after it (`Reported sub-reasons`, `Most downtime`, `Weekday profile`) and renders in small caps.
+- **Where to look**: two or three bullets after the label `Where to look`, each naming a place in the records, never an action, and ending with the question that opens it, `→ “Show the setup matrix”`. Each is a question the offline router answers in the same scope; the client links it to that question's address.
+- Anything else is a plain sentence of at most about forty words: the window and its coverage, a tool's note split into its sentences, a caveat, a reported note.
+
+A shape depends on the plan that ran and the scope, never on the wording of the question, so a question and its canonical address answer with the same sections ([URLS](URLS.md)); the two period intents the URL grammar resolves as aliases (a day-shaped downtime or quality question under a ranged window) share the Pareto's and the waste breakdown's shape. An analyst's own plan is shaped by the tools it ran. The evals hold the shape from outside: every bold figure must be a value of the row it cites (`evals/README.md`, global invariants).
+
 ## Interface and transport
 
 One screen offers date/shift scope, questions, calculated metrics, charts, report download and expandable tool/context/SQL traces. It labels synthetic data and offline planning. No fabricated email signup/success flow exists.

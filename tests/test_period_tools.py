@@ -8,6 +8,7 @@ pinned in test_synth_determinism.py).
 """
 from collections import defaultdict
 from datetime import date, timedelta
+import re
 import pytest
 from investigator.agent import Agent, Context, PERIOD_TOOLS, TOOL_SCHEMAS, parse_request
 from investigator.record_store import (KPI_CATALOG, TREND_METRICS, default_store, fiscal_bounds, parse_window, previous_window, window_label)
@@ -354,10 +355,11 @@ def test_overrun_chart_is_a_range_with_the_band(store):
     [chart] = result["charts"]
     assert chart["type"] == "range" and chart["y"] == "overrun_pct" and chart["band_pct"] == 2.0
     assert chart["rows"][-1]["knife"] == "all knives"
-    assert "Over/under-run by knife" in result["sections"][1] and "inside the band" in result["sections"][1]
+    assert result["sections"][0].endswith("(query 1 · row 3)") and "across all knives" in result["sections"][0]   # the headline cites the all-knives row (#75)
+    assert any(s.startswith("- knife 1: **") and "inside the band" in s for s in result["sections"])
     grade = Agent(analysis, store=store).ask("Volume by grade this month", context)
     assert grade["status"] == "complete" and grade["charts"][0]["y2"] == "previous_volume_msf"
-    assert "Totals by grade" in grade["sections"][1] and "% of the" in grade["sections"][1]
+    assert re.match(r"^\*\*[0-9,.]+ MSF\*\* across [0-9]+ grades", grade["sections"][0]) and any("% of the volume" in s for s in grade["sections"][1:])
 
 
 def test_speed_opportunity_best_fifth_is_a_ratio_of_sums(store, data):
@@ -612,7 +614,7 @@ def test_offline_investigation_end_to_end(store):
         assert trace["tool"] == "compare_periods" and chart["tool"] == "render_chart" and chart["ok"]
         assert result["charts"][0]["type"] == "bar" and result["charts"][0]["y2"] == "previous" and result["charts"][0]["rows"] == trace["data"]["rows"]
         assert "September 2026" in result["charts"][0]["title"] and "all shifts" in result["charts"][0]["title"]
-        assert any("Volume" in s and "MSF" in s for s in result["sections"])
+        assert re.match(r"^\*\*[0-9,.]+ MSF(/day)?\*\* · ", result["sections"][0])   # the headline is the volume (per production day when the days differ, #75)
         assert [t["title"] for t in result["tables"]] == ["compare_periods"]
         trend = agent.ask("trend of trim over eight weeks", Context(DAY, 2, scope="day"))
         assert trend["charts"][0]["type"] == "line" and trend["charts"][0]["unit"] == "% of gross"

@@ -208,13 +208,14 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  console.log('UI issue-33 checks passed: tables and charts paint before the trace; a stale frame is skipped.');
 }
 
-// ---- issue #40: the query box is the first thing below the question, step 1 open, built in the first paint; the
-// per-step data ("What came back") stays below and keeps #33's two-frame deferral; the copy text is the SQL with its
-// bound values; charts and tables link back to their query box; on a phone every box is one line with the SQL on tap.
+// ---- issue #40, reordered by #75: the query box, step 1 open, built in the first paint, is one line under the answer
+// (`3 queries · 4 ms · Show SQL`) until it is opened; the per-step data ("What came back") stays below and keeps #33's
+// two-frame deferral; the copy text is the SQL with its bound values; charts and tables link back to their query box;
+// on a phone every box is one line with the SQL on tap.
 {
  const at=id=>html.indexOf(`id="${id}"`);
- assert.ok(at('ask')<at('card-title')&&at('card-title')<at('queries')&&at('queries')<at('messages'),'the ask bar, the title line, the query box directly under it, then the narrative');
- assert.ok(at('queries')<at('charts')&&at('charts')<at('tables')&&at('tables')<at('trace'),'queries, then the evidence, then the per-step data');
+ assert.ok(at('ask')<at('card-title')&&at('card-title')<at('messages')&&at('messages')<at('charts'),'the ask bar, the title line, then the headline and findings, then the charts (#75)');
+ assert.ok(at('charts')<at('look')&&at('look')<at('queries')&&at('queries')<at('tables')&&at('tables')<at('trace'),'where to look, then the one-line query box, then the evidence, then the per-step data');
  assert.ok(html.includes('<details id="execution"><summary>What came back, per query'));
  const frames=[]; context.requestAnimationFrame=f=>{frames.push(f);return frames.length;};
  const copied=[]; context.navigator={clipboard:{writeText:async t=>{copied.push(t);}}};
@@ -268,7 +269,57 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  const moreQ=walk(elements.queries).find(e=>e.textContent==='2 more queries');moreQ.events.click();assert.ok(six.every(b=>!b.hidden));assert.equal(moreQ.textContent,'Show fewer');assert.equal(moreQ['aria-expanded'],'true');
  vm.runInContext('reset()',context);assert.equal(elements.queries.children.length,0);
  delete context.requestAnimationFrame;delete context.navigator;
- console.log('UI issue-40 checks passed: query box first and open in the first paint; copy text is the SQL with bound values; links both ways; one line per step on a phone.');
+ console.log('UI issue-40 checks passed: query box built in the first paint with step 1 open; copy text is the SQL with bound values; links both ways; one line per step on a phone.');
+}
+
+// ---- issue #75: the answer shape. The server's sections carry two markers (`**figure**`, a leading `- `). The
+// headline's figure is in display size with the rest of the line in the secondary ink; findings are a list, one bold
+// figure each, its evidence a small link to the query box; a label line is small caps; a sixth bullet folds under
+// "more"; where to look goes under the charts as links that ask their question offline; the text a reader sees is
+// each section without its markers; the query box is one line (`N queries · M ms · Show SQL`) until it is opened.
+{
+ const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
+ const strip=s=>(s.startsWith('- ')?s.slice(2):s).replace(/\*\*([^*]+)\*\*/g,'$1');
+ elements.messages.replaceChildren();elements.look.replaceChildren();
+ const bullets=['Order change: **6.37 min** of recorded downtime, the largest of 6 reasons (query 2 · row 0)','Knife / slitter jam: **4.65 min** (query 2 · row 1)',
+  'Stacker: **2.28 min** (query 2 · row 2)','Raw material (roll): **1.65 min** (query 2 · row 3)','Glue / starch: **1.10 min** (query 2 · row 4)','Other: **0.50 min** (query 2 · row 5)'];
+ const sections=['**89.0%** of grade target · 616.2 ft/min including downtime (query 1 · row 0)',...bullets.map(b=>'- '+b),'Reported sub-reasons','- Up warp (warp): **5,387.9 sq ft** (query 2 · detail 0)',
+  'Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.','Where to look','- The setups on WE1, the slowest run → “Show the setup matrix”','- The same stops by equipment → “Show downtime by equipment”'];
+ const asked=[];context.__asked=asked;vm.runInContext('var __ask=ask;ask=(q,o)=>{__asked.push([q,o]);return Promise.resolve();}',context);
+ const rec={scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},corrupt:false};context.__rec=rec;
+ vm.runInContext(`message('',${JSON.stringify(sections)},'',__rec)`,context);
+ const msg=elements.messages.children[0], [head,list,more,label,subs,caveat]=msg.children;
+ assert.equal(head.className,'headline');assert.deepEqual(head.children.map(e=>[e.tag,e.className||'',e.textContent]),[['strong','figure','89.0%'],['span','clause',' of grade target · 616.2 ft/min including downtime'],['span','',' '],['a','ref','(query 1 · row 0)']]);
+ assert.equal(head.children[3].href,'#query-0');                                                    // the evidence links to its query box
+ assert.equal(list.tag,'ul');assert.equal(list.className,'findings');assert.equal(list.children.length,6);
+ assert.ok(list.children.every(li=>li.children.filter(e=>e.className==='figure').length===1));    // exactly one bold figure per finding
+ assert.deepEqual(list.children.map(li=>li.children.find(e=>e.className==='ref').href),['#query-1','#query-1','#query-1','#query-1','#query-1','#query-1']);
+ assert.deepEqual(list.children.map(li=>!!li.hidden),[false,false,false,false,false,true]);        // three to five shown; a sixth folds under "more"
+ assert.equal(more.textContent,'1 more');more.events.click();assert.ok(list.children.every(li=>!li.hidden));assert.equal(more.textContent,'Fewer');more.events.click();assert.equal(list.children[5].hidden,true);
+ assert.equal(label.className,'label');assert.equal(label.textContent,'Reported sub-reasons');      // a label line in small caps
+ assert.equal(subs.children[0].children.find(e=>e.className==='ref').textContent,'(query 2 · detail 0)');
+ assert.equal(caveat.tag,'p');assert.equal(caveat.className,undefined);
+ const [lookLabel,lookList]=elements.look.children;
+ assert.equal(lookLabel.textContent,'Where to look');assert.equal(lookLabel.className,'label');assert.equal(lookList.className,'look-list');
+ const link=lookList.children[0].children[2];assert.equal(link.className,'look-q');assert.equal(link.textContent,'“Show the setup matrix”');
+ assert.ok(link.href.startsWith('/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Show+the+setup+matrix'),link.href);   // an address: a modifier click opens it in a new tab
+ link.events.click({preventDefault(){}});assert.deepEqual(asked.map(a=>[a[0],a[1].mode,a[1].scope]),[['Show the setup matrix','offline',rec.scope]]);   // a plain click asks it offline, in the card's scope
+ // what a reader sees is the sections without their two markers, word for word and in order
+ assert.deepEqual([textOf(head),...list.children.map(textOf),textOf(label),...subs.children.map(textOf),textOf(caveat),textOf(lookLabel),...lookList.children.map(textOf)],sections.map(strip));
+ vm.runInContext('ask=__ask',context);
+ // the query box: one line under the answer until it is opened; an evidence link opens it at its query
+ vm.runInContext(`showResult({run_id:'s75',session_id:'s',production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',context:{},usage:{tool_calls:2,model_calls:0},sections:[],tables:[],charts:[],
+  trace:[{result_id:'r:1',tool:'get_shift_kpis',arguments:{shift:2},ok:true,elapsed_ms:2.4,data:{shift:2,coverage:'complete',rows:[${JSON.stringify(row)}],trace:{sql:'SELECT 1',parameters:[2]}}},
+         {result_id:'r:2',tool:'get_downtime_breakdown',arguments:{shift:2,group_by:'reason',kind:null},ok:true,elapsed_ms:1.4,data:{shift:2,coverage:'complete',rows:[],trace:{sql:'SELECT 2',parameters:[2]}}}]})`,context);
+ const box=elements.queries, line=box.children[0], toggle=line.children[1];
+ assert.equal(line.className,'queries-line');assert.equal(line.children[0].textContent,'2 queries · 4 ms');assert.equal(toggle.textContent,'Show SQL');
+ assert.equal(box.className,'queries collapsed');assert.equal(toggle['aria-expanded'],'false');
+ toggle.events.click();assert.equal(box.className,'queries');assert.equal(toggle.textContent,'Hide SQL');assert.equal(toggle['aria-expanded'],'true');
+ toggle.events.click();assert.equal(box.className,'queries collapsed');
+ const step=box.children.filter(e=>/^query\b/.test(e.className))[1];step.parentElement=box;const byId=document.getElementById;document.getElementById=id=>id==='query-1'?step:byId(id);
+ vm.runInContext(`revealQuery({getAttribute:()=>'#query-1'})`,context);assert.equal(step.open,true);assert.equal(box.className,'queries');   // an evidence link opens the box at its query
+ document.getElementById=byId;
+ console.log('UI issue-75 checks passed: one headline with its display figure, findings with one bold figure and an evidence link each, small-caps labels, a sixth bullet folds, where to look asks offline, text equals the sections without markers, the query box is one line until opened.');
 }
 
 // ---- issue #36: light by default whatever the OS prefers; a pinned choice in localStorage wins; the toggle stays.
@@ -363,7 +414,11 @@ const analystChecks=(async()=>{
  assert.equal(bodies[0].mode,'anthropic');assert.equal(bodies[0].session_id,null);assert.equal(keys[0],undefined);   // public: never a visitor key
  const text=flat(elements.messages);
  assert.equal(elements.card.className,'card answer');assert.match(elements['card-meta'].textContent,/ · analyst · 2 model calls · (\d+ ms|\d+\.\d s)$/);
- assert.match(text,/Finding: Shift 2 ran at 512\.34 ft\/min\./);assert.match(text,/Evidence: Shift 2, observed_shift_fpm, query 1, row 0/);
+ const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
+ const finding=find(elements.messages,'analyst-p').find(e=>e.tag==='li');   // #75: the interpretation is a list, one bullet per paragraph
+ assert.ok(finding&&textOf(finding).startsWith('Finding: Shift 2 ran at 512.34 ft/min.'),textOf(finding||{}));
+ assert.deepEqual(finding.children.filter(e=>e.className==='figure').map(e=>e.textContent),['512.34 ft/min']);   // its figure bold, never the shift's own number
+ assert.match(text,/Evidence: Shift 2, observed_shift_fpm, query 1, row 0/);assert.equal(finding.children[finding.children.length-1].className,'analyst-cites muted');   // the evidence small under it
  assert.ok(!/It lost/.test(text));assert.match(text,/2 model calls/);assert.match(text,/first words after 1\.2 s/);
  assert.equal(vm.runInContext('sessionId',context),'s2');assert.equal(vm.runInContext('latest.session_id',context),'s2');
  assert.equal(offlineCard().length,0);                                 // the analyst's card offers no second round
@@ -439,8 +494,8 @@ const issue17=(async()=>{
 // before the task yields; nothing is disabled while a question is out; the payload to /api/ask is unchanged.
 const issue63=issue17.then(async()=>{
  const at=id=>html.indexOf(`id="${id}"`), text=e=>e.textContent;
- const order=['rail','day','shift-seg','period-seg','examples','rates-change','advanced','mode','reset','ask','question','submit','analyst','card','card-title','card-meta','queries','messages','charts','kpis','metrics','card-foot','earlier'];
- assert.deepEqual([...order].sort((a,b)=>at(a)-at(b)),order,'rail, then the ask bar, then the card (title line, queries, summary, charts, tiles, footer), then the earlier answers');
+ const order=['rail','day','shift-seg','period-seg','examples','rates-change','advanced','mode','reset','ask','question','submit','analyst','card','card-title','card-meta','messages','charts','look','queries','kpis','metrics','card-foot','earlier'];
+ assert.deepEqual([...order].sort((a,b)=>at(a)-at(b)),order,'rail, then the ask bar, then the card (title line, the answer, charts, where to look, the one-line query box, tiles, footer), then the earlier answers');
  assert.ok(order.every(id=>at(id)>0));
  for(const phrase of ['Looking at','Ask in one click','Every canned question is a fixed query. No model, no wait.','Your rates','$55 / MSF','$1,200 / hr','not set'])assert.ok(html.includes(phrase),phrase);
  assert.match(html,/<button id="rates-change"[^>]*disabled[^>]*>Change rates<\/button>/);          // the rates panel is a placeholder until #31
@@ -798,7 +853,13 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
 // first figure at once, the charts bloom after the first sentence, a key ends it. The text it shows is the result's.
 (async()=>{
  const whySlow=JSON.parse(fs.readFileSync('tests/ui_fixtures/why_slow.json','utf8'));
- const NOTE=/ - reported note \(synthetic, unverified\): /, visible=whySlow.sections.filter(s=>!NOTE.test(s)), notes=whySlow.sections.filter(s=>NOTE.test(s));
+ // #75: the sections are the answer shape; what a reader sees is each section without its two markers (`**figure**`,
+ // a leading `- `). The headline and the finding bullets type; the notes fold; where to look sits under the charts.
+ const NOTE=/ - reported note \(synthetic, unverified\): /, LOOK='Where to look', strip=s=>(s.startsWith('- ')?s.slice(2):s).replace(/\*\*([^*]+)\*\*/g,'$1');
+ const lookAt=whySlow.sections.indexOf(LOOK), body=whySlow.sections.slice(0,lookAt), looks=whySlow.sections.slice(lookAt+1).map(strip);
+ const visible=body.filter(s=>!NOTE.test(s)).map(strip), notes=body.filter(s=>NOTE.test(s));
+ assert.ok(lookAt>0&&looks.length>=2&&whySlow.sections[0].startsWith('**')&&visible.length>=4,'the fixture is the why-slow shape: a headline, findings, notes, where to look');
+ const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
  const setup=({reduced=false}={})=>{
   const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
   Object.assign(els.day,{value:'2026-09-14'});els.period.value='day';els.shift.value='2';els.scope.value='shift';els.mode.value='offline';
@@ -813,7 +874,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  };
  const tick=()=>new Promise(r=>setTimeout(r,0));
  const summaryOf=els=>els.messages.children.find(e=>/^message\b/.test(e.className));
- const typedText=els=>summaryOf(els).children.filter(e=>e.tag==='p').map(e=>e.textContent);
+ const typedText=els=>{ const out=[]; for(const e of summaryOf(els).children){ if(e.tag==='p')out.push(textOf(e)); else if(e.tag==='ul')for(const li of e.children)if(!li.hidden)out.push(textOf(li)); } return out; };
+ const lookText=els=>els.look.children.flatMap(e=>e.tag==='ul'?e.children.map(textOf):[textOf(e)]);
  const queryLines=els=>els.queries.children.filter(e=>/^query\b/.test(e.className));
  const waiting=e=>/\bpace-wait\b/.test(e.className);
  const ask=async (t,land=40)=>{ t.setWall(0); const done=vm.runInContext(`ask('Why was this shift slow? Chart downtime by reason.')`,t.ctx);
@@ -829,7 +891,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.ok(t.els.metrics.children.length===7&&!t.els.metrics.children.some(waiting));   // the tiles land at once, like a gauge
  assert.equal(t.els.tables.children.length,1);assert.ok(!waiting(t.els.tables.children[0]));   // tables appear at once
  assert.ok(t.els.charts.children.length===2&&t.els.charts.children.every(waiting));   // 4. the charts wait for the first sentence
- assert.deepEqual(typedText(t.els),['','','']);
+ assert.deepEqual(typedText(t.els),visible.map(()=>''));
+ assert.ok(t.els.look.children.length===2&&t.els.look.children.every(waiting),'where to look arrives with the last word');
  await t.at(40+120);assert.deepEqual(queryLines(t.els).map(waiting),[false,false,true,true,true,true]);   // 80 ms apart
  // 3. the first figure of the first sentence is on screen within 400 ms of the submit (the bar is the 400 ms of the issue)
  await t.at(40+170);
@@ -846,7 +909,12 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(t.els.card['data-reveal'],'done');
  assert.deepEqual(typedText(t.els),visible);
  assert.deepEqual(summaryOf(t.els).children.find(e=>e.tag==='details').children.slice(1).map(e=>e.textContent),notes);
- assert.deepEqual(walk(summaryOf(t.els)).filter(e=>e.tag==='p').map(e=>e.textContent),whySlow.sections);   // every section, in order, nothing added or paraphrased
+ const details=summaryOf(t.els).children.find(e=>e.tag==='details');
+ assert.deepEqual([...typedText(t.els),...details.children.slice(1).map(textOf),...lookText(t.els)],whySlow.sections.map(strip));   // every section, in order, nothing added or paraphrased: only the two markers are gone
+ assert.deepEqual(lookText(t.els),[LOOK,...looks]);
+ const head=summaryOf(t.els).children[0];assert.equal(head.className,'headline');assert.equal(head.children.filter(e=>e.className==='figure').length,1);   // one headline, its figure in display size (#75)
+ const items=summaryOf(t.els).children.find(e=>e.tag==='ul').children;assert.ok(items.length>=3&&items.length<=5&&items.every(li=>li.children.filter(e=>e.className==='figure').length===1&&li.children.some(e=>e.className==='ref')),'three to five findings, each with exactly one bold figure and its evidence link');
+ assert.ok(!t.els.look.children.some(waiting));
  assert.ok(![...queryLines(t.els),...t.els.charts.children,...walk(t.els.messages)].some(waiting));
  assert.ok(!walk(t.els.messages).some(e=>/\btyping\b/.test(e.className)));
  assert.equal(t.els['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 40 ms');   // the animation never moved the measured time
