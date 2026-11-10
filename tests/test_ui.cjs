@@ -836,6 +836,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  t.listeners.keydown({key:'x'});
  assert.deepEqual(typedText(t.els),visible);assert.equal(t.els.card['data-reveal'],'done');
  assert.ok(![...queryLines(t.els),...t.els.charts.children].some(waiting));
+ assert.ok(!t.els.charts.children.some(e=>/\bbloom\b/.test(e.className)),'a skip shows the charts drawn: no bloom left to run');
  assert.equal(typeof t.listeners.pointerdown,'function');
  // Reopening a card shows it settled; it is revealed once.
  vm.runInContext('renderCard()',t.ctx);assert.deepEqual(typedText(t.els),visible);assert.notEqual(t.els.card['data-reveal'],'running');

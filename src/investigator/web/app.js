@@ -731,15 +731,15 @@ function dropClass(e,c){ e.className=(e.className||'').split(' ').filter(x=>x&&x
 function firstFigureEnd(text){ const re=/\d[\d,.]*/g; let m; while((m=re.exec(text))&&/\bShift $/.test(text.slice(0,m.index))); if(!m)return 0; const end=m.index+m[0].length; const space=text.slice(end).search(/\s/); return space<0?text.length:end+space; }
 function sentenceEnd(text){ const m=/[.!?](\s|$)/.exec(text); return m?m.index+1:text.length; }
 function wordEnd(text,n){ if(n>=text.length)return text.length; if(n<=0)return 0; const space=text.slice(n).search(/\s/); return space<0?text.length:n+space; }
-function finishReveal(){
+function finishReveal(skipped=false){
  const p=pace; if(!p)return; pace=null; p.done=true;
  for(const q of p.queries)dropClass(q,'pace-wait');
  for(const t of p.typed){ t.el.textContent=t.text; dropClass(t.el,'typing'); }
  for(const e of p.later)dropClass(e,'pace-wait');
- for(const e of p.blooms){ dropClass(e,'pace-wait'); addClass(e,'bloom'); }
+ for(const e of p.blooms){ dropClass(e,'pace-wait'); if(skipped)dropClass(e,'bloom'); }   // skipped: the charts show drawn, no growth still to run
  if(p.card)p.card.setAttribute('data-reveal','done');
 }
-function skipReveal(){ if(pace)finishReveal(); }
+function skipReveal(){ if(pace)finishReveal(true); }
 function reveal(summary){
  if(pace)finishReveal();   // a newer card: the one before is settled first
  if(reducedMotion()||typeof requestAnimationFrame!=='function'||!summary)return;
