@@ -49,6 +49,11 @@ SOCKET_TIMEOUT = 20
 # the error back; finish and cannot_answer are checked in next_step), so strict mode was a
 # convenience, not the gate. STRICT_TOOLS can name a few small schemas to opt back in.
 STRICT_TOOLS = frozenset()
+# The two money tools are not offered to the Anthropic planner or the analyst's plan yet: their prompts
+# still say costs are unavailable, so a planner offered them would be told two things. The dollars still
+# reach the analyst on the priced rows of the tools it does plan. #23 / #31b retune the prompts and
+# offer them; the OpenAI loop leaves them out for its byte cap (openai_provider.OPENAI_OMITTED_TOOLS).
+ANTHROPIC_OMITTED_TOOLS = frozenset({'get_shift_dollars', 'get_opportunities'})
 CONTROL_TOOLS = [
     {'name': 'finish', 'description': 'Finish with successful evidence result IDs.', 'strict': False,
      'input_schema': {'type': 'object', 'properties': {'result_ids': {'type': 'array', 'items': {'type': 'string'}}},
@@ -96,6 +101,8 @@ def anthropic_tools(schemas):
     """Map the application's tool schemas (OpenAI-style parameters) to Anthropic input_schema."""
     tools = []
     for schema in schemas:
+        if schema['name'] in ANTHROPIC_OMITTED_TOOLS:
+            continue
         parameters = _strip_null_enum_members(deepcopy(schema['parameters']))
         parameters['required'] = list(parameters['properties'])
         tools.append({'name': schema['name'], 'description': schema['description'], 'input_schema': parameters,
@@ -428,9 +435,10 @@ def stream_transport(payload, key, timeout):
 
 
 def plan_catalog(schemas, all_shifts=False):
-    """The tools a plan may name: every investigation tool, without render_chart (charts are application output).
+    """The tools a plan may name: every investigation tool, without render_chart (charts are application output)
+    or the money tools (ANTHROPIC_OMITTED_TOOLS).
     With all three shifts in scope the period tools (the ones that compare shifts) come first (issue #78)."""
-    tools = [s for s in schemas if s['name'] != 'render_chart']
+    tools = [s for s in schemas if s['name'] != 'render_chart' and s['name'] not in ANTHROPIC_OMITTED_TOOLS]
     if all_shifts:
         tools.sort(key=lambda s: 'window' not in s['parameters']['properties'] and 'anchor' not in s['parameters']['properties'])
     return tools

@@ -224,10 +224,12 @@ def approx(value, rel=1e-6):
     return [round(value, 9), round(abs(value) * rel + 1e-6, 9)]
 
 
-def case(id, tool, arguments, expect, *, day="2026-09-14", corrupt=False, note="", max_ms=None):
+def case(id, tool, arguments, expect, *, day="2026-09-14", corrupt=False, note="", max_ms=None, rates=None):
     entry = {"id": id, "type": "value", "mode": "offline", "day": day, "tool": tool, "arguments": arguments}
     if corrupt:
         entry["corrupt"] = True
+    if rates:
+        entry["rates"] = rates   # the visitor's rate overrides, as rates= spells them (context.rates)
     if note:
         entry["note"] = note
     if max_ms is not None:
@@ -640,6 +642,158 @@ def day_quality_case(plain, id, day, shift, note=""):
                 {"coverage": "complete", "row_count": len(order), "values": values}, day=day, note=note)
 
 
+# ---------------------------------------------------------------- dollars (issue #31), by hand
+# The post's numbers, typed here on purpose: this second computation never reads the application's
+# cost model for a number (`check_rates()` confirms the two agree on the defaults).
+PAPER, HOUR, TRIM_TARGET = 55.0, 1200.0, 3.25
+MSF_PER_MIN = 675 * 96 / 12 / 1000          # one minute at 675 ft/min on 96 in net = 5.4 MSF
+ANNUAL_MSF = 3_600_000 / 2                   # the post's 3.6M MSF a year across two machines, per machine
+ANNUAL_MIN = 1440 * ANNUAL_MSF / 7000        # 1,440 scheduled minutes on each of the post's production days
+SQFT_KINDS = ("trim", "waste", "paper")
+WASTE_PRICING = {"trim": "trim", "bale": "paper", "unexplained": "paper"}   # every other category is waste board
+
+
+def rates_of(text):
+    """'paper:66,hour:1500,margin:40' -> (paper, hour, margin, trim target), the defaults filled in."""
+    found = dict(item.split(":") for item in text.split(",")) if text else {}
+    return (float(found.get("paper", PAPER)), float(found.get("hour", HOUR)),
+            float(found["margin"]) if "margin" in found else None, float(found.get("trim", TRIM_TARGET)))
+
+
+def money(kind, qty, gross, minutes, rates, quantum=0.0):
+    """The dollar fields of one priced quantity, each [expected, tolerance]. `quantum` is the display
+    rounding of the quantity the tool priced (0.1 sq ft, 0.01 min): one step of it is allowed."""
+    paper, hour, margin, _ = rates
+    if qty < 0:
+        return {"usd": exact(None), "contribution_status": exact("not priced")}
+    if kind in SQFT_KINDS:
+        msf = qty / 1000
+        paper_usd = msf * paper
+        run_min = msf / MSF_PER_MIN if kind == "waste" else 0.0
+        not_made = msf if kind == "waste" else 0.0
+        per_unit = paper / 1000 + (hour / 60 / MSF_PER_MIN / 1000 if kind == "waste" else 0) + (margin or 0) / 1000
+    else:
+        paper_usd, run_min, not_made = 0.0, qty, qty * MSF_PER_MIN
+        per_unit = hour / 60 + (margin or 0) * MSF_PER_MIN
+    machine = run_min / 60 * hour
+    by_volume = ANNUAL_MSF / (gross / 1000) if gross else None
+    by_time = ANNUAL_MIN / minutes
+    machine_factor = by_volume if kind == "waste" else by_time
+    tol = round(0.011 + 1.01 * quantum * per_unit, 6)
+    year = paper_usd * (by_volume or 0) + machine * machine_factor
+    year_tol = round(tol * max(by_volume or 0, by_time) + 1.01, 3)
+    out = {"paper_usd": [round(paper_usd, 6), tol] if kind in SQFT_KINDS else exact(None),
+           "machine_time_usd": [round(machine, 6), tol], "usd": [round(paper_usd + machine, 6), tol],
+           "usd_per_year": [round(year, 3), year_tol], "msf_not_made": [round(not_made, 6), 0.0011 + quantum * MSF_PER_MIN]}
+    if margin is None:
+        out.update({"contribution_usd": exact(None), "contribution_usd_per_year": exact(None), "contribution_status": exact("margin not set")})
+    else:
+        factor = by_volume if kind in SQFT_KINDS else by_time
+        out.update({"contribution_usd": [round(not_made * margin, 6), tol],
+                    "contribution_usd_per_year": [round(not_made * margin * factor, 3), year_tol], "contribution_status": exact("set")})
+    return out
+
+
+def window_minutes(plain, span, shift):
+    days = {sh.production_date for sh in plain.between("shifts", *span, shift)}
+    return len(days) * (480 if shift else 1440)
+
+
+def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
+    """get_shift_dollars by hand: each downtime reason, the speed gap to 675 ft/min over running time,
+    side trim, shear and each dry-end reason, priced and ranked by dollars."""
+    rates = rates_of(rates_text)
+    span = (date.fromisoformat(day),) * 2
+    setups, _ = day_setups(plain, day, shift)
+    stops = plain.between("stops", *span, shift)
+    gross = sum(s.total_produced_sqft for s in setups)
+    feet = sum(s.lineal_ft for s in setups)
+    reasons, rejects = defaultdict(float), defaultdict(float)
+    for st in stops:
+        reasons[st.reason] += st.duration_sec / 60
+    for s in setups:
+        for r in s.rejects:
+            rejects[r.reason] += r.sqft
+    gaps = {f"Downtime: {r}": money("downtime", m, gross, 480, rates) for r, m in reasons.items()}
+    running = 480 - sum(st.duration_sec for st in stops) / 60
+    gaps["Speed gap to 675 ft/min"] = money("speed", max(0.0, 675 * running - feet) / 675, gross, 480, rates)
+    gaps["Side trim"] = money("trim", sum(s.trim_sqft for s in setups), gross, 480, rates)
+    gaps["Shear chops"] = money("waste", sum(s.chop_sqft for s in setups), gross, 480, rates)
+    gaps.update({f"Dry-end: {r}": money("waste", a, gross, 480, rates) for r, a in rejects.items()})
+    values = {f"rows:gap={g}": e for g, e in gaps.items()}
+    top = max(gaps, key=lambda g: (gaps[g]["usd"][0], [-ord(c) for c in g]))
+    values["#0"] = {"gap": exact(top)}
+    n = len(gaps)
+    values["$"] = {"total_usd": [round(sum(e["usd"][0] for e in gaps.values()), 6), 0.011 * n],
+                   "total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in gaps.values()), 3), 1.01 * n],
+                   "total_contribution_usd": exact(None) if rates[2] is None else
+                       [round(sum(e["contribution_usd"][0] for e in gaps.values()), 6), 0.011 * n],
+                   "contribution_status": exact("margin not set" if rates[2] is None else "set")}
+    return case(id, "get_shift_dollars", {"shift": shift}, {"coverage": "complete", "row_count": n, "values": values},
+                day=day, note=note, rates=rates_text)
+
+
+def waste_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, *, day="2026-09-14", note=""):
+    """get_waste_breakdown's dollar fields: each category's displayed square feet priced."""
+    rates = rates_of(rates_text)
+    span = window(period, anchor)
+    t = plain.sums(*span, shift)
+    areas = {"trim": t["trim"], "shear": t["shear"], "bond": t["bond"], "warp": t["warp"], "misalignment": t["misalignment"],
+             "moisture": t["moisture"], "dry_end": t["rejects"], "bale": t["bale"], "unexplained": t["bale"] - t["trim"] - t["shear"] - t["rejects"]}
+    minutes = window_minutes(plain, span, shift)
+    values = {f"category={k}": money(WASTE_PRICING.get(k, "waste"), round(a, 1), t["gross"], minutes, rates, 0.1) for k, a in areas.items()}
+    return case(id, "get_waste_breakdown", {"window": {"period": period, "anchor": anchor}, "shift": shift},
+                {"row_count": len(WASTE), "values": values}, day=day, note=note, rates=rates_text)
+
+
+def pareto_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, *, day="2026-09-14", note=""):
+    """get_downtime_pareto's dollar fields: each reason's displayed minutes at the machine rate."""
+    rates = rates_of(rates_text)
+    span = window(period, anchor)
+    minutes = defaultdict(float)
+    for st in plain.between("stops", *span, shift):
+        minutes[st.reason] += st.duration_sec / 60
+    scheduled = window_minutes(plain, span, shift)
+    values = {f"category={r}": money("downtime", round(m, 2), None, scheduled, rates, 0.01) for r, m in minutes.items()}
+    return case(id, "get_downtime_pareto", {"window": {"period": period, "anchor": anchor}, "group_by": "reason", "measure": "minutes", "shift": shift},
+                {"row_count": len(minutes), "values": values}, day=day, note=note, rates=rates_text)
+
+
+def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *, day="2026-09-14", note=""):
+    """get_opportunities by hand: the speed gap to each cell's best fifth (the speed case's own hours),
+    trim points over the target, each downtime reason and the recorded shear and dry-end waste, priced
+    and ranked by dollars a year."""
+    rates = rates_of(rates_text)
+    span = window(period, anchor)
+    t = plain.sums(*span, shift)
+    gross = round(t["gross"], 1)
+    scheduled = window_minutes(plain, span, shift)
+    speed = speed_case(plain, "_", period, anchor, "width", shift)["expect"]["values"]
+    cells = [v["opportunity_hours"][0] for k, v in speed.items() if k.startswith("label=")]
+    hours = round(sum(round(h, 2) for h in cells), 2)
+    levers = {"Speed gap to best-fifth speed": money("speed", hours * 60, gross, scheduled, rates, 1.2)}
+    trim_pct = round(t["trim"] / t["gross"] * 100, 4)
+    over = max(0.0, trim_pct - rates[3])
+    levers[f"Side trim over the {rates[3]:g}% target"] = money("trim", over / 100 * gross, gross, scheduled, rates, 1e-4 / 100 * gross)
+    minutes, stops = defaultdict(float), defaultdict(int)
+    for st in plain.between("stops", *span, shift):
+        minutes[st.reason] += st.duration_sec / 60
+        stops[st.reason] += 1
+    for r, m in minutes.items():
+        levers[f"Downtime: {r}" + (" (setup time)" if r == "Order change" else "")] = money("downtime", round(m, 2), gross, scheduled, rates, 0.01)
+    labels = {"shear": "Shear chops", "bond": "Dry-end: bond", "warp": "Dry-end: warp", "misalignment": "Dry-end: misalignment", "moisture": "Dry-end: moisture"}
+    for key, label in labels.items():
+        if round(t[key], 1):
+            levers[f"{label} (all recorded)"] = money("waste", round(t[key], 1), gross, scheduled, rates, 0.1)
+    values = {f"rows:lever={k}": e for k, e in levers.items()}
+    values["#0"] = {"lever": exact(max(levers, key=lambda k: levers[k]["usd_per_year"][0]))}
+    values["$"] = {"total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in levers.values()), 3),
+                                          sum(e["usd_per_year"][1] for e in levers.values())],
+                   "contribution_status": exact("margin not set" if rates[2] is None else "set")}
+    return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift},
+                {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note, rates=rates_text)
+
+
 # ---------------------------------------------------------------- the case list
 
 def build(data=None):
@@ -729,6 +883,19 @@ def build(data=None):
                               note="Expected values are sums over the remaining valid setups: the 99,999,999 sq ft trim is reported in excluded_records, not averaged in."))
     cases.append(day_kpi_case(plain, "value-dq-corrupt-other-shift-complete", "2026-09-14", 1, corrupt=True,
                               note="The bad record sits in shift 2; shift 1 stays complete and unchanged."))
+    # Dollars (issue #31): the quantities priced at the post's rates, a second time by hand.
+    cases.append(shift_dollars_case(plain, "value-dollars-shift-0914-shift-2", "2026-09-14", 2,
+                                    note="Where the money went in shift 2: every gap priced at the post's rates; contribution reads 'margin not set', never $0."))
+    cases.append(shift_dollars_case(plain, "value-dollars-shift-0930-shift-1", "2026-09-30", 1))
+    cases.append(shift_dollars_case(plain, "value-dollars-shift-0914-shift-2-rates", "2026-09-14", 2, "paper:66,hour:1500,margin:40",
+                                    note="The same shift with paper x1.2, machine time x1.25 and a $40/MSF margin: each dollar scales with its own rate only."))
+    cases.append(waste_dollars_case(plain, "value-dollars-waste-september", "month", "2026-09-14",
+                                    note="What waste genuinely costs: each bucket's MSF x paper, plus the run time shear and rejects took."))
+    cases.append(pareto_dollars_case(plain, "value-dollars-pareto-week-0907-shift-2", "week", "2026-09-09", 2))
+    cases.append(opportunities_case(plain, "value-dollars-opportunities-september", "month", "2026-09-14",
+                                    note="Where to look: the levers ranked by dollars a year at the post's volumes."))
+    cases.append(opportunities_case(plain, "value-dollars-opportunities-week-0914-shift-2-margin", "week", "2026-09-14", 2, "margin:40,trim:3",
+                                    note="A $40/MSF margin and a 3% trim target: contribution is priced beside, never added, and trim points over 3% become a lever."))
     assert len({c["id"] for c in cases}) == len(cases)
     return {
         "about": "GENERATED by evals/make_value_goldens.py from plain Python sums over synth.generate_months(); "
@@ -752,6 +919,16 @@ def check_catalog():
         raise SystemExit("trend metrics or waste categories drifted from the application")
 
 
+def check_rates():
+    """The post's numbers typed here must equal the application's defaults (rates.json)."""
+    defaults = json.loads((ROOT / "src" / "investigator" / "rates.json").read_text())
+    rates = {r["short"]: r["default"] for r in defaults["rates"]}
+    facts = {a["id"]: a["value"] for a in defaults["assumptions"]}
+    mine = {"paper": PAPER, "hour": HOUR, "margin": None, "trim": TRIM_TARGET}
+    if rates != mine or facts["annual_msf_per_machine"] != ANNUAL_MSF or facts["required_fpm"] * facts["net_width_in"] / 12 / 1000 != MSF_PER_MIN:
+        raise SystemExit(f"rates.json drifted from the post's numbers here: {rates} vs {mine}")
+
+
 def render(golden):
     return json.dumps(golden, indent=1) + "\n"
 
@@ -761,6 +938,7 @@ def main(argv=None):
     parser.add_argument('--check', action='store_true', help='compare with the committed file instead of writing')
     args = parser.parse_args(argv)
     check_catalog()
+    check_rates()
     golden = build()
     text = render(golden)
     values = sum(len(v) for c in golden["cases"] for v in c["expect"]["values"].values())

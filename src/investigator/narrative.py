@@ -23,6 +23,9 @@ NARRATIVE_SCHEMA = {'type':'object','properties':{'paragraphs':{'type':'array','
     'required':['paragraphs'],'additionalProperties':False}
 
 
+PACKET_DROP=frozenset({'source_ids','usd_basis','msf','machine_minutes','msf_not_made','contribution_usd_per_year'})
+
+
 def evidence_packet(evidence):
     """Bound the writer's preview explicitly; row positions stay stable.
 
@@ -35,7 +38,9 @@ def evidence_packet(evidence):
     packet=[]
     for result in evidence:
         data=result['data']
-        rows=[{k:v for k,v in row.items() if k!='source_ids'} for row in data.get('rows',[])[:12]]
+        # The writer may cite the dollars (usd, usd_per_year, paper_usd, machine_time_usd, contribution_usd);
+        # the formula text and the intermediate quantities stay on the card, inside the byte caps.
+        rows=[{k:v for k,v in row.items() if k not in PACKET_DROP} for row in data.get('rows',[])[:12]]
         entry={'result_id':result['result_id'],'tool':result['tool'],
             'shift':data['shift'],'coverage':data['coverage'],'rows':rows,
             'total_rows':len(data.get('rows',[])), 'preview_rows':len(rows)}

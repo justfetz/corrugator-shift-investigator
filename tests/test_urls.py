@@ -168,8 +168,8 @@ def test_every_measure_has_a_meaning_under_every_grain():
                     continue
                 # one spelling per state: the address of the resolved state is the address. Under a ranged grain
                 # the day-shaped downtime, quality and compare are the Pareto, the waste breakdown and the KPI tiles,
-                # so they normalize to pareto, waste and kpis once and stay there.
-                alias = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis'} if grain != 'day' else {}
+                # so they normalize to pareto, waste and kpis once and stay there; dollars is the money levers (get_opportunities).
+                alias = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis', 'dollars': 'money'} if grain != 'day' else {}
                 normalized = page_url(resolved)
                 assert normalized == url.replace('measure=' + measure, 'measure=' + alias.get(measure, measure)), url
                 assert page_url(resolve_url(normalized, store)) == normalized
@@ -275,8 +275,9 @@ def test_an_alias_resolves_to_its_canonical_state(typed, canonical):
 def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
     """A sweep of measures, grains, scopes and modifiers: a refused URL never redirects, and a redirect target
     resolves, runs the same plan over the same shifts, and does not redirect again. Every URL that resolves and is
-    not canonical redirects: none is left answering at its own address (issue #90 gave the last of them, a
-    ranged-grain downtime or quality split over named shifts, its resolvable spelling measure=pareto&shifts=1,3)."""
+    not canonical redirects: the only URLs left answering at their own address are a ranged-grain dollars split over named shifts
+    (measure=money&shifts=1,3 is refused, issue #31); issue #90 gave downtime and quality split over named shifts
+    their resolvable spelling measure=pareto|waste&shifts=1,3."""
     store = default_store()
     tails = ['', 'compare=prev', 'shifts=1,3', 'shifts=2', 'shifts=1,3&compare=prev', 'by=place', 'by=place&compare=prev',
              'by=reason', 'by=grade', 'by=setup', 'by=grade&compare=prev', 'kind=operator&compare=prev', 'window=week',
@@ -301,7 +302,7 @@ def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
                     assert redirect_for(target, store) is None and page_url(landed) == target, url
                     assert ran(landed) == ran(resolved), url
                     redirected += 1
-    assert redirected > 500 and stayed == 0, (redirected, stayed)
+    assert redirected > 500 and stayed == 3, (redirected, stayed)   # dollars, shifts=1,3, three ranged grains
     assert redirect_for(f'{W}?measure=downtime&shifts=1,3', store) == f'{W}?measure=pareto&shifts=1,3'
     assert redirect_for(f'{M}?measure=quality&shifts=2,1&compare=prev', store) == f'{M}?measure=waste&shifts=2,1'
 

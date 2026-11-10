@@ -60,6 +60,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context  # noqa: E402
+from investigator.cost_model import parse_rates  # noqa: E402
 from investigator.record_store import default_store  # noqa: E402
 
 GOLDEN = ROOT / 'evals' / 'golden.json'
@@ -922,6 +923,7 @@ def _run_case(case, provider, live, record, scratch):
         context = Context(day, shift)
         context.scope = scope
         context.period = case.get('period', 'day')   # the Period control: week, month or fiscal routes to the period tools
+        context.rates = parse_rates(case.get('rates'))   # a case's rate overrides, spelled as rates= spells them (issue #31)
         started = time.perf_counter()
         try:
             for text in turns:
