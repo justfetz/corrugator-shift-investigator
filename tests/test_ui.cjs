@@ -547,6 +547,10 @@ const issue63=issue17.then(async()=>{
  // 6. "Clear the thread" empties it.
  elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);
  delete context.performance;
+ // The analyst card (.message.analyst) holds several paragraphs; a bare `.analyst{display:inline-flex}` rule (the
+ // ask-bar button's) once laid them out side by side, one character per line. The button rule must stay scoped.
+ assert.ok(!/(^|[\s}])\.analyst\s*\{[^}]*inline-flex/.test(css), 'the inline-flex rule must be scoped to button.analyst, not .analyst');
+ assert.match(css, /button\.analyst\s*\{[^}]*inline-flex/);
  console.log('UI issue-63 checks passed: shell order, skeleton in the same task as the submit, measured ms on the title line, three cards from three questions with nothing disabled, payload unchanged, offline default.');
 }).catch(error=>{console.error(error);process.exit(1);});
 
