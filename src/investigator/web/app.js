@@ -742,6 +742,12 @@ function paintAnalyst(rec){
  const r=rec.result, ran=(r.trace||[]).some(e=>e.ok), offline=rec.source&&rec.source.result;
  if(ran)showResult(r); else if(offline)showResult(offline);
  const card=message(null,[],'analyst');
+ if(r.status==='plan_rejected'){   // issue #78: a refused plan degrades, it does not stop; one quiet line under the offline evidence
+  const over=r.plan_rejection, calls=(r.usage&&r.usage.model_calls)||0;
+  card.append(node('p',over?`The analyst proposed ${over.proposed} queries; the limit is ${over.limit}, so none ran.`:(r.sections||[]).filter(t=>!/^Investigation stopped/.test(t)).join(' '),'analyst-p muted'));
+  const state=node('p',`analyst · plan rejected · ${calls} model call${calls===1?'':'s'}`,'muted analyst-state'); if(r.usage)state.title=usageText(r.usage); card.append(state);
+  return;
+ }
  const notes=ran?(r.sections||[]).filter(t=>/^(Investigation stopped|The model narrative|The requested)/.test(t)):(r.sections||[]);
  if(r.narrative_status!=='available'||r.status!=='complete')for(const text of notes)card.append(node('p',text,'analyst-p warning-note'));
  for(const item of r.narrative||[]){
