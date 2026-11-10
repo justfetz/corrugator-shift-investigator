@@ -60,6 +60,8 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_grade_totals", "Totals by board grade for a window: setups, wet ends, lineal ft, volume MSF and share, speed without stops and elapsed speed from the setup clocks, percent of grade target, setup stops, trim and dry-end percent; previous window's volume beside. Use for 'how much 275-BC did we run', 'which grade is slowest against target'.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
+        ("get_rollstock", "Paper consumed (rollstock) in a window, from the wet-end paper-run records: lineal feet and MSF per board grade and web width, paper runs and feet per run, previous window alongside with deltas. MSF is the paper footprint (feet x width); no basis weight, so no tons. Use for 'how much paper did we consume this month', 'rollstock consumed this week'.",
+         {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_overrun", "Over/under-run by knife for a window: nominal cuts vs actual cuts as cuts, sheets and percent of nominal, with the share of customer lines inside, over and under the +-band; last row is all knives.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_speed_opportunity", "Where could we run faster: per grade and web width (or crew), typical speed without stops vs the best fifth of setups, gap, % of target for both, opportunity hours, and the dry-end reject % of the fast fifth against the rest (a positive penalty means the gain costs rejects). Peak speeds never used; setups under the minimum run time excluded and counted.",
@@ -77,6 +79,7 @@ TOOL_SCHEMAS.append({"name": "render_chart", "description": "Chart a result from
 CHART_TITLES = {'get_period_kpis': 'KPI tiles', 'compare_periods': 'KPI comparison', 'get_downtime_pareto': 'Downtime Pareto',
                 'get_waste_breakdown': 'Waste breakdown', 'get_stops_profile': 'Stops per production day', 'get_trend': 'Weekly trend',
                 'get_grade_totals': 'Volume by grade (MSF)', 'get_overrun': 'Over/under-run by knife',
+                'get_rollstock': 'Paper consumed by grade and width (MSF)',
                 'get_speed_opportunity': 'Speed opportunity (hours at best-fifth speed)'}
 # Chartable results: tool -> (x field, y field or a function of the result data, unit or a function, chart type).
 CHARTABLE = {
@@ -92,6 +95,7 @@ CHARTABLE = {
     'get_stops_profile': ('production_day', 'stops', 'stops', 'bar', None),
     'get_grade_totals': ('grade', 'volume_msf', 'MSF', 'bar', 'previous_volume_msf'),
     'get_overrun': ('knife', 'overrun_pct', '% of nominal cuts', 'range', None),
+    'get_rollstock': ('label', 'msf', 'MSF', 'bar', 'previous_msf'),
     'get_speed_opportunity': ('label', 'opportunity_hours', 'hours', 'bar', None),
     'get_trend': ('week_start', 'value', lambda d: d['unit'], 'line', None),
 }
@@ -198,7 +202,7 @@ TREND_WORDS = ((r"lineal per paper change|per paper change|per wet[- ]end|feet p
 PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare this month to last', "
                "'how did September go versus August', 'how did shift 2 go compared with last week', "
                "'which downtime reason cost the most minutes', 'is it bond or warp', 'stops per day this week', "
-               "'trend of trim over eight weeks', 'volume by grade this month', 'over/under-run by knife this week', "
+               "'trend of trim over eight weeks', 'volume by grade this month', 'how much paper did we consume this month', 'over/under-run by knife this week', "
                "'compare this period to the previous period' (4-4-5 accounting periods), 'where is the speed opportunity this month'.")
 
 
@@ -215,9 +219,10 @@ def parse_period_request(lower, current, shifts):
     waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|moisture|bale|unexplained|twist|s-warp|delamination", lower))
     this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
     grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
+    rollstock = bool(re.search(r"roll[- ]?stock|\bpaper (consum|usage|used\b)|\bconsum\w*\b.*\bpaper\b|\bpaper\b.*\bconsum|how much paper\b|\brolls? (of paper )?(consumed|used)", lower))
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
-    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp):
+    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock):
         return None
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
@@ -235,6 +240,9 @@ def parse_period_request(lower, current, shifts):
     elif overrun:
         plan = [("get_overrun", {"window": window, "shift": shift})]
         intent = 'period_overrun'
+    elif rollstock:
+        plan = [("get_rollstock", {"window": window, "shift": shift})]
+        intent = 'period_rollstock'
     elif grade:
         plan = [("get_grade_totals", {"window": window, "shift": shift})]
         intent = 'period_grade'
@@ -856,6 +864,13 @@ class Agent:
                 f'trim {num(r["trim_pct"])}%, dry-end {num(r["dry_end_pct"])}%' +
                 (f', previous {num(r["previous_volume_msf"])} MSF ({num(r["delta_volume_msf"], signed=True)})' if r['previous_volume_msf'] is not None else '')
                 for r in data['rows']) or 'no setups in this window') + '. ' + data['speed_note'])
+        elif tool == 'get_rollstock':
+            lines.append(f'Paper consumed ({num(data["total_lineal_ft"])} ft = {num(data["total_msf"])} MSF over {num(data["paper_runs"])} paper runs, {num(data["lineal_per_run"])} ft per run' +
+                         (f'; previous {num(data["previous_total_lineal_ft"])} ft = {num(data["previous_total_msf"])} MSF over {num(data["previous_paper_runs"])} runs, {num(data["delta_lineal_ft"], signed=True)} ft / {num(data["delta_msf"], signed=True)} MSF' if data['previous_total_lineal_ft'] is not None else '; previous window unavailable') +
+                         '), by grade and web width: ' + ('; '.join(
+                f'{r["label"]}: {num(r["lineal_ft"])} ft = {num(r["msf"])} MSF ({num(r["share_of_feet_pct"])}% of feet) over {num(r["paper_runs"])} runs, {num(r["lineal_per_run"])} ft per run' +
+                (f', previous {num(r["previous_lineal_ft"])} ft ({num(r["delta_lineal_ft"], signed=True)})' if r['previous_lineal_ft'] is not None else '')
+                for r in data['rows']) or 'no paper runs in this window') + '. ' + data['attribution_note'] + ' ' + data['msf_note'])
         elif tool == 'get_speed_opportunity':
             lines.append(f'Speed opportunity by grade and {data["rows"][0]["slice_by"] if data["rows"] else "width"} ({num(data["total_opportunity_hours"])} hours in total if every cell ran at its best-fifth speed; {num(data["excluded_short_setups"])} setups under {num(data["min_run_minutes"])} running minutes excluded): ' + ('; '.join(
                 f'{r["label"]}: typical {num(r["typical_fpm"])} ft/min ({num(r["typical_pct_of_target"])}% of target) vs best fifth {num(r["best_fifth_fpm"])} ({num(r["best_fifth_pct_of_target"])}%), gap {num(r["gap_fpm"])} ft/min = {num(r["opportunity_hours"])} hours over {num(r["setups"])} setups; '

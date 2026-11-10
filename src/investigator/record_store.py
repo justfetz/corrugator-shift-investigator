@@ -779,6 +779,71 @@ class RecordStore:
                               speed_note="Grade speeds come from the setup records' own elapsed clocks; "
                                          "scheduled shift minutes carry no grade, so there is no per-grade speed with stops.")
 
+    def get_rollstock(self, window, shift=None):
+        """Paper consumed in one window, from the wet-end (paper run) records: lineal feet and
+        MSF per board grade and web width, paper runs and feet per run, the previous window of
+        the same kind alongside. MSF is the paper footprint, lineal feet x web width, the same
+        area the board records carry; the records hold no basis weight, so there are no tons.
+
+        All shifts: whole paper runs, each on the production day its first setup started. One
+        shift: the setups that shift ran on each run, so the feet are the setup feet of that
+        shift and a run that spans two shifts is counted in both."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        current = self._window(window)
+        previous = self._previous(current)
+        _, extra = self._shift_clause(shift)
+        if shift is None:
+            sql = ("SELECT grade, width_in, count(*) AS paper_runs, coalesce(sum(feet),0) AS feet, coalesce(sum(gross),0) AS gross "
+                   "FROM wet_ends WHERE production_date BETWEEN ? AND ? GROUP BY grade, width_in")
+        else:
+            sql = ("SELECT w.grade AS grade, w.width_in AS width_in, count(DISTINCT s.wet_end_id) AS paper_runs, "
+                   "coalesce(sum(s.feet),0) AS feet, coalesce(sum(s.gross),0) AS gross "
+                   "FROM setups s JOIN wet_ends w ON w.wet_end_id = s.wet_end_id "
+                   "WHERE s.production_date BETWEEN ? AND ? AND s.shift = ? GROUP BY w.grade, w.width_in")
+        fetched = {}
+        for name, win in (("current", current), ("previous", previous)):
+            params = [win["start"], win["end"], *extra]
+            fetched[name] = {(r["grade"], r["width_in"]): r for r in self._fetch(sql, params)}
+            trace["sql"].append(sql)
+            trace["parameters"].append(params)
+        available = previous["coverage"] != "unavailable"
+
+        def totals(cells):
+            return {"paper_runs": sum(r["paper_runs"] for r in cells.values()),
+                    "feet": sum(r["feet"] for r in cells.values()), "gross": sum(r["gross"] for r in cells.values())}
+        now, before = totals(fetched["current"]), totals(fetched["previous"])
+        ordered = sorted(fetched["current"].values(), key=lambda r: (-r["feet"], r["grade"], r["width_in"]))
+        rows = []
+        for r in ordered:
+            prior = fetched["previous"].get((r["grade"], r["width_in"])) if available else None
+            prior_feet = round(prior["feet"], 1) if prior else (0.0 if available else None)
+            prior_msf = round(prior["gross"] / 1000, 1) if prior else (0.0 if available else None)
+            feet, msf = round(r["feet"], 1), round(r["gross"] / 1000, 1)
+            rows.append({"grade": r["grade"], "width_in": r["width_in"], "label": f"{r['grade']} {r['width_in']:g} in",
+                         "paper_runs": r["paper_runs"], "lineal_ft": feet, "msf": msf,
+                         "share_of_feet_pct": _ratio(r["feet"], now["feet"], 100),
+                         "lineal_per_run": _ratio(r["feet"], r["paper_runs"], places=1),
+                         "previous_paper_runs": prior["paper_runs"] if prior else (0 if available else None),
+                         "previous_lineal_ft": prior_feet, "previous_msf": prior_msf,
+                         "delta_lineal_ft": round(feet - prior_feet, 1) if prior_feet is not None else None,
+                         "delta_msf": round(msf - prior_msf, 1) if prior_msf is not None else None})
+        total_feet, total_msf = round(now["feet"], 1), round(now["gross"] / 1000, 1)
+        prev_feet = round(before["feet"], 1) if available else None
+        prev_msf = round(before["gross"] / 1000, 1) if available else None
+        source = {"current": {"wet_ends": now["paper_runs"]}, "previous": {"wet_ends": before["paper_runs"]} if available else None}
+        attribution = ("Whole paper runs, each on the production day its first setup started." if shift is None else
+                       f"The setups shift {shift} ran on each paper run: a run that spans two shifts is counted in both, "
+                       "and its feet are split by the setups each shift ran.")
+        return self._envelope("get_rollstock", current, previous, shift, rows, trace, started, source,
+                              total_lineal_ft=total_feet, total_msf=total_msf, paper_runs=now["paper_runs"],
+                              lineal_per_run=_ratio(now["feet"], now["paper_runs"], places=1),
+                              previous_total_lineal_ft=prev_feet, previous_total_msf=prev_msf,
+                              previous_paper_runs=before["paper_runs"] if available else None,
+                              delta_lineal_ft=round(total_feet - prev_feet, 1) if prev_feet is not None else None,
+                              delta_msf=round(total_msf - prev_msf, 1) if prev_msf is not None else None,
+                              attribution_note=attribution,
+                              msf_note="MSF is the paper footprint, lineal feet times web width in thousands of square feet; the records carry no basis weight, so tons and cost are not computed.")
+
     def get_overrun(self, window, shift=None):
         """Over/under-run by knife: actual cuts against nominal cuts for every
         customer line of the window, as cuts, sheets (cuts x outs) and percent of

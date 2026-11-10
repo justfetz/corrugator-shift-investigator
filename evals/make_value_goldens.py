@@ -410,6 +410,61 @@ def grade_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=
                 {"coverage": coverage, "row_count": len(by_grade), "values": values}, day=day, note=note)
 
 
+def rollstock_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
+    """Paper consumed per grade and web width. All shifts: the wet-end records by the production day
+    they started on. One shift: the setups that shift ran, grouped by their run's grade and width, with
+    distinct wet ends as the run count."""
+    cur = window(period, anchor)
+    prev = previous(period, *cur)
+    available = plain.coverage(*prev) != "unavailable"
+
+    def cells(span):
+        out = defaultdict(lambda: {"runs": set(), "feet": 0.0, "gross": 0.0})
+        if shift is None:
+            for w in plain.between("wet_ends", *span):
+                cell = out[(w.quality_id, w.web_width_in)]
+                cell["runs"].add(w.wet_end_id)
+                cell["feet"] += w.lineal_ft
+                cell["gross"] += w.total_produced_sqft
+        else:
+            for s in plain.between("dry_end_setups", *span, shift):
+                cell = out[(s.quality_id, s.web_width_in)]
+                cell["runs"].add(s.wet_end_id)
+                cell["feet"] += s.lineal_ft
+                cell["gross"] += s.total_produced_sqft
+        return out
+    now, before = cells(cur), cells(prev)
+    total_feet = sum(c["feet"] for c in now.values())
+    total_gross = sum(c["gross"] for c in now.values())
+    total_runs = sum(len(c["runs"]) for c in now.values())
+    prev_feet = sum(c["feet"] for c in before.values())
+    prev_gross = sum(c["gross"] for c in before.values())
+    prev_runs = sum(len(c["runs"]) for c in before.values())
+    values = {"$": {"total_lineal_ft": num(total_feet, 1), "total_msf": num(total_gross / 1000, 1), "paper_runs": exact(total_runs),
+                    "lineal_per_run": num(total_feet / total_runs, 1),
+                    "previous_total_lineal_ft": num(prev_feet, 1) if available else exact(None),
+                    "previous_total_msf": num(prev_gross / 1000, 1) if available else exact(None),
+                    "previous_paper_runs": exact(prev_runs) if available else exact(None),
+                    # the tool subtracts the two displayed (1-dp) totals
+                    "delta_lineal_ft": [round(total_feet - prev_feet, 6), 0.11] if available else exact(None),
+                    "delta_msf": [round((total_gross - prev_gross) / 1000, 6), 0.11] if available else exact(None)}}
+    for (grade, width), cell in now.items():
+        prior = before.get((grade, width), {"runs": set(), "feet": 0.0, "gross": 0.0})
+        feet, gross, runs = cell["feet"], cell["gross"], len(cell["runs"])
+        values[f"label={grade} {width:g} in"] = {
+            "grade": exact(grade), "width_in": num(float(width), 1), "paper_runs": exact(runs),
+            "lineal_ft": num(feet, 1), "msf": num(gross / 1000, 1), "share_of_feet_pct": num(feet / total_feet * 100, 4),
+            "lineal_per_run": num(feet / runs, 1),
+            "previous_paper_runs": exact(len(prior["runs"])) if available else exact(None),
+            "previous_lineal_ft": num(prior["feet"], 1) if available else exact(None),
+            "previous_msf": num(prior["gross"] / 1000, 1) if available else exact(None),
+            "delta_lineal_ft": [round(feet - prior["feet"], 6), 0.11] if available else exact(None),
+            "delta_msf": [round((gross - prior["gross"]) / 1000, 6), 0.11] if available else exact(None)}
+    coverage = "complete" if plain.coverage(*cur) == "complete" and plain.coverage(*prev) == "complete" else "partial"
+    return case(id, "get_rollstock", {"window": {"period": period, "anchor": anchor}, "shift": shift},
+                {"coverage": coverage, "row_count": len(now), "values": values}, day=day, note=note)
+
+
 def overrun_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
     cur = window(period, anchor)
     lines = defaultdict(list)
@@ -638,6 +693,14 @@ def build(data=None):
     cases.append(grade_case(plain, "value-grade-totals-august", "month", "2026-08-14",
                             note="July is unavailable: previous and delta volume are null, never zero."))
     cases.append(grade_case(plain, "value-grade-totals-week-0914-shift-2", "week", "2026-09-14", 2))
+    # Rollstock (paper consumed) from the wet-end records: both months (August's previous is July: null),
+    # and one week for one shift, where the feet are the setups that shift ran on each paper run.
+    cases.append(rollstock_case(plain, "value-rollstock-september", "month", "2026-09-14",
+                                note="Whole paper runs by the production day they started on; MSF is feet x width, no basis weight."))
+    cases.append(rollstock_case(plain, "value-rollstock-august", "month", "2026-08-14",
+                                note="July is unavailable: previous feet, MSF, runs and deltas are null, never zero."))
+    cases.append(rollstock_case(plain, "value-rollstock-week-0914-shift-2", "week", "2026-09-14", 2,
+                                note="One shift: the setups it ran on each run; a run spanning two shifts counts in both."))
     # Over/under-run by knife: the story week for one shift, and September for all shifts.
     cases.append(overrun_case(plain, "value-overrun-week-0914-shift-2", "week", "2026-09-14", 2))
     cases.append(overrun_case(plain, "value-overrun-september", "month", "2026-09-14"))
