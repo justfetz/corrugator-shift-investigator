@@ -3,14 +3,17 @@
 `canonical_url(parse_request(q))` is the address of a question; `resolve_url` is its inverse. The
 round trip is proved on every question the golden set asks (the answers compare equal step by step),
 and the grammar refuses what it cannot name instead of guessing."""
+import http.client
 import json
 import re
 from pathlib import Path
+from threading import Thread
 import pytest
 from investigator.agent import Agent, Context, parse_request
 from investigator.record_store import default_store
-from investigator.urls import (PATH, canonical_url, machine_slug, page_url, question_url, resolve_url, scope_url,
-                               INTENT_MEASURES, STORE_MEASURES)
+from investigator.server import make_server
+from investigator.urls import (PATH, canonical_url, machine_slug, page_url, question_url, redirect_target, resolve_url,
+                               scope_url, INTENT_MEASURES, STORE_MEASURES)
 
 ROOT = Path(__file__).resolve().parent.parent
 GOLDEN = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
@@ -58,6 +61,7 @@ def test_every_golden_question_round_trips_through_its_url(case):
             return
         resolved = resolve_url(url, store)
         assert page_url(resolved) == url, 'the address of the resolved state is the address itself'
+        assert redirect_target(url, resolved) is None, 'a canonical URL is never redirected (issue #70)'
         assert (resolved['day'], resolved['scope'], resolved['shift'], resolved['tool_period'], resolved['corrupt']) == (day, scope, shift, period, corrupt), 'the path is the controls'
         asked, context = answer(store, day, shift, scope, period, corrupt, text, history=context.history)
         resolved['context'].history = resolved['history']
@@ -209,6 +213,148 @@ def test_every_measure_has_a_meaning_under_every_grain():
 def test_what_the_grammar_refuses(url, reason):
     with pytest.raises(ValueError, match=reason):
         resolve_url(url, default_store())
+
+
+# Issue #70: hand-typed spellings of a canonical state, as (you may type, it becomes): the table of docs/URLS.md.
+# The first two are issue #20's own example URLs; the third is its rollstock example, on a production day.
+D, W, M, P = '/corr/1/day/2026-09-14', '/corr/1/week/2026-09-14', '/corr/1/month/2026-09-14', '/corr/1/period/2026-09-14'
+ALIASES = [
+    (f'{D}/shift/2?measure=downtime&by=reason&compare=prev', f'{D}/shift/2?measure=pareto'),
+    (f'{P}/shift/3?measure=waste&by=grade', f'{P}/shift/3?measure=grade'),
+    (f'{M}?measure=rollstock&compare=prev', f'{M}?measure=rollstock'),
+    # compare=prev where the answer carries the previous window already: prev is its default
+    (f'{W}?measure=kpis&compare=prev', f'{W}?measure=kpis'),
+    (f'{D}/shift/2?measure=pareto&by=place&unit=count&compare=prev', f'{D}/shift/2?measure=pareto&by=place&unit=count'),
+    (f'{W}?measure=waste&compare=prev', f'{W}?measure=waste'),
+    (f'{M}/shift/1?measure=grade&compare=prev', f'{M}/shift/1?measure=grade'),
+    (f'{W}/shift/2?measure=overview&by=kind&compare=prev', f'{W}/shift/2?measure=overview&by=kind'),
+    (f'{M}?measure=fpm&compare=prev', f'{M}?measure=fpm'),
+    (f'{P}?measure=summary&compare=prev', f'{P}?measure=summary'),
+    (f'{D}/shift/2?measure=overview&window=week&compare=prev', f'{D}/shift/2?measure=overview&window=week'),
+    (f'{D}/shift/2?measure=fpm&window=2026-08&compare=prev', f'{D}/shift/2?measure=fpm&window=2026-08'),
+    # under a ranged grain downtime, quality and compare already are the Pareto, the waste breakdown and the KPI tiles
+    (f'{W}/shift/2?measure=downtime&by=place&compare=prev', f'{W}/shift/2?measure=pareto&by=place'),
+    (f'{W}/shift/2?measure=downtime', f'{W}/shift/2?measure=pareto'),
+    (f'{M}?measure=quality&compare=prev', f'{M}?measure=waste'),
+    (f'{W}?measure=compare&shifts=1,3&compare=prev', f'{W}?measure=kpis&shifts=1,3'),
+    # under Day the same three take that store form, against the previous production day
+    (f'{D}/shift/2?measure=downtime&by=kind&compare=prev', f'{D}/shift/2?measure=pareto&by=kind'),
+    (f'{D}/shift/3?measure=quality&compare=prev', f'{D}/shift/3?measure=waste'),
+    (f'{D}?measure=compare&shifts=2,1&compare=prev', f'{D}?measure=kpis&shifts=2,1'),
+    # and a day measure that leads with the KPI tiles becomes the KPI compare
+    (f'{D}/shift/2?measure=overview&compare=prev', f'{D}/shift/2?measure=kpis'),
+    (f'{D}?measure=fpm&shifts=3&compare=prev', f'{D}?measure=kpis&shifts=3'),
+    (f'{D}/shift/1?measure=summary&compare=prev', f'{D}/shift/1?measure=kpis'),
+    # waste by grade is the totals by grade, waste by setup the setup matrix
+    (f'{D}/shift/2?measure=waste&by=grade&window=month&compare=prev', f'{D}/shift/2?measure=grade&window=month'),
+    (f'{D}/shift/2?measure=waste&by=setup&corrupt=1', f'{D}/shift/2?measure=setups&corrupt=1'),
+    # a spelled-out default or another field order is the same state
+    (f'{D}/shift/2?by=place&measure=pareto&unit=minutes', f'{D}/shift/2?measure=pareto&by=place'),
+]
+
+
+@pytest.mark.parametrize('typed, canonical', ALIASES)
+def test_an_alias_resolves_to_its_canonical_state(typed, canonical):
+    """The alias and its canonical address are one state: the same plan over the same shifts with the same stated
+    objectives, so the same tools run (under a ranged grain the router's own labels of a plan, intent=period_downtime
+    and group_by for the Pareto, may differ; the redirect serves the canonical address). The canonical address is a
+    fixed point, so a redirect never loops."""
+    store = default_store()
+    alias, state = resolve_url(typed, store), resolve_url(canonical, store)
+    assert page_url(alias) == canonical and alias['text'] == canonical
+    same = lambda request: {k: v for k, v in request.items() if 'plan' not in request or k not in ('intent', 'group_by')}
+    assert same(alias['request']) == same(state['request']) and alias['corrupt'] == state['corrupt']
+    assert page_url(state) == canonical and redirect_target(canonical, state) is None
+    assert redirect_target(typed, alias) == canonical
+    path, query = canonical.split('?', 1)
+    json_alias = typed.replace('?', '.json?', 1)
+    assert redirect_target(json_alias, resolve_url(json_alias, store)) == f'{path}.json?{query}'   # the representation is kept
+    assert redirect_target(typed + '&format=pdf', resolve_url(typed + '&format=pdf', store)) == canonical + '&format=pdf'
+
+
+@pytest.mark.parametrize('url, reason', [
+    (f'{D}?measure=stops&compare=prev', 'compare= does not apply to measure=stops: its answer carries no previous window'),
+    (f'{W}?measure=overrun&compare=prev', 'compare= does not apply to measure=overrun'),
+    (f'{D}?measure=opportunity&compare=prev', 'compare= does not apply to measure=opportunity'),
+    (f'{D}?measure=trend&metric=trim_pct&compare=prev', 'compare= does not apply to measure=trend'),
+    (f'{D}/shift/2?measure=fpm&by=grade&compare=prev', 'compare= does not apply to measure=fpm'),
+    (f'{D}/shift/2?measure=notes&compare=prev', 'compare= does not apply to measure=notes'),
+    (f'{W}?measure=report&compare=prev', 'compare= does not apply to measure=report'),
+    (f'{W}?measure=setups&compare=prev', 'Switch Period to Day'),
+    (f'{D}/shift/2?measure=summary&window=week&compare=prev', 'window= does not apply to measure=summary'),
+    (f'{D}/shift/2?measure=downtime&kind=maintenance&compare=prev', 'kind= does not apply to measure=downtime&compare=prev under Day'),
+    (f'{D}/shift/2?measure=overview&by=place&compare=prev', 'by= does not apply to measure=overview&compare=prev under Day'),
+    (f'{D}?measure=compare&kind=operator&compare=prev', 'kind= does not apply to measure=compare&compare=prev under Day'),
+    (f'{D}?measure=downtime&shifts=1,2&compare=prev', r'not split by shift \(measure=downtime&compare=prev becomes measure=pareto\)'),
+    (f'{W}?measure=pareto&compare=none', 'compare= does not apply to measure=pareto: a comparison base'),
+    (f'{M}?measure=waste&compare=2026-08', 'compare= does not apply to measure=waste'),
+    (f'{D}?measure=waste&by=crew', 'by=crew does not apply to measure=waste'),
+    (f'{W}?measure=waste&by=setup', 'by=setup does not apply to measure=waste under Week'),
+    (f'{D}?measure=waste&by=grade&unit=count', r'unit= does not apply to measure=grade \(measure=waste&by=grade becomes measure=grade\)'),
+    (f'{D}?measure=downtime&by=grade', 'by is reason, place or kind'),   # by=grade is an alias on waste only
+])
+def test_an_alias_that_cannot_be_normalized_is_refused_naming_the_field(url, reason):
+    with pytest.raises(ValueError, match=reason):
+        resolve_url(url, default_store())
+
+
+@pytest.fixture(scope='module')
+def served():
+    server = make_server(0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield server
+    server.shutdown()
+    thread.join()
+    server.server_close()
+    server.app.close()
+
+
+def get(server, path, accept='application/json'):
+    client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+    try:
+        client.request('GET', path, headers={'Accept': accept})
+        response = client.getresponse()
+        return response.status, dict(response.getheaders()), response.read()
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize('typed, canonical', ALIASES)
+def test_an_alias_answers_through_a_302_to_its_canonical_address(served, typed, canonical):
+    """302 -> canonical -> 200, as /q is: the redirect runs no tool and the canonical address answers."""
+    status, headers, body = get(served, typed)
+    assert status == 302 and headers['Location'] == canonical and json.loads(body)['url'] == canonical
+    assert headers['Cache-Control'] == 'no-store' and 'Server-Timing' not in headers
+    status, _, body = get(served, canonical)
+    assert status == 200 and json.loads(body)['url'] == canonical
+
+
+def test_the_issue_20_examples_redirect_in_every_representation(served):
+    """The page, the .json suffix, format=json and format=pdf each redirect to the same representation of the
+    canonical address, which answers; a refused alias is a 400 naming its field and the page still loads."""
+    for typed, canonical in ALIASES[:2]:
+        path, query = canonical.split('?', 1)
+        status, headers, _ = get(served, typed, accept='text/html,application/xhtml+xml,*/*;q=0.8')
+        assert status == 302 and headers['Location'] == canonical
+        status, headers, page = get(served, canonical, accept='text/html')
+        assert status == 200 and headers['Content-Type'].startswith('text/html') and b'Shift Investigator' in page
+        status, headers, _ = get(served, typed.replace('?', '.json?', 1), accept='*/*')
+        assert status == 302 and headers['Location'] == f'{path}.json?{query}'
+        status, _, body = get(served, headers['Location'], accept='*/*')
+        assert status == 200 and json.loads(body)['url'] == canonical
+        status, headers, _ = get(served, typed + '&format=json', accept='*/*')
+        assert status == 302 and headers['Location'] == canonical + '&format=json'
+        assert get(served, headers['Location'], accept='*/*')[0] == 200
+    status, headers, _ = get(served, ALIASES[0][0] + '&format=pdf', accept='*/*')
+    assert status == 302 and headers['Location'] == ALIASES[0][1] + '&format=pdf'
+    status, headers, pdf = get(served, headers['Location'], accept='*/*')
+    assert status == 200 and headers['Content-Type'] == 'application/pdf' and pdf.startswith(b'%PDF-')
+    refused = f'{D}/shift/2?measure=downtime&kind=maintenance&compare=prev'
+    status, _, body = get(served, refused)
+    assert status == 400 and json.loads(body)['error'].startswith('kind= does not apply to measure=downtime&compare=prev')
+    assert get(served, refused, accept='text/html')[0] == 200   # the page loads and shows the refusal of its .json
+    assert get(served, f'{D}/shift/2?measure=pareto')[0] == 200   # a canonical address answers at once
 
 
 def test_follow_up_context_rides_in_the_url():

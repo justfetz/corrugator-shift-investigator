@@ -59,7 +59,7 @@ Modifiers, each refused when it does not apply to the measure:
 | `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
 | `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
-| `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`) | `prev` |
+| `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`); on other measures `prev` alone, as an alias (below) | `prev` |
 | `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's) | all three for day plans, all shifts together for store tools |
 | `rank=` | `speed`, `downtime`, `quality` | all three |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
@@ -67,10 +67,45 @@ Modifiers, each refused when it does not apply to the measure:
 | `after=` | the earlier views of this conversation, each a canonical address without its own chain, at most 8; the agent keeps its `max_turns`. A period report in the chain is kept on the address but, as on the session path, enters no history | none |
 | `format=` | `json`, `pdf` | the page |
 
-One state has one spelling: the fields come in the order above, defaults are omitted, and a few
-aliases normalize (`downtime`, `quality` and `compare` under a ranged grain). `resolve_url` is tolerant
-of a hand-typed alias and strict about everything else: an unknown field, a repeated field, a modifier
-the measure does not read, or a shift outside the selected scope is a 400 with the reason.
+One state has one spelling: the fields come in the order above and defaults are omitted. `resolve_url`
+is tolerant of a hand-typed alias (below) and strict about everything else: an unknown field, a repeated
+field, a modifier the measure does not read, or a shift outside the selected scope is a 400 with the reason.
+
+## Aliases
+
+An address that reads naturally but is not the canonical spelling still answers: the server **302**s it to
+the canonical address (as `/q` does), keeping the representation (`.json`, `format=json`, `format=pdf`), so
+the address bar ends on the one spelling (issue #70). The redirect runs no tool and is not a round; the
+canonical address resolves to itself, so nothing redirects twice. The rest of the query (`shifts=`, `window=`,
+`by=`, `unit=`, `want=`, `corrupt=`, `after=`) carries over. `compare=prev` asks for the previous window of the
+same grain, which these answers carry already or which their store form carries.
+
+| You may type | It becomes |
+| --- | --- |
+| `measure=waste&by=grade` | `measure=grade` (volume, lineal, speed and waste by grade, the previous window's volume beside) |
+| `measure=waste&by=setup` (Day) | `measure=setups` (the setup matrix) |
+| `compare=prev` on `kpis`, `pareto`, `waste`, `grade`, `rollstock` | the same address without it: `prev` is the default, the previous window is beside |
+| `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
+| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` |
+| `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |
+| `measure=quality&compare=prev` under Day | `measure=waste` |
+| `measure=compare&compare=prev` under Day | `measure=kpis` (`shifts=` kept: the tiles per shift) |
+| `measure=overview`, `summary` or `fpm` with `compare=prev` under Day | `measure=kpis`: the day's KPI tiles against the previous production day |
+| a default spelled out (`by=reason`, `unit=minutes`, `weeks=8`) or the fields in another order | the canonical spelling |
+
+Issue #20's examples: `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=reason&compare=prev` →
+`/corr/1/day/2026-09-14/shift/2?measure=pareto`; `/corr/1/period/2026-09-14/shift/3?measure=waste&by=grade` →
+`/corr/1/period/2026-09-14/shift/3?measure=grade`; `…/month/2026-09-14?measure=rollstock&compare=prev` →
+`…/month/2026-09-14?measure=rollstock` (the path takes a production day, not `2026-09`).
+
+An alias that cannot be normalized is a 400 naming the field: `compare=prev` on a measure that carries no
+previous window (`stops`, `overrun`, `opportunity`, `trend`, `fpm&by=grade`, `setups`, `orders`, `notes`,
+`rank`, `report`); `compare=none` or a comparison base on anything but `kpis`; `kind=` with `downtime` or
+`compare` and `compare=prev` under Day (the Pareto groups `by=kind` instead), or `by=`/`kind=` where the target
+is `kpis`; `by=` on `waste` other than `grade` or `setup`; `by=setup` under a ranged grain (the setup matrix is
+per production day). A refusal on the target names the alias too, as in "measure=pareto runs for one shift …
+(measure=downtime&compare=prev becomes measure=pareto)". The page itself still loads at a refused address and
+shows the refusal of its `.json`.
 
 ## Examples
 
@@ -97,7 +132,7 @@ resolves each question through the server and fails the case when it lands elsew
 | Request | Answer |
 | --- | --- |
 | `GET /q?day=&shift=&scope=&period=&corrupt=&q=&after=` | the `/api/ask` fields of an offline question (`period` is `day|week|month|accounting`); validated like `/api/ask`, the question parsed by the offline router, then **302** to the canonical URL. A refusal of the router is a 400 with the same text `/api/ask` would send. Every example chip is a link of this form. |
-| `GET /corr/…?measure=…` | the app page; `app.js` reads the address, sets the controls and fetches the `.json`. The bare scope address (no `measure`) is the page with the controls set. |
+| `GET /corr/…?measure=…` | the app page; `app.js` reads the address, sets the controls and fetches the `.json`. The bare scope address (no `measure`) is the page with the controls set. An alias, in any representation below, is a **302** to the canonical address in the same representation (see Aliases). |
 | `GET /corr/….json?measure=…`, `…&format=json`, or `Accept: application/json` | the JSON `/api/ask` returns for the same state, plus `url` (the page address, with the `after=` chain) and no `session_id`; the bare scope address is a 400 asking for `measure=`. `Server-Timing: app;dur=<ms>` is the server's own time. |
 | `GET /corr/…?measure=…&format=pdf` | the PDF of that answer, rendered on request from the same state. No report cache, so any instance serves any PDF; `POST /api/report` remains for live answers, which have no address. |
 
