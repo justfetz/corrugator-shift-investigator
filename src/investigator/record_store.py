@@ -798,14 +798,20 @@ class RecordStore:
         return self._envelope("get_stops_profile", current, None, shift, daily, trace, started, source,
                               weekday_profile=weekday_rows)
 
-    def get_grade_totals(self, window, shift=None):
+    def get_grade_totals(self, window, shift=None, measure="volume"):
         """Volume, lineal feet, speed and waste by board grade for one window,
         previous window's volume alongside. Ratios of sums within each grade.
 
         Grade-level speed can only use the setup records' own clocks: without
         stops = feet / (elapsed - setup-allocated stop seconds), elapsed = feet /
         elapsed seconds. Scheduled shift minutes carry no grade, so the tile
-        table's "speed with stops" has no per-grade equivalent."""
+        table's "speed with stops" has no per-grade equivalent.
+
+        `measure` chooses what the answer leads with and charts, never the rows:
+        volume (MSF beside the previous window) or speed (ft/min without stops
+        against each grade's target)."""
+        if measure not in ("volume", "speed"):
+            raise ValueError("measure is volume or speed")
         started, trace = time.perf_counter(), {"sql": [], "parameters": []}
         current = self._window(window)
         previous = self._previous(current)
@@ -843,7 +849,7 @@ class RecordStore:
         source = {"current": {"setups": sum(r["setups"] for r in fetched["current"])},
                   "previous": {"setups": sum(r["setups"] for r in fetched["previous"])} if available else None}
         return self._envelope("get_grade_totals", current, previous, shift, rows, trace, started, source,
-                              total_volume_msf=round(total_gross / 1000, 1),
+                              total_volume_msf=round(total_gross / 1000, 1), measure=measure,
                               speed_note="Grade speeds come from the setup records' own elapsed clocks; "
                                          "scheduled shift minutes carry no grade, so there is no per-grade speed with stops.")
 

@@ -36,10 +36,10 @@ store measures run one record-store tool over a window.
 
 | `measure=` | Under `day` | Under `week`, `month`, `period` |
 | --- | --- | --- |
-| `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
+| `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow"); with `window=` the period form over that window ("why was this shift slow this week", "were we slow in August") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
 | `summary` | `get_shift_overview` in one call, three charts | the same three store tools as `overview` |
 | `downtime` | KPIs and downtime by `by=` (`kind=` narrows) | the Pareto alone: an alias of `pareto` |
-| `fpm` | KPIs and wet-end speed against grade targets | KPI tiles and totals by grade |
+| `fpm` | KPIs and wet-end speed against grade targets; with `window=` the period form over that window ("average speed this week", "our speed vs last week"); with `by=grade` speed without stops against each grade target, charted in ft/min ("fpm by grade") | KPI tiles and speed by grade against target; `by=grade` the speed-by-grade table alone |
 | `quality` | KPIs and dry-end rejects by reason | the waste breakdown alone: an alias of `waste` |
 | `compare` | KPIs, downtime and speed per shift (`shifts=` or all three) | KPI tiles per shift: an alias of `kpis` with `shifts=` |
 | `setups`, `orders`, `notes`, `rank` | the setup matrix, the order matrix, the notes, the rankings (`rank=` picks the metrics) | refused: "Switch Period to Day", as the question is |
@@ -55,8 +55,8 @@ Modifiers, each refused when it does not apply to the measure:
 | Field | Values | Default |
 | --- | --- | --- |
 | `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: July answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
-| `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity | `reason`; `width` |
-| `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`) | both |
+| `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity; `grade` for `fpm` | `reason`; `width`; none |
+| `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
 | `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
 | `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`) | `prev` |
@@ -81,6 +81,9 @@ the measure does not read, or a shift outside the selected scope is a 400 with t
 | "Which downtime reason cost the most minutes this week?" — Day | `/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week` |
 | the same question — Week | `/corr/1/week/2026-09-14/shift/2?measure=pareto` |
 | "How did September go versus August?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=kpis&window=2026-09&compare=2026-08` |
+| "fpm by grade" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade` |
+| "Average speed this week" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week` |
+| "Why was this shift slow this week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=overview&window=week` |
 | "Trend of lineal per setup over six weeks" | `/corr/1/day/2026-09-14?measure=trend&metric=lineal_per_setup&weeks=6` |
 | "Compare that with first shift", after "Why was second shift slow?" — all shifts | `/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
