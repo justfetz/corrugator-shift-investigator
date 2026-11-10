@@ -212,7 +212,10 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
 # "running" alone ("which grades are we running") is not a speed word: "how fast are we running" carries one.
 SPEED_WORDS = r"\b(speeds?|fpm|ft/min|feet per minute|fast|faster|fastest|pace|slow|slower|slowest)\b"
 # A volume cue next to a speed word ("how much 275-BC did we run", "which grade ran the most") keeps it volume.
-VOLUME_CUES = r"\b(how much|most|least|share)\b"
+# The cue is attached to a volume ask: a loose "most", "share" or "how much" ("which shift lost the most
+# speed", "how much speed did we lose", "what share of time were we at speed") leaves the question speed.
+VOLUME_CUES = (r"\bhow much\b(?!\s+(speed|time|faster|slower|pace)\b)[^?]*\b(did|do|have|were|are) we (run|ran|make|made|produce|running|making)\b"
+               r"|\b(ran|run|running|made|make|making|produced?) the (most|least)\b|\bshare of (the )?(output|volume|msf|production|footage)\b")
 VOLUME_WORDS = r"\b(throughput|output|volume|made|make|produced?|msf|lineal|footage)\b"
 VOLUME_ASKS = r"\bhow much\b.*\b(did|do|have) we (run|make|made|produce)\b"
 # A diagnosis cue asks why the result was bad, so it is answered by the overview (KPIs, downtime, waste,
@@ -288,7 +291,7 @@ def parse_period_request(lower, current, shifts):
         metric = 'speed_run_fpm' if re.search(r"without stops|running speed", lower) else 'speed_all_fpm'
         plan = [("get_trend", {"metric": metric, "weeks": 8, "anchor": anchor, "shift": shift})]
         intent = 'period_trend'
-    elif grade:
+    elif grade and not diagnose:
         # a speed word makes it speed grouped by grade; the grade word alone is volume by grade
         plan = [("get_grade_totals", {"window": window, "shift": shift, **({"measure": "speed"} if speed else {})})]
         intent = 'period_speed' if speed else 'period_grade'
@@ -313,9 +316,14 @@ def parse_period_request(lower, current, shifts):
     elif waste:
         plan = [("get_waste_breakdown", {"window": window, "shift": shift})]
         intent = 'period_waste'
-    elif diagnose and period and len(set(months)) < 2:
+    elif diagnose and len(set(months)) < 2:
         # "why was this shift slow this week", "were we slow in August": the overview over the window,
-        # as the day path answers "why was this shift slow" (a speed plan alone has no downtime or waste)
+        # as the day path answers "why was this shift slow" (a speed plan alone has no downtime or waste).
+        # A grade word does not turn it into speed by grade ("why was 275-BC slow this week"); with no
+        # window named the day path answers it, under the Period control's window. "Slower than normal"
+        # stays on the baseline branch above (the interim speed trend until #76).
+        if not (period or months):
+            return None
         return period_plan('overview', {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"} if months else window, shifts, group_by_words(lower), current)
     elif speed and period and len(set(months)) < 2:
         # "average speed this week", "our speed vs last week", "how fast did we run in August": the speed

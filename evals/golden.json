@@ -956,6 +956,519 @@
    }
   },
   {
+   "id": "speed-how-much-speed-did-we-lose",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how much speed did we lose",
+   "note": "Review of PR 81 (reviewer pass): a loose 'how much' beside a speed word is not a volume cue; the cue must attach to a volume ask ('how much did we make').",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-which-shift-lost-the-most-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "which shift lost the most speed",
+   "note": "Review of PR 81 (reviewer pass): a loose 'most' beside a speed word stays speed ('ran the most' is the volume cue).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-where-did-we-lose-the-most-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "where did we lose the most speed",
+   "note": "Review of PR 81 (reviewer pass): a loose 'most' beside a speed word stays speed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-share-of-time-at-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "what share of time were we at speed",
+   "note": "Review of PR 81 (reviewer pass): 'share of time' is not 'share of output'; the question stays speed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "overview-why-grade-slow-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why was 275-BC slow this week",
+   "note": "Review of PR 81 (reviewer pass): a grade word does not turn a why/slow question into speed by grade; the overview over the window answers it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "overview-why-grade-slow",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why was 275-BC slow",
+   "note": "Review of PR 81 (reviewer pass): with no window named a grade word still leaves why/slow on the day overview.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason",
+       "kind": null
+      }
+     },
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "overview-why-were-we-slower",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why were we slower",
+   "note": "Review of PR 81 (reviewer pass): 'why ... slower' is a diagnosis cue on the day path too (was measure=fpm before this review).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason",
+       "kind": null
+      }
+     },
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "speed-how-fast-did-we-make-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast did we make 275-BC",
+   "note": "Review of PR 81 (reviewer pass): a speed word with a grade is speed by grade in ft/min; 'make' no longer vetoes speed (was volume by grade).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "ft/min"
+    ]
+   }
+  },
+  {
+   "id": "overview-was-this-a-bad-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "was this a bad week",
+   "note": "Review of PR 81 (reviewer pass): 'bad' is a diagnosis cue; over a window it is the overview, not the KPI tiles alone (was measure=kpis&window=week).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "overview-why-slow-on-stops-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why were we slow on stops this week",
+   "note": "Review of PR 81 (reviewer pass): the loss word keeps it off speed and the why/slow cue makes it the overview over the week (was measure=kpis&window=week).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "overview-were-we-slow-in-august-445-control",
+   "type": "routing",
+   "mode": "offline",
+   "period": "fiscal",
+   "question": "were we slow in august",
+   "note": "Review of PR 81 (reviewer pass): under the 4-4-5 control a named month carries the overview form as window=2026-08.",
+   "expect": {
+    "url": "/corr/1/period/2026-09-14/shift/2?measure=overview&window=2026-08",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "overview-why-slow-this-period",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why were we slow this period",
+   "note": "Review of PR 81 (reviewer pass): 'this period' (4-4-5) under Day is the overview over that window, window=period.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=period",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "overview-second-shift-slow-this-week-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "why was second shift slow this week",
+   "note": "Review of PR 81 (reviewer pass): all-shifts scope: the named shift narrows the overview over the week, shifts=2.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=overview&window=week&shifts=2",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ]
+   }
+  },
+  {
    "id": "slow-vs-normal-on-stops-not-a-speed-trend",
    "type": "routing",
    "mode": "offline",

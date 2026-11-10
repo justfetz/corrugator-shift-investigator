@@ -334,6 +334,8 @@ def _request(measure, fields, context, window):
         if measure == 'fpm' and 'by' in fields:
             return _speed_by_grade(fields['by'], shifts, context, window)
         if context.period != 'day' or (measure in ('fpm', 'overview') and 'window' in fields):
+            if kind is not None:
+                raise ValueError('kind= narrows the day overview and downtime; the period form groups the downtime Pareto with by=kind instead')
             return period_plan(intent, window, shifts, group_by, context)
         return {'intent': intent, 'shifts': shifts or ([1, 2, 3] if scope == 'day' else [shift]), 'kind': kind,
                 'group_by': group_by, 'want_chart': True, 'ranking_metrics': metrics}
