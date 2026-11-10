@@ -114,8 +114,9 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
 .chip-group{display:grid;grid-template-columns:86px 1fr;gap:8px;align-items:start}
 .chip-group h4{margin:0;padding-top:8px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips button{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--grid);font-family:var(--sans);font-size:12.5px;padding:0 9px;font-weight:500;min-height:30px;border-radius:999px}
-.chips button:hover:not(:disabled){color:var(--ink);border-color:var(--ink-3);filter:none}
+.chips button,.chips a.chip{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--grid);font-family:var(--sans);font-size:12.5px;padding:0 9px;font-weight:500;min-height:30px;border-radius:999px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}
+.chips button:hover:not(:disabled),.chips a.chip:hover:not([aria-disabled="true"]){color:var(--ink);border-color:var(--ink-3);filter:none}
+.chips a.chip[aria-disabled="true"]{opacity:.45;pointer-events:none}
 #messages{min-height:80px;max-height:420px;overflow:auto;line-height:1.6;margin:12px 0}
 .empty{color:var(--ink-3);border-left:2px solid var(--rule);padding:10px 16px}
 .message{border-bottom:1px solid var(--line-2);padding:14px 0;font-size:.92rem}

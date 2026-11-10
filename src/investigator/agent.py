@@ -274,10 +274,30 @@ def parse_period_request(lower, current, shifts):
             "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
 
+def asked_for(text):
+    """Objectives the question states that the tools may not meet: a chart (the answer turns partial
+    when none can be drawn) and a financial outcome (the records hold no costs). They ride on the
+    request so a question and its canonical URL (urls.py, `want=`) answer the same way."""
+    asked = []
+    if re.search(r'\b(chart|charts|graph|plot)\b', text, re.I):
+        asked.append('chart')
+    if re.search(r'\b(profit|profitability|savings|revenue|roi)\b', text, re.I):
+        asked.append('profit')
+    return asked
+
+
 def parse_request(text, current):
-    lower = text.lower()
+    """The offline router: a supported question in its scope becomes a request the planner runs,
+    or a ValueError saying what to change. `asked` carries the objectives of `asked_for`."""
+    request = _parse_request(text, current)
+    request['asked'] = asked_for(text)
+    return request
+
+
+def _parse_request(text, current):
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
         raise ValueError("Enter a question of 1-2000 characters")
+    lower = text.lower()
     date_tokens = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", text)
     if date_tokens and any(d != current.production_day for d in date_tokens):
         raise ValueError("Select that production day in the day control first")
@@ -494,16 +514,20 @@ class Agent:
             raise ValueError('Shift must be 1, 2 or 3')
         return getattr(self.analysis, name)(**arguments)
 
-    def ask(self, text, context, emit=None):
+    def ask(self, text, context, request=None, emit=None):
+        """Answer `text` in `context`. `request` is a request already parsed from the text (or
+        resolved from its canonical URL, urls.py); without it the offline router parses the text.
+        `emit` receives the live stream's step events (issue #23)."""
         emit = emit or (lambda event: None)
         if not isinstance(text, str):
             raise ValueError('Question must be text')
         if not text.strip() or len(text) > 2000:
             raise ValueError('Enter a question of 1-2000 characters')
         with self.guard:
-            request = parse_request(text, context) if isinstance(self.planner, OfflinePlanner) else {
-                'intent': 'model', 'shifts': [context.shift], 'kind': None,
-                'group_by': 'reason', 'want_chart': True}
+            if request is None:
+                request = parse_request(text, context) if isinstance(self.planner, OfflinePlanner) else {
+                    'intent': 'model', 'shifts': [context.shift], 'kind': None,
+                    'group_by': 'reason', 'want_chart': True, 'asked': asked_for(text)}
             allowed_shifts, period = self._enter(context)
             history = deepcopy(context.history[-self.max_turns:])
         run_id = uuid4().hex
@@ -600,7 +624,8 @@ class Agent:
             raise ValueError('Question must be text')
         if not text.strip() or len(text) > 2000:
             raise ValueError('Enter a question of 1-2000 characters')
-        request = {'intent': 'model', 'shifts': [context.shift], 'kind': None, 'group_by': 'reason', 'want_chart': True}
+        request = {'intent': 'model', 'shifts': [context.shift], 'kind': None, 'group_by': 'reason', 'want_chart': True,
+                   'asked': asked_for(text)}
         with self.guard:
             allowed_shifts, period = self._enter(context)
             history = deepcopy(context.history[-self.max_turns:])
@@ -650,6 +675,7 @@ class Agent:
     def _assemble(self, text, context, request, run_id, store, traces, status, final_ids, failure_message, period, narrate):
         """Turn the gathered results into the answer: evidence lines, charts, tables, the optional
         narrative (the only model call here, made outside the guard) and the context for the next question."""
+        asked = request.get('asked') or []
         refusals = [v['error']['message'] for v in store.values() if not v['ok']]
         if store and len(refusals) == len(store) and (status == 'unavailable' or (status == 'planner_error' and failure_message is None)):
             # Every tool call was refused (a window outside the dataset, a shift outside the
@@ -678,10 +704,10 @@ class Agent:
                     charts.append({'type':'bar','source_result_id':result['result_id'],
                         'shift':component['shift'],'coverage':component['coverage'],
                         'x':x,'y':y,'unit':unit,'rows':deepcopy(component['rows']),'title':f"Shift {component['shift']} · {title}"})
-        if status=='complete' and re.search(r'\b(chart|charts|graph|plot)\b',text,re.I) and not charts:
+        if status=='complete' and 'chart' in asked and not charts:
             status='partial'
             sections.insert(0,'The requested chart was not produced. The evidence below is available; try a specific speed, downtime or waste chart.')
-        if re.search(r'\b(profit|profitability|savings|revenue|roi)\b',text,re.I):
+        if 'profit' in asked:
             if status=='complete': status='partial'
             sections.insert(0,'The requested financial objective is unavailable: these records contain no costs, revenue or measured intervention outcomes. Production evidence alone cannot establish profit or achievable savings.')
         narrative=[]

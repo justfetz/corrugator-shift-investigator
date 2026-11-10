@@ -101,6 +101,8 @@ def describe_expect(expect):
     lines = []
     if 'raises' in expect:
         lines.append(f'Refused before any tool runs, with a reason matching /{expect["raises"]}/')
+    if 'url' in expect:
+        lines.append(f'Typed into /q, the question resolves to the address {expect["url"]} (issue #20)')
     if 'status' in expect:
         lines.append(f'Ends with status "{expect["status"]}"')
     if 'status_in' in expect:
