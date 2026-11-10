@@ -29,11 +29,11 @@ elements.mode.value='offline';
 elements.mode.value='anthropic';vm.runInContext('updateScope()',context);assert.equal(elements['key-label'].hidden,false);assert.match(elements['key-label-text'].textContent,/^Anthropic API key/);assert.match(elements['mode-badge'].textContent,/Anthropic selected/);
 elements.mode.value='openai';vm.runInContext('updateScope()',context);assert.match(elements['key-label-text'].textContent,/^OpenAI API key/);
 assert.equal(vm.runInContext("JSON.stringify(Object.values(PROVIDERS).map(p=>p.header))",context),'["X-OpenAI-Key","X-Anthropic-Key"]');
-// Public demo with only the Anthropic server key: that option is relabelled, the OpenAI option is removed, Anthropic is preselected.
+// Public demo with only the Anthropic server key: the Agent control is offline-only and Anthropic is what "Ask the analyst" uses.
 const options={openai:new Element('option'),anthropic:new Element('option')};for(const [v,o] of Object.entries(options)){o.value=v;o.removed=false;o.remove=()=>{o.removed=true;};}
 elements.mode.querySelector=sel=>{const v=sel.match(/value="(\w+)"/)[1];return options[v]&&!options[v].removed?options[v]:null;};
 vm.runInContext("config={public:true,live_modes:['anthropic'],live_model_available:true,days:['2026-09-01','2026-09-30'],token:'t'};applyPublicMode()",context);
-assert.equal(elements.mode.value,'offline');/* issue #42: offline is the default even with a server key */assert.equal(options.anthropic.textContent,'Anthropic / server key');assert.equal(options.openai.removed,true);assert.equal(elements['key-label'].hidden,true);assert.match(elements['mode-help'].textContent,/Anthropic/);
+assert.equal(elements.mode.value,'offline');/* issue #42: offline is the default even with a server key *//* issue #23: the model is a button on each answer, so both live options leave the control */assert.equal(options.anthropic.removed,true);assert.equal(options.openai.removed,true);assert.equal(elements.mode.disabled,true);assert.equal(elements['key-label'].hidden,true);assert.match(elements['mode-help'].textContent,/Ask the analyst.*Anthropic/);assert.equal(vm.runInContext('analystMode()',context),'anthropic');
 elements.mode.querySelector=()=>null;
 // Public demo: with the server's model available the default stays offline (issue #42) and the model is a choice; without it the OpenAI option is gone and offline is forced.
 vm.runInContext("config={public:true,live_model_available:true,days:['2026-09-01','2026-09-30'],token:'t'};applyPublicMode()",context);assert.equal(elements.mode.value,'offline');assert.equal(elements['key-label'].hidden,true);assert.match(elements['mode-badge'].textContent,/model available/);
@@ -304,8 +304,87 @@ assert.match(css,/\.chart \.tick\{[^}]*fill:var\(--ink-2\)/);assert.match(css,/\
 console.log('light-theme contrast on the chart panel (--surface-2):',JSON.stringify(onPanel));
 console.log('UI issue-36 checks passed: light by default, pinned theme wins, toggle present, heatmap ink flip.');
 
+// ---- issue #23 / #67 in the shell: every question is answered offline first; "Ask the analyst" (the ask bar's button, or
+// the one under an offline answer) opens its own card, which fills from the stream: the planned queries with their
+// progress, the paragraphs as they are written, a withdrawn paragraph gone, then the validated result. A refused
+// plan keeps the offline evidence on the analyst's card; a mid-stream error says so and fabricates nothing.
+const analystChecks=(async()=>{
+ await new Promise(r=>setTimeout(r,20));
+ const flat=e=>[e.textContent||'',...(e.children||[]).map(flat)].join(' ');
+ const find=(e,cls)=>((e.className||'').split(' ').includes(cls)?[e]:[]).concat(...(e.children||[]).map(c=>find(c,cls)));
+ const step={ok:true,tool:'get_shift_notes',arguments:{shift:2},result_id:'run9:1',elapsed_ms:1.5,data:{rows:[],shift:2,coverage:'complete',excluded_records:[]}};
+ const answer=(extra)=>({session_id:'s1',run_id:'r1',mode:'offline rule-based planner; no language model',status:'complete',production_day:'2026-09-14',selected_shifts:[2],sections:['Shift 2: evidence line.'],trace:[step],tables:[],charts:[],context:{},usage:{tool_calls:1,model_calls:0,cost_usd:0},narrative:[],narrative_status:'not_requested',url:'/corr/1/day/2026-09-14/shift/2?measure=notes',...extra});
+ const bodies=[], keys=[], gets=[]; let events=[], gated=false; const releases=[];
+ const ev=e=>JSON.stringify(e)+'\n';
+ context.TextDecoder=TextDecoder;
+ context.fetch=async(path,init)=>{
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t'})};
+  if(!init||!init.body){ gets.push({path,headers:init&&init.headers}); return {ok:true,status:200,json:async()=>answer({})}; }   // offline: a GET of the question's address (#20)
+  const body=JSON.parse(init.body); bodies.push(body); keys.push(init.headers['X-Anthropic-Key']);
+  const chunks=events.map(e=>new TextEncoder().encode(e)), split=[]; for(const c of chunks)for(let i=0;i<c.length;i+=3)split.push([c.slice(i,i+3),i+3>=c.length]);   // three bytes at a time: events split across reads, as on the wire
+  let at=0;
+  return {ok:true,status:200,body:{getReader:()=>({read:async()=>{ if(at>=split.length)return {done:true}; const [value,last]=split[at++]; if(gated&&last)await new Promise(r=>releases.push(r)); return {done:false,value}; }})}};
+ };
+ const tick=()=>new Promise(r=>setTimeout(r,0)), release=async n=>{ for(let i=0;i<n;i++){ while(!releases.length)await tick(); releases.shift()(); await tick(); } await tick(); };
+ vm.runInContext("config={public:true,live_modes:['anthropic'],live_model_available:true,days:['2026-09-01','2026-09-30'],token:'t',demo_guards:{rate_limit_per_min:30}};reset()",context);
+ elements.mode.value='anthropic';   // even a stale live value in the control cannot make a question a model call
+ await vm.runInContext("ask('Why was this shift slow?')",context);
+ assert.equal(bodies.length,0);assert.match(gets[0].path,/^\/q\?day=.*&q=Why\+was\+this\+shift\+slow%3F/);assert.equal(gets[0].headers['X-Anthropic-Key'],undefined);
+ const offlineCard=()=>find(elements.messages,'analyst-ask');
+ assert.equal(offlineCard().length,1);assert.equal(offlineCard()[0].textContent,'Ask the analyst');assert.match(flat(elements.messages),/Anthropic picks the queries in one call.*site's key under a spend cap/);
+ const offlineQueries=elements.queries.children.length;
+ // the analyst under the answer: its card fills from the stream, event by event
+ const done=answer({session_id:'s2',url:undefined,mode:'Anthropic (claude-haiku-5-5) analyst: one planning call, calculated evidence, streamed narrative',usage:{tool_calls:1,model_calls:2,cost_usd:0.0004,first_token_ms:1200},narrative_status:'available',narrative:[{kind:'finding',text:'Shift 2 ran at 512.34 ft/min.',citations:['Shift 2, observed_shift_fpm, run9:1, row 0'],charts:[]}]});
+ events=[ev({type:'start',mode:'anthropic',session_id:'s2'}),ev({type:'plan',steps:[{tool:'get_shift_notes',arguments:{shift:2}}]}),ev({type:'step',phase:'start',index:0,tool:'get_shift_notes',arguments:{shift:2}}),ev({type:'step',phase:'finish',index:0,tool:'get_shift_notes',arguments:{shift:2},ok:true,rows:4,ms:1.5,result_id:'run9:1'}),
+  ev({type:'delta',paragraph:0,kind:'finding',text:'Shift 2 ran at '}),ev({type:'delta',paragraph:0,kind:'finding',text:'512.34 '}),ev({type:'delta',paragraph:1,kind:'hypothesis',text:'It lost '}),ev({type:'retract',paragraph:1,reason:'typed number'}),
+  ev({type:'paragraph',paragraph:0,kind:'finding',text:'Shift 2 ran at 512.34 ft/min.',citations:[]}),ev({type:'done',result:done})];
+ gated=true; offlineCard()[0].events.click();
+ assert.equal(elements.card.className,'card answer skeleton');assert.match(elements['card-meta'].textContent,/^Shift 2 · .* · anthropic · asking…$/);   // its own card, in the task of the click
+ await tick();assert.equal(elements.card.className,'card answer streaming');assert.match(flat(elements.messages),/Planning the queries…/);   // the stream is open
+ await release(2);   // start, plan
+ assert.equal(elements.card.className,'card answer streaming');
+ assert.match(flat(elements.queries),/Queries the analyst planned.*1 query · running.*get_shift_notes.*· queued/);
+ await release(2);   // the step starts and finishes
+ assert.match(flat(elements.queries),/· 4 rows · 1\.5 ms/);assert.match(flat(elements.messages),/Writing the interpretation…/);
+ await release(3);   // two deltas of paragraph 0, one of paragraph 1
+ assert.ok(find(elements.messages,'streaming').some(p=>p.textContent==='Finding: Shift 2 ran at 512.34 '));assert.match(flat(elements.messages),/Hypothesis: It lost/);
+ await release(1);   // paragraph 1 withdrawn
+ assert.ok(!/It lost/.test(flat(elements.messages)));
+ gated=false; await release(0); while(releases.length)releases.shift()(); await new Promise(r=>setTimeout(r,30));
+ assert.equal(bodies[0].mode,'anthropic');assert.equal(bodies[0].session_id,null);assert.equal(keys[0],undefined);   // public: never a visitor key
+ const text=flat(elements.messages);
+ assert.equal(elements.card.className,'card answer');assert.match(elements['card-meta'].textContent,/ · anthropic · 1 query · /);
+ assert.match(text,/Finding: Shift 2 ran at 512\.34 ft\/min\./);assert.match(text,/Evidence: Shift 2, observed_shift_fpm, query 1, row 0/);
+ assert.ok(!/It lost/.test(text));assert.match(text,/2 model calls/);assert.match(text,/first words after 1\.2 s/);
+ assert.equal(vm.runInContext('sessionId',context),'s2');assert.equal(vm.runInContext('latest.session_id',context),'s2');
+ assert.equal(offlineCard().length,0);                                 // the analyst's card offers no second round
+ elements.earlier.children[0].children[1].events.click();assert.equal(offlineCard().length,0);   // and the offline card has had its one
+ // a refused plan: the notes are shown, and the offline evidence it was asked from stays on the analyst's card
+ await vm.runInContext("ask('Why was this shift slow?')",context);
+ const source=vm.runInContext('latest',context);
+ const rejected=answer({session_id:'s3',url:undefined,status:'plan_rejected',trace:[],sections:['Investigation stopped: plan_rejected. Any results below are partial.',"The analyst's plan was rejected (it names \"run_sql\", which is not one of the permitted tools); no query was run for it. The offline answer stands on its own."],usage:{tool_calls:0,model_calls:1,cost_usd:0.0001}});
+ events=[ev({type:'start',mode:'anthropic',session_id:'s3'}),ev({type:'done',result:rejected})];
+ offlineCard()[0].events.click(); await new Promise(r=>setTimeout(r,30));
+ assert.equal(vm.runInContext('latest',context),source);assert.equal(elements.queries.children.length,offlineQueries);
+ assert.match(flat(elements.messages),/plan was rejected .*run_sql.*offline answer stands/);
+ // a mid-stream error from the ask bar's analyst: the card fails, says nothing was fabricated, and no control is left disabled
+ events=[ev({type:'start',mode:'anthropic',session_id:'s3'}),ev({type:'plan',steps:[{tool:'get_shift_notes',arguments:{shift:2}},{tool:'get_shift_kpis',arguments:{shift:2}}]}),ev({type:'error',error:'Investigation failed; no answer was fabricated'})];
+ await assert.rejects(vm.runInContext("ask('Why slow, really?',{mode:'anthropic'})",context),/no answer was fabricated/);
+ assert.equal(elements.card.className,'card answer failed');assert.match(flat(elements.messages),/no answer was fabricated.*offline answer stands/);
+ assert.deepEqual(Object.entries(elements).filter(([id,e])=>e.disabled&&!['rates-change','mode','day-prev','day-next'].includes(id)).map(([id])=>id),[]);
+ // loopback: the provider beside the key field is the analyst, and the key travels with that one request only
+ vm.runInContext("config={days:['2026-09-01','2026-09-30'],token:'test'}",context);
+ elements.mode.value='offline';assert.equal(vm.runInContext('analystMode()',context),null);
+ elements.mode.value='anthropic';elements['api-key'].value='sk-ant-visitor';events=[ev({type:'start',mode:'anthropic',session_id:'s3'}),ev({type:'done',result:rejected})];
+ const sent=bodies.length;await vm.runInContext("ask('Why was this shift slow?')",context);assert.equal(bodies.length,sent);assert.equal(gets[gets.length-1].headers['X-Anthropic-Key'],undefined);assert.equal(elements['api-key'].value,'sk-ant-visitor');
+ await vm.runInContext("ask('Why was this shift slow?',{mode:'anthropic'})",context);assert.equal(keys[keys.length-1],'sk-ant-visitor');assert.equal(elements['api-key'].value,'');
+ elements.mode.value='offline';vm.runInContext('reset()',context);
+ console.log('UI issue-23 checks passed: offline first, the analyst opens its own card, streamed plan/steps/narrative fill it, withdrawn paragraph gone, refused plan keeps the offline evidence, a stream error fabricates nothing.');
+})().catch(error=>{console.error(error);process.exit(1);});
+
 // ---- issue #17: post() refreshes /api/config once on a 403 and resends with the new token; a second 403 is returned, not retried forever.
 const issue17=(async()=>{
+ await analystChecks;
  await new Promise(r=>setTimeout(r,50));   // let init()'s own primeKpis() finish against the original fetch stub before swapping it
  const calls=[];
  const record=(path,init)=>{if(path==='/api/config'||(init&&init.body&&init.body.includes('probe-17')))calls.push([path,init&&init.headers?init.headers['X-Workbench-Token']:undefined]);};
@@ -366,7 +445,8 @@ const issue63=issue17.then(async()=>{
  context.fetch=(path,init)=>new Promise(resolve=>{
   let body;if(init&&init.body)body=JSON.parse(init.body);else{const q=new URLSearchParams(path.split('?')[1]||'');body={get:path,question:q.get('q'),day:q.get('day'),shift:Number(q.get('shift')),corrupt:q.get('corrupt')==='1',after:q.getAll('after'),mode:'offline',scope:q.get('scope'),period:q.get('period')};}
   const n=bodies.push(body), url=body.get?`/corr/1/day/${body.day}/shift/${body.shift}?measure=m${n}`+body.after.map(x=>'&after='+x).join(''):undefined;   // the canonical url carries its priors unencoded, each with its own '?', as the server writes them
-  gates.push({ok:()=>resolve({ok:true,status:200,json:async()=>Object.assign(answer(n),url?{url}:{})}),fail:message=>resolve({ok:false,status:400,json:async()=>({error:message})})});});
+  gates.push({ok:()=>resolve(url?{ok:true,status:200,json:async()=>Object.assign(answer(n),{url})}:{ok:true,status:200,text:async()=>JSON.stringify({type:'start'})+'\n'+JSON.stringify({type:'done',result:answer(n)})+'\n'}),   // a live round is a stream (#67); no reader here, so its events arrive together
+ fail:message=>resolve({ok:false,status:400,json:async()=>({error:message})})});});
  const tick=()=>new Promise(r=>setTimeout(r,0));
  vm.runInContext(`config={days:${JSON.stringify(storeDays)},first_day:'2026-09-11',token:'t',live_modes:[],demo_guards:{rate_limit_per_min:30}};acceptedDay='2026-09-14'`,context);   // a rate limit: no priming call
  elements.day.value='2026-09-14';elements.period.value='day';elements.scope.value='shift';elements.shift.value='2';elements.mode.value='offline';elements.corrupt.checked=false;
@@ -483,14 +563,14 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
                       replaceState(state,_,url){history.push(['replace',url]);const [p,q='']=url.split('?');location.pathname=p;location.search=q?'?'+q:'';}},
             location,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
  const answer=(url,extra={})=>({run_id:'r-'+url,production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',url,sections:['Shift 2: 600.0 ft/min.'],context:{history:[]},usage:{tool_calls:2,model_calls:0},trace:[],tables:[],charts:[],report_markdown:'# x',...extra});
- context.fetch=async(path,init)=>{fetched.push([path,init&&init.headers&&init.headers.Accept]);
+ const fetch20=async(path,init)=>{fetched.push([path,init&&init.headers&&init.headers.Accept]);   // this page's own stub: the shared context's fetch belongs to the other blocks
   if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-11','2026-09-14','2026-09-15'],first_day:'2026-08-03',last_day:'2026-09-30',demo_guards:{max_turns:4,rate_limit_per_min:0}})};
   if(path.startsWith('/q?')){const q=new URLSearchParams(path.slice(3));const url=`/corr/1/day/${q.get('day')}/shift/${q.get('shift')}?measure=${q.get('q').includes('slow')?'overview':'fpm'}`+q.getAll('after').map(a=>'&after='+encodeURIComponent(a)).join('');return {ok:true,status:200,url,json:async()=>answer(url)};}
   if(path.startsWith('/corr/')){const page=path.replace('.json','');if(page.includes('measure=kpis'))return {ok:true,status:200,json:async()=>answer(page,{trace:[]})};return {ok:true,status:200,json:async()=>answer(page)};}
   return {ok:false,status:404,json:async()=>({error:'no'})};
  };
  // a fresh page with the window stubs: init() replaces the home address with the bare scope address and primes the tiles
- const ctx2={...context,window:win,document:context.document,location,requestAnimationFrame:undefined};delete ctx2.requestAnimationFrame;
+ const ctx2={...context,fetch:fetch20,window:win,document:context.document,location,requestAnimationFrame:undefined};delete ctx2.requestAnimationFrame;
  vm.createContext(ctx2);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx2);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx2);
  await new Promise(r=>setTimeout(r,80));
  assert.deepEqual(history,[['replace','/corr/1/day/2026-09-14/shift/2']]);
@@ -566,7 +646,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const pasted={pathname:'/corr/1/month/2026-09-15/shift/3',search:'?measure=waste&corrupt=1'};
  const win3={history:win.history,location:pasted,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
  for(const [id,value] of [['day','2026-09-14'],['period','day'],['shift','2'],['scope','shift']])elements[id].value=value;elements.corrupt.checked=false;
- const ctx3={...context,window:win3,location:pasted};delete ctx3.requestAnimationFrame;
+ const ctx3={...context,fetch:fetch20,window:win3,location:pasted};delete ctx3.requestAnimationFrame;
  vm.createContext(ctx3);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx3);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx3);
  await new Promise(r=>setTimeout(r,80));
  assert.deepEqual(fetched.map(f=>f[0]).filter(f=>f!=='/api/config'),['/corr/1/month/2026-09-15/shift/3?measure=waste&corrupt=1']);   // the address itself, as JSON; no priming, no push

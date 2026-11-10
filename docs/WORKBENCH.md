@@ -53,12 +53,17 @@ These plain phrasings run the period tools over the whole two months (offline, n
 - "Trend of trim over eight weeks" — a weekly line for one metric (trim, shear, dry-end, warp, bond, misalignment, moisture, speed, downtime, stops, minutes per stop, MSF per day, lineal per setup, lineal per paper change).
 - "Compare this period to the previous period" — the same tiles over 4-4-5 accounting periods; any comparison with unequal production days says so and points at MSF per day and the ratio tiles.
 - "Volume by grade this month", "How much 275-BC did we run this week?", "Which grade is eating the most downtime?" — totals by board grade with speed against target and allocated downtime.
+- "How much paper did we consume this month?", "Rollstock consumed this week" — paper consumed from the wet-end records as lineal feet and MSF per grade and web width, with paper runs and feet per run, against the previous window.
 - "Over/under-run by knife this week", "Are we inside the cut range?" — nominal versus actual cuts per knife, drawn as a bullet chart against the ±2 % band.
 - "Where is the speed opportunity this month?", "Which crews run faster, and does it cost rejects?" — typical versus best-fifth speed by grade and width or crew, in hours, with the dry-end rate of the fast setups beside it.
 - "Which warp are we seeing this month, up warp or twist warp?" — the waste breakdown with the reported sub-reasons.
 
 The window is anchored on the selected day: a week is its Monday–Friday production week, a month its calendar month. Windows before 3 August 2026 are unavailable, never zero, and deltas are withheld unless both windows are complete. "Yesterday" and "today" still ask you to use the day control, and a bare "Compare last week" is refused as ambiguous. Every percentage is a ratio of sums over the window (METRICS.md).
 
+
+## Optional model: Ask the analyst
+
+Every question is answered offline first. When a provider is available (the hosted demo's own Anthropic key, or a provider chosen in the Agent control with your key on the loopback workbench), an offline answer carries an **Ask the analyst** button for its question, and the ask bar has one for the typed question. Either opens the analyst's own card in the thread, which fills from the stream: the queries the model planned appear in its query box with their progress as they run, then the interpretation is written paragraph by paragraph with every value substituted from a query row. A paragraph that fails validation is withdrawn. A refused plan shows a one-line note and keeps the offline evidence it was asked from on the card; a stream that fails says so and fabricates nothing. One analyst round per offline answer.
 
 ## Optional OpenAI mode
 

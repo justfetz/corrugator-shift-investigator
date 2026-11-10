@@ -33,7 +33,7 @@ MEASURE_INTENTS = {v: k for k, v in INTENT_MEASURES.items()}
 # One record-store tool each; `kpis` becomes compare_periods when `compare=` names a window.
 STORE_MEASURES = {'kpis': 'get_period_kpis', 'pareto': 'get_downtime_pareto', 'waste': 'get_waste_breakdown',
                   'stops': 'get_stops_profile', 'grade': 'get_grade_totals', 'overrun': 'get_overrun',
-                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend'}
+                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock'}
 TOOL_MEASURES = {v: k for k, v in STORE_MEASURES.items()}
 # Plans the period form of a day-shaped intent runs that are more than one store tool (agent.period_plan),
 # by their tools in order. Under a ranged grain `downtime` is the Pareto alone, `quality` the waste breakdown
@@ -372,7 +372,7 @@ def _request(measure, fields, context, window):
             plan.append((STORE_MEASURES[measure], {'window': window, 'shift': s}))
     intent = {'kpis': 'period_compare', 'pareto': 'period_pareto', 'waste': 'period_waste', 'stops': 'period_stops',
               'grade': 'period_grade', 'overrun': 'period_overrun', 'opportunity': 'period_speed_opportunity',
-              'trend': 'period_trend'}[measure]
+              'trend': 'period_trend', 'rollstock': 'period_rollstock'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
 

@@ -46,6 +46,7 @@ store measures run one record-store tool over a window.
 | `kpis` | `get_period_kpis` for the window with the previous window; `compare=` changes the base | the same |
 | `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
+| `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
 | `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |
 | `report` | refused: a day is investigated with a question | the deterministic period report (heatmap, daily matrix, recurring downtime, notes) |
 
@@ -121,6 +122,4 @@ answer is a link to `…&format=pdf`. Live mode keeps the session and the POST.
 
 ## Room left in the grammar
 
-`measure=rollstock` (feet and MSF consumed, from `wet_ends`) is reserved for the small new tool the
-issue describes; it is not a measure until that tool exists with its value goldens. Dollars (#31) add
-`rates=` later; it is not a field today and is refused like any unknown field.
+Dollars (#31) add `rates=` later; it is not a field today and is refused like any unknown field.

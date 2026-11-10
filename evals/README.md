@@ -218,16 +218,34 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`160/160 golden · 12 ms p50`) is `evals.badge` of
+- The badge on the main page (`166/166 golden · 13 ms p50`) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 154 cases make 160 runs because six offline cases also have a
+recorded variant: 155 cases make 161 runs because six offline cases also have a
 recording. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can
 reach a provider, whatever keys the server holds. Latency on the page is this
 server's own; the tracked numbers are the machine that ran `--track`.
+
+## Scripted plans and the analyst's recordings
+
+A case with a `plan` field (`analyst-plan-out-of-list-tool`) puts a plan a model
+might return through the real plan check and tool execution
+(`Agent.ask_planned`) with no model: it is an offline case, free and
+deterministic. That is how "an out-of-list tool refuses the whole plan" is a
+golden case rather than a hope about a model.
+
+The Anthropic analyst (issue #23) makes two streamed calls: one plan, one
+narrative. `--live --provider anthropic` records that shape: the fixture is
+stamped `shape: "plan"` and stores each call's stream events. A live or replayed
+analyst case fails if any turn made more than two model calls, or an answer with
+a narrative did not make exactly two. A live run prints
+`live latency: p50 … p95 … first_token_p50 … model calls per case: at most N`,
+and `--track` writes those numbers to the history line as `live_ms`; replays are
+never timed. A fixture without the stamp was recorded with the earlier tool loop
+and replays through it until it is re-recorded.
 
 ## Known defects
 

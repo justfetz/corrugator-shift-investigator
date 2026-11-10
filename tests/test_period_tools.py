@@ -448,6 +448,9 @@ ROUTES = [
     ("which crews run faster on 275-BC this week", "get_speed_opportunity", {"window": {"period": "week", "anchor": DAY}, "slice_by": "crew"}),
     ("how much 275-BC did we run this week", "get_grade_totals", {"window": {"period": "week", "anchor": DAY}}),
     ("over/under-run by knife this week", "get_overrun", {"window": {"period": "week", "anchor": DAY}}),
+    ("how much paper did we consume this month", "get_rollstock", {"window": {"period": "month", "anchor": DAY}}),
+    ("rollstock consumed this week", "get_rollstock", {"window": {"period": "week", "anchor": DAY}}),
+    ("paper consumption this fiscal period", "get_rollstock", {"window": {"period": "fiscal", "anchor": DAY}}),
     ("are we inside the cut range this month", "get_overrun", {"window": {"period": "month", "anchor": DAY}}),
 ]
 
@@ -550,11 +553,49 @@ def test_day_questions_still_route_to_the_day_tools():
         assert "plan" not in parse_request(text, Context(DAY, 2, scope="shift")), text
 
 
+def test_rollstock_is_the_wet_end_records_by_grade_and_width(store, data):
+    """All shifts: whole paper runs on the production day they started, feet and MSF (feet x width) per
+    grade and width against the previous window. One shift: the setups that shift ran on each run."""
+    result = store.get_rollstock({"period": "month", "anchor": "2026-09-14"})
+    runs = [w for w in between(data["wet_ends"], date(2026, 9, 1), date(2026, 9, 30))]
+    august = [w for w in between(data["wet_ends"], date(2026, 8, 1), date(2026, 8, 31))]
+    assert result["paper_runs"] == len(runs) == result["source_rows"]["current"]["wet_ends"]
+    assert result["total_lineal_ft"] == pytest.approx(sum(w.lineal_ft for w in runs), abs=0.06)
+    assert result["total_msf"] == pytest.approx(sum(w.total_produced_sqft for w in runs) / 1000, abs=0.06)
+    assert result["previous_total_lineal_ft"] == pytest.approx(sum(w.lineal_ft for w in august), abs=0.06)
+    assert result["delta_msf"] == pytest.approx(result["total_msf"] - result["previous_total_msf"], abs=0.06)
+    assert [r["lineal_ft"] for r in result["rows"]] == sorted((r["lineal_ft"] for r in result["rows"]), reverse=True)
+    assert sum(r["paper_runs"] for r in result["rows"]) == len(runs)
+    assert sum(r["share_of_feet_pct"] for r in result["rows"]) == pytest.approx(100, abs=0.05)
+    for row in result["rows"]:
+        mine = [w for w in runs if w.quality_id == row["grade"] and w.web_width_in == row["width_in"]]
+        before = [w for w in august if w.quality_id == row["grade"] and w.web_width_in == row["width_in"]]
+        assert row["label"] == f"{row['grade']} {row['width_in']:g} in" and row["paper_runs"] == len(mine)
+        assert row["lineal_ft"] == pytest.approx(sum(w.lineal_ft for w in mine), abs=0.06)
+        assert row["msf"] == pytest.approx(sum(w.total_produced_sqft for w in mine) / 1000, abs=0.06)
+        assert row["msf"] == pytest.approx(row["lineal_ft"] * row["width_in"] / 12 / 1000, rel=1e-3)   # the footprint, no basis weight
+        assert row["lineal_per_run"] == pytest.approx(row["lineal_ft"] / len(mine), abs=0.06)
+        assert row["previous_lineal_ft"] == pytest.approx(sum(w.lineal_ft for w in before), abs=0.06)
+        assert row["previous_paper_runs"] == len(before)
+    # August's previous window is July: previous and delta are null, never zero.
+    first = store.get_rollstock({"period": "month", "anchor": "2026-08-14"})
+    assert first["coverage"] == "partial" and first["previous_total_msf"] is None and first["delta_lineal_ft"] is None
+    assert all(r["previous_msf"] is None and r["delta_msf"] is None for r in first["rows"])
+    # One shift: the setups it ran, grouped by their run's grade and width; distinct wet ends are the run count.
+    week = store.get_rollstock({"period": "week", "anchor": "2026-09-14"}, shift=2)
+    setups = [s for s in between(data["dry_end_setups"], date(2026, 9, 14), date(2026, 9, 18)) if s.shift_number == 2]
+    assert week["paper_runs"] == len({s.wet_end_id for s in setups})
+    assert week["total_lineal_ft"] == pytest.approx(sum(s.lineal_ft for s in setups), abs=0.06)
+    assert "shift 2" in week["attribution_note"] and "no basis weight" in week["msf_note"]
+    with pytest.raises(ValueError, match="Shift must be"):
+        store.get_rollstock({"period": "week", "anchor": "2026-09-14"}, shift=4)
+
+
 def test_period_tool_schemas_are_declared():
     names = {s["name"] for s in TOOL_SCHEMAS}
     assert PERIOD_TOOLS <= names and PERIOD_TOOLS == {"get_period_kpis", "compare_periods", "get_downtime_pareto",
                                                      "get_waste_breakdown", "get_stops_profile", "get_trend",
-                                                     "get_grade_totals", "get_overrun", "get_speed_opportunity"}
+                                                     "get_grade_totals", "get_overrun", "get_speed_opportunity", "get_rollstock"}
     for schema in TOOL_SCHEMAS:
         if schema["name"] in PERIOD_TOOLS:
             assert schema["parameters"]["additionalProperties"] is False and "shift" in schema["parameters"]["properties"]

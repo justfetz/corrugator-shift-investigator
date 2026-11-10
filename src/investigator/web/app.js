@@ -14,7 +14,7 @@ function syncKeyLabel(){
  $('key-label').hidden=!p||!!(config&&config.public);
  if(p)$('key-label-text').textContent=`${p.name} API key (optional if configured on server)`;
 }
-function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
+function liveHelp(){ const p=provider(); return `Every question is answered offline first. “Ask the analyst” on an answer sends ${p.name} your question, recent context and synthetic evidence; live calls incur charges and your key is used for that request only.`; }
 const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 function message(label, paragraphs, cls='') {
  const e=node('div',undefined,'message '+cls);if(label)e.append(node('strong',label));
@@ -24,6 +24,7 @@ function message(label, paragraphs, cls='') {
   notes=null; e.append(node('p',p));
  }
  $('messages').append(e);
+ return e;
 }
 
 // ---- Scope: the hidden selects (#day, #period, #shift, #scope, #mode) hold the state the
@@ -182,12 +183,12 @@ const PERIOD_NOUN={day:'day',week:'week',month:'month',accounting:'4-4-5 period'
 function updateScope(){
  const ranged=$('period').value!=='day', live=isLive();
  $('scope-help').textContent=scopeSentence(currentScope());
- syncKeyLabel();syncSegments();
+ $('mode').disabled=!!(config&&config.public);syncKeyLabel();syncSegments();   // public: the model is Ask the analyst, never a mode (#23)
  const days=storeDays(), index=days?days.indexOf($('day').value):-1;
  $('day-prev').disabled=!days||index<=0; $('day-next').disabled=!days||index<0||index>=days.length-1;   // the ends of the store, never a busy state (#63)
  $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
  const noun=PERIOD_NOUN[$('period').value]||'period';
- if(ranged)$('mode-help').textContent=`Ask about the selected ${noun}: KPIs against the previous one, the downtime Pareto, waste, stops per day, trends, totals by grade, over/under-run, the speed opportunity.${live?' '+liveHelp():' No model calls or API charges.'} Period report builds the output heatmap, daily matrix, recurring downtime and notes without a model.`;
+ if(ranged)$('mode-help').textContent=`Ask about the selected ${noun}: KPIs against the previous one, the downtime Pareto, waste, stops per day, trends, totals by grade, paper consumed, over/under-run, the speed opportunity.${live?' '+liveHelp():' No model calls or API charges.'} Period report builds the output heatmap, daily matrix, recurring downtime and notes without a model.`;
  else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
  $('question').placeholder=ranged?`Ask about this ${noun}: KPIs, downtime, waste, stops per day, trends, grades`:'Ask about this shift: speed, downtime, waste, setups, orders, notes';
  $('submit').textContent='Ask'; $('report').hidden=!ranged;
@@ -428,9 +429,9 @@ function showChart(chart) {
  const link=queryLink(chart.source_result_id);if(link)wrap.append(link);
  $('charts').append(wrap);
 }
-const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'Speed w/o stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status'};
+const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'Speed w/o stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF',paper_runs:'Paper runs',msf:'MSF',previous_msf:'Prev MSF',delta_msf:'Δ MSF',share_of_feet_pct:'Share of ft %',lineal_per_run:'Lineal / run',previous_paper_runs:'Prev runs',previous_lineal_ft:'Prev lineal (ft)',delta_lineal_ft:'Δ lineal (ft)',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status'};
 function showTable(data){
- const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'Totals by grade',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew'};
+ const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'Totals by grade',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
@@ -697,15 +698,68 @@ function renderCard(){
  if(!rec){card.className='card answer idle';card.setAttribute('aria-label','Answer');card.setAttribute('aria-busy','false');$('card-title').textContent='Ask about a shift';paintMeta(null);$('messages').append(node('p',IDLE_TEXT,'empty'));$('card-foot').hidden=true;latest=null;renderEarlier();return;}
  $('card-title').textContent=rec.title;$('card-title').title=rec.question;paintMeta(rec);
  card.setAttribute('aria-label',`Answer: ${rec.title}`);card.setAttribute('aria-busy',String(rec.state==='pending'));
- if(rec.state==='pending'){card.className='card answer skeleton';skeleton();$('card-foot').hidden=true;latest=null;}
- else if(rec.state==='error'){card.className='card answer failed';message('Could not complete',[rec.error],'error');$('card-foot').hidden=true;latest=null;}
+ if(rec.state==='pending'&&rec.live){card.className='card answer streaming';paintLive(rec);$('card-foot').hidden=true;latest=null;}
+ else if(rec.state==='pending'){card.className='card answer skeleton';skeleton();$('card-foot').hidden=true;latest=null;}
+ else if(rec.state==='error'){card.className='card answer failed';message('Could not complete',[rec.error],'error');if(PROVIDERS[rec.mode])message(null,['The analyst could not answer; no answer was fabricated. The offline answer stands.'],'muted');$('card-foot').hidden=true;latest=null;}
+ else if(PROVIDERS[rec.mode]){card.className='card answer';paintAnalyst(rec);$('card-foot').hidden=false;syncPdf();}
  else{
   card.className='card answer';
   if(rec.note)message('Note',[rec.note]);
   message('',rec.result.sections||[]);showResult(rec.result);
   $('card-foot').hidden=false;syncPdf();
  }
+ if(rec.state!=='pending')analystOffer(rec);
  renderEarlier();
+}
+// ---- Ask the analyst (issues #23, #67). The model is opt-in per question: the ask bar's button for the typed
+// question, or the button under an offline answer for that answer's question. Either opens its own card. The
+// server streams newline-delimited JSON events: start, plan (the queries the model chose, in one call), a step
+// as each query starts and finishes, narrative text as the model writes it, a retract for a paragraph that failed
+// validation, then done with the full result. Every number in the narrative was substituted from a query row.
+const KIND_LABEL={finding:'Finding',hypothesis:'Hypothesis',check:'Check',limitation:'Limitation'};
+async function readEvents(response,onEvent){
+ const line=text=>{ if(text.trim())onEvent(JSON.parse(text)); };
+ if(response.body&&typeof response.body.getReader==='function'&&typeof TextDecoder==='function'){
+  const reader=response.body.getReader(), decoder=new TextDecoder(); let buffer='';
+  for(;;){ const {value,done}=await reader.read(); if(done)break; buffer+=decoder.decode(value,{stream:true}); let cut; while((cut=buffer.indexOf('\n'))>=0){ line(buffer.slice(0,cut)); buffer=buffer.slice(cut+1); } }
+  line(buffer);
+ } else for(const text of (await response.text()).split('\n'))line(text);   // no stream reader: the events arrive together
+}
+// The card while the stream runs: the planned queries with their progress, then the paragraphs as they are written.
+function paintLive(rec){
+ const live=rec.live; clearCard();
+ if(live.steps.length){
+  const box=$('queries'), head=node('div',undefined,'queries-head');
+  head.append(node('span','Queries the analyst planned'),node('span',`${live.steps.length} ${live.steps.length===1?'query':'queries'} · running`,'mono')); box.append(head);
+  for(const step of live.steps){ const d=node('div',undefined,'query pending'); d.append(node('code',step.tool,'tool'),node('span',`(${argText(step.arguments)})`,'args'),node('span',step.facts,'facts')); box.append(d); }
+ }
+ const card=message(null,[],'analyst'); card.append(node('p',live.state,'muted analyst-state'));
+ for(const [,p] of [...live.paragraphs].sort((a,b)=>a[0]-b[0]))if(!p.hidden)card.append(node('p',`${KIND_LABEL[p.kind]||'Note'}: ${p.text}`,'analyst-p'+(p.final?'':' streaming')));
+}
+// The finished analyst card. When the analyst's own queries ran, their evidence is the card's; when the plan was
+// refused (nothing ran), the notes say so and the offline evidence it was asked from stays on the card.
+function paintAnalyst(rec){
+ const r=rec.result, ran=(r.trace||[]).some(e=>e.ok), offline=rec.source&&rec.source.result;
+ if(ran)showResult(r); else if(offline)showResult(offline);
+ const card=message(null,[],'analyst');
+ const notes=ran?(r.sections||[]).filter(t=>/^(Investigation stopped|The model narrative|The requested)/.test(t)):(r.sections||[]);
+ if(r.narrative_status!=='available'||r.status!=='complete')for(const text of notes)card.append(node('p',text,'analyst-p warning-note'));
+ for(const item of r.narrative||[]){
+  card.append(node('p',`${KIND_LABEL[item.kind]||'Note'}: ${item.text}`,'analyst-p'));
+  const cites=(item.citations||[]).map(c=>{ for(const [rid,i] of stepIndex)c=c.replace(rid,`query ${i+1}`); return c; });
+  if(cites.length)card.append(node('p',`Evidence: ${cites.join('; ')}`+((item.charts||[]).length?` · Charts: ${item.charts.join('; ')}`:''),'analyst-cites muted'));
+ }
+ const first=r.usage&&r.usage.first_token_ms;
+ card.append(node('p',`${r.mode} · ${r.status} · ${usageText(r.usage)}`+(typeof first==='number'?` · first words after ${(first/1000).toFixed(1)} s`:''),'muted analyst-state'));
+ if(r.narrative_status==='available')card.append(node('p','Model interpretation: review it with the evidence; hypotheses are not proven causes. Every number above was substituted from a query row.','muted'));
+}
+// Under an offline answer (or a question the offline planner could not route): one analyst round for that question.
+function analystOffer(rec){
+ const mode=analystMode(); if(!mode||rec.report||PROVIDERS[rec.mode]||rec.analysed||!/^(done|error)$/.test(rec.state))return;
+ const row=node('div',undefined,'analyst-row'), b=node('button','Ask the analyst','secondary analyst-ask'); b.type='button';
+ b.addEventListener('click',()=>{ rec.analysed=true; ask(rec.question,{mode,title:rec.title,scope:rec.scope,corrupt:rec.corrupt,source:rec}).catch(()=>{}); });
+ row.append(b,node('span',`${rec.state==='error'?'The offline planner has no pattern for this question. ':''}${PROVIDERS[mode].name} picks the queries in one call and writes an interpretation under the numbers. A few seconds; ${config&&config.public?"uses this site's key under a spend cap":'uses your key and incurs API charges'}.`,'muted'));
+ $('messages').append(row);
 }
 // The one render entry for an answer, asked or opened from an address: the record takes the result and its card
 // (open or one line in the thread) is drawn again. The ms is submit to rendered.
@@ -718,20 +772,21 @@ function land(rec,result){
 // GET of the question's address (/q, which the server redirects to the canonical URL), and the answer's URL goes in
 // the address bar. "Ask the analyst" is the only live path: it passes the agent as `mode` and POSTs /api/ask, whose
 // session carries the follow-up history; a model's answer is not an address. A report is always offline.
-async function ask(question,{report=false,mode='offline',title}={}) {
+async function ask(question,{report=false,mode='offline',title,scope:asked,corrupt:askedCorrupt,source}={}) {
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
  if(!config)throw new Error('The workbench is still loading');
- const scope=currentScope(), epoch=sessionEpoch, corrupt=$('corrupt').checked, recMode=report?'offline':mode;
+ const scope=asked||currentScope(), epoch=source&&source.epoch!==sessionEpoch?-1:sessionEpoch,   // a card from an earlier scope asks outside the current conversation
+  corrupt=askedCorrupt??$('corrupt').checked, recMode=report?'offline':mode;
  // The same question, still out, asked again (a double click): it is the card already waiting, not a second
  // request. Nothing is disabled to prevent it, so this is what keeps a second paid round from going out.
  const twin=thread.find(r=>r.state==='pending'&&r.epoch===epoch&&r.question===question&&r.mode===recMode&&r.report===report&&r.corrupt===corrupt&&['day','period','shift','scope'].every(k=>r.scope[k]===scope[k]));
  if(twin){ if(openId!==twin.id)openCard(twin); return twin.done; }
- const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
+ const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,source:source||null,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null,live:null};
  thread.push(rec);openId=rec.id;renderCard();   // the skeleton card is in the DOM before this task yields: within one frame of the submit
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
  // What the visitor chose is read now; the request itself waits its turn. Two questions out at once would both carry
  // the conversation as it was before either was answered, and the follow-up context would lose one.
- const headers={}, p=PROVIDERS[rec.mode]||null, turn=queue, address={...controls(),corrupt}; let release; queue=new Promise(resolve=>{release=resolve;});
+ const headers={}, p=PROVIDERS[rec.mode]||null, turn=queue, address={day:scope.day,shift:String(scope.shift),scope:scope.scope,period:scope.period,corrupt}; let release; queue=new Promise(resolve=>{release=resolve;});
  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
  if(p)$('api-key').value='';   // the key is cleared when it is sent; an offline question leaves it for the analyst
  rec.done=(async()=>{
@@ -744,6 +799,27 @@ async function ask(question,{report=false,mode='offline',title}={}) {
     const pending=post('/api/ask',body,headers);
     for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
     response=await pending;
+    if(response.ok){   // a live round is a stream (#67); a refusal before it starts is plain JSON
+     rec.live={state:'Planning the queries…',steps:[],paragraphs:new Map()}; $('status').textContent='Analyst · planning the queries…';
+     let result=null, failure=null;
+     const repaint=()=>{ if(openId===rec.id&&rec.state==='pending'){ $('card').className='card answer streaming'; paintLive(rec); } };
+     const para=(i,kind)=>{ let q=rec.live.paragraphs.get(i); if(!q){ q={kind,text:'',hidden:false,final:false}; rec.live.paragraphs.set(i,q); } return q; };
+     repaint();
+     await readEvents(response,event=>{
+      const live=rec.live;
+      if(event.type==='plan'){ live.steps=event.steps.map(st=>({tool:st.tool,arguments:st.arguments,facts:'· queued'})); live.state=`Running ${event.steps.length} ${event.steps.length===1?'query':'queries'}…`; $('status').textContent='Analyst · running the queries…'; }
+      else if(event.type==='step'){ const st=live.steps[event.index]; if(st)st.facts=event.phase==='start'?'· running…':event.ok?`· ${event.rows===null||event.rows===undefined?'done':event.rows+(event.rows===1?' row':' rows')} · ${Number(event.ms).toFixed(1)} ms`:'· refused'; if(event.phase==='finish'&&event.index===live.steps.length-1){ live.state='Writing the interpretation…'; $('status').textContent='Analyst · writing…'; } }
+      else if(event.type==='delta')para(event.paragraph,event.kind).text+=event.text;
+      else if(event.type==='paragraph'){ const q=para(event.paragraph,event.kind); q.text=event.text; q.final=true; }
+      else if(event.type==='retract'){ const q=para(event.paragraph); q.text=''; q.hidden=true; }   // it failed validation: nothing of it stays on screen
+      else if(event.type==='done')result=event.result;
+      else if(event.type==='error')failure=event.error;
+      repaint();
+     });
+     if(failure)throw new Error(failure);
+     if(!result)throw new Error('The analyst stream ended before the answer; nothing was fabricated');
+     response={ok:true,json:async()=>result};
+    }
    }else{
     const priors=current?conversation:[];
     response=await fetch(report?reportUrl(address,priors):questionUrl(question,address,priors),{headers:{Accept:'application/json'}});
@@ -792,16 +868,15 @@ function applyPublicMode(){
  const modes=liveModes();
  for(const [value,entry] of Object.entries(PROVIDERS)){
   const option=$('mode').querySelector?.(`option[value="${value}"]`);
-  if(!option)continue;
-  if(modes.includes(value))option.textContent=`${entry.name} / server key`;else option.remove();
+  if(option)option.remove();   // the model is a button on each answer, not a mode that sticks (issue #23)
  }
- if(!modes.length){$('mode').value='offline';$('mode').disabled=true;$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';}
+ $('mode').value='offline';$('mode').disabled=true;
+ if(!modes.length)$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';
  else{
-  // Offline is the default even when the site has a key (issue #42): it answers in tens of
-  // milliseconds; the model path takes seconds and spends the site's budget. The model is a choice.
-  if(!modes.includes($('mode').value))$('mode').value='offline';
+  // Every question is answered offline first, in tens of milliseconds (issues #42, #23). The model is
+  // a choice made per answer: it takes seconds and spends the site's budget.
   const live=modes.includes('anthropic')?'anthropic':modes[0];
-  $('mode-help').textContent=`Public demo: Offline answers instantly with fixed queries over synthetic records. Choose ${PROVIDERS[live]?.name||'the model'} to have a model pick the tools and write the interpretation; that takes several seconds and uses this site's own key under a spend cap. Every number comes from the queries either way; no visitor key is accepted.`;
+  $('mode-help').textContent=`Public demo: every question is answered at once with fixed queries over synthetic records. “Ask the analyst” on an answer has ${PROVIDERS[live]?.name||'a model'} pick the queries and write an interpretation under the numbers; that takes a few seconds and uses this site's own key under a spend cap. Every number comes from the queries either way; no visitor key is accepted.`;
  }
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model available':'Synthetic data / Public demo';
 }
