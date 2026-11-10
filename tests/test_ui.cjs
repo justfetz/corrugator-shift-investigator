@@ -366,7 +366,19 @@ const analystChecks=(async()=>{
  events=[ev({type:'start',mode:'anthropic',session_id:'s3'}),ev({type:'done',result:rejected})];
  offlineCard()[0].events.click(); await new Promise(r=>setTimeout(r,30));
  assert.equal(vm.runInContext('latest',context),source);assert.equal(elements.queries.children.length,offlineQueries);
- assert.match(flat(elements.messages),/plan was rejected .*run_sql.*offline answer stands/);
+ assert.match(flat(elements.messages),/plan was rejected .*run_sql.*offline answer stands/);assert.ok(!/Investigation stopped/.test(flat(elements.messages)));
+ assert.match(flat(elements.messages),/analyst · plan rejected · 1 model call(?!s)/);
+ // issue #78: a plan over the step cap: the offline evidence plus one quiet line with the counts, no banner, nothing disabled
+ await vm.runInContext("ask('What shift was fastest and why?')",context);
+ const overCap=answer({session_id:'s3',url:undefined,status:'plan_rejected',trace:[],plan_rejection:{proposed:12,limit:9},sections:["The analyst's plan was rejected (it proposes more queries than the limit allows); no query was run for it. The offline answer stands on its own."],usage:{tool_calls:0,model_calls:1,cost_usd:0.0008}});
+ events=[ev({type:'start',mode:'anthropic',session_id:'s3'}),ev({type:'done',result:overCap})];
+ offlineCard()[0].events.click(); await new Promise(r=>setTimeout(r,30));
+ assert.equal(elements.queries.children.length,offlineQueries);   // the offline card's evidence stays
+ const analystNotes=find(elements.messages,'analyst-p');
+ assert.equal(analystNotes.length,1);assert.equal(analystNotes[0].textContent,'The analyst proposed 12 queries; the limit is 9, so none ran.');
+ assert.ok(!/warning-note/.test(analystNotes[0].className));assert.ok(!/Investigation stopped/.test(flat(elements.messages)));
+ assert.match(flat(elements.messages),/analyst · plan rejected · 1 model call/);
+ assert.deepEqual(Object.entries(elements).filter(([id,e])=>e.disabled&&!['rates-change','mode','day-prev','day-next'].includes(id)).map(([id])=>id),[]);
  // a mid-stream error from the ask bar's analyst: the card fails, says nothing was fabricated, and no control is left disabled
  events=[ev({type:'start',mode:'anthropic',session_id:'s3'}),ev({type:'plan',steps:[{tool:'get_shift_notes',arguments:{shift:2}},{tool:'get_shift_kpis',arguments:{shift:2}}]}),ev({type:'error',error:'Investigation failed; no answer was fabricated'})];
  await assert.rejects(vm.runInContext("ask('Why slow, really?',{mode:'anthropic'})",context),/no answer was fabricated/);

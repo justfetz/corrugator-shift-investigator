@@ -2373,6 +2373,213 @@
     "tables": [],
     "sections_match": "plan was rejected \\(it names \"run_sql\", which is not one of the permitted tools\\); no query was run"
    }
+  },
+  {
+   "id": "analyst-plan-all-shifts-nine-steps",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What shift was fastest and why?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_overview",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_shift_overview",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_shift_overview",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_rankings",
+      "arguments": {
+       "shift": 1,
+       "metric": "speed"
+      }
+     },
+     {
+      "tool": "get_rankings",
+      "arguments": {
+       "shift": 2,
+       "metric": "speed"
+      }
+     },
+     {
+      "tool": "get_rankings",
+      "arguments": {
+       "shift": 3,
+       "metric": "speed"
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 1,
+       "group_by": "reason"
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason"
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 3,
+       "group_by": "reason"
+      }
+     }
+    ]
+   },
+   "note": "Issue #78. The owner's question on All shifts: the model planned overview, speed ranking and downtime for each of the three shifts, nine steps, and the old flat cap of six refused the whole plan. The cap is now two per shift in scope plus three (one shift: five; all shifts: nine), so this plan runs every step.",
+   "expect": {
+    "status": "complete",
+    "tool_calls": 9,
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_shift_overview",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_rankings",
+      "arguments": {
+       "shift": 2,
+       "metric": "speed"
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 3,
+       "group_by": "reason"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "get_rankings",
+     "get_downtime_breakdown"
+    ],
+    "sections_not_match": "plan was rejected|Investigation stopped"
+   }
+  },
+  {
+   "id": "analyst-plan-too-many-steps",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What shift was fastest and why?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_overview",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_shift_overview",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_shift_overview",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_rankings",
+      "arguments": {
+       "shift": 1,
+       "metric": "speed"
+      }
+     },
+     {
+      "tool": "get_rankings",
+      "arguments": {
+       "shift": 2,
+       "metric": "speed"
+      }
+     },
+     {
+      "tool": "get_rankings",
+      "arguments": {
+       "shift": 3,
+       "metric": "speed"
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 1,
+       "group_by": "reason"
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason"
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 3,
+       "group_by": "reason"
+      }
+     },
+     {
+      "tool": "get_quality_breakdown",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_quality_breakdown",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_quality_breakdown",
+      "arguments": {
+       "shift": 3
+      }
+     }
+    ]
+   },
+   "note": "Issue #78. Twelve steps over all three shifts is above the scaled cap (two per shift plus three: nine), so the plan is refused whole and nothing runs. The answer degrades instead of stopping: one line saying the plan was over the limit (the counts travel as plan_rejection, not as digits in the text), and no 'Investigation stopped' banner over the offline answer.",
+   "expect": {
+    "status": "plan_rejected",
+    "tool_calls": 0,
+    "charts": 0,
+    "tables": [],
+    "sections_match": "plan was rejected \\(it proposes more queries than the limit allows\\); no query was run",
+    "sections_not_match": "Investigation stopped"
+   }
   }
  ]
 }

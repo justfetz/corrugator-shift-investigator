@@ -407,7 +407,12 @@ def chart_for(rid, result):
     return chart
 
 
-MAX_PLAN_STEPS = 6
+def plan_step_cap(allowed_shifts):
+    """The most steps an analyst plan may have: two per shift in scope plus three (one shift: five;
+    all shifts: nine), so an all-shift plan of a few tools per shift is not refused (issue #78)."""
+    return 2 * len(allowed_shifts) + 3
+
+
 PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] != 'render_chart'}
 PLAN_REJECTED = "The analyst's plan was rejected ({reason}); no query was run for it. The offline answer stands on its own."
 
@@ -453,8 +458,10 @@ def validate_plan(plan, allowed_shifts, scope, period, production_day):
     the answer's numbers come from tool output only."""
     if not isinstance(plan, dict) or set(plan) != {'steps'} or not isinstance(plan['steps'], list):
         return [], 'it was not a JSON object with a list of steps'
-    if not 1 <= len(plan['steps']) <= MAX_PLAN_STEPS:
-        return [], 'it has no steps or too many; one to six are allowed'
+    if not plan['steps']:
+        return [], 'it has no steps'
+    if len(plan['steps']) > plan_step_cap(allowed_shifts):
+        return [], 'it proposes more queries than the limit allows'
     steps = []
     for step in plan['steps']:
         if not isinstance(step, dict) or set(step) != {'tool', 'arguments'} or not isinstance(step['tool'], str):
@@ -644,7 +651,8 @@ class Agent:
         planner_context = {**request, 'question': text, 'production_day': context.production_day,
             'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context),
             'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
-            'history': history, 'results': []}
+            'max_steps': plan_step_cap(allowed_shifts), 'history': history, 'results': []}
+        rejection = None
         try:
             plan = self.planner.plan(planner_context)
         except Exception as exc:
@@ -657,6 +665,10 @@ class Agent:
                 steps, reason = validate_plan(plan, allowed_shifts, context.scope, period, context.production_day)
                 if reason:
                     status, failure_message = 'plan_rejected', PLAN_REJECTED.format(reason=reason)
+                    if isinstance(plan, dict) and isinstance(plan.get('steps'), list) and len(plan['steps']) > plan_step_cap(allowed_shifts):
+                        # The counts are application facts, not data: they travel as fields for the card's
+                        # one line, so the answer's text keeps no digits a tool did not return.
+                        rejection = {'proposed': len(plan['steps']), 'limit': plan_step_cap(allowed_shifts)}
         if steps:
             emit({'type': 'plan', 'steps': deepcopy(steps)})
         for number, action in enumerate(steps, 1):
@@ -678,7 +690,10 @@ class Agent:
         if steps and status == 'complete' and not any(v['ok'] for v in store.values()):
             status = 'unavailable'   # every planned call was refused by its tool: the refusals are the answer
         narrate = (lambda question, evidence: self.planner.narrate(question, evidence, emit)) if status == 'complete' else None
-        return self._assemble(text, context, request, run_id, store, traces, status, [], failure_message, period, narrate)
+        result = self._assemble(text, context, request, run_id, store, traces, status, [], failure_message, period, narrate)
+        if rejection:
+            result['plan_rejection'] = rejection
+        return result
 
     def _assemble(self, text, context, request, run_id, store, traces, status, final_ids, failure_message, period, narrate):
         """Turn the gathered results into the answer: evidence lines, charts, tables, the optional
@@ -740,7 +755,9 @@ class Agent:
                     sections.insert(0,'The model narrative is unavailable or failed validation. Calculated evidence and charts are retained.')
         if failure_message:
             sections.insert(0, failure_message)
-        if status != 'complete':
+        if status not in ('complete', 'plan_rejected'):
+            # A refused plan ran nothing and stopped nothing: the offline answer stands, and the one
+            # line saying why the plan was refused is the whole of it (issue #78).
             sections.insert(0, f'Investigation stopped: {status}. Any results below are partial.')
         result_shifts = list(dict.fromkeys(r['data']['shift'] for r in evidence if r['data']['shift'] is not None)) or request['shifts']
         with self.guard:
