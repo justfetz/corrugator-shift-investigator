@@ -45,7 +45,7 @@ def assert_same(new, old, path="result"):
         for i, (a, b) in enumerate(zip(new, old)):
             assert_same(a, b, f"{path}[{i}]")
     elif isinstance(old, float) and not isinstance(old, bool):
-        assert isinstance(new, (int, float)) and round(new, 4) == pytest.approx(round(old, 4), abs=1e-4, rel=0), (path, new, old)
+        assert isinstance(new, (int, float)) and round(new, 4) == round(old, 4), (path, new, old)
     else:
         assert new == old, (path, new, old)
 
