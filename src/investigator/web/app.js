@@ -708,11 +708,11 @@ function renderCard(){
   if(rec.note)message('Note',[rec.note]);
   const summary=message('',rec.result.sections||[]);showResult(rec.result);
   $('card-foot').hidden=false;syncPdf();
-  if(rec.state==='done'&&!rec.revealed){ rec.revealed=true; pendingReveal=summary; }   // first time this answer is drawn: it is revealed once, reopening shows it settled
+  if(rec.state==='done'&&!rec.revealed){ rec.revealed=true; pendingReveal={summary,t0:rec.t0}; }   // first time this answer is drawn: it is revealed once, reopening shows it settled
  }
  if(rec.state!=='pending')analystOffer(rec);
  renderEarlier();
- if(pendingReveal){ const summary=pendingReveal; pendingReveal=null; reveal(summary); }
+ if(pendingReveal){ const {summary,t0}=pendingReveal; pendingReveal=null; reveal(summary,t0); }
 }
 // ---- The reveal (issue #65). The answer is complete and in the DOM before this runs: the pacing only changes
 // when the parts of it become visible, in the order of the reasoning. The query lines tick in about 80 ms apart;
@@ -722,7 +722,7 @@ function renderCard(){
 // the finished card: each paragraph shows a prefix of its own textContent, and the end state is that text. A click
 // or any key ends it at once; prefers-reduced-motion, or a page without a frame scheduler, shows everything at once.
 let pendingReveal=null, pace=null;
-const PACE={query_ms:80,queries_ms:480,type_after_ms:160,cps:50,type_ms:1000};
+const PACE={query_ms:80,queries_ms:480,type_after_ms:160,first_by_ms:400,frame_ms:17,cps:50,type_ms:1000};
 function reducedMotion(){ try{return typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;} }
 function addClass(e,c){ e.className=((e.className||'')+' '+c).trim(); }
 function dropClass(e,c){ e.className=(e.className||'').split(' ').filter(x=>x&&x!==c).join(' '); }
@@ -740,7 +740,7 @@ function finishReveal(skipped=false){
  if(p.card)p.card.setAttribute('data-reveal','done');
 }
 function skipReveal(){ if(pace)finishReveal(true); }
-function reveal(summary){
+function reveal(summary,submitted){
  if(pace)finishReveal();   // a newer card: the one before is settled first
  if(reducedMotion()||typeof requestAnimationFrame!=='function'||!summary)return;
  const queries=$('queries').children.filter?$('queries').children.filter(e=>/^query\b/.test(e.className||'')):[...$('queries').children].filter(e=>/^query\b/.test(e.className||''));
@@ -749,7 +749,11 @@ function reveal(summary){
  const later=[...kids.filter(e=>!typed.some(t=>t.el===e)),...[...$('messages').children].filter(e=>e!==summary&&!/\bmessage\b/.test(e.className||''))];   // the note disclosure and the analyst offer arrive with the last word
  const blooms=[...$('charts').children,...$('heatmaps').children];
  const total=typed.reduce((n,t)=>n+t.text.length,0), step=queries.length?Math.min(PACE.query_ms,PACE.queries_ms/queries.length):0;
- const p={t0:clock(),queries,typed,later,blooms,step,start:Math.min(PACE.type_after_ms,queries.length*step),cps:Math.max(PACE.cps,total/(PACE.type_ms/1000)),lead:typed.length?firstFigureEnd(typed[0].text):0,first:typed.length?sentenceEnd(typed[0].text):0,bloomed:false,done:false,card:$('card')};
+ // The first figure is due 400 ms after the submit, not after the land: a slow land shortens the wait before the
+ // lead chunk (by a frame's margin), and past that point it lands on the reveal's first frame.
+ const now=clock(), since=typeof submitted==='number'?now-submitted:0;
+ const start=Math.max(0,Math.min(PACE.type_after_ms,queries.length*step,PACE.first_by_ms-PACE.frame_ms-since));
+ const p={t0:now,queries,typed,later,blooms,step,start,cps:Math.max(PACE.cps,total/(PACE.type_ms/1000)),lead:typed.length?firstFigureEnd(typed[0].text):0,first:typed.length?sentenceEnd(typed[0].text):0,bloomed:false,done:false,card:$('card')};
  pace=p; p.card.setAttribute('data-reveal','running');
  queries.forEach((q,i)=>{ if(i*step>0)addClass(q,'pace-wait'); });
  for(const t of typed){ t.el.textContent=''; addClass(t.el,'typing'); }

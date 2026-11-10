@@ -795,10 +795,10 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const typedText=els=>summaryOf(els).children.filter(e=>e.tag==='p').map(e=>e.textContent);
  const queryLines=els=>els.queries.children.filter(e=>/^query\b/.test(e.className));
  const waiting=e=>/\bpace-wait\b/.test(e.className);
- const ask=async t=>{ t.setWall(0); const done=vm.runInContext(`ask('Why was this shift slow? Chart downtime by reason.')`,t.ctx);
+ const ask=async (t,land=40)=>{ t.setWall(0); const done=vm.runInContext(`ask('Why was this shift slow? Chart downtime by reason.')`,t.ctx);
   assert.equal(t.els.card.className,'card answer skeleton');   // 1. the skeleton is in the DOM in the task of the submit: within the first frame
   assert.ok(walk(t.els.messages).some(e=>/^skel\b/.test(e.className)),'a pulsing line where the first sentence goes');
-  await tick(); t.setWall(40); t.open(); await done; };   // the offline answer is complete 40 ms after the submit
+  await tick(); t.setWall(land); t.open(); await done; };   // the offline answer is complete `land` ms after the submit (40 by default)
 
  // Paced: at 40 ms the answer is in the DOM, the title line carries the real 40 ms, and the reveal starts.
  let t=setup(); await ask(t);
@@ -829,6 +829,20 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.ok(![...queryLines(t.els),...t.els.charts.children,...walk(t.els.messages)].some(waiting));
  assert.ok(!walk(t.els.messages).some(e=>/\btyping\b/.test(e.className)));
  assert.equal(t.els['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 40 ms');   // the animation never moved the measured time
+
+ // The 400 ms bar is from the submit, not the land: an answer that lands at 300 ms still has its first figure on
+ // screen by 400 ms (frames every 16 ms from the land), and one that lands after the bar shows it on its first frame.
+ const leadIn=els=>{ const s=typedText(els)[0]; return s.includes(firstFigure)&&s.includes(measured)&&visible[0].startsWith(s); };
+ t=setup(); await ask(t,300);
+ assert.equal(t.els['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 300 ms');
+ assert.equal(typedText(t.els)[0],'','nothing typed on the land frame: 100 ms of the bar remain');
+ let landedAt=null; for(let ms=316;ms<=400&&landedAt===null;ms+=16){ await t.at(ms); if(leadIn(t.els))landedAt=ms; }
+ assert.ok(landedAt!==null&&landedAt<=400,`landed at 300 ms: the first figure by 400 ms from the submit (at ${landedAt} ms): "${typedText(t.els)[0]}"`);
+ assert.ok(typedText(t.els)[0].length<visible[0].length,'and the rest still types');
+ await t.at(1800); assert.equal(t.els.card['data-reveal'],'done'); assert.deepEqual(typedText(t.els),visible);
+ t=setup(); await ask(t,500);
+ assert.ok(leadIn(t.els),`landed at 500 ms: the first figure is there on the land frame: "${typedText(t.els)[0]}"`);
+ assert.equal(t.els.card['data-reveal'],'running');
 
  // A keypress completes it immediately (and a click: the same handler on pointerdown).
  t=setup(); await ask(t); await t.at(40+100);
@@ -863,5 +877,5 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.deepEqual(typedText(t.els),visible);assert.equal(t.els.card['data-reveal'],undefined);
  assert.ok(![...queryLines(t.els),...t.els.charts.children,...walk(t.els.messages)].some(waiting));
  assert.equal(t.els.charts.children.length,2);
- console.log('UI issue-65 checks passed: skeleton in the submit task, query lines tick in, first figure by 400 ms, word-chunked typing, charts bloom after the first sentence, full summary by 1.5 s and verbatim, a key skips, reduced motion shows all at once, measured ms unchanged.');
+ console.log('UI issue-65 checks passed: skeleton in the submit task, query lines tick in, first figure by 400 ms from the submit (lands at 40, 300 and 500 ms), word-chunked typing, charts bloom after the first sentence, full summary by 1.5 s and verbatim, a key skips, reduced motion shows all at once, measured ms unchanged.');
 })().catch(error=>{console.error(error);process.exit(1);});
