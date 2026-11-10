@@ -95,7 +95,7 @@ def test_why_slow_renders_headline_findings_chart_and_where_to_look_each_number_
         rest = re.sub(r'\b[Ss]hift [123]\b', ' ', rest)
         for token in NUMBER.findall(rest):
             assert token in allowed, f'{token!r} on {line!r} is not a value of the row it cites'
-    assert [c['unit'] for c in result['charts']][:1] == ['minutes'], 'the chart for the measure comes first: downtime by reason'
+    assert [c['unit'] for c in result['charts']] == ['ft/min', 'minutes'], 'the chart for the measure first (speed against grade target), then the downtime that explains it'
     looks = sections[sections.index('Where to look') + 1:]
     assert 2 <= len(looks) <= 3 and all(s.startswith('- ') and LOOK.search(s) for s in looks), looks
     for s in looks:
@@ -153,6 +153,67 @@ def test_no_two_intents_share_an_opening_sentence():
         assert context.history[-1]['intent'] == alias
         week, _ = ask({'period_pareto': 'Which downtime reason cost the most minutes?', 'period_waste': 'Waste breakdown'}[canonical], scope='day', period='week')
         assert opening(result['sections']) == opening(week['sections'])
+
+
+def test_every_rank_word_is_true_on_every_day():
+    """A rank the answer states is a rank of the figure it is said of, on every production day of the store:
+    the shift a speed or summary headline calls the lowest is the lowest in percent of grade target, the run
+    called the highest against its target is the highest, and the rankings headline is the extreme of the
+    shifts' first-ranked rows (issue #75 review: 14 of 43 days broke the first, 20 shift-days the second)."""
+    store = default_store()
+    pct = re.compile(r'on shift ([123])\b[^·]* · ([0-9.]+)% of grade target, the lowest of the three shifts')
+    for day in store.production_days:
+        analysis = store.day_analysis(day)
+        try:
+            for question in ('Show speed to target', 'Summarize this shift'):
+                context = Context(day, 2)
+                context.scope = 'day'
+                result = Agent(analysis).ask(question, context)
+                rows = {t['data']['shift']: t['data']['rows'][0] for t in result['trace']
+                        if t['ok'] and t['tool'] in ('get_shift_kpis', 'get_shift_overview') and t['data']['coverage'] == 'complete'}
+                m = pct.search(result['sections'][0])
+                assert m, (day, question, result['sections'][0])
+                lowest = min(rows, key=lambda s: rows[s]['speed_to_target_pct'])
+                assert int(m[1]) == lowest, (day, question, result['sections'][0])
+            for shift in (1, 2, 3):
+                context = Context(day, shift)
+                context.scope = 'shift'
+                result = Agent(analysis).ask('Show speed to target', context)
+                runs = next(t['data']['rows'] for t in result['trace'] if t['ok'] and t['tool'] == 'get_wet_end_performance')
+                for line in result['sections']:
+                    if 'the highest of' in line:
+                        row = runs[int(REF.search(line)[3])]
+                        assert row['speed_to_target_pct'] == max(r['speed_to_target_pct'] for r in runs), (day, shift, line)
+            context = Context(day, 2)
+            context.scope = 'day'
+            result = Agent(analysis).ask('Show rankings', context)
+            firsts = [t['data']['rows'][0]['value'] for t in result['trace']
+                      if t['ok'] and t['tool'] == 'get_rankings' and t['data']['metric'] == 'speed' and t['data']['rows']]
+            head = float(re.match(r'^\*\*([0-9.]+)%', result['sections'][0])[1])
+            assert f'{min(firsts):.1f}' == f'{head:.1f}', (day, result['sections'][0])
+        finally:
+            analysis.close()
+
+
+def test_an_analyst_plan_keeps_a_finding_for_every_result():
+    """An analyst's own plan is answered in the shape of the tools it ran, and every other result keeps its own
+    finding with its evidence, so the calculated evidence under a narrative never drops a result it can cite."""
+    sys.path.insert(0, str(ROOT / 'evals'))
+    from run import ScriptedAnalyst
+    store = default_store()
+    analysis = store.day_analysis(DAY)
+    try:
+        context = Context(DAY, 2)
+        context.scope = 'shift'
+        steps = [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2}}, {'tool': 'get_quality_breakdown', 'arguments': {'shift': 2}},
+                 {'tool': 'get_downtime_breakdown', 'arguments': {'shift': 2, 'group_by': 'reason', 'kind': None}},
+                 {'tool': 'get_wet_end_performance', 'arguments': {'shift': 2}}, {'tool': 'get_setup_matrix', 'arguments': {'shift': 2}}]
+        result = Agent(analysis, planner=ScriptedAnalyst({'steps': steps}, None)).ask_planned('Why was this shift slow?', context)
+    finally:
+        analysis.close()
+    cited = {int(m[1]) for s in result['sections'] for m in [REF.search(s)] if m}
+    assert cited >= {2, 3, 4, 5}, (cited, result['sections'])   # every result but the KPIs the shape's headline already cites
+    assert 1 in cited
 
 
 def golden_answers():

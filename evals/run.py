@@ -367,11 +367,13 @@ def unfaithful_numbers(lines, trace):
 
 
 def unprovenanced(lines, trace):
-    """Bold figures whose cited evidence does not hold them (issue #75). A line with a `**figure**` carries
-    exactly one, and an evidence reference `(query N · row M)` that resolves: step N of the trace, a
+    """Numbers on a cited line that its cited evidence does not hold (issue #75). A line with a `**figure**`
+    carries exactly one, and an evidence reference `(query N · row M)` that resolves: step N of the trace, a
     successful tool call, row M of its rows (`detail M`, `weekday M`: of its sub-reason and weekday lists).
     Every number in the figure is a rendering of a value of that row; with no row named, of the result as a
-    whole: a count of its rows, a below-target count, or a total its envelope carries."""
+    whole: a count of its rows, a below-target count, or a total its envelope carries. Every other number on
+    the line is one of those too, a count of the result's rows, or a stated rule constant: a line never
+    states a figure from a row it does not cite."""
     bad = []
     for line in lines:
         figures = BOLD.findall(line)
@@ -388,21 +390,32 @@ def unprovenanced(lines, trace):
             bad.append(f'query {step} is not a successful tool call: {line[:70]!r}')
             continue
         data = source['data']
+        rows = data.get('rows', [])
         if part:
             records = data.get(EVIDENCE_PARTS[part]) or []
             if int(index) >= len(records):
                 bad.append(f'query {step} has no {part} {index}: {line[:70]!r}')
                 continue
-            allowed = set().union(*(renderings(v) for v in records[int(index)].values() if not isinstance(v, (str, list, dict))))
+            record = records[int(index)]
+            allowed = set().union(*(renderings(v) for v in record.values() if not isinstance(v, (str, list, dict))))
+            names = [v for v in record.values() if isinstance(v, str)]
         else:
-            rows = data.get('rows', [])
             allowed = renderings(len(rows))
             if rows and 'actual_fpm' in rows[0] and 'target_fpm' in rows[0]:
                 allowed |= renderings(sum(r['actual_fpm'] < r['target_fpm'] for r in rows))
             allowed |= set().union(set(), *(renderings(v) for v in data.values() if isinstance(v, (int, float)) and not isinstance(v, bool)))
+            names = [v for v in data.values() if isinstance(v, str)]
         for token in NUMBER.findall(figures[0]):
             if token.rstrip(',') not in allowed:
                 bad.append(f'{token!r} is not in query {step} {part or "result"} {index}: {line[:70]!r}')
+        beside = allowed | renderings(len(rows)) | set(RULE_CONSTANTS)
+        rest = LOOK_LINK.sub(' ', EVIDENCE.sub(' ', line))
+        for name in sorted(names, key=len, reverse=True):
+            rest = rest.replace(name, ' ')
+        rest = re.sub(r'\b[Ss]hift [123]\b', ' ', rest)
+        for token in NUMBER.findall(rest):
+            if token.rstrip(',') not in beside:
+                bad.append(f'{token!r} on a line citing query {step} {part or "result"} {index} is not from it: {line[:70]!r}')
     return bad
 
 

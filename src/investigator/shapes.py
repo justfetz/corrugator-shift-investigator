@@ -104,9 +104,11 @@ def answer_sections(intent, evidence, context, period_tools):
     daily = [r for r in evidence if r['tool'] not in period_tools]
     lines = []
     if period:
-        lines += PeriodAnswer(intent if intent.startswith('period_') else infer_period(period), period, context).sections()
+        own = intent.startswith('period_')
+        lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own).sections()
     if daily:
-        lines += DailyAnswer(intent if not intent.startswith('period_') and intent != 'model' else infer_daily(daily), daily, context).sections()
+        own = not intent.startswith('period_') and intent != 'model'
+        lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own).sections()
     return order(lines)
 
 
@@ -199,9 +201,17 @@ class DailyAnswer:
     FOCUS = {'overview': ('speed_to_target_pct', True), 'speed': ('speed_to_target_pct', True),
              'summary': ('speed_to_target_pct', True), 'compare': ('speed_to_target_pct', True),
              'downtime': ('downtime_pct', False), 'quality': ('dry_end_pct', False)}
+    # The tools each shape reads for its focus shift; any other result there (an analyst's own plan) still gets
+    # its own finding, so nothing the evidence holds drops out of the answer. Notes are always listed (all_notes).
+    KPIS = 'get_shift_kpis'
+    USES = {'overview': {KPIS, 'get_downtime_breakdown', 'get_wet_end_performance'}, 'speed': {KPIS, 'get_wet_end_performance'},
+            'downtime': {KPIS, 'get_downtime_breakdown'}, 'quality': {KPIS, 'get_quality_breakdown'},
+            'matrix': {KPIS, 'get_setup_matrix'}, 'notes': {KPIS}, 'orders': {KPIS, 'get_order_matrix'},
+            'ranking': {KPIS, 'get_rankings'}, 'summary': {'get_shift_overview'},
+            'compare': {KPIS, 'get_downtime_breakdown', 'get_wet_end_performance'}}
 
-    def __init__(self, intent, evidence, context):
-        self.intent, self.context = intent, context
+    def __init__(self, intent, evidence, context, inferred=False):
+        self.intent, self.context, self.inferred, self.generic = intent, context, inferred, False
         self.shifts = group(evidence)
         self.incomplete = [s for s, tools in self.shifts.items()
                            if any(r['data']['coverage'] != 'complete' for k, r in tools.items() if not k.startswith('all:'))]
@@ -222,6 +232,12 @@ class DailyAnswer:
         return {'Maintenance': 'maintenance_pct', 'Operator': 'operator_pct', 'PM': 'pm_pct'}.get(kind, 'downtime_pct')
 
     def focus(self):
+        if self.intent == 'ranking' and len(self.complete) > 1:
+            # the shift whose first ranking leads: the lowest speed attainment, the most downtime or rejected area
+            tops = [(r['data']['rows'][0]['value'], s, r['data'].get('metric')) for s in self.complete
+                    for r in self.shifts[s].get('all:get_rankings', [])[:1] if r['data']['rows']]
+            if tops:
+                return (min if tops[0][2] == 'speed' else max)(tops)[1]
         field_low = self.FOCUS.get(self.intent)
         if not field_low or len(self.complete) < 2:
             return self.complete[0]
@@ -245,19 +261,37 @@ class DailyAnswer:
         focus = self.focus()
         shape = getattr(self, 'shape_' + self.intent, None) or self.shape_speed
         head, bullets, notes, looks = shape(focus)
+        bullets += self.leftovers(focus)
         others = [] if self.intent == 'compare' else [b for s in self.complete if s != focus for b in [self.other(s)] if b]
+        if self.inferred:   # an analyst's plan: every other shift's evidence is listed too
+            others += [f'- Shift {s} · {b[2:]}' for s in self.complete if s != focus for b in self.leftovers(s, all_tools=True)]
         if others:   # several shifts: the focus shift's findings say whose they are
-            bullets = [f'- Shift {focus} · {b[2:]}' if b.startswith('- ') else b for b in bullets]
+            bullets = [f'- Shift {focus} · {b[2:]}' if b.startswith('- ') and not b.startswith('- Shift ') else b for b in bullets]
         out = [head, *others, *bullets, *lines, *notes, *self.all_notes(focus)]
         if looks:
             out += [LOOK, *looks]
         return out
 
     def clause(self, focus, low=True):
-        """`on shift 2, the lowest of the three shifts` when the scope holds several shifts; nothing for one."""
-        if self.context.scope != 'day':
-            return ''
-        return f' on shift {focus}' + rank_words(len(self.complete), bool(self.incomplete), low)
+        """`on shift 2, the lowest of the three shifts` when the scope holds several shifts; nothing for one.
+        Put right after the figure the focus was chosen by, so the rank is said of the measure that was ranked."""
+        return self.where(focus) + self.rank(low)
+
+    def where(self, focus):
+        return f' on shift {focus}' if self.context.scope == 'day' else ''
+
+    def rank(self, low=True):
+        return rank_words(len(self.complete), bool(self.incomplete), low) if self.context.scope == 'day' else ''
+
+    def leftovers(self, shift, all_tools=False):
+        """A finding for each result of the shift its shape did not read (an analyst's own plan); none offline."""
+        if self.generic and not all_tools:
+            return []
+        used = set() if all_tools else self.USES.get(self.intent, set())
+        tools = {k: r for k, r in self.shifts[shift].items() if not k.startswith('all:') and k not in used and k != 'get_shift_notes'}
+        if all_tools:
+            tools.pop('get_shift_kpis', None)   # the other shift's own bullet already states its KPIs
+        return [b for key, result in tools.items() for b in self.findings_of(result, self.shifts[shift])[0]]
 
     def all_notes(self, focus):
         """Reported notes of every complete shift (the client folds them into one disclosure)."""
@@ -319,7 +353,7 @@ class DailyAnswer:
         if i is None or len(rows) < 2:
             return None
         r = rows[i]
-        return bullet(f'{r["wet_end_id"]} ({r["grade"]}): **{f1(r["speed_to_target_pct"])}%** of its {f0(r["target_fpm"])} ft/min grade target, the closest to it', we, i)
+        return bullet(f'{r["wet_end_id"]} ({r["grade"]}): **{f1(r["speed_to_target_pct"])}%** of its {f0(r["target_fpm"])} ft/min grade target, the highest of {len(rows)} runs', we, i)
 
     @staticmethod
     def below(we):
@@ -377,7 +411,7 @@ class DailyAnswer:
         k, row = self.kpis(tools)
         if not row:
             return self.shape_generic(s)
-        head = f'**{f1(row["observed_shift_fpm"])} ft/min** including downtime{self.clause(s)} · {f1(row["speed_to_target_pct"])}% of grade target {ref(k, 0)}'
+        head = f'**{f1(row["observed_shift_fpm"])} ft/min** including downtime{self.where(s)} · {f1(row["speed_to_target_pct"])}% of grade target{self.rank()} {ref(k, 0)}'
         bullets, looks = [], []
         we = tools.get('get_wet_end_performance')
         slow = None
@@ -478,7 +512,8 @@ class DailyAnswer:
         head = f'**{len(orders["data"]["rows"])}** order fragments{self.clause(s, low=False).split(",")[0]} · demand repeats on continuing orders {ref(orders)}'
         notes = ['Requested and planned quantities repeat on continuing orders; sum produced sheets only. Remaining demand carries across shifts.',
                  'Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled.']
-        looks = [look('The setups those orders ran on', f'Show the setup matrix{self.suffix(s)}')]
+        looks = [look('The setups those orders ran on', f'Show the setup matrix{self.suffix(s)}'),
+                 look('The downtime between those orders, by reason', f'Show the downtime breakdown{self.suffix(s)}')]
         return head, [], notes, looks
 
     def shape_ranking(self, s):
@@ -507,8 +542,8 @@ class DailyAnswer:
         if not o:
             return self.shape_overview(s)
         row = o['data']['rows'][0]
-        head = (f'**{f0(row["observed_lineal_ft"])} lineal ft**{self.clause(s)} at {f1(row["observed_shift_fpm"])} ft/min including downtime · '
-                f'{f1(row["speed_to_target_pct"])}% of grade target {ref(o, 0)}')
+        head = (f'**{f0(row["observed_lineal_ft"])} lineal ft**{self.where(s)} at {f1(row["observed_shift_fpm"])} ft/min including downtime · '
+                f'{f1(row["speed_to_target_pct"])}% of grade target{self.rank()} {ref(o, 0)}')
         bullets = []
         if row['largest_downtime_minutes']:
             bullets.append(bullet(f'{row["largest_downtime_reason"]}: **{f2(row["largest_downtime_minutes"])} min**, the largest downtime reason', o, 0))
@@ -526,8 +561,13 @@ class DailyAnswer:
         k, row = self.kpis(self.shifts[s])
         if not row:
             return self.shape_generic(s)
-        rest = ''.join(f' · shift {o} {f1(self.kpis(self.shifts[o])[1]["observed_shift_fpm"])}' for o in self.complete if o != s and self.kpis(self.shifts[o])[1])
-        head = f'**{f1(row["observed_shift_fpm"])} ft/min** on shift {s}{rest} · including downtime {ref(k, 0)}'
+        # the fastest shift by elapsed speed, so the rank is said of the figure it was chosen by; every number on
+        # the line is a value of its own row (the other shifts are bullets, each citing theirs)
+        rated = [(self.kpis(self.shifts[o])[1]['observed_shift_fpm'], o) for o in self.complete if self.kpis(self.shifts[o])[1]]
+        fast = max(rated)[1] if len(rated) > 1 else s
+        k, row = self.kpis(self.shifts[fast])
+        lead = f'Fastest: shift {fast} at ' if len(rated) > 1 else f'Shift {fast}: '
+        head = f'{lead}**{f1(row["observed_shift_fpm"])} ft/min** including downtime · {f1(row["speed_to_target_pct"])}% of grade target {ref(k, 0)}'
         bullets = []
         for shift in self.complete:
             kk, rr = self.kpis(self.shifts[shift])
@@ -554,43 +594,42 @@ class DailyAnswer:
         pairs = [(v, s) for v, s in zip(scored, self.complete) if v is not None]
         return min(pairs)[1] if pairs else self.complete[0]
 
+    def findings_of(self, result, tools):
+        """(bullets, caveats) for one result, whatever shape it falls in: the generic finding of each daily tool."""
+        data, tool = result['data'], result['tool']
+        if tool in ('get_shift_kpis', 'get_shift_overview') and data['rows']:
+            row = data['rows'][0]
+            return [bullet(f'Speed: **{f1(row["observed_shift_fpm"])} ft/min** including downtime · {f1(row["speed_to_target_pct"])}% of grade target', result, 0)], []
+        if tool == 'get_downtime_breakdown':
+            return [bullet(f'{r["category"]}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift', result, i)
+                    for i, r in enumerate(data['rows'])], []
+        if tool == 'get_wet_end_performance':
+            return [b for b in (self.slowest_run(result)[0], self.below(result)) if b], []
+        if tool == 'get_quality_breakdown':
+            return [bullet(f'{r["reason"]}: **{f1(r["rejected_sqft"])} sq ft** rejected at the dry end', result, i) for i, r in enumerate(data['rows'])], []
+        if tool == 'get_setup_matrix':
+            return [bullet(f'Setup matrix: **{len(data["rows"])}** valid setups', result)], [
+                'Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.']
+        if tool == 'get_order_matrix':
+            return [bullet(f'Order matrix: **{len(data["rows"])}** order fragments', result)], [
+                'Requested and planned quantities repeat on continuing orders; sum produced sheets only.']
+        if tool == 'get_rankings':
+            return [self.ranked(r, 0) for r in tools.get('all:get_rankings', []) if r['data']['rows']], []
+        return [], []
+
     def shape_generic(self, s):
-        """Evidence a shape does not expect (an analyst's own plan): one finding per result."""
+        """Evidence a shape does not expect (an analyst's own plan): one finding per result, the first as the headline."""
+        self.generic = True
         tools = self.shifts[s]
-        head, bullets, notes = None, [], []
+        bullets, notes = [], []
         for key, result in tools.items():
-            if key.startswith('all:'):
-                continue
-            data, tool = result['data'], result['tool']
-            if tool in ('get_shift_kpis', 'get_shift_overview') and data['rows']:
-                row = data['rows'][0]
-                line = f'**{f1(row["observed_shift_fpm"])} ft/min** including downtime · {f1(row["speed_to_target_pct"])}% of grade target {ref(result, 0)}'
-                if head is None:
-                    head = line
-                else:
-                    bullets.append('- ' + line)
-            elif tool == 'get_downtime_breakdown':
-                bullets += [bullet(f'{r["category"]}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift', result, i)
-                            for i, r in enumerate(data['rows'])]
-            elif tool == 'get_wet_end_performance':
-                bullets += [self.slowest_run(result)[0], self.below(result)]
-            elif tool == 'get_quality_breakdown':
-                bullets += [bullet(f'{r["reason"]}: **{f1(r["rejected_sqft"])} sq ft** rejected at the dry end', result, i) for i, r in enumerate(data['rows'])]
-            elif tool == 'get_setup_matrix':
-                bullets.append(bullet(f'Setup matrix: **{len(data["rows"])}** valid setups', result))
-                notes.append('Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.')
-            elif tool == 'get_order_matrix':
-                bullets.append(bullet(f'Order matrix: **{len(data["rows"])}** order fragments', result))
-                notes.append('Requested and planned quantities repeat on continuing orders; sum produced sheets only.')
-            elif tool == 'get_rankings':
-                for ranking in tools.get('all:get_rankings', []):
-                    if ranking['data']['rows']:
-                        bullets.append(self.ranked(ranking, 0))
-        bullets = [b for b in bullets if b]
-        if head is None and bullets:
-            first = bullets.pop(0)
-            head = first[2:]
-        return head or f'Shift {s}: no figures in this evidence.', bullets, notes, []
+            if not key.startswith('all:') and key != 'get_shift_notes':
+                more, caveats = self.findings_of(result, tools)
+                bullets += more
+                notes += [c for c in caveats if c not in notes]
+        if not bullets:
+            return f'Shift {s}: no figures in this evidence.', [], notes, []
+        return bullets[0][2:], bullets[1:], notes, []
 
 
 # ------------------------------------------------------------------ a window of the record store (period tools)
@@ -651,9 +690,13 @@ class PeriodAnswer:
             'period_stops': ('get_stops_profile',), 'period_trend': ('get_trend',), 'period_rollstock': ('get_rollstock',),
             'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',)}
 
-    def __init__(self, intent, evidence, context):
+    KPI_TOOLS = ('get_period_kpis', 'compare_periods')
+    USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
+            'period_summary': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'), 'period_speed': (*KPI_TOOLS, 'get_grade_totals')}
+
+    def __init__(self, intent, evidence, context, inferred=False):
         self.intent = intent if intent in self.LEAD else infer_period(evidence)
-        self.context, self.evidence = context, evidence
+        self.context, self.evidence, self.inferred = context, evidence, inferred
         self.shifts = group(evidence)
 
     def wp(self, data):
@@ -685,6 +728,17 @@ class PeriodAnswer:
             other = next((self.shifts[s][t] for t in lead_tools if t in self.shifts[s]), None)
             if other:
                 others.append(self.brief(other))
+        # any other result (an analyst's own plan) keeps its own finding: its headline, as a bullet
+        used = set(self.USES.get(self.intent, lead_tools)) | set(lead_tools)
+        for s in keys:
+            for key, result in self.shifts[s].items():
+                if key.startswith('all:') or (s == focus and key in used) or (s != focus and key in lead_tools):
+                    continue
+                if s != focus and not self.inferred:
+                    continue
+                line = self.brief(result)
+                if line and line not in others:
+                    bullets = [*bullets, line]
         out = [head, *others, *[b for b in bullets if b], window_head(lead['data']), *notes]
         looks = [x for x in looks if x]
         if looks:
@@ -701,8 +755,7 @@ class PeriodAnswer:
         label = f'Shift {data["shift"]}' if data.get('shift') else 'All shifts'
         if result['tool'] in ('get_period_kpis', 'compare_periods'):
             i, row = self.metric(result, 'volume_msf')
-            j, speed = self.metric(result, 'speed_all_fpm')
-            return bullet(f'{label}: **{pval(row["current"], "MSF")} MSF** · speed with stops {pval(speed["current"], "ft/min")} ft/min', result, i)
+            return bullet(f'{label}: **{pval(row["current"], "MSF")} MSF** · {delta_clause(row)}', result, i)
         head = self.headline_of(result)
         return '- ' + label + ': ' + head if head else None
 
@@ -756,11 +809,8 @@ class PeriodAnswer:
     def period_summary(self, tools, k):
         data = k['data']
         i, vol = self.metric(k, 'volume_msf')
-        _, speed = self.metric(k, 'speed_all_fpm')
-        _, down = self.metric(k, 'downtime_pct')
-        head = (f'**{pval(vol["current"], "MSF")} MSF**{self.where(data)} at {pval(speed["current"], "ft/min")} ft/min with stops · '
-                f'{pval(down["current"])}% of scheduled minutes down {ref(k, i)}')
-        return head, self.loss_bullets(tools, k), self.kpi_notes(data), self.window_looks(data, ('stops', 'grade', 'trend'))
+        head = f'**{pval(vol["current"], "MSF")} MSF** produced{self.where(data)} · {delta_clause(vol)} {ref(k, i)}'
+        return head, [self.kpi_bullet(k, 'speed_all_fpm'), *self.loss_bullets(tools, k)], self.kpi_notes(data), self.window_looks(data, ('stops', 'grade', 'trend'))
 
     def loss_bullets(self, tools, k):
         bullets = []
@@ -794,18 +844,17 @@ class PeriodAnswer:
         order = sorted((r['speed_to_target_pct'], i) for i, r in enumerate(rows) if r.get('speed_to_target_pct') is not None)
         k = tools.get('get_period_kpis') or tools.get('compare_periods')
         if k:
-            i, row = self.metric(k, 'speed_all_fpm')
             j, run = self.metric(k, 'speed_run_fpm')
-            head = (f'**{pval(row["current"], "ft/min")} ft/min** with stops{self.where(data)} · {pval(run["current"], "ft/min")} ft/min without · '
-                    f'{delta_clause(row)} {ref(k, i)}')
+            head = f'**{pval(run["current"], "ft/min")} ft/min** without stops{self.where(data)} · {delta_clause(run)} {ref(k, j)}'
         elif order:
             i = order[0][1]
             r = rows[i]
             head = f'Slowest: {r["grade"]} at **{f1(r["speed_run_fpm"])} ft/min**{self.where(data)} · {f1(r["speed_to_target_pct"])}% of its {f0(r["target_fpm"])} target {ref(g, i)}'
         else:
             head = f'No setups in this window{self.where(data)} {ref(g)}'
-        bullets = [bullet(f'{rows[i]["grade"]}: **{f1(rows[i]["speed_run_fpm"])} ft/min** · {f1(rows[i]["speed_to_target_pct"])}% of target · {n(rows[i]["setups"])} setups', g, i)
-                   for _, i in order[:3]]
+        bullets = ([self.kpi_bullet(k, 'speed_all_fpm')] if k else []) + [
+            bullet(f'{rows[i]["grade"]}: **{f1(rows[i]["speed_run_fpm"])} ft/min** · {f1(rows[i]["speed_to_target_pct"])}% of target · {n(rows[i]["setups"])} setups', g, i)
+            for _, i in order[:3]]
         notes = (self.kpi_notes(k['data']) if k else []) + sentences(data.get('speed_note'))
         wp, sfx = self.wp(data), self.sfx(data)
         looks = []
@@ -902,6 +951,7 @@ class PeriodAnswer:
                  'speed': [look('The latest week by grade, against each grade target', f'Which grade is slowest against target this week{sfx}?')],
                  'grade': [look('The latest week by grade', f'Volume by grade this week{sfx}')],
                  'waste': [look('The latest week\'s waste by component and sub-reason', f'Waste breakdown this week{sfx}')]}[kind]
+        looks.append(look('The latest week\'s KPIs against the week before', f'Compare this week to last{sfx}'))
         return head, bullets, notes, looks
 
     def period_rollstock(self, tools, r):
@@ -909,7 +959,8 @@ class PeriodAnswer:
         head = f'**{f1(data["total_msf"])} MSF** of paper consumed{self.where(data)} · {f1(data["total_lineal_ft"])} ft over {n(data["paper_runs"])} paper runs {ref(r)}'
         bullets = []
         if data.get('previous_total_msf') is not None:
-            bullets.append(bullet(f'Previous window: **{f1(data["previous_total_msf"])} MSF** over {n(data["previous_paper_runs"])} paper runs · {signed(data["delta_msf"], "MSF")} MSF this window', r))
+            bullets.append(bullet(f'Previous window: **{f1(data["previous_total_msf"])} MSF** · {f1(data["previous_total_lineal_ft"])} ft over {n(data["previous_paper_runs"])} paper runs · '
+                                  f'{signed(data["delta_msf"], "MSF")} MSF this window', r))
         else:
             bullets.append(f'- Previous window unavailable {ref(r)}')
         order = sorted(((-x['msf'], i) for i, x in enumerate(rows) if x.get('msf') is not None))[:3]
@@ -927,7 +978,7 @@ class PeriodAnswer:
         if total is not None:
             x = rows[total]
             head = (f'**{x["overrun_pct"] + 0.0:+.2f}%** of nominal cuts across all knives{self.where(data)} · {f1(x["lines_inside_band_pct"])}% of lines inside '
-                    f'the ±{f2(data["band_pct"])}% band {ref(o, total)}')
+                    f'the band {ref(o, total)}')
         else:
             head = f'No customer lines in this window{self.where(data)} {ref(o)}'
         bullets = [bullet(f'{x["knife"]}: **{x["overrun_pct"] + 0.0:+.2f}%** of nominal cuts · {n(x["over_sheets"])} sheets over and {n(x["under_sheets"])} under · '

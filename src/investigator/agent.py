@@ -468,6 +468,7 @@ def period_plan(intent, window, named, group_by, current):
             "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
 
+FIRST_CHART = {'overview': 'get_wet_end_performance', 'compare': 'get_wet_end_performance'}   # intent -> the tool whose chart leads
 DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_end_performance': 'Wet-end speed vs grade target',
                       'get_quality_breakdown': 'Dry-end rejects by reason'}
 
@@ -817,6 +818,11 @@ class Agent:
                     charts.append({'type':'bar','source_result_id':result['result_id'],
                         'shift':component['shift'],'coverage':component['coverage'],
                         'x':x,'y':y,'unit':unit,'rows':deepcopy(component['rows']),'title':f"Shift {component['shift']} · {title}"})
+        # The chart for the answer's measure first (#75): a speed-led answer (why slow, compare) shows speed against
+        # grade target, then the downtime by reason that explains it. A stable sort: the order within each kind holds.
+        first = FIRST_CHART.get(request.get('intent'))
+        if first:
+            charts.sort(key=lambda c: 0 if store.get(c['source_result_id'], {}).get('tool') == first else 1)
         if status=='complete' and 'chart' in asked and not charts:
             status='partial'
             sections.insert(0,'The requested chart was not produced. The evidence below is available; try a specific speed, downtime or waste chart.')

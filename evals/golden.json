@@ -181,6 +181,9 @@
     "sections_match": [
      "^Slowest: .* at \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of its [0-9,]+ target",
      "^- .*: \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of target · [0-9,]+ setups \\(query 1 · row [0-9]+\\)$"
+    ],
+    "tables": [
+     "get_grade_totals"
     ]
    }
   },
@@ -335,7 +338,14 @@
      "get_grade_totals",
      "render_chart"
     ],
-    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* with stops · "
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* without stops · ",
+     "^- Speed with stops: \\*\\*[0-9.,]+ ft/min\\*\\* · "
+    ],
+    "tables": [
+     "get_grade_totals",
+     "get_period_kpis"
+    ]
    }
   },
   {
@@ -375,7 +385,14 @@
      "get_grade_totals",
      "render_chart"
     ],
-    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* with stops · [0-9.,]+ ft/min without · [+-][0-9.,]+ vs [0-9.,]+ ft/min, (better|worse|same)"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* without stops · [+-][0-9.,]+ vs [0-9.,]+ ft/min, (better|worse|same)",
+     "^- Speed with stops: \\*\\*[0-9.,]+ ft/min\\*\\* · [+-][0-9.,]+ vs [0-9.,]+ ft/min, (better|worse|same)"
+    ],
+    "tables": [
+     "get_grade_totals",
+     "get_period_kpis"
+    ]
    }
   },
   {
@@ -676,7 +693,14 @@
      "get_grade_totals",
      "render_chart"
     ],
-    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* with stops · "
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* without stops · ",
+     "^- Speed with stops: \\*\\*[0-9.,]+ ft/min\\*\\* · "
+    ],
+    "tables": [
+     "get_grade_totals",
+     "get_period_kpis"
+    ]
    }
   },
   {
@@ -1553,6 +1577,9 @@
     "sections_match": [
      "^Slowest: .* at \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of its [0-9,]+ target",
      "^- .*: \\*\\*[0-9.,]+ ft/min\\*\\* · [0-9.]+% of target · [0-9,]+ setups \\(query 1 · row [0-9]+\\)$"
+    ],
+    "tables": [
+     "get_grade_totals"
     ]
    }
   },
@@ -2020,7 +2047,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "^\\*\\*[0-9.,]+ MSF/day\\*\\* · [+-][0-9.,]+ vs [0-9.,]+ MSF/day"
+    "sections_match": "^\\*\\*[0-9.,]+ MSF/day\\*\\* · [+-][0-9.,]+ vs [0-9.,]+ MSF/day",
+    "tables": [
+     "compare_periods"
+    ]
    }
   },
   {
@@ -2144,6 +2174,9 @@
     "sections_match": [
      "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes",
      "^- .*: \\*\\*[0-9.,]+ min\\*\\* over [0-9,]+ stops · [0-9.]+%, cumulative [0-9.]+%"
+    ],
+    "tables": [
+     "get_downtime_pareto"
     ]
    }
   },
@@ -2199,7 +2232,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "^\\*\\*[0-9,]+ stops\\*\\* at .*, the largest of [0-9]+ places · [0-9.]+% of the window's stops"
+    "sections_match": "^\\*\\*[0-9,]+ stops\\*\\* at .*, the largest of [0-9]+ places · [0-9.]+% of the window's stops",
+    "tables": [
+     "get_downtime_pareto"
+    ]
    }
   },
   {
@@ -2223,7 +2259,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "^- Dry-end: bond: \\*\\*[0-9.]+%\\*\\* of gross · [0-9.,]+ sq ft"
+    "sections_match": "^- Dry-end: bond: \\*\\*[0-9.]+%\\*\\* of gross · [0-9.,]+ sq ft",
+    "tables": [
+     "get_waste_breakdown"
+    ]
    }
   },
   {
@@ -2276,6 +2315,9 @@
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste · previous [0-9.]+%, [-+][0-9.]+ points",
      "^- Shear chops: \\*\\*[0-9.]+%\\*\\* of gross · [0-9.,]+ sq ft · previous [0-9.]+%, [-+][0-9.]+ points"
+    ],
+    "tables": [
+     "get_waste_breakdown"
     ]
    }
   },
@@ -2304,6 +2346,9 @@
     "sections_match": [
      "^Weekday profile$",
      "^- Mon: \\*\\*[0-9.]+ stops per day\\*\\*"
+    ],
+    "tables": [
+     "get_stops_profile"
     ]
    }
   },
@@ -2332,6 +2377,9 @@
     "sections_match": [
      "^Weekday profile$",
      "^- Mon: \\*\\*[0-9.]+ stops per day\\*\\* · .* over 4 day\\(s\\)"
+    ],
+    "tables": [
+     "get_stops_profile"
     ]
    }
   },
@@ -2360,6 +2408,9 @@
     "sections_match": [
      "^\\*\\*[0-9.,]+ MSF\\*\\* across [0-9]+ grades \\(query 1\\)$",
      "^- .*: \\*\\*[0-9.,]+ MSF\\*\\* · [0-9.]+% of the volume · [+-][0-9.,]+ vs [0-9.,]+ MSF"
+    ],
+    "tables": [
+     "get_grade_totals"
     ]
    }
   },
@@ -2387,8 +2438,11 @@
     "charts": 1,
     "sections_match": [
      "^\\*\\*[0-9.,]+ MSF\\*\\* of paper consumed · [0-9.,]+ ft over [0-9,]+ paper runs",
-     "^- Previous window: \\*\\*[0-9.,]+ MSF\\*\\* over [0-9,]+ paper runs",
+     "^- Previous window: \\*\\*[0-9.,]+ MSF\\*\\* · [0-9.,]+ ft over [0-9,]+ paper runs",
      "^[0-9.,]+ ft per paper run\\.$"
+    ],
+    "tables": [
+     "get_rollstock"
     ]
    }
   },
@@ -2418,6 +2472,9 @@
     "sections_match": [
      "^\\*\\*[0-9.,]+ MSF\\*\\* of paper consumed · .* paper runs",
      "^The setups shift 2 ran on each paper run"
+    ],
+    "tables": [
+     "get_rollstock"
     ]
    }
   },
@@ -2469,8 +2526,12 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^\\*\\*[+-][0-9.]+%\\*\\* of nominal cuts across all knives · [0-9.]+% of lines inside the ±2\\.00% band",
-     "^- knife 1: \\*\\*[+-][0-9.]+%\\*\\* of nominal cuts"
+     "^\\*\\*[+-][0-9.]+%\\*\\* of nominal cuts across all knives · [0-9.]+% of lines inside the band",
+     "^- knife 1: \\*\\*[+-][0-9.]+%\\*\\* of nominal cuts",
+     "^Inside the band means actual cuts within \\+-2% of nominal"
+    ],
+    "tables": [
+     "get_overrun"
     ]
    }
   },
@@ -2522,7 +2583,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "[0-9,]+ setup stops, [0-9.]+% of its elapsed time \\(query 1 · row [0-9]+\\)$"
+    "sections_match": "[0-9,]+ setup stops, [0-9.]+% of its elapsed time \\(query 1 · row [0-9]+\\)$",
+    "tables": [
+     "get_grade_totals"
+    ]
    }
   },
   {
@@ -2547,7 +2611,10 @@
     ],
     "charts": 1,
     "sections_match": "^\\*\\*[0-9.,]+ ft/setup\\*\\* in the week of .*, the latest of [0-9]+ weeks of lineal per setup",
-    "max_ms": 500
+    "max_ms": 500,
+    "tables": [
+     "get_trend"
+    ]
    }
   },
   {
@@ -2574,7 +2641,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "^- Lineal per paper change \\(wet-end record\\): \\*\\*[0-9.,]+ ft/paper change\\*\\*"
+    "sections_match": "^- Lineal per paper change \\(wet-end record\\): \\*\\*[0-9.,]+ ft/paper change\\*\\*",
+    "tables": [
+     "get_period_kpis"
+    ]
    }
   },
   {
@@ -2603,6 +2673,9 @@
      "^Dry-end by reported sub-reason$",
      "^- Up warp \\(warp\\): \\*\\*[0-9.]+%\\*\\* of dry-end rejects · [0-9.,]+ sq ft",
      "^- Twist warp \\(warp\\): \\*\\*[0-9.]+%\\*\\* of dry-end rejects"
+    ],
+    "tables": [
+     "get_waste_breakdown"
     ]
    }
   },
@@ -2628,7 +2701,10 @@
     ],
     "charts": 1,
     "sections_match": "the latest of [0-9]+ weeks of moisture \\(query 1 · row [0-9]+\\)$",
-    "max_ms": 500
+    "max_ms": 500,
+    "tables": [
+     "get_trend"
+    ]
    }
   },
   {
@@ -2713,6 +2789,9 @@
      "^\\*\\*[0-9.,]+ hours\\*\\* if every cell ran at its best-fifth speed",
      "^Peak speeds are never used",
      "no temperatures"
+    ],
+    "tables": [
+     "get_speed_opportunity"
     ]
    }
   },
@@ -2740,7 +2819,10 @@
      }
     ],
     "charts": 1,
-    "sections_match": "^- .* · Crew [ABC]: \\*\\*[0-9.]+ hours\\*\\* · typical .* on the fast fifth vs .* on the rest"
+    "sections_match": "^- .* · Crew [ABC]: \\*\\*[0-9.]+ hours\\*\\* · typical .* on the fast fifth vs .* on the rest",
+    "tables": [
+     "get_speed_opportunity"
+    ]
    }
   },
   {
@@ -2792,6 +2874,9 @@
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in the week of .*, the latest of 4 weeks of downtime",
      "^- Week of 2026-08-24: \\*\\*[0-9.]+%\\*\\* of scheduled minutes, the first week of the series"
+    ],
+    "tables": [
+     "get_trend"
     ]
    }
   },
@@ -2818,7 +2903,10 @@
     ],
     "charts": 1,
     "sections_match": "^\\*\\*[0-9.]+ min/stop\\*\\* in the week of .*, the latest of [0-9]+ weeks of minutes per stop",
-    "max_ms": 500
+    "max_ms": 500,
+    "tables": [
+     "get_trend"
+    ]
    }
   },
   {
@@ -2846,7 +2934,10 @@
      "^\\*\\*[0-9.]+%\\*\\* of gross in the week of .*, the latest of 7 weeks of warp",
      "^Weeks without records: 2026-07-27\\.$"
     ],
-    "max_ms": 500
+    "max_ms": 500,
+    "tables": [
+     "get_trend"
+    ]
    }
   },
   {
@@ -3213,6 +3304,180 @@
      ]
     },
     "sections_not_match": "Totals by grade|Speed by grade, without stops"
+   }
+  },
+  {
+   "id": "speed-all-shifts-rank-follows-the-ranked-measure",
+   "type": "faithfulness",
+   "mode": "offline",
+   "day": "2026-08-05",
+   "scope": "day",
+   "question": "Show speed to target",
+   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-05 shift 3 is lowest in percent of target but not in ft/min (shift 2 ran 579.8 ft/min to its 595.2): the headline must not call its ft/min the lowest.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime on shift [123] · [0-9.]+% of grade target, the lowest of the three shifts \\(query [0-9]+ · row 0\\)$",
+    "sections_not_match": "ft/min\\*\\* including downtime on shift [123], the (lowest|lower)"
+   }
+  },
+  {
+   "id": "summary-all-shifts-rank-follows-the-ranked-measure",
+   "type": "faithfulness",
+   "mode": "offline",
+   "day": "2026-08-05",
+   "scope": "day",
+   "question": "Summarize this shift",
+   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 2 made fewer feet on 2026-08-05).",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "sections_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [123] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lowest of the three shifts",
+    "sections_not_match": "lineal ft\\*\\* on shift [123], the (lowest|lower)"
+   }
+  },
+  {
+   "id": "speed-run-over-target-is-the-highest-not-the-closest",
+   "type": "faithfulness",
+   "mode": "offline",
+   "day": "2026-08-10",
+   "shift": 3,
+   "question": "Show speed to target",
+   "note": "Issue #75 review: a run above its target (101.3% on 2026-08-10, shift 3) is the highest against target, not the closest to it (another run sits at 100.07%).",
+   "expect": {
+    "status": "complete",
+    "sections_match": "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the highest of [0-9]+ runs \\(query 2 · row [0-9]+\\)$",
+    "sections_not_match": "closest"
+   }
+  },
+  {
+   "id": "rankings-all-shifts-headline-is-the-extreme",
+   "type": "faithfulness",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Show rankings",
+   "note": "Issue #75 review: with all shifts, the rankings headline names the lowest speed attainment across the shifts (shift 3's WE20260914039 on 2026-09-14), not shift 1's first-ranked run.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of target on WE[0-9]+ on shift 3, the lowest speed attainment \\(query [0-9]+ · row 0\\)$",
+     "^- Shift 1, 1\\. WE[0-9]+: \\*\\*[0-9.]+% of target\\*\\*"
+    ]
+   }
+  },
+  {
+   "id": "analyst-mixed-plan-keeps-every-result",
+   "type": "grounding",
+   "mode": "offline",
+   "question": "Why was this shift slow?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_quality_breakdown",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason",
+       "kind": null
+      }
+     },
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   },
+   "note": "Issue #75 review: an analyst's own plan is shaped by the tools it ran (here the dry-end shape), and every other result keeps its own findings in the calculated evidence: the downtime reasons and the slowest run are not dropped.",
+   "expect": {
+    "status_in": [
+     "complete"
+    ],
+    "tool_calls": 4,
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross rejected at the dry end",
+     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, [0-9.]+% of the shift \\(query 3 · row 0\\)$",
+     "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the slowest of [0-9]+ runs \\(query 4 · row [0-9]+\\)$"
+    ]
+   }
+  },
+  {
+   "id": "analyst-mixed-period-plan-keeps-every-result",
+   "type": "grounding",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What changed this week?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": null
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     },
+     {
+      "tool": "get_trend",
+      "arguments": {
+       "metric": "trim_pct",
+       "weeks": 8,
+       "anchor": "2026-09-14",
+       "shift": null
+      }
+     }
+    ]
+   },
+   "note": "Issue #75 review: a mixed period plan answers in the trend's shape and keeps the Pareto and the waste breakdown as bullets with their own evidence.",
+   "expect": {
+    "status_in": [
+     "complete"
+    ],
+    "tool_calls": 3,
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in the week of 2026-09-14",
+     "^- All shifts: \\*\\*[0-9.,]+ min\\*\\* at .*\\(query 1 · row 0\\)$",
+     "^- All shifts: \\*\\*[0-9.]+%\\*\\* of gross in side trim.*\\(query 2 · row 0\\)$"
+    ]
    }
   },
   {

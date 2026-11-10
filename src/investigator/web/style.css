@@ -479,7 +479,8 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
 .message ul.findings li::marker,.look-list li::marker,.analyst-list li::marker{color:var(--ink-3)}
 .message p.label,.look .label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:8px 0 2px}
 .look{font-size:13.5px}.look:empty{display:none}
-.look .label{margin-top:0}
+.look .label{margin-top:6px}.look>.label:first-child{margin-top:0}
+.look p.context-line{margin:0 0 4px;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
 .look-list a.look-q{color:var(--brand)}
 button.more-bullets{min-height:24px;padding:0 10px;margin:0 0 6px 20px;font-size:12px}
 .analyst-list .kind{color:var(--ink-3);font-weight:600}

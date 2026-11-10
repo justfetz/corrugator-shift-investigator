@@ -288,18 +288,19 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  const asked=[];context.__asked=asked;vm.runInContext('var __ask=ask;ask=(q,o)=>{__asked.push([q,o]);return Promise.resolve();}',context);
  const rec={scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},corrupt:false};context.__rec=rec;
  vm.runInContext(`message('',${JSON.stringify(sections)},'',__rec)`,context);
- const msg=elements.messages.children[0], [head,list,more,label,subs,caveat]=msg.children;
+ const msg=elements.messages.children[0], [head,list,label,subs,more]=msg.children;
  assert.equal(head.className,'headline');assert.deepEqual(head.children.map(e=>[e.tag,e.className||'',e.textContent]),[['strong','figure','89.0%'],['span','clause',' of grade target · 616.2 ft/min including downtime'],['span','',' '],['a','ref','(query 1 · row 0)']]);
  assert.equal(head.children[3].href,'#query-0');                                                    // the evidence links to its query box
  assert.equal(list.tag,'ul');assert.equal(list.className,'findings');assert.equal(list.children.length,6);
  assert.ok(list.children.every(li=>li.children.filter(e=>e.className==='figure').length===1));    // exactly one bold figure per finding
  assert.deepEqual(list.children.map(li=>li.children.find(e=>e.className==='ref').href),['#query-1','#query-1','#query-1','#query-1','#query-1','#query-1']);
- assert.deepEqual(list.children.map(li=>!!li.hidden),[false,false,false,false,false,true]);        // three to five shown; a sixth folds under "more"
- assert.equal(more.textContent,'1 more');more.events.click();assert.ok(list.children.every(li=>!li.hidden));assert.equal(more.textContent,'Fewer');more.events.click();assert.equal(list.children[5].hidden,true);
+ assert.deepEqual(list.children.map(li=>!!li.hidden),[false,false,false,false,false,true]);        // five findings per card; the sixth folds under "more"
  assert.equal(label.className,'label');assert.equal(label.textContent,'Reported sub-reasons');      // a label line in small caps
+ assert.ok(label.hidden&&subs.hidden,'a list with nothing left to show folds with its label: the fold is per card, not per list');
+ assert.equal(more.textContent,'2 more');more.events.click();assert.ok(list.children.every(li=>!li.hidden)&&!label.hidden&&!subs.hidden);assert.equal(more.textContent,'Fewer');more.events.click();assert.ok(list.children[5].hidden&&subs.hidden);
  assert.equal(subs.children[0].children.find(e=>e.className==='ref').textContent,'(query 2 · detail 0)');
- assert.equal(caveat.tag,'p');assert.equal(caveat.className,undefined);
- const [lookLabel,lookList]=elements.look.children;
+ const [caveat,lookLabel,lookList]=elements.look.children;
+ assert.equal(caveat.className,'context-line');   // a plain line after the findings reads under the charts, so the chart follows the findings
  assert.equal(lookLabel.textContent,'Where to look');assert.equal(lookLabel.className,'label');assert.equal(lookList.className,'look-list');
  const link=lookList.children[0].children[2];assert.equal(link.className,'look-q');assert.equal(link.textContent,'“Show the setup matrix”');
  assert.ok(link.href.startsWith('/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Show+the+setup+matrix'),link.href);   // an address: a modifier click opens it in a new tab

@@ -41,13 +41,17 @@ function shapedInline(text,headline=false){
  if(ref){ out.push(node('span',' ')); out.push(refLink(ref[0].trim(),Number(ref[1]))); }
  return out;
 }
-function foldList(list){
- const items=[...list.children];
- if(items.length<=BULLETS_SHOWN)return null;
- const hidden=items.slice(BULLETS_SHOWN); for(const li of hidden)li.hidden=true;
+// Three to five findings per card (#75): past the fifth bullet of the card's finding lists the rest fold under one
+// "N more"; a list left with nothing shown folds with its label.
+function foldFindings(e,lists){
+ const items=lists.flatMap(l=>[...l.children]); if(items.length<=BULLETS_SHOWN)return;
+ const hidden=items.slice(BULLETS_SHOWN), kids=[...e.children], folded=[];
+ for(const li of hidden)li.hidden=true;
+ for(const l of lists){ if(![...l.children].every(li=>li.hidden))continue; folded.push(l); const at=kids.indexOf(l), label=kids[at-1]; if(label&&label.className==='label')folded.push(label); }
+ for(const f of folded)f.hidden=true;
  const more=node('button',`${hidden.length} more`,'secondary more-bullets'); more.type='button'; more.setAttribute('aria-expanded','false');
- more.addEventListener('click',()=>{ const show=hidden.some(li=>li.hidden); for(const li of hidden)li.hidden=!show; more.textContent=show?'Fewer':`${hidden.length} more`; more.setAttribute('aria-expanded',String(show)); });
- return more;
+ more.addEventListener('click',()=>{ const show=hidden.some(li=>li.hidden); for(const x of [...hidden,...folded])x.hidden=!show; more.textContent=show?'Fewer':`${hidden.length} more`; more.setAttribute('aria-expanded',String(show)); });
+ const last=lists[lists.length-1]; if(typeof last.after==='function')last.after(more); else e.children.splice(e.children.indexOf(last)+1,0,more);
 }
 function lookItem(text,rec){
  const m=SHAPE_LOOK.exec(text), li=node('li');
@@ -62,27 +66,33 @@ function lookItem(text,rec){
  li.append(node('span',m[1]),node('span',' → '),a);
  return li;
 }
+// A plain line after the findings (the window and its coverage, a tool's note, a caveat) reads under the charts, in the
+// secondary ink above where to look, so the chart follows the findings directly; a data-quality warning stays with them.
+const STAYS=/data incomplete|withheld|unavailable/i;
 function message(label, paragraphs, cls='', rec=null) {
  const e=node('div',undefined,'message '+cls);if(label)e.append(node('strong',label));
  let notes=null, list=null, look=null, headline=false; // consecutive shift-note lines fold into one disclosure instead of a dump
- const lists=[], groups=[];
+ const lists=[], groups=[], context=[], looks=[];
  paragraphs.forEach((p,i)=>{
   const next=paragraphs[i+1];
   if(NOTE_LINE.test(p)){ list=look=null; if(!notes){notes=node('details',undefined,'note-group');notes.append(node('summary'));e.append(notes);groups.push(notes);} notes.append(node('p',p)); notes.children[0].textContent=`${notes.children.length-1} reported note${notes.children.length-1===1?'':'s'} (synthetic, unverified — observations, not causes)`; return; }
   notes=null;
-  if(p===LOOK_LABEL&&next&&next.startsWith('- ')){   // where to look: under the charts
-   list=null; const box=$('look'); box.replaceChildren(node('h3',LOOK_LABEL,'label')); look=node('ul',undefined,'look-list'); box.append(look); lists.push([look,box]); return;
-  }
-  if(look&&p.startsWith('- ')){ look.append(lookItem(p.slice(2),rec)); return; }
+  if(p===LOOK_LABEL&&next&&next.startsWith('- ')){ list=null; look=node('ul',undefined,'look-list'); return; }   // where to look: under the charts
+  if(look&&p.startsWith('- ')){ look.append(lookItem(p.slice(2),rec)); if(!looks.includes(look))looks.push(look); return; }
   look=null;
-  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push([list,e]);} const li=node('li');li.append(...shapedInline(p.slice(2)));list.append(li); return; }
+  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2)));list.append(li); return; }
   list=null;
   if(shapeLabel(p,next)){ e.append(node('p',p,'label')); return; }
   if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true)); e.append(h); return; }
+  if(lists.length&&!STAYS.test(p)){ context.push(node('p',p,'context-line')); return; }
   e.append(node('p',p));
  });
- for(const [l,box] of lists){ const more=foldList(l); if(!more)continue; if(typeof l.after==='function')l.after(more); else box.children.splice(box.children.indexOf(l)+1,0,more); }
- if(!lists.some(([,box])=>box===e))for(const g of groups)g.open=true;   // no findings (the notes question): the notes are the answer
+ foldFindings(e,lists);
+ if(context.length||looks.length){
+  const box=$('look'); box.replaceChildren(...context);
+  if(looks.length)box.append(node('h3',LOOK_LABEL,'label'),...looks);
+ }
+ if(!lists.length)for(const g of groups)g.open=true;   // no findings (the notes question): the notes are the answer
  $('messages').append(e);
  return e;
 }
@@ -358,7 +368,8 @@ function barChart(chart,wrap){
 }
 // Wet-end speed: bars with the grade-target mark; long lists show the five best and five worst by % of target.
 function speedChart(chart,wrap){
- const all=chart.rows, long=all.length>10; let showAll=!long;
+ // grades read slowest first against their targets, as the answer's bullets do (#75); the rows themselves are the tool's
+ const all=chart.x==='grade'?[...chart.rows].sort((a,b)=>(a.speed_to_target_pct??0)-(b.speed_to_target_pct??0)):chart.rows, long=all.length>10; let showAll=!long;
  const box=node('div',undefined,'speed-box'); wrap.append(box);
  const rh=long?22:30, bh=long?12:16, by=(rh-bh)/2, ty=rh/2+4;   // a long list is drawn on tighter rows so the card keeps its tiles above the fold (#63)
  const draw=()=>{
@@ -944,6 +955,7 @@ function typedLines(summary){
  const out=[];
  for(const e of summary.children?[...summary.children]:[]){
   const tag=String(e.tag||e.tagName||'').toLowerCase();
+  if(e.hidden)continue;   // folded under "more": shown as it is when opened
   if(tag==='p')out.push(e);
   else if(tag==='ul')for(const li of [...e.children])if(!li.hidden)out.push(li);
  }
