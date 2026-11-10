@@ -365,7 +365,7 @@ const issue63=issue17.then(async()=>{
  // an offline question is a GET of its /q address (#20); a live one POSTs /api/ask. Each request waits on its gate.
  context.fetch=(path,init)=>new Promise(resolve=>{
   let body;if(init&&init.body)body=JSON.parse(init.body);else{const q=new URLSearchParams(path.split('?')[1]||'');body={get:path,question:q.get('q'),day:q.get('day'),shift:Number(q.get('shift')),corrupt:q.get('corrupt')==='1',after:q.getAll('after'),mode:'offline',scope:q.get('scope'),period:q.get('period')};}
-  const n=bodies.push(body), url=body.get?`/corr/1/day/${body.day}/shift/${body.shift}?measure=m${n}`+body.after.map(x=>'&after='+encodeURIComponent(x)).join(''):undefined;   // the canonical url carries its priors, as the server's does
+  const n=bodies.push(body), url=body.get?`/corr/1/day/${body.day}/shift/${body.shift}?measure=m${n}`+body.after.map(x=>'&after='+x).join(''):undefined;   // the canonical url carries its priors unencoded, each with its own '?', as the server writes them
   gates.push({ok:()=>resolve({ok:true,status:200,json:async()=>Object.assign(answer(n),url?{url}:{})}),fail:message=>resolve({ok:false,status:400,json:async()=>({error:message})})});});
  const tick=()=>new Promise(r=>setTimeout(r,0));
  vm.runInContext(`config={days:${JSON.stringify(storeDays)},first_day:'2026-09-11',token:'t',live_modes:[],demo_guards:{rate_limit_per_min:30}};acceptedDay='2026-09-14'`,context);   // a rate limit: no priming call

@@ -118,15 +118,19 @@ function questionUrl(question,s=controls(),priors=conversation){
 }
 function reportUrl(s=controls(),priors=conversation){ const p=new URLSearchParams([['measure','report']]); if(s.corrupt)p.append('corrupt','1'); afterParams(p,priors); return scopeUrl(s)+'?'+p.toString(); }
 function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
-function bareUrl(url){ const [path,query='']=url.split('?'); const p=new URLSearchParams(query); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
-function priorsOf(url){ return new URLSearchParams(url.split('?')[1]||'').getAll('after'); }
+// The query is everything after the first '?': the server writes after= values unencoded, and each holds its own '?'
+// (…?measure=fpm&after=/corr/1/day/2026-09-14/shift/2?measure=overview), so splitting on every '?' loses the priors.
+function pathOf(url){ const i=url.indexOf('?'); return i<0?url:url.slice(0,i); }
+function queryOf(url){ const i=url.indexOf('?'); return new URLSearchParams(i<0?'':url.slice(i+1)); }
+function bareUrl(url){ const path=pathOf(url), p=queryOf(url); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
+function priorsOf(url){ return queryOf(url).getAll('after'); }
 const MAX_AFTER=8;   // the grammar carries at most eight prior views (urls.MAX_AFTER); the agent keeps its own max_turns
 function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.min(MAX_AFTER,Math.max(0,(turns||4)-1)); }
 function currentAddress(){ return nav?nav.location.pathname+nav.location.search:null; }
 // Set the controls from a canonical address; false when the address is not one.
 function applyUrl(url){
- const m=CANONICAL.exec(url.split('?')[0]); if(!m)return false;
- const query=new URLSearchParams(url.split('?')[1]||'');
+ const m=CANONICAL.exec(pathOf(url)); if(!m)return false;
+ const query=queryOf(url);
  $('period').value=GRAIN_PERIOD[m[1]]; $('day').value=m[2]; acceptedDay=m[2];
  if(m[3]){$('scope').value='shift';$('shift').value=m[3];} else $('scope').value='day';
  $('corrupt').checked=query.get('corrupt')==='1';
@@ -142,12 +146,12 @@ async function restore(url){
  renderQuestionChips(); sessionEpoch++; sessionId=null; $('api-key').value='';   // the scope may have changed under the open card: a fresh server conversation
  const held=thread.find(r=>r.state==='done'&&r.url===url);
  if(held){ held.epoch=sessionEpoch; openId=held.id; followView(url,!held.report); renderCard(); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
- if(!new URLSearchParams(url.split('?')[1]||'').has('measure')){ openId=null; conversation=[]; renderCard(); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
+ if(!queryOf(url).has('measure')){ openId=null; conversation=[]; renderCard(); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
  // Nothing is disabled while this loads, so the conversation is this address's own priors from now on: a question
  // asked meanwhile, or a chip link, never carries the previous day's views (the grammar refuses those).
  conversation=priorsOf(url).slice(-maxPriors());
  $('status').textContent='Loading this address…';
- const scope=currentScope(), epoch=sessionEpoch, rec={id:++seq,question:bareUrl(url),title:bareUrl(url),scope,answered:null,mode:'offline',report:new URLSearchParams(url.split('?')[1]||'').get('measure')==='report',corrupt:$('corrupt').checked,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
+ const scope=currentScope(), epoch=sessionEpoch, rec={id:++seq,question:bareUrl(url),title:bareUrl(url),scope,answered:null,mode:'offline',report:queryOf(url).get('measure')==='report',corrupt:$('corrupt').checked,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
  thread.push(rec); openId=rec.id; renderCard(); updateScope();
  try{
   const response=await fetch(url,{headers:{Accept:'application/json'}});
@@ -809,7 +813,7 @@ async function init(){
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
  if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
  const address=currentAddress();
- if(!(address&&CANONICAL.test(address.split('?')[0])&&await restore(address))){pushAddress(scopeUrl(),true);primeKpis();}
+ if(!(address&&CANONICAL.test(pathOf(address))&&await restore(address))){pushAddress(scopeUrl(),true);primeKpis();}
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question,{mode:'offline'});}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}
