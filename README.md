@@ -12,6 +12,7 @@ For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics
 | Install, run, ask questions, and read reports | [Workbench how-to](docs/WORKBENCH.md) |
 | Check a formula, target, calendar boundary, or heatmap color | [Metrics and interpretation](docs/METRICS.md) |
 | Understand the agent, tools, context and data flow | [Execution walkthrough](docs/AGENT_EXECUTION.md) and [agent contract](docs/AGENT_CONTRACT.md) |
+| Link to a question: the URL grammar every offline view has (the Datasette model) | [URLs](docs/URLS.md) |
 | Use a key and understand the spending guard | [OpenAI/BYOK](docs/OPENAI_BYOK.md) |
 | Run the hosted demo on Anthropic with the server's key, rate limit and daily cap | [Anthropic demo](docs/ANTHROPIC_DEMO.md) |
 | Recover from an error or unexpected answer | [Troubleshooting](docs/TROUBLESHOOTING.md) |
@@ -26,7 +27,7 @@ The public demo is on Google Cloud Run: <https://corrugator-shift-investigator-6
 ```bash
 pip install -e . pytest                              # Python >= 3.11; the dependencies are duckdb and reportlab
 python -m investigator.server --port 7860            # the workbench at http://127.0.0.1:7860
-python -m pytest -q                                  # 479 tests, about a minute
+python -m pytest -q                                  # 621 tests, about two minutes
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
 python3 evals/run.py                                 # the golden set: 160 cases offline in a few seconds; the regression gate
 python3 evals/run.py --live --provider anthropic     # the live cases against a real model; needs ANTHROPIC_API_KEY, costs cents

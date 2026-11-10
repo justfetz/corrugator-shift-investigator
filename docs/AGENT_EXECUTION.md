@@ -4,7 +4,7 @@ This describes the implemented code as reviewed September 7, 2026. It replaces t
 
 ## Three execution paths
 
-1. **Production day / Offline:** the application parses a supported question pattern and runs a predetermined bounded tool plan.
+1. **Production day / Offline:** the application parses a supported question pattern and runs a predetermined bounded tool plan. Since issue #20 every such view is a URL ([URLS](URLS.md)): the browser sends the question as `GET /q?…&q=`, the server redirects to the canonical address and answers it, and the address bar is kept equal to it.
 2. **Production day / OpenAI:** the provider chooses one function at a time; application code validates scope, executes queries, and formats the numerical answer.
 3. **Week, month, accounting:** the server calls PeriodReports directly. There is no model call, natural-language planning, or provider permission on this path.
 
@@ -14,7 +14,7 @@ Choosing OpenAI does not add new calculation tools, dates, or production authori
 
 In the UI, choose September 14, shift 2, Selected shift only, Production day, and Offline. Ask "Why was this shift slow? Chart downtime by reason."
 
-The browser POSTs JSON to /api/ask with question, day, shift, scope, period, mode, corrupt, and optional session_id. It sends the workbench token in a header. A live BYOK request also uses X-OpenAI-Key, which is kept out of the JSON and cleared from the field on submit.
+In offline mode the browser sends `GET /q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F…` with `Accept: application/json`; the server parses the question with the offline router, answers `302 Location: /corr/1/day/2026-09-14/shift/2?measure=overview`, and that address returns the answer (the browser then pushes it with `history.pushState`). No token and no session: the state is the address. A live round POSTs JSON to /api/ask with question, day, shift, scope, period, mode, corrupt, and optional session_id, with the workbench token in a header; a live BYOK request also uses X-OpenAI-Key, which is kept out of the JSON and cleared from the field on submit.
 
 The server validates the request before selecting a dataset: the day must be one of the store's Monday–Friday production days (a weekend or out-of-range date is a 400 with the reason). `RecordStore.day_analysis` builds that day's private in-memory DuckDB tables from the record families. Up to three day/scenario Analysis objects are retained by the server.
 
@@ -109,6 +109,6 @@ Heatmap rows contain the date, availability, output, percentages, counts, and he
 
 ## Delivery and limitations
 
-The server retains the latest result for up to 32 sessions. Save text contains narrative sections and limitations, not all evidence tables. PDF uses the retained session/run reference and adds summary tables; no model call is made for export. The heatmap title fallback is repaired; daily and period PDF byte/access regression tests pass. Visual layout certification remains pending.
+The server retains the latest result for up to 32 live sessions. Save text contains narrative sections and limitations, not all evidence tables. The PDF of an addressed (offline) answer is the same address with `format=pdf`, rendered on request on any instance; a live answer's PDF uses the retained session/run reference. Neither makes a model call for export. The heatmap title fallback is repaired; daily and period PDF byte/access regression tests pass. Visual layout certification remains pending.
 
 No email, schedule write, equipment action, web search or external market feed exists. Public deployment requires a separate implementation pass. The current local server, tokens, cache and rate limit are not a multi-user production service.

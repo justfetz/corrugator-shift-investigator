@@ -100,6 +100,67 @@ function selectShift(value){
  else { if($('scope').value==='shift'&&$('shift').value===value)return; $('scope').value='shift'; $('shift').value=value; }
  rescope();
 }
+// ---- Addresses (issue #20): every offline view is one URL and the address bar always equals it. The path is
+// the controls (/corr/<machine>/<day|week|month|period>/<date>[/shift/<n>]), the query is the question's plan;
+// a typed question goes to /q?...&q= and the server redirects to the canonical URL (docs/URLS.md).
+const GRAIN={day:'day',week:'week',month:'month',accounting:'period'}, GRAIN_PERIOD={day:'day',week:'week',month:'month',period:'accounting'};
+const CANONICAL=/^\/corr\/[^/]+\/(day|week|month|period)\/(\d{4}-\d{2}-\d{2})(?:\/shift\/([123]))?(?:\.json)?$/;
+const nav=(typeof window!=='undefined'&&window.history&&window.location)?window:null;
+let conversation=[];     // this conversation's earlier views, carried as after= so offline follow-ups need no session
+let navigating=false;    // restoring a view from the address: controls follow the URL, nothing is pushed
+function machine(){ return (config&&config.machine)||'1'; }
+// The controls as an address needs them, read when a question is asked: a queued question keeps the scope it was asked under.
+function controls(){ return {day:$('day').value,shift:$('shift').value,scope:$('scope').value,period:$('period').value,corrupt:$('corrupt').checked}; }
+function scopeUrl(s=controls()){ return `/corr/${machine()}/${GRAIN[s.period]||'day'}/${s.day}`+(s.scope==='shift'?`/shift/${s.shift}`:''); }
+function afterParams(p,priors=conversation){ for(const a of priors)p.append('after',a); }
+function questionUrl(question,s=controls(),priors=conversation){
+ const p=new URLSearchParams([['day',s.day],['shift',String(s.shift)],['scope',s.scope],['period',s.period]]);
+ if(s.corrupt)p.append('corrupt','1'); p.append('q',question); afterParams(p,priors); return '/q?'+p.toString();
+}
+function reportUrl(s=controls(),priors=conversation){ const p=new URLSearchParams([['measure','report']]); if(s.corrupt)p.append('corrupt','1'); afterParams(p,priors); return scopeUrl(s)+'?'+p.toString(); }
+function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
+function bareUrl(url){ const [path,query='']=url.split('?'); const p=new URLSearchParams(query); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
+function priorsOf(url){ return new URLSearchParams(url.split('?')[1]||'').getAll('after'); }
+const MAX_AFTER=8;   // the grammar carries at most eight prior views (urls.MAX_AFTER); the agent keeps its own max_turns
+function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.min(MAX_AFTER,Math.max(0,(turns||4)-1)); }
+function currentAddress(){ return nav?nav.location.pathname+nav.location.search:null; }
+// Set the controls from a canonical address; false when the address is not one.
+function applyUrl(url){
+ const m=CANONICAL.exec(url.split('?')[0]); if(!m)return false;
+ const query=new URLSearchParams(url.split('?')[1]||'');
+ $('period').value=GRAIN_PERIOD[m[1]]; $('day').value=m[2]; acceptedDay=m[2];
+ if(m[3]){$('scope').value='shift';$('shift').value=m[3];} else $('scope').value='day';
+ $('corrupt').checked=query.get('corrupt')==='1';
+ return true;
+}
+function pushAddress(url,replace=false){ if(!nav||navigating||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
+function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?[bareUrl(url)]:[])].slice(-maxPriors()); }   // follow=false: the period report is a view, not a question in the conversation
+// Back, forward or a pasted address: the controls follow the URL, and the view becomes the open card of the
+// thread. A view this page has shown opens its card again without a request; any other is fetched as JSON from
+// the same address and lands in a new card, through the same render entry as an asked question.
+async function restore(url){
+ if(!applyUrl(url))return false;
+ navigating=true;
+ try{
+  renderQuestionChips(); sessionEpoch++; sessionId=null; $('api-key').value='';   // the scope may have changed under the open card: a fresh server conversation
+  const held=thread.find(r=>r.state==='done'&&r.url===url);
+  if(held){ openId=held.id; followView(url,!held.report); renderCard(); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
+  if(!new URLSearchParams(url.split('?')[1]||'').has('measure')){ openId=null; conversation=[]; renderCard(); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
+  $('status').textContent='Loading this address…';
+  const scope=currentScope(), rec={id:++seq,question:bareUrl(url),title:bareUrl(url),scope,answered:null,mode:'offline',report:new URLSearchParams(url.split('?')[1]||'').get('measure')==='report',corrupt:$('corrupt').checked,epoch:sessionEpoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
+  thread.push(rec); openId=rec.id; renderCard(); updateScope();
+  try{
+   const response=await fetch(url,{headers:{Accept:'application/json'}});
+   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
+   rec.url=result.url||url; rec.question=rec.title=bareUrl(rec.url); followView(rec.url,!rec.report);
+   if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url);   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
+   land(rec,result); $('status').textContent=readyText();
+  }catch(error){ rec.error=error.message; rec.state='error'; settleCard(rec); $('status').textContent='Ready to retry'; }
+  finally{ updateScope(); }
+  return true;
+ }finally{navigating=false;}
+}
+if(nav&&nav.addEventListener)nav.addEventListener('popstate',()=>{restore(currentAddress()).catch(()=>{});});
 function periodChanged(){ renderQuestionChips(); rescope(); }
 let acceptedDay=null;
 function dayChanged(){
@@ -127,8 +188,11 @@ function updateScope(){
  $('question').placeholder=ranged?`Ask about this ${noun}: KPIs, downtime, waste, stops per day, trends, grades`:'Ask about this shift: speed, downtime, waste, setups, orders, notes';
  $('submit').textContent='Ask'; $('report').hidden=!ranged;
  $('analyst').hidden=!analystMode();   // Ask the analyst is the only live path: the agent chosen under "Agent and advanced", or else the one the server's own key enables
- for(const b of chipButtons)b.hidden=ranged&&b.dataset.period==='day';   // the per-shift matrices have no period form
+ for(const b of chipButtons){ b.hidden=ranged&&b.dataset.period==='day'; chipHref(b); }   // the per-shift matrices have no period form
 }
+// A canned question is a link to its address in the current scope (/q?...&q=, with the conversation's after=): copy it or
+// open it in a new tab, or click it here.
+function chipHref(b){ b.href=questionUrl(b.dataset.question,{...controls(),...(b.dataset.scope?{scope:b.dataset.scope}:{})}); }
 
 // ---- Canned questions (the rail's "Ask in one click"). Each is a phrasing the offline planner routes to fixed,
 // parameterized tools, and a click always asks offline: no model, no wait. "{period}" is the window word of the
@@ -160,8 +224,11 @@ function renderQuestionChips(){
  const word=periodWord();
  for(const [label,text,scope,period,primary] of QUESTIONS){
   const question=text.replaceAll('{period}',word), shown=label.replaceAll('{period}',word);
-  const b=node('button',shown,'canned'); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question;
-  b.addEventListener('click',()=>{ if(b.dataset.scope&&$('scope').value!==b.dataset.scope){$('scope').value=b.dataset.scope;rescope();} const sheet=railOpen(); closeRail(); ask(question,{mode:'offline',title:shown}).catch(()=>{}); if(sheet)focusCard(); });
+  const b=node('a',shown,'canned'); b.setAttribute('role','button'); b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question; chipHref(b);
+  b.addEventListener('click',event=>{
+   if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return;   // a modifier click opens the link as the browser would (new tab, window)
+   if(event&&event.preventDefault)event.preventDefault();
+   if(b.dataset.scope&&$('scope').value!==b.dataset.scope){$('scope').value=b.dataset.scope;rescope();} const sheet=railOpen(); closeRail(); ask(question,{mode:'offline',title:shown}).catch(()=>{}); if(sheet)focusCard(); });
   (primary?short:more).append(b); chipButtons.push(b);
  }
 }
@@ -441,15 +508,16 @@ async function post(path,body,extraHeaders={}){
 
 async function primeKpis(){
  const token=++primeToken, question=primeQuestion();
- if(!config||!question||thread.length||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;   // the tiles are the idle card's content; an asked question owns the card
+ if(!config||!question||openId!==null||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;   // the tiles are the idle card's content; an asked question owns the card
  try{
-  const response=await post('/api/ask',{question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:$('period').value});
+  // The scope's tiles are the KPI measure of the scope's own address; the address bar is not moved for them.
+  const response=await fetch(withQuery(scopeUrl()+'.json','measure=kpis'+($('corrupt').checked?'&corrupt=1':'')),{headers:{Accept:'application/json'}});
   const result=await response.json();
-  if(token!==primeToken||thread.length||!response.ok||!Array.isArray(result.trace))return;
+  if(token!==primeToken||openId!==null||!response.ok||!Array.isArray(result.trace))return;
   const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
   if(!entry)return;
   renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
-  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
+  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”, the address ${result.url||''}. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
 
@@ -546,7 +614,7 @@ function showResult(result) {
 // tiles and exports fill the fixed containers of #card. Earlier answers are one line each under it, newest on
 // top, with an Open button. Submitting draws the open card as a skeleton in the same task as the click, and
 // the answer fills that card in place; nothing on the page is disabled while a question is out. The thread
-// lives in this page's memory only (permalinks are issue #20).
+// lives in this page's memory; an offline answer's address is in the address bar (issue #20, restore() above).
 let thread=[], openId=null, seq=0, sessionEpoch=0;
 let queue=Promise.resolve();   // questions go to the server one at a time, in the order asked, so each carries the session the one before it left
 const latestRun=new Map();   // session id -> its latest run id: the only run /api/report can still print
@@ -613,7 +681,7 @@ function paintMeta(rec){
  const r=rec.result, server=typeof r.elapsed_ms==='number'?r.elapsed_ms:(r.trace||[]).reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
  meta.title=`${Math.round(rec.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${r.mode}.`;
 }
-function syncPdf(){ if(latest)$('pdf').hidden=latestRun.get(latest.session_id)!==latest.run_id; }   // the server prints a session's latest run only; re-checked when another answer lands
+function syncPdf(){ if(latest)$('pdf').hidden=!latest.url&&latestRun.get(latest.session_id)!==latest.run_id; }   // an addressed answer prints from its address; a model's answer only while it is its session's latest run (re-checked when another lands)
 function focusCard(){ try{$('card-title').focus?.();}catch(e){} }   // keyboard focus follows the card when the control that had it goes away
 function renderCard(){
  const rec=thread.find(r=>r.id===openId)||null, card=$('card');
@@ -631,8 +699,17 @@ function renderCard(){
  }
  renderEarlier();
 }
-// Ask is the deterministic path: the offline planner, whatever agent is chosen under "Agent and advanced". "Ask the
-// analyst" is the only live path; it passes the agent as `mode`. A report is always offline.
+// The one render entry for an answer, asked or opened from an address: the record takes the result and its card
+// (open or one line in the thread) is drawn again. The ms is submit to rendered.
+function settleCard(rec){ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} }
+function land(rec,result){
+ if(result.session_id)latestRun.set(result.session_id,result.run_id);
+ rec.result=result; rec.answered=answeredScope(rec.scope,result); rec.state='done'; settleCard(rec);
+}
+// Ask is the deterministic path: the offline planner, whatever agent is chosen under "Agent and advanced"; it is a
+// GET of the question's address (/q, which the server redirects to the canonical URL), and the answer's URL goes in
+// the address bar. "Ask the analyst" is the only live path: it passes the agent as `mode` and POSTs /api/ask, whose
+// session carries the follow-up history; a model's answer is not an address. A report is always offline.
 async function ask(question,{report=false,mode='offline',title}={}) {
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
  if(!config)throw new Error('The workbench is still loading');
@@ -641,33 +718,38 @@ async function ask(question,{report=false,mode='offline',title}={}) {
  // request. Nothing is disabled to prevent it, so this is what keeps a second paid round from going out.
  const twin=thread.find(r=>r.state==='pending'&&r.epoch===epoch&&r.question===question&&r.mode===recMode&&r.report===report&&r.corrupt===corrupt&&['day','period','shift','scope'].every(k=>r.scope[k]===scope[k]));
  if(twin){ if(openId!==twin.id){openId=twin.id;renderCard();} return twin.done; }
- const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null};
+ const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
  thread.push(rec);openId=rec.id;renderCard();   // the skeleton card is in the DOM before this task yields: within one frame of the submit
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
- const settle=()=>{ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} };   // the ms is submit to rendered
  // What the visitor chose is read now; the request itself waits its turn. Two questions out at once would both carry
- // the session as it was before either was answered (or none, and open two), and the follow-up context would lose one.
- const headers={}, p=PROVIDERS[rec.mode]||null, turn=queue; let release; queue=new Promise(resolve=>{release=resolve;});
+ // the conversation as it was before either was answered, and the follow-up context would lose one.
+ const headers={}, p=PROVIDERS[rec.mode]||null, turn=queue, address={...controls(),corrupt}; let release; queue=new Promise(resolve=>{release=resolve;});
  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
  if(p)$('api-key').value='';   // the key is cleared when it is sent; an offline question leaves it for the analyst
  rec.done=(async()=>{
   try{
    await turn;
-   const body={question,day:scope.day,shift:scope.shift,corrupt,session_id:epoch===sessionEpoch?sessionId:null,mode:rec.mode,scope:scope.scope,period:scope.period};
-   if(report)body.report=true;
-   const pending=post('/api/ask',body,headers);
-   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
-   const response=await pending;
+   const current=epoch===sessionEpoch;   // the scope did not change while this waited: it continues the conversation
+   let response;
+   if(p){
+    const body={question,day:scope.day,shift:scope.shift,corrupt,session_id:current?sessionId:null,mode:rec.mode,scope:scope.scope,period:scope.period};
+    const pending=post('/api/ask',body,headers);
+    for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
+    response=await pending;
+   }else{
+    const priors=current?conversation:[];
+    response=await fetch(report?reportUrl(address,priors):questionUrl(question,address,priors),{headers:{Accept:'application/json'}});
+   }
    const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-   if(epoch===sessionEpoch){   // the scope did not change while this was out: the answer continues the conversation
+   if(p&&current){
     if(result.session_reset&&sessionId)rec.note='The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.';
     sessionId=result.session_id;
    }
-   if(result.session_id)latestRun.set(result.session_id,result.run_id);
-   rec.result=result;rec.answered=answeredScope(scope,result);rec.state='done';settle();
+   if(!p&&result.url){ rec.url=result.url; if(current){ followView(result.url,!report); if(openId===rec.id)pushAddress(result.url); } }
+   land(rec,result);
    $('status').textContent=readyText();
-   return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
-  }catch(error){rec.error=error.message;rec.state='error';settle();$('status').textContent='Ready to retry';throw error;}
+   return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts,url:result.url};
+  }catch(error){rec.error=error.message;rec.state='error';settleCard(rec);$('status').textContent='Ready to retry';throw error;}
   finally{release();updateScope();}
  })();
  return rec.done;
@@ -686,13 +768,15 @@ $('rail').addEventListener('keydown',event=>{ if(event.key==='Escape'&&railOpen(
 $('came-back').addEventListener('click',()=>{ $('execution').open=true; });
 // A scope change starts a new server conversation (the follow-up context belongs to the old scope) but keeps the
 // thread: every card carries its own scope in its title line. Only "Clear the thread" empties it.
-function rescope(){ sessionEpoch++;sessionId=null;$('api-key').value='';$('status').textContent=readyText();if(!thread.length)renderCard();updateScope();primeKpis(); }
+function rescope(){ sessionEpoch++;sessionId=null;conversation=[];$('api-key').value='';pushAddress(scopeUrl());$('status').textContent=readyText();if(!thread.length)renderCard();updateScope();primeKpis(); }
 function reset(){ thread=[];openId=null;renderCard();rescope(); }
 $('mode').addEventListener('change',()=>{rescope();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: Ask the analyst has ${p.name} choose which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted. Ask and the canned questions stay offline.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges. Ask and the canned questions stay offline.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',rescope);$('shift').addEventListener('change',rescope);$('scope').addEventListener('change',rescope);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 let printing=false;
-$('pdf').addEventListener('click',async()=>{if(!latest||printing)return;printing=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{printing=false;}});
+$('pdf').addEventListener('click',async()=>{if(!latest||printing)return;
+ if(latest.url){const a=node('a');a.href=withQuery(latest.url,'format=pdf');a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();return;}   // an addressed answer: the PDF is the same address with format=pdf
+ printing=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{printing=false;}});
 function applyPublicMode(){
  // Hosted synthetic demo: no visitor keys, ever. A live option stays only when the server's own key for that provider and the cap are enabled.
  if(!config.public)return;
@@ -717,9 +801,11 @@ async function init(){
  renderSegments();renderQuestionChips();renderCard();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
- applyPublicMode();updateScope();primeKpis();
+ applyPublicMode();updateScope();
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
  if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
+ const address=currentAddress();
+ if(!(address&&CANONICAL.test(address.split('?')[0])&&await restore(address))){pushAddress(scopeUrl(),true);primeKpis();}
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question,{mode:'offline'});}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}

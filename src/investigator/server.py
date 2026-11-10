@@ -6,6 +6,12 @@ binds 0.0.0.0:$PORT, allows only the configured browser origins, never accepts
 visitor API keys, and serves investigations one at a time under a lock. The
 optional demo guards (DEMO_RATE_LIMIT_PER_MIN, DEMO_DAILY_CAP, DEMO_MAX_TURNS,
 TRUST_PROXY) are off unless set; see docs/ANTHROPIC_DEMO.md.
+
+Offline questions are URL-addressable (issue #20, docs/URLS.md): `GET /q?day=&shift=&scope=&period=&q=`
+resolves a typed question and redirects to its canonical URL, `/corr/<machine>/<grain>/<date>[/shift/<n>]
+?measure=...`, which serves the page, the answer as `.json` (or with `Accept: application/json`), or the
+PDF with `format=pdf`. That path never calls a model and never waits on the lock a live round holds.
+Live analysis stays on `POST /api/ask`.
 """
 from collections import OrderedDict, deque
 from datetime import datetime, timedelta, timezone
@@ -24,11 +30,14 @@ import sqlite3
 import threading
 import time
 
-from .agent import Agent, Context, TOOL_SCHEMAS
+from urllib.parse import parse_qsl, urlsplit
+
+from .agent import Agent, Context, TOOL_SCHEMAS, parse_request
 from .anthropic_provider import resolve_model
 from .evalboard import EvalBoard, evals_dir
 from .record_store import DEFAULT_MONTHS, default_store
 from .synth import production_days
+from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, resolve_url, scope_url
 
 WEB = Path(__file__).with_name('web')
 # The record store's Monday-Friday production calendar (August and September 2026);
@@ -117,11 +126,14 @@ class Workbench:
         self.public = public
         self.guards = guards or DemoGuards()
         self.anthropic_model = resolve_model(os.environ.get('ANTHROPIC_MODEL'))  # an unsupported value fails at boot
-        self.lock = threading.Lock()  # investigations and PDFs run one at a time; static files do not wait
+        self.lock = threading.Lock()  # POST investigations and PDFs run one at a time; static files do not wait
+        self.read_lock = threading.Lock()   # URL answers (offline only) queue here, never behind a live round
         self.token = self._workbench_token(public)
         self.sessions = OrderedDict()
-        self.datasets = OrderedDict()
+        self.datasets = OrderedDict()        # day analyses for the POST path, under self.lock
+        self.read_datasets = OrderedDict()   # day analyses for the URL path, under self.read_lock
         self.requests = deque()
+        self.request_limit = 60       # investigations per process per minute (POST and URL answers); the eval harness raises it
         self.eval_requests = deque()  # /api/evals/run has its own window, so browsing the golden set never spends the question limits
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
         self.rate_lock = threading.Lock()
@@ -206,8 +218,73 @@ class Workbench:
             db.execute('DELETE FROM demo_rounds WHERE day < ?', ((now-timedelta(days=2)).strftime('%Y-%m-%d'),))
 
     def close(self):
-        for analysis in self.datasets.values():
+        for analysis in (*self.datasets.values(), *self.read_datasets.values()):
             analysis.close()
+
+    def _dataset(self, cache, day, corrupt):
+        """The day's Analysis from one of the two small caches (three entries, least recent evicted and closed)."""
+        key = (day, corrupt)
+        if key not in cache:
+            if len(cache) >= 3:
+                _, evicted = cache.popitem(last=False)
+                evicted.close()
+            cache[key] = self.store.day_analysis(day, corrupt=corrupt)
+        cache.move_to_end(key)
+        return cache[key]
+
+    @staticmethod
+    def _markdown(result):
+        return '\n\n'.join([
+            f'# Synthetic production investigation: {result.get("period_label", result["production_day"])}',
+            result['mode'] + '. No email delivery.',
+            *result['sections'], result['limitations']])
+
+    def question_url(self, query):
+        """`/q?day=&shift=&scope=&period=&corrupt=&q=&after=`: the same validation as /api/ask for an
+        offline question, then the canonical URL the question resolves to (the redirect target)."""
+        fields, after = {}, []
+        for key, value in parse_qsl(query, keep_blank_values=True):
+            if key == 'after':
+                after.append(value)
+            elif key in fields or key not in ('q', 'day', 'shift', 'scope', 'period', 'corrupt'):
+                raise ValueError('Invalid request fields')
+            else:
+                fields[key] = value
+        scope = fields.get('scope', 'shift')
+        if scope not in ('shift', 'day'):
+            raise ValueError('Choose selected shift or production-day comparison')
+        period = fields.get('period', 'day')
+        if period not in ('day', 'week', 'month', 'accounting'):
+            raise ValueError('Choose day, week, calendar month or accounting period')
+        shift = fields.get('shift', '')
+        if shift not in ('1', '2', '3'):
+            raise ValueError('Select a supported shift (1, 2 or 3)')
+        day = self.store.check_day(fields.get('day'))
+        question = fields.get('q', '')
+        if not question.strip() or len(question) > 2000:
+            raise ValueError('Enter a question of 1-2000 characters')
+        corrupt = fields.get('corrupt', '0')
+        if corrupt not in ('0', '1'):
+            raise ValueError('Invalid data-quality option')
+        context = Context(day, int(shift), period='fiscal' if period == 'accounting' else period)
+        context.scope = scope
+        request = parse_request(question, context)   # the refusals of the offline router, verbatim
+        return canonical_url(request, context, corrupt == '1', self.store.machine_id, after)
+
+    def answer_url(self, url):
+        """A canonical URL answered offline: the result `/api/ask` returns for the same state, plus `url`
+        (its page address) and no session. Returns (result, format). ValueError names what is wrong."""
+        resolved = resolve_url(url, self.store, max_turns=self.guards.max_turns)
+        if resolved['report']:
+            result = self.periods.investigate(resolved['day'], resolved['shift'], resolved['scope'], resolved['control_period'], resolved['corrupt'])
+        else:
+            context = resolved['context']
+            context.history = resolved['history']
+            analysis = self._dataset(self.read_datasets, resolved['day'], resolved['corrupt'])
+            result = Agent(analysis, max_turns=self.guards.max_turns).ask(resolved['text'], context, request=resolved['request'])
+        result['url'] = page_url(resolved)
+        result['report_markdown'] = self._markdown(result)
+        return result, resolved['format']
 
     def ask(self, payload, api_key=None, anthropic_key=None):
         if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period', 'report'}:
@@ -265,6 +342,7 @@ class Workbench:
             self.sessions[session_id] = Context(day, shift, period=tool_period)
         if report:
             result = self.periods.investigate(day, shift, scope, period, corrupt)   # no model on this path, whatever the mode
+            result['url'] = scope_url(day, period, scope, shift, self.store.machine_id) + '?measure=report' + ('&corrupt=1' if corrupt else '')
             return self._retain(result, session_id, session_reset)
         context = self.sessions[session_id]
         # Visible date/period/shift controls own the scope; follow-ups retain history while they stay unchanged.
@@ -274,15 +352,11 @@ class Workbench:
         context.shift = shift
         context.scope = scope
         self.sessions.move_to_end(session_id)
-        key = (day, corrupt)
-        if key not in self.datasets:
-            if len(self.datasets) >= 3:
-                _, evicted = self.datasets.popitem(last=False)
-                evicted.close()
-            self.datasets[key] = self.store.day_analysis(day, corrupt=corrupt)
-        self.datasets.move_to_end(key)
+        analysis = self._dataset(self.datasets, day, corrupt)
         if mode == 'offline':
-            result = Agent(self.datasets[key], max_turns=self.guards.max_turns).ask(question, context)
+            request = parse_request(question, context)
+            result = Agent(analysis, max_turns=self.guards.max_turns).ask(question, context, request=request)
+            result['url'] = canonical_url(request, context, corrupt, self.store.machine_id)   # the question's own address
         else:
             from .openai_provider import Budget
             budget = Budget(Path(self.guards.ledger))
@@ -293,7 +367,7 @@ class Workbench:
                 from .anthropic_provider import AnthropicPlanner
                 planner = AnthropicPlanner(anthropic_key or os.environ.get('ANTHROPIC_API_KEY'), budget, model=self.anthropic_model)
             try:
-                result = Agent(self.datasets[key], planner=planner, max_calls=10, max_seconds=60, max_turns=self.guards.max_turns).ask(question, context)
+                result = Agent(analysis, planner=planner, max_calls=10, max_seconds=60, max_turns=self.guards.max_turns).ask(question, context)
             finally:
                 planner.close()
         return self._retain(result, session_id, session_reset)
@@ -301,10 +375,7 @@ class Workbench:
     def _retain(self, result, session_id, session_reset=False):
         result['session_id'] = session_id
         result['session_reset'] = session_reset   # True: the id the client sent was unknown here; a fresh conversation answered
-        result['report_markdown'] = '\n\n'.join([
-            f'# Synthetic production investigation: {result.get("period_label", result["production_day"])}',
-            result['mode'] + '. No email delivery.',
-            *result['sections'], result['limitations']])
+        result['report_markdown'] = self._markdown(result)
         self.reports[session_id] = result
         self.reports.move_to_end(session_id)
         if len(self.reports) > 32:
@@ -390,9 +461,45 @@ def make_server(port=8765, public=None, host=None, guards=None):
                 return origin is not None and origin.rstrip('/') in public.origins
             return origin is None or origin == f'http://127.0.0.1:{self.server.server_port}'
 
+        def _count_request(self):
+            """The per-process 60-per-minute window over investigations (POST and URL answers alike)."""
+            now = time.monotonic()
+            while app.requests and app.requests[0] < now-60:
+                app.requests.popleft()
+            if len(app.requests) >= app.request_limit:
+                return False
+            app.requests.append(now)
+            return True
+
+        def _wants_json(self, query):
+            """The `.json` suffix, `format=json`, or an Accept header that asks for JSON and not HTML."""
+            if 'format=json' in query.split('&'):
+                return True
+            accept = self.headers.get('Accept', '')
+            return 'application/json' in accept and 'text/html' not in accept
+
+        def _page(self):
+            """The app page, revalidated with an ETag like `/`: a canonical URL serves it and app.js reads the address."""
+            data = (WEB/'index.html').read_bytes()
+            etag = '"' + hashlib.sha256(data).hexdigest()[:16] + '"'
+            held = [v.strip() for v in self.headers.get('If-None-Match', '').split(',')]
+            if etag in held or etag[:-1] + '-gzip"' in held:
+                return self._send(304, b'', 'text/html; charset=utf-8', {'ETag': etag, 'Cache-Control': 'no-cache'})
+            self._send(200, data, 'text/html; charset=utf-8', {'ETag': etag, 'Cache-Control': 'no-cache'})
+
         def do_GET(self):
             if not self._host_ok():
                 return self._send(403, {'error': 'Local host only'})
+            url = urlsplit(self.path)
+            if url.path == '/q':
+                # A typed question is a shortcut: resolve it and redirect to the one URL for it.
+                try:
+                    target = app.question_url(url.query)
+                except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                    return self._send(400, {'error': str(exc)})
+                return self._send(302, {'url': target}, extra={'Location': target, 'Cache-Control': 'no-store'})
+            if url.path.startswith('/corr/'):
+                return self._answer_url(url)
             if self.path in ('/api/health', '/healthz'):  # /healthz is reserved by Google's front end on *.run.app; /api/health reaches the container everywhere
                 return self._send(200, {'ok': True, 'public': public is not None,
                                         'store': {'source': app.store.boot_source, 'boot_ms': round(app.store.boot_seconds * 1000),
@@ -400,7 +507,7 @@ def make_server(port=8765, public=None, host=None, guards=None):
             if self.path == '/api/config':
                 return self._send(200, {'days': app.store.production_days, 'first_day': app.store.first_day,
                                        'last_day': app.store.last_day, 'production_calendar': 'Mon-Fri',
-                                       'dataset_hash': app.store.content_hash,
+                                       'dataset_hash': app.store.content_hash, 'machine': machine_slug(app.store.machine_id),
                                        'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',
                                        'public': public is not None, 'server_key_available': app.live_model_available,
                                        'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
@@ -432,6 +539,35 @@ def make_server(port=8765, public=None, host=None, guards=None):
                 return self._send(304, b'', content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
             self._send(200, data, content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
 
+        def _answer_url(self, url):
+            """`/corr/<machine>/<grain>/<date>[/shift/<n>][.json]?measure=...`: the page, the answer or the PDF.
+            Offline only; the same guards as /api/ask except the token (a GET carries no key and changes
+            nothing), and its own lock, so it never queues behind a live round."""
+            pdf = 'format=pdf' in url.query.split('&')
+            if not pdf and not url.path.endswith('.json') and not self._wants_json(url.query):
+                if not URL_PATH.match(url.path):
+                    return self._send(404, {'error': 'Not found'})
+                return self._page()
+            try:
+                if not self._count_request():
+                    return self._send(429, {'error': 'Local request limit reached; retry in a minute'})
+                app.client_round(self._client_ip())   # a round is counted even if the URL is later refused
+                started = time.perf_counter()
+                with app.read_lock:
+                    result, fmt = app.answer_url(self.path)
+                headers = {'Server-Timing': f'app;dur={(time.perf_counter()-started)*1000:.1f}'}
+                if fmt == 'pdf':
+                    from .reports import report_pdf
+                    headers['Content-Disposition'] = f'attachment; filename="synthetic-report-{result["production_day"]}.pdf"'
+                    return self._send(200, report_pdf(result), 'application/pdf', headers)
+                self._send(200, result, extra=headers)
+            except DemoLimit as exc:
+                self._send(429, {'error': str(exc), 'code': exc.code}, extra={'Retry-After': str(exc.retry_after)})
+            except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                self._send(404 if str(exc).startswith('No machine') else 400, {'error': str(exc)})
+            except Exception:
+                self._send(500, {'error': 'Investigation failed; no answer was fabricated'})
+
         def do_POST(self):
             # Consume bounded bodies before a rejection so Windows clients receive
             # the HTTP error instead of a reset from closing over unread bytes.
@@ -459,16 +595,18 @@ def make_server(port=8765, public=None, host=None, guards=None):
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 16000:
                     return self._send(413, {'error': 'Request too large or empty'})
-                now = time.monotonic()
                 # Eval runs are counted apart from questions (EVAL_RUNS_PER_MIN for everyone together): a visitor
                 # opening cases on /evals must not use up the question window or their own per-IP rounds.
-                window, limit = (app.eval_requests, EVAL_RUNS_PER_MIN) if self.path == '/api/evals/run' else (app.requests, 60)
-                while window and window[0] < now-60:
-                    window.popleft()
-                if len(window) >= limit:
-                    return self._send(429, {'error': 'Golden-case run limit reached; retry in a minute' if window is app.eval_requests
-                                            else 'Local request limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
-                window.append(now)
+                if self.path == '/api/evals/run':
+                    now = time.monotonic()
+                    window = app.eval_requests
+                    while window and window[0] < now-60:
+                        window.popleft()
+                    if len(window) >= EVAL_RUNS_PER_MIN:
+                        return self._send(429, {'error': 'Golden-case run limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
+                    window.append(now)
+                elif not self._count_request():
+                    return self._send(429, {'error': 'Local request limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(app.requests[0]+60-time.monotonic()))})
                 if self.path == '/api/ask':
                     app.client_round(self._client_ip())  # a round is counted even if the question is later rejected
                 self.connection.settimeout(5)

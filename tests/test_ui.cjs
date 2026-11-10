@@ -13,8 +13,8 @@ class Element {
 const elements=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
 Object.assign(elements.day,{value:'2026-09-14'});elements.period.value='day';elements.shift.value='2';elements.scope.value='shift';elements.mode.value='offline';
 const document={getElementById:id=>{assert.ok(elements[id],`Unknown control ${id}`);return elements[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[]};
-const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test',evals:{badge:'160/160 golden · 12 ms p50',ran_at:'2026-11-09T19:21Z',commit:'abc1234'}})}),window:{addEventListener(){}},console,setTimeout,URL,Blob,AbortController};
-vm.createContext(context);vm.runInContext(fs.readFileSync("src/investigator/web/trail.js","utf8"),context);vm.runInContext(fs.readFileSync("src/investigator/web/app.js","utf8"),context);   // trail.js first, as index.html loads them
+const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test',evals:{badge:'160/160 golden · 12 ms p50',ran_at:'2026-11-09T19:21Z',commit:'abc1234'}})}),window:{addEventListener(){}},console,setTimeout,URL,URLSearchParams,Blob,AbortController};
+vm.createContext(context);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),context);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),context);   // trail.js first, as index.html loads them
 vm.runInContext('updateScope()',context);assert.equal(elements['scope-help'].textContent,'Monday 14 Sep 2026 · shift 2 · 15:00–23:00 · compared with Friday 11 Sep');
 elements.scope.value='day';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/all three shifts · 24 hours from 07:00 · compared with Friday 11 Sep/);
 elements.scope.value='shift';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/shift 2/);
@@ -337,7 +337,7 @@ const issue17=(async()=>{
 // ---- issue #63: the layout shell. A rail (scope, canned questions, rates, agent under a disclosure), an ask bar,
 // one open answer card with a title line, earlier answers as one line each. A submit draws the skeleton card
 // before the task yields; nothing is disabled while a question is out; the payload to /api/ask is unchanged.
-issue17.then(async()=>{
+const issue63=issue17.then(async()=>{
  const at=id=>html.indexOf(`id="${id}"`), text=e=>e.textContent;
  const order=['rail','day','shift-seg','period-seg','examples','rates-change','advanced','mode','reset','ask','question','submit','analyst','card','card-title','card-meta','queries','messages','charts','kpis','metrics','card-foot','earlier'];
  assert.deepEqual([...order].sort((a,b)=>at(a)-at(b)),order,'rail, then the ask bar, then the card (title line, queries, summary, charts, tiles, footer), then the earlier answers');
@@ -362,7 +362,11 @@ issue17.then(async()=>{
   charts:[{type:'bar',source_result_id:'a:2',shift:2,coverage:'complete',unit:'minutes',x:'category',y:'down_minutes',rows:[{category:'Order change',down_minutes:6.4}]},{shift:2,coverage:'complete',unit:'ft/min',x:'wet_end_id',y:'actual_fpm',rows:[{wet_end_id:'W2-01',actual_fpm:600,target_fpm:800,speed_to_target_pct:75,grade:'200-C'}]}]});
  const bodies=[], gates=[]; let wall=1000;
  context.performance={now:()=>wall};
- context.fetch=(path,init)=>new Promise((resolve,reject)=>{const n=bodies.push(JSON.parse(init.body));gates.push({ok:()=>resolve({ok:true,status:200,json:async()=>answer(n)}),fail:message=>resolve({ok:false,status:400,json:async()=>({error:message})})});});
+ // an offline question is a GET of its /q address (#20); a live one POSTs /api/ask. Each request waits on its gate.
+ context.fetch=(path,init)=>new Promise(resolve=>{
+  let body;if(init&&init.body)body=JSON.parse(init.body);else{const q=new URLSearchParams(path.split('?')[1]||'');body={get:path,question:q.get('q'),day:q.get('day'),shift:Number(q.get('shift')),corrupt:q.get('corrupt')==='1',after:q.getAll('after'),mode:'offline',scope:q.get('scope'),period:q.get('period')};}
+  const n=bodies.push(body), url=body.get?`/corr/1/day/${body.day}/shift/${body.shift}?measure=m${n}`+body.after.map(x=>'&after='+encodeURIComponent(x)).join(''):undefined;   // the canonical url carries its priors, as the server's does
+  gates.push({ok:()=>resolve({ok:true,status:200,json:async()=>Object.assign(answer(n),url?{url}:{})}),fail:message=>resolve({ok:false,status:400,json:async()=>({error:message})})});});
  const tick=()=>new Promise(r=>setTimeout(r,0));
  vm.runInContext(`config={days:${JSON.stringify(storeDays)},first_day:'2026-09-11',token:'t',live_modes:[],demo_guards:{rate_limit_per_min:30}};acceptedDay='2026-09-14'`,context);   // a rate limit: no priming call
  elements.day.value='2026-09-14';elements.period.value='day';elements.scope.value='shift';elements.shift.value='2';elements.mode.value='offline';elements.corrupt.checked=false;
@@ -380,7 +384,7 @@ issue17.then(async()=>{
  assert.ok(walk(elements.queries).some(e=>/^skel\b/.test(e.className))&&elements.charts.children.length===2&&elements.charts.children.every(e=>/skel-chart/.test(e.className)));
  assert.deepEqual(disabled(),[]);                                              // nothing is disabled while the question is out
  await tick();
- assert.deepEqual(bodies[0],{question:'Why was this shift slow? Chart downtime by reason.',day:'2026-09-14',shift:2,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});   // the /api/ask payload is unchanged
+ assert.equal(bodies[0].get,'/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F+Chart+downtime+by+reason.');   // an offline question is a GET of its address (#20)
  wall=1093;gates[0].ok();await tick();
  assert.equal(card.className,'card answer');assert.equal(card['aria-busy'],'false');
  assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 2 queries · 93 ms');   // the measured wall time, submit to rendered
@@ -394,12 +398,12 @@ issue17.then(async()=>{
  canned[1].events.click();
  elements.mode.value='anthropic';canned[2].events.click();elements.mode.value='offline';
  await tick();assert.equal(bodies.length,2);                                   // the third waits for the second: one request at a time, so each carries the session the last one left
- assert.equal(bodies[1].session_id,'s1');                                      // the thread continues the server conversation
+ assert.deepEqual(bodies[1].after,['/corr/1/day/2026-09-14/shift/2?measure=m1']);   // the thread continues the conversation: the prior view rides as after=
  assert.equal(card.className,'card answer skeleton');assert.equal(elements['card-title'].textContent,'Dry-end waste');
  assert.deepEqual(earlier.children.map(l=>l.children[0].children.map(text)),[['Speed to target','Shift 2 · asking…'],['Why was this shift slow?','Shift 2 · 93 ms']]);
  assert.deepEqual(disabled(),[]);
  wall=1200;gates[1].ok();await tick();
- assert.equal(bodies.length,3);assert.equal(bodies[2].session_id,'s1');assert.deepEqual(bodies.map(b=>b.mode),['offline','offline','offline']);   // a canned question never calls a model, whatever the agent select says
+ assert.equal(bodies.length,3);assert.deepEqual(bodies[2].after,['/corr/1/day/2026-09-14/shift/2?measure=m1','/corr/1/day/2026-09-14/shift/2?measure=m2']);assert.deepEqual(bodies.map(b=>b.mode),['offline','offline','offline']);   // a canned question never calls a model, whatever the agent select says
  assert.equal(card.className,'card answer skeleton');assert.equal(earlier.children[0].children[0].children[1].textContent,'Shift 2 · 107 ms');   // the collapsed line fills in while the open card is still out
  wall=1300;gates[2].ok();await tick();
  assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(card.className,'card answer');
@@ -408,25 +412,25 @@ issue17.then(async()=>{
  assert.ok(earlier.children.every(l=>l.children[1].tag==='button'&&l.children[1].textContent==='Open'&&/^card earlier/.test(l.className)));
  assert.deepEqual(disabled(),[]);
 
- // 3. Open an earlier answer: it becomes the open card, the other two are the lines; the PDF is offered for the session's latest run only.
+ // 3. Open an earlier answer: it becomes the open card, the other two are the lines; an addressed answer offers its PDF by address.
  earlier.children[1].children[1].events.click();
  assert.equal(elements['card-title'].textContent,'Why was this shift slow?');assert.ok(walk(elements.messages).some(e=>e.textContent==='Shift 2 answer 1.'));
  assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 2 queries · 93 ms');
  assert.deepEqual(earlier.children.map(l=>l.children[0].children[0].textContent),['Dry-end waste','Speed to target']);
- assert.equal(elements.pdf.hidden,true);
- earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,true);
- earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,false);   // run 3 landed last
+ assert.equal(elements.pdf.hidden,false);
+ earlier.children[1].children[1].events.click();assert.equal(elements['card-title'].textContent,'Speed to target');assert.equal(elements.pdf.hidden,false);
+ earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,false);
 
- // 3b. An answer that lands while an earlier card is open takes the PDF away from that card (the server prints the latest run only).
- canned[3].events.click();earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,false);
- await tick();gates[3].ok();await tick();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,true);
+ // 3b. An answer that lands while an earlier card is open leaves that card open.
+ canned[3].events.click();earlier.children[0].children[1].events.click();assert.equal(elements['card-title'].textContent,'Dry-end waste');
+ await tick();gates[3].ok();await tick();assert.equal(elements['card-title'].textContent,'Dry-end waste');assert.equal(elements.pdf.hidden,false);
  elements.question.value='  ';elements.ask.events.submit({preventDefault(){}});assert.equal(bodies.length,4);assert.equal(elements.status.textContent,'Type a question first');   // an empty Ask says so and sends nothing
 
  // 4. A scope change keeps the thread and starts a new server conversation; the new card carries its own scope.
  elements['shift-seg'].children.find(b=>b.dataset.value==='1').events.click();
  assert.equal(earlier.children.length,3);assert.equal(elements['card-title'].textContent,'Dry-end waste');
  elements.question.value='How many setups?';elements.ask.events.submit({preventDefault(){}});
- await tick();assert.deepEqual(bodies[4],{question:'How many setups?',day:'2026-09-14',shift:1,corrupt:false,session_id:null,mode:'offline',scope:'shift',period:'day'});
+ await tick();assert.equal(bodies[4].get,'/q?day=2026-09-14&shift=1&scope=shift&period=day&q=How+many+setups%3F');   // a new scope: a new conversation, no after=
  assert.equal(elements['card-title'].textContent,'How many setups?');assert.equal(elements['card-meta'].textContent,'Shift 1 · Mon 14 Sep 2026 · offline · asking…');
  wall=1350;gates[4].fail('That question is not supported');await tick();
  assert.equal(card.className,'card answer failed');assert.match(elements['card-meta'].textContent,/ · failed · 50 ms$/);assert.equal(elements['card-foot'].hidden,true);
@@ -440,7 +444,10 @@ issue17.then(async()=>{
  elements.analyst.events.click();await tick();assert.equal(bodies.length,6);   // a double click on the analyst is the card already waiting, not a second paid round
  assert.equal(earlier.children.filter(l=>l.children[0].children[0].textContent==='Why slow?').length,0);
  elements.ask.events.submit({preventDefault(){}});await tick();assert.equal(bodies.length,6);
- gates[5].ok();await tick();assert.equal(bodies[6].mode,'offline');gates[6].ok();await tick();
+ gates[5].ok();await tick();assert.equal(bodies[6].mode,'offline');assert.ok(bodies[6].get);
+ const analystCard=()=>earlier.children.find(l=>l.children[0].children[0].textContent==='Why slow?');
+ analystCard().children[1].events.click();assert.equal(elements.pdf.hidden,false);   // a model's answer is not an address: its PDF is offered while it is the session's latest run
+ gates[6].ok();await tick();assert.equal(elements.pdf.hidden,true);                   // the offline answer that landed after it took that place
  // a provider picked under "Agent and advanced" does not turn Ask into a model call; the key stays for the analyst
  elements.mode.value='anthropic';elements['api-key'].value='sk-visitor';elements.question.value='Why slow again?';elements.ask.events.submit({preventDefault(){}});await tick();
  assert.equal(bodies[7].mode,'offline');assert.match(elements['card-meta'].textContent,/ · offline · asking…$/);assert.equal(elements['api-key'].value,'sk-visitor');
@@ -459,6 +466,124 @@ issue17.then(async()=>{
  elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);
  delete context.performance;
  console.log('UI issue-63 checks passed: shell order, skeleton in the same task as the submit, measured ms on the title line, three cards from three questions with nothing disabled, payload unchanged, offline default.');
+}).catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #20: the address bar is the state. Offline questions are GETs of /q (the server redirects to the canonical
+// URL and answers it), the page pushes that URL, back/forward re-render a shown view without a request, a pasted
+// address sets the controls and fetches its .json, and the example chips are links to their /q address.
+issue63.then(async()=>{   // after #63: both drive the same stub elements
+ for(const [id,value] of [['day','2026-09-14'],['period','day'],['shift','2'],['scope','shift'],['mode','offline']])elements[id].value=value;elements.corrupt.checked=false;
+ const guard=setTimeout(()=>{console.error('UI issue-20 checks did not finish: a promise never settled');process.exit(1);},8000);
+ await new Promise(r=>setTimeout(r,80));
+ const history=[], fetched=[];
+ const location={pathname:'/',search:''};   // the home address: init() replaces it with the scope's own
+ const win={history:{pushState(state,_,url){history.push(['push',url]);const [p,q='']=url.split('?');location.pathname=p;location.search=q?'?'+q:'';},
+                      replaceState(state,_,url){history.push(['replace',url]);const [p,q='']=url.split('?');location.pathname=p;location.search=q?'?'+q:'';}},
+            location,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
+ const answer=(url,extra={})=>({run_id:'r-'+url,production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',url,sections:['Shift 2: 600.0 ft/min.'],context:{history:[]},usage:{tool_calls:2,model_calls:0},trace:[],tables:[],charts:[],report_markdown:'# x',...extra});
+ context.fetch=async(path,init)=>{fetched.push([path,init&&init.headers&&init.headers.Accept]);
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-11','2026-09-14','2026-09-15'],first_day:'2026-08-03',last_day:'2026-09-30',demo_guards:{max_turns:4,rate_limit_per_min:0}})};
+  if(path.startsWith('/q?')){const q=new URLSearchParams(path.slice(3));const url=`/corr/1/day/${q.get('day')}/shift/${q.get('shift')}?measure=${q.get('q').includes('slow')?'overview':'fpm'}`+q.getAll('after').map(a=>'&after='+encodeURIComponent(a)).join('');return {ok:true,status:200,url,json:async()=>answer(url)};}
+  if(path.startsWith('/corr/')){const page=path.replace('.json','');if(page.includes('measure=kpis'))return {ok:true,status:200,json:async()=>answer(page,{trace:[]})};return {ok:true,status:200,json:async()=>answer(page)};}
+  return {ok:false,status:404,json:async()=>({error:'no'})};
+ };
+ // a fresh page with the window stubs: init() replaces the home address with the bare scope address and primes the tiles
+ const ctx2={...context,window:win,document:context.document,location,requestAnimationFrame:undefined};delete ctx2.requestAnimationFrame;
+ vm.createContext(ctx2);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx2);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx2);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(history,[['replace','/corr/1/day/2026-09-14/shift/2']]);
+ assert.ok(fetched.some(f=>f[0]==='/corr/1/day/2026-09-14/shift/2.json?measure=kpis'&&f[1]==='application/json'),'the tiles are the kpis measure of the scope address: '+JSON.stringify(fetched));
+ // chips are links to their /q address in the current scope, disabled ones say so
+ const chip=elements.examples.children[0];
+ assert.equal(chip.tag,'a');assert.equal(chip['role'],'button');
+ assert.equal(chip.href,'/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F+Chart+downtime+by+reason.');
+ const compareChip=[...elements.examples.children,...elements['examples-more'].children].find(b=>b.dataset.question==='Compare all shifts');
+ assert.equal(compareChip.href,'/q?day=2026-09-14&shift=2&scope=day&period=day&q=Compare+all+shifts');   // its own scope override
+ // an offline question is a GET of /q with Accept: application/json; the answer's address is pushed and remembered
+ fetched.length=0;history.length=0;
+ const first=await vm.runInContext("ask('Why was this shift slow?')",ctx2);
+ assert.equal(first.url,'/corr/1/day/2026-09-14/shift/2?measure=overview');
+ assert.deepEqual(fetched[0],['/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F','application/json']);
+ assert.deepEqual(history,[['push','/corr/1/day/2026-09-14/shift/2?measure=overview']]);
+ assert.equal(ctx2.location.search,'?measure=overview');
+ assert.equal(elements.pdf.hidden,false);
+ // the follow-up carries the prior view as after=, and the chips' links do too
+ const second=await vm.runInContext("ask('Show speed to target')",ctx2);
+ assert.equal(second.url,'/corr/1/day/2026-09-14/shift/2?measure=fpm&after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Doverview');
+ assert.ok(fetched.some(f=>f[0].startsWith('/q?')&&f[0].includes('q=Show+speed+to+target')&&f[0].includes('after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Doverview')),JSON.stringify(fetched));
+ assert.ok(chip.href.includes('after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Doverview')&&chip.href.includes('after=%2Fcorr%2F1%2Fday%2F2026-09-14%2Fshift%2F2%3Fmeasure%3Dfpm'),chip.href);
+ assert.equal(history.length,2);
+ // the PDF of an addressed answer is the same address with format=pdf, no POST
+ fetched.length=0;
+ const links=[];context.document.createElement=tag=>{const e=new Element(tag);if(tag==='a')links.push(e);return e;};
+ ctx2.document.createElement=context.document.createElement;
+ await vm.runInContext("$('pdf').events.click()",ctx2);
+ const pdfLink=links.find(l=>l.download&&l.download.endsWith('.pdf'));
+ assert.ok(pdfLink&&pdfLink.href===second.url+'&format=pdf',pdfLink&&pdfLink.href);
+ assert.equal(fetched.length,0);
+ // back: the earlier view is restored from memory, the controls follow the address, no request is made
+ fetched.length=0;
+ location.pathname='/corr/1/day/2026-09-14/shift/2';location.search='?measure=overview';
+ await win.listeners.popstate();await new Promise(r=>setTimeout(r,20));
+ assert.equal(fetched.length,0,'a shown view is re-rendered without a request');
+ assert.match(elements.status.textContent,/restored$/);
+ assert.equal(elements['card-title'].textContent,'Why was this shift slow?');assert.equal(elements.card.className,'card answer');   // the card it was, opened again
+ // forward to an address this page never showed: the controls follow it and its .json is fetched
+ location.pathname='/corr/1/day/2026-09-15';location.search='?measure=fpm';
+ await win.listeners.popstate();await new Promise(r=>setTimeout(r,20));
+ assert.deepEqual(fetched.map(f=>f[0]),['/corr/1/day/2026-09-15?measure=fpm']);
+ assert.equal(elements.day.value,'2026-09-15');assert.equal(elements.scope.value,'day');
+ assert.equal(elements['card-title'].textContent,'/corr/1/day/2026-09-15?measure=fpm');assert.equal(elements.card.className,'card answer');   // a new card in the thread, through the same render entry
+ // a bare scope address on popstate clears the view and primes; a control change pushes the new scope address
+ fetched.length=0;history.length=0;
+ location.pathname='/corr/1/week/2026-09-14/shift/1';location.search='';
+ await win.listeners.popstate();await new Promise(r=>setTimeout(r,20));
+ assert.equal(elements.period.value,'week');assert.equal(elements.shift.value,'1');assert.equal(history.length,0);
+ assert.deepEqual(fetched.map(f=>f[0]),['/corr/1/week/2026-09-14/shift/1.json?measure=kpis']);
+ vm.runInContext("selectShift('3')",ctx2);
+ assert.deepEqual(history,[['push','/corr/1/week/2026-09-14/shift/3']]);
+ // the period report is the report measure of the scope address
+ fetched.length=0;
+ await vm.runInContext("ask('Build week report',{report:true})",ctx2);
+ assert.deepEqual(fetched[0],['/corr/1/week/2026-09-14/shift/3?measure=report','application/json']);
+ // a fresh page opened on a pasted canonical address: the controls follow it and its .json is fetched on load (acceptance 1)
+ fetched.length=0;history.length=0;
+ const pasted={pathname:'/corr/1/month/2026-09-15/shift/3',search:'?measure=waste&corrupt=1'};
+ const win3={history:win.history,location:pasted,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
+ for(const [id,value] of [['day','2026-09-14'],['period','day'],['shift','2'],['scope','shift']])elements[id].value=value;elements.corrupt.checked=false;
+ const ctx3={...context,window:win3,location:pasted};delete ctx3.requestAnimationFrame;
+ vm.createContext(ctx3);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx3);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx3);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(fetched.map(f=>f[0]).filter(f=>f!=='/api/config'),['/corr/1/month/2026-09-15/shift/3?measure=waste&corrupt=1']);   // the address itself, as JSON; no priming, no push
+ assert.equal(history.length,0);
+ assert.deepEqual([elements.day.value,elements.period.value,elements.shift.value,elements.scope.value,elements.corrupt.checked],['2026-09-15','month','3','shift',true]);
+ assert.equal(elements['card-title'].textContent,'/corr/1/month/2026-09-15/shift/3?measure=waste&corrupt=1');assert.equal(elements.card.className,'card answer');
+ assert.equal(elements.pdf.hidden,false);
+ // Codex review on #62: a modifier click on a chip is left to the browser (it opens the link); a plain click asks here
+ fetched.length=0;
+ const anyChip=elements.examples.children[1]; let prevented=false;
+ anyChip.events.click({ctrlKey:true,preventDefault(){prevented=true;}});await new Promise(r=>setTimeout(r,20));
+ assert.equal(prevented,false);assert.equal(fetched.length,0);
+ anyChip.events.click({preventDefault(){prevented=true;}});await new Promise(r=>setTimeout(r,40));
+ assert.equal(prevented,true);assert.ok(fetched.some(f=>f[0].startsWith('/q?')));
+ // the retained priors never exceed the grammar's eight, whatever DEMO_MAX_TURNS says
+ vm.runInContext("config.demo_guards.max_turns=50",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),8);
+ vm.runInContext("config.demo_guards.max_turns=4",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),3);
+ // a pasted alias is replaced in the address bar by the canonical url the server returns
+ fetched.length=0;history.length=0;
+ const alias={pathname:'/corr/1/week/2026-09-14',search:'?measure=downtime'};
+ const win4={history:{pushState(state,_,url){history.push(['push',url]);},replaceState(state,_,url){history.push(['replace',url]);}},location:alias,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}};
+ const ctx4={...context,window:win4,location:alias};delete ctx4.requestAnimationFrame;
+ context.fetch=async(path,init)=>{fetched.push([path]);
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-14'],demo_guards:{max_turns:4,rate_limit_per_min:0}})};
+  return {ok:true,status:200,json:async()=>answer('/corr/1/week/2026-09-14?measure=pareto')};};
+ ctx4.fetch=context.fetch;
+ vm.createContext(ctx4);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx4);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx4);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(history,[['replace','/corr/1/week/2026-09-14?measure=pareto']]);
+ assert.equal(elements['card-title'].textContent,'/corr/1/week/2026-09-14?measure=pareto');
+ clearTimeout(guard);
+ console.log('UI issue-20 checks passed: /q GET, pushState, back/forward from memory, pasted address, chips as links, PDF by address.');
 }).catch(error=>{console.error(error);process.exit(1);});
 
 // ---- issue #26: the /evals page. Every case is listed once, the score and trend come from the board, opening a case
