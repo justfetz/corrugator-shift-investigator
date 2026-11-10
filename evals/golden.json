@@ -1492,10 +1492,136 @@
    "type": "refusal",
    "mode": "offline",
    "period": "week",
-   "question": "how fast were the changeovers",
-   "note": "Review of PR 81 (optional item): under Week a changeover-speed question is the setup matrix, which is per shift and per day, so it is refused with the window to switch to, like 'Show setup matrix'; never a line-speed plan.",
+   "question": "how fast did we change paper",
+   "note": "Review of PR 81 (optional item): under Week a paper-change-speed question is the setup matrix, which is per shift and per day, so it is refused with the window to switch to, like 'Show setup matrix'; never a line-speed plan.",
    "expect": {
     "raises": "Switch Period to Day"
+   }
+  },
+  {
+   "id": "setup-how-fast-were-the-changeovers",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast were the changeovers",
+   "note": "Review of PR 81 (optional item): asking how fast the changeovers went is a setup question, the setup matrix, never line speed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_setup_matrix",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "speed-fpm-by-grade-after-changeovers",
+   "type": "routing",
+   "mode": "offline",
+   "question": "fpm by grade after changeovers",
+   "note": "Review of PR 81: a line-speed question that only mentions changeovers stays speed by grade; the first paper-change rule sent it to measure=grade (volume).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "charts": 1,
+    "chart_units": [
+     "ft/min"
+    ],
+    "sections_match": "^Speed by grade, without stops, against each grade target: .* ft/min = .*% of the .* target"
+   }
+  },
+  {
+   "id": "speed-running-between-changeovers",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast are we running between changeovers",
+   "note": "Review of PR 81: the line speed between changeovers is speed; the first paper-change rule sent it to the setup matrix.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ],
+    "chart_units": [
+     "ft/min"
+    ]
+   }
+  },
+  {
+   "id": "overview-why-slow-on-changeovers",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why was this shift slow on changeovers",
+   "note": "Review of PR 81: a diagnosis cue stays on the overview even beside 'changeovers'; the first paper-change rule sent it to the setup matrix.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason",
+       "kind": null
+      }
+     },
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_downtime_breakdown",
+     "get_wet_end_performance",
+     "get_shift_notes",
+     "render_chart"
+    ],
+    "charts": 2,
+    "tables": [
+     "get_shift_notes"
+    ]
    }
   },
   {
