@@ -4623,6 +4623,59 @@
     "charts": 1,
     "sections_match": "^Where the money went, ranked by dollars: (?=.*\\bSide trim: \\$[\\d,]+ )(?=.*\\bShear chops: \\$[\\d,]+ )(?=.*\\bDry-end: [A-Z]+: \\$[\\d,]+ )"
    }
+  },
+  {
+   "id": "money-contribution-per-msf",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What is our contribution per MSF?",
+   "note": "Review of #31a: 'contribution' was not a money word, so 'per MSF' made it the volume by grade. Contribution is the margin rate: the shift's dollars, with contribution reported as margin not set, never $0.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "sections_match": "contribution margin not set",
+    "sections_not_match": "contribution \\$0\\b|contribution \\$0\\.00"
+   }
+  },
+  {
+   "id": "money-margin-this-shift",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What's our margin on this shift?",
+   "note": "Review of #31a: 'margin' was not a money word, so the question fell to the shift overview. It is the shift's dollars, with the margin reported as not set.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "sections_match": "contribution margin not set"
+   }
   }
  ]
 }
