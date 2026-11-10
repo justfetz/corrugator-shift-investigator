@@ -40,7 +40,7 @@ DEFAULT_SEED = 2026
 DEFAULT_MONTHS = (("2026", 8), ("2026", 9))
 DEFAULT_MACHINE = "CORR-1"
 PREBUILT_ENV = "INVESTIGATOR_PREBUILT"   # folder written by `python -m investigator.prebuilt`; unset = generate at boot
-PREBUILT_FORMAT = 1
+PREBUILT_FORMAT = 2   # 2: the folder also carries the derived shift_kpis table (issue #34)
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 WEEKDAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 PERIODS = ("day", "week", "month", "fiscal")
@@ -71,6 +71,70 @@ TABLES = {
     "stops": ("stop_id VARCHAR, production_date DATE, shift INTEGER, setup_id VARCHAR, kind VARCHAR, place VARCHAR, "
               "reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, note VARCHAR"),
 }
+
+# One row per production day x shift x variant (`corrupt` false: the records as generated; true: the
+# fixture's bad-trim record injected into the day's first shift-2 setup, as `day_analysis(corrupt=True)`
+# does). Raw numerators and denominators only, never a percentage: any window's tile is a ratio of the
+# sums of these columns (docs/METRICS.md, "The shift_kpis table", names each column's formula row).
+# Built once per store from the six tables (`build_shift_kpis`): at image build into the prebuilt
+# file, at boot when generating. Setups that fail validation are left out of the setup columns and
+# counted in `excluded_setups`, exactly as the per-day Analysis excludes them (issue #34).
+SHIFT_KPIS = (
+    ("production_date", "DATE"), ("shift", "INTEGER"), ("corrupt", "BOOLEAN"), ("crew", "VARCHAR"),
+    ("coverage", "VARCHAR"), ("excluded_setups", "INTEGER"),
+    ("setups", "INTEGER"), ("paper_changes", "INTEGER"), ("wet_end_ids", "VARCHAR[]"),
+    ("lineal_ft", "DOUBLE"), ("target_ft", "DOUBLE"), ("elapsed_seconds", "DOUBLE"), ("setup_stop_seconds", "DOUBLE"),
+    ("gross_sqft", "DOUBLE"), ("trim_sqft", "DOUBLE"), ("shear_sqft", "DOUBLE"), ("reject_sqft", "DOUBLE"),
+    ("bond_sqft", "DOUBLE"), ("warp_sqft", "DOUBLE"), ("misalignment_sqft", "DOUBLE"), ("moisture_sqft", "DOUBLE"),
+    ("setups_above_trim_target", "INTEGER"), ("grade_gross_sqft", "MAP(VARCHAR, DOUBLE)"),
+    ("scheduled_seconds", "DOUBLE"), ("bale_sqft", "DOUBLE"),
+    ("stops", "INTEGER"), ("stop_seconds", "DOUBLE"), ("maintenance_seconds", "DOUBLE"), ("pm_seconds", "DOUBLE"),
+    ("operator_seconds", "DOUBLE"), ("source_ids", "VARCHAR[]"),
+)
+SHIFT_TRIM_TARGET_PCT = 3.25   # the per-setup trim flag of the daily KPI tool (analysis.get_shift_kpis)
+_SHIFT_KPIS_SQL = f"""
+WITH variants AS (SELECT * FROM (VALUES (false), (true)) v(corrupt)),
+valid AS (SELECT v.corrupt, s.* FROM setups s CROSS JOIN variants v
+          WHERE NOT EXISTS (SELECT 1 FROM kpi_excluded x WHERE x.setup_id = s.setup_id AND x.corrupt = v.corrupt)),
+excluded AS (SELECT x.corrupt, s.production_date, s.shift, count(*) AS n
+             FROM kpi_excluded x JOIN setups s ON s.setup_id = x.setup_id GROUP BY ALL),
+setup_sums AS (SELECT corrupt, production_date, shift, count(*) AS setups, count(DISTINCT wet_end_id) AS paper_changes,
+                      list(DISTINCT wet_end_id ORDER BY wet_end_id) AS wet_end_ids, sum(feet) AS lineal_ft,
+                      sum(target*seconds/60) AS target_ft, sum(seconds) AS elapsed_seconds, sum(stop_seconds) AS setup_stop_seconds,
+                      sum(gross) AS gross_sqft, sum(trim) AS trim_sqft, sum(shear) AS shear_sqft, sum(rejects) AS reject_sqft,
+                      count(*) FILTER (WHERE trim/gross*100 > {SHIFT_TRIM_TARGET_PCT}) AS setups_above_trim_target,
+                      list(setup_id ORDER BY setup_id) AS source_ids
+               FROM valid GROUP BY ALL),
+grade_sums AS (SELECT corrupt, production_date, shift, map(list(grade ORDER BY grade), list(gross ORDER BY grade)) AS grade_gross_sqft
+               FROM (SELECT corrupt, production_date, shift, grade, sum(gross) AS gross FROM valid GROUP BY ALL) GROUP BY ALL),
+reject_sums AS (SELECT v.corrupt, v.production_date, v.shift,
+                       sum(r.sqft) FILTER (WHERE r.reason = 'BOND') AS bond_sqft, sum(r.sqft) FILTER (WHERE r.reason = 'WARP') AS warp_sqft,
+                       sum(r.sqft) FILTER (WHERE r.reason = 'MISALIGNMENT') AS misalignment_sqft,
+                       sum(r.sqft) FILTER (WHERE r.reason = 'MOISTURE') AS moisture_sqft
+                FROM rejects r JOIN valid v ON v.setup_id = r.setup_id GROUP BY ALL),
+stop_sums AS (SELECT production_date, shift, count(*) AS stops, sum(seconds) AS stop_seconds,
+                     sum(seconds) FILTER (WHERE kind = 'Maintenance') AS maintenance_seconds,
+                     sum(seconds) FILTER (WHERE kind = 'PM') AS pm_seconds,
+                     sum(seconds) FILTER (WHERE kind = 'Operator') AS operator_seconds
+              FROM stops GROUP BY ALL)
+SELECT sh.production_date, sh.shift, v.corrupt, sh.crew,
+       CASE WHEN coalesce(e.n, 0) > 0 THEN 'incomplete' ELSE 'complete' END, coalesce(e.n, 0),
+       coalesce(ss.setups, 0), coalesce(ss.paper_changes, 0), coalesce(ss.wet_end_ids, []),
+       coalesce(ss.lineal_ft, 0), coalesce(ss.target_ft, 0), coalesce(ss.elapsed_seconds, 0), coalesce(ss.setup_stop_seconds, 0),
+       coalesce(ss.gross_sqft, 0), coalesce(ss.trim_sqft, 0), coalesce(ss.shear_sqft, 0), coalesce(ss.reject_sqft, 0),
+       coalesce(rs.bond_sqft, 0), coalesce(rs.warp_sqft, 0), coalesce(rs.misalignment_sqft, 0), coalesce(rs.moisture_sqft, 0),
+       coalesce(ss.setups_above_trim_target, 0), coalesce(gs.grade_gross_sqft, map()),
+       sh.scheduled_minutes * 60.0, sh.bale,
+       coalesce(st.stops, 0), coalesce(st.stop_seconds, 0), coalesce(st.maintenance_seconds, 0), coalesce(st.pm_seconds, 0),
+       coalesce(st.operator_seconds, 0), coalesce(ss.source_ids, [])
+FROM shifts sh CROSS JOIN variants v
+LEFT JOIN setup_sums ss ON ss.corrupt = v.corrupt AND ss.production_date = sh.production_date AND ss.shift = sh.shift
+LEFT JOIN grade_sums gs ON gs.corrupt = v.corrupt AND gs.production_date = sh.production_date AND gs.shift = sh.shift
+LEFT JOIN reject_sums rs ON rs.corrupt = v.corrupt AND rs.production_date = sh.production_date AND rs.shift = sh.shift
+LEFT JOIN excluded e ON e.corrupt = v.corrupt AND e.production_date = sh.production_date AND e.shift = sh.shift
+LEFT JOIN stop_sums st ON st.production_date = sh.production_date AND st.shift = sh.shift
+ORDER BY sh.production_date, sh.shift, v.corrupt"""
+
 
 # The dashboard tiles: key, label, unit, which direction is better.
 # "neutral" means the count is context, not a score (docs/METRICS.md).
@@ -122,6 +186,11 @@ OVERRUN_WINDOW_PCT = 10.0
 SPEED_MIN_RUN_MINUTES = 2.0
 SPEED_MIN_SETUPS = 10
 _SPEED_SLICES = ("width", "crew")
+
+
+def shift_note(crew):
+    """The one note a shift record carries: its crew label (the record families have no free text)."""
+    return f"{crew} on duty (synthetic crew label, not a person). The record families carry no free-text shift note."
 
 
 def _round(value, places):
@@ -248,6 +317,7 @@ class RecordStore:
         self._db = duckdb.connect(":memory:", config={"threads": 2})
         for table, columns in TABLES.items():
             self._db.execute(f"CREATE TABLE {table} ({columns})")
+        self._db.execute(f"CREATE TABLE shift_kpis ({_SHIFT_KPIS_COLUMNS})")
         folder = prebuilt_folder(prebuilt)
         loaded = read_prebuilt(folder, seed, months, machine_id) if folder else None
         data = None
@@ -280,24 +350,24 @@ class RecordStore:
             self._by_day[self._iso(st.production_date)]["stops"].append(st)
 
     def _load_prebuilt_tables(self, folder, expected_counts):
-        """Copy the six tables out of the prebuilt file. False (and empty tables) when the
-        file is unreadable, its schema no longer matches TABLES, or its counts differ
-        from the manifest: the caller then generates. Never raises."""
+        """Copy the six tables and the derived shift_kpis out of the prebuilt file. False (and
+        empty tables) when the file is unreadable, its schema no longer matches TABLES or
+        SHIFT_KPIS, or its counts differ from the manifest: the caller then generates. Never raises."""
         # ATTACH takes no bound parameter; the path is ours (env or argument), quoted as a literal.
         literal = str(Path(folder) / "store.duckdb").replace("'", "''")
         attached = False
         try:
             self._db.execute(f"ATTACH '{literal}' AS prebuilt (READ_ONLY)")
             attached = True
-            for table in TABLES:
+            for table in (*TABLES, "shift_kpis"):
                 self._db.execute(f"INSERT INTO {table} SELECT * FROM prebuilt.{table}")
-            counts = {table: self._db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] for table in TABLES}
+            counts = {table: self._db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] for table in (*TABLES, "shift_kpis")}
             if counts != expected_counts:
                 raise ValueError(f"prebuilt counts {counts} differ from the manifest {expected_counts}")
-            self.counts = counts
+            self.counts = {table: counts[table] for table in TABLES}
             return True
         except Exception:
-            for table in TABLES:
+            for table in (*TABLES, "shift_kpis"):
                 self._db.execute(f"DELETE FROM {table}")
             return False
         finally:
@@ -309,6 +379,7 @@ class RecordStore:
         tables = self._rows(data)
         for table, rows in tables.items():
             load_rows(self._db, table, rows)
+        build_shift_kpis(self._db, data)
         self.counts = {table: len(rows) for table, rows in tables.items()}
 
     @classmethod
@@ -399,7 +470,7 @@ class RecordStore:
         with self._lock:
             families = self._by_day[day]
             setups = sorted(families["setups"], key=lambda s: (s.start, s.setup_id))
-            target = next((s for s in setups if s.shift_number == 2), None) if corrupt else None
+            target = _corrupt_target(setups) if corrupt else None
             errors, setup_rows, order_rows, reject_rows = [], [], [], []
             for s in setups:
                 trim = CORRUPT_TRIM_SQFT if s is target else s.trim_sqft
@@ -422,19 +493,20 @@ class RecordStore:
                                        c.nominal_cuts * c.number_of_outs, c.actual_cuts * c.number_of_outs, None, None])
                 for r in s.rejects:
                     reject_rows.append([s.setup_id, s.shift_number, r.reason, r.detail, float(r.sheets), r.sqft])
-            shift_rows = [[sh.shift_number, float(sh.scheduled_minutes * 60),
-                           f"{sh.group_name} on duty (synthetic crew label, not a person). "
-                           "The record families carry no free-text shift note."]
+            shift_rows = [[sh.shift_number, float(sh.scheduled_minutes * 60), shift_note(sh.group_name)]
                           for sh in sorted(families["shifts"], key=lambda sh: sh.shift_number)]
             stop_rows = [[st.stop_id, st.shift_number, st.kind, st.place, st.reason, float(st.duration_sec),
                           st.start, st.end, st.user_info] for st in sorted(families["stops"], key=lambda st: st.start)]
-        version = hashlib.sha256(f"{self.content_hash}|{day}|{'corrupt' if corrupt else 'clean'}".encode()).hexdigest()
-        return Analysis.from_rows(day, version, shift_rows, setup_rows, stop_rows, order_rows, reject_rows,
+        return Analysis.from_rows(day, self.day_version(day, corrupt), shift_rows, setup_rows, stop_rows, order_rows, reject_rows,
                                   errors=errors, store=self)
+
+    def day_version(self, production_day, corrupt=False):
+        """The dataset version of one production day's records, clean or with the bad-trim record."""
+        return hashlib.sha256(f"{self.content_hash}|{production_day}|{'corrupt' if corrupt else 'clean'}".encode()).hexdigest()
 
     # ------------------------------------------------------------ fixed reads
 
-    def _fetch(self, sql, params):
+    def _fetch(self, sql, params, limit=ROW_LIMIT):
         """Run one fixed read with bound values under the same bounds as Analysis."""
         with self._lock:
             timer = Timer(2.0, self._db.interrupt)
@@ -443,8 +515,8 @@ class RecordStore:
             try:
                 result = self._db.execute(sql, params)
                 columns = [c[0] for c in result.description]
-                fetched = result.fetchmany(ROW_LIMIT + 1)
-                if len(fetched) > ROW_LIMIT:
+                fetched = result.fetchmany(limit + 1)
+                if len(fetched) > limit:
                     raise ValueError("Result exceeds row limit")
                 return [dict(zip(columns, row)) for row in fetched]
             except duckdb.InterruptException as exc:
@@ -480,20 +552,26 @@ class RecordStore:
         return " AND shift = ?", [shift]
 
     def _sums(self, window, shift, trace):
-        """Raw numerators and denominators of one window; KPIs are ratios of these."""
+        """Raw numerators and denominators of one window; KPIs are ratios of these.
+        The tiles are sums of the precomputed `shift_kpis` rows (issue #34); only the
+        reject sub-reasons (`details`) are read from the raw reject lines."""
         clause, extra = self._shift_clause(shift)
         params = [window["start"], window["end"], *extra]
         queries = {
-            "setups": "SELECT count(*) AS setup_records, count(DISTINCT wet_end_id) AS paper_changes, "
-                      "coalesce(sum(feet),0) AS lineal_ft, coalesce(sum(gross),0) AS gross_sqft, "
-                      "coalesce(sum(trim),0) AS trim_sqft, coalesce(sum(shear),0) AS shear_sqft, "
-                      "coalesce(sum(rejects),0) AS reject_sqft, coalesce(sum(seconds),0) AS elapsed_seconds, "
-                      "coalesce(sum(stop_seconds),0) AS setup_stop_seconds, count(DISTINCT production_date) AS production_days "
-                      f"FROM setups WHERE production_date BETWEEN ? AND ?{clause}",
-            "shifts": "SELECT count(*) AS shift_records, coalesce(sum(scheduled_minutes),0)*60 AS scheduled_seconds, "
-                      f"coalesce(sum(bale),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
-            "stops": f"SELECT kind, count(*) AS stops, sum(seconds) AS seconds FROM stops WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind",
-            "rejects": f"SELECT reason, sum(sqft) AS sqft FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason",
+            "kpis": "SELECT count(*) AS shift_records, coalesce(sum(setups),0) AS setup_records, "
+                    "coalesce(list_unique(flatten(list(wet_end_ids))),0) AS paper_changes, "
+                    "coalesce(sum(lineal_ft),0) AS lineal_ft, coalesce(sum(gross_sqft),0) AS gross_sqft, "
+                    "coalesce(sum(trim_sqft),0) AS trim_sqft, coalesce(sum(shear_sqft),0) AS shear_sqft, "
+                    "coalesce(sum(reject_sqft),0) AS reject_sqft, coalesce(sum(elapsed_seconds),0) AS elapsed_seconds, "
+                    "coalesce(sum(setup_stop_seconds),0) AS setup_stop_seconds, "
+                    "count(DISTINCT production_date) FILTER (WHERE setups > 0) AS production_days, "
+                    "coalesce(sum(scheduled_seconds),0) AS scheduled_seconds, coalesce(sum(bale_sqft),0) AS bale_sqft, "
+                    "coalesce(sum(stops),0) AS stop_count, coalesce(sum(stop_seconds),0) AS stop_seconds, "
+                    "coalesce(sum(maintenance_seconds + pm_seconds),0) AS maintenance_pm_seconds, "
+                    "coalesce(sum(operator_seconds),0) AS operator_seconds, "
+                    "coalesce(sum(bond_sqft),0) AS bond_sqft, coalesce(sum(warp_sqft),0) AS warp_sqft, "
+                    "coalesce(sum(misalignment_sqft),0) AS misalignment_sqft, coalesce(sum(moisture_sqft),0) AS moisture_sqft "
+                    f"FROM shift_kpis WHERE NOT corrupt AND production_date BETWEEN ? AND ?{clause}",
             "details": f"SELECT reason, detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason, detail ORDER BY sum(sqft) DESC, reason, detail",
         }
         sums = {}
@@ -502,19 +580,9 @@ class RecordStore:
             trace["sql"].append(sql)
             trace["parameters"].append(params)
             sums[name] = rows
-        setup, shifts = sums["setups"][0], sums["shifts"][0]
-        by_kind = {r["kind"]: r for r in sums["stops"]}
-        by_reason = {r["reason"]: r["sqft"] for r in sums["rejects"]}
-        total = {**setup, **shifts,
-                 "stop_count": sum(r["stops"] for r in sums["stops"]),
-                 "stop_seconds": sum(r["seconds"] for r in sums["stops"]),
-                 "maintenance_pm_seconds": sum(r["seconds"] for k, r in by_kind.items() if k in ("Maintenance", "PM")),
-                 "operator_seconds": by_kind.get("Operator", {}).get("seconds", 0) or 0,
-                 "bond_sqft": by_reason.get("BOND", 0.0), "warp_sqft": by_reason.get("WARP", 0.0),
-                 "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0), "moisture_sqft": by_reason.get("MOISTURE", 0.0),
-                 "details": sums["details"],
-                 "source_rows": {"setups": setup["setup_records"], "shifts": shifts["shift_records"],
-                                 "stops": sum(r["stops"] for r in sums["stops"]), "rejects": len(sums["rejects"])}}
+        total = {**sums["kpis"][0], "details": sums["details"]}
+        total["source_rows"] = {"setups": total["setup_records"], "shifts": total["shift_records"],
+                                "stops": total["stop_count"], "rejects": len({d["reason"] for d in sums["details"]})}
         return total
 
     @staticmethod
@@ -991,6 +1059,49 @@ _DEFAULT = None
 _DEFAULT_LOCK = threading.Lock()
 
 
+# ------------------------------------------------------------------ shift_kpis
+
+_SHIFT_KPIS_COLUMNS = ", ".join(f"{name} {kind}" for name, kind in SHIFT_KPIS)
+
+
+def _corrupt_target(setups):
+    """The setup the data-quality demo corrupts: the day's first shift-2 setup by start time."""
+    return next((s for s in sorted(setups, key=lambda s: (s.start, s.setup_id)) if s.shift_number == 2), None)
+
+
+def build_shift_kpis(db, data):
+    """Fill `shift_kpis` in `db` (which holds the six tables of `data`) and return its row count.
+    Validation runs once here, in Python, with the per-day Analysis's own rules
+    (`RecordStore._validate_setup`); the invalid setup ids of each variant go into a
+    temporary table the aggregate leaves out."""
+    by_day = {}
+    for s in data["dry_end_setups"]:
+        by_day.setdefault(s.production_date, []).append(s)
+    excluded = []
+    for setups in by_day.values():
+        target = _corrupt_target(setups)
+        for s in setups:
+            for corrupt in (False, True):
+                try:
+                    RecordStore._validate_setup(s, CORRUPT_TRIM_SQFT if corrupt and s is target else s.trim_sqft)
+                except ValueError:
+                    excluded.append([s.setup_id, corrupt])
+    db.execute(f"CREATE TABLE IF NOT EXISTS shift_kpis ({_SHIFT_KPIS_COLUMNS})")
+    db.execute("CREATE TEMP TABLE kpi_excluded (setup_id VARCHAR, corrupt BOOLEAN)")
+    # One thread: a parallel sum adds in whatever order the threads finish, and the prebuilt
+    # file and a generated store must hold bit-identical sums.
+    threads = db.execute("SELECT current_setting('threads')").fetchone()[0]
+    try:
+        if excluded:
+            db.executemany("INSERT INTO kpi_excluded VALUES (?, ?)", excluded)
+        db.execute("SET threads = 1")
+        db.execute("INSERT INTO shift_kpis " + _SHIFT_KPIS_SQL)
+    finally:
+        db.execute(f"SET threads = {int(threads)}")
+        db.execute("DROP TABLE kpi_excluded")
+    return db.execute("SELECT count(*) FROM shift_kpis").fetchone()[0]
+
+
 # ------------------------------------------------------------------ prebuilt store
 
 def generator_fingerprint():
@@ -1034,13 +1145,14 @@ def build_prebuilt(folder, seed=DEFAULT_SEED, months=DEFAULT_MONTHS, machine_id=
         for table, columns in TABLES.items():
             db.execute(f"CREATE TABLE {table} ({columns})")
             load_rows(db, table, rows[table])
+        kpi_rows = build_shift_kpis(db, data)
         db.execute("CHECKPOINT")
     finally:
         db.close()
     (folder / "records.pkl").write_bytes(pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL))
     manifest = {"format": PREBUILT_FORMAT, "seed": seed, "months": [list(m) for m in months], "machine_id": machine_id,
                 "generator_fingerprint": generator_fingerprint(), "content_hash": data["content_hash"],
-                "counts": {table: len(r) for table, r in rows.items()}}
+                "counts": {table: len(r) for table, r in rows.items()}, "shift_kpis_rows": kpi_rows}
     (folder / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
 
@@ -1064,7 +1176,7 @@ def read_prebuilt(folder, seed, months, machine_id):
     if not (folder / "store.duckdb").is_file():
         return None
     counts = manifest.get("counts")
-    if not isinstance(counts, dict) or set(counts) != set(TABLES):
+    if not isinstance(counts, dict) or set(counts) != set(TABLES) or type(manifest.get("shift_kpis_rows")) is not int:
         return None
     try:
         # pickle executes what it reads: this file came from our own build (see the docstring).
@@ -1073,7 +1185,7 @@ def read_prebuilt(folder, seed, months, machine_id):
         return None
     if not isinstance(data, dict) or data.get("content_hash") != manifest.get("content_hash"):
         return None
-    return data, counts
+    return data, {**counts, "shift_kpis": manifest["shift_kpis_rows"]}
 
 
 def default_store():
