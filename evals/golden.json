@@ -2497,6 +2497,46 @@
     "sections_match": "contribution margin not set",
     "sections_not_match": "contribution \\$0\\b|contribution \\$0\\.00"
    }
+  },
+  {
+   "id": "money-compare-in-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Compare September with August in dollars",
+   "note": "Review of #31a: the money words used to win and answer September's levers alone, dropping the comparison. A shape with no dollars yet is refused with what to ask.",
+   "expect": {
+    "raises": "in dollars is not available yet"
+   }
+  },
+  {
+   "id": "money-costing-us-most-minutes-pareto",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Which downtime reason is costing us the most minutes this month?",
+   "note": "Review of #31a: 'costing us' is a money word, but the question is the Pareto, whose rows carry their dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Shift 2 in dollars: .*min x \\$1,200/hr machine time.*per year: x "
+   }
   }
  ]
 }

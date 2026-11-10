@@ -38,7 +38,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from .agent import Agent, Context, TOOL_SCHEMAS, parse_request
 from .anthropic_provider import resolve_model
-from .cost_model import parse_rates
+from .cost_model import effective as effective_rates, parse_rates
 from .evalboard import EvalBoard, evals_dir
 from .record_store import DEFAULT_MONTHS, default_store
 from .synth import production_days
@@ -132,6 +132,7 @@ class Workbench:
         self.public = public
         self.guards = guards or DemoGuards()
         self.anthropic_model = resolve_model(os.environ.get('ANTHROPIC_MODEL'))  # an unsupported value fails at boot
+        effective_rates()   # an invalid INVESTIGATOR_RATES fails at boot, not on every visitor's question
         # Offline investigations, PDFs and each tool call of a live round take this lock, one at a time, for
         # milliseconds. No model call is ever made while it is held; static files do not wait on it.
         self.lock = threading.Lock()

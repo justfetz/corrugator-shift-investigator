@@ -96,6 +96,8 @@ carries dollars names its rates in a provenance line ("paper $55/MSF (post), mac
 
 Overrides layer: the defaults, then `INVESTIGATOR_RATES=paper:55,hour:1200,margin:40` on the server,
 then `rates=` on the request (`/api/ask` body, `/q`, or the URL; `docs/URLS.md`). Each source is named.
+A rate takes at most two decimals, so the rate a link carries is exactly the rate its answer used; an
+invalid `INVESTIGATOR_RATES` stops the server at boot.
 
 Three components per priced row, kept apart so that changing one rate changes only the dollars that use it:
 
@@ -106,7 +108,7 @@ Three components per priced row, kept apart so that changing one rate changes on
 | `usd` | `paper_usd` + `machine_time_usd` | every priced row |
 | `contribution_usd` | MSF not made x margin $/MSF; MSF not made = minutes x 5.4 for time, the waste MSF for shear and rejects | null with `contribution_status` "margin not set" until a margin is set, never $0; shown beside `usd`, never added (it prices the same lost capacity as the shadow price, from the other side) |
 | `usd_per_year`, `contribution_usd_per_year` | paper (and the run time of waste board) by volume: x 1.8M MSF / the window's gross MSF; machine time by time: x (1,440 x 257.14 min) / the window's scheduled minutes | the window's loss rate held for a year of one machine at the post's volume |
-| `usd_basis` | the formula with its numbers, e.g. "11,218.7 sq ft = 11.219 MSF x $55/MSF paper = $617; 11.219 MSF / 5.4 MSF per min = 2.08 min x $1,200/hr machine time = $41.55; contribution: margin not set" | so a superintendent can redo it on paper |
+| `usd_basis` | the formula with its numbers, e.g. "11,218.7 sq ft = 11.219 MSF x $55/MSF paper = $617; 11.219 MSF / 5.4 MSF per min = 2.08 min x $1,200/hr machine time = $41.55; contribution: margin not set" | so a superintendent can redo it on paper; it ends with the per-year factor, e.g. "per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)" or "per year: x 771.43 (370,286 scheduled min a year / 480 min)" |
 
 The fields are flat on the row, beside the quantity, so the live narrative cites them like any other
 field and the narrative validator substitutes every dollar from the tool result. They ride on
@@ -125,6 +127,18 @@ field and the narrative validator substitutes every dollar from the tool result.
   those, so the whole loss). Each lever names the records behind it. It ranks levers and names records; it
   never prescribes a machine adjustment. Asked as "where is the money this month", "what's costing us",
   "opportunities"; under the Day control "where is the money" is the shift's own `get_shift_dollars`.
+
+A money word beside another question never replaces it. Downtime, rejects, waste, the Pareto, the
+overview and the comparison carry their dollars on the rows, so "which reason is costing us the most
+minutes" is the Pareto, priced. A comparison, trend, rollstock, grade, over/under-run, stops-per-day,
+summary, matrix, notes or ranking asked "in dollars" is refused with what to ask instead, not
+answered as the levers alone.
+
+The live paths: the narrative may cite `usd`, `usd_per_year`, `paper_usd`, `machine_time_usd` and
+`contribution_usd` (the formula text and intermediate quantities stay off the packet). The OpenAI
+planner loop is not offered the two money tools and sees no dollar fields: its request after one
+waste breakdown was already within a few hundred bytes of its 24,000-byte cap, so its requests stay
+byte for byte what they were. Money questions are answered offline or by the Anthropic analyst.
 
 Not yet on the card: the dollar line, dollars on tiles and bars, the units toggle and the editable rates
 panel are #31b (`web/`). The tools here give that card the same numbers the goldens check.

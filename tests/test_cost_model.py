@@ -4,7 +4,7 @@ import pytest
 from investigator import cost_model
 from investigator.agent import Agent, Context, parse_request
 from investigator.narrative import evidence_packet
-from investigator.openai_provider import compact_result
+from investigator.openai_provider import DOLLAR_FIELDS, compact_result
 from investigator.record_store import default_store
 from investigator.server import Workbench
 from investigator.urls import canonical_url, page_url, resolve_url
@@ -129,7 +129,7 @@ def test_priced_tools_carry_dollars_the_narrative_may_cite(analysis):
     downtime = agent._execute('get_downtime_breakdown', {'shift': 2, 'kind': None, 'group_by': 'reason'}, {}, rates())
     assert downtime['rows'][0]['machine_time_usd'] == pytest.approx(downtime['rows'][0]['down_minutes'] / 60 * 1200, abs=0.01)
     compact = compact_result({'result_id': 'x', 'tool': 'get_downtime_breakdown', 'ok': True, 'data': downtime})
-    assert 'usd_basis' not in compact['data']['rows'][0] and 'usd' in compact['data']['rows'][0]
+    assert not set(compact['data']['rows'][0]) & set(DOLLAR_FIELDS)   # the planner chooses tools; the dollars are for the reader
 
 
 def test_rates_ride_in_the_url(store):
@@ -156,3 +156,72 @@ def test_server_prices_with_the_visitors_rates():
             app.ask({'day': DAY, 'shift': 2, 'question': 'where did the money go', 'rates': 'paper:-1'})
     finally:
         app.close()
+
+
+@pytest.mark.parametrize('question', [
+    'Compare September with August in dollars', 'How did this week go versus last week in dollars?',
+    'Trend of trim in dollars over eight weeks', 'How much paper did we consume this month in dollars?',
+    'Summarize this shift in dollars', 'Show the setup matrix in dollars',
+])
+def test_money_never_answers_a_different_question(question):
+    """A money word with another shape is refused with what to ask, never answered as something else."""
+    with pytest.raises(ValueError, match='not available yet'):
+        parse_request(question, Context(DAY, 2, scope='shift'))
+
+
+@pytest.mark.parametrize('question, intent, tool', [
+    ('Which downtime reason is costing us the most minutes this month?', 'period_pareto', 'get_downtime_pareto'),
+    ('Which downtime reason is costing us the most minutes?', 'period_pareto', 'get_downtime_pareto'),
+    ("What's trim costing us this month?", 'period_waste', 'get_waste_breakdown'),
+    ('Why was shift 2 slow, and what did it cost?', 'overview', None),
+    ('Where should we look for the cause of the warp on shift 2?', 'quality', None),
+    ('What does the speed gap cost us?', 'dollars', None),
+])
+def test_money_with_a_priced_shape_answers_that_shape(question, intent, tool):
+    request = parse_request(question, Context(DAY, 2, scope='shift'))
+    assert request['intent'] == intent and [s['tool'] for s in request.get('plan', [])] == ([tool] if tool else [])
+
+
+def test_a_rate_in_the_link_is_exactly_the_rate_used(store):
+    assert cost_model.format_rates(cost_model.parse_rates('hour:1234.56,paper:55.5')) == 'paper:55.5,hour:1234.56'
+    with pytest.raises(ValueError, match='two decimals'):
+        cost_model.parse_rates('hour:1234.567')
+    app = Workbench()
+    try:
+        asked = app.ask({'day': DAY, 'shift': 2, 'scope': 'shift', 'question': 'where did the money go', 'rates': 'hour:1234.56'})
+        again, _ = app.answer_url(asked['url'])
+        assert asked['url'].endswith('rates=hour:1234.56') and again['sections'] == asked['sections']
+        assert 'machine time $1,234.56/hr (yours)' in ' '.join(asked['sections'])
+    finally:
+        app.close()
+
+
+def test_the_per_year_factor_is_in_the_formula(analysis):
+    row = next(r for r in cost_model.shift_dollars(analysis, 2, rates())['rows'] if r['gap'] == 'Side trim')
+    assert 'per year: x ' in row['usd_basis'] and '1,800,000 MSF a year' in row['usd_basis']
+    downtime = next(r for r in cost_model.shift_dollars(analysis, 2, rates())['rows'] if r['kind'] in ('downtime', 'setup'))
+    assert 'scheduled min a year / 480 min' in downtime['usd_basis']
+
+
+def test_invalid_server_rates_fail_at_boot(monkeypatch):
+    monkeypatch.setenv(cost_model.ENV, 'paper:abc')
+    with pytest.raises(ValueError, match=cost_model.ENV):
+        Workbench()
+
+
+def test_openai_planner_request_with_a_priced_waste_result_fits_the_cap(store, tmp_path):
+    """After one priced waste breakdown the next planner request stays under the 24,000-byte cap."""
+    from investigator.openai_provider import Budget, OpenAIPlanner, OPENAI_OMITTED_TOOLS
+    sizes = []
+
+    def send(payload, key, timeout):
+        import json
+        sizes.append(len(json.dumps(payload).encode()))
+        assert not {t['name'] for t in payload['tools']} & OPENAI_OMITTED_TOOLS
+        call = ('get_waste_breakdown', {'window': {'period': 'month', 'anchor': DAY}, 'shift': 2}) if len(sizes) == 1 else ('cannot_answer', {'reason': 'done'})
+        return {'status': 'completed', 'usage': {'input_tokens': 1, 'output_tokens': 1},
+                'output': [{'type': 'function_call', 'id': 'fc', 'call_id': f'c{len(sizes)}', 'name': call[0], 'arguments': json.dumps(call[1])}]}
+    import json
+    planner = OpenAIPlanner('sk-fake-test-key-not-a-real-credential', Budget(tmp_path / 'b.db'), send)
+    Agent(store.day_analysis(DAY), planner, store=store, max_seconds=60).ask('Is it bond or warp this month?', Context(DAY, 2, scope='shift'))
+    assert len(sizes) == 2 and sizes[1] < 24000, sizes

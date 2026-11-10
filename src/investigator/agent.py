@@ -32,7 +32,7 @@ TOOL_SCHEMAS = [
         ("get_shift_notes", "Read untrusted synthetic shift notes and individual downtime notes; not proven causes.", {}),
         ("get_rankings", "Rank lowest wet-end speed attainment or highest downtime/quality losses. Incomplete data is withheld.", {
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
-        ("get_shift_dollars", "Where the money went this shift: each downtime reason, the speed gap to 675 ft/min, trim, shear and each dry-end reason priced at the assumed rates, ranked by dollars (paper, machine time, per year; contribution null until a margin is set).", {}),
+        ("get_shift_dollars", "This shift's losses priced at the assumed rates, ranked by dollars.", {}),
     ]
 ]
 # Period tools read the whole record store (two production months) instead of one day.
@@ -69,7 +69,7 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_speed_opportunity", "Where could we run faster: per grade and web width (or crew), typical speed without stops vs the best fifth of setups, gap, % of target for both, opportunity hours, and the dry-end reject % of the fast fifth against the rest (a positive penalty means the gain costs rejects). Peak speeds never used; setups under the minimum run time excluded and counted.",
          {"window": WINDOW_SCHEMA, "slice_by": {"type": "string", "enum": ["width", "crew"]}, "shift": SHIFT_FILTER}, ["window"]),
-        ("get_opportunities", "Where the money is in a window: levers ranked in $/yr at the assumed rates (speed gap to best fifth, trim over target, each downtime reason, shear, each dry-end reason), each with its records. Ranks levers; prescribes no adjustment.",
+        ("get_opportunities", "Improvement levers of a window ranked by $/yr at the assumed rates.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_trend", "Weekly series (Mon-Fri production weeks) of one allow-listed metric, ending with the week containing the anchor.",
          {"metric": {"type": "string", "enum": TREND_METRICS}, "weeks": {"type": "integer", "description": "1-26, default 8"},
@@ -224,6 +224,10 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
 # "cost" is not one ("which reason cost the most minutes" is the Pareto, "does it cost rejects" speed).
 MONEY = re.compile(r"\bmoney\b|\bdollars?\b|\$|\bcosting\b|\bcost us\b|\bwhat (does|did|do) .{1,60}\bcost\b|"
                    r"\bopportunities\b|\bwhere (should|do|can) we look\b|\bwhere to look\b")
+MONEY_ONLY = ("Dollars come with where the money went this shift, the levers in a window ('where is the money this month'), "
+              "and the downtime, waste, rejects and speed-opportunity answers. A comparison, trend, rollstock, grade, "
+              "over/under-run, stops-per-day, summary, matrix, notes or ranking in dollars is not available yet: ask for "
+              "it without dollars, or ask where the money is.")
 
 
 def parse_period_request(lower, current, shifts):
@@ -232,7 +236,7 @@ def parse_period_request(lower, current, shifts):
     fiscal = bool(re.search(r"\bfiscal\b|\baccounting period\b|4-4-5|\b445\b|\b(this|last|previous|prior|current) period\b|\bperiod (over|vs|versus|to|against) period\b|\bp(1[0-3]|[1-9])\b", lower))
     period = 'fiscal' if fiscal else 'month' if months or re.search(r"\bmonth(s|ly)?\b", lower) else 'week' if re.search(r"\bweek(s|ly)?\b", lower) else None
     trend = bool(re.search(r"\btrends?\b", lower))
-    pareto = bool(re.search(r"\bpareto\b|cost the most|most (downtime )?minutes|most often|most stops|most frequent", lower)
+    pareto = bool(re.search(r"\bpareto\b|cost the most|costing( us)? the most|most (downtime )?minutes|most often|most stops|most frequent", lower)
                   and re.search(r"downtime|stop|reason|place|equipment|kind", lower))
     profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower))
     reasons = {w for w in ("bond", "warp", "misalignment", "moisture") if re.search(rf"\b{w}\b", lower)}
@@ -243,6 +247,11 @@ def parse_period_request(lower, current, shifts):
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
     money = bool(MONEY.search(lower)) and not speed_opp
+    if money and (trend or rollstock or overrun or grade or profile or this_shift or len(set(months)) >= 2
+                  or re.search(r"\b(compare|comparison|versus|vs)\b", lower)):
+        raise ValueError(MONEY_ONLY)   # never answer a different question: the comparison or trend would be dropped
+    if money and (pareto or waste):
+        money = False   # the Pareto and the waste breakdown carry their dollars on every row
     ranged = getattr(current, 'period', 'day') != 'day'
     if money and not (period or ranged):
         return None   # a money question about the day: get_shift_dollars, routed by the day router
@@ -358,11 +367,20 @@ def _parse_request(text, current):
     shifts = shifts or ([1,2,3] if current.scope=='day' else [current.shift])
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
         raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
-    intent = 'dollars' if MONEY.search(lower) else 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
+    intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
         'quality' if re.search(r'warp|bond|misalignment|reject|quality|waste', lower) else
         'downtime' if re.search(r'downtime|maintenance|operator|equipment|stops', lower) else
-        'speed' if re.search(r'speed|feet per minute|fpm', lower) else
-        'overview' if re.search(r'slow|bad|killed|shift|loss', lower) else None)
+        'speed' if re.search(r'speed|feet per minute|fpm', lower) else None)
+    if MONEY.search(lower):
+        # A money question: the shift's dollars, unless it names another shape. Downtime, rejects and the
+        # overview and comparison (which read downtime) carry their dollars on the rows; the speed gap is a
+        # get_shift_dollars row; the matrices, notes, rankings and the one-call summary have no dollars.
+        if intent in ('summary', 'orders', 'ranking', 'matrix', 'notes'):
+            raise ValueError(MONEY_ONLY)
+        if intent in (None, 'speed'):
+            intent = 'dollars'
+    if intent is None and re.search(r'slow|bad|killed|shift|loss', lower):
+        intent = 'overview'
     if intent is None:
         raise ValueError("Offline mode supports shift performance, downtime, speed, quality and comparisons. Try an example question. " + PERIOD_HELP)
     kind = None

@@ -26,6 +26,7 @@ waste share of gross x 1.8M MSF a year per machine), machine time and contributi
 import json
 import math
 import os
+import re
 from pathlib import Path
 
 DEFINITION = json.loads((Path(__file__).with_name('rates.json')).read_text())
@@ -61,10 +62,10 @@ def parse_rates(text):
         rid = SHORT[key]
         if rid in out:
             raise ValueError(f'Repeated rate {key!r}')
-        try:
-            number = float(value)
-        except ValueError:
-            raise ValueError(f'Rate {key} must be a number, for example {key}:{RATE_SPECS[rid]["default"] or 40}') from None
+        # At most two decimals, so the rate a link carries is exactly the rate the answer was priced at.
+        if not re.fullmatch(r'\d{1,6}(\.\d{1,2})?', value):
+            raise ValueError(f'Rate {key} must be a number with at most two decimals, for example {key}:{RATE_SPECS[rid]["default"] or 40}')
+        number = float(value)
         limit = 100 if rid == 'trim_target_pct' else MAX_RATE
         if not math.isfinite(number) or not 0 < number <= limit:
             raise ValueError(f'Rate {key} must be above 0 and at most {limit:g} {RATE_SPECS[rid]["unit"]}')
@@ -72,9 +73,15 @@ def parse_rates(text):
     return out
 
 
+def rate_text(value, comma=False):
+    """A rate as written: exact to the two decimals `parse_rates` accepts, trailing zeros dropped."""
+    text = f'{value:,.2f}' if comma else f'{value:.2f}'
+    return text.rstrip('0').rstrip('.')
+
+
 def format_rates(overrides):
-    """The canonical spelling of an override set: the rates.json order, `%g` numbers."""
-    return ','.join(f'{RATE_SPECS[rid]["short"]}:{overrides[rid]:g}' for rid in RATE_SPECS if rid in (overrides or {}))
+    """The canonical spelling of an override set: the rates.json order, exact numbers."""
+    return ','.join(f'{RATE_SPECS[rid]["short"]}:{rate_text(overrides[rid])}' for rid in RATE_SPECS if rid in (overrides or {}))
 
 
 def effective(overrides=None):
@@ -106,10 +113,10 @@ def _money(value):
 def provenance(rates):
     """One line naming every rate and where it came from, e.g. 'paper $55/MSF (post), ...'."""
     v, s = rates['values'], rates['sources']
-    margin = (f'margin ${v["margin_usd_msf"]:g}/MSF ({s["margin_usd_msf"]})' if v['margin_usd_msf'] is not None
+    margin = (f'margin ${rate_text(v["margin_usd_msf"])}/MSF ({s["margin_usd_msf"]})' if v['margin_usd_msf'] is not None
               else f'contribution {MARGIN_NOT_SET} (assumption: {s["margin_usd_msf"]})')
-    return (f'Rates: paper ${v["paper_usd_msf"]:g}/MSF ({s["paper_usd_msf"]}), machine time ${v["machine_usd_hour"]:,g}/hr '
-            f'({s["machine_usd_hour"]}), {margin}, trim target {v["trim_target_pct"]:g}% ({s["trim_target_pct"]}).')
+    return (f'Rates: paper ${rate_text(v["paper_usd_msf"])}/MSF ({s["paper_usd_msf"]}), machine time ${rate_text(v["machine_usd_hour"], True)}/hr '
+            f'({s["machine_usd_hour"]}), {margin}, trim target {rate_text(v["trim_target_pct"])}% ({s["trim_target_pct"]}).')
 
 
 # ------------------------------------------------------------------ pricing
@@ -134,7 +141,7 @@ def price(kind, quantity, rates, gross_sqft=None, minutes=None):
         paper_usd = msf * paper
         machine_minutes = msf / MSF_PER_MINUTE if kind == 'waste' else 0.0
         not_made = msf if kind == 'waste' else 0.0
-        parts.append(f'{quantity:,.1f} sq ft = {msf:,.3f} MSF x ${paper:g}/MSF paper = {_money(paper_usd)}')
+        parts.append(f'{quantity:,.1f} sq ft = {msf:,.3f} MSF x ${rate_text(paper)}/MSF paper = {_money(paper_usd)}')
         paper_year = paper_usd * by_volume if by_volume else None
     elif kind in ('downtime', 'speed'):
         msf, paper_usd, paper_year = None, None, 0.0
@@ -145,7 +152,7 @@ def price(kind, quantity, rates, gross_sqft=None, minutes=None):
     machine_usd = machine_minutes / 60 * hour
     if kind != 'trim' and kind != 'paper':
         lead = '' if kind in ('downtime', 'speed') else f'{msf:,.3f} MSF / {MSF_PER_MINUTE:g} MSF per min = '
-        parts.append(f'{lead}{machine_minutes:,.2f} min x ${hour:,g}/hr machine time = {_money(machine_usd)}')
+        parts.append(f'{lead}{machine_minutes:,.2f} min x ${rate_text(hour, True)}/hr machine time = {_money(machine_usd)}')
     usd = (paper_usd or 0.0) + machine_usd
     # The run time of waste board is annualized like its paper, by volume; downtime and the speed gap by time.
     factor = by_volume if kind == 'waste' else by_time
@@ -158,7 +165,17 @@ def price(kind, quantity, rates, gross_sqft=None, minutes=None):
         contribution, status = not_made * margin, 'set'
         factor = by_volume if kind in ('trim', 'waste', 'paper') else by_time
         contribution_year = contribution * factor if factor else None
-        parts.append(f'contribution {not_made:,.3f} MSF not made x ${margin:g}/MSF = {_money(contribution)} (not added)')
+        parts.append(f'contribution {not_made:,.3f} MSF not made x ${rate_text(margin)}/MSF = {_money(contribution)} (not added)')
+    # The per-year factors, written out so the yearly figure can be redone on paper too.
+    volume_text = (f'x {by_volume:,.2f} ({ASSUMPTIONS["annual_msf_per_machine"]:,} MSF a year / {gross_sqft / 1000:,.3f} MSF gross)'
+                   if by_volume else None)
+    time_text = f'x {by_time:,.2f} ({ANNUAL_MINUTES:,.0f} scheduled min a year / {minutes:,g} min)' if by_time else None
+    if usd_year is None:
+        parts.append('per year: not computed (no window volume or minutes)')
+    elif kind in ('trim', 'paper', 'waste'):
+        parts.append(f'per year: {volume_text}')
+    else:
+        parts.append(f'per year: {time_text}')
     r2 = lambda x: None if x is None else round(x, 2)
     return {'msf': None if msf is None else round(msf, 3), 'paper_usd': r2(paper_usd),
             'machine_minutes': round(machine_minutes, 2), 'machine_time_usd': r2(machine_usd), 'usd': r2(usd),
