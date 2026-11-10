@@ -28,11 +28,18 @@ def analysis():
 
 @pytest.fixture(scope='module')
 def packet(analysis):
-    """r1..r3: get_shift_kpis for shifts 1, 2, 3; r4: Shift 1's downtime by reason (largest first)."""
-    evidence = [{'result_id': f'run:{n}', 'tool': 'get_shift_kpis', 'arguments': {'shift': s}, 'ok': True, 'data': analysis.get_shift_kpis(s)}
-                for n, s in enumerate((1, 2, 3), 1)]
-    evidence.append({'result_id': 'run:4', 'tool': 'get_downtime_breakdown', 'arguments': {'shift': 1}, 'ok': True,
-                     'data': analysis.get_downtime_breakdown(1)})
+    """r1-r3: get_shift_kpis for shifts 1, 2, 3; r4-r6: each shift's downtime by reason and r7-r9 its rejects by
+    reason (largest first); r10-r13: September's KPI tiles, downtime Pareto, speed opportunity and waste breakdown."""
+    evidence = []
+
+    def add(tool, data):
+        evidence.append({'result_id': f'run:{len(evidence) + 1}', 'tool': tool, 'arguments': {}, 'ok': True, 'data': data})
+    for tool in ('get_shift_kpis', 'get_downtime_breakdown', 'get_quality_breakdown'):
+        for s in (1, 2, 3):
+            add(tool, getattr(analysis, tool)(s))
+    store, september = default_store(), {'period': 'month', 'anchor': '2026-09-15'}
+    for tool in ('get_period_kpis', 'get_downtime_pareto', 'get_speed_opportunity', 'get_waste_breakdown'):
+        add(tool, getattr(store, tool)(window=september))
     return evidence_packet(evidence)
 
 
@@ -133,6 +140,52 @@ def test_claims_the_rules_cannot_pin_down_are_left_alone(packet, line):
     assert kept(packet, line)
 
 
+@pytest.mark.parametrize('line', [
+    # each shift's own table ranks its own reasons: "largest" is not one shift's top reason against another's
+    'finding: On Shift 2 the largest stop reason was Knife / slitter jam at {{r5.0.down_minutes}} minutes; on Shift 1 it was Glue / starch at {{r4.0.down_minutes}} minutes.',
+    "finding: Shift 2's largest stop was {{r5.0.category}} at {{r5.0.down_minutes}} minutes, against {{r4.0.category}} at {{r4.0.down_minutes}} minutes on Shift 1.",
+    'finding: The largest reject reason on Shift 1 was BOND at {{r7.0.rejected_sqft}} square feet; on Shift 2 it was WARP at {{r8.0.rejected_sqft}} square feet.',
+    'finding: Shift 3 lost the most time to Raw material (roll), {{r6.0.down_minutes}} minutes, while Shift 1 lost {{r4.0.down_minutes}} minutes to Glue / starch.',
+    "finding: Shift 1's longest stop reason was Glue / starch at {{r4.0.down_minutes}} minutes, while Shift 2's largest was Knife / slitter jam at {{r5.0.down_minutes}} minutes.",
+    'finding: Glue / starch was the largest stop reason on Shift 1 at {{r4.0.down_minutes}} minutes, ahead of Order change at {{r4.1.down_minutes}} and Stacker at {{r4.2.down_minutes}}.',
+    # "fastest" is said of the ft/min beside it, not of a percent-of-target pair later in the sentence
+    f'finding: Shift 1 ran fastest at {FPM % 1} ft/min even though Shift 2 ran closer to target, {{{{r2.0.speed_to_target_pct}}}} percent against {{{{r1.0.speed_to_target_pct}}}}.',
+    f"finding: Shift 1 ran fastest at {FPM % 1} ft/min even though its speed to target, {{{{r1.0.speed_to_target_pct}}}} percent, was below Shift 2's {{{{r2.0.speed_to_target_pct}}}}.",
+    f'finding: Shift 1 ran fastest, at {FPM % 1} ft/min, though at {{{{r1.0.speed_to_target_pct}}}} percent of target it trailed Shift 2 at {{{{r2.0.speed_to_target_pct}}}}.',
+    f'finding: Shift 2 had the highest speed to target at {{{{r2.0.speed_to_target_pct}}}} percent against {{{{r1.0.speed_to_target_pct}}}} on Shift 1, yet the lowest observed speed at {FPM % 2} against {FPM % 1}.',
+    f'finding: Shift 1 posted the fastest speed at {FPM % 1} ft/min but the highest downtime at {DOWN % 1} percent, against {FPM % 2} ft/min and {DOWN % 2} percent on Shift 2.',
+    f'finding: Shift 1 at {FPM % 1} and Shift 3 at {FPM % 3} both ran faster than Shift 2 at {FPM % 2}.',
+    # "down" meaning stopped and "made up" are not directions; "the best fifth" is a field, not a superlative
+    'finding: The corrugator was down {{r11.1.minutes}} minutes for Missed splice, against {{r11.1.previous_minutes}} in the previous month.',
+    'finding: Order change made up {{r11.3.minutes}} minutes of stops, against {{r11.3.previous_minutes}} in the previous month.',
+    'finding: On {{r12.0.label}} the best fifth of setups ran {{r12.0.best_fifth_fpm}} ft/min against a typical {{r12.0.typical_fpm}}; on {{r12.1.label}} the best fifth ran {{r12.1.best_fifth_fpm}} ft/min.',
+    'finding: Missed splice was the largest reason after Planned maintenance ({{r11.0.minutes}} minutes), at {{r11.1.minutes}} minutes against {{r11.3.minutes}} for Order change.',
+    # true directions on the real September tables
+    'finding: Stops went up to {{r10.7.current}} from {{r10.7.previous}}, even though downtime minutes went down to {{r10.6.current}} from {{r10.6.previous}}.',
+    'finding: Side trim rose to {{r13.0.pct_of_gross}} percent of gross from {{r13.0.previous_pct_of_gross}}, the largest of the waste categories at {{r13.0.sqft}} square feet against {{r13.1.sqft}} for shear.',
+])
+def test_true_orderings_from_review_are_kept(packet, line):
+    """Each line is true on these rows; the first version of the check withdrew most of them."""
+    assert kept(packet, line)
+
+
+@pytest.mark.parametrize('line', [
+    f'finding: Shift 2 ran faster than Shift 1, {FPM % 2} ft/min against {FPM % 1} ft/min.',          # names in words, values after a comma
+    f'finding: Shift 2 ran faster than Shift 1 at {FPM % 1} ft/min, posting {FPM % 2} ft/min.',
+    f'finding: Shift 1 lost less time to stops than Shift 2, {DOWN % 1} percent against {DOWN % 2} percent.',
+    f'finding: Shift 1 had better downtime than Shift 2, {DOWN % 1} percent against {DOWN % 2}.',
+    f'finding: Shift 2 at {FPM % 2} ft/min outpaced Shift 1 at {FPM % 1} and Shift 3 at {FPM % 3}.',
+    f'finding: The fastest shift was Shift 2, at {FPM % 2} ft/min against {FPM % 1} on Shift 1 and {FPM % 3} on Shift 3.',
+    f'finding: Shift 2 posted the highest speed, {FPM % 2} ft/min including downtime, against {FPM % 1} ft/min on Shift 1.',
+    f'finding: Shift 2 achieved the best speed, {FPM % 2} ft/min, versus {FPM % 1} for Shift 1.',
+    f'finding: Including downtime, Shift 2 ran fastest at {FPM % 2} ft/min (Shift 1 {FPM % 1}, Shift 3 {FPM % 3}).',
+    f'finding: Shift 2 ran the fastest. It averaged {FPM % 2} ft/min against {FPM % 1} on Shift 1 and {FPM % 3} on Shift 3.',
+    'finding: Stacker was the largest stop reason on Shift 1 at {{r4.2.down_minutes}} minutes, ahead of Glue / starch at {{r4.0.down_minutes}}.',
+])
+def test_false_orderings_from_review_are_withdrawn(packet, line):
+    assert not kept(packet, line)
+
+
 PERIOD = [
     {'result_id': 'p1', 'tool': 'get_downtime_pareto', 'shift': None, 'coverage': 'complete', 'total_rows': 2, 'preview_rows': 2,
      'rows': [{'category': 'Missed splice', 'stops': 128, 'minutes': 196.5, 'previous_stops': 81, 'previous_minutes': 124.65},
@@ -230,14 +283,23 @@ def _runner():
     return module
 
 
-def test_the_run_summary_counts_comparisons_withdrawn_and_the_live_variant_runs_on_demand():
+def test_the_run_summary_counts_comparisons_withdrawn_and_the_live_variant_runs_on_demand(tmp_path):
     runner = _runner()
+    runner.FIXTURES = tmp_path      # whether the owner has recorded this case yet (#71) does not matter here
     rows = [{'provider': None, 'comparisons_withdrawn': 1}, {'provider': None, 'comparisons_withdrawn': None},
             {'provider': 'anthropic', 'called': True, 'comparisons_withdrawn': 0},
             {'provider': 'anthropic', 'called': True, 'comparisons_withdrawn': 2},
             {'provider': 'anthropic', 'comparisons_withdrawn': 0}]
     assert runner.comparisons_withdrawn(rows) == {'offline': (1, 1), 'live anthropic': (2, 2), 'replayed anthropic': (0, 1)}
     case = next(c for c in runner.load_cases() if c['id'] == 'analyst-fastest-shift-contradicted')
-    assert case.get('live') and case.get('plan') and not runner.fixture_path(case['id'], 'anthropic').exists()
+    assert case.get('live') and case.get('plan')
     assert runner.plan_rows([case], False, None) == [(case, None)]                          # no skipped @live row offline
     assert runner.plan_rows([case], True, 'anthropic') == [(case, None), (case, 'anthropic')]   # --live asks the real analyst
+
+
+def test_both_narrative_prompts_ask_for_orderings_computed_from_the_cited_values():
+    from investigator.anthropic_provider import NARRATIVE_STREAM_INSTRUCTIONS
+    from investigator.openai_provider import NARRATIVE_INSTRUCTIONS
+    for prompt in (NARRATIVE_STREAM_INSTRUCTIONS, NARRATIVE_INSTRUCTIONS):
+        assert 'compare those values before you write it' in prompt
+        assert 'maximum (or minimum)' in prompt and 'contradicts its own cited values is removed' in prompt

@@ -180,20 +180,23 @@ _HIGH = frozenset('fastest quickest highest largest biggest greatest longest mos
 _LOW = frozenset('slowest lowest smallest shortest least fewest minimum'.split())
 _JUDGED = frozenset(('best', 'worst'))
 _SPEED_ONLY = frozenset('fastest quickest slowest faster slower'.split())   # said of a speed, not of minutes
-_UP = frozenset('more higher greater larger bigger longer faster above exceeds exceeded exceed exceeding ahead'.split())
-_DOWN = frozenset('less fewer lower smaller shorter slower below behind'.split())
+_UP = frozenset('more higher greater larger bigger longer faster above exceeds exceeded exceed exceeding ahead outpaced outran'.split())
+_DOWN = frozenset('less fewer lower smaller shorter slower below behind trailed trailing'.split())
 SUPERLATIVE = re.compile(r'\b(' + '|'.join(sorted(_HIGH | _LOW | _JUDGED)) + r')\b', re.I)
-COMPARATIVE = re.compile(r'\b(?:(more|higher|greater|larger|bigger|longer|faster|less|fewer|lower|smaller|shorter|slower|better|worse)\s+than'
-                         r'|(above|below|behind|ahead)(?:\s+of)?|(exceed(?:s|ed|ing)?))\b', re.I)
+COMPARATIVE = re.compile(r'\b(?:(?P<adj>more|higher|greater|larger|bigger|longer|faster|less|fewer|lower|smaller|shorter|slower|better|worse)'
+                         r'(?P<noun>(?:\s+[A-Za-z-]+){0,3}?)\s+than'
+                         r'|(?P<prep>above|below|behind|ahead)(?:\s+of)?|(?P<verb>exceed(?:s|ed|ing)?|outpaced|outran|trailed|trailing))\b', re.I)
 RISE = re.compile(r'\b(?:rose|risen|rises|rising|rise|increased|increases|increasing|increase|grew|grown|climbed|climbing|jumped'
-                  r'|up(?=\s+(?:from|by|on)\b|\s+\{\{)|(?:went|ticked|edged|moved)\s+up)\b', re.I)
+                  r'|(?<!made )(?<!make )(?<!makes )up(?=\s+(?:from|by|on)\b|\s+\{\{)|(?:went|ticked|edged|moved)\s+up)\b', re.I)
 FALL = re.compile(r'\b(?:fell|fallen|falls|falling|dropped|dropping|drops|drop|declined|declines|declining|decline|decreased|decreases'
                   r'|decreasing|decrease|down(?=\s+(?:from|by|on)\b|\s+\{\{)|(?:went|ticked|edged|moved)\s+down)\b', re.I)
 # "at most", "the second-largest", "most of", "most likely", "the largest unplanned reason": not a claim about these values.
 _NOT_BEFORE = re.compile(r'(?:\bat|\bsecond|\bthird|\bfourth|\bfifth|\bnext)[\s-]+$', re.I)
 _NOT_AFTER = re.compile(r'\s*-?\s*(?:\w+ly\b|likely|important|relevant|useful|notable|consistent|reliable|recent|significant|striking|telling'
                         r'|informative|urgent|obvious|clear|actionable|visible|plausible|possible|probable|common|frequent|unplanned'
-                        r'|unscheduled|controllable|other|remaining|single|individual)\b', re.I)
+                        r'|unscheduled|controllable|other|remaining|single|individual|fifth|tenth|quarter|half|decile|quartile|percentile)\b', re.I)
+# "the largest reason after Planned maintenance": the set is narrowed by words the check cannot follow
+_QUALIFIED = re.compile(r'\b(?:after|besides|excluding|except|apart\s+from|other\s+than|outside)\b', re.I)
 _NEGATION = re.compile(r"\b(?:not|no|never|nor|neither|without|hardly)\b|n't\b", re.I)
 _CLAUSE_BREAK = re.compile(r'[,:;()–—]|\s-\s|\b(?:and|but|while|whereas|although|though|against|versus|vs|compared|than|ahead|behind|so|which)\b', re.I)
 # the subject named right after a superlative: "the fastest was Shift 1", "highest speed came on Shift 3"
@@ -203,6 +206,7 @@ _PLACE = re.compile(r'\{\{(\d+)\}\}')
 _MANY = object()   # a name that fits several cited values decides nothing
 # a quantity named right after a superlative ("the most stops") and the field names it can mean
 _NOUN_FIELDS = {'speed': ('fpm', 'speed'), 'pace': ('fpm', 'speed'), 'downtime': ('down', 'minutes'), 'minutes': ('minutes', 'down'),
+                'time': ('down', 'minutes', 'elapsed'),
                 'stops': ('stop',), 'stoppages': ('stop',), 'waste': ('sqft', 'pct', 'reject', 'waste', 'trim', 'shear', 'dry_end'),
                 'rejects': ('reject', 'sqft', 'dry_end', 'pct'), 'trim': ('trim', 'sqft', 'pct'), 'setups': ('setup',),
                 'volume': ('msf', 'volume', 'lineal', 'sqft'), 'output': ('msf', 'volume', 'lineal', 'sqft')}
@@ -250,7 +254,8 @@ def _labels(entry, row):
 
 
 def _speed(field):
-    return ('fpm' in field or 'speed' in field) and 'gap' not in field
+    """A speed in ft/min; a percent of target is not what "fastest" is said of."""
+    return ('fpm' in field or 'speed' in field) and 'gap' not in field and 'pct' not in field
 
 
 def _partner(field):
@@ -270,9 +275,17 @@ def ordering_contradicted(text, cited):
         number = (round(float(value), 2) if isinstance(value, (int, float)) and not isinstance(value, bool)
                   and math.isfinite(value) and field != 'shift' else None)
         ident = (entry['result_id'], row, field)
-        facts.append({'canon': first.setdefault(ident, i), 'row': (entry['result_id'], row), 'field': field, 'value': value,
-                      'number': number, 'key': _quantity(entry, record, field) if number is not None else None,
-                      'labels': _labels(entry, record), 'better': _better(entry.get('tool'), record, field)})
+        labels = _labels(entry, record)
+        same = sum(1 for r in entry['rows'] if r.get('metric') == record.get('metric')
+                   and isinstance(r.get(field), (int, float)) and not isinstance(r.get(field), bool))
+        facts.append({'canon': first.setdefault(ident, i), 'row': (entry['result_id'], row), 'result': entry['result_id'],
+                      'field': field, 'value': value, 'number': number,
+                      'key': _quantity(entry, record, field) if number is not None else None, 'labels': labels,
+                      'better': _better(entry.get('tool'), record, field),
+                      # a row of a table that ranks rows (a reason, a day, a week): its peers are the rows of its own
+                      # result, not the same reason in another shift's table; a one-row result (a shift's KPIs) is
+                      # itself the entity, and its peers are the other one-row results
+                      'ranked': same > 1 or (record.get('metric') is None and any(not l.startswith('shift ') for l in labels))})
     unique = [i for i, f in enumerate(facts) if f['canon'] == i]
     places = [(m.start(), m.end(), facts[int(m.group(1))]['canon']) for m in _PLACE.finditer(text) if int(m.group(1)) < len(facts)]
     groups = {}
@@ -288,7 +301,7 @@ def ordering_contradicted(text, cited):
             if _superlative_contradicted(text, m, s0, s1, facts, groups, here, mentions):
                 return True
         for m in COMPARATIVE.finditer(text, s0, s1):
-            if _comparison_contradicted(text, m, s0, facts, groups, here, mentions):
+            if _comparison_contradicted(text, m, s0, s1, facts, groups, here, mentions):
                 return True
         for pattern, rise in ((RISE, True), (FALL, False)):
             for m in pattern.finditer(text, s0, s1):
@@ -334,32 +347,49 @@ def _clause(text, start, end, s0, s1):
 
 def _superlative_contradicted(text, m, s0, s1, facts, groups, here, mentions):
     word = m.group(1).lower()
+    c0, c1 = _clause(text, m.start(), m.end(), s0, s1)
     if (_NOT_BEFORE.search(text[max(s0, m.start() - 8):m.start()]) or _NOT_AFTER.match(text, m.end()) or _negated(text, m.start(), s0)
-            or word in ('most', 'least') and re.match(r'\s+of\b', text[m.end():])):
+            or word in ('most', 'least') and re.match(r'\s+of\b', text[m.end():]) or _QUALIFIED.search(text, m.end(), c1)):
         return False
     noun = re.match(r'\s+(?:the\s+)?([A-Za-z-]+)', text[m.end():s1])
-    noun = _NOUN_FIELDS.get(noun.group(1).lower()) if noun else None
-    allowed = {key for key, group in groups.items() if len(group) >= 2 and _fits(word, facts[group[0]])
-               and (noun is None or key[1] == 'value' or any(n in key[1] for n in noun))}
-    c0, c1 = _clause(text, m.start(), m.end(), s0, s1)
-    near = [facts[i]['key'] for st, _, i in here if c0 <= st < c1 and facts[i]['key'] in allowed]
-    after = [facts[i]['key'] for st, _, i in here if m.end() <= st < c1 and facts[i]['key'] in allowed]
+    noun = [noun.group(1)] if noun else []
+
+    def fitting(i):
+        return facts[i]['key'] is not None and _fits(word, facts[i]) and _named(noun, facts[i]['key'])
+    # The value placed in the word's own clause says which quantity it is about ("fastest at {{0}} ft/min");
+    # only a clause without one looks to the rest of the sentence, and then only to a single quantity.
+    after = [i for st, _, i in here if m.end() <= st < c1 and fitting(i)]
+    before = [i for st, en, i in here if c0 <= st and en <= m.start() and fitting(i)]
+    allowed = {key for key, group in groups.items() if len(group) >= 2 and fitting(group[0])}
     sentence = list(dict.fromkeys(facts[i]['key'] for _, _, i in here if facts[i]['key'] in allowed))
-    if near:
-        key = (after or near)[0]
+    if after or before:
+        key = facts[(after or before[::-1])[0]]['key']
     elif len(sentence) == 1:
         key = sentence[0]
-    elif not sentence and len(allowed) == 1 and (noun or word in _SPEED_ONLY):
+    elif not sentence and len(allowed) == 1 and (_named(noun, None) is False or word in _SPEED_ONLY):
         key = next(iter(allowed))
     else:
         return False        # no value of one quantity is tied to the word: nothing to check
-    group = groups[key]
-    subject = _subject(text, m, s0, s1, c0, c1, group, facts, here, mentions)
+    group = groups.get(key, [])
+    subject = _subject(text, m, s0, s1, c0, c1, group, facts, here, mentions) if len(group) >= 2 else None
     if subject is None:
         return False
+    own_table = facts[subject]['ranked']
+    peers = [i for i in group if (facts[i]['result'] == facts[subject]['result'] if own_table else not facts[i]['ranked'])]
+    if len(peers) < 2:
+        return False        # nothing it is ranked against was cited
     high = word in _HIGH or (word in _JUDGED and (word == 'best') == (facts[group[0]]['better'] == 'higher'))
-    values, own = [facts[i]['number'] for i in group], facts[subject]['number']
+    values, own = [facts[i]['number'] for i in peers], facts[subject]['number']
     return max(values) > own if high else min(values) < own
+
+
+def _named(words, key):
+    """Whether quantity words next to an ordering ("the most stops", "less time to stops than") allow the
+    quantity `key`. With key None: False when the words name a quantity at all (a known noun), else None."""
+    known = [_NOUN_FIELDS[w.lower()] for w in words if w.lower() in _NOUN_FIELDS]
+    if key is None:
+        return False if known else None
+    return not known or key[1] == 'value' or any(n in key[1] for fragments in known for n in fragments)
 
 
 def _fits(word, fact):
@@ -407,35 +437,69 @@ def _subject(text, m, s0, s1, c0, c1, group, facts, here, mentions):
     return None
 
 
-def _comparison_contradicted(text, m, s0, facts, groups, here, mentions):
-    """"A <comparison> B" between the placed values on either side, B close after the word."""
-    word = (m.group(1) or m.group(2) or 'exceed').lower()
-    if _negated(text, m.start(), s0):
+def _comparison_contradicted(text, m, s0, s1, facts, groups, here, mentions):
+    """"A <comparison> B": between the placed values on either side, B close after the word; failing
+    that, between the values of the two names on either side ("Shift 2 ran faster than Shift 1, ...")."""
+    word = (m.group('adj') or m.group('prep') or m.group('verb')).lower()
+    noun = (m.group('noun') or '').split()
+    if _negated(text, m.start(), s0) or (noun and _NOT_AFTER.match(' ' + noun[0])):
+        return False        # "no more than", "more likely than"
+
+    def fitting(i):
+        return facts[i]['key'] is not None and _fits(word, facts[i]) and _named(noun, facts[i]['key'])
+    pair = _placed_pair(text, m, facts, groups, here, mentions, fitting) or _named_pair(text, m, s0, s1, facts, groups, here, mentions, fitting)
+    if pair is None:
         return False
-    after = [x for x in here if x[0] >= m.end()]
-    if not after:
-        return False
-    gap = text[m.end():after[0][0]]
-    if (re.search(r'[,;:()]', gap) or len(re.findall(r"[A-Za-z']+", gap)) > 4
-            or re.search(r'\b(?:was|were|is|are|had|has|ran|recorded|logged|lost)\b', gap, re.I)):
-        return False        # the next value is not the object of this comparison ("below target, while Shift 1 ran ...")
-    b = after[0][2]
-    if facts[b]['key'] is None or not _fits(word, facts[b]):
-        return False
-    group = groups[facts[b]['key']]
-    before = [x for x in here if x[1] <= m.start() and x[2] in group and x[2] != b]
-    if not before:
-        return False
-    a_end, a = before[-1][1], before[-1][2]
-    between = [_denotes(x, group, facts) for x in mentions if a_end <= x[0] and x[1] <= m.start()]
-    if any(len(hit) == 1 and hit != [a] for hit in between):
-        return False        # another subject is named between the first value and the comparison
+    a, b = pair
     if word in ('better', 'worse'):
         up = (word == 'better') == (facts[b]['better'] == 'higher')
     else:
         up = word in _UP or word.startswith('exceed')
     va, vb = facts[a]['number'], facts[b]['number']
     return va < vb if up else va > vb
+
+
+def _placed_pair(text, m, facts, groups, here, mentions, fitting):
+    after = [x for x in here if x[0] >= m.end()]
+    if not after:
+        return None
+    gap = text[m.end():after[0][0]]
+    if (re.search(r'[,;:()]', gap) or len(re.findall(r"[A-Za-z']+", gap)) > 4
+            or re.search(r'\b(?:was|were|is|are|had|has|ran|recorded|logged|lost)\b', gap, re.I)):
+        return None         # the next value is not the object of this comparison ("below target, while Shift 1 ran ...")
+    b = after[0][2]
+    if not fitting(b):
+        return None
+    group = groups[facts[b]['key']]
+    before = [x for x in here if x[1] <= m.start() and x[2] in group and x[2] != b]
+    if not before:
+        return None
+    a_end, a = before[-1][1], before[-1][2]
+    between = [_denotes(x, group, facts) for x in mentions if a_end <= x[0] and x[1] <= m.start()]
+    if any(len(hit) == 1 and hit != [a] for hit in between):
+        return None         # another subject is named between the first value and the comparison
+    return a, b
+
+
+def _named_pair(text, m, s0, s1, facts, groups, here, mentions, fitting):
+    """The subject named last before the word in its clause and the object named right after it, each
+    picking exactly one cited value of one quantity (preferring a quantity placed in the sentence)."""
+    c0, _ = _clause(text, m.start(), m.end(), s0, s1)
+    subjects = [x for x in mentions if c0 <= x[0] and x[1] <= m.start()]
+    target = next((x for x in mentions if m.end() <= x[0] < s1), None)
+    if not subjects or target is None or not re.fullmatch(r'\s*(?:(?:on|for|in|at|by)\s+)?(?:the\s+)?', text[m.end():target[0]]):
+        return None
+    found = []
+    for key, group in groups.items():
+        if len(group) < 2 or not fitting(group[0]):
+            continue
+        a, b = _denotes(subjects[-1], group, facts), _denotes(target, group, facts)
+        if len(a) == 1 and len(b) == 1 and a != b:
+            found.append((key, a[0], b[0]))
+    if len(found) > 1:
+        placed = {facts[i]['key'] for _, _, i in here}
+        found = [f for f in found if f[0] in placed]
+    return found[0][1:] if len(found) == 1 else None
 
 
 def _direction_contradicted(text, m, s0, rise, facts, unique, here):
@@ -460,6 +524,8 @@ def _direction_contradicted(text, m, s0, rise, facts, unique, here):
     field = fact['field']
     if field == 'delta' or field.startswith('delta_') or field.endswith('_delta'):
         return fact['number'] < 0 if rise else fact['number'] > 0
+    if m.group(0).lower() in ('up', 'down') and text[m.end():].lstrip().startswith('{{'):
+        return False        # "up {{x}}" is a change only when x is a delta; "was down {{x}} minutes" is stopped time
     partner = next((j for j in unique if facts[j]['row'] == fact['row'] and facts[j]['field'] == _partner(field)
                     and facts[j]['number'] is not None), None)
     if partner is None:

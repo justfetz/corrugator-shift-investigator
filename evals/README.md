@@ -218,11 +218,11 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`168/168 golden · 11 ms p50`) is `evals.badge` of
+- The badge on the main page (`169/169 golden · 11 ms p50`) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 162 cases make 168 runs because six offline cases also have a
+recorded variant: 163 cases make 169 runs because six offline cases also have a
 recording. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can
@@ -240,17 +240,22 @@ golden case rather than a hope about a model.
 A plan case may also carry `narrative`: the lines a model might stream, with
 placeholders such as `{{r1.0.observed_shift_fpm}}`. They are fed in small deltas
 through the real stream validator (`NarrativeStream`), so a narrative a model
-wrote is a golden case too. The two cases of issue #79 replay the live exchange
+wrote is a golden case too. Two cases of issue #79 replay the live exchange
 in which the analyst wrote "Shift 2 ran fastest at 562.75 ft/min including
 downtime, against 608.92 ft/min on Shift 1 and 592.11 ft/min on Shift 3" over
 its own KPI rows: `analyst-fastest-shift-contradicted` must withdraw that line
 (`comparisons_withdrawn: 1`, with the limitation line *A comparison was withdrawn
 because it contradicted its own figures.*) and keep the rest, and
 `analyst-fastest-shift-consistent`, the corrected line, must survive whole
-(`narrative_match`, `comparisons_withdrawn: 0`). Every run that writes a
+(`narrative_match`, `comparisons_withdrawn: 0`). A third,
+`analyst-orderings-per-shift`, holds what review of the first check found: two
+true lines it withdrew ("the largest stop reason" of each shift's own breakdown;
+"fastest" beside a speed-to-target pair) must be kept, and a false comparison
+whose subjects are named in words ("Shift 2 ran faster than Shift 1, … against
+…") must be withdrawn. Every run that writes a
 narrative counts the withdrawn lines in `usage.comparisons_withdrawn`, and the
 summary prints them per kind of run:
-`comparisons withdrawn: replayed anthropic 0 in 11 narratives  offline 1 in 2 narratives`.
+`comparisons withdrawn: replayed anthropic 0 in 11 narratives  offline 2 in 3 narratives`.
 
 A plan case marked `live: true` runs its question against the real analyst only
 under `--live` (its `plan` and `narrative` are not used then); unrecorded, it
@@ -308,5 +313,6 @@ advice. They catch the specific failures listed in `docs/TESTING.md`, not prose
 quality in general. Read the recorded fixtures when a live case passes for the
 first time. The ordering check is rule-based in the same way: it withdraws a
 line only when it can tell which cited value a word is about, so a subject named
-only by a pronoun ("Shift 2 ran … . It was the fastest of the three."), or an
-ordering over values the line does not cite, is not caught by it.
+only by a pronoun ("Shift 2 ran … . It was the fastest of the three."), an
+ordering word it does not know ("Shift 2 led the day"), or an ordering over values
+the line does not cite, is not caught by it.
