@@ -3002,6 +3002,92 @@
    }
   },
   {
+   "id": "period-control-downtime-split-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "period": "week",
+   "scope": "day",
+   "question": "Downtime by reason for first shift and third shift",
+   "note": "Issue #90: under a ranged grain, downtime split over two named shifts is one Pareto per shift; its address measure=pareto&shifts=1,3 must resolve back to the same two Paretos (it was a 400).",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=pareto&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 3
+      }
+     }
+    ],
+    "charts": 2,
+    "sections_match": "Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), shift 3, versus Week 2026-09-07"
+   }
+  },
+  {
+   "id": "period-control-waste-split-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "period": "month",
+   "scope": "day",
+   "question": "Waste for first shift and third shift",
+   "note": "Issue #90, the waste twin: one waste breakdown per named shift; measure=waste&shifts=1,3 resolves back to the same two breakdowns.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=waste&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": 3
+      }
+     }
+    ],
+    "charts": 2,
+    "sections_match": "September 2026 \\(2026-09-01 to 2026-09-30\\), shift 3, versus August 2026"
+   }
+  },
+  {
    "id": "period-control-setup-matrix",
    "type": "refusal",
    "mode": "offline",
