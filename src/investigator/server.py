@@ -41,7 +41,7 @@ from .anthropic_provider import resolve_model
 from .evalboard import EvalBoard, evals_dir
 from .record_store import DEFAULT_MONTHS, default_store
 from .synth import production_days
-from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_target, resolve_url, scope_url
+from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
 
 WEB = Path(__file__).with_name('web')
 # The record store's Monday-Friday production calendar (August and September 2026);
@@ -283,11 +283,7 @@ class Workbench:
     def canonical_redirect(self, url):
         """The canonical address a hand-typed alias of `url` redirects to (issue #70), or None: `url` is
         canonical already, or the grammar refuses it and the caller answers with that refusal. No tool runs."""
-        try:
-            resolved = resolve_url(url, self.store, max_turns=self.guards.max_turns)
-        except (ValueError, UnicodeError, TypeError, KeyError):
-            return None
-        return redirect_target(url, resolved)
+        return redirect_for(url, self.store, max_turns=self.guards.max_turns)
 
     def answer_url(self, url):
         """A canonical URL answered offline: the result `/api/ask` returns for the same state, plus `url`

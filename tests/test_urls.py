@@ -12,8 +12,8 @@ import pytest
 from investigator.agent import Agent, Context, parse_request
 from investigator.record_store import default_store
 from investigator.server import make_server
-from investigator.urls import (PATH, canonical_url, machine_slug, page_url, question_url, redirect_target, resolve_url,
-                               scope_url, INTENT_MEASURES, STORE_MEASURES)
+from investigator.urls import (PATH, canonical_url, machine_slug, page_url, question_url, redirect_for, redirect_target,
+                               resolve_url, scope_url, INTENT_MEASURES, STORE_MEASURES)
 
 ROOT = Path(__file__).resolve().parent.parent
 GOLDEN = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
@@ -272,8 +272,42 @@ def test_an_alias_resolves_to_its_canonical_state(typed, canonical):
     assert redirect_target(typed + '&format=pdf', resolve_url(typed + '&format=pdf', store)) == canonical + '&format=pdf'
 
 
+def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
+    """A sweep of measures, grains, scopes and modifiers: a refused URL never redirects, and a redirect target
+    resolves, runs the same plan over the same shifts, and does not redirect again. A ranged-grain downtime or
+    quality split over named shifts has no resolvable canonical spelling (canonical_url writes
+    measure=pareto&shifts=1,3, which the grammar refuses), so it answers at its own address as before (review of #70)."""
+    store = default_store()
+    tails = ['', 'compare=prev', 'shifts=1,3', 'shifts=2', 'shifts=1,3&compare=prev', 'by=place', 'by=place&compare=prev',
+             'by=reason', 'by=grade', 'by=setup', 'by=grade&compare=prev', 'kind=operator&compare=prev', 'window=week',
+             'window=week&compare=prev', 'window=2026-08&compare=prev', 'unit=minutes', 'compare=none', 'want=chart&compare=prev']
+    redirected = stayed = 0
+    for base in (D, W, M, P):
+        for scope in ('', '/shift/2'):
+            for measure in [*INTENT_MEASURES.values(), *STORE_MEASURES, 'report']:
+                for tail in tails:
+                    url = f'{base}{scope}?measure={measure}' + ('&metric=trim_pct' if measure == 'trend' else '') + (f'&{tail}' if tail else '')
+                    try:
+                        resolved = resolve_url(url, store)
+                    except ValueError:
+                        assert redirect_for(url, store) is None, url
+                        continue
+                    target = redirect_for(url, store)
+                    if target is None:
+                        stayed += redirect_target(url, resolved) is not None
+                        continue
+                    landed = resolve_url(target, store)
+                    ran = lambda r: r['report'] or (r['request'].get('plan') or r['request']['intent'], r['request']['shifts'])
+                    assert redirect_for(target, store) is None and page_url(landed) == target, url
+                    assert ran(landed) == ran(resolved), url
+                    redirected += 1
+    assert redirected > 500 and stayed == 12, (redirected, stayed)   # the 12: downtime and quality, shifts=1,3, three ranged grains, +-compare=prev
+    assert redirect_for(f'{W}?measure=downtime&shifts=1,3', store) is None
+    assert redirect_for(f'{M}?measure=quality&shifts=2,1&compare=prev', store) is None
+
+
 @pytest.mark.parametrize('url, reason', [
-    (f'{D}?measure=stops&compare=prev', 'compare= does not apply to measure=stops: its answer carries no previous window'),
+    (f'{D}?measure=stops&compare=prev','compare= does not apply to measure=stops: its answer carries no previous window'),
     (f'{W}?measure=overrun&compare=prev', 'compare= does not apply to measure=overrun'),
     (f'{D}?measure=opportunity&compare=prev', 'compare= does not apply to measure=opportunity'),
     (f'{D}?measure=trend&metric=trim_pct&compare=prev', 'compare= does not apply to measure=trend'),
@@ -355,6 +389,10 @@ def test_the_issue_20_examples_redirect_in_every_representation(served):
     assert status == 400 and json.loads(body)['error'].startswith('kind= does not apply to measure=downtime&compare=prev')
     assert get(served, refused, accept='text/html')[0] == 200   # the page loads and shows the refusal of its .json
     assert get(served, f'{D}/shift/2?measure=pareto')[0] == 200   # a canonical address answers at once
+    # no resolvable canonical spelling: answered at its own address, as before #70, never a redirect to a 400
+    for url in (f'{W}?measure=downtime&shifts=1,3', f'{W}?measure=downtime&shifts=1,3&compare=prev'):
+        status, _, body = get(served, url)
+        assert status == 200 and len(json.loads(body)['selected_shifts']) == 2, url
 
 
 def test_follow_up_context_rides_in_the_url():

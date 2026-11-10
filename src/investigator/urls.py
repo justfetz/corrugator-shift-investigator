@@ -497,6 +497,27 @@ def redirect_target(url, resolved):
     return target_path + suffix + '?' + target_query + (f'&format={fmt[0]}' if fmt else '')
 
 
+def redirect_for(url, store, max_turns=4):
+    """The address the server redirects `url` to, or None: `url` is canonical, or refused (the caller answers
+    the refusal), or its canonical spelling would not land on the same state. The last guard is for a plan
+    `canonical_url` writes in a form `resolve_url` refuses (a ranged-grain downtime or quality split over named
+    shifts becomes `measure=pareto&shifts=1,3`): that URL answers at its own address, as it did before issue
+    #70, instead of redirecting to a 400. A target is always a fixed point that runs the same plan over the same
+    shifts; which stated objectives the address keeps (`want=`) is canonical_url's own rule."""
+    try:
+        resolved = resolve_url(url, store, max_turns)
+        target = redirect_target(url, resolved)
+        if target is None:
+            return None
+        landed = resolve_url(target, store, max_turns)
+    except (ValueError, UnicodeError, TypeError, KeyError):
+        return None
+    plan = lambda request: request and (request.get('plan'), request['shifts'])
+    same = (landed['report'], landed['corrupt'], landed['history'], plan(landed['request'])) == \
+           (resolved['report'], resolved['corrupt'], resolved['history'], plan(resolved['request']))
+    return target if same and redirect_target(target, landed) is None else None
+
+
 def question_url(day, shift, scope, control_period, corrupt=False, question='', after=(), machine_id='CORR-1'):
     """The `/q` shortcut for a typed question in a scope; the server answers it with a redirect."""
     params = [('day', day), ('shift', str(shift)), ('scope', scope), ('period', control_period)]

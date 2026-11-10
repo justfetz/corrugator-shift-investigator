@@ -75,8 +75,12 @@ field, a modifier the measure does not read, or a shift outside the selected sco
 
 An address that reads naturally but is not the canonical spelling still answers: the server **302**s it to
 the canonical address (as `/q` does), keeping the representation (`.json`, `format=json`, `format=pdf`), so
-the address bar ends on the one spelling (issue #70). The redirect runs no tool and is not a round; the
-canonical address resolves to itself, so nothing redirects twice. The rest of the query (`shifts=`, `window=`,
+the address bar ends on the one spelling (issue #70). The redirect runs no tool and is not a round. The
+server redirects only to an address that resolves to itself and runs the same plan over the same shifts, so
+nothing redirects twice or to a refusal: a ranged-grain `downtime` or `quality` split over named shifts
+(`…/week/…?measure=downtime&shifts=1,3`, one Pareto per shift) has no resolvable canonical spelling yet
+(`measure=pareto&shifts=1,3` is refused, since a store measure is not split by shift), so it answers at its
+own address as before. The rest of the query (`shifts=`, `window=`,
 `by=`, `unit=`, `want=`, `corrupt=`, `after=`) carries over. `compare=prev` asks for the previous window of the
 same grain, which these answers carry already or which their store form carries.
 
@@ -86,7 +90,7 @@ same grain, which these answers carry already or which their store form carries.
 | `measure=waste&by=setup` (Day) | `measure=setups` (the setup matrix) |
 | `compare=prev` on `kpis`, `pareto`, `waste`, `grade`, `rollstock` | the same address without it: `prev` is the default, the previous window is beside |
 | `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
-| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` |
+| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` (not `downtime` or `quality` with several `shifts=`: above) |
 | `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |
 | `measure=quality&compare=prev` under Day | `measure=waste` |
 | `measure=compare&compare=prev` under Day | `measure=kpis` (`shifts=` kept: the tiles per shift) |
