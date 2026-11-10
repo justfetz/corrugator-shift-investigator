@@ -15,7 +15,6 @@ function syncKeyLabel(){
  if(p)$('key-label-text').textContent=`${p.name} API key (optional if configured on server)`;
 }
 function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
-function node(tag, text, cls) { const e=document.createElement(tag); if(text!==undefined)e.textContent=text; if(cls)e.className=cls; return e; }
 const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 function message(label, paragraphs, cls='') {
  const e=node('div',undefined,'message '+cls);e.append(node('strong',label));
@@ -101,6 +100,68 @@ function selectShift(value){
  else { if($('scope').value==='shift'&&$('shift').value===value)return; $('scope').value='shift'; $('shift').value=value; }
  reset();
 }
+// ---- Addresses (issue #20): every offline view is one URL and the address bar always equals it. The path is
+// the controls (/corr/<machine>/<day|week|month|period>/<date>[/shift/<n>]), the query is the question's plan;
+// a typed question goes to /q?...&q= and the server redirects to the canonical URL (docs/URLS.md).
+const GRAIN={day:'day',week:'week',month:'month',accounting:'period'}, GRAIN_PERIOD={day:'day',week:'week',month:'month',period:'accounting'};
+const CANONICAL=/^\/corr\/[^/]+\/(day|week|month|period)\/(\d{4}-\d{2}-\d{2})(?:\/shift\/([123]))?(?:\.json)?$/;
+const nav=(typeof window!=='undefined'&&window.history&&window.location)?window:null;
+const views=new Map();   // canonical page URL -> {result, question}: back/forward re-render without a request
+let conversation=[];     // this conversation's earlier views, carried as after= so offline follow-ups need no session
+let navigating=false;    // restoring a view from the address: controls follow the URL, nothing is pushed
+function machine(){ return (config&&config.machine)||'1'; }
+function scopeUrl(scope=$('scope').value){ return `/corr/${machine()}/${GRAIN[$('period').value]||'day'}/${$('day').value}`+(scope==='shift'?`/shift/${$('shift').value}`:''); }
+function afterParams(p){ for(const a of conversation)p.append('after',a); }
+function questionUrl(question,scope=$('scope').value){
+ const p=new URLSearchParams([['day',$('day').value],['shift',$('shift').value],['scope',scope],['period',$('period').value]]);
+ if($('corrupt').checked)p.append('corrupt','1'); p.append('q',question); afterParams(p); return '/q?'+p.toString();
+}
+function reportUrl(){ const p=new URLSearchParams([['measure','report']]); if($('corrupt').checked)p.append('corrupt','1'); afterParams(p); return scopeUrl()+'?'+p.toString(); }
+function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
+function bareUrl(url){ const [path,query='']=url.split('?'); const p=new URLSearchParams(query); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
+function priorsOf(url){ return new URLSearchParams(url.split('?')[1]||'').getAll('after'); }
+const MAX_AFTER=8;   // the grammar carries at most eight prior views (urls.MAX_AFTER); the agent keeps its own max_turns
+function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.min(MAX_AFTER,Math.max(0,(turns||4)-1)); }
+function currentAddress(){ return nav?nav.location.pathname+nav.location.search:null; }
+// Set the controls from a canonical address; false when the address is not one.
+function applyUrl(url){
+ const m=CANONICAL.exec(url.split('?')[0]); if(!m)return false;
+ const query=new URLSearchParams(url.split('?')[1]||'');
+ $('period').value=GRAIN_PERIOD[m[1]]; $('day').value=m[2]; acceptedDay=m[2];
+ if(m[3]){$('scope').value='shift';$('shift').value=m[3];} else $('scope').value='day';
+ $('corrupt').checked=query.get('corrupt')==='1';
+ return true;
+}
+function pushAddress(url,replace=false){ if(!nav||navigating||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
+function rememberView(result,question,{follow=true}={}){   // follow=false: the period report is a view, not a question in the conversation
+ views.set(result.url,{result,question}); while(views.size>20)views.delete(views.keys().next().value);
+ conversation=[...priorsOf(result.url),...(follow?[bareUrl(result.url)]:[])].slice(-maxPriors());
+ pushAddress(result.url);
+}
+function clearResults(){ $('heatmaps').replaceChildren();$('kpis').replaceChildren();$('queries').replaceChildren();stepIndex=new Map();latest=null;$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true; }
+// Back, forward or a pasted address: the controls follow the URL; a view this page has shown is re-rendered
+// from memory without a request, any other is fetched as .json from the same address.
+async function restore(url){
+ if(!applyUrl(url))return false;
+ navigating=true;
+ try{
+  const held=views.get(url);
+  if(held){ $('messages').replaceChildren();message('You',[held.question],'user');message(`Investigator · ${held.result.mode}`,held.result.sections);showResult(held.result);conversation=[...priorsOf(url),bareUrl(url)].slice(-maxPriors());$('status').textContent=`${held.result.status} · ${usageText(held.result.usage)} · restored`;return true; }
+  if(!new URLSearchParams(url.split('?')[1]||'').has('measure')){ clearResults();$('messages').replaceChildren(node('p','Choose a question.','empty'));conversation=[];updateScope();primeKpis();return true; }
+  setBusy(true);$('status').textContent='Loading this address…';
+  try{
+   const response=await fetch(url,{headers:{Accept:'application/json'}});
+   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
+   $('messages').replaceChildren();message('You',[bareUrl(result.url||url)],'user');message(`Investigator · ${result.mode}`,result.sections);showResult(result);
+   views.set(result.url,{result,question:bareUrl(result.url||url)});conversation=[...priorsOf(result.url),bareUrl(result.url)].slice(-maxPriors());
+   if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url);   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
+   $('status').textContent=`${result.status} · ${usageText(result.usage)}`;
+  }catch(error){clearResults();$('messages').replaceChildren();message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';}
+  finally{setBusy(false);updateScope();}
+  return true;
+ }finally{navigating=false;}
+}
+if(nav&&nav.addEventListener)nav.addEventListener('popstate',()=>{restore(currentAddress()).catch(()=>{});});
 function periodChanged(){ renderQuestionChips(); reset(); }
 let acceptedDay=null;
 function dayChanged(){
@@ -126,8 +187,10 @@ function updateScope(){
  if(ranged)$('mode-help').textContent=`Ask about the selected ${noun}: KPIs against the previous one, the downtime Pareto, waste, stops per day, trends, totals by grade, over/under-run, the speed opportunity.${live?' '+liveHelp():' No model calls or API charges.'} Period report builds the output heatmap, daily matrix, recurring downtime and notes without a model.`;
  else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
  $('submit').textContent='Investigate'; $('report').hidden=!ranged; $('report').disabled=busy;
- for(const b of chipButtons)b.disabled=busy||(ranged&&b.dataset.period==='day');   // the per-shift matrices have no period form
+ for(const b of chipButtons)chipState(b,busy||(ranged&&b.dataset.period==='day'));   // the per-shift matrices have no period form
 }
+// A chip is a link to its question in the current scope (/q?...&q=): copy or open it in a new tab, or click it here.
+function chipState(b,off){ b.disabled=off; b.setAttribute('aria-disabled',String(off)); b.tabIndex=off?-1:0; b.href=questionUrl(b.dataset.question,b.dataset.scope||undefined); }
 
 // ---- Example questions, grouped by intent. Daily chips run the day tools for the selected scope; the
 // period chips are the phrasings the offline planner routes to the record-store tools (docs/WORKBENCH.md).
@@ -150,8 +213,10 @@ function renderQuestionChips(){
   const row=node('div',undefined,'chips');
   for(const [label,text,scope,period] of chips){
    const question=text.replaceAll('{period}',word);
-   const b=node('button',label.replaceAll('{period}',word)); b.type='button'; b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question;
-   b.addEventListener('click',()=>{ if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
+   const b=node('a',label.replaceAll('{period}',word),'chip'); b.dataset.question=question; if(scope)b.dataset.scope=scope; if(period)b.dataset.period=period; b.title=question; b.setAttribute('role','button');
+   b.addEventListener('click',event=>{
+    if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return;   // a modifier click opens the link as the browser would (new tab, window)
+    if(event&&event.preventDefault)event.preventDefault(); if(busy||b.disabled)return; if(b.dataset.scope){$('scope').value=b.dataset.scope;reset();} $('question').value=question; ask(question).catch(()=>{}); });
    row.append(b); chipButtons.push(b);
   }
   group.append(row); box.append(group);
@@ -180,7 +245,7 @@ function showHeatmap(chart) {
   const tooltip=row.available?detail+` Dry-end setups: ${row.valid_setups}.`:detail;
   cell.title=tooltip;cell.setAttribute('aria-label',tooltip);for(const event of ['mouseenter','focus','click'])cell.addEventListener(event,()=>{tip.textContent=tooltip;});grid.append(cell);
  }
- wrap.append(grid);const legend=node('div',undefined,'heatmap-legend');legend.append(node('span','Lower output'),node('span',undefined,'heatmap-scale'),node('span','Higher output'));wrap.append(legend,tip);$('heatmaps').append(wrap);
+ wrap.append(grid);const legend=node('div',undefined,'heatmap-legend');legend.append(node('span','Lower output'),node('span',undefined,'heatmap-scale'),node('span','Higher output'));wrap.append(legend,tip);const link=queryLink(chart.source_result_id);if(link)wrap.append(link);$('heatmaps').append(wrap);
 }
 // ---- Charts: plain SVG, one axis per chart, text in ink tokens, series color on the marks only.
 // Every chart is drawn from a tool result's rows; the same rows sit in the evidence tables.
@@ -345,6 +410,7 @@ function showChart(chart) {
  else if(chart.y2)pairedChart(chart,wrap);
  else if(isSpeed)speedChart(chart,wrap);
  else barChart(chart,wrap);
+ const link=queryLink(chart.source_result_id);if(link)wrap.append(link);
  $('charts').append(wrap);
 }
 const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'Speed w/o stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status'};
@@ -352,12 +418,12 @@ function showTable(data){
  const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'Totals by grade',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
- if(!data.rows.length){box.append(node('p','No eligible rows.'));$('tables').append(box);return;}
+ if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
  const omitted=new Set(['source_ids','gross_sqft','observed_lineal_ft','throughput_in','lineal_per_setup','lineal_per_wet_end','setups_above_trim_target']);
  const columns=Object.keys(data.rows[0]).filter(k=>!omitted.has(k)&&!Array.isArray(data.rows[0][k]));
  const wrap=node('div',undefined,'table-scroll');wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',titles[data.title]||data.title);const table=node('table'),head=node('thead'),tr=node('tr');
  for(const key of columns){const th=node('th',labels[key]||key.replaceAll('_',' '));th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=node('tbody');
- for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);$('tables').append(box);
+ for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);
 }
 
 // ---- KPI strip: dashboard-style tiles from a get_period_kpis / compare_periods envelope.
@@ -433,49 +499,64 @@ async function primeKpis(){
  const token=++primeToken, question=primeQuestion();
  if(!config||!question||busy||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;
  try{
-  const response=await post('/api/ask',{question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:null,mode:'offline',scope:$('scope').value,period:$('period').value});
+  // The scope's tiles are the KPI measure of the scope's own address; the address bar is not moved for them.
+  const response=await fetch(withQuery(scopeUrl()+'.json','measure=kpis'+($('corrupt').checked?'&corrupt=1':'')),{headers:{Accept:'application/json'}});
   const result=await response.json();
   if(token!==primeToken||!response.ok||!Array.isArray(result.trace))return;
   const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
   if(!entry)return;
   if(!latest)$('metrics').replaceChildren();
   renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
-  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
+  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”, the address ${result.url||''}. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
 
-// ---- The tool trail: one row per tool call. Arguments, row count, coverage and timing on the row;
-// the exact SQL with its bound values and the full result JSON behind disclosures.
-const compactJson=value=>JSON.stringify(value,(k,v)=>v===null?null:v)||'';
-function traceRow(entry){
- const d=node('details',undefined,'trace-step '+(entry.ok?'ok':'failed')), data=entry.ok?entry.data:null;
- const rows=data?Array.isArray(data.rows)?data.rows.length:null:null;
- const sum=node('summary',undefined,'trace-sum');
- sum.append(node('code',entry.tool,'tool'));
- sum.append(node('span',compactJson(entry.arguments||{}),'args mono'));
- const facts=[];
- if(rows!==null)facts.push(`${rows} row${rows===1?'':'s'}`);
- if(data&&data.coverage)facts.push(data.coverage);
- if(typeof entry.elapsed_ms==='number')facts.push(`${entry.elapsed_ms.toFixed(1)} ms`);
- facts.push(entry.ok?'OK':'error');
- sum.append(node('span',facts.join(' · '),'facts mono'));
+// The tool trail row (traceRow), node(), compactJson, dedent and sqlText live in trail.js, shared with the /evals page.
+let stepIndex=new Map();   // result_id -> step number of the latest answer, for the links from charts, tables and render_chart steps (#40)
+// ---- The query box (issue #40): the compact trace at the top of the answer, Datasette-style. One block
+// per tool step in order: tool(arguments) · rows · ms, then the exact parameterized SQL with its bound
+// values and a copy button. A few hundred bytes per step, so it is built with the answer, in the first
+// paint; the full per-step result ("What came back") stays below and is built after the paint (#33).
+// Read-only by design: the tools are parameterized (docs/AGENT_CONTRACT.md), so visitors cannot edit
+// and re-run the SQL here; the copy button is how someone re-runs it themselves.
+function argText(args){ return Object.entries(args||{}).filter(([,v])=>v!==null&&v!==undefined).map(([k,v])=>`${k}=${k==='result_id'&&stepIndex.has(v)?`query ${stepIndex.get(v)+1}`:typeof v==='object'?compactJson(v):String(v)}`).join(', '); }   // a result id reads as the query it names
+function stepFacts(entry){ const data=entry.ok?entry.data:null, rows=data&&Array.isArray(data.rows)?data.rows.length:null, facts=[]; if(rows!==null)facts.push(`${rows} row${rows===1?'':'s'}`); if(typeof entry.elapsed_ms==='number')facts.push(`${entry.elapsed_ms.toFixed(1)} ms`); if(!entry.ok)facts.push('error'); return facts; }
+function phoneWidth(){ try{return typeof matchMedia==='function'&&matchMedia('(max-width:850px)').matches;}catch(e){return false;} }
+function copyText(text,button){
+ const done=label=>{const was=button.textContent;button.textContent=label;setTimeout(()=>{button.textContent=was;},1500);};
+ try{ if(typeof navigator!=='undefined'&&navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>done('Copied'),()=>done('Copy failed')); else done('Copy unavailable'); }catch(e){done('Copy failed');}
+}
+function revealStep(i){ try{ $('execution').open=true; const fold=document.querySelector?.('.supporting-fold'); if(fold)fold.open=true; const step=document.getElementById(`step-${i}`); if(step)step.open=true; }catch(e){} }
+function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; return a; }
+function queryBox(entry,i){
+ const d=node('details',undefined,'query '+(entry.ok?'ok':'failed')); d.id=`query-${i}`;
+ const sum=node('summary',undefined,'query-sum');
+ sum.append(node('code',entry.tool,'tool'),node('span',`(${argText(entry.arguments)})`,'args'),node('span','· '+stepFacts(entry).join(' · '),'facts'));
  d.append(sum);
- if(!entry.ok){d.append(node('p',`${entry.error?.code||'error'}: ${entry.error?.message||'tool call rejected'}`,'warning-note'));}
- else{
-  const meta=node('dl',undefined,'trace-meta');const add=(k,v)=>{if(v===undefined||v===null||v==='')return;meta.append(node('dt',k),node('dd',String(v)));};
-  if(data.window)add('Window',`${data.window.label} (${data.window.coverage})`+(data.previous_window?`; previous ${data.previous_window.label} (${data.previous_window.coverage})`:''));
-  if(data.shift!==undefined)add('Shift',data.shift===null?'all shifts':data.shift);
-  if(data.source_rows)add('Source rows',compactJson(data.source_rows));
-  if(data.excluded_records?.length)add('Excluded records',data.excluded_records.map(r=>`${r.record_id}: ${r.error}`).join('; '));
-  if(entry.tool==='render_chart')add('Chart',`${data.type}; x=${data.x}; y=${data.y}${data.y2?'; y2='+data.y2:''}; unit=${data.unit}; from ${data.source_result_id}`);
-  if(data.dataset_version)add('Dataset',String(data.dataset_version).slice(0,16)+'…');
-  if(meta.children.length)d.append(meta);
-  const sql=data.trace?.sql||data.daily_sql; const params=data.trace?.parameters;
-  if(sql){const q=node('details',undefined,'trace-sql');q.append(node('summary','SQL and bound values'));q.append(node('pre',String(sql).trim()+(params?`\n\n-- bound values\n${JSON.stringify(params)}`:'')));d.append(q);}
-  else if(entry.tool!=='render_chart'){d.append(node('p','No SQL: this tool composes other results.','muted'));}
- }
- const full=node('details',undefined,'trace-json');full.append(node('summary','Full result JSON'));full.append(node('pre',JSON.stringify(entry,null,2)));d.append(full);
+ const sql=sqlText(entry);
+ if(sql)d.append(node('pre',sql,'sql'));
+ else if(!entry.ok)d.append(node('p',`${entry.error?.code||'error'}: ${entry.error?.message||'tool call rejected'}`,'warning-note'));
+ else if(entry.tool==='render_chart'){ const p=node('p',undefined,'muted'); const src=queryLink(entry.arguments?.result_id); p.append('No SQL: draws the rows of '); p.append(src||'an earlier query'); p.append('.'); d.append(p); }
+ else d.append(node('p','No SQL: this tool composes other results.','muted'));
+ const foot=node('div',undefined,'query-foot');
+ if(sql){const copy=node('button','Copy SQL','secondary copy');copy.type='button';copy.dataset.copy=sql;copy.addEventListener('click',()=>copyText(sql,copy));foot.append(copy);}
+ const back=node('a','What came back ↓','came-back');back.href=`#step-${i}`;back.title='The full result of this step, below the charts';back.addEventListener('click',()=>revealStep(i));foot.append(back);
+ d.append(foot);
  return d;
+}
+function renderQueries(result){
+ const box=$('queries'); box.replaceChildren(); stepIndex=new Map();
+ const steps=result.trace||[]; if(!steps.length)return;
+ steps.forEach((e,i)=>{if(e.result_id)stepIndex.set(e.result_id,i);});
+ const total=steps.reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
+ const head=node('div',undefined,'queries-head'); head.append(node('span','Queries that produced this answer'),node('span',`${steps.length} ${steps.length===1?'query':'queries'} · ${total.toFixed(0)} ms`,'mono')); box.append(head);
+ const phone=phoneWidth(), boxes=steps.map((entry,i)=>{const d=queryBox(entry,i);d.open=!phone&&i===0;box.append(d);return d;});   // step 1 open; the rest, and all on a phone, one line with the SQL on tap
+ const foot=node('div',undefined,'queries-foot');
+ const all=node('button','Expand all','secondary');all.type='button';all.addEventListener('click',()=>{const open=!boxes.every(b=>b.open);for(const b of boxes)b.open=open;all.textContent=open?'Collapse all':'Expand all';});foot.append(all);
+ const sqls=steps.map((e,i)=>[e,i,sqlText(e)]).filter(x=>x[2]);
+ if(sqls.length){const copy=node('button','Copy all SQL','secondary');copy.type='button';const text=sqls.map(([e,i,sql])=>`-- query ${i+1}: ${e.tool}(${argText(e.arguments)})\n${sql}`).join('\n\n');copy.dataset.copy=text;copy.addEventListener('click',()=>copyText(text,copy));foot.append(copy);}
+ foot.append(node('span','Fixed, parameterized queries. Visitors cannot edit them.'));
+ box.append(foot);
 }
 function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool calls · ${usage.model_calls} model call${usage.model_calls===1?'':'s'} · estimated $${Number(usage.cost_usd||0).toFixed(4)}`+(usage.reserved_usd!==undefined?` · reserved $${Number(usage.reserved_usd).toFixed(2)}`:''):`${usage.tool_calls} tool call${usage.tool_calls===1?'':'s'} · $0 model cost`; }
 // Paint the answer, tables and charts first; the trace table (the largest part of the page)
@@ -488,6 +569,7 @@ function showResult(result) {
  latest=result; $('download').disabled=false; $('pdf').disabled=false;
  try{const fold=document.querySelector('.examples-fold'); if(fold&&fold.open)fold.open=false;}catch(e){}  // the first answer folds the examples so the conversation has the room
  $('tables').replaceChildren(); $('charts').replaceChildren(); $('metrics').replaceChildren(); $('trace').replaceChildren();   // each answer replaces the last one's evidence
+ renderQueries(result);   // the query box: first below the question, built in the first paint (#40)
  const kpiEntry=result.trace.find(e=>e.ok&&(e.tool==='get_period_kpis'||e.tool==='compare_periods'));
  if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`);
  for(const entry of result.trace) {
@@ -500,13 +582,13 @@ function showResult(result) {
  }
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
- afterPaint(()=>{if(latest!==result)return;for(const entry of result.trace)$('trace').append(traceRow(entry));});   // a newer answer already replaced the evidence: skip
+ afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip
  $('calls').textContent=' · '+usageText(result.usage);
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
 }
 const CONTROL_IDS=['reset','day','day-prev','day-next','period','scope','shift','corrupt','mode','api-key','report'];
-function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; for(const b of chipButtons)b.disabled=flag; const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
+function setBusy(flag){ busy=flag; for(const id of CONTROL_IDS)$(id).disabled=flag; $('submit').disabled=flag; for(const b of chipButtons)chipState(b,flag); const results=document.querySelector?.('.results'); if(results)results.setAttribute('aria-busy',String(flag)); }
 async function ask(question,{report=false}={}) {
  if(busy)throw new Error('An investigation is already running');
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
@@ -517,25 +599,33 @@ async function ask(question,{report=false}={}) {
   const p=provider();
   if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
   $('api-key').value='';
-  const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:report?'offline':$('mode').value,scope:$('scope').value,period:$('period').value};
-  if(report)body.report=true;
-  const pending=post('/api/ask',body,headers);
-  for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
-  const response=await pending;
+  const live=isLive()&&!report;
+  let response;
+  if(live){   // a model round: POST, the session carries the follow-up history, the answer is not an address
+   const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:$('mode').value,scope:$('scope').value,period:$('period').value};
+   const pending=post('/api/ask',body,headers);
+   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
+   response=await pending;
+  }else{      // offline: a GET of the question's address; the server redirects /q to the canonical URL and answers it
+   response=await fetch(report?reportUrl():questionUrl(question),{headers:{Accept:'application/json'}});
+  }
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-  if(result.session_reset&&sessionId)message('Note',['The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.']);
-  sessionId=result.session_id;
-  message(`Investigator · ${result.mode}`,result.sections);showResult(result);$('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+  if(live){ if(result.session_reset&&sessionId)message('Note',['The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.']); sessionId=result.session_id; }
+  message(`Investigator · ${result.mode}`,result.sections);showResult(result);
+  if(!live&&result.url)rememberView(result,question,{follow:!report});
+  $('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts,url:result.url};
  }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
  finally{setBusy(false);updateScope();}
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('question').value).catch(()=>{});});
 $('report').addEventListener('click',()=>{ if(busy)return; ask(`Build ${PERIOD_NOUN[$('period').value]||'period'} report`,{report:true}).catch(()=>{}); });
-function reset(){$('heatmaps').replaceChildren();$('kpis').replaceChildren();$('api-key').value='';sessionId=null;latest=null;$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('tables').replaceChildren();$('metrics').replaceChildren();$('charts').replaceChildren();$('trace').replaceChildren();$('context').replaceChildren();$('calls').textContent='';$('download').disabled=true;$('pdf').disabled=true;$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';updateScope();primeKpis();}
+function reset(){clearResults();$('api-key').value='';sessionId=null;conversation=[];$('messages').replaceChildren(node('p','Conversation reset. Choose a question.','empty'));$('status').textContent=isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs';pushAddress(scopeUrl());updateScope();primeKpis();}
 $('mode').addEventListener('change',()=>{reset();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',reset);$('shift').addEventListener('change',reset);$('scope').addEventListener('change',reset);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
-$('pdf').addEventListener('click',async()=>{if(!latest||busy)return;$('pdf').disabled=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
+$('pdf').addEventListener('click',async()=>{if(!latest||busy)return;
+ if(latest.url){const a=node('a');a.href=withQuery(latest.url,'format=pdf');a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();return;}   // an addressed answer: the PDF is the same address with format=pdf
+ $('pdf').disabled=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{$('pdf').disabled=!latest;}});
 function applyPublicMode(){
  // Hosted synthetic demo: no visitor keys, ever. A live option stays only when the server's own key for that provider and the cap are enabled.
  if(!config.public)return;
@@ -560,7 +650,11 @@ async function init(){
  $('submit').disabled=true;renderSegments();renderQuestionChips();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
- applyPublicMode();updateScope(); $('submit').disabled=false;primeKpis();
+ applyPublicMode();updateScope(); $('submit').disabled=false;
+ // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
+ if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
+ const address=currentAddress();
+ if(!(address&&CANONICAL.test(address.split('?')[0])&&await restore(address))){pushAddress(scopeUrl(),true);primeKpis();}
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question);}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}

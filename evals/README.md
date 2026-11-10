@@ -22,13 +22,25 @@ fails the build when the committed value goldens are not what the generator prod
 
 | Type | What it proves | How it is checked |
 | --- | --- | --- |
-| routing | the planner picked the right tools with the right arguments | required tool calls (argument subset), optional allow-list, call count, chart and table counts, selected shifts |
+| routing | the planner picked the right tools with the right arguments | required tool calls (argument subset), optional allow-list, call count, chart and table counts, selected shifts; `expect.url`, the canonical address the question resolves to (`GET /q` must redirect there) |
 | faithfulness | every number in the answer came out of a tool row | each numeric token in the prose must equal some tool-row value under one of the application's formats (`.1f`, `.2f`, `,.0f`, `g`, …), a row count, a below-target count, or a stated rule constant; a refused call's own message, quoted verbatim, is tool output too |
 | grounding | findings cite evidence that exists and nothing is silently dropped | narrative citations resolve to `(result_id, row, field)` in the trace; non-limitation paragraphs cite something; a requested chart that could not be drawn is disclosed |
 | refusal | out-of-scope requests are refused rather than answered | expected `ValueError` text, or a `partial`/`unavailable` status with the disclaimer, or forbidden phrases absent; a window before the dataset is unavailable, never zero; a weekend day is refused with the calendar reason |
 | value | a tool's numbers equal a second, plain computation over the records | one tool call through the real agent loop; `expect.values` maps a row selector to fields to `[expected, tolerance]`; `row_count`, `coverage` and reported `excluded_records` alongside |
 | investigation | a multi-turn question finds a seeded story in the evidence, reports its numbers, and asserts no cause the evidence lacks | evidence rules (tool, argument subset, window covering the story period, a row and a comparison), the found numbers present in the prose, forbidden causal patterns absent |
 | data_quality | a corrupt record is flagged, excluded, reported, never averaged in | coverage `incomplete` for its shift only, the excluded record reported with its raw value, the impossible number absent from the answer, rankings withheld; the matching value case pins the remaining sums |
+
+## The URL path
+
+Every offline view is a URL (issue #20, `docs/URLS.md`). After the in-process run, `run_case` sends each
+offline question to `GET /q?…&q=` on a loopback server started once per run: the redirect must land on
+`expect.url` when the case records one (every routing case does; the value is the last turn's address
+without its `after=` chain), a refusal must come back as the same text (`raises`), and the answer
+served at the canonical address is scored with the same invariants and expectations as the in-process
+one, within the case's own `max_ms` on the server's time (`Server-Timing`, so the HTTP round trip is
+outside the clock). Failures are prefixed `URL:`; the table's note carries `URL <ms> ms` and the
+summary prints the server p50 and p95 over GET. Value cases have no question and are not sent; a
+live row checks only that its question resolves to its `expect.url`.
 
 ## Global invariants
 
@@ -175,11 +187,47 @@ Anthropic recordings are committed under `fixtures/anthropic/`; none for OpenAI.
 after the score table: the UTC time, the git commit, the dataset hash, the
 case count, pass / fail / skip per type for the offline cases, `latency_ms`
 (the offline p50 and p95 of that run, in ms), and per provider the model its
-recordings were made with, pass / fail / skip per type and the recorded cost. A
+recordings were made with, pass / fail / skip per type and the recorded cost. `--track` records whole-set runs only and refuses `--only`. The same
+flag rewrites `evals/last_run.json`: one row per run of that newest line (id,
+outcome, ms, note), stamped with the line's time and commit. Commit the two
+files together; `tests/test_evalboard.py` fails when they disagree. A
 run is comparable with the one before it when the dataset hash and the model
 match, and the latency with the one before it when the machine does too; a changed prompt is flagged by the replay warning. The
 file is the answer to "did that change make the agent better or worse": read
 the two lines, not the vibes.
+
+## The set in the app: `/evals`
+
+The server shows the set to a visitor (issue #26). `src/investigator/evalboard.py`
+reads this folder as shipped (the checkout, or `/app/evals` in the image, named
+by `INVESTIGATOR_EVALS`) and loads this `run.py` to run a case; nothing on the
+page writes here.
+
+- `GET /evals`: every case of `golden.json` and `golden_values.json` exactly
+  once, with its question (or the scripted call of a value case), its type, its
+  expectations in plain words ("Calls get_downtime_breakdown for shift 2 by
+  reason") and its result in the last tracked run. Opening a case runs it on
+  the server and draws the actual tool trail beside the expectation, with the
+  same trail row the main page draws. `/evals?case=<id>` opens that case;
+  `/evals?type=<type>` filters.
+- `GET /evals.json`: the same data as JSON, readable from another origin
+  (`Access-Control-Allow-Origin: *`) so the scoreboard can be embedded:
+  `badge`, `counts`, `last_run`, `history` (one entry per `history.jsonl` line
+  with `pass_rate_pct`, `p50_ms`, `p95_ms`) and `cases`.
+- `POST /api/evals/run` with `{"id": "<run id>"}` runs one row and returns its
+  outcome, failures and the trace of every turn; `{"all": true}` runs every row
+  and returns the score (answered from the previous whole-set run for a minute).
+  It carries the same token and Origin checks as `/api/ask`.
+- The badge on the main page (`160/160 golden · 12 ms p50`) is `evals.badge` of
+  `/api/config`: passed / runs and the offline p50 of the newest history line.
+
+A run id is the case id for the offline run and `<id>@<provider>` for its
+recorded variant: 154 cases make 160 runs because six offline cases also have a
+recording. A live run on the page is always a **replay** of the committed
+fixture (`live=False` in `run_case_detail`): the page shows the recording's
+model, its tool choices and its recorded cost, and no request from the page can
+reach a provider, whatever keys the server holds. Latency on the page is this
+server's own; the tracked numbers are the machine that ran `--track`.
 
 ## Known defects
 

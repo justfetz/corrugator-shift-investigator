@@ -14,7 +14,11 @@ Seven case types, one score table:
   data_quality   a corrupt record is flagged, excluded, reported, never averaged in
 
 Every case also passes the global invariants in `invariants()`, whatever its
-type. Offline cases are deterministic and free. Cases marked `live: true` (and
+type. Offline cases are deterministic and free, and each one also runs through the
+URL path (issue #20): its question goes to `GET /q?...&q=` on a loopback server,
+the redirect must land on `expect.url` when the case records one, and the answer
+served at that canonical address is scored like the in-process one, within the
+same per-case budget on the server's own time (`Server-Timing`). Cases marked `live: true` (and
 the `mode: live` cases) also run against a live planner: OpenAI or Anthropic,
 chosen by `--provider` or by whichever key is set. Live runs are recorded to
 `evals/fixtures/<provider>/<id>.json` (stamped with the dataset hash; a recording made
@@ -36,17 +40,21 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 from datetime import datetime, timezone
 import subprocess
 import math
 import os
 import re
+import shutil
 import sys
 import tempfile
 import time
 from collections import Counter
 from pathlib import Path
+from threading import Thread
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
@@ -125,6 +133,98 @@ def close_datasets():
     for analysis in _DATASETS.values():
         analysis.close()
     _DATASETS.clear()
+    close_server()
+
+
+# ---------------------------------------------------------------- the URL path (issue #20)
+
+_SERVER = {}
+URL_MS = {}   # case id -> server time of its answers over GET, for the table and the JSON
+
+
+def local_server():
+    """One loopback workbench per run, started on first use, over the same default store."""
+    if 'server' not in _SERVER:
+        from investigator.server import make_server
+        server = make_server(0)
+        server.app.request_limit = 1_000_000   # the harness is not a visitor: the per-minute window is for people
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        _SERVER['server'], _SERVER['thread'] = server, thread
+    return _SERVER['server']
+
+
+def close_server():
+    if 'server' in _SERVER:
+        server, thread = _SERVER.pop('server'), _SERVER.pop('thread')
+        server.shutdown()
+        thread.join()
+        server.server_close()
+        server.app.close()
+
+
+def http_get(path):
+    server = local_server()
+    connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=60)
+    try:
+        connection.request('GET', path, headers={'Accept': 'application/json'})
+        response = connection.getresponse()
+        return response.status, dict(response.getheaders()), response.read()
+    finally:
+        connection.close()
+
+
+def bare_url(url):
+    """A canonical address without its follow-up chain (`after=`): what `expect.url` records."""
+    path, query = urlsplit(url).path, urlsplit(url).query
+    kept = [(k, v) for k, v in parse_qsl(query, keep_blank_values=True) if k != 'after']
+    return path + ('?' + urlencode(kept, safe=',/?=:-') if kept else '')
+
+
+def via_url(case, expect, turns, redirect_only=False):
+    """Run the turns through the URL path: `GET /q` must redirect to the canonical address (the
+    recorded `expect.url` when there is one), and that address must answer as the question would.
+    Returns (results or None when a turn was refused, the refusal text, failures, server ms).
+    `redirect_only` checks the resolution alone (a live case that records a URL)."""
+    failures, results, after, ms, error, location = [], [], [], 0.0, None, None
+    period = case.get('period', 'day')
+    for text in turns:
+        params = [('day', case.get('day', DEFAULT_DAY)), ('shift', case.get('shift', 2)), ('scope', case.get('scope', 'shift')),
+                  ('period', 'accounting' if period == 'fiscal' else period)]
+        if case.get('corrupt'):
+            params.append(('corrupt', '1'))
+        params.append(('q', text))
+        params.extend(after)
+        status, headers, body = http_get('/q?' + urlencode(params))
+        if status == 400:
+            error = json.loads(body)['error']
+            break
+        if status != 302 or 'Location' not in headers:
+            failures.append(f'GET /q answered {status}, expected a 302 to the canonical URL')
+            break
+        location = headers['Location']
+        if redirect_only:
+            continue
+        status, headers, body = http_get(location)
+        timing = re.search(r'dur=([0-9.]+)', headers.get('Server-Timing', ''))
+        ms += float(timing[1]) if timing else 0.0
+        if status == 400:
+            error = json.loads(body)['error']
+            break
+        if status != 200:
+            failures.append(f'GET {location} answered {status}')
+            break
+        result = json.loads(body)
+        if result.get('url') != location:
+            failures.append(f'the answer names {result.get("url")!r} as its address, served at {location!r}')
+        results.append(result)
+        after.append(('after', bare_url(location)))
+    want = expect.get('url')
+    if want and (location is None or bare_url(location) != want):
+        failures.append(f'q= resolves to {bare_url(location) if location else repr(error)}, expected {want}')
+    if error is not None:
+        results = None
+    return results, error, failures, ms
 
 
 # ---------------------------------------------------------------- planners
@@ -641,6 +741,22 @@ def default_provider():
 # ---------------------------------------------------------------- running one case
 
 def run_case(case, provider=None, live=False, record=False):
+    """(outcome, failures, note, ms): `run_case_detail` without the turn results."""
+    return run_case_detail(case, provider, live, record)[:4]
+
+
+def run_case_detail(case, provider=None, live=False, record=False):
+    """`_run_case` plus the agent's result for each turn that ran (the /evals page draws its tool
+    trail from them). The temporary budget ledger of a live or replayed run is removed afterwards."""
+    scratch = []
+    try:
+        return _run_case(case, provider, live, record, scratch)
+    finally:
+        for folder in scratch:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def _run_case(case, provider, live, record, scratch):
     """Return (outcome, failures, note, ms) with outcome in pass/fail/skip/xfail and
     ms the wall time of the agent's turns (0 when the case did not run).
 
@@ -656,6 +772,7 @@ def run_case(case, provider=None, live=False, record=False):
     if provider and 'expect_live' in case:
         expect = case['expect_live']
     allowed = [shift] if scope == 'shift' else [1, 2, 3]
+    results = []
     turns = case.get('turns') or [case.get('question') or f'value golden: {case.get("tool")}']
     mode = 'live' if provider else 'offline'
     note, warnings, exchanges = '', set(), []
@@ -664,7 +781,7 @@ def run_case(case, provider=None, live=False, record=False):
         if case['type'] == 'value':
             stale = stale_values()
             if stale:
-                return 'fail', [stale], '', 0.0
+                return 'fail', [stale], '', 0.0, results
 
             def make_agent(analysis):
                 return Agent(analysis, planner=ScriptedPlanner(case['tool'], case['arguments']))
@@ -677,7 +794,7 @@ def run_case(case, provider=None, live=False, record=False):
         if live:
             key = os.environ.get(spec['env'])
             if not key:
-                return 'skip', [], f'{spec["env"]} not set', 0.0
+                return 'skip', [], f'{spec["env"]} not set', 0.0, results
             send = spec['record'](exchanges)
         elif fixture.exists():
             recording = json.loads(fixture.read_text())
@@ -687,18 +804,19 @@ def run_case(case, provider=None, live=False, record=False):
             recorded_dataset, live_dataset = recording.get('dataset_version'), dataset_version()
             if recorded_dataset != live_dataset:
                 return 'skip', [], (f'stale recording: dataset {str(recorded_dataset)[:12] if recorded_dataset else "unversioned"} '
-                                    f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}'), 0.0
+                                    f'vs live {live_dataset[:12]}; re-record with --live --provider {provider}'), 0.0, results
             exchanges = recording['exchanges']
             send = spec['replay'](exchanges, warnings)
             key = spec['replay_key']
         else:
-            return 'skip', [], f'no {provider} fixture; run --live --provider {provider} to record', 0.0
-        ledger = Path(tempfile.mkdtemp()) / 'budget.sqlite3'
+            return 'skip', [], f'no {provider} fixture; run --live --provider {provider} to record', 0.0, results
+        scratch.append(tempfile.mkdtemp())
+        ledger = Path(scratch[-1]) / 'budget.sqlite3'
 
         def make_agent(analysis):
             return Agent(analysis, planner=spec['planner'](key, ledger, send), max_calls=10, max_seconds=60)
 
-    results, analysis, ms = [], None, 0.0
+    analysis, ms = None, 0.0
     try:
         analysis = dataset(day, case.get('corrupt', False))
         context = Context(day, shift)
@@ -713,21 +831,15 @@ def run_case(case, provider=None, live=False, record=False):
     except ValueError as exc:
         want = expect.get('raises')
         if want and re.search(want, str(exc), re.I):
-            slow = latency_failures(expect, provider, ms)
-            return ('fail' if slow else 'pass'), slow, f'refused: {str(exc)[:60]}', ms
-        return 'fail', [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], '', ms
+            slow = latency_failures(expect, provider, ms) + url_failures(case, expect, turns, provider)
+            return ('fail' if slow else 'pass'), slow, f'refused: {str(exc)[:60]}', ms, results
+        return 'fail', [f'raised {str(exc)[:90]!r}' + (f', expected /{want}/' if want else '')], '', ms, results
     if expect.get('raises'):
-        return 'fail', [f'did not raise; status {results[-1]["status"]}'], '', ms
+        return 'fail', [f'did not raise; status {results[-1]["status"]}'], '', ms, results
 
     failures = latency_failures(expect, provider, ms)
-    for result in results:
-        failures.extend(invariants(mode, result, analysis, allowed))
-    if case['type'] == 'investigation':
-        failures.extend(investigation_failures(expect, results))
-    else:
-        failures.extend(expectations(expect, results[-1]))
-        if case['type'] == 'value':
-            failures.extend(value_failures(expect, results[-1]))
+    failures.extend(score(case, expect, results, analysis, allowed, mode))
+    failures.extend(url_failures(case, expect, turns, provider, analysis, allowed))
     last = results[-1]
     if provider and live and record:
         fixture = fixture_path(case['id'], provider)
@@ -740,13 +852,59 @@ def run_case(case, provider=None, live=False, record=False):
         note = f'{last["status"]}, {last["usage"]["model_calls"]} model calls'
     else:
         note = f'{last["status"]}, {sum(len(r["trace"]) for r in results)} tool calls'
+        if case['id'] in URL_MS:
+            note += f'; URL {URL_MS[case["id"]]:.0f} ms'
     if warnings:
         note += '; ' + '; '.join(sorted(warnings))
     if failures and case.get('known_defect'):
-        return 'xfail', failures, 'known defect: ' + case['known_defect'], ms
+        return 'xfail', failures, 'known defect: ' + case['known_defect'], ms, results
     if not failures and case.get('known_defect'):
         note += '; known_defect marker is stale: the case passes, remove the marker'
-    return ('fail' if failures else 'pass'), failures, note, ms
+    return ('fail' if failures else 'pass'), failures, note, ms, results
+
+
+def score(case, expect, results, analysis, allowed, mode):
+    """The invariants over every turn and the case's own expectations over the last (or, for an
+    investigation, over all of them): the same scoring for the in-process and the URL answers."""
+    failures = []
+    for result in results:
+        failures.extend(invariants(mode, result, analysis, allowed))
+    if case['type'] == 'investigation':
+        failures.extend(investigation_failures(expect, results))
+    else:
+        failures.extend(expectations(expect, results[-1]))
+        if case['type'] == 'value':
+            failures.extend(value_failures(expect, results[-1]))
+    return failures
+
+
+def url_failures(case, expect, turns, provider, analysis=None, allowed=None):
+    """The URL path of an offline case: the redirect lands on `expect.url`, a refusal comes back as
+    the same text, an answer scores like the in-process one and stays within the case's budget on
+    the server's own time. A value case has no question; a live row checks the resolution only."""
+    if case['type'] == 'value':
+        return []
+    if provider:
+        if 'url' not in expect:
+            return []
+        _, _, failures, _ = via_url(case, expect, turns, redirect_only=True)
+        return [f'URL: {f}' for f in failures]
+    results, error, failures, ms = via_url(case, expect, turns)
+    want = expect.get('raises')
+    if want:
+        if error is None:
+            failures.append(f'answered over GET; expected a refusal /{want}/')
+        elif not re.search(want, error, re.I):
+            failures.append(f'GET refused with {error[:90]!r}, expected /{want}/')
+    elif error is not None:
+        failures.append(f'GET refused: {error[:90]!r}')
+    elif results and not failures:
+        URL_MS[case['id']] = ms
+        budget = expect.get('max_ms', DEFAULT_MAX_MS)
+        if ms > budget:
+            failures.append(f'{ms:.0f} ms server time, budget {budget} ms')
+        failures.extend(score(case, expect, results, analysis, allowed, 'offline'))
+    return [f'URL: {f}' for f in failures]
 
 
 def latency_failures(expect, provider, ms):
@@ -799,6 +957,11 @@ def main(argv=None):
     parser.add_argument('--track', action='store_true', help='append one line per run to evals/history.jsonl (commit, dataset, model, pass rate per type, cost)')
     args = parser.parse_args(argv)
 
+    if args.track and args.only:
+        # history.jsonl and last_run.json describe whole-set runs: the /evals page and the main page's badge
+        # read the newest line as the score of the set, so a subset must never be appended.
+        print('--track records a whole-set run; it cannot be combined with --only')
+        return 2
     provider = args.provider or default_provider()
     if args.live and provider is None:
         print('--live needs exactly one of ' + ' / '.join(s['env'] for s in PROVIDERS.values()) + ' set, or --provider')
@@ -818,7 +981,8 @@ def main(argv=None):
                 label = case['id'] + (f'@{case_provider}' if case_provider else '')
             rows.append({'id': label, 'case': case['id'], 'type': case['type'], 'provider': case_provider,
                          'mode': 'live' if case_provider or label.endswith('@live') else 'offline',
-                         'outcome': outcome, 'failures': failures, 'note': note, 'ms': round(ms, 1)})
+                         'outcome': outcome, 'failures': failures, 'note': note, 'ms': round(ms, 1),
+                         'url_ms': round(URL_MS[case['id']], 1) if not case_provider and case['id'] in URL_MS else None})
     finally:
         close_datasets()
 
@@ -856,6 +1020,10 @@ def main(argv=None):
             parts.append(f'{stale} stale recording(s): re-record with --live --provider {name}')
         if parts:
             print(f'live {name}: ' + '  '.join(parts))
+    url_latency = percentiles(URL_MS[r['case']] for r in rows if r['case'] in URL_MS and not r['provider'])
+    if url_latency['p50'] is not None:
+        print(f'URL path: {sum(1 for r in rows if r["case"] in URL_MS and not r["provider"])} offline cases answered over GET; '
+              + '  '.join(f'server {k} {url_latency[k]:.0f} ms' for k in ('p50', 'p95')) + ' (each case within its own budget)')
     latency = offline_latency(rows)
     if latency['p50'] is not None and args.only:   # a subset's percentiles are those cases' own times: reported, not gated
         print('offline latency: ' + '  '.join(f'{k} {latency[k]:.0f} ms' for k in ('p50', 'p95')) + ' (not gated under --only)')
@@ -877,13 +1045,25 @@ def main(argv=None):
         HISTORY.parent.mkdir(parents=True, exist_ok=True)
         with HISTORY.open('a') as out:
             out.write(json.dumps(line, separators=(',', ':')) + '\n')
-        print(f'tracked in {HISTORY.relative_to(ROOT)}: ' + ', '.join(f'{k} {v["pass"]}/{v["pass"] + v["fail"]}' for k, v in line['offline'].items())
+        LAST_RUN.write_text(json.dumps(last_run(rows, line), indent=1) + '\n')
+        print(f'tracked in {HISTORY.relative_to(ROOT)} (rows in {LAST_RUN.relative_to(ROOT)}): ' + ', '.join(f'{k} {v["pass"]}/{v["pass"] + v["fail"]}' for k, v in line['offline'].items())
               + (f'; latency p50 {line["latency_ms"]["p50"]:.0f} ms, p95 {line["latency_ms"]["p95"]:.0f} ms' if line['latency_ms']['p50'] is not None else '')
               + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items()))
     return failed + breaches
 
 
 HISTORY = ROOT / 'evals' / 'history.jsonl'
+
+
+LAST_RUN = ROOT / 'evals' / 'last_run.json'
+
+
+def last_run(rows, line):
+    """The rows behind the newest history line: id, case, type, provider, outcome and ms per row.
+    `ran_at` and `commit` are that line's, so a reader can tell the two files belong together; the
+    /evals page shows each case's result from here without running anything."""
+    return {'ran_at': line['ran_at'], 'commit': line['commit'], 'dataset': line['dataset'],
+            'rows': [{k: r[k] for k in ('id', 'case', 'type', 'provider', 'mode', 'outcome', 'ms', 'note')} for r in rows]}
 
 
 def offline_latency(rows):

@@ -114,8 +114,9 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-v
 .chip-group{display:grid;grid-template-columns:86px 1fr;gap:8px;align-items:start}
 .chip-group h4{margin:0;padding-top:8px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips button{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--grid);font-family:var(--sans);font-size:12.5px;padding:0 9px;font-weight:500;min-height:30px;border-radius:999px}
-.chips button:hover:not(:disabled){color:var(--ink);border-color:var(--ink-3);filter:none}
+.chips button,.chips a.chip{background:var(--surface-2);color:var(--ink-2);border:1px solid var(--grid);font-family:var(--sans);font-size:12.5px;padding:0 9px;font-weight:500;min-height:30px;border-radius:999px;display:inline-flex;align-items:center;text-decoration:none;cursor:pointer}
+.chips button:hover:not(:disabled),.chips a.chip:hover:not([aria-disabled="true"]){color:var(--ink);border-color:var(--ink-3);filter:none}
+.chips a.chip[aria-disabled="true"]{opacity:.45;pointer-events:none}
 #messages{min-height:80px;max-height:420px;overflow:auto;line-height:1.6;margin:12px 0}
 .empty{color:var(--ink-3);border-left:2px solid var(--rule);padding:10px 16px}
 .message{border-bottom:1px solid var(--line-2);padding:14px 0;font-size:.92rem}
@@ -203,6 +204,30 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;line-height:1.6
 .trace-sql summary,.trace-json summary,.trace-context summary{font-size:.78rem;font-family:var(--mono);color:var(--ink-3);font-weight:500}
 .trace-sql pre,.trace-json pre,.trace-context pre{margin-top:6px}
 code{font-family:var(--mono)}
+
+/* Query box (#40): the compact trace at the top of the answer, Datasette-style. One block per tool step:
+   tool(arguments) · rows · ms on the summary, the SQL with its bound values and a copy button inside. Step 1
+   is open; the rest are one line each with the SQL on tap. Charts and tables carry a link back to their box. */
+.queries:empty{display:none}
+.queries{margin:12px 0 0;border:1px solid var(--rule);border-radius:10px;background:var(--surface-2);padding:8px 12px 10px;font-family:var(--mono);font-size:12px}
+.queries-head{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;align-items:baseline;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:500;padding-bottom:6px;border-bottom:1px solid var(--line-2)}
+.queries-head .mono{letter-spacing:0;text-transform:none;font-size:11.5px}
+.query{margin:0;border-top:0;padding:0}
+.query+.query{border-top:1px solid var(--line-2)}
+.query>summary{min-height:30px;padding:4px 0;gap:6px;font-size:12px;font-weight:500;flex-wrap:wrap;color:var(--ink-2)}
+.query>summary .tool{font-weight:600;color:var(--brand-ink)}
+.query>summary .args{font-weight:400;overflow-wrap:anywhere;min-width:0}
+.query>summary .facts{font-weight:400;color:var(--ink-3);white-space:nowrap;margin-left:auto}
+.query.failed>summary .tool{color:var(--bad)}
+.query pre.sql{margin:2px 0 6px 12px;padding:8px 10px;border:0;border-left:2px solid var(--grid);border-radius:0 6px 6px 0;background:var(--surface);font-size:12px;line-height:1.5;max-height:240px}   /* a long query scrolls inside its box; the copy button carries all of it */
+.query>.muted,.query>.warning-note{margin:2px 0 6px 12px;font-size:12px;line-height:1.5}
+.query-foot{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 8px 12px;font-size:11.5px}
+.query-foot .copy,.queries-foot button{min-height:26px;padding:0 9px;font-size:11.5px;font-family:var(--mono)}
+.query-foot a{color:var(--ink-2)}
+.queries-foot{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--line-2);color:var(--ink-3);font-size:11.5px}
+.query-link{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.chart .query-link{color:var(--ink-2)}   /* 4.5:1 on the chart panel, like the captions (#36) */
+.query a:focus-visible,.query-link:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 .note-group{margin:8px 0;border-top:0;padding:6px 10px;background:var(--surface-2);border-radius:8px}
 .note-group summary{font-size:.82rem;font-weight:500;color:var(--ink-2)}
 .note-group p{margin:8px 0 2px;font-size:.85rem;color:var(--ink-2)}
@@ -244,9 +269,46 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
  .metrics,.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .chip-group{grid-template-columns:1fr;gap:4px}.chip-group h4{padding-top:4px}
  .trace-meta{grid-template-columns:1fr}.trace-sum .facts{white-space:normal}
+ .queries{padding:6px 10px 8px}.queries-head{flex-direction:column;gap:2px}.query>summary{flex-wrap:nowrap;overflow:hidden}.query>summary .args{display:none}.query>summary .tool{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.query pre.sql,.query-foot,.query>.muted,.query>.warning-note{margin-left:0}
  .tile .v{font-size:1.2rem}
  .heatmap-weekdays,.heatmap-grid{gap:4px}.heatmap-cell{padding:5px}
  #messages{max-height:350px}
  td,th{min-width:80px}
 }
 @media(prefers-reduced-motion:no-preference){button{transition:filter .15s}}
+
+/* Golden evals page (/evals) and its badge on the investigator's left rail */
+.evals-badge{display:inline-flex;align-items:center;margin-top:10px;min-height:30px;padding:0 10px;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--ink-2);text-decoration:none}
+.evals-badge:hover{color:var(--accent);border-color:var(--accent)}
+.evals-page .card+.card{margin-top:14px}
+.evals-summary{margin:0 0 6px;font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--ink);overflow-wrap:anywhere}
+.evals-page .report-actions{align-items:center}
+#score-table tr.total td{font-weight:600;color:var(--ink);border-bottom:0}
+#trend-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}#trend-charts .chart{margin-top:0}
+.evals-filter{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.evals-filter .seg{flex-wrap:wrap}.evals-filter input{flex:1 1 200px;min-height:34px;padding:6px 10px;font-size:.88rem}
+.case{margin-top:0;border-top:1px solid var(--line-2);padding:4px 0}
+.case-sum{flex-wrap:wrap;gap:4px 8px;padding:6px 0;min-height:36px;font-weight:400}
+.case-id{font-size:12.5px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.type-chip{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.case-q{flex:1 1 100%;font-family:var(--sans);font-size:.9rem;color:var(--ink-2);overflow-wrap:anywhere}
+.outcome{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--neutral-soft);color:var(--ink-2);white-space:nowrap}
+.outcome.pass{background:var(--good-soft);color:var(--good)}.outcome.fail{background:var(--bad-soft);color:var(--bad)}.outcome.none{font-weight:500}
+.case-body{padding:4px 0 12px}
+.case-grid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:18px}
+.case-col{min-width:0}.case-col h3{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:500;margin:6px 0 8px}
+.case-col h4{font-size:.85rem;margin:14px 0 6px;font-weight:600;color:var(--ink-2)}
+.case-col p,.case-col li{font-size:.88rem;line-height:1.55;overflow-wrap:anywhere}.case-col p{margin:6px 0}
+.case-col ul,.case-col ol{margin:6px 0;padding-left:20px}
+.case-setup{font-size:12px!important;color:var(--ink-3)}.case-question{font-weight:500}
+.failures{color:var(--bad)}
+.run-box{border:1px solid var(--line-2);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.run-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.85rem}.run-head button{min-height:30px;font-size:12px}
+.result-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}.result-line .mono,.turn-facts{font-size:12px!important;color:var(--ink-2)}
+.turn{margin-top:10px}.recorded .tool{background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:12px}.recorded span{font-size:12px}
+@media(max-width:850px){
+ #trend-charts,.case-grid{grid-template-columns:1fr}
+ .evals-page .card{padding:14px}
+ .evals-filter .seg-btn{flex:1 1 auto;padding:0 8px}
+ #score-table td:nth-child(2),#score-table th:nth-child(2){min-width:180px}
+}

@@ -95,6 +95,8 @@ def test_config_reports_the_production_calendar_and_refuses_other_days(running):
     assert status==200 and result['period_label']=='2026-08-01 to 2026-08-31' and result['status']=='complete'
     assert any('Full comparison unavailable' in s for s in result['sections'])   # July is before the dataset
     assert result['trace'][0]['tool']=='get_period_report'
+    assert result['tables'] and all(tbl['source_result_id']==result['trace'][0]['result_id'] for tbl in result['tables'])   # #40: period tables name their step
+    report=result['trace'][0]['data'];assert report['daily_sql'].count('?')==len(report['daily_parameters'])>0 and set(report['daily_parameters'])=={2}   # #40: the per-day SQL with its bound values
     # A question under Week is investigated over that week by the period tools (no longer the canned report).
     status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'period':'week','question':'Why was this shift slow? Chart downtime by reason.'}),headers)
     result=json.loads(body)
@@ -466,3 +468,120 @@ def test_static_files_revalidate_with_an_etag(running):
     assert status==200 and len(body)>1000
     status,headers,body=request(running,'GET','/style.css',headers={'Accept-Encoding':'gzip'})
     assert status==200 and headers['Content-Encoding']=='gzip'  # static files compress too
+
+
+# ---- issue #20: URL-addressable questions (the Datasette model) ----
+
+def test_a_typed_question_redirects_to_its_canonical_url_and_the_url_answers(running):
+    """GET /q resolves the question with the offline router and redirects; the canonical URL serves the page,
+    the answer as .json (or with Accept: application/json), and the PDF with format=pdf. No token, no session."""
+    sessions_before,reports_before=len(running.app.sessions),len(running.app.reports)
+    status,headers,body=request(running,'GET','/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F+Chart+downtime+by+reason.')
+    assert status==302 and headers['Location']=='/corr/1/day/2026-09-14/shift/2?measure=overview' and json.loads(body)['url']==headers['Location']
+    assert headers['Cache-Control']=='no-store'
+    canonical=headers['Location']
+    status,headers,body=request(running,'GET',canonical,headers={'Accept':'application/json'})
+    result=json.loads(body)
+    assert status==200 and headers['Content-Type'].startswith('application/json') and result['status']=='complete'
+    assert result['url']==canonical and 'session_id' not in result and result['usage']['model_calls']==0
+    assert [t['tool'] for t in result['trace'] if t['tool']!='render_chart']==['get_shift_kpis','get_downtime_breakdown','get_wet_end_performance','get_shift_notes']
+    assert result['context']['history']==[{'question':canonical,'shifts':[2],'intent':'overview'}]
+    served=float(headers['Server-Timing'].split('dur=')[1])
+    assert 0<served<250, headers['Server-Timing']   # acceptance: server time under 250 ms
+    assert 'Synthetic production investigation' in result['report_markdown']
+    # the same answer three ways: .json suffix, format=json, Accept header
+    status,_,again=request(running,'GET','/corr/1/day/2026-09-14/shift/2.json?measure=overview')
+    assert status==200 and json.loads(again)['sections']==result['sections'] and json.loads(again)['url']==canonical
+    status,_,again=request(running,'GET',canonical+'&format=json')
+    assert status==200 and json.loads(again)['sections']==result['sections']
+    assert (len(running.app.sessions),len(running.app.reports))==(sessions_before,reports_before)   # no session, no retained report
+    # the POST answer to the same question names the same address
+    token=json.loads(request(running,'GET','/api/config')[2])['token']
+    post_headers={'Content-Type':'application/json','X-Workbench-Token':token}
+    status,_,posted=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'question':'Why was this shift slow? Chart downtime by reason.'}),post_headers)
+    assert status==200 and json.loads(posted)['url']==canonical and json.loads(posted)['sections']==result['sections']
+    # a browser navigation gets the app page (ETag-revalidated like /), which reads its own address
+    status,headers,page=request(running,'GET',canonical,headers={'Accept':'text/html,application/xhtml+xml,*/*;q=0.8'})
+    assert status==200 and headers['Content-Type'].startswith('text/html') and b'Shift Investigator' in page and headers['ETag']
+    assert request(running,'GET',canonical,headers={'Accept':'text/html','If-None-Match':headers['ETag']})[0]==304
+    assert request(running,'GET','/corr/1/day/2026-09-14/shift/2',headers={'Accept':'text/html'})[0]==200   # the bare scope is a page
+    assert request(running,'GET','/corr/1/day/2026-09-14/shift/4',headers={'Accept':'text/html'})[0]==404   # not an address
+    # the PDF is the same address with format=pdf: no report cache, so any instance can serve it
+    status,headers,pdf=request(running,'GET',canonical+'&format=pdf')
+    assert status==200 and headers['Content-Type']=='application/pdf' and pdf.startswith(b'%PDF-') and 'synthetic-report-2026-09-14.pdf' in headers['Content-Disposition']
+    assert running.app.lock.locked() is False and running.app.read_lock.locked() is False
+
+
+def test_the_url_path_refuses_like_the_post_path(running):
+    for path,status,message in (
+        ('/q?day=2026-09-14&shift=2&q=What+is+the+weather',400,'Try an example question'),
+        ('/q?day=2026-09-13&shift=2&q=Show+speed',400,'Sunday'),
+        ('/q?day=2026-09-14&shift=9&q=Show+speed',400,'supported shift'),
+        ('/q?day=2026-09-14&shift=2&period=year&q=Show+speed',400,'accounting period'),
+        ('/q?day=2026-09-14&shift=2&mode=openai&q=Show+speed',400,'Invalid request fields'),
+        ('/q?day=2026-09-14&shift=2&scope=shift&q=Show+shift+1',400,'Selected shift only'),
+        ('/q?day=2026-09-14&shift=2&period=week&q=Show+setup+matrix',400,'Switch Period to Day'),
+        ('/corr/1/day/2026-09-14/shift/2.json',400,'Add measure='),
+        ('/corr/1/day/2026-09-14/shift/2.json?measure=overview&bogus=1',400,'Unknown query field'),
+        ('/corr/1/day/2026-09-12/shift/2.json?measure=overview',400,'Saturday'),
+        ('/corr/1/week/2026-09-14/shift/2.json?measure=setups',400,'Switch Period to Day'),
+        ('/corr/1/day/2026-09-14/shift/2.json?measure=report',400,'needs Week, Month or 4-4-5'),
+        ('/corr/2/day/2026-09-14/shift/2.json?measure=overview',404,'No machine'),
+    ):
+        got,_,body=request(running,'GET',path)
+        assert got==status and message in json.loads(body)['error'], (path,got,body)
+    assert request(running,'GET','/q?day=2026-09-14&shift=2&q=Show+speed',headers={'Host':'evil.example'})[0]==403
+
+
+def test_follow_ups_reports_and_the_bad_record_ride_in_the_url(running):
+    """after= carries the conversation (no session), measure=report is the deterministic period report, and
+    corrupt=1 is the Advanced toggle; the redirect keeps all three on the canonical address."""
+    status,headers,_=request(running,'GET','/q?day=2026-09-14&shift=2&scope=day&q=Why+was+second+shift+slow%3F')
+    first=headers['Location']
+    assert status==302 and first=='/corr/1/day/2026-09-14?measure=overview&shifts=2'
+    status,headers,_=request(running,'GET','/q?day=2026-09-14&shift=2&scope=day&q=Compare+that+with+first+shift&after='+first.replace('&','%26'))
+    second=headers['Location']
+    assert second=='/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2'
+    status,_,body=request(running,'GET',second+'&format=json')
+    result=json.loads(body)
+    assert status==200 and result['selected_shifts']==[2,1] and result['url']==second
+    assert [h['question'] for h in result['context']['history']]==[first,'/corr/1/day/2026-09-14?measure=compare&shifts=2,1']
+    status,_,body=request(running,'GET','/corr/1/month/2026-08-12/shift/2.json?measure=report')
+    result=json.loads(body)
+    assert status==200 and result['trace'][0]['tool']=='get_period_report' and result['period_label']=='2026-08-01 to 2026-08-31'
+    assert result['url']=='/corr/1/month/2026-08-12/shift/2?measure=report'
+    status,_,body=request(running,'GET','/corr/1/day/2026-09-14/shift/2.json?measure=setups&corrupt=1')
+    result=json.loads(body)
+    assert status==200 and result['trace'][0]['data']['coverage']=='incomplete' and result['url'].endswith('?measure=setups&corrupt=1')
+    status,headers,_=request(running,'GET','/q?day=2026-09-14&shift=2&corrupt=1&q=Show+setup+matrix')
+    assert headers['Location']=='/corr/1/day/2026-09-14/shift/2?measure=setups&corrupt=1'
+    token=json.loads(request(running,'GET','/api/config')[2])['token']
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-08-12','shift':2,'period':'month','question':'Build month report','report':True}),
+                          {'Content-Type':'application/json','X-Workbench-Token':token})
+    assert status==200 and json.loads(body)['url']=='/corr/1/month/2026-08-12/shift/2?measure=report'
+    assert json.loads(request(running,'GET','/api/config')[2])['machine']=='1'
+
+
+def test_url_answers_count_against_the_request_window_and_the_per_ip_limit(tmp_path):
+    from investigator.server import DemoGuards
+    app=Workbench(guards=DemoGuards(rate_limit_per_min=2,ledger=tmp_path/'ledger.sqlite3'))
+    try:
+        app.client_round('198.51.100.7'); app.client_round('198.51.100.7')
+        with pytest.raises(Exception,match='slow down'):
+            app.client_round('198.51.100.7')
+        result,fmt=app.answer_url('/corr/1/day/2026-09-14/shift/2?measure=fpm')
+        assert fmt is None and result['status']=='complete' and app.datasets=={} and set(app.read_datasets)=={('2026-09-14',False)}
+        result,fmt=app.answer_url('/corr/1/day/2026-09-14/shift/2?measure=fpm&format=pdf')
+        assert fmt=='pdf'
+        assert app.question_url('day=2026-09-14&shift=2&q=Show+speed+to+target')=='/corr/1/day/2026-09-14/shift/2?measure=fpm'
+    finally:app.close()
+    server=make_server(0)
+    try:
+        server.app.request_limit=1
+        thread=Thread(target=server.serve_forever,daemon=True);thread.start()
+        assert request(server,'GET','/corr/1/day/2026-09-14/shift/2.json?measure=fpm')[0]==200
+        status,_,body=request(server,'GET','/corr/1/day/2026-09-14/shift/2.json?measure=fpm')
+        assert status==429 and 'request limit' in json.loads(body)['error']
+        assert request(server,'GET','/corr/1/day/2026-09-14/shift/2',headers={'Accept':'text/html'})[0]==200   # the page itself is not a round
+    finally:
+        server.shutdown();thread.join();server.server_close();server.app.close()

@@ -7,6 +7,7 @@ in it has three validated shifts.
 """
 from collections import OrderedDict, defaultdict
 from datetime import date, timedelta
+import threading
 import time
 from uuid import uuid4
 from .record_store import DEFAULT_MONTHS, FISCAL_START, default_store
@@ -67,20 +68,22 @@ class PeriodReports:
         self.first = date.fromisoformat(self.store.first_day)
         self.last = date.fromisoformat(self.store.last_day)
         self.cache = OrderedDict()
+        self.cache_lock = threading.Lock()   # the POST path and the URL path (issue #20) share one cache
 
     def snapshot(self, day, corrupt=False):
         key = (day.isoformat(), corrupt)
-        if key not in self.cache:
-            a = self.store.day_analysis(day.isoformat(), corrupt)
-            try:
-                self.cache[key] = {'version': a.version, 'shifts': {
-                    s: {'kpis': a.get_shift_kpis(s), 'notes': a.get_shift_notes(s)} for s in (1,2,3)}}
-            finally:
-                a.close()
-            if len(self.cache)>60:
-                self.cache.popitem(last=False)
-        self.cache.move_to_end(key)
-        return self.cache[key]
+        with self.cache_lock:
+            if key not in self.cache:
+                a = self.store.day_analysis(day.isoformat(), corrupt)
+                try:
+                    self.cache[key] = {'version': a.version, 'shifts': {
+                        s: {'kpis': a.get_shift_kpis(s), 'notes': a.get_shift_notes(s)} for s in (1,2,3)}}
+                finally:
+                    a.close()
+                if len(self.cache)>60:
+                    self.cache.popitem(last=False)
+            self.cache.move_to_end(key)
+            return self.cache[key]
 
     def investigate(self, day, shift, scope, period, corrupt=False):
         started = time.monotonic()
@@ -159,14 +162,15 @@ class PeriodReports:
             for metric,field,reverse in [('speed','speed_to_target_pct',True),('maintenance','maintenance_pct',False),('waste','dry_end_pct',False)]:
                 values=sorted({r[field] for r in rankings},reverse=reverse)
                 for r in rankings:r[metric+'_rank']=values.index(r[field])+1
-        tables=[{'title':'Recurring downtime: current and previous period','rows':recurring,'coverage':'complete' if complete else 'incomplete'},
-                {'title':'Shift rankings: 1 = best in this period; no combined score','rows':rankings,'coverage':'complete' if complete else 'incomplete'},
-                {'title':'Daily shift matrix','rows':current,'coverage':'complete' if complete else 'incomplete'},
-                {'title':'Reported shift and downtime notes (synthetic, unverified)','rows':note_rows,'coverage':'complete' if complete else 'incomplete'}]
+        tables=[{'title':'Recurring downtime: current and previous period','rows':recurring,'coverage':'complete' if complete else 'incomplete','source_result_id':rid},
+                {'title':'Shift rankings: 1 = best in this period; no combined score','rows':rankings,'coverage':'complete' if complete else 'incomplete','source_result_id':rid},
+                {'title':'Daily shift matrix','rows':current,'coverage':'complete' if complete else 'incomplete','source_result_id':rid},
+                {'title':'Reported shift and downtime notes (synthetic, unverified)','rows':note_rows,'coverage':'complete' if complete else 'incomplete','source_result_id':rid}]
+        daily_trace=self.snapshot(date.fromisoformat(current[0]['day']),corrupt)['shifts'][shifts[0]]['kpis']['trace']
         trace={'result_id':rid,'tool':'get_period_report','arguments':{'day':day,'period':period,'scope':scope,'shift':shift},
                'ok':True,'elapsed_ms':(time.monotonic()-started)*1000,'data':{'range':label,'coverage':'complete' if complete else 'incomplete',
                'rows':[totals],'dataset_versions':versions,'calculation':'Sum raw numerators and denominators from validated daily SQL tools. Fixed 480 minutes per shift. Speed target weighted by elapsed grade time.',
-               'daily_sql':self.snapshot(date.fromisoformat(current[0]['day']),corrupt)['shifts'][shifts[0]]['kpis']['trace']['sql']}}
+               'daily_sql':daily_trace['sql'],'daily_parameters':daily_trace['parameters']}}   # the per-day KPI query with its bound values (#40)
         heatmap_rows=[]
         for n in range((end-start).days+1):
             moment = start+timedelta(days=n)
