@@ -203,6 +203,10 @@ def test_a_rejected_plan_degrades_with_its_counts(analysis, tmp_path):
     assert result['plan_rejection'] == {'proposed': 12, 'limit': 9}
     assert not any(s.startswith('Investigation stopped') for s in result['sections'])
     assert any('more queries than the limit allows' in s and 'offline answer stands' in s for s in result['sections'])
+    # another reason for refusal carries no counts, even when the plan is also long
+    shaped = json.dumps({'steps': NINE + all_shift_steps(('get_quality_breakdown', {})), 'x': 1})
+    odd = Agent(analysis, planner=analyst(tmp_path, scripted(shaped))).ask_planned('What shift was fastest and why?', day)
+    assert odd['status'] == 'plan_rejected' and 'plan_rejection' not in odd
     # another reason for refusal carries no counts
     bad = json.dumps({'steps': [{'tool': 'run_sql', 'arguments': {}}]})
     other = Agent(analysis, planner=analyst(tmp_path, scripted(bad))).ask_planned('Why slow?', context())

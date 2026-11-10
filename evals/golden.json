@@ -2580,6 +2580,76 @@
     "sections_match": "plan was rejected \\(it proposes more queries than the limit allows\\); no query was run",
     "sections_not_match": "Investigation stopped"
    }
+  },
+  {
+   "id": "analyst-plan-all-shifts-period-kpis",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What shift was fastest and why?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 3
+      }
+     }
+    ]
+   },
+   "note": "Issue #78. The plan the all-shift prompt steers a which-shift question to: get_period_kpis for the selected window once per shift, three steps, so speed with and without stops, downtime and waste sit side by side for each shift. It validates in production-day scope and runs every step.",
+   "expect": {
+    "status": "complete",
+    "tool_calls": 3,
+    "tools_only": [
+     "get_period_kpis"
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "shift": 3
+      }
+     }
+    ],
+    "sections_not_match": "plan was rejected|Investigation stopped"
+   }
   }
  ]
 }

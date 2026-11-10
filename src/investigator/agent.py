@@ -413,6 +413,7 @@ def plan_step_cap(allowed_shifts):
     return 2 * len(allowed_shifts) + 3
 
 
+OVER_CAP = 'it proposes more queries than the limit allows'
 PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] != 'render_chart'}
 PLAN_REJECTED = "The analyst's plan was rejected ({reason}); no query was run for it. The offline answer stands on its own."
 
@@ -461,7 +462,7 @@ def validate_plan(plan, allowed_shifts, scope, period, production_day):
     if not plan['steps']:
         return [], 'it has no steps'
     if len(plan['steps']) > plan_step_cap(allowed_shifts):
-        return [], 'it proposes more queries than the limit allows'
+        return [], OVER_CAP
     steps = []
     for step in plan['steps']:
         if not isinstance(step, dict) or set(step) != {'tool', 'arguments'} or not isinstance(step['tool'], str):
@@ -665,7 +666,7 @@ class Agent:
                 steps, reason = validate_plan(plan, allowed_shifts, context.scope, period, context.production_day)
                 if reason:
                     status, failure_message = 'plan_rejected', PLAN_REJECTED.format(reason=reason)
-                    if isinstance(plan, dict) and isinstance(plan.get('steps'), list) and len(plan['steps']) > plan_step_cap(allowed_shifts):
+                    if reason == OVER_CAP:
                         # The counts are application facts, not data: they travel as fields for the card's
                         # one line, so the answer's text keeps no digits a tool did not return.
                         rejection = {'proposed': len(plan['steps']), 'limit': plan_step_cap(allowed_shifts)}
