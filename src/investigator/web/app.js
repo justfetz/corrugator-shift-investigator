@@ -313,7 +313,7 @@ function speedChart(chart,wrap){
    labelText(svg,r[chart.x],f.x0-8,y+ty,f.chars);
    svg.append(barPath(f.x0,y+by,(Number(r[chart.y])/max)*(f.x1-f.x0),bh,chart.coverage==='complete'?'bar cur':'bar incomplete'));
    if(r.target_fpm){const x=f.x0+r.target_fpm/max*(f.x1-f.x0);svg.append(svgNode('line',{x1:x,x2:x,y1:y+by-3,y2:y+by+bh+3,class:'target'}));}
-   const detail=r.target_fpm?`${r[chart.x]} / ${r.grade||'grade-weighted'}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. ${chart.y==='speed_run_fpm'?'Without stops.':'Includes downtime.'}`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;
+   const detail=r.target_fpm?`${chart.x==='grade'?r.grade:`${r[chart.x]} / ${r.grade||'grade-weighted'}`}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. ${chart.y==='speed_run_fpm'?'Without stops.':'Includes downtime.'}`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;
    const value=svgNode('text',{x:f.x1+8,y:y+ty,tabindex:0,'aria-label':detail,class:'val'},r.target_fpm?`${Number(r[chart.y]).toFixed(1)} / ${r.speed_to_target_pct.toFixed(1)}%`:Number(r[chart.y]).toFixed(1));value.append(svgNode('title',{},detail));svg.append(value);
   });
   box.append(svg);

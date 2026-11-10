@@ -169,6 +169,15 @@ marks=walk(elements.charts);
 assert.equal(marks.filter(e=>e.class==='bar cur').length,10);          // five best and five worst of twelve
 const toggle=marks.find(e=>e.tag==='button');assert.equal(toggle.textContent,'Show all 12');toggle.events.click();
 assert.equal(walk(elements.charts).filter(e=>e.class==='bar cur').length,12);
+assert.ok(walk(elements.charts).some(e=>/Includes downtime\./.test(e.textContent||'')));   // elapsed wet-end speed includes downtime
+// Speed by grade (issue #74) charts speed without stops against each grade target: same marks, its own wording.
+elements.charts.replaceChildren();
+vm.runInContext(`showChart({type:'bar',title:'Speed by grade vs target (ft/min without stops): week',shift:2,coverage:'complete',unit:'ft/min',x:'grade',y:'speed_run_fpm',rows:[{grade:'32-C',speed_run_fpm:828.4,target_fpm:900,speed_to_target_pct:92},{grade:'275-BC',speed_run_fpm:449.6,target_fpm:500,speed_to_target_pct:89.9}]})`,context);
+marks=walk(elements.charts);
+assert.equal(marks.filter(e=>e.class==='bar cur').length,2);assert.equal(marks.filter(e=>e.class==='target').length,2);
+assert.ok(marks.some(e=>e.textContent==='Value = ft/min without stops / % of target; the mark is the grade target.'));
+assert.ok(marks.some(e=>e['aria-label']==='32-C: 828.4 ft/min; target 900.0; 92.0% of target. Without stops.'));
+assert.ok(!marks.some(e=>/Includes downtime/.test((e.textContent||'')+(e['aria-label']||''))));
 
 // ---- Messages: consecutive reported-note lines fold into one disclosure.
 elements.messages.replaceChildren();

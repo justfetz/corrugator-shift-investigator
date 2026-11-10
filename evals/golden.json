@@ -371,7 +371,8 @@
      "get_period_kpis",
      "get_grade_totals",
      "render_chart"
-    ]
+    ],
+    "sections_match": "speed with stops [0-9.,]+ ft/min \\([+-][0-9.,]+ vs [0-9.,]+ ft/min"
    }
   },
   {
@@ -500,6 +501,150 @@
     "tools": [
      {
       "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "volume-grade-running-most",
+   "type": "routing",
+   "mode": "offline",
+   "question": "which grade were we running the most this month",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "MSF"
+    ]
+   }
+  },
+  {
+   "id": "volume-output-of-the-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "what was the output of the shift",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "MSF"
+    ]
+   }
+  },
+  {
+   "id": "volume-throughput-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "what was our throughput this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "MSF"
+    ]
+   }
+  },
+  {
+   "id": "speed-how-fast-in-august",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast did we run in august",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=2026-08",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_grade_totals",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "slow-vs-normal-on-stops-not-a-speed-trend",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how slow were we compared to normal on stops",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_breakdown",
       "arguments": {
        "shift": 2
       }
