@@ -2060,7 +2060,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "How did August go?",
-   "note": "One named month: the month tiles with the previous month alongside. July is outside the dataset, so the previous window is unavailable and every delta is withheld; the previous tile reads unavailable, never zero.",
+   "note": "One named month: the month tiles with the previous month alongside. The year window (issue #35) holds July, so the comparison is complete and every delta is shown; the unequal production days (21 vs 23) are flagged. A month with no records reads unavailable, never zero (october-unavailable-never-zero).",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=kpis&window=2026-08",
     "status": "complete",
@@ -2077,7 +2077,7 @@
       }
      }
     ],
-    "sections_match": "August 2026 .*, all shifts, versus July 2026 .*previous unavailable",
+    "sections_match": "August 2026 .*, all shifts, versus July 2026 .*Window coverage: complete; previous complete",
     "sections_not_match": "\\(previous 0(\\.00)? "
    }
   },
@@ -2785,6 +2785,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Weekly warp trend",
+   "note": "Eight weeks back from 14 September stay inside the year window (issue #35), so every week has records; missing weeks are covered by value-trend-stops-9w-missing-weeks at the window's start.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=trend&metric=warp_pct",
     "status": "complete",
@@ -2800,8 +2801,9 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly warp_pct \\(% of gross\\), 7 weeks available: .*Weeks without records: 2026-07-27",
-    "max_ms": 500
+    "sections_match": "Weekly warp_pct \\(% of gross\\), 8 weeks available: week of 2026-07-27: ",
+    "max_ms": 500,
+    "sections_not_match": "Weeks without records"
    }
   },
   {
@@ -3303,39 +3305,39 @@
    "mode": "offline",
    "live": true,
    "scope": "day",
-   "day": "2026-09-14",
+   "day": "2026-08-17",
    "turns": [
     "Is it bond or warp this month?",
     "And on this Monday specifically, is it bond or warp?",
     "Stops per day this month: do Mondays stand out?",
     "Show me the weekly warp trend."
    ],
-   "note": "Seeded story 3 (stories.WEEKEND_WARP): warp rejects run 1.5x on the first production day after a weekend and higher in August than September; bond and misalignment stay flat. No tool breaks warp down by weekday, so the Monday evidence is a day window against the Friday before, plus the Monday stop profile. The prose may say the Monday pattern warrants a look at the first setups after the weekend; it may not assert weekend moisture, humidity or temperature as the cause, because no such measurement exists in the records.",
+   "note": "Seeded story 3 (stories.WEEKEND_WARP): warp rejects run 1.5x on the first production day after a weekend and higher in August than in any other month; bond and misalignment stay flat. Anchored on Monday 17 August 2026 (issue #35: under the per-day seeding September's Mondays no longer have the most stops per day, while August's do by four a day), so 'this month' is August against July. No tool breaks warp down by weekday, so the Monday evidence is a day window against the Friday before, plus the Monday stop profile. The prose may say the Monday pattern warrants a look at the first setups after the weekend; it may not assert weekend moisture, humidity or temperature as the cause, because no such measurement exists in the records.",
    "expect": {
     "status": "complete",
     "evidence": [
      {
       "tool": "get_waste_breakdown",
       "window_covers": [
-       "2026-09-01",
-       "2026-09-30"
+       "2026-08-01",
+       "2026-08-31"
       ],
       "row": {
        "category": "warp"
       },
-      "field": "previous_pct_of_gross",
+      "field": "pct_of_gross",
       "at_least_times": {
-       "field": "pct_of_gross",
+       "field": "previous_pct_of_gross",
        "factor": 1.2
       },
-      "why": "August warp percent of gross is at least 1.2x September"
+      "why": "August warp percent of gross is at least 1.2x July"
      },
      {
       "tool": "get_waste_breakdown",
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-14"
+        "anchor": "2026-08-17"
        }
       },
       "row": {
@@ -3346,14 +3348,14 @@
        "field": "previous_pct_of_gross",
        "factor": 1.2
       },
-      "why": "Monday 14 September warp is at least 1.2x the Friday before"
+      "why": "Monday 17 August warp is at least 1.2x the Friday before"
      },
      {
       "tool": "get_waste_breakdown",
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-14"
+        "anchor": "2026-08-17"
        }
       },
       "row": {
@@ -3367,8 +3369,8 @@
      {
       "tool": "get_stops_profile",
       "window_covers": [
-       "2026-09-01",
-       "2026-09-30"
+       "2026-08-01",
+       "2026-08-31"
       ],
       "rows": "weekday_profile",
       "row": {
@@ -3376,7 +3378,7 @@
       },
       "field": "stops_per_day",
       "max_among": true,
-      "why": "Monday has the most stops per day of the five weekdays in September"
+      "why": "Monday has the most stops per day of the five weekdays in August"
      },
      {
       "tool": "get_trend",
@@ -3384,16 +3386,16 @@
        "metric": "warp_pct"
       },
       "row": {
-       "week_start": "2026-09-14"
+       "week_start": "2026-08-17"
       },
       "field": "value",
       "change_from": {
        "row": {
-        "week_start": "2026-08-10"
+        "week_start": "2026-07-27"
        },
-       "max": -0.1
+       "min": 0.1
       },
-      "why": "weekly warp falls at least 0.1 pp from the week of 10 August to the week of 14 September"
+      "why": "weekly warp rises at least 0.1 pp from the week of 27 July to the week of 17 August"
      }
     ],
     "prose_numbers": [
@@ -3462,34 +3464,34 @@
    }
   },
   {
-   "id": "july-unavailable-never-zero",
+   "id": "october-unavailable-never-zero",
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "question": "How did July go?",
-   "note": "July is before the first production day. The period tool refuses the window; the answer carries no July tile and no zero, and the status is unavailable (the reason itself is checked by july-reason-surfaced).",
+   "question": "How did October go?",
+   "note": "October 2026 is after the last production day of the golden window (2026-09-30; until issue #35 the case asked about July, then before the first day). The period tool refuses the window; the answer carries no October tile and no zero, and the status is unavailable (the reason itself is checked by october-reason-surfaced).",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
     "charts": 0,
-    "sections_not_match": "July 2026|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
+    "sections_not_match": "October 2026|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
    }
   },
   {
-   "id": "july-reason-surfaced",
+   "id": "october-reason-surfaced",
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "question": "How did July go?",
-   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2026-08-03 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it.",
+   "question": "How did October go?",
+   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2025-09-30 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it; asked about July until the year window (issue #35) took July in.",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
     "charts": 0,
     "tables": [],
-    "sections_match": "outside the dataset range 2026-08-03 to 2026-09-30"
+    "sections_match": "outside the dataset range 2025-09-30 to 2026-09-30"
    }
   },
   {

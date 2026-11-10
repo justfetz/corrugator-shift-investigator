@@ -1,8 +1,16 @@
-"""The app's data source: two synthetic months in one in-memory DuckDB.
+"""The app's data source: a rolling year of synthetic production in one in-memory DuckDB.
 
-`RecordStore` generates the record families once (`synth.generate_months`,
-about two seconds), loads them into fixed tables (setups, customers, rejects,
-wet_ends, shifts, stops) and exposes two things:
+The dataset is a window, not a file (issue #35): every production day (Mon-Fri)
+from `as_of` minus 365 days to `as_of`. `INVESTIGATOR_AS_OF` pins `as_of` (tests
+and the golden set use 2026-09-30); unset, a store booting from a prebuilt
+folder takes the window that folder was built for (the image's window is fixed
+at image build), and otherwise `as_of` is yesterday. Every day is generated from
+its own date-keyed streams (`synth.generate_day`), so a day's records are the
+same in every window that contains it.
+
+`RecordStore` generates the record families once (`synth.generate_days`,
+about six seconds for a year), loads them into fixed tables (setups, customers,
+rejects, wet_ends, shifts, stops) and exposes two things:
 
 * `day_analysis(production_day, corrupt=False)` builds the SAME per-day tables
   the existing `Analysis` tools read (shifts, setups, stops, orders, rejects),
@@ -34,20 +42,27 @@ import duckdb
 from . import records as R
 from .analysis import Analysis, load_rows
 from .fixture import GRADES
-from .synth import generate_months, production_days
+from .synth import DATASET_SPAN_DAYS, generate_days, weekdays_between, window_bounds
 
 DEFAULT_SEED = 2026
-DEFAULT_MONTHS = (("2026", 8), ("2026", 9))
 DEFAULT_MACHINE = "CORR-1"
+AS_OF_ENV = "INVESTIGATOR_AS_OF"         # YYYY-MM-DD: the window's last calendar day; unset = the prebuilt folder's, else yesterday
 PREBUILT_ENV = "INVESTIGATOR_PREBUILT"   # folder written by `python -m investigator.prebuilt`; unset = generate at boot
-PREBUILT_FORMAT = 2   # 2: the folder also carries the derived shift_kpis table (issue #34)
+# 2: the folder also carries the derived shift_kpis table (issue #34). 3: the window replaces the months and
+# records.pkl holds one pickled blob per production day, unpickled on first use (issue #35: a year of record
+# objects costs about 600 ms to unpickle, which is most of the boot budget).
+PREBUILT_FORMAT = 3
+DAY_CACHE = 64   # production days of record objects a store keeps unpickled at once (the rest stay pickled)
+LOAD_CHUNK = 50_000   # rows per insert while loading a generated store, so the JSON payload stays small
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 WEEKDAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 PERIODS = ("day", "week", "month", "fiscal")
-# 4-4-5 accounting calendar for the demo: the fiscal year starts on the dataset's first Monday and
-# periods run 4, 4, 5 weeks per quarter. periods.py (the legacy period report) shares the start, so
-# the scope bar's "4-4-5" view and the period tools name the same windows. Walking backwards from
-# the start continues the pattern (5, 4, 4 ...), labelled as the prior year.
+# 4-4-5 accounting calendar for the demo: a fiscal year is 52 weeks, four quarters of 4, 4 and 5 weeks
+# (twelve periods), and the year anchored here starts on Monday 2026-08-03 (the first Monday of the
+# original two months). periods.py (the legacy period report) uses the same `fiscal_period`, so the
+# scope bar's "4-4-5" view and the period tools name the same windows. The calendar is defined for
+# every date (issue #35): the prior year starts on 2025-08-04, so the rolling window's first days fall
+# in its periods, and years further away are named by their first Monday.
 FISCAL_START = date(2026, 8, 3)
 FISCAL_WEEKS = (4, 4, 5)
 
@@ -218,23 +233,30 @@ def _month_bounds(moment):
     return start, start.replace(day=monthrange(start.year, start.month)[1])
 
 
+def fiscal_period(moment):
+    """(start, end, year, number, weeks) of the 4-4-5 period containing `moment`. A fiscal year is
+    52 weeks: four quarters of 4, 4 and 5 weeks, so twelve periods. Year 0 starts on FISCAL_START,
+    year -1 (the prior year) 52 weeks earlier; `number` is 1-12."""
+    year, week = divmod((moment - FISCAL_START).days // 7, 52)
+    year_start, first_week = FISCAL_START + timedelta(weeks=52 * year), 0
+    for number in range(12):
+        weeks = FISCAL_WEEKS[number % 3]
+        if week < first_week + weeks:
+            start = year_start + timedelta(weeks=first_week)
+            return start, start + timedelta(days=weeks * 7 - 1), year, number + 1, weeks
+        first_week += weeks
+    raise AssertionError("twelve periods cover 52 weeks")
+
+
 def fiscal_bounds(moment):
-    """(start, end, label) of the 4-4-5 period containing `moment`."""
-    if moment >= FISCAL_START:
-        start, index = FISCAL_START, 0
-        while True:
-            weeks = FISCAL_WEEKS[index % 3]
-            end = start + timedelta(days=weeks * 7 - 1)
-            if moment <= end:
-                return start, end, f"4-4-5 P{index % 13 + 1} ({weeks} weeks)"
-            start, index = end + timedelta(days=1), index + 1
-    end, index = FISCAL_START - timedelta(days=1), -1
-    while True:
-        weeks = FISCAL_WEEKS[index % 3]
-        start = end - timedelta(days=weeks * 7 - 1)
-        if moment >= start:
-            return start, end, f"4-4-5 P{index % 13 + 1} of the prior year ({weeks} weeks)"
-        end, index = start - timedelta(days=1), index - 1
+    """(start, end, label) of the 4-4-5 period containing `moment`: P1-P12 of the year anchored at
+    FISCAL_START, of the prior year, or of the fiscal year named by its first Monday."""
+    start, end, year, number, weeks = fiscal_period(moment)
+    if year == 0:
+        return start, end, f"4-4-5 P{number} ({weeks} weeks)"
+    if year == -1:
+        return start, end, f"4-4-5 P{number} of the prior year ({weeks} weeks)"
+    return start, end, f"4-4-5 P{number} of the year starting {(FISCAL_START + timedelta(weeks=52 * year)).isoformat()} ({weeks} weeks)"
 
 
 def parse_window(spec, first_day=None, last_day=None):
@@ -292,12 +314,50 @@ def window_label(period, start, end):
     return f"{start.strftime('%B %Y')} ({start.isoformat()} to {end.isoformat()})"
 
 
+def _parse_as_of(value, source):
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{source} must be a YYYY-MM-DD date, not {value!r}") from None
+
+
+def _prebuilt_window(folder):
+    """The (first, last) window a prebuilt folder's manifest names, or None."""
+    try:
+        first, last = json.loads((Path(folder) / "manifest.json").read_text())["window"]
+        return date.fromisoformat(first), date.fromisoformat(last)
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
+def dataset_window(as_of=None, prebuilt=None, today=None):
+    """The (first, last) calendar dates of the dataset: the rolling window of DATASET_SPAN_DAYS
+    ending on `as_of`. Resolved in this order: the argument; INVESTIGATOR_AS_OF; the window of the
+    prebuilt folder (the argument, else INVESTIGATOR_PREBUILT), so a container keeps the window its
+    image was built with however long it runs; else yesterday (`today` minus one day), the last
+    production day whose three shifts have all started."""
+    if as_of is not None:
+        return window_bounds(as_of if isinstance(as_of, date) else _parse_as_of(as_of, "as_of"))
+    value = os.environ.get(AS_OF_ENV, "").strip()
+    if value:
+        return window_bounds(_parse_as_of(value, AS_OF_ENV))
+    folder = prebuilt_folder(prebuilt)
+    window = _prebuilt_window(folder) if folder else None
+    if window is not None:
+        return window
+    return window_bounds((today or date.today()) - timedelta(days=1))
+
+
 class RecordStore:
-    def __init__(self, seed=DEFAULT_SEED, months=DEFAULT_MONTHS, machine_id=DEFAULT_MACHINE, prebuilt=None):
-        """The two synthetic months in an in-memory DuckDB plus the record objects by day.
+    def __init__(self, seed=DEFAULT_SEED, window=None, machine_id=DEFAULT_MACHINE, prebuilt=None):
+        """The rolling window of synthetic production in an in-memory DuckDB plus the record objects by day.
+
+        `window` is a (first, last) pair of calendar dates; None resolves it with
+        `dataset_window()` (INVESTIGATOR_AS_OF, else the prebuilt folder's window, else
+        the year ending yesterday).
 
         `prebuilt` (or the INVESTIGATOR_PREBUILT folder) holds what `build_prebuilt`
-        wrote for exactly these seed, months, machine and generator source: the record
+        wrote for exactly these seed, window, machine and generator source: the record
         objects and the six tables. Loading it takes a fraction of generating
         (issue #19: generation plus the JSON inserts cost about two seconds per
         process start, paid by every visitor after Cloud Run scaled to zero).
@@ -307,27 +367,34 @@ class RecordStore:
         reads): it comes from our own image build or from the operator, never from a
         visitor."""
         started = time.perf_counter()
-        self.seed, self.months, self.machine_id = seed, tuple(months), machine_id
-        self._days = {d.isoformat(): d for d in production_days(months)}
+        first, last = window if window is not None else dataset_window(prebuilt=prebuilt)
+        if not isinstance(first, date) or not isinstance(last, date) or last < first:
+            raise ValueError("A store window is a (first, last) pair of dates, first on or before last")
+        self.seed, self.window, self.machine_id = seed, (first, last), machine_id
+        self.as_of = last
+        self._days = {d.isoformat(): d for d in weekdays_between(first, last)}
+        if not self._days:
+            raise ValueError(f"The window {first} to {last} holds no production day (Monday to Friday)")
         self.production_days = list(self._days)
         self.first_day, self.last_day = self.production_days[0], self.production_days[-1]
         self._first, self._last = self._days[self.first_day], self._days[self.last_day]
-        self._by_day = {key: {"setups": [], "stops": [], "shifts": []} for key in self._days}
+        self._by_day = {}            # production day -> its record objects: the DAY_CACHE most recently read
+        self._day_blobs = {}         # production day -> its pickled record objects, unpickled on first use
         self._lock = threading.RLock()
         self._db = duckdb.connect(":memory:", config={"threads": 2})
         for table, columns in TABLES.items():
             self._db.execute(f"CREATE TABLE {table} ({columns})")
         self._db.execute(f"CREATE TABLE shift_kpis ({_SHIFT_KPIS_COLUMNS})")
         folder = prebuilt_folder(prebuilt)
-        loaded = read_prebuilt(folder, seed, months, machine_id) if folder else None
+        loaded = read_prebuilt(folder, seed, self.window, machine_id) if folder else None
         data = None
         if loaded is not None and self._load_prebuilt_tables(folder, loaded[1]):
             self.boot_source = "prebuilt"
             data = loaded[0]
-            self._index(data)
+            self._day_blobs = data["days"]
         if data is None:
             self.boot_source = "generated"
-            data = generate_months(seed=seed, months=months, machine_id=machine_id)
+            data = generate_days(list(self._days.values()), seed=seed, machine_id=machine_id)
             self._load(data)
         self.content_hash = data["content_hash"]
         self.manifest = data["manifest"]
@@ -340,14 +407,28 @@ class RecordStore:
     def _iso(text):
         return f"{text[:4]}-{text[4:6]}-{text[6:]}"
 
-    def _index(self, data):
-        """The record objects by production day; the per-day Analysis reads these."""
-        for s in data["dry_end_setups"]:
-            self._by_day[self._iso(s.production_date)]["setups"].append(s)
-        for sh in data["shifts"]:
-            self._by_day[self._iso(sh.production_date)]["shifts"].append(sh)
-        for st in data["stops"]:
-            self._by_day[self._iso(st.production_date)]["stops"].append(st)
+    @classmethod
+    def _day_blobs_of(cls, data):
+        """The record objects the per-day Analysis reads, one pickled blob per ISO production day.
+        A year of record objects is about 330 MB in memory and 25 MB pickled, and a question reads
+        one day at a time; prebuilt and generated stores hold the same blobs."""
+        days = {}
+        for family, key in (("dry_end_setups", "setups"), ("shifts", "shifts"), ("stops", "stops")):
+            for record in data[family]:
+                days.setdefault(cls._iso(record.production_date), {"setups": [], "stops": [], "shifts": []})[key].append(record)
+        return {day: pickle.dumps(families, protocol=pickle.HIGHEST_PROTOCOL) for day, families in days.items()}
+
+    def _day_records(self, day):
+        """One production day's record objects, unpickled on first use; the DAY_CACHE most recently
+        read stay unpickled. Call under self._lock."""
+        families = self._by_day.pop(day, None)
+        if families is None:
+            blob = self._day_blobs.get(day)
+            families = pickle.loads(blob) if blob is not None else {"setups": [], "stops": [], "shifts": []}
+        self._by_day[day] = families   # most recent last
+        while len(self._by_day) > DAY_CACHE:
+            del self._by_day[next(iter(self._by_day))]
+        return families
 
     def _load_prebuilt_tables(self, folder, expected_counts):
         """Copy the six tables and the derived shift_kpis out of the prebuilt file. False (and
@@ -375,10 +456,10 @@ class RecordStore:
                 self._db.execute("DETACH prebuilt")
 
     def _load(self, data):
-        self._index(data)
+        self._day_blobs = self._day_blobs_of(data)
         tables = self._rows(data)
         for table, rows in tables.items():
-            load_rows(self._db, table, rows)
+            _load_chunked(self._db, table, rows)
         build_shift_kpis(self._db, data)
         self.counts = {table: len(rows) for table, rows in tables.items()}
 
@@ -468,7 +549,7 @@ class RecordStore:
         if type(corrupt) is not bool:
             raise ValueError("Invalid data-quality option")
         with self._lock:
-            families = self._by_day[day]
+            families = self._day_records(day)
             setups = sorted(families["setups"], key=lambda s: (s.start, s.setup_id))
             target = _corrupt_target(setups) if corrupt else None
             errors, setup_rows, order_rows, reject_rows = [], [], [], []
@@ -1070,6 +1151,11 @@ _DEFAULT_LOCK = threading.Lock()
 _SHIFT_KPIS_COLUMNS = ", ".join(f"{name} {kind}" for name, kind in SHIFT_KPIS)
 
 
+def _load_chunked(db, table, rows):
+    for at in range(0, len(rows), LOAD_CHUNK):
+        load_rows(db, table, rows[at:at + LOAD_CHUNK])
+
+
 def _corrupt_target(setups):
     """The setup the data-quality demo corrupts: the day's first shift-2 setup by start time."""
     return next((s for s in sorted(setups, key=lambda s: (s.start, s.setup_id)) if s.shift_number == 2), None)
@@ -1132,15 +1218,18 @@ def prebuilt_folder(explicit=None):
     return Path(value) if value else None
 
 
-def build_prebuilt(folder, seed=DEFAULT_SEED, months=DEFAULT_MONTHS, machine_id=DEFAULT_MACHINE):
-    """Generate the months once and write what a RecordStore needs to boot without
-    generating: the record objects (`records.pkl`) and the six tables in DuckDB's
-    own file format (`store.duckdb`, attached read-only at boot: about 40 ms where
-    Parquet costs 250 ms for the reader's first use), plus a manifest naming the
-    inputs and the generator fingerprint. Run at image build time; see Dockerfile."""
+def build_prebuilt(folder, seed=DEFAULT_SEED, window=None, machine_id=DEFAULT_MACHINE):
+    """Generate the window once and write what a RecordStore needs to boot without
+    generating: the record objects (`records.pkl`, one pickled blob per production day,
+    unpickled when a day is first read) and the six tables plus shift_kpis in DuckDB's
+    own file format (`store.duckdb`, attached read-only at boot and copied in), plus a
+    manifest naming the inputs and the generator fingerprint. `window` None resolves
+    like a store's (INVESTIGATOR_AS_OF, else yesterday; never an existing folder's).
+    Run at image build time; see Dockerfile."""
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    data = generate_months(seed=seed, months=months, machine_id=machine_id)
+    first, last = window if window is not None else dataset_window(prebuilt="")
+    data = generate_days(weekdays_between(first, last), seed=seed, machine_id=machine_id)
     rows = RecordStore._rows(data)
     store = folder / "store.duckdb"
     for stale in (store, folder / "store.duckdb.wal"):
@@ -1150,20 +1239,23 @@ def build_prebuilt(folder, seed=DEFAULT_SEED, months=DEFAULT_MONTHS, machine_id=
     try:
         for table, columns in TABLES.items():
             db.execute(f"CREATE TABLE {table} ({columns})")
-            load_rows(db, table, rows[table])
+            _load_chunked(db, table, rows[table])
         kpi_rows = build_shift_kpis(db, data)
         db.execute("CHECKPOINT")
     finally:
         db.close()
-    (folder / "records.pkl").write_bytes(pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL))
-    manifest = {"format": PREBUILT_FORMAT, "seed": seed, "months": [list(m) for m in months], "machine_id": machine_id,
+    records = {"content_hash": data["content_hash"], "manifest": data["manifest"], "days": RecordStore._day_blobs_of(data)}
+    (folder / "records.pkl").write_bytes(pickle.dumps(records, protocol=pickle.HIGHEST_PROTOCOL))
+    manifest = {"format": PREBUILT_FORMAT, "seed": seed, "window": [first.isoformat(), last.isoformat()], "machine_id": machine_id,
+                "first_day": data["manifest"]["first_day"], "last_day": data["manifest"]["last_day"],
+                "production_days": data["manifest"]["production_days"],
                 "generator_fingerprint": generator_fingerprint(), "content_hash": data["content_hash"],
                 "counts": {table: len(r) for table, r in rows.items()}, "shift_kpis_rows": kpi_rows}
     (folder / "manifest.json").write_text(json.dumps(manifest, indent=1))
     return manifest
 
 
-def read_prebuilt(folder, seed, months, machine_id):
+def read_prebuilt(folder, seed, window, machine_id):
     """(record objects, manifest counts) from a prebuilt folder, or None when anything
     about it does not match these inputs and this generator source. Never raises: a
     bad folder means generating, not failing to start. The folder is trusted like the
@@ -1175,8 +1267,8 @@ def read_prebuilt(folder, seed, months, machine_id):
         manifest = json.loads((folder / "manifest.json").read_text())
     except (OSError, ValueError):
         return None
-    expected = {"format": PREBUILT_FORMAT, "seed": seed, "months": [list(m) for m in months], "machine_id": machine_id,
-                "generator_fingerprint": generator_fingerprint()}
+    expected = {"format": PREBUILT_FORMAT, "seed": seed, "window": [window[0].isoformat(), window[1].isoformat()],
+                "machine_id": machine_id, "generator_fingerprint": generator_fingerprint()}
     if not isinstance(manifest, dict) or any(manifest.get(key) != value for key, value in expected.items()):
         return None
     if not (folder / "store.duckdb").is_file():
@@ -1189,13 +1281,14 @@ def read_prebuilt(folder, seed, months, machine_id):
         data = pickle.loads((folder / "records.pkl").read_bytes())
     except Exception:   # a truncated or foreign file: generate instead
         return None
-    if not isinstance(data, dict) or data.get("content_hash") != manifest.get("content_hash"):
+    if not isinstance(data, dict) or data.get("content_hash") != manifest.get("content_hash") or not isinstance(data.get("days"), dict) \
+            or any(not isinstance(blob, bytes) for blob in data["days"].values()):
         return None
     return data, {**counts, "shift_kpis": manifest["shift_kpis_rows"]}
 
 
 def default_store():
-    """The process-wide store over the default two months, built on first use."""
+    """The process-wide store over the rolling window (`dataset_window()`), built on first use."""
     global _DEFAULT
     with _DEFAULT_LOCK:
         if _DEFAULT is None:

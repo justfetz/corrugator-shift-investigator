@@ -2,19 +2,22 @@
 
 `src/investigator/records.py` defines four plain dataclasses whose field names and units mirror the shape of a corrugator controller's own record types: the dry-end setup record ("P04P"-shaped), the wet-end record ("P04G"-shaped), the shift record ("P04T"-shaped) and the stop record ("P04S"-shaped). They are **our own documented demo schema** (`demo-records/v1`). The names are borrowed so the data reads like plant records; nothing here claims OEM protocol or wire-format compatibility, and no vendor field semantics are asserted beyond what this page states.
 
-`src/investigator/synth.py` generates two full months (August and September 2026) of one machine from a seed. These records are the app's data source: `src/investigator/record_store.py` builds them once per process into one in-memory DuckDB, derives the per-day tables the daily tools read (`RecordStore.day_analysis`, see [AGENT_EXECUTION](AGENT_EXECUTION.md)) and answers the period tools over the whole two months ([METRICS](METRICS.md)). The one-day XML fixture (`fixture.generate()`) remains only for its own tests.
+`src/investigator/synth.py` generates any range of production days of one machine from a seed, one day at a time: every random draw of a day comes from streams keyed by the seed and a date (issue #35), so a day is byte-identical in every range that contains it. The app's data source is a rolling year: every production day from 365 days before `as_of` to `as_of` (`INVESTIGATOR_AS_OF`; the image's build date minus one day; 2026-09-30 for the tests and the golden set). `src/investigator/record_store.py` builds that window once per process (or loads it prebuilt) into one in-memory DuckDB, derives the per-day tables the daily tools read (`RecordStore.day_analysis`, see [AGENT_EXECUTION](AGENT_EXECUTION.md)) and answers the period tools over the whole window ([METRICS](METRICS.md)). The one-day XML fixture (`fixture.generate()`) remains only for its own tests.
 
 ## Generating
 
 ```python
-from investigator.synth import generate_months, write_jsonl, read_jsonl
-data = generate_months(seed=2026, months=(("2026", 8), ("2026", 9)), machine_id="CORR-1")
-data["content_hash"]            # sha256 over the four JSONL files
+from datetime import date
+from investigator.synth import generate_day, generate_months, generate_window, write_jsonl, read_jsonl
+data = generate_window(date(2026, 9, 30), seed=2026, machine_id="CORR-1")   # the year ending 2026-09-30
+data = generate_months(seed=2026, months=(("2026", 8), ("2026", 9)))          # or any months
+day = generate_day(date(2026, 9, 14))     # one production day: the same records as inside either range
+data["content_hash"]            # sha256 over the four JSONL files of the range
 write_jsonl(data, "artifacts/synthetic")   # four .jsonl files + manifest.json
 same = read_jsonl("artifacts/synthetic")   # dataclasses again; manifest hash must match
 ```
 
-The same seed gives byte-identical JSONL. Two months generate in well under three seconds. Generated files are ignored by git (`*.jsonl`); write them under `artifacts/`.
+The same seed gives byte-identical JSONL, and a day gives the same records whatever range it is generated in. Two months generate in about a second, the year in about six. Generated files are ignored by git (`*.jsonl`); write them under `artifacts/`.
 
 ## Units and conventions
 
@@ -56,7 +59,7 @@ The same seed gives byte-identical JSONL. Two months generate in well under thre
 
 | Field | Unit | Meaning |
 | --- | --- | --- |
-| `order_number` | text | `SO-nnnnnn`; unique per order, once per setup, may continue onto the next setup |
+| `order_number` | text | `SO-YYMMDDnnnn`: the production day and the order's sequence in it; unique per order, once per setup, may continue onto the next setup inside the day |
 | `part_number` | text | `P-nnnnn` |
 | `sheet_width_in`, `sheet_length_in` | in | ordered sheet; length is the cutoff (20-92) |
 | `number_of_outs` | count | sheets across the web for this order |
@@ -120,13 +123,14 @@ The same seed gives byte-identical JSONL. Two months generate in well under thre
 
 ## Generator behaviour and the bands it keeps
 
-These are simulation choices (`synth.py` constants), not plant standards. `tests/test_records_invariants.py` checks each line for every record of both months.
+These are simulation choices (`synth.py` constants), not plant standards. `tests/test_records_invariants.py` checks each line for every record of August and September 2026.
 
-- **Time**: setups tile each shift with no gaps; a setup that would cross a shift boundary is split there (first part keeps its code, second part is `S` and shares the orders). A remainder with under 60 s of running time is absorbed; a first part under 60 s stretches the prior record instead. Across a weekend the open run simply ends.
+- **Seeding by date** (issue #35): a production day draws from `Random(f"{seed}:{day}")`; its week's speed factor from `Random(f"{seed}:week:{monday}")`; its month's power outage from `Random(f"{seed}:outage:{yyyy-mm}")`, chosen among every shift of the whole month; crews rotate weekly counted from Monday 2026-08-03. Nothing carries from one production day into the next, so a day regenerates byte-identically in any range, and moving the window by a day changes no day it keeps (`tests/test_synth_determinism.py`).
+- **Time**: setups tile each shift with no gaps; a setup that would cross the boundary between shifts 1 and 2 or 2 and 3 is split there (first part keeps its code, second part is `S` and shares the orders). A remainder with under 60 s of running time is absorbed; a first part under 60 s stretches the prior record instead. At the end of shift 3 (07:00 the next morning) the open run ends and the next production day starts fresh, as after a weekend, so no record or paper run crosses a production day.
 - **Output**: about 2.5 million gross sq ft per shift (6-8.5 million per production day) at a 98-inch average web on a 110-inch machine; about 7,000 lineal ft per dry-end setup (roughly 100-140 setups a day) and about 20,000 lineal ft per wet-end run (roughly 40 paper changes a day); week-to-week volume moves a few percent through a per-week speed draw. Running speed is the grade target x crew factor (0.88-0.94) x shift factor x noise; displayed averages include stops.
 - **Downtime**: Maintenance + PM between 2% and 3% of scheduled minutes per month; PM is one 120-135 minute window every Thursday on shift 1 (the rebuild week runs 180 min), recorded with kind `PM` and reason `Planned maintenance`, plus unplanned maintenance stops (Monday x1.40, August x1.08; operator stops Monday x1.15), one 10-15 minute power outage per month. Operator stops separately 1-3%.
 - **Waste per month**: side trim 2.5-3.5% of gross, shear chops 0.4-1.0%, dry-end rejects about 1.0-1.1% split bond 0.40 / warp 0.30-0.42 / misalignment 0.20 / moisture 0.10 points; inside warp about 45% up, 25% down, 20% twist, 10% S; inside bond 60% delamination, 40% paper / raw material. Rejected sheets are discarded; they are never replaced in the records. Each missed splice adds a run of 8-14 chops (a web break).
-- **Determinism**: `content_hash` is pinned in `tests/test_synth_determinism.py`; change it only with an intended generator change.
+- **Determinism**: the content hash of August and September 2026 is pinned in `tests/test_synth_determinism.py`, and that of the golden year in `evals/golden_values.json`; change them only with an intended generator change.
 
 ## Seeded stories
 
@@ -134,7 +138,9 @@ The answer keys live in `src/investigator/stories.py` and are read only by the g
 
 1. A slitter/scorer rebuild in the Thursday 20 August PM window; afterwards side trim creeps about 0.1 percentage point per week and knife / slitter jam stops rise, concentrating on the slitter/scorer.
 2. A missed-splice problem on Splicer 3 in the week of 7-13 September: missed-splice minutes roughly triple, stop counts rise, shear chops follow.
-3. Warp rejects are higher on the first production day after a weekend (Monday x1.5) and in August (0.42% of gross) than in September (0.30%).
+3. Warp rejects are higher on the first production day after a weekend (Monday x1.5) and in August (0.42% of gross) than in September (0.30%) or any other month.
+
+The stories keep their 2026 dates in every window. The first has no end date: in a window that runs past September 2026 the trim creep keeps adding about 0.1 point a week (about 3.9% by mid-November 2026) and the knife / slitter jam stops stay three times the baseline.
 
 ## Not modelled
 

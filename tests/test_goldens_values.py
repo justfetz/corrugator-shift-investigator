@@ -43,9 +43,12 @@ def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
                 if expected is None:
                     assert tolerance is None
     by_id = {c['id']: c for c in cases}
-    august = by_id['value-kpi-august-all']['expect']['values']
-    assert august['metric=volume_msf']['previous'] == [None, None] and august['metric=stops']['delta'] == [None, None]
-    assert by_id['value-trend-stops-9w-missing-weeks']['expect']['values']['$']['missing_weeks'] == [['2026-07-20', '2026-07-27'], None]
+    # a window before the dataset's first day reads null, never zero (issue #35: the year's first week, not July)
+    first = by_id['value-kpi-first-week-no-previous']['expect']['values']
+    assert first['metric=volume_msf']['previous'] == [None, None] and first['metric=stops']['delta'] == [None, None]
+    august = by_id['value-kpi-august-all']['expect']['values']   # July is inside the year: a full comparison
+    assert august['metric=volume_msf']['previous'][0] > 0 and august['metric=stops']['delta'][0] is not None
+    assert by_id['value-trend-stops-9w-missing-weeks']['expect']['values']['$']['missing_weeks'] == [['2025-09-15', '2025-09-22'], None]
     corrupt = by_id['value-dq-corrupt-trim-excluded']
     assert corrupt['corrupt'] is True and corrupt['expect']['coverage'] == 'incomplete'
     [excluded] = corrupt['expect']['excluded_records']
@@ -58,7 +61,10 @@ def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
 
 @pytest.mark.parametrize('period, anchor', [
     ('day', '2026-09-14'), ('day', '2026-08-03'), ('week', '2026-09-16'), ('week', '2026-09-19'), ('week', '2026-08-05'),
-    ('month', '2026-09-14'), ('month', '2026-08-14'), ('week', '2026-09-29')])
+    ('month', '2026-09-14'), ('month', '2026-08-14'), ('week', '2026-09-29'),
+    # the year's first days (issue #35): a partial first week and month, and the 4-4-5 periods on both sides of 2026-08-03
+    ('day', '2025-09-30'), ('week', '2025-10-01'), ('month', '2025-09-30'), ('month', '2025-10-15'),
+    ('fiscal', '2025-10-15'), ('fiscal', '2026-08-02'), ('fiscal', '2026-08-14'), ('fiscal', '2026-09-30')])
 def test_generator_calendar_agrees_with_the_store(period, anchor):
     start, end = maker.window(period, anchor)
     assert (start, end) == parse_window({'period': period, 'anchor': anchor})[2:]
@@ -72,8 +78,20 @@ _DATA = {}
 
 def default_store_data():
     if 'data' not in _DATA:
-        _DATA['data'] = maker.generate_months(seed=maker.SEED, months=maker.MONTHS, machine_id=maker.MACHINE)
+        _DATA['data'] = maker.generate()
     return _DATA['data']
+
+
+def test_the_goldens_the_runner_and_the_tests_name_one_window():
+    """The value goldens are generated for the year ending maker.AS_OF; evals/run.py scores the golden
+    set against the store of that window; tests/conftest.py pins the default store to it."""
+    runner_spec = importlib.util.spec_from_file_location('golden_runner', ROOT / 'evals' / 'run.py')
+    runner = importlib.util.module_from_spec(runner_spec)
+    runner_spec.loader.exec_module(runner)
+    from conftest import GOLDEN_AS_OF
+    assert maker.AS_OF == runner.GOLDEN_AS_OF == GOLDEN_AS_OF == COMMITTED['as_of']
+    assert COMMITTED['first_day'] == '2025-09-30' and default_store().first_day == '2025-09-30'
+    assert runner.golden_store() is default_store()   # the session's store already holds that window: no second store
 
 
 def test_plain_tiles_are_ratios_of_sums_not_averages_of_averages():
@@ -82,4 +100,4 @@ def test_plain_tiles_are_ratios_of_sums_not_averages_of_averages():
     days = [d for d in sorted(plain.days) if d.month == 9]
     per_day = [plain.tiles(plain.sums(d, d))['trim_pct'] for d in days]
     assert month['trim_pct'] != pytest.approx(sum(per_day) / len(per_day), abs=1e-6)
-    assert month['trim_pct'] == pytest.approx(3.2274, abs=1e-4) and month['stops'] == 617
+    assert month['trim_pct'] == pytest.approx(3.2256, abs=1e-4) and month['stops'] == 673   # issue #35: was 3.2274 and 617

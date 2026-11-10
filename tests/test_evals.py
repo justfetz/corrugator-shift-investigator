@@ -287,6 +287,9 @@ def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
     assert failures == [f'{ms:.0f} ms, budget 250 ms']
     replay = next(c for c in CASES if c['id'] == 'live-setup-matrix')   # a committed Anthropic recording
     outcome, failures, note, ms = golden.run_case(replay, 'anthropic')
+    if note.startswith('stale recording'):   # recorded on the dataset before issue #35: skipped, never scored, until re-recorded
+        assert outcome == 'skip' and failures == [] and 're-record with --live --provider anthropic' in note
+        pytest.skip('the live-setup-matrix recording is stale (issue #35); re-record with python3 evals/run.py --live --provider anthropic --track')
     assert outcome == 'pass' and ms > 250, (failures, note, ms)
 
 

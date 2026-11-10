@@ -103,16 +103,16 @@ def test_every_tool_call_refused_surfaces_the_reason_as_unavailable():
     try:
         for scope in ('day','shift'):
             context=Context('2026-09-14',2,scope=scope)
-            result=Agent(analysis).ask('How did July go?',context)
+            result=Agent(analysis).ask('How did October go?',context)   # after the year ending 2026-09-30 (issue #35; was July)
             assert result['status']=='unavailable'
             [step]=result['trace']
             assert step['tool']=='get_period_kpis' and not step['ok']
             reason=step['error']['message']
-            assert 'outside the dataset range 2026-08-03 to 2026-09-30' in reason
+            assert 'outside the dataset range 2025-09-30 to 2026-09-30' in reason
             assert reason in result['sections'] and result['sections'][0].startswith('Investigation stopped: unavailable')
             assert result['charts']==[] and result['tables']==[] and result['evidence_ids']==[]
-            assert not any('July 2026' in s or ' 0 MSF' in s or '0.0 ft' in s for s in result['sections'])
-            assert context.history[-1]['question']=='How did July go?'
+            assert not any('October 2026' in s or ' 0 MSF' in s or '0.0 ft' in s for s in result['sections'])
+            assert context.history[-1]['question']=='How did October go?'
     finally:
         analysis.close()
 

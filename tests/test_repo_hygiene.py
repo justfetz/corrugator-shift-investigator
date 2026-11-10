@@ -146,3 +146,24 @@ def test_september_review_is_archived():
     assert not (ROOT / 'docs' / '_scratch').exists()
     assert (ROOT / 'docs' / 'archive' / 'REVIEW_2026-09-07.md').exists()
     assert (ROOT / 'docs' / 'archive' / 'review-2026-09-07' / 'probes.py').exists()
+
+
+def test_main_redeploys_every_weekday_night_and_by_hand():
+    """Issue #35: the dataset is the year ending yesterday, fixed per image, so main is rebuilt and
+    redeployed on a schedule (and on demand); the push trigger stays."""
+    import yaml
+    workflow = yaml.safe_load(DEPLOY.read_text())
+    triggers = workflow[True] if True in workflow else workflow['on']   # YAML 1.1 reads the key `on` as True
+    assert triggers['push'] == {'branches': ['main']} and 'workflow_dispatch' in triggers
+    assert triggers['schedule'] == [{'cron': '0 9 * * 1-5'}]
+
+
+def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
+    """The demo's window ends on the build's yesterday; the /evals page scores against the golden
+    window, whose as-of is read from golden_values.json so the two can never disagree."""
+    dockerfile = (ROOT / 'Dockerfile').read_text()
+    assert 'python -m investigator.prebuilt /app/prebuilt ' in dockerfile
+    assert ('python -m investigator.prebuilt --as-of "$(python -c \'import json; print(json.load(open("evals/golden_values.json"))["as_of"])\')" '
+            '/app/prebuilt-golden') in dockerfile
+    assert 'INVESTIGATOR_PREBUILT=/app/prebuilt ' in dockerfile and 'INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden' in dockerfile
+    assert not any('INVESTIGATOR_AS_OF' in line for line in dockerfile.splitlines() if line.startswith(('ENV', 'ARG')))   # never pinned

@@ -107,26 +107,39 @@ a slow change pass.
 ## How the value goldens are made
 
 `make_value_goldens.py` generates every number in `golden_values.json` from plain
-Python sums over `synth.generate_months()`: it has its own day / week / month
-calendar arithmetic, its own ratio-of-sums tile formulas, its own Pareto
+Python sums over `synth.generate_window()` for the golden window, the year ending
+`as_of` (2026-09-30; every weekday from 30 September 2025): it has its own day /
+week / month / 4-4-5 calendar arithmetic, its own ratio-of-sums tile formulas, its own Pareto
 ordering, and never imports the DuckDB path the tools use for a number (it
 imports the application's tile catalog only to check that the two lists have not
 drifted apart). Each expectation is `[expected, tolerance]`; the tolerance covers
 the tool's display rounding (one decimal for feet and MSF, four for percentages,
 two for minutes) plus floating-point noise between a DuckDB sum and a Python
-sum. Integers, strings, lists and `null` are exact: August's previous window is
-July, which is outside the dataset, so its tiles must come back `null`, not `0`.
+sum. Integers, strings, lists and `null` are exact: the year's first week's
+previous window is before the dataset, so its tiles must come back `null`, not `0`.
 
-The file carries the dataset `content_hash`. `run.py` compares it with the live
+**The golden window** (issue #35). The app's dataset is a rolling year that the
+nightly deploy moves; the golden set is not. `run.py` scores every case against
+the store of the year ending `GOLDEN_AS_OF` (2026-09-30): the process's own store
+when it already holds that window (`tests/conftest.py` and CI pin
+`INVESTIGATOR_AS_OF=2026-09-30`), otherwise a second store built once, from the
+prebuilt folder `INVESTIGATOR_GOLDEN_PREBUILT` names when the image carries it
+(the deployed `/evals` page). Every production day is generated from its own
+date-keyed draws, so the golden window's days are the same days any later
+window holds.
+
+The file carries the dataset `content_hash`. `run.py` compares it with the golden
 store before scoring and fails every value case when they differ ("stale
 goldens; run make_value_goldens.py"), so an intended generator change forces a
-deliberate regeneration and an unintended one is caught. The 58 cases cover
+deliberate regeneration and an unintended one is caught. The 75 cases cover
 every KPI tile for September and August (all shifts and per shift), one week
-and one production day per shift, the first week (no previous window) and the
-last week (partial), `compare_periods` both ways, the downtime Pareto of the
+and one production day per shift, the year's first week and month and 4-4-5
+period (no or a partial previous window) and the last week (partial),
+`compare_periods` both ways, the downtime Pareto of the
 missed-splice week by reason, place and kind, the waste breakdown for both
-months and the story week, the stops profile for both months, the trim, warp,
-stops and MSF-per-day trends, the three daily tools for three production days,
+months, the story week and the year's first week, the stops profile for both
+months, totals by grade and rollstock for both months and the year's first week,
+the trim, warp, stops (reaching before the year) and MSF-per-day trends, the three daily tools for three production days,
 and the corrupt-record day.
 
 Row selectors: `metric=volume_msf` (the first row whose field prints as the
@@ -281,7 +294,9 @@ and replays through it until it is re-recorded.
 A case may carry `known_defect`. It is run, shown as `xfail` in the table with
 the defect text, and does not count against the exit status; when it starts
 passing the note says to remove the marker. None is marked today. The last one,
-`july-reason-surfaced`, recorded that an investigation whose only tool call was
+`july-reason-surfaced` (now `october-reason-surfaced`: since issue #35 July is
+inside the year window, so the case asks about the month after the golden
+window's last day), recorded that an investigation whose only tool call was
 refused ended `planner_error` with the window reason left in the trace; the
 agent now answers `unavailable` with the tool's own reason as the text (the
 offline planner and both live adapters alike), and the case is an ordinary

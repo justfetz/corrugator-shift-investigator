@@ -2,9 +2,13 @@
 
 "Shift 2 ran fastest at 562.75 ft/min, against 608.92 ft/min on Shift 1 and 592.11 ft/min on Shift 3"
 passed every placeholder check, because every digit came from a tool row. The claim about the digits
-was false. The shift tests run on the real rows of 2026-08-26 (All shifts), the day of the report;
-the period tests on small rows of the period tools' shapes."""
+was false. The shift tests run on the real rows of 2026-08-26 (All shifts), the day of the report,
+frozen as the evidence packet of that day in the dataset the report was made on
+(`narrative_packet_2026-08-26.json`): the orderings the lines assert are the report's, and issue
+#35's regeneration of the days must not move them. The period tests run on small rows of the period
+tools' shapes; the answer-level tests at the end run on the live store's day."""
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -26,8 +30,7 @@ def analysis():
     value.close()
 
 
-@pytest.fixture(scope='module')
-def packet(analysis):
+def build_packet(analysis, store):
     """r1-r3: get_shift_kpis for shifts 1, 2, 3; r4-r6: each shift's downtime by reason and r7-r9 its rejects by
     reason (largest first); r10-r13: September's KPI tiles, downtime Pareto, speed opportunity and waste breakdown."""
     evidence = []
@@ -37,10 +40,24 @@ def packet(analysis):
     for tool in ('get_shift_kpis', 'get_downtime_breakdown', 'get_quality_breakdown'):
         for s in (1, 2, 3):
             add(tool, getattr(analysis, tool)(s))
-    store, september = default_store(), {'period': 'month', 'anchor': '2026-09-15'}
+    september = {'period': 'month', 'anchor': '2026-09-15'}
     for tool in ('get_period_kpis', 'get_downtime_pareto', 'get_speed_opportunity', 'get_waste_breakdown'):
         add(tool, getattr(store, tool)(window=september))
     return evidence_packet(evidence)
+
+
+@pytest.fixture(scope='module')
+def packet():
+    """The report day's packet (build_packet over dataset d9143ff1d150, frozen when issue #35 regenerated the days)."""
+    return json.loads((ROOT / 'tests' / 'narrative_packet_2026-08-26.json').read_text())
+
+
+def test_the_frozen_packet_has_the_live_packet_shape(analysis):
+    """The frozen rows stay what build_packet makes today: the same tools, row fields and coverage."""
+    live, frozen = build_packet(analysis, default_store()), json.loads((ROOT / 'tests' / 'narrative_packet_2026-08-26.json').read_text())
+    assert [(p['result_id'], p['tool'], p['coverage']) for p in live] == [(p['result_id'], p['tool'], p['coverage']) for p in frozen]
+    for a, b in zip(live, frozen):
+        assert set(a) == set(b) and a['rows'] and b['rows'] and set(a['rows'][0]) == set(b['rows'][0]), a['tool']
 
 
 def stream(packet, *lines, chunk=7):

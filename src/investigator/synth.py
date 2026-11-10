@@ -1,19 +1,29 @@
-"""Deterministic multi-month synthetic generator for the demo record families.
+"""Deterministic synthetic generator for the demo record families, seeded by date.
 
-`generate_months()` lays out every production shift of the requested months
-for one corrugator and emits dry-end setups, wet ends, shifts and stops
-(see `records.py`, docs/RECORDS.md). The same seed gives byte-identical
-JSONL and the same `content_hash`. Simulation settings here are demo
-choices, not plant standards; the seeded stories come from `stories.py`,
-which no tool or analysis module reads.
+`generate_day(day)` lays out the three shifts of one production day for one
+corrugator and emits its dry-end setups, wet ends, shifts and stops (see
+`records.py`, docs/RECORDS.md). Every random draw of a day comes from streams
+keyed by the dataset seed and a date (issue #35): the day's own
+`Random(f"{seed}:{day}")`, its production week's speed factor
+`Random(f"{seed}:week:{monday}")` and its month's power outage
+`Random(f"{seed}:outage:{yyyy-mm}")`. Nothing carries from one production day
+into the next (the day closes at 07:00 the following morning), so a day
+regenerates byte-identically whatever range it is generated in: the rolling
+window, two months, or the day alone. `generate_days()`, `generate_window()`
+and `generate_months()` concatenate days and add the `content_hash` of the
+range. Simulation settings here are demo choices, not plant standards; the
+seeded stories come from `stories.py`, which no tool or analysis module reads.
 
 Calendar: production days are Monday to Friday (weekends are plant-down and
 emit nothing; there is no holiday calendar). Each production day has three
-480-minute shifts starting 07:00 and is labelled by its start date.
+480-minute shifts starting 07:00 and is labelled by its start date. The
+dataset is a rolling window (`window_days`): every production day from
+`as_of` minus DATASET_SPAN_DAYS to `as_of`.
 """
 from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 import hashlib
 import json
 import math
@@ -42,6 +52,8 @@ PM_PLACES = ("Double backer", "Single facer", "Glue dams", "Steam system", "Stac
 POWER_OUTAGE_MINUTES = (10, 15)           # one per month
 MONDAY_MAINTENANCE, AUGUST_MAINTENANCE, MONDAY_OPERATOR = 1.40, 1.08, 1.15
 RUN_MINUTES_PER_SHIFT = 460               # budget basis for the stop rates
+CREW_EPOCH = date(2026, 8, 3)             # the Monday the crew rotation counts weeks from (the original dataset's first Monday)
+DATASET_SPAN_DAYS = 365                   # the rolling window: every production day from as_of - 365 days to as_of
 
 # Unplanned stop catalogue: reason, candidate places, expected minutes per
 # RUN_MINUTES_PER_SHIFT of running time, mean duration in seconds.
@@ -85,6 +97,21 @@ def production_days(months):
     return days
 
 
+def weekdays_between(first, last):
+    """Monday-Friday dates from `first` to `last` inclusive, in order."""
+    return [first + timedelta(days=n) for n in range((last - first).days + 1) if (first + timedelta(days=n)).weekday() < 5]
+
+
+def window_bounds(as_of, span_days=DATASET_SPAN_DAYS):
+    """(first, last) calendar dates of the rolling window that ends on `as_of` (inclusive)."""
+    return as_of - timedelta(days=span_days), as_of
+
+
+def window_days(as_of, span_days=DATASET_SPAN_DAYS):
+    """Every production day of the rolling window ending on `as_of`: Mon-Fri from as_of - span_days to as_of."""
+    return weekdays_between(*window_bounds(as_of, span_days))
+
+
 @dataclass
 class _Shift:
     day: date
@@ -99,14 +126,15 @@ class _Shift:
         return self.day.strftime("%Y%m%d")
 
 
-def _shift_slots(days):
-    anchor = days[0] - timedelta(days=days[0].weekday())
+def _day_slots(day):
+    """The three shifts of one production day. Crews rotate weekly, counted from CREW_EPOCH (floor
+    division continues the rotation before it). Shifts 1 to 2 and 2 to 3 are contiguous; shift 3 is
+    not continued into the next production day, so no record or paper run crosses a day boundary."""
+    week = (day - CREW_EPOCH).days // 7
     slots = []
-    for day in days:
-        week = (day - anchor).days // 7
-        for number in (1, 2, 3):
-            start, end = R.shift_window(day.strftime("%Y%m%d"), number)
-            slots.append(_Shift(day, number, start, end, R.CREWS[(number - 1 + week) % 3]))
+    for number in (1, 2, 3):
+        start, end = R.shift_window(day.strftime("%Y%m%d"), number)
+        slots.append(_Shift(day, number, start, end, R.CREWS[(number - 1 + week) % 3]))
     for current, following in zip(slots, slots[1:]):
         current.contiguous_next = following.start == current.end
     slots[-1].contiguous_next = False
@@ -127,12 +155,19 @@ class _Context:
     week_factor: float = 1.0    # the production week's speed draw (WEEK_SPEED_FACTOR)
 
 
-def _week_factors(days, seed):
-    """One speed factor per ISO production week, drawn from its own stream so the week-to-week
-    movement does not depend on how many setups the previous week produced."""
-    rng = random.Random(f"{seed}:weeks")
-    weeks = sorted({d.isocalendar()[:2] for d in days})
-    return {week: rng.uniform(*WEEK_SPEED_FACTOR) for week in weeks}
+@lru_cache(maxsize=4096)
+def week_factor(seed, monday):
+    """The production week's speed factor, from the week's own stream keyed by its Monday, so the
+    week-to-week movement depends on neither the previous week nor the range being generated."""
+    return random.Random(f"{seed}:week:{monday.isoformat()}").uniform(*WEEK_SPEED_FACTOR)
+
+
+@lru_cache(maxsize=1024)
+def outage_slot(seed, year, month):
+    """The month's one power outage: a (day, shift) drawn from the month's own stream over every
+    production shift of the whole month, whichever days of it a range includes."""
+    slots = [(d, n) for d in production_days(((year, month),)) for n in (1, 2, 3)]
+    return random.Random(f"{seed}:outage:{year:04d}-{month:02d}").choice(slots)
 
 
 def _context(slot, outage_slots, week_factors=None):
@@ -204,9 +239,10 @@ def _fit_setup(rng, width, trim_target_pct, fixed, count):
 class _Planner:
     """Generates wet ends and the setups inside them, ahead of any clock."""
 
-    def __init__(self, rng):
+    def __init__(self, rng, order_prefix):
         self.rng = rng
-        self.order_seq = 820000
+        self.order_prefix = order_prefix   # the production day (YYMMDD): order numbers stay unique across days
+        self.order_seq = 0
         self.wet = None
         self.wet_count = 0
         self.wet_seq = {}
@@ -218,8 +254,10 @@ class _Planner:
 
     def _order(self, width_in, outs, quality):
         self.order_seq += 1
+        if self.order_seq > 9999:
+            raise ValueError("more than 9,999 orders in one production day")
         thick = quality.endswith(("BC", "EB"))
-        return {"order_number": f"SO-{self.order_seq}",
+        return {"order_number": f"SO-{self.order_prefix}{self.order_seq:04d}",
                 "part_number": f"P-{self.rng.randint(10000, 99999)}",
                 "w": width_in, "outs": outs, "L": self.rng.randint(20, 92),
                 "stack": self.rng.randint(80, 160) if thick else self.rng.randint(150, 300)}
@@ -595,32 +633,61 @@ def _shift_records(rng, slots, setups):
     return records
 
 
-def generate_months(seed=2026, months=(("2026", 8), ("2026", 9)), machine_id="CORR-1"):
-    """Generate every record family for the production days of `months`.
+def generate_day(day, seed=2026, machine_id="CORR-1"):
+    """Every record family of one production day (a Monday-Friday `date`), from streams keyed by the
+    seed and dates only: the same day is byte-identical in any range that contains it (issue #35).
 
-    Returns {"dry_end_setups": [...], "wet_ends": [...], "shifts": [...],
-    "stops": [...], "content_hash": sha256 hex, "manifest": {...}} where the
-    lists hold the dataclasses from `records.py` in time order.
+    Returns {"dry_end_setups": [...], "wet_ends": [...], "shifts": [...], "stops": [...]} with the
+    dataclasses from `records.py` in time order.
     """
-    months = tuple((str(y), int(m)) for y, m in months)
-    rng = random.Random(seed)
-    slots = _shift_slots(production_days(months))
-    outage_slots = {rng.choice([(s.day, s.number) for s in slots
-                                if (str(s.day.year), s.day.month) == month]) for month in months}
-    week_factors = _week_factors([s.day for s in slots], seed)
-    frames = _layout(rng, slots, _Planner(rng), _machine_code(machine_id), outage_slots, week_factors)
+    if day.weekday() >= 5:
+        raise ValueError(f"{day} is a weekend day: production days are Monday to Friday")
+    rng = random.Random(f"{seed}:{day.isoformat()}")
+    slots = _day_slots(day)
+    outage_slots = {outage_slot(seed, day.year, day.month)}
+    week_factors = {day.isocalendar()[:2]: week_factor(seed, day - timedelta(days=day.weekday()))}
+    frames = _layout(rng, slots, _Planner(rng, day.strftime("%y%m%d")), _machine_code(machine_id), outage_slots, week_factors)
     setups, stops = [], []
     for frame in frames:
         record, stop_records = _setup_record(rng, frame, _context(frame.slot, outage_slots, week_factors), machine_id)
         setups.append(record)
         stops.extend(stop_records)
-    data = {"dry_end_setups": setups, "wet_ends": _wet_end_records(setups),
+    return {"dry_end_setups": setups, "wet_ends": _wet_end_records(setups),
             "shifts": _shift_records(rng, slots, setups), "stops": stops}
+
+
+def generate_days(days, seed=2026, machine_id="CORR-1"):
+    """Every record family of the given production days (ascending dates), one day at a time.
+
+    Returns {"dry_end_setups": [...], "wet_ends": [...], "shifts": [...], "stops": [...],
+    "content_hash": sha256 hex of the range, "manifest": {...}}.
+    """
+    days = list(days)
+    if not days or any(b <= a for a, b in zip(days, days[1:])):
+        raise ValueError("generate_days needs at least one production day, in ascending order")
+    data = {name: [] for name in R.FAMILIES}
+    for day in days:
+        part = generate_day(day, seed=seed, machine_id=machine_id)
+        for name in R.FAMILIES:
+            data[name].extend(part[name])
     data["content_hash"] = content_hash(data)
-    data["manifest"] = {"schema": R.SCHEMA, "seed": seed, "months": [list(m) for m in months],
-                        "machine_id": machine_id, "content_hash": data["content_hash"],
+    data["manifest"] = {"schema": R.SCHEMA, "seed": seed, "first_day": days[0].isoformat(), "last_day": days[-1].isoformat(),
+                        "production_days": len(days), "machine_id": machine_id, "content_hash": data["content_hash"],
                         "counts": {name: len(data[name]) for name in R.FAMILIES},
                         "files": {name: f"{name}.jsonl" for name in R.FAMILIES}}
+    return data
+
+
+def generate_window(as_of, seed=2026, machine_id="CORR-1", span_days=DATASET_SPAN_DAYS):
+    """The rolling window ending on `as_of`: every production day from as_of - span_days to as_of."""
+    return generate_days(window_days(as_of, span_days), seed=seed, machine_id=machine_id)
+
+
+def generate_months(seed=2026, months=(("2026", 8), ("2026", 9)), machine_id="CORR-1"):
+    """Every record family of the production days of `months` (the days are the same as in any
+    other range that contains them). Kept for tests and the record docs; the app reads a window."""
+    data = generate_days(production_days(tuple((str(y), int(m)) for y, m in months)), seed=seed, machine_id=machine_id)
+    data["manifest"]["months"] = [[str(y), int(m)] for y, m in months]
     return data
 
 

@@ -13,11 +13,16 @@ COPY pyproject.toml ./
 COPY src ./src
 # The golden set, its recorded fixtures and the tracked history, read-only, for the /evals page (issue #26).
 COPY evals ./evals
-# Generate the two synthetic months once here, not at every container start (issue #19):
-# the server loads /app/prebuilt in about 150 ms instead of generating for about 2 s.
+# Generate the rolling year once here, not at every container start (issues #19, #35): the server
+# loads /app/prebuilt in about 200 ms instead of generating for about 12 s. The window ends
+# yesterday (UTC) at build time and is fixed for the image, whenever a container starts; the
+# nightly deploy (deploy-cloudrun.yml, schedule) builds the next one. /app/prebuilt-golden is the
+# golden set's own window (the year ending golden_values.json's as_of), which the /evals page
+# scores against; it is loaded on the first eval run, never at boot.
 RUN pip install --no-cache-dir . && python -m investigator.prebuilt /app/prebuilt \
+    && python -m investigator.prebuilt --as-of "$(python -c 'import json; print(json.load(open("evals/golden_values.json"))["as_of"])')" /app/prebuilt-golden \
     && mkdir -p /app/artifacts && chown -R app:app /app
-ENV INVESTIGATOR_PREBUILT=/app/prebuilt INVESTIGATOR_EVALS=/app/evals
+ENV INVESTIGATOR_PREBUILT=/app/prebuilt INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden INVESTIGATOR_EVALS=/app/evals
 
 USER app
 EXPOSE 7860
