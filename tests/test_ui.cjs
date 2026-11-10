@@ -353,7 +353,7 @@ const analystChecks=(async()=>{
  gated=false; await release(0); while(releases.length)releases.shift()(); await new Promise(r=>setTimeout(r,30));
  assert.equal(bodies[0].mode,'anthropic');assert.equal(bodies[0].session_id,null);assert.equal(keys[0],undefined);   // public: never a visitor key
  const text=flat(elements.messages);
- assert.equal(elements.card.className,'card answer');assert.match(elements['card-meta'].textContent,/ · analyst · 2 model calls · /);
+ assert.equal(elements.card.className,'card answer');assert.match(elements['card-meta'].textContent,/ · analyst · 2 model calls · (\d+ ms|\d+\.\d s)$/);
  assert.match(text,/Finding: Shift 2 ran at 512\.34 ft\/min\./);assert.match(text,/Evidence: Shift 2, observed_shift_fpm, query 1, row 0/);
  assert.ok(!/It lost/.test(text));assert.match(text,/2 model calls/);assert.match(text,/first words after 1\.2 s/);
  assert.equal(vm.runInContext('sessionId',context),'s2');assert.equal(vm.runInContext('latest.session_id',context),'s2');
@@ -839,6 +839,23 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(typeof t.listeners.pointerdown,'function');
  // Reopening a card shows it settled; it is revealed once.
  vm.runInContext('renderCard()',t.ctx);assert.deepEqual(typedText(t.els),visible);assert.notEqual(t.els.card['data-reveal'],'running');
+
+ // Races: a pointerdown skips; a new question during a reveal settles the first card; it reopens settled, verbatim.
+ t=setup(); await ask(t); await t.at(40+100);
+ t.listeners.pointerdown({});assert.deepEqual(typedText(t.els),visible);assert.equal(t.els.card['data-reveal'],'done');
+ t=setup(); await ask(t); await t.at(40+100);
+ const firstCard=vm.runInContext('openId',t.ctx);
+ t.setWall(200); const second=vm.runInContext("ask('Why was this shift slow?')",t.ctx); await tick();   // a second question while the first is still typing
+ t.open(); await second;
+ vm.runInContext(`openCard(thread.find(r=>r.id===${firstCard}))`,t.ctx);
+ assert.deepEqual(typedText(t.els),visible);assert.notEqual(t.els.card['data-reveal'],'running');
+ assert.ok(![...queryLines(t.els),...t.els.charts.children,...walk(t.els.messages)].some(waiting));
+ // a card that landed while another was open opens settled too
+ t=setup(); vm.runInContext("ask('Why was this shift slow? Chart downtime by reason.')",t.ctx); await tick();
+ const background=vm.runInContext('openId',t.ctx); vm.runInContext("openId=null;renderCard()",t.ctx);
+ t.setWall(40); t.open(); await vm.runInContext(`thread.find(r=>r.id===${background}).done`,t.ctx);
+ vm.runInContext(`openCard(thread.find(r=>r.id===${background}))`,t.ctx);
+ assert.deepEqual(typedText(t.els),visible);assert.notEqual(t.els.card['data-reveal'],'running');
 
  // prefers-reduced-motion: everything is present at the first frame.
  t=setup({reduced:true}); await ask(t);

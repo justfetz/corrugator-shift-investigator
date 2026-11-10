@@ -661,7 +661,7 @@ function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries 
  else if(rec.state==='error')parts.push('failed');
  else if(analyst){const n=Number(rec.result.usage&&rec.result.usage.model_calls)||0;parts.push(`${n} model ${n===1?'call':'calls'}`);}
  else{const n=(rec.result.trace||[]).length;parts.push(`${n} ${n===1?'query':'queries'}`);}
- if(rec.ms!==null)parts.push(msText(rec.ms));
+ if(rec.ms!==null)parts.push(analyst&&rec.ms>=1000?`${(rec.ms/1000).toFixed(1)} s`:msText(rec.ms));   // a model round reads in seconds: analyst · 2 model calls · 1.8 s
  return parts.join(' · ');
 }
 function clearCard(){ if(pace)finishReveal(); for(const id of ['queries','messages','charts','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('calls').textContent=''; stepIndex=new Map(); }
@@ -824,7 +824,7 @@ function analystOffer(rec){
 }
 // The one render entry for an answer, asked or opened from an address: the record takes the result and its card
 // (open or one line in the thread) is drawn again. The ms is submit to rendered.
-function settleCard(rec){ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} }
+function settleCard(rec){ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); else rec.revealed=true;   /* landed behind another card: it opens settled (#65) */ rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} }
 function land(rec,result){
  if(result.session_id)latestRun.set(result.session_id,result.run_id);
  rec.result=result; rec.answered=answeredScope(rec.scope,result); rec.state='done'; settleCard(rec);
