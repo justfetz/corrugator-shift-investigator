@@ -4596,6 +4596,33 @@
     ],
     "sections_match": "Shift 2 in dollars: .*min x \\$1,200/hr machine time"
    }
+  },
+  {
+   "id": "money-what-did-waste-cost-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What did waste cost this shift?",
+   "note": "Review of #31a: on the day grain 'waste' chose the dry-end reject breakdown, so the answer priced rejects alone and left out side trim and shear. What waste costs is trim, shear and dry-end together: the shift's dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": "^Where the money went, ranked by dollars: (?=.*\\bSide trim: \\$[\\d,]+ )(?=.*\\bShear chops: \\$[\\d,]+ )(?=.*\\bDry-end: [A-Z]+: \\$[\\d,]+ )"
+   }
   }
  ]
 }
