@@ -913,7 +913,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const answer=(n,url)=>({run_id:'r'+n,session_id:'s',mode:'offline rule-based planner; no language model',status:'complete',production_day:'2026-09-14',selected_shifts:[2],url,sections:[`Answer ${n}: shift 2 ran 616.2 ft/min against a 692.4 target.`,`Second paragraph of answer ${n}.`],context:{},usage:{tool_calls:2,model_calls:0},report_markdown:'# r',
   trace:[{result_id:`a${n}:1`,tool:'get_shift_kpis',arguments:{shift:2},ok:true,elapsed_ms:3,data:{shift:2,coverage:'complete',rows:[row],trace:{sql:'SELECT 1',parameters:[2]}}},{result_id:`a${n}:2`,tool:'get_downtime_breakdown',arguments:{shift:2},ok:true,elapsed_ms:2,data:{shift:2,coverage:'complete',rows:[{category:'Order change',down_minutes:6.4}],trace:{sql:'SELECT 2',parameters:[2]}}}],tables:[],
   charts:[{type:'bar',source_result_id:`a${n}:2`,shift:2,coverage:'complete',unit:'minutes',x:'category',y:'down_minutes',rows:[{category:'Order change',down_minutes:6.4}]}]});
- const setup=async({store=null,location=null}={})=>{
+ const setup=async({store=null,location=null,limit=30}={})=>{
   const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
   Object.assign(els.day,{value:'2026-09-14'});els.period.value='day';els.shift.value='2';els.scope.value='shift';els.mode.value='offline';
   const focused=[]; els.question.focus=()=>focused.push('question'); els['card-title'].focus=()=>focused.push('card-title');
@@ -921,7 +921,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   const frames=[], listeners={}, requests=[], held=[]; let wall=0, n=0, hold=false;
   const doc={getElementById:id=>els[id]||walk(els.earlier).find(e=>e.id===id)||assert.fail(`Unknown control ${id}`),createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[],addEventListener:(name,fn)=>{listeners[name]=fn;}};
   const respond=(path,init)=>{
-   if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-11','2026-09-14','2026-09-15'],first_day:'2026-09-11',last_day:'2026-09-15',live_modes:['anthropic'],demo_guards:{max_turns:4,rate_limit_per_min:30}})};
+   if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-11','2026-09-14','2026-09-15'],first_day:'2026-09-11',last_day:'2026-09-15',live_modes:['anthropic'],demo_guards:{max_turns:4,rate_limit_per_min:limit}})};
    const k=++n;
    if(path==='/api/ask')return {ok:true,status:200,text:async()=>JSON.stringify({type:'start'})+'\n'+JSON.stringify({type:'done',result:{...answer(k),mode:'anthropic',narrative_status:'available',narrative:[{kind:'finding',text:`Model reading ${k}.`,citations:[]}],usage:{tool_calls:2,model_calls:1,cost_usd:0.01}}})+'\n'};
    const q=new URLSearchParams(path.split('?')[1]||''), url=path.startsWith('/q?')?`/corr/1/day/${q.get('day')}/shift/${q.get('shift')}?measure=m${k}`:path;
@@ -980,11 +980,15 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  t.focused.length=0;els['new-pill'].events.click();
  assert.equal(target(),852);assert.equal(els['new-pill'].hidden,true);assert.deepEqual(t.focused,['card-title']);
  t.layout(1000,360);await t.frame(164);assert.equal(target(),872,'following again');
- // 5. Scrolling back down resumes it too; a nudge inside 80 px never stops it.
- els.transcript.scrollTop=600;els.transcript.events.scroll();t.layout(1000,380);await t.frame(180);assert.equal(target(),600);assert.equal(els['new-pill'].hidden,false);
- els.transcript.scrollTop=850;els.transcript.events.scroll();assert.equal(els['new-pill'].hidden,true);   // within 80 px of the follow point (892)
- t.layout(1000,400);await t.frame(196);assert.equal(target(),912);
- els.transcript.scrollTop=862;els.transcript.events.scroll();t.layout(1000,420);await t.frame(212);assert.equal(target(),932,'50 px up is a nudge, not a stop');
+ // 4b. A trackpad scrolls in steps of a few pixels, one or two per frame: each step up stops the pull at once (the pane is
+ // never pulled back down under the reader), and the pill comes once the reader is more than 80 px away and more arrives.
+ for(let k=1,h=360;k<=8;k++){ els.transcript.scrollTop-=15;els.transcript.events.scroll();t.layout(1000,h+=4);await t.frame(164+k*2);
+  assert.equal(target(),872-15*k,`step ${k}: not pulled back`);assert.equal(els['new-pill'].hidden,872+4*k-(872-15*k)<=80,`step ${k}: the pill only past 80 px`); }
+ // 5. Scrolling back down to within 80 px resumes it.
+ els.transcript.scrollTop=850;els.transcript.events.scroll();assert.equal(els['new-pill'].hidden,true);   // within 80 px of the follow point (904)
+ t.layout(1000,400);await t.frame(196);assert.equal(target(),912,'following again');
+ els.transcript.scrollTop=870;els.transcript.events.scroll();t.layout(1000,420);await t.frame(212);assert.equal(target(),870,'a small move up is a stop too, not pulled back');assert.equal(els['new-pill'].hidden,true,'but no pill within 80 px');
+ els.transcript.scrollTop=900;els.transcript.events.scroll();t.layout(1000,420);await t.frame(214);assert.equal(target(),932,'scrolling back down resumes');
  // 5b. The scroll event of the pane's own scroll arrives a frame late: a card that landed above meanwhile and moved the
  // follow point 800 px down is not the reader leaving, and neither is the browser's scroll anchoring (it only moves down).
  t.layout(1800,420);els.transcript.events.scroll();assert.equal(els['new-pill'].hidden,true);
@@ -993,7 +997,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // 6. The rule never scrolls up on its own: a reader below the follow point (reading the tiles) stays there.
  els.transcript.scrollTop=1900;els.transcript.events.scroll();t.layout(1800,460);await t.frame(228);assert.equal(target(),1900);
  // 7. Once the card is taller than the pane, the follow point is its title line, not its bottom.
- els.transcript.scrollTop=1750;els.transcript.events.scroll();t.layout(1800,900);await t.frame(244);assert.equal(target(),1788,'the title line at the top (1800 - 12), not the bottom (2212)');
+ els['new-pill'].events.click();t.layout(1800,900);await t.frame(244);assert.equal(target(),1788,'the title line at the top (1800 - 12), not the bottom (2212)');
  for(let ms=260;ms<=2000;ms+=200)await t.frame(ms);assert.equal(els.card['data-reveal'],'done');
  // 8. Asking always brings the new card into view, even from a paused pane.
  els.transcript.scrollTop=300;els.transcript.events.scroll();
@@ -1005,8 +1009,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  els.question.events.keydown({key:'Enter',shiftKey:true,preventDefault(){prevented=true;}});
  els.question.events.keydown({key:'Enter',isComposing:true,preventDefault(){prevented=true;}});
  await tick();assert.equal(prevented,false);assert.equal(sent(),before);
- t.focused.length=0;els.question.events.keydown({key:'Enter',preventDefault(){prevented=true;}});await t.release(2200);
- assert.equal(prevented,true);assert.equal(sent(),before+1);assert.ok(t.requests.some(r=>r[1].includes('q=How+many+setups%3F')));
+ const all=t.requests.length;t.focused.length=0;els.question.events.keydown({key:'Enter',preventDefault(){prevented=true;}});await t.release(2200);
+ assert.equal(prevented,true);assert.equal(sent(),before+1);assert.equal(t.requests.length,all+1,'no new fetch on the hot path: the question is its one GET');assert.ok(t.requests.some(r=>r[1].includes('q=How+many+setups%3F')));
  assert.deepEqual(t.focused,[],'after send, focus stays in the ask bar');
  let stopped=false;
  t.listeners.keydown({key:'/',target:{tagName:'BODY'},preventDefault(){stopped=true;}});assert.equal(stopped,true);assert.deepEqual(t.focused,['question']);
@@ -1042,5 +1046,16 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(r.els.earlier.children[4].children[0].children[1].textContent,'Shift 2 · 40 ms','the time it was first answered in');
  const offers=r.els.earlier.children.map(l=>walk(l.children[2]).some(e=>e.tag==='button'&&e.textContent==='Ask the analyst'));
  assert.deepEqual([offers[0],offers[4]],[true,false],'the analyst card comes back as the offline answer with the analyst button; its source keeps its asked state');
- console.log('UI issue-86 checks passed: no page scroll, follow while filling (bottom, then title line), stop on scroll-up with the ↓ new pill, resume on click or scroll-down, never up on its own, asking always shows the new card, earlier cards whole with their own ids, Enter / Shift+Enter / slash, nothing disabled, reload replays the thread by GET without /api/ask.');
+ // 13. Each replay counts against the visitor's rate limit: with 8 a minute, a reload fetches the newest 2 cards above the
+ // addressed one (a quarter of the limit); the 3 older ones come back as their title lines, and Open loads one, by GET.
+ const lim=await setup({store,location:{pathname:address.slice(0,i),search:address.slice(i)},limit:8});
+ assert.equal(lim.requests.filter(q=>q[1]!=='/api/config').length,3,JSON.stringify(lim.requests));
+ const lines=lim.els.earlier.children;
+ assert.deepEqual(lines.map(l=>[l.children[0].children[0].textContent,/\bdrawn\b/.test(l.className)]),[['Why was this shift slow?',true],['How many setups?',true],['Dry-end waste',false],['Speed to target',false],['Why was this shift slow?',false]]);
+ assert.equal(lines[2].children[0].children[1].textContent,'Shift 2 · not reloaded: Open loads it');assert.equal(lines[2].children.length,2);
+ lines[3].children[1].events.click();for(let k=0;k<6;k++)await tick();
+ assert.equal(lim.els['card-title'].textContent,'Speed to target');assert.equal(lim.els.card.className,'card answer');
+ assert.equal(lim.requests.filter(q=>q[1]!=='/api/config').length,4);assert.ok(lim.requests.every(q=>q[1]!=='/api/ask'));
+ assert.equal(JSON.parse(lim.store['csi-thread']).length,6,'the cards not reloaded are still kept');
+ console.log('UI issue-86 checks passed: no page scroll, follow while filling (bottom, then title line), stop on scroll-up with the ↓ new pill, resume on click or scroll-down, never up on its own, asking always shows the new card, earlier cards whole with their own ids, Enter / Shift+Enter / slash, nothing disabled, no new fetch on the hot path, small trackpad steps up never pulled back, reload replays the thread by GET without /api/ask within a share of the rate limit.');
 })().catch(error=>{console.error(error);process.exit(1);});

@@ -68,19 +68,21 @@ const disabledControls=()=>[...document.querySelectorAll('button,input,select,te
  for(const [name,w,h] of [['desktop',1280,720],['phone',390,844]]){
   const page=await browser.newPage({viewport:{width:w,height:h},deviceScaleFactor:1}), calls=[];
   page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
-  page.on('request',q=>calls.push([q.method(),new URL(q.url()).pathname,q.resourceType()]));
+  page.on('request',q=>calls.push([q.method(),new URL(q.url()).pathname,q.resourceType(),!!q.redirectedFrom()]));
   await page.goto(url);await page.waitForFunction(()=>document.querySelectorAll('#examples .canned').length>0);await page.waitForTimeout(200);
   const start=await page.evaluate(frame), steps=[];
   for(const q of ['Why was this shift slow?','Show speed to target','Show dry-end quality waste']){
-   await page.click('#question');await page.fill('#question',q);await page.keyboard.press('Enter');
+   await page.click('#question');await page.fill('#question',q);const before=calls.length;await page.keyboard.press('Enter');
    await page.waitForFunction(settled,null,{timeout:8000});await page.waitForTimeout(150);
-   steps.push(await page.evaluate(frame));
+   const fetched=calls.slice(before).filter(c=>c[2]==='fetch'&&!c[3]);   // the /q GET; its redirect to the canonical address is the same fetch
+   steps.push({...await page.evaluate(frame),fetches:fetched.map(c=>c[1])});
   }
   for(const s of steps){
    assert.equal(s.scrollY,0,`${name}: the page does not scroll`);assert.equal(s.doc,h,`${name}: the page is one window tall`);
    assert.deepEqual(s.ask,start.ask,`${name}: the ask bar never moves`);assert.ok(s.ask[1]<=h,`${name}: the ask bar is on screen`);
    assert.deepEqual(s.rail,start.rail,`${name}: the rail never moves`);assert.equal(s.title_in_pane,true,`${name}: the answer is in view when it finishes`);
    assert.match(s.meta,/ · offline · \d+ quer(y|ies) · \d{1,2} ms$/,`${name}: the offline time on the title line is still two digits`);
+   assert.deepEqual(s.fetches,['/q'],`${name}: no new fetch on the hot path: one GET per question`);
   }
   assert.deepEqual(steps.map(s=>s.title),['Why was this shift slow?','Show speed to target','Show dry-end quality waste']);assert.deepEqual(steps.map(s=>s.earlier),[0,1,2],'earlier cards move up whole');
   assert.ok(steps[1].pane_scroll>steps[0].pane_scroll&&steps[2].pane_scroll>steps[1].pane_scroll,'the pane followed each new answer: older content moved up');
@@ -90,9 +92,13 @@ const disabledControls=()=>[...document.querySelectorAll('button,input,select,te
   // Scroll up during a reveal: the pane stops following, the pill appears, clicking it lands on the newest content.
   await page.fill('#question','Is it bond or warp?');await page.keyboard.press('Enter');
   await page.waitForFunction(()=>document.getElementById('card').getAttribute('data-reveal')==='running',null,{timeout:8000});
-  const box=await page.locator('#transcript').boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.wheel(0,-600);
+  // Small wheel notches, as a trackpad or a smooth-scrolling mouse sends them: each one moves the pane up and stays.
+  const box=await page.locator('#transcript').boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+  const tops=[(await page.evaluate(pane)).scroll];
+  for(let k=0;k<6;k++){await page.mouse.wheel(0,-40);await page.waitForTimeout(40);tops.push((await page.evaluate(pane)).scroll);}
+  assert.ok(tops.every((v,k)=>k===0||v<tops[k-1]),`${name}: every small step up stays up, never pulled back: ${tops}`);
   await page.waitForFunction(()=>!document.getElementById('new-pill').hidden,null,{timeout:3000});
-  const paused=await page.evaluate(pane);
+  const paused={...await page.evaluate(pane),tops};
   if(shots&&name==='desktop')await page.screenshot({path:`${shots}/${name}-new-pill.png`});
   await page.click('#new-pill');await page.waitForTimeout(100);
   const resumed=await page.evaluate(()=>({pill_hidden:document.getElementById('new-pill').hidden,title_in_pane:(()=>{const p=document.getElementById('transcript').getBoundingClientRect(),t=document.getElementById('card-title').getBoundingClientRect();return t.top>=p.top&&t.bottom<=p.bottom;})(),scroll:Math.round(document.getElementById('transcript').scrollTop)}));

@@ -124,7 +124,9 @@ does the same on load. Follow-up context is the `after=` chain the page builds f
 answer is a link to `…&format=pdf`. Live mode keeps the session and the POST. On a reload of the tab the
 thread above the addressed card comes back the same way (issue #86): each card is kept in `sessionStorage` as
 its own address (an analyst's card as the offline address it was asked from) and fetched again as JSON;
-only same-origin `/corr/…` and `/q?…` paths are replayed.
+only same-origin `/corr/…` and `/q?…` paths are replayed. Each replay counts against the request limits like any
+URL answer, so a reload fetches only the newest few cards (a quarter of the per-visitor limit, at most 8) and
+the older ones load when opened.
 
 ## Room left in the grammar
 

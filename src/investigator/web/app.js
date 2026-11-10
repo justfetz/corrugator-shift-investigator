@@ -618,7 +618,7 @@ function showResult(result) {
  for(const entry of shiftKpis)shiftTiles(entry,result,shiftKpis.length>1);
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
- afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip
+ if(!slots)afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip. An earlier card drawn into its own containers has no trail (#86)
  $('calls').textContent=`${result.status?result.status+' · ':''}${usageText(result.usage)}`;
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
@@ -738,7 +738,7 @@ function renderEarlier(){
   const v=entryOf(rec);
   if(settled(rec)&&v.key!==bodyKey(rec))setBody(v,drawBody(rec),bodyKey(rec));
   v.line.className='card earlier'+(rec.state==='error'?' failed':'')+(v.body?' drawn':'');v.line.setAttribute('aria-label',`Earlier answer: ${rec.title}`);
-  v.title.textContent=rec.title;v.meta.textContent=`${entryWho(rec)} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':msText(rec.ms)}`;
+  v.title.textContent=rec.title;v.meta.textContent=`${entryWho(rec)} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':rec.state==='stored'?'not reloaded: Open loads it':msText(rec.ms)}`;
   v.open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);
   lines.push(v.line);
  }
@@ -756,7 +756,7 @@ function syncPdf(){ if(latest)$('pdf').hidden=!latest.url&&latestRun.get(latest.
 // Opening a card: an addressed answer of the current scope puts its address in the bar and the conversation follows
 // it, so the next question is a follow-up of the card on screen. A card asked under another scope keeps the rail's
 // address: the rail, not the card, is what the address encodes.
-function openCard(rec){ openId=rec.id; renderCard(); scheduleFollow(true); if(rec.state==='done'&&rec.url&&rec.epoch===sessionEpoch){ followView(rec.url,!rec.report); pushAddress(rec.url); updateScope(); } }
+function openCard(rec){ if(rec.state==='stored')replayOne(rec);   /* a card kept but not reloaded (#86) loads when it is opened */ openId=rec.id; renderCard(); scheduleFollow(true); if(rec.state==='done'&&rec.url&&rec.epoch===sessionEpoch){ followView(rec.url,!rec.report); pushAddress(rec.url); updateScope(); } }
 function focusCard(){ try{$('card-title').focus?.({preventScroll:true});}catch(e){} }   // keyboard focus follows the card when the control that had it goes away; the pane's follow rule does the scrolling (#86)
 // A settled answer's own content, into the card's containers: the open card's, or an earlier card's own (#86).
 // Returns the summary the reveal paces, for an offline answer.
@@ -796,9 +796,10 @@ function renderCard(){
 // and only #transcript scrolls. The open card is the newest, at the bottom. While it fills (skeleton, landed answer,
 // reveal steps, streamed narrative), the pane follows it: its bottom sits at the pane's bottom while it fits, and once
 // it is taller than the pane its title line stays at the top, so the answer is read from its first word. The rule
-// never scrolls up on its own. A reader who scrolls up more than FOLLOW_SLACK px stops it; a "↓ new" pill then says
-// more arrived below, and clicking it, or scrolling back down, resumes following. Asking, or opening a card, always
-// brings the open card into view.
+// never scrolls up on its own, and never pulls a reader back down: any move up, however small (a trackpad scrolls in
+// steps of a few pixels), stops it. Once the reader is more than FOLLOW_SLACK px from the newest content and more has
+// arrived, a "↓ new" pill says so; clicking it, or scrolling back down to within FOLLOW_SLACK px, resumes following.
+// Asking, or opening a card, always brings the open card into view.
 const FOLLOW_SLACK=80, FOLLOW_GAP=12;
 let following=true, unseen=false, lastTop=0, followQueued=false, followForce=false, followFresh=false;
 function paneOf(){ const p=$('transcript'); return p&&typeof p.scrollTop==='number'&&typeof p.scrollHeight==='number'&&typeof p.clientHeight==='number'?p:null; }   // null in the unit tests' layout-less stub, unless a test gives it numbers
@@ -812,8 +813,8 @@ function syncPill(){ $('new-pill').hidden=following||!unseen; }
 function follow(force=false,fresh=true){
  const p=paneOf(); if(!p)return;
  if(force){ following=true; unseen=false; }
- if(!following){ if(fresh)unseen=true; syncPill(); return; }
  const target=followTarget(p);
+ if(!following){ if(fresh&&target-p.scrollTop>FOLLOW_SLACK)unseen=true; syncPill(); return; }
  if(force||p.scrollTop<target)p.scrollTop=target;
  lastTop=p.scrollTop; syncPill();
 }
@@ -825,14 +826,14 @@ function scheduleFollow(force=false,fresh=true){
  if(followQueued)return; followQueued=true;
  requestAnimationFrame(()=>{ followQueued=false; const f=followForce, n=followFresh; followForce=followFresh=false; follow(f,n); });
 }
-// Only a move up stops the following. A scroll event is dispatched a frame after the scroll, so by then a card may have
-// landed and moved the follow point: the event of our own scroll, or of the browser's scroll anchoring (which moves
-// down when content grows above), must not read as the reader leaving. A user's scroll event always runs before the
-// frame's follow step.
+// Only a move up stops the following; the distance to the follow point decides only when it resumes. A scroll event
+// is dispatched a frame after the scroll, so by then a card may have landed and moved the follow point: the event of
+// our own scroll, or of the browser's scroll anchoring (which moves down when content grows above), is not a move up
+// and must not read as the reader leaving. A user's scroll event always runs before the frame's follow step.
 function onPaneScroll(){
  const p=paneOf(); if(!p)return;
  const top=p.scrollTop, gap=followTarget(p)-top;
- if(top<lastTop&&gap>FOLLOW_SLACK)following=false;
+ if(top<lastTop){ following=false; if(gap<=FOLLOW_SLACK)unseen=false; }
  else if(gap<=FOLLOW_SLACK){ following=true; unseen=false; }
  lastTop=top; syncPill();
 }
@@ -1073,13 +1074,16 @@ function reset(){ thread=[];openId=null;renderCard();scheduleFollow(true);saveTh
 // analyst's card as the offline answer it was asked from) with its title line, in sessionStorage: this tab only, never
 // sent anywhere. On load the address bar's card is restore()'s, as before (#20); the cards above it are GETs of their
 // own addresses, never /api/ask, and land settled, in their order. A model's narrative is not kept or replayed: its
-// card comes back as the offline answer, with the analyst button.
-const THREAD_KEY='csi-thread', THREAD_MAX=24, REPLAYABLE=/^\/(corr\/|q\?)/;   // same-origin paths only
+// card comes back as the offline answer, with the analyst button. Each replay is an answer the server counts against
+// the visitor's rate limit, so a reload fetches only the newest few (a quarter of that limit, at most REPLAY_MAX); the
+// older cards come back as their title lines, and Open loads one.
+const THREAD_KEY='csi-thread', THREAD_MAX=24, REPLAY_MAX=8, REPLAYABLE=/^\/(corr\/|q\?)/;   // same-origin paths only
+function replayBudget(){ const limit=Number(config&&config.demo_guards&&config.demo_guards.rate_limit_per_min)||0; return limit>0?Math.min(REPLAY_MAX,Math.max(1,Math.floor(limit/4))):REPLAY_MAX; }
 function tabStore(){ try{ return typeof sessionStorage!=='undefined'&&sessionStorage?sessionStorage:null; }catch(e){ return null; } }
 function replayUrl(r){ return PROVIDERS[r.mode]?((r.source&&r.source.url)||r.askUrl):(r.url||r.askUrl); }
 function saveThread(){
  const store=tabStore(); if(!store)return;
- const cards=thread.map(r=>({url:replayUrl(r),title:r.title,question:r.question,scope:{day:r.scope.day,period:r.scope.period,shift:r.scope.shift,scope:r.scope.scope},corrupt:!!r.corrupt,report:!!r.report,analysed:!PROVIDERS[r.mode]&&!!r.analysed,ms:!PROVIDERS[r.mode]&&r.state==='done'?r.ms:null}))
+ const cards=thread.map(r=>({url:replayUrl(r),title:r.title,question:r.question,scope:{day:r.scope.day,period:r.scope.period,shift:r.scope.shift,scope:r.scope.scope},corrupt:!!r.corrupt,report:!!r.report,analysed:!PROVIDERS[r.mode]&&!!r.analysed,ms:PROVIDERS[r.mode]?null:r.state==='done'?r.ms:typeof r.keepMs==='number'?r.keepMs:null}))
   .filter(c=>typeof c.url==='string'&&REPLAYABLE.test(c.url)).slice(-THREAD_MAX);
  try{ if(cards.length)store.setItem(THREAD_KEY,JSON.stringify(cards)); else store.removeItem(THREAD_KEY); }catch(e){ /* storage full or blocked: the thread is a convenience */ }
 }
@@ -1089,19 +1093,26 @@ function storedThread(){
 }
 function sameScope(rec){ const s=currentScope(); return rec.scope.day===s.day&&rec.scope.period===s.period&&rec.scope.scope===s.scope&&Number(rec.scope.shift)===s.shift&&!!rec.corrupt===$('corrupt').checked; }
 function replayThread(cards){
- for(const c of cards){
-  const rec={id:++seq,question:typeof c.question==='string'?c.question:c.url,title:typeof c.title==='string'?c.title:c.url,scope:{day:c.scope.day,period:c.scope.period,shift:Number(c.scope.shift),scope:c.scope.scope},answered:null,mode:'offline',report:!!c.report,corrupt:!!c.corrupt,epoch:-1,source:null,state:'pending',t0:clock(),ms:null,keepMs:typeof c.ms==='number'?c.ms:null,result:null,error:null,note:null,url:null,live:null,revealed:true,analysed:!!c.analysed,askUrl:c.url};
+ const from=Math.max(0,cards.length-replayBudget());
+ cards.forEach((c,i)=>{
+  const rec={id:++seq,question:typeof c.question==='string'?c.question:c.url,title:typeof c.title==='string'?c.title:c.url,scope:{day:c.scope.day,period:c.scope.period,shift:Number(c.scope.shift),scope:c.scope.scope},answered:null,mode:'offline',report:!!c.report,corrupt:!!c.corrupt,epoch:-1,source:null,state:'stored',t0:clock(),ms:null,keepMs:typeof c.ms==='number'?c.ms:null,result:null,error:null,note:null,url:null,live:null,revealed:true,analysed:!!c.analysed,askUrl:c.url};
   thread.push(rec);
-  rec.done=(async()=>{
-   try{
-    const response=await fetch(c.url,{headers:{Accept:'application/json'}}), result=await response.json();
-    if(!response.ok)throw new Error(result.error||'Request failed');
-    rec.url=result.url||null; if(rec.url&&sameScope(rec))rec.epoch=sessionEpoch;   // a card of the rail's scope opens into the conversation, as it did before the reload
-    land(rec,result);
-   }catch(error){ rec.error=error.message; rec.state='error'; settleCard(rec); }
-  })();
- }
+  if(i>=from)replayOne(rec);
+ });
  if(cards.length)renderEarlier();
+}
+function replayOne(rec){
+ rec.state='pending'; rec.t0=clock();
+ rec.done=(async()=>{
+  try{
+   const response=await fetch(rec.askUrl,{headers:{Accept:'application/json'}}), result=await response.json();
+   if(!response.ok)throw new Error(result.error||'Request failed');
+   rec.url=result.url||null; if(rec.url&&sameScope(rec))rec.epoch=sessionEpoch;   // a card of the rail's scope opens into the conversation, as it did before the reload
+   land(rec,result);
+   if(openId===rec.id&&rec.url&&rec.epoch===sessionEpoch){ followView(rec.url,!rec.report); pushAddress(rec.url); updateScope(); }   // opened while it loaded
+  }catch(error){ rec.error=error.message; rec.state='error'; settleCard(rec); }
+ })();
+ return rec.done;
 }
 $('mode').addEventListener('change',()=>{rescope();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: Ask the analyst has ${p.name} choose which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted. Ask and the canned questions stay offline.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges. Ask and the canned questions stay offline.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',rescope);$('shift').addEventListener('change',rescope);$('scope').addEventListener('change',rescope);$('period').addEventListener('change',periodChanged);
