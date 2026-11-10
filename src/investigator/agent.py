@@ -894,7 +894,11 @@ class Agent:
             sections.insert(0,'The requested chart was not produced. The evidence below is available; try a specific speed, downtime or waste chart.')
         if 'profit' in asked:
             if status=='complete': status='partial'
-            sections.insert(0,'The requested financial objective is unavailable: these records contain no costs, revenue or measured intervention outcomes. Production evidence alone cannot establish profit or achievable savings.')
+            # The records hold no costs; a dollar below is a tool's quantity priced at an assumed rate (issue #31).
+            priced = any(r['ok'] and isinstance(r.get('data'), dict) and r['data'].get('provenance') for r in evidence)
+            sections.insert(0,'The requested financial objective is unavailable: these records contain no costs, revenue or measured intervention outcomes. '
+                            + ('The dollars below are these records priced at assumed rates, not the plant\'s. ' if priced else '')
+                            + 'Production evidence alone cannot establish profit or achievable savings.')
         narrative=[]
         narrative_status='not_requested'
         withdrawn=None   # paragraphs the ordering check took out (issue #79); counted in usage when a narrative was written

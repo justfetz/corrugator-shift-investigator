@@ -190,7 +190,7 @@ The monthly `Budget` ledger (`artifacts/model-budget.sqlite3`) caps reservations
 
 - **No real plant and no OEM protocol.** The records are our own documented demo schema with borrowed field names; there is no machine connection, no upload endpoint, no importer, and no claim of vendor compatibility.
 - **No causes asserted.** Stop reasons, reject reasons and notes are recorded observations. The tools report them, the prose may say what coincides with what and what warrants a look, and nothing — tool, planner, golden or document — turns a symptom into a diagnosis. Targets are editable simulation settings, not standards.
-- **No money.** There are no costs, prices, revenue or measured intervention outcomes, so no savings or profit claim can be grounded, and the agent says so when asked.
+- **No recorded money.** The records hold no costs, prices, revenue or measured intervention outcomes, so no savings or profit claim can be grounded, and the agent says so when asked. The dollars it shows (issue #31) are the records' quantities priced at assumed rates, named in every answer that carries them, not the plant's figures.
 - **No delivery.** No email, no subscribers, no schedule writes, no equipment actions, no web search.
 - **No calendar beyond the demo.** No holidays, no timezone or daylight-saving handling, weekends are plant-down and emit nothing, and the 4-4-5 anchor is provisional.
 - **No order ledger, no overlap policy.** Requested and remaining sheets are null in the record families; stops never overlap or cross a shift; reject replacement and accepted-shipment accounting are not modelled.

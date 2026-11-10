@@ -233,3 +233,19 @@ def test_openai_planner_request_with_a_priced_waste_result_is_byte_for_byte_main
     planner = OpenAIPlanner('sk-fake-test-key-not-a-real-credential', Budget(tmp_path / 'b.db'), send)
     Agent(store.day_analysis(DAY), planner, store=store, max_seconds=60).ask('Is it bond or warp this month?', Context(DAY, 2, scope='shift'))
     assert offered and not offered[0] & OPENAI_OMITTED_TOOLS and 'get_waste_breakdown' in offered[0]
+
+
+def test_the_profit_disclosure_says_the_dollars_are_priced_at_assumed_rates():
+    """Review of #31a: the 'no costs' preamble sat directly above priced levers. When the answer carries
+    dollars it says they are these records priced at assumed rates, not the plant's; without dollars it
+    is unchanged. The golden 'profit' and 'live-profit' cases match the unchanged first sentence."""
+    app = Workbench()
+    try:
+        first = 'these records contain no costs, revenue or measured intervention outcomes'
+        priced, _ = app.answer_url(f'/corr/1/day/{DAY}/shift/2?measure=money&window=month&want=profit')
+        plain, _ = app.answer_url(f'/corr/1/day/{DAY}/shift/2?measure=fpm&want=profit')
+        line = lambda result: next(s for s in result['sections'] if 'financial objective is unavailable' in s)
+        assert first in line(priced) and "priced at assumed rates, not the plant's" in line(priced)
+        assert first in line(plain) and 'assumed rates' not in line(plain)
+    finally:
+        app.close()
