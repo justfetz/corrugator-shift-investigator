@@ -1038,6 +1038,7 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
    }else{
     const priors=current?conversation:[];
     rec.askUrl=report?reportUrl(address,priors):questionUrl(question,address,priors);
+    saveThread();   // the stored address now carries the real priors, not the ones at submit time
     response=await fetch(rec.askUrl,{headers:{Accept:'application/json'}});
    }
    const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
