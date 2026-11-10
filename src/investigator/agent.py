@@ -224,10 +224,20 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
 
 # "Where is the money", "what's costing us", "opportunities", "contribution", "margin": the money questions
 # (issue #31). Plain "cost" is not one ("which reason cost the most minutes" is the Pareto, "does it cost
-# rejects" speed), nor is "contributed" ("which reasons contributed the most square feet").
+# rejects" speed), nor is what contributed ("which reasons contributed the most square feet", "the biggest
+# contributions to waste"), a trim margin or a margin of error.
 MONEY = re.compile(r"\bmoney\b|\bdollars?\b|\$|\bcosting\b|\bcost us\b|\bwhat (does|did|do) .{1,60}\bcost\b|"
-                   r"\bcontributions?\b|\bmargins?\b|"
+                   r"\bcontributions?\b(?!\s+(to|towards?)\b)|(?<!trim )\bmargins?\b(?!\s+of\s+error\b)|"
                    r"\bopportunities\b|\bwhere (should|do|can) we look\b|\bwhere to look\b")
+# A money question about a loss: what it cost or is costing us, what we lost. A volume word beside one
+# ("what's costing us output", "what did lost output cost") is the thing lost, not a volume ask.
+MONEY_LOSS = r"\b(cost|costs|costing|lost|lose|losing|loss|losses)\b"
+# A rate of a money word ("contribution per MSF", "cost per MSF", "$/MSF"): MSF is its unit, not a volume ask.
+# Any other rate of a volume ("how much did we make per hour in dollars") is still a volume ask.
+MONEY_RATIO = r"\b(contributions?|margins?|costs?|dollars?|usd)\s*(per|/|an?)\s*(msf|thousand)\b|\$\s*(/|per)\s*msf\b"
+# A diagnosis that asks why the result was bad keeps its overview in dollars; the cost of a bare "slow"
+# ("what did slow running cost us") is the money answer, whose speed gap is priced.
+WHY_WORDS = r"\bwhy\b|\b(bad|killed)\b"
 MONEY_ONLY = ("Dollars come with where the money went this shift, the levers in a window ('where is the money this month'), "
               "and the downtime, waste, rejects and speed-opportunity answers. A comparison, trend, speed against normal, "
               "volume, rollstock, grade, over/under-run, stops-per-day, summary, matrix, notes or ranking in dollars is not "
@@ -307,15 +317,18 @@ def parse_period_request(lower, current, shifts):
     baseline = speed and bool(re.search(BASELINE_WORDS, lower))         # "are we running slower than normal" (#76 adds the baseline)
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
     money = bool(MONEY.search(lower)) and not speed_opp
-    # A volume ask ("how much did we make in dollars", "throughput in dollars") is volume by grade, which
-    # has no dollars. A ratio ("contribution per MSF") or a loss beside the volume word ("what does trim
-    # cost per MSF") is a question about what a loss costs, with MSF as its unit: it stays a money question.
-    volume_ask = volume and not re.search(r"\bper\b|/", lower) and not re.search(LOSS_WORDS, lower)
-    if money and (trend or baseline or rollstock or overrun or grade or profile or this_shift or volume_ask or len(set(months)) >= 2
-                  or re.search(r"\b(compare|comparison|versus|vs)\b", lower)):
+    # A volume ask ("how much did we make in dollars", "throughput in dollars", "output per hour in dollars") is
+    # volume by grade, which has no dollars. A rate of a money word ("contribution per MSF") or a loss beside
+    # the volume word ("what's costing us output", "what does trim cost per MSF") stays a money question.
+    volume_ask = volume and not (re.search(MONEY_RATIO, lower) or re.search(LOSS_WORDS, lower) or re.search(MONEY_LOSS, lower))
+    why = diagnose and bool(re.search(WHY_WORDS, lower))   # "why was this week so bad", not "what did slow running cost"
+    if money and (trend or baseline or rollstock or overrun or (grade and not why) or profile or this_shift or volume_ask
+                  or len(set(months)) >= 2 or re.search(r"\b(compare|comparison|versus|vs)\b", lower)):
         raise ValueError(MONEY_ONLY)   # never answer a different question: the comparison, trend or volume would be dropped
-    if money and (pareto or waste or diagnose):
-        money = False   # the Pareto, the waste breakdown and the overview of a diagnosis carry their dollars on every row
+    if money and (pareto or waste or why):
+        # The Pareto and the waste breakdown carry their dollars on every row; the overview of a diagnosis
+        # carries them on its Pareto and waste rows (its KPI tiles have none).
+        money = False
     ranged = getattr(current, 'period', 'day') != 'day'
     if money and not (period or ranged):
         return None   # a money question about the day: get_shift_dollars, routed by the day router
@@ -468,6 +481,8 @@ def _parse_request(text, current):
             raise ValueError(MONEY_ONLY)
         if intent in (None, 'speed', 'volume'):
             intent = 'dollars'
+        if intent == 'overview' and not re.search(WHY_WORDS, lower):
+            intent = 'dollars'   # "what does a slow shift cost us": the speed gap is a get_shift_dollars row (as on a window)
         if (intent == 'quality' and period_window(current) is None and re.search(r'\bwaste\b', lower)
                 and not re.search(MONEY_REJECT_WORDS, lower)):
             # "What did waste cost": on the day grain the waste is side trim, shear and dry-end together,

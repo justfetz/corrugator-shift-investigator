@@ -172,9 +172,19 @@ field and the narrative validator substitutes every dollar from the tool result.
 
 A money word beside another question never replaces it. Downtime, rejects, waste, the Pareto, the
 overview and the comparison carry their dollars on the rows, so "which reason is costing us the most
-minutes" is the Pareto, priced. A comparison, trend, speed against normal, volume ("how much did we
-make in dollars"), rollstock, grade, over/under-run, stops-per-day, summary, matrix, notes or ranking
-asked "in dollars" is refused with what to ask instead, not answered as the levers alone.
+minutes" is the Pareto, priced, and "why was this week so bad in dollars" is the overview (a why, bad or
+killed question; the cost of a bare "slow", "what did slow running cost us", is the money answer, whose
+speed gap is priced). On the day grain "what did waste cost" is `get_shift_dollars` (side trim, shear and
+dry-end together); a named reject keeps the reject breakdown. A comparison, trend, speed against normal,
+volume ("how much did we make in dollars", "output per hour in dollars"; a loss of output, "what's costing
+us output", and a rate of a money word, "contribution per MSF", are money questions), rollstock, grade,
+over/under-run, stops-per-day, summary, matrix, notes or ranking asked "in dollars" is refused with what
+to ask instead, not answered as the levers alone.
+
+Known gap: with Week, Month or 4-4-5 selected and no window named in the question, a money question is
+answered by the levers (`get_opportunities`) whatever else it names, so "summarize this shift in dollars"
+or "what did waste cost" under the Week control gives the levers, while the same question naming its
+window ("what did waste cost this week") gives the priced waste breakdown.
 
 The live paths: the narrative may cite `usd`, `usd_per_year`, `paper_usd`, `machine_time_usd` and
 `contribution_usd` (the formula text and intermediate quantities stay off the packet). No live planner
