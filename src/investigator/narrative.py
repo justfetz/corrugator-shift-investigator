@@ -334,7 +334,13 @@ def _denotes(mention, group, facts):
 
 
 def _negated(text, start, s0):
-    return bool(_NEGATION.search(text[max(s0, start - 30):start]))
+    """A negation in the 30 characters before the word, within its own clause: "did not meet target
+    but ran fastest" keeps "fastest" checked, because the "not" belongs to the clause before "but"."""
+    window = text[max(s0, start - 30):start]
+    cut = 0
+    for m in _CLAUSE_BREAK.finditer(window):
+        cut = m.end()
+    return bool(_NEGATION.search(window[cut:]))
 
 
 def _clause(text, start, end, s0, s1):
@@ -456,7 +462,7 @@ def _comparison_contradicted(text, m, s0, s1, facts, groups, here, mentions):
     else:
         up = word in _UP or word.startswith('exceed')
     va, vb = facts[a]['number'], facts[b]['number']
-    return va < vb if up else va > vb
+    return va <= vb if up else va >= vb      # strict words: equal values contradict "more than" and "below" alike
 
 
 def _placed_pair(text, m, facts, groups, here, mentions, fitting):
@@ -523,7 +529,7 @@ def _direction_contradicted(text, m, s0, rise, facts, unique, here):
         return False
     field = fact['field']
     if field == 'delta' or field.startswith('delta_') or field.endswith('_delta'):
-        return fact['number'] < 0 if rise else fact['number'] > 0
+        return fact['number'] <= 0 if rise else fact['number'] >= 0      # a zero delta neither rose nor fell
     if m.group(0).lower() in ('up', 'down') and text[m.end():].lstrip().startswith('{{'):
         return False        # "up {{x}}" is a change only when x is a delta; "was down {{x}} minutes" is stopped time
     partner = next((j for j in unique if facts[j]['row'] == fact['row'] and facts[j]['field'] == _partner(field)
@@ -532,7 +538,7 @@ def _direction_contradicted(text, m, s0, rise, facts, unique, here):
         return False
     previous = field == 'previous' or field.startswith('previous_')
     current, earlier = (facts[partner], fact) if previous else (fact, facts[partner])
-    return current['number'] < earlier['number'] if rise else current['number'] > earlier['number']
+    return current['number'] <= earlier['number'] if rise else current['number'] >= earlier['number']
 
 
 # ---------------------------------------------------------------- streamed narrative (issue #23)

@@ -219,6 +219,39 @@ def test_directions_against_the_previous_window_and_deltas(line, ok):
     assert kept(PERIOD, line) is ok
 
 
+TIES = [
+    {'result_id': 'p1', 'tool': 'get_downtime_pareto', 'shift': None, 'coverage': 'complete', 'total_rows': 2, 'preview_rows': 2,
+     'rows': [{'category': 'Missed splice', 'stops': 40, 'minutes': 60.0, 'previous_stops': 40, 'previous_minutes': 60.0},
+              {'category': 'Stacker', 'stops': 40, 'minutes': 60.0, 'previous_stops': 52, 'previous_minutes': 75.0}]},
+    {'result_id': 'p2', 'tool': 'get_period_kpis', 'shift': None, 'coverage': 'complete', 'total_rows': 1, 'preview_rows': 1,
+     'rows': [{'metric': 'stops', 'label': 'Stops', 'unit': 'stops', 'current': 300, 'previous': 300, 'delta': 0, 'better': 'lower', 'change': 'same'}]},
+]
+
+
+@pytest.mark.parametrize('line', [
+    'finding: Missed splice at {{r1.0.minutes}} minutes ran above {{r1.1.minutes}} for Stacker.',          # equal: not above
+    'finding: Missed splice logged {{r1.0.minutes}} minutes, more than {{r1.1.minutes}} for Stacker.',
+    'finding: Missed splice minutes rose to {{r1.0.minutes}} from {{r1.0.previous_minutes}}.',             # equal: neither rose
+    'finding: Missed splice minutes fell to {{r1.0.minutes}} from {{r1.0.previous_minutes}}.',             # nor fell
+    'finding: Stops increased to {{r2.0.current}} from {{r2.0.previous}}.',
+    'finding: Stops rose by {{r2.0.delta}}.',                                                              # a zero delta
+    'finding: Stops fell by {{r2.0.delta}}.',
+])
+def test_strict_words_over_equal_values_are_withdrawn(line):
+    assert not kept(TIES, line)
+
+
+def test_a_negation_in_the_clause_before_does_not_excuse_the_ordering(packet):
+    # "not" belongs to "did not meet target"; "fastest" after "but" is still checked (Shift 2 is the slowest)
+    assert not kept(packet, f'finding: Shift 2 did not meet target but ran fastest at {FPM % 2} ft/min, against {FPM % 1} on Shift 1.')
+    assert kept(packet, f'finding: Shift 2 did not run fastest at {FPM % 2} ft/min, against {FPM % 1} on Shift 1.')
+
+
+def test_equal_values_without_an_ordering_word_are_kept():
+    assert kept(TIES, 'finding: Missed splice logged {{r1.0.minutes}} minutes, the same as {{r1.1.minutes}} for Stacker.')
+    assert kept(TIES, 'finding: Stops held at {{r2.0.current}} against {{r2.0.previous}} in the previous window.')
+
+
 def test_the_structured_writer_is_checked_the_same_way(packet):
     value = {'paragraphs': [
         {'kind': 'finding', 'text': 'Shift 2 ran fastest at {{0}} ft/min, against {{1}} on Shift 1.',
