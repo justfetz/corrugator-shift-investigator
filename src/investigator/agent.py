@@ -230,6 +230,8 @@ MONEY_ONLY = ("Dollars come with where the money went this shift, the levers in 
               "and the downtime, waste, rejects and speed-opportunity answers. A comparison, trend, speed against normal, "
               "volume, rollstock, grade, over/under-run, stops-per-day, summary, matrix, notes or ranking in dollars is not "
               "available yet: ask for it without dollars, or ask where the money is.")
+# Words that keep a money question about waste on the dry-end reject breakdown (the rejects, priced).
+MONEY_REJECT_WORDS = r"\b(rejects?|warp|bond|misalignment|moisture|quality)\b|\bdry[- ]end\b"
 
 
 # Measure words decide the intent; grouping words (by grade, by width, by crew) only choose the breakdown.
@@ -463,6 +465,12 @@ def _parse_request(text, current):
         if intent in ('summary', 'orders', 'ranking', 'matrix', 'notes'):
             raise ValueError(MONEY_ONLY)
         if intent in (None, 'speed', 'volume'):
+            intent = 'dollars'
+        if (intent == 'quality' and period_window(current) is None and re.search(r'\bwaste\b', lower)
+                and not re.search(MONEY_REJECT_WORDS, lower)):
+            # "What did waste cost": on the day grain the waste is side trim, shear and dry-end together,
+            # which the shift's dollars price; the reject breakdown prices dry-end alone. A named reject
+            # ("what did warp cost", "dry-end waste") stays the rejects, priced (issue #31 review).
             intent = 'dollars'
     if intent is None and re.search(r'slow|bad|killed|shift|loss', lower):
         intent = 'overview'
