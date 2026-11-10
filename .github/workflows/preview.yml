@@ -174,7 +174,7 @@ jobs:
               # Every run sweeps every orphan, so another run may have deleted it first: gone (NOT_FOUND) is the goal.
               # Anything else, a describe that failed for another reason included, is reported and the next run retries.
               if ! gcloud run revisions describe "$NAME" --project "$PROJECT_ID" --region "$REGION" > /dev/null 2> /tmp/revision.err \
-                 && grep -qiE 'NOT_FOUND|could not be found|not found' /tmp/revision.err; then
+                 && grep -qiE 'NOT_FOUND|could not be found|not found|Cannot find revision' /tmp/revision.err; then
                 echo "$NAME is already gone; another run deleted it first"
               else
                 cat /tmp/revision.err; echo "::warning::could not delete $NAME; the next run retries"
@@ -247,7 +247,7 @@ jobs:
               # Another run's sweep may have deleted it first: gone (NOT_FOUND) is the goal. Anything else, a describe
               # that failed for another reason included, fails the job as a failed delete always has.
               if ! gcloud run revisions describe "$NAME" --project "$PROJECT_ID" --region "$REGION" > /dev/null 2> /tmp/revision.err \
-                 && grep -qiE 'NOT_FOUND|could not be found|not found' /tmp/revision.err; then
+                 && grep -qiE 'NOT_FOUND|could not be found|not found|Cannot find revision' /tmp/revision.err; then
                 echo "$NAME is already gone; another run deleted it first"
               else
                 cat /tmp/revision.err; echo "::error::could not delete $NAME"; exit 1

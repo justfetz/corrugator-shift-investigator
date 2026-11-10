@@ -298,7 +298,7 @@ def test_every_write_to_the_service_goes_through_the_retry_helper(workflow, writ
     if workflow is WORKFLOW:
         assert text.count('is already gone; another run deleted it first') == 2, 'both sweeps'
         assert text.count('if ! gcloud run revisions describe "$NAME"') == 2
-        assert text.count("&& grep -qiE 'NOT_FOUND|could not be found|not found' /tmp/revision.err") == 2, 'gone means NOT_FOUND, not any failed describe'
+        assert text.count("&& grep -qiE 'NOT_FOUND|could not be found|not found|Cannot find revision' /tmp/revision.err") == 2, 'gone means NOT_FOUND, not any failed describe'
         assert 'cancel-in-progress: false' not in text and text.count('group:') == 1, 'no repository-wide group: GitHub keeps one pending run per group'
 
 
@@ -307,3 +307,22 @@ def test_workflow_yaml_parses_when_pyyaml_is_available():
     wf = yaml.safe_load(WORKFLOW.read_text())
     assert set(wf['jobs']) == {'deploy', 'cleanup'}
     assert yaml.safe_load((ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml').read_text())['jobs']['deploy']
+
+
+def test_the_already_gone_pattern_matches_what_gcloud_actually_prints():
+    """A revision another run's sweep deleted first is 'gone', not a failure. gcloud 570 prints
+    'Cannot find revision [NAME]' from `revisions describe` on a 404 (surface/run/revisions/describe.py),
+    and 'Revision [NAME] could not be found.' from `revisions delete`; the pattern must match both and
+    nothing that is a real failure. Run with grep, the same way the workflow does."""
+    import re
+    text = WORKFLOW.read_text()
+    patterns = set(re.findall(r"grep -qiE '([^']+)' /tmp/revision\.err", text))
+    assert len(patterns) == 1, patterns
+    pattern = patterns.pop()
+    def matches(line):
+        return subprocess.run(['grep', '-qiE', pattern], input=line, text=True).returncode == 0
+    assert matches('ERROR: (gcloud.run.revisions.describe) Cannot find revision [corrugator-shift-investigator-pr-47-abc1234-3].')
+    assert matches('ERROR: (gcloud.run.revisions.delete) Revision [corrugator-shift-investigator-pr-47-abc1234-3] could not be found.')
+    assert matches('ERROR: (gcloud.run.revisions.describe) NOT_FOUND: Resource not found')
+    assert not matches('ERROR: (gcloud.run.revisions.describe) PERMISSION_DENIED: The caller does not have permission')
+    assert not matches('ERROR: (gcloud.run.revisions.delete) ABORTED: Conflict for resource')

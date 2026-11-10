@@ -161,8 +161,12 @@ jobs:
           if [ "$MERGED" != "$(python3 -c 'import sys; print(",".join(sorted(set(sys.argv[1].split(",")))))' "$ORIGINS")" ]; then
             echo "new URL after deploy; allow-listing ${MERGED}"
             # This makes one more revision; it is named too, and it is the one the traffic step routes to.
+            # The update builds from the service's CURRENT template; a preview deploy landing in between would put
+            # the PR's image there. Pin the image to the revision this run just deployed, so by-name routing below
+            # can only ever route production to main's own build.
             bash .github/scripts/cloud_run_update.sh gcloud run services update "$SERVICE" --project "$PROJECT_ID" --region "$REGION" \
-              --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${MERGED}" --revision-suffix "${SUFFIX}-urls" --quiet
+              --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${MERGED}" --revision-suffix "${SUFFIX}-urls" \
+              --image "$(gcloud run revisions describe "${SERVICE}-${SUFFIX}" --project "$PROJECT_ID" --region "$REGION" --format='value(spec.containers[0].image)')" --quiet
             echo "REVISION=${SERVICE}-${SUFFIX}-urls" >> "$GITHUB_ENV"
           fi
           echo "ORIGINS=${MERGED}" >> "$GITHUB_ENV"
