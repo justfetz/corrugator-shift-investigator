@@ -177,10 +177,13 @@ make in dollars"), rollstock, grade, over/under-run, stops-per-day, summary, mat
 asked "in dollars" is refused with what to ask instead, not answered as the levers alone.
 
 The live paths: the narrative may cite `usd`, `usd_per_year`, `paper_usd`, `machine_time_usd` and
-`contribution_usd` (the formula text and intermediate quantities stay off the packet). The OpenAI
-planner loop is not offered the two money tools and sees no dollar fields: its request after one
-waste breakdown was already within a few hundred bytes of its 24,000-byte cap, so its requests stay
-byte for byte what they were. Money questions are answered offline or by the Anthropic analyst.
+`contribution_usd` (the formula text and intermediate quantities stay off the packet). No live planner
+is offered the two money tools yet. The OpenAI planner loop also sees no dollar fields, so its requests
+stay byte for byte main's (its 24,000-byte cap is tight: since #74 main's own request after one waste
+breakdown is 24,040 bytes). The Anthropic tool loop and the analyst's plan catalog leave the two tools
+out because their prompts still say costs are unavailable; the analyst still sees the dollars on the
+priced rows of the tools it plans. #23 / #31b retune the prompts and offer them. Money questions are
+answered offline: every one goes to the offline planner first.
 
 Not yet on the card: the dollar line, dollars on tiles and bars, the units toggle and the editable rates
 panel are #31b (`web/`). The tools here give that card the same numbers the goldens check.
