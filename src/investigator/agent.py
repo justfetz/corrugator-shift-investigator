@@ -310,8 +310,8 @@ def parse_period_request(lower, current, shifts):
     if money and (trend or baseline or rollstock or overrun or grade or profile or this_shift or volume_ask or len(set(months)) >= 2
                   or re.search(r"\b(compare|comparison|versus|vs)\b", lower)):
         raise ValueError(MONEY_ONLY)   # never answer a different question: the comparison, trend or volume would be dropped
-    if money and (pareto or waste):
-        money = False   # the Pareto and the waste breakdown carry their dollars on every row
+    if money and (pareto or waste or diagnose):
+        money = False   # the Pareto, the waste breakdown and the overview of a diagnosis carry their dollars on every row
     ranged = getattr(current, 'period', 'day') != 'day'
     if money and not (period or ranged):
         return None   # a money question about the day: get_shift_dollars, routed by the day router
