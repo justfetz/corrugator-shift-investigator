@@ -288,7 +288,7 @@ code{font-family:var(--mono)}
  .query[open]>pre.sql,.query[open]>.muted,.query[open]>.warning-note{position:absolute;left:48%;right:12px;top:8px;bottom:46px;margin:0;max-height:none;overflow:auto}
  .query[open]>.query-foot{position:absolute;right:12px;bottom:8px;margin:0;flex-wrap:nowrap}
  .queries-foot{flex-wrap:nowrap;white-space:nowrap;overflow:hidden;padding-right:250px;min-height:26px}
- .queries-foot .fixed-note{overflow:hidden;text-overflow:ellipsis}
+ .queries-foot .fixed-note{white-space:normal;min-width:0;line-height:1.3}   /* wraps to a second line rather than losing its end under the open step's buttons */
 }
 .query-link{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 .chart .query-link{color:var(--ink-2)}   /* 4.5:1 on the chart panel, like the captions (#36) */

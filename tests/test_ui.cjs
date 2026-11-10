@@ -248,6 +248,8 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  document.getElementById=byId;
  context.matchMedia=()=>({matches:true});vm.runInContext('showResult(result)',context);   // a phone: every box is one line
  assert.deepEqual(elements.queries.children.filter(e=>/^query\b/.test(e.className)).map(b=>b.open),[false,false,false]);
+ assert.deepEqual(elements.queries.children.filter(e=>/^query\b/.test(e.className)).map(b=>!!b.hidden),[false,true,true]);   // the mockup's phone shows one query line; the rest fold behind "2 more queries" (#63)
+ assert.ok(walk(elements.queries).some(e=>e.textContent==='2 more queries'));
  delete context.matchMedia;
  const phoneCss=fs.readFileSync('src/investigator/web/style.css','utf8');const phoneBlock=phoneCss.slice(phoneCss.indexOf('@media(max-width:850px)'));
  assert.ok(phoneBlock.includes('.query>summary .args{display:none}')&&phoneBlock.includes('.query>summary{flex-wrap:nowrap;overflow:hidden}'),'at 390 px each step is tool · rows · ms on one line; the SQL is on tap');
@@ -382,6 +384,7 @@ issue17.then(async()=>{
  wall=1093;gates[0].ok();await tick();
  assert.equal(card.className,'card answer');assert.equal(card['aria-busy'],'false');
  assert.equal(elements['card-meta'].textContent,'Shift 2 · Mon 14 Sep 2026 · offline · 2 queries · 93 ms');   // the measured wall time, submit to rendered
+ assert.equal(elements['card-meta'].title,'93 ms from submit to the rendered card in this browser; 5 ms of it in the queries on the server. Planner: offline rule-based planner; no language model.');   // the server's own time is on the tooltip
  assert.equal(elements.queries.children.filter(e=>/^query\b/.test(e.className)).length,2);
  assert.ok(walk(elements.messages).some(e=>e.textContent==='Shift 2 answer 1.'));
  assert.equal(elements.charts.children.length,2);assert.equal(elements.metrics.children.length,7);assert.equal(elements['card-foot'].hidden,false);assert.equal(elements.pdf.hidden,false);
@@ -434,8 +437,23 @@ issue17.then(async()=>{
  vm.runInContext("config.live_modes=['anthropic'];updateScope()",context);assert.equal(elements.analyst.hidden,false);
  elements.question.value='Why slow?';elements.analyst.events.click();
  assert.match(elements['card-meta'].textContent,/ · anthropic · asking…$/);await tick();assert.equal(bodies[5].mode,'anthropic');
+ elements.analyst.events.click();await tick();assert.equal(bodies.length,6);   // a double click on the analyst is the card already waiting, not a second paid round
+ assert.equal(earlier.children.filter(l=>l.children[0].children[0].textContent==='Why slow?').length,0);
  elements.ask.events.submit({preventDefault(){}});await tick();assert.equal(bodies.length,6);
  gates[5].ok();await tick();assert.equal(bodies[6].mode,'offline');gates[6].ok();await tick();
+ // a provider picked under "Agent and advanced" does not turn Ask into a model call; the key stays for the analyst
+ elements.mode.value='anthropic';elements['api-key'].value='sk-visitor';elements.question.value='Why slow again?';elements.ask.events.submit({preventDefault(){}});await tick();
+ assert.equal(bodies[7].mode,'offline');assert.match(elements['card-meta'].textContent,/ · offline · asking…$/);assert.equal(elements['api-key'].value,'sk-visitor');
+ gates[7].ok();await tick();elements.mode.value='offline';elements['api-key'].value='';
+ vm.runInContext("config.live_modes=[];updateScope()",context);assert.equal(elements.analyst.hidden,true);elements.mode.value='openai';vm.runInContext('updateScope()',context);assert.equal(elements.analyst.hidden,false);elements.mode.value='offline';vm.runInContext('updateScope()',context);   // locally, a provider chosen with your key is what offers the analyst
+ // a question that names its own window: the title line says what the query ran over, in the tool's own words
+ const september={period:'month',anchor:'2026-09-01',start:'2026-09-01',end:'2026-09-30',label:'September 2026 (2026-09-01 to 2026-09-30)',coverage:'complete'};
+ const windowed=w=>({mode:'offline',trace:[{result_id:'w:1',tool:'get_downtime_pareto',ok:true,elapsed_ms:2,data:{window:w,shift:w===september?null:1,coverage:'complete',rows:[]}}]});
+ const s1={day:'2026-09-14',period:'day',shift:1,scope:'shift'};
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s1)},answered:answeredScope(${JSON.stringify(s1)},${JSON.stringify(windowed(september))})})`,context),'All shifts · September 2026 (2026-09-01 to 2026-09-30)');   // the rail says shift 1, 14 Sep; the query ran all shifts over the month
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s1)},answered:answeredScope(${JSON.stringify(s1)},${JSON.stringify(windowed({period:'day',anchor:'2026-09-14',start:'2026-09-14',end:'2026-09-14',label:'2026-09-14 (Mon)'}))})})`,context),'Shift 1 · Mon 14 Sep 2026');   // the rail's own window keeps the rail's wording
+ const sm={...s1,period:'month'};
+ assert.equal(vm.runInContext(`answeredScope(${JSON.stringify(sm)},${JSON.stringify(windowed(september))}).window`,context),null);   // a month on the rail is the same month the tool ran
 
  // 6. "Clear the thread" empties it.
  elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);

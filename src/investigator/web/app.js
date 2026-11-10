@@ -126,7 +126,7 @@ function updateScope(){
  else $('mode-help').textContent=live?liveHelp():'Ask about performance, setups, rankings or notes within the selected scope. No model calls or API charges.';
  $('question').placeholder=ranged?`Ask about this ${noun}: KPIs, downtime, waste, stops per day, trends, grades`:'Ask about this shift: speed, downtime, waste, setups, orders, notes';
  $('submit').textContent='Ask'; $('report').hidden=!ranged;
- $('analyst').hidden=!liveModes().length;   // Ask the analyst is the live mode, offered only when the server has a key for one
+ $('analyst').hidden=!analystMode();   // Ask the analyst is the only live path: the agent chosen under "Agent and advanced", or else the one the server's own key enables
  for(const b of chipButtons)b.hidden=ranged&&b.dataset.period==='day';   // the per-shift matrices have no period form
 }
 
@@ -487,17 +487,17 @@ function queryBox(entry,i){
  d.append(foot);
  return d;
 }
-const QUERY_LINES=4;   // steps shown before "N more queries"; with the SQL pane beside them the box stays about 150 px tall
+const QUERY_LINES=4;   // steps shown before "N more queries"; with the SQL pane beside them the box stays about 150 px tall. A phone shows one, as the mockup does
 function renderQueries(result){
  const box=$('queries'); box.replaceChildren(); stepIndex=new Map();
  const steps=result.trace||[]; if(!steps.length)return;
  steps.forEach((e,i)=>{if(e.result_id)stepIndex.set(e.result_id,i);});
  const total=steps.reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
  // Step 1 open (all closed on a phone); one open at a time, so at desktop width its SQL sits in the pane beside the list.
- const phone=phoneWidth(), boxes=steps.map((entry,i)=>{const d=queryBox(entry,i);d.open=!phone&&i===0;if(i>=QUERY_LINES)d.hidden=true;d.addEventListener('toggle',()=>{if(d.open)for(const other of boxes)if(other!==d)other.open=false;});box.append(d);return d;});
+ const phone=phoneWidth(), lines=phone?1:QUERY_LINES, boxes=steps.map((entry,i)=>{const d=queryBox(entry,i);d.open=!phone&&i===0;if(i>=lines)d.hidden=true;d.addEventListener('toggle',()=>{if(d.open)for(const other of boxes)if(other!==d)other.open=false;});box.append(d);return d;});
  const foot=node('div',undefined,'queries-foot');
- if(steps.length>QUERY_LINES){const n=steps.length-QUERY_LINES, more=node('button',`${n} more ${n===1?'query':'queries'}`,'secondary');more.type='button';more.setAttribute('aria-expanded','false');
-  more.addEventListener('click',()=>{const show=boxes.slice(QUERY_LINES).some(b=>b.hidden);for(const b of boxes.slice(QUERY_LINES))b.hidden=!show;more.textContent=show?'Show fewer':`${n} more ${n===1?'query':'queries'}`;more.setAttribute('aria-expanded',String(show));});foot.append(more);}
+ if(steps.length>lines){const n=steps.length-lines, more=node('button',`${n} more ${n===1?'query':'queries'}`,'secondary');more.type='button';more.setAttribute('aria-expanded','false');
+  more.addEventListener('click',()=>{const show=boxes.slice(lines).some(b=>b.hidden);for(const b of boxes.slice(lines))b.hidden=!show;more.textContent=show?'Show fewer':`${n} more ${n===1?'query':'queries'}`;more.setAttribute('aria-expanded',String(show));});foot.append(more);}
  const sqls=steps.map((e,i)=>[e,i,sqlText(e)]).filter(x=>x[2]);
  if(sqls.length){const copy=node('button','Copy all SQL','secondary');copy.type='button';const text=sqls.map(([e,i,sql])=>`-- query ${i+1}: ${e.tool}(${argText(e.arguments)})\n${sql}`).join('\n\n');copy.dataset.copy=text;copy.addEventListener('click',()=>copyText(text,copy));foot.append(copy);}
  foot.append(node('span',`${steps.length} ${steps.length===1?'query':'queries'} · ${total.toFixed(0)} ms in the tools`,'mono'),node('span','Fixed, parameterized queries. Visitors cannot edit them.','fixed-note'));
@@ -554,15 +554,36 @@ const clock=()=>typeof performance!=='undefined'&&performance.now?performance.no
 const msText=ms=>ms>=10000?`${(ms/1000).toFixed(1)} s`:`${Math.max(1,Math.round(ms))} ms`;
 const IDLE_TEXT='Pick a question on the left or type one above. The answer lands here as one card: the queries that ran, the summary, the charts and the KPI tiles.';
 function scopeWho(s){ return s.scope==='day'?'All shifts':`Shift ${s.shift}`; }
-function scopeLabel(s){   // "Shift 2 · Mon 14 Sep 2026"
- const who=scopeWho(s), d=utc(s.day); if(Number.isNaN(d.getTime()))return who;
- if(s.period==='day')return `${who} · ${dayText(d)}`;
- if(s.period==='week'){const [a,b]=weekOf(d);return `${who} · week of ${spanText(a,b)}`;}
- if(s.period==='month')return `${who} · ${MONTHS_LONG[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
- return `${who} · 4-4-5 period of ${dayText(d)}`;
+function windowText(s){   // "Mon 14 Sep 2026"
+ const d=utc(s.day); if(Number.isNaN(d.getTime()))return String(s.day);
+ if(s.period==='day')return dayText(d);
+ if(s.period==='week'){const [a,b]=weekOf(d);return `week of ${spanText(a,b)}`;}
+ if(s.period==='month')return `${MONTHS_LONG[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+ return `4-4-5 period of ${dayText(d)}`;
 }
+function scopeLabel(s){ return `${scopeWho(s)} · ${windowText(s)}`; }   // "Shift 2 · Mon 14 Sep 2026"
+// A question can name its own window or shift ("How did September go versus August?" with the rail on a day):
+// the card then says what the first windowed query actually ran over, in the tool's own words. The date on the
+// card is a number, so it comes from a tool result, not from the rail.
+function railRange(s){
+ const d=utc(s.day); if(Number.isNaN(d.getTime()))return null;
+ if(s.period==='day')return [s.day,s.day];
+ if(s.period==='week'){const [a,b]=weekOf(d);return [iso(a),iso(b)];}
+ if(s.period==='month')return [iso(new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),1))),iso(new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)))];
+ return null;
+}
+function answeredScope(s,result){
+ const step=(result.trace||[]).find(e=>e.ok&&e.data&&e.data.window&&e.data.window.label), out={who:null,window:null}; if(!step)return out;
+ const w=step.data.window, period=w.period==='fiscal'?'accounting':w.period, range=railRange(s);
+ if(period!==s.period||(range?(w.start!==range[0]||w.end!==range[1]):w.anchor!==s.day))out.window=w.label;
+ const who=step.data.shift===null?'All shifts':typeof step.data.shift==='number'?`Shift ${step.data.shift}`:null;
+ if(who&&who!==scopeWho(s))out.who=who;
+ return out;
+}
+function entryWho(rec){ return (rec.answered&&rec.answered.who)||scopeWho(rec.scope); }
+function entryLabel(rec){ return `${entryWho(rec)} · ${(rec.answered&&rec.answered.window)||windowText(rec.scope)}`; }
 function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 93 ms
- const parts=[rec.where,rec.mode];
+ const parts=[entryLabel(rec),rec.mode];
  if(rec.state==='pending')parts.push('asking…');
  else if(rec.state==='error')parts.push('failed');
  else{const n=(rec.result.trace||[]).length;parts.push(`${n} ${n===1?'query':'queries'}`);}
@@ -579,18 +600,26 @@ function renderEarlier(){
  const box=$('earlier'); box.replaceChildren();
  for(const rec of thread.filter(r=>r.id!==openId).sort((a,b)=>b.id-a.id)){
   const line=node('article',undefined,'card earlier'+(rec.state==='error'?' failed':''));line.setAttribute('aria-label',`Earlier answer: ${rec.title}`);
-  const text=node('div',undefined,'earlier-text');text.append(node('strong',rec.title),node('span',`${rec.who} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':msText(rec.ms)}`));
+  const text=node('div',undefined,'earlier-text');text.append(node('strong',rec.title),node('span',`${entryWho(rec)} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':msText(rec.ms)}`));
   const open=node('button','Open','secondary');open.type='button';open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);open.addEventListener('click',()=>{openId=rec.id;renderCard();focusCard();});
   line.append(text,open);box.append(line);
  }
+}
+// The ms on the title line is the wall time in this browser from submit to the rendered card; the tooltip splits
+// out the server's own time in the queries.
+function paintMeta(rec){
+ const meta=$('card-meta'); meta.textContent=rec?cardMeta(rec):'';
+ if(!rec||rec.state!=='done'||rec.ms===null){meta.title='';return;}
+ const r=rec.result, server=typeof r.elapsed_ms==='number'?r.elapsed_ms:(r.trace||[]).reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
+ meta.title=`${Math.round(rec.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${r.mode}.`;
 }
 function syncPdf(){ if(latest)$('pdf').hidden=latestRun.get(latest.session_id)!==latest.run_id; }   // the server prints a session's latest run only; re-checked when another answer lands
 function focusCard(){ try{$('card-title').focus?.();}catch(e){} }   // keyboard focus follows the card when the control that had it goes away
 function renderCard(){
  const rec=thread.find(r=>r.id===openId)||null, card=$('card');
  clearCard();
- if(!rec){card.className='card answer idle';card.setAttribute('aria-label','Answer');card.setAttribute('aria-busy','false');$('card-title').textContent='Ask about a shift';$('card-meta').textContent='';$('messages').append(node('p',IDLE_TEXT,'empty'));$('card-foot').hidden=true;latest=null;renderEarlier();return;}
- $('card-title').textContent=rec.title;$('card-title').title=rec.question;$('card-meta').textContent=cardMeta(rec);
+ if(!rec){card.className='card answer idle';card.setAttribute('aria-label','Answer');card.setAttribute('aria-busy','false');$('card-title').textContent='Ask about a shift';paintMeta(null);$('messages').append(node('p',IDLE_TEXT,'empty'));$('card-foot').hidden=true;latest=null;renderEarlier();return;}
+ $('card-title').textContent=rec.title;$('card-title').title=rec.question;paintMeta(rec);
  card.setAttribute('aria-label',`Answer: ${rec.title}`);card.setAttribute('aria-busy',String(rec.state==='pending'));
  if(rec.state==='pending'){card.className='card answer skeleton';skeleton();$('card-foot').hidden=true;latest=null;}
  else if(rec.state==='error'){card.className='card answer failed';message('Could not complete',[rec.error],'error');$('card-foot').hidden=true;latest=null;}
@@ -602,40 +631,49 @@ function renderCard(){
  }
  renderEarlier();
 }
-async function ask(question,{report=false,mode,title}={}) {
+// Ask is the deterministic path: the offline planner, whatever agent is chosen under "Agent and advanced". "Ask the
+// analyst" is the only live path; it passes the agent as `mode`. A report is always offline.
+async function ask(question,{report=false,mode='offline',title}={}) {
  if(typeof question!=='string'||!question.trim())throw new Error('Enter a question');
  if(!config)throw new Error('The workbench is still loading');
- const scope=currentScope(), epoch=sessionEpoch;
- const rec={id:++seq,question,title:title||question.trim(),where:scopeLabel(scope),who:scopeWho(scope),mode:report?'offline':(mode||$('mode').value),state:'pending',t0:clock(),ms:null,result:null,error:null,note:null};
+ const scope=currentScope(), epoch=sessionEpoch, corrupt=$('corrupt').checked, recMode=report?'offline':mode;
+ // The same question, still out, asked again (a double click): it is the card already waiting, not a second
+ // request. Nothing is disabled to prevent it, so this is what keeps a second paid round from going out.
+ const twin=thread.find(r=>r.state==='pending'&&r.epoch===epoch&&r.question===question&&r.mode===recMode&&r.report===report&&r.corrupt===corrupt&&['day','period','shift','scope'].every(k=>r.scope[k]===scope[k]));
+ if(twin){ if(openId!==twin.id){openId=twin.id;renderCard();} return twin.done; }
+ const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null};
  thread.push(rec);openId=rec.id;renderCard();   // the skeleton card is in the DOM before this task yields: within one frame of the submit
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
- const settle=()=>{ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)$('card-meta').textContent=cardMeta(rec); else{renderEarlier();syncPdf();} };   // the ms is submit to rendered
+ const settle=()=>{ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} };   // the ms is submit to rendered
  // What the visitor chose is read now; the request itself waits its turn. Two questions out at once would both carry
  // the session as it was before either was answered (or none, and open two), and the follow-up context would lose one.
- const headers={}, p=PROVIDERS[rec.mode]||null, corrupt=$('corrupt').checked, turn=queue; let release; queue=new Promise(resolve=>{release=resolve;});
+ const headers={}, p=PROVIDERS[rec.mode]||null, turn=queue; let release; queue=new Promise(resolve=>{release=resolve;});
  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
- $('api-key').value='';
- try{
-  await turn;
-  const body={question,day:scope.day,shift:scope.shift,corrupt,session_id:epoch===sessionEpoch?sessionId:null,mode:rec.mode,scope:scope.scope,period:scope.period};
-  if(report)body.report=true;
-  const pending=post('/api/ask',body,headers);
-  for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
-  const response=await pending;
-  const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-  if(epoch===sessionEpoch){   // the scope did not change while this was out: the answer continues the conversation
-   if(result.session_reset&&sessionId)rec.note='The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.';
-   sessionId=result.session_id;
-  }
-  if(result.session_id)latestRun.set(result.session_id,result.run_id);
-  rec.result=result;rec.state='done';settle();
-  $('status').textContent=readyText();
-  return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
- }catch(error){rec.error=error.message;rec.state='error';settle();$('status').textContent='Ready to retry';throw error;}
- finally{release();updateScope();}
+ if(p)$('api-key').value='';   // the key is cleared when it is sent; an offline question leaves it for the analyst
+ rec.done=(async()=>{
+  try{
+   await turn;
+   const body={question,day:scope.day,shift:scope.shift,corrupt,session_id:epoch===sessionEpoch?sessionId:null,mode:rec.mode,scope:scope.scope,period:scope.period};
+   if(report)body.report=true;
+   const pending=post('/api/ask',body,headers);
+   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
+   const response=await pending;
+   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
+   if(epoch===sessionEpoch){   // the scope did not change while this was out: the answer continues the conversation
+    if(result.session_reset&&sessionId)rec.note='The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.';
+    sessionId=result.session_id;
+   }
+   if(result.session_id)latestRun.set(result.session_id,result.run_id);
+   rec.result=result;rec.answered=answeredScope(scope,result);rec.state='done';settle();
+   $('status').textContent=readyText();
+   return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts};
+  }catch(error){rec.error=error.message;rec.state='error';settle();$('status').textContent='Ready to retry';throw error;}
+  finally{release();updateScope();}
+ })();
+ return rec.done;
 }
 function readyText(){ return isLive()?`Ready · ${provider().name} calls incur charges`:'Ready · no API costs'; }
-function analystMode(){ const modes=liveModes(); return isLive()?$('mode').value:modes.includes('anthropic')?'anthropic':modes[0]; }
+function analystMode(){ if(isLive())return $('mode').value; const modes=liveModes(); return modes.includes('anthropic')?'anthropic':(modes[0]||null); }
 function railOpen(){ return /\bopen\b/.test($('rail').className); }
 function closeRail(){ $('rail').className='rail'; $('rail-toggle').setAttribute('aria-expanded','false'); }
 function typed(options){ const q=$('question').value; if(!q.trim()){$('status').textContent='Type a question first';return;} ask(q,options).catch(()=>{}); }
@@ -650,7 +688,7 @@ $('came-back').addEventListener('click',()=>{ $('execution').open=true; });
 // thread: every card carries its own scope in its title line. Only "Clear the thread" empties it.
 function rescope(){ sessionEpoch++;sessionId=null;$('api-key').value='';$('status').textContent=readyText();if(!thread.length)renderCard();updateScope();primeKpis(); }
 function reset(){ thread=[];openId=null;renderCard();rescope(); }
-$('mode').addEventListener('change',()=>{rescope();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: ${p.name} chooses which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
+$('mode').addEventListener('change',()=>{rescope();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: Ask the analyst has ${p.name} choose which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted. Ask and the canned questions stay offline.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges. Ask and the canned questions stay offline.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',rescope);$('shift').addEventListener('change',rescope);$('scope').addEventListener('change',rescope);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 let printing=false;
