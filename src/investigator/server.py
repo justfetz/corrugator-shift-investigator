@@ -2,8 +2,10 @@
 
 Default: loopback only, for one person on one computer. With PUBLIC_DEMO_ORIGIN
 set, it runs as the offline synthetic demo behind a hosting platform's TLS proxy:
-binds 0.0.0.0:$PORT, allows only the configured browser origins, never accepts
-visitor API keys, and serves investigations one at a time under a lock. The
+binds 0.0.0.0:$PORT, allows only the configured browser origins and never accepts
+visitor API keys. Offline investigations run one at a time under a lock, for tens of
+milliseconds each. A live round answers as a stream and holds that lock only while one
+of its tools reads the database, never across a model call (issue #23). The
 optional demo guards (DEMO_RATE_LIMIT_PER_MIN, DEMO_DAILY_CAP, DEMO_MAX_TURNS,
 TRUST_PROXY) are off unless set; see docs/ANTHROPIC_DEMO.md.
 
@@ -13,10 +15,10 @@ resolves a typed question and redirects to its canonical URL, `/corr/<machine>/<
 PDF with `format=pdf`. That path never calls a model and never waits on the lock a live round holds.
 Live analysis stays on `POST /api/ask`.
 """
-from collections import OrderedDict, deque
+from collections import Counter, OrderedDict, deque
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
 import gzip
 import hashlib
@@ -26,6 +28,8 @@ import math
 import os
 from pathlib import Path
 import secrets
+import select
+import socket
 import sqlite3
 import threading
 import time
@@ -46,6 +50,7 @@ DAYS = [d.isoformat() for d in production_days(DEFAULT_MONTHS)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
 LIVE_MODES = ('openai', 'anthropic')
 EVAL_RUNS_PER_MIN = 120   # POST /api/evals/run, container-wide: a case is 10-100 ms offline, the whole set about 3 s once a minute
+LIVE_CONCURRENCY = 2      # live rounds in flight per container; a third is answered 429 `busy` instead of queueing
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
 
 
@@ -126,7 +131,11 @@ class Workbench:
         self.public = public
         self.guards = guards or DemoGuards()
         self.anthropic_model = resolve_model(os.environ.get('ANTHROPIC_MODEL'))  # an unsupported value fails at boot
-        self.lock = threading.Lock()  # POST investigations and PDFs run one at a time; static files do not wait
+        # Offline investigations, PDFs and each tool call of a live round take this lock, one at a time, for
+        # milliseconds. No model call is ever made while it is held; static files do not wait on it.
+        self.lock = threading.Lock()
+        self.live_slots = threading.BoundedSemaphore(LIVE_CONCURRENCY)
+        self.pins = Counter()         # dataset key -> live rounds reading it; a pinned day is not evicted
         self.read_lock = threading.Lock()   # URL answers (offline only) queue here, never behind a live round
         self.token = self._workbench_token(public)
         self.sessions = OrderedDict()
@@ -221,9 +230,9 @@ class Workbench:
         for analysis in (*self.datasets.values(), *self.read_datasets.values()):
             analysis.close()
 
-    def _dataset(self, cache, day, corrupt):
-        """The day's Analysis from one of the two small caches (three entries, least recent evicted and closed)."""
-        key = (day, corrupt)
+    def _read_dataset(self, day, corrupt):
+        """The day's Analysis for the URL path (three entries, least recent evicted and closed). Read lock held."""
+        key, cache = (day, corrupt), self.read_datasets
         if key not in cache:
             if len(cache) >= 3:
                 _, evicted = cache.popitem(last=False)
@@ -280,13 +289,15 @@ class Workbench:
         else:
             context = resolved['context']
             context.history = resolved['history']
-            analysis = self._dataset(self.read_datasets, resolved['day'], resolved['corrupt'])
+            analysis = self._read_dataset(resolved['day'], resolved['corrupt'])
             result = Agent(analysis, max_turns=self.guards.max_turns).ask(resolved['text'], context, request=resolved['request'])
         result['url'] = page_url(resolved)
         result['report_markdown'] = self._markdown(result)
         return result, resolved['format']
 
-    def ask(self, payload, api_key=None, anthropic_key=None):
+    def prepare(self, payload, api_key=None, anthropic_key=None):
+        """Validate a question and bind it to its session: everything before the investigation runs.
+        Call with the lock held. Returns the job `run_offline` or `run_live` takes."""
         if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period', 'report'}:
             raise ValueError('Invalid request fields')
         scope = payload.get('scope', 'shift')
@@ -335,42 +346,95 @@ class Workbench:
         if mode != 'offline' and not report:
             self.daily_round()  # counted before the model is asked; failed rounds still count
         tool_period = 'fiscal' if period == 'accounting' else period   # the period tools' name for the 4-4-5 window
+        job = {'mode': mode, 'report': report, 'question': question, 'day': day, 'shift': shift, 'scope': scope, 'period': period,
+               'tool_period': tool_period, 'corrupt': corrupt, 'key': (day, corrupt), 'session_reset': session_reset,
+               'api_key': api_key, 'anthropic_key': anthropic_key}
         if session_id is None:
             session_id = secrets.token_urlsafe(24)
             if len(self.sessions) >= 32:
                 self.sessions.popitem(last=False)
             self.sessions[session_id] = Context(day, shift, period=tool_period)
-        if report:
-            result = self.periods.investigate(day, shift, scope, period, corrupt)   # no model on this path, whatever the mode
-            result['url'] = scope_url(day, period, scope, shift, self.store.machine_id) + '?measure=report' + ('&corrupt=1' if corrupt else '')
-            return self._retain(result, session_id, session_reset)
-        context = self.sessions[session_id]
+        job['session_id'] = session_id
+        return job
+
+    def _context(self, job):
+        """The session's context for this job; a changed scope starts a new one. Call with the lock held."""
+        session_id = job['session_id']
+        context = self.sessions.get(session_id)
         # Visible date/period/shift controls own the scope; follow-ups retain history while they stay unchanged.
-        if context.production_day != day or context.shift != shift or context.scope != scope or context.period != tool_period:
-            context = Context(day, shift, period=tool_period)
+        if (context is None or context.production_day != job['day'] or context.shift != job['shift']
+                or context.scope != job['scope'] or context.period != job['tool_period']):
+            context = Context(job['day'], job['shift'], period=job['tool_period'])
             self.sessions[session_id] = context
-        context.shift = shift
-        context.scope = scope
+        context.shift = job['shift']
+        context.scope = job['scope']
         self.sessions.move_to_end(session_id)
-        analysis = self._dataset(self.datasets, day, corrupt)
-        if mode == 'offline':
-            request = parse_request(question, context)
-            result = Agent(analysis, max_turns=self.guards.max_turns).ask(question, context, request=request)
-            result['url'] = canonical_url(request, context, corrupt, self.store.machine_id)   # the question's own address
-        else:
-            from .openai_provider import Budget
-            budget = Budget(Path(self.guards.ledger))
-            if mode == 'openai':
-                from .openai_provider import OpenAIPlanner
-                planner = OpenAIPlanner(api_key or os.environ.get('OPENAI_API_KEY'), budget)
-            else:
-                from .anthropic_provider import AnthropicPlanner
-                planner = AnthropicPlanner(anthropic_key or os.environ.get('ANTHROPIC_API_KEY'), budget, model=self.anthropic_model)
-            try:
-                result = Agent(analysis, planner=planner, max_calls=10, max_seconds=60, max_turns=self.guards.max_turns).ask(question, context)
-            finally:
-                planner.close()
-        return self._retain(result, session_id, session_reset)
+        return context
+
+    def _dataset(self, key):
+        """The day's analysis, building it on first use; at most three unpinned days stay open. Lock held."""
+        if key not in self.datasets:
+            idle = [k for k in self.datasets if not self.pins[k]]
+            if len(self.datasets) >= 3 and idle:
+                self.datasets.pop(idle[0]).close()
+            self.datasets[key] = self.store.day_analysis(key[0], corrupt=key[1])
+        self.datasets.move_to_end(key)
+        return self.datasets[key]
+
+    def run_offline(self, job):
+        """The deterministic answer or the period report: no model, whatever the mode. Lock held."""
+        if job['report']:
+            result = self.periods.investigate(job['day'], job['shift'], job['scope'], job['period'], job['corrupt'])
+            result['url'] = (scope_url(job['day'], job['period'], job['scope'], job['shift'], self.store.machine_id)
+                             + '?measure=report' + ('&corrupt=1' if job['corrupt'] else ''))
+            return self._retain(result, job['session_id'], job['session_reset'])
+        context = self._context(job)
+        request = parse_request(job['question'], context)
+        result = Agent(self._dataset(job['key']), max_turns=self.guards.max_turns).ask(job['question'], context, request=request)
+        result['url'] = canonical_url(request, context, job['corrupt'], self.store.machine_id)   # the question's own address
+        return self._retain(result, job['session_id'], job['session_reset'])
+
+    def make_planner(self, mode, key, budget, cancelled=None):
+        """The provider adapter for a live round; tests replace this to stub the model."""
+        if mode == 'openai':
+            from .openai_provider import OpenAIPlanner
+            return OpenAIPlanner(key or os.environ.get('OPENAI_API_KEY'), budget)
+        from .anthropic_provider import AnthropicAnalyst
+        return AnthropicAnalyst(key or os.environ.get('ANTHROPIC_API_KEY'), budget, model=self.anthropic_model, cancelled=cancelled)
+
+    def run_live(self, job, emit=None, cancelled=None):
+        """A live round. Call WITHOUT the lock: it is taken only around each tool call and the
+        context updates (the agent's guard), so offline questions never wait behind a model call."""
+        from .openai_provider import Budget
+        mode = job['mode']
+        planner = self.make_planner(mode, job['api_key'] if mode == 'openai' else job['anthropic_key'], Budget(Path(self.guards.ledger)), cancelled)
+        with self.lock:
+            context = self._context(job)
+            analysis = self._dataset(job['key'])
+            self.pins[job['key']] += 1
+        try:
+            if getattr(planner, 'planned', False):   # one planning call, tools, one streamed narrative
+                agent = Agent(analysis, planner=planner, max_calls=2, max_seconds=10, max_turns=self.guards.max_turns, guard=self.lock)
+                result = agent.ask_planned(job['question'], context, emit)
+            else:                                    # the tool loop (OpenAI): same stream, steps as they finish
+                agent = Agent(analysis, planner=planner, max_calls=10, max_seconds=60, max_turns=self.guards.max_turns, guard=self.lock)
+                result = agent.ask(job['question'], context, emit=emit)
+        finally:
+            planner.close()
+            with self.lock:
+                self.pins[job['key']] -= 1
+        with self.lock:
+            return self._retain(result, job['session_id'], job['session_reset'])
+
+    def ask(self, payload, api_key=None, anthropic_key=None):
+        """One question, start to finish, as a single result. The HTTP handler streams live modes
+        instead (see do_POST); this is the direct entry for offline questions, reports and tests.
+        Call with the lock held for offline work, as the handler does; a live mode must be called
+        without it."""
+        job = self.prepare(payload, api_key=api_key, anthropic_key=anthropic_key)
+        if job['mode'] == 'offline' or job['report']:
+            return self.run_offline(job)
+        return self.run_live(job)
 
     def _retain(self, result, session_id, session_reset=False):
         result['session_id'] = session_id
@@ -439,6 +503,74 @@ def make_server(port=8765, public=None, host=None, guards=None):
             self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors "+frame_ancestors+"; form-action 'self'")
             self.end_headers()
             self.wfile.write(body)
+
+        def _stream_open(self):
+            """Start a newline-delimited JSON stream: one event per line, flushed as it happens.
+            Chunked on HTTP/1.1 so proxies pass each line on; the connection closes at the end."""
+            self.chunked = self.request_version == 'HTTP/1.1'
+            if self.chunked:
+                self.protocol_version = 'HTTP/1.1'
+            self.close_connection = True
+            self.send_response(200)
+            for name, value in (('Content-Type', 'application/x-ndjson; charset=utf-8'), ('Cache-Control', 'no-store'),
+                                ('X-Accel-Buffering', 'no'), ('Connection', 'close'), ('X-Content-Type-Options', 'nosniff'),
+                                ('Referrer-Policy', 'no-referrer')):
+                self.send_header(name, value)
+            if self.chunked:
+                self.send_header('Transfer-Encoding', 'chunked')
+            self.end_headers()
+            self.gone = False
+
+        def _stream_event(self, event):
+            if self.gone:
+                return
+            line = json.dumps(event, allow_nan=False).encode() + b'\n'
+            try:
+                self.wfile.write(b'%x\r\n%s\r\n' % (len(line), line) if self.chunked else line)
+                self.wfile.flush()
+            except OSError:
+                self.gone = True   # the visitor left: stop writing; the model call is cancelled at its next event
+
+        def _stream_close(self):
+            if self.chunked and not self.gone:
+                try:
+                    self.wfile.write(b'0\r\n\r\n')
+                    self.wfile.flush()
+                except OSError:
+                    self.gone = True
+
+        def _client_gone(self):
+            """True once the visitor's connection is closed: a failed write, or end-of-file on the socket."""
+            if self.gone:
+                return True
+            try:
+                readable, _, _ = select.select([self.connection], [], [], 0)
+                if readable and self.connection.recv(1, socket.MSG_PEEK) == b'':
+                    self.gone = True
+            except (OSError, ValueError):
+                self.gone = True
+            return self.gone
+
+        def _live(self, payload, api_key, anthropic_key):
+            """A live round as a stream: start, plan, a step per tool, narrative deltas, done.
+            Runs outside the shared lock under its own semaphore; a visitor who leaves cancels the model call."""
+            if not app.live_slots.acquire(blocking=False):
+                raise DemoLimit('the analyst is busy with other questions; retry in a few seconds', 'busy', 3)
+            try:
+                with app.lock:
+                    job = app.prepare(payload, api_key=api_key, anthropic_key=anthropic_key)   # a refused request is still a plain 400/429
+                self._stream_open()
+                self._stream_event({'type': 'start', 'mode': job['mode'], 'session_id': job['session_id']})
+                try:
+                    result = app.run_live(job, emit=self._stream_event, cancelled=self._client_gone)
+                    self._stream_event({'type': 'done', 'result': result})
+                except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                    self._stream_event({'type': 'error', 'error': str(exc)})
+                except Exception:
+                    self._stream_event({'type': 'error', 'error': 'Investigation failed; no answer was fabricated'})
+                self._stream_close()
+            finally:
+                app.live_slots.release()
 
         def _host_ok(self):
             if public is not None:
@@ -622,6 +754,8 @@ def make_server(port=8765, public=None, host=None, guards=None):
                     if not isinstance(payload, dict) or set(payload) not in ({'id'}, {'all'}) or payload.get('all', True) is not True:
                         raise ValueError('Send {"id": "<case>"} or {"all": true}')
                     return self._send(200, app.evals.run_all(app.lock) if 'all' in payload else app.evals.run_one(payload['id'], app.lock))
+                if self.path == '/api/ask' and isinstance(payload, dict) and payload.get('mode') in LIVE_MODES and payload.get('report') is not True:
+                    return self._live(payload, api_key, anthropic_key)   # a stream; offline keeps its single JSON response
                 with app.lock:
                     if self.path == '/api/report':
                         body = app.pdf(payload)
@@ -636,11 +770,10 @@ def make_server(port=8765, public=None, host=None, guards=None):
                 self._send(408, {'error': 'Request timed out'})
             except Exception:
                 self._send(500, {'error': 'Investigation failed; no answer was fabricated'})
-    if public is None:
-        server = HTTPServer((host or '127.0.0.1', port), Handler)
-    else:
-        server = ThreadingHTTPServer((host or '0.0.0.0', port), Handler)
-        server.daemon_threads = True
+    # One thread per request in both modes: a live round streams for seconds, and an offline
+    # question arriving meanwhile must be answered at once (issue #23).
+    server = ThreadingHTTPServer((host or ('127.0.0.1' if public is None else '0.0.0.0'), port), Handler)
+    server.daemon_threads = True
     server.app = app
     return server
 

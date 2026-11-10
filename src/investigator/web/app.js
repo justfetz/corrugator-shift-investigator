@@ -14,7 +14,7 @@ function syncKeyLabel(){
  $('key-label').hidden=!p||!!(config&&config.public);
  if(p)$('key-label-text').textContent=`${p.name} API key (optional if configured on server)`;
 }
-function liveHelp(){ const p=provider(); return `${p.name} receives your question, recent context and synthetic evidence. Live calls incur charges. Your key is used for this request only.`; }
+function liveHelp(){ const p=provider(); return `Every question is answered offline first. “Ask the analyst” on an answer sends ${p.name} your question, recent context and synthetic evidence; live calls incur charges and your key is used for that request only.`; }
 const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 function message(label, paragraphs, cls='') {
  const e=node('div',undefined,'message '+cls);e.append(node('strong',label));
@@ -24,6 +24,7 @@ function message(label, paragraphs, cls='') {
   notes=null; e.append(node('p',p));
  }
  $('messages').append(e);$('messages').scrollTop=$('messages').scrollHeight;
+ return e;
 }
 
 // ---- Scope: the hidden selects (#day, #period, #shift, #scope, #mode) hold the state the
@@ -179,7 +180,7 @@ const PERIOD_NOUN={day:'day',week:'week',month:'month',accounting:'4-4-5 period'
 function updateScope(){
  const ranged=$('period').value!=='day', live=isLive();
  $('scope-help').textContent=scopeSentence(currentScope());
- $('mode').disabled=busy;$('question').disabled=busy;syncKeyLabel();syncSegments();
+ $('mode').disabled=busy||!!(config&&config.public);$('question').disabled=busy;syncKeyLabel();syncSegments();
  const days=storeDays(), index=days?days.indexOf($('day').value):-1;
  $('day-prev').disabled=busy||!days||index<=0; $('day-next').disabled=busy||!days||index<0||index>=days.length-1;
  $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
@@ -595,26 +596,97 @@ async function ask(question,{report=false}={}) {
  setBusy(true);$('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Querying evidence…';
  const empty=$('messages').querySelector('.empty');if(empty)empty.remove();message('You',[question],'user');
  try{
-  const headers={};
-  const p=provider();
-  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
-  $('api-key').value='';
-  const live=isLive()&&!report;
-  let response;
-  if(live){   // a model round: POST, the session carries the follow-up history, the answer is not an address
-   const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode:$('mode').value,scope:$('scope').value,period:$('period').value};
-   const pending=post('/api/ask',body,headers);
-   for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
-   response=await pending;
-  }else{      // offline: a GET of the question's address; the server redirects /q to the canonical URL and answers it
-   response=await fetch(report?reportUrl():questionUrl(question),{headers:{Accept:'application/json'}});
-  }
+  // Deterministic first, always (issue #23): every question is answered by the offline planner and the
+  // fixed queries, in one JSON response, whatever the Agent control says. The model is a per-question
+  // button on the answer ("Ask the analyst"), never something the numbers wait for.
+  const response=await fetch(report?reportUrl():questionUrl(question),{headers:{Accept:'application/json'}});   // a GET of the question's address (#20); /q redirects to the canonical URL
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-  if(live){ if(result.session_reset&&sessionId)message('Note',['The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.']); sessionId=result.session_id; }
-  message(`Investigator · ${result.mode}`,result.sections);showResult(result);
-  if(!live&&result.url)rememberView(result,question,{follow:!report});
+  const card=message(`Investigator · ${result.mode}`,result.sections);if(!report)analystButton(card,question);
+  showResult(result);if(result.url)rememberView(result,question,{follow:!report});
   $('status').textContent=`${result.status} · ${usageText(result.usage)}`;return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts,url:result.url};
- }catch(error){message('Could not complete',[error.message],'error');$('status').textContent='Ready to retry';throw error;}
+ }catch(error){const card=message('Could not complete',[error.message],'error');if(!report)analystButton(card,question,'The offline planner has no pattern for this question. ');$('status').textContent='Ready to retry';throw error;}
+ finally{setBusy(false);updateScope();}
+}
+// ---- Ask the analyst (issue #23). A live round is opt-in per question and answers as a stream of
+// newline-delimited JSON events: start, plan (the queries the model chose, in one call), a step as each
+// query starts and finishes, narrative text as the model writes it, then done with the full result.
+// The numbers in the narrative are substituted by the server from the query rows; a paragraph that
+// fails validation is withdrawn. The deterministic answer above stays where it is until the analyst's
+// own queries have run, and stays for good when the plan is refused or the model is unavailable.
+function analystMode(){
+ if(!config)return null;
+ if(config.public){const modes=liveModes();return modes.includes('anthropic')?'anthropic':modes[0]||null;}   // the site's own key
+ return PROVIDERS[$('mode').value]?$('mode').value:null;                                                    // loopback: the provider chosen beside the key field
+}
+function analystButton(card,question,lead=''){
+ const mode=analystMode(); if(!mode||!card)return null;
+ const row=node('div',undefined,'analyst-row'), b=node('button','Ask the analyst','secondary analyst-ask'); b.type='button';
+ b.addEventListener('click',()=>{ if(busy)return; row.replaceChildren(); askAnalyst(question,mode).catch(()=>{}); });
+ row.append(b,node('span',`${lead}${PROVIDERS[mode].name} picks the queries in one call and writes an interpretation under the numbers. A few seconds; ${config.public?"uses this site's key under a spend cap":'uses your key and incurs API charges'}.`,'muted'));
+ card.append(row); return b;
+}
+async function readEvents(response,onEvent){
+ const line=text=>{ if(text.trim())onEvent(JSON.parse(text)); };
+ if(response.body&&typeof response.body.getReader==='function'&&typeof TextDecoder==='function'){
+  const reader=response.body.getReader(), decoder=new TextDecoder(); let buffer='';
+  for(;;){ const {value,done}=await reader.read(); if(done)break; buffer+=decoder.decode(value,{stream:true}); let cut; while((cut=buffer.indexOf('\n'))>=0){ line(buffer.slice(0,cut)); buffer=buffer.slice(cut+1); } }
+  line(buffer);
+ } else for(const text of (await response.text()).split('\n'))line(text);   // no stream reader: the events arrive together
+}
+const KIND_LABEL={finding:'Finding',hypothesis:'Hypothesis',check:'Check',limitation:'Limitation'};
+function pendingQueries(steps){
+ const box=$('queries'); box.replaceChildren();
+ const head=node('div',undefined,'queries-head'); head.append(node('span','Queries the analyst planned'),node('span',`${steps.length} ${steps.length===1?'query':'queries'} · running`,'mono')); box.append(head);
+ return steps.map(step=>{ const d=node('div',undefined,'query pending'), facts=node('span','· queued','facts'); d.append(node('code',step.tool,'tool'),node('span',`(${argText(step.arguments)})`,'args'),facts); box.append(d); return {row:d,facts}; });
+}
+async function askAnalyst(question,mode){
+ if(busy)throw new Error('An investigation is already running');
+ setBusy(true); $('status').textContent='Analyst · planning the queries…';
+ const card=message(`Analyst · ${PROVIDERS[mode].name}`,[],'analyst'), state=node('p','Planning the queries…','muted analyst-state'), prose=node('div',undefined,'analyst-prose'); card.append(state,prose);
+ const paragraphs=new Map(); let rows=[], planned=false;
+ const paragraph=(i,kind)=>{ let p=paragraphs.get(i); if(!p){ p=node('p',`${KIND_LABEL[kind]||'Note'}: `,'analyst-p streaming'); paragraphs.set(i,p); prose.append(p); } return p; };
+ try{
+  const headers={}, p=PROVIDERS[mode];
+  if($('api-key').value && !config.public)headers[p.header]=$('api-key').value;
+  $('api-key').value='';
+  const body={question,day:$('day').value,shift:Number($('shift').value),corrupt:$('corrupt').checked,session_id:sessionId,mode,scope:$('scope').value,period:$('period').value};
+  const pending=post('/api/ask',body,headers);
+  for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
+  const response=await pending;
+  if(!response.ok){ const refused=await response.json(); throw new Error(refused.error||'Request failed'); }
+  let result=null, failure=null;
+  await readEvents(response,event=>{
+   if(event.type==='plan'){ planned=true; rows=pendingQueries(event.steps); state.textContent=`Running ${event.steps.length} ${event.steps.length===1?'query':'queries'}…`; $('status').textContent='Analyst · running the queries…'; }
+   else if(event.type==='step'){ const row=rows[event.index]; if(row)row.facts.textContent=event.phase==='start'?'· running…':event.ok?`· ${event.rows===null?'done':event.rows+(event.rows===1?' row':' rows')} · ${Number(event.ms).toFixed(1)} ms`:'· refused'; if(event.phase==='finish'&&event.index===rows.length-1){state.textContent='Writing the interpretation…';$('status').textContent='Analyst · writing…';} }
+   else if(event.type==='delta'){ paragraph(event.paragraph,event.kind).textContent+=event.text; $('messages').scrollTop=$('messages').scrollHeight; }
+   else if(event.type==='paragraph'){ const el=paragraph(event.paragraph,event.kind); el.textContent=`${KIND_LABEL[event.kind]||'Note'}: ${event.text}`; el.className='analyst-p'; }
+   else if(event.type==='retract'){ const el=paragraphs.get(event.paragraph); if(el){ el.textContent=''; el.hidden=true; } }   // it failed validation: nothing of it stays on screen
+   else if(event.type==='done')result=event.result;
+   else if(event.type==='error')failure=event.error;
+  });
+  if(failure)throw new Error(failure);
+  if(!result)throw new Error('The analyst stream ended before the answer; nothing was fabricated');
+  sessionId=result.session_id;
+  const ran=result.trace.some(e=>e.ok);
+  if(ran)showResult(result); else if(planned&&latest)renderQueries(latest);   // the analyst's own queries, charts and tables replace the offline ones only when they ran
+  prose.replaceChildren();
+  const notes=ran?result.sections.filter(t=>/^(Investigation stopped|The model narrative|The requested)/.test(t)):result.sections;
+  if(result.narrative_status!=='available'||result.status!=='complete')for(const text of notes)prose.append(node('p',text,'analyst-p warning-note'));
+  for(const item of result.narrative||[]){
+   const el=node('p',`${KIND_LABEL[item.kind]||'Note'}: ${item.text}`,'analyst-p'); prose.append(el);
+   const cites=(item.citations||[]).map(c=>{ for(const [rid,i] of stepIndex)c=c.replace(rid,`query ${i+1}`); return c; });
+   if(cites.length)prose.append(node('p',`Evidence: ${cites.join('; ')}`+((item.charts||[]).length?` · Charts: ${item.charts.join('; ')}`:''),'analyst-cites muted'));
+  }
+  const first=result.usage.first_token_ms;
+  state.textContent=`${result.mode} · ${result.status} · ${usageText(result.usage)}`+(typeof first==='number'?` · first words after ${(first/1000).toFixed(1)} s`:'');
+  if(result.narrative_status==='available')prose.append(node('p','Model interpretation: review it with the evidence; hypotheses are not proven causes. Every number above was substituted from a query row.','muted'));
+  $('status').textContent=`Analyst · ${result.status} · ${usageText(result.usage)}`;
+  return {status:result.status,narrative:result.narrative};
+ }catch(error){
+  if(planned&&latest)renderQueries(latest);
+  state.textContent='The analyst could not answer; the offline answer above stands.'; prose.replaceChildren(node('p',error.message,'analyst-p warning-note')); $('status').textContent='Ready';
+  throw error;
+ }
  finally{setBusy(false);updateScope();}
 }
 $('ask').addEventListener('submit',event=>{event.preventDefault();ask($('question').value).catch(()=>{});});
@@ -633,16 +705,15 @@ function applyPublicMode(){
  const modes=liveModes();
  for(const [value,entry] of Object.entries(PROVIDERS)){
   const option=$('mode').querySelector?.(`option[value="${value}"]`);
-  if(!option)continue;
-  if(modes.includes(value))option.textContent=`${entry.name} / server key`;else option.remove();
+  if(option)option.remove();   // the model is a button on each answer, not a mode that sticks (issue #23)
  }
- if(!modes.length){$('mode').value='offline';$('mode').disabled=true;$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';}
+ $('mode').value='offline';$('mode').disabled=true;
+ if(!modes.length)$('mode-help').textContent='Public demo: the free offline planner answers the supported questions from synthetic records. No model calls, no keys.';
  else{
-  // Offline is the default even when the site has a key (issue #42): it answers in tens of
-  // milliseconds; the model path takes seconds and spends the site's budget. The model is a choice.
-  if(!modes.includes($('mode').value))$('mode').value='offline';
+  // Every question is answered offline first, in tens of milliseconds (issues #42, #23). The model is
+  // a choice made per answer: it takes seconds and spends the site's budget.
   const live=modes.includes('anthropic')?'anthropic':modes[0];
-  $('mode-help').textContent=`Public demo: Offline answers instantly with fixed queries over synthetic records. Choose ${PROVIDERS[live]?.name||'the model'} to have a model pick the tools and write the interpretation; that takes several seconds and uses this site's own key under a spend cap. Every number comes from the queries either way; no visitor key is accepted.`;
+  $('mode-help').textContent=`Public demo: every question is answered at once with fixed queries over synthetic records. “Ask the analyst” on an answer has ${PROVIDERS[live]?.name||'a model'} pick the queries and write an interpretation under the numbers; that takes a few seconds and uses this site's own key under a spend cap. Every number comes from the queries either way; no visitor key is accepted.`;
  }
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model available':'Synthetic data / Public demo';
 }

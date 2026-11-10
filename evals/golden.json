@@ -2343,6 +2343,36 @@
     ],
     "max_cost_usd": 0.05
    }
+  },
+  {
+   "id": "analyst-plan-out-of-list-tool",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Why was this shift slow?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "run_sql",
+      "arguments": {
+       "query": "select * from stops"
+      }
+     }
+    ]
+   },
+   "note": "Issue #23. The analyst's single planning call returns an ordered list of {tool, arguments}; the application checks every step against the tool allowlist before anything runs. A plan naming a tool outside the list is refused whole: no query runs (not even its valid first step), no narrative is written, and the answer is one line saying so. The `plan` field is the plan a model might return, put through Agent.ask_planned without a model.",
+   "expect": {
+    "status": "plan_rejected",
+    "tool_calls": 0,
+    "charts": 0,
+    "tables": [],
+    "sections_match": "plan was rejected \\(it names \"run_sql\", which is not one of the permitted tools\\); no query was run"
+   }
   }
  ]
 }
