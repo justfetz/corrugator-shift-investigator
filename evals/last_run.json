@@ -1,6 +1,6 @@
 {
- "ran_at": "2026-11-10T18:31Z",
- "commit": "284bc28",
+ "ran_at": "2026-11-10T19:16Z",
+ "commit": "997b18a",
  "dataset": "d9143ff1d150",
  "rows": [
   {
@@ -10,8 +10,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 21.2,
-   "note": "complete, 6 tool calls; URL 45 ms"
+   "ms": 20.1,
+   "note": "complete, 6 tool calls; URL 50 ms"
   },
   {
    "id": "summary-charts",
@@ -20,8 +20,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 13.1,
-   "note": "complete, 1 tool calls; URL 13 ms"
+   "ms": 18.6,
+   "note": "complete, 1 tool calls; URL 16 ms"
   },
   {
    "id": "equipment-downtime",
@@ -30,7 +30,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 8.1,
+   "ms": 9.0,
    "note": "complete, 3 tool calls; URL 8 ms"
   },
   {
@@ -40,7 +40,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 6.7,
+   "ms": 8.5,
    "note": "complete, 3 tool calls; URL 8 ms"
   },
   {
@@ -50,8 +50,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 6.5,
-   "note": "complete, 3 tool calls; URL 9 ms"
+   "ms": 9.0,
+   "note": "complete, 3 tool calls; URL 10 ms"
   },
   {
    "id": "speed-to-target",
@@ -60,8 +60,448 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 7.4,
+   "ms": 11.5,
+   "note": "complete, 3 tool calls; URL 11 ms"
+  },
+  {
+   "id": "speed-fpm-by-grade",
+   "case": "speed-fpm-by-grade",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 10.2,
+   "note": "complete, 2 tool calls; URL 9 ms"
+  },
+  {
+   "id": "speed-how-fast",
+   "case": "speed-how-fast",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 9.5,
+   "note": "complete, 3 tool calls; URL 12 ms"
+  },
+  {
+   "id": "speed-how-fast-this-grade",
+   "case": "speed-how-fast-this-grade",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 8.6,
+   "note": "complete, 2 tool calls; URL 7 ms"
+  },
+  {
+   "id": "volume-throughput",
+   "case": "volume-throughput",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 8.2,
+   "note": "complete, 2 tool calls; URL 8 ms"
+  },
+  {
+   "id": "volume-how-much-did-we-make",
+   "case": "volume-how-much-did-we-make",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 6.6,
+   "note": "complete, 2 tool calls; URL 6 ms"
+  },
+  {
+   "id": "speed-average-this-week",
+   "case": "speed-average-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 19.7,
+   "note": "complete, 4 tool calls; URL 25 ms"
+  },
+  {
+   "id": "speed-vs-last-week",
+   "case": "speed-vs-last-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 19.7,
+   "note": "complete, 4 tool calls; URL 21 ms"
+  },
+  {
+   "id": "speed-slower-than-normal",
+   "case": "speed-slower-than-normal",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 36.8,
+   "note": "complete, 2 tool calls; URL 37 ms"
+  },
+  {
+   "id": "speed-what-was-our-speed",
+   "case": "speed-what-was-our-speed",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 8.1,
+   "note": "complete, 3 tool calls; URL 11 ms"
+  },
+  {
+   "id": "speed-bare-word",
+   "case": "speed-bare-word",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 8.2,
    "note": "complete, 3 tool calls; URL 8 ms"
+  },
+  {
+   "id": "speed-to-target-lower",
+   "case": "speed-to-target-lower",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 12.9,
+   "note": "complete, 3 tool calls; URL 9 ms"
+  },
+  {
+   "id": "speed-were-we-slow-on-2",
+   "case": "speed-were-we-slow-on-2",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 19.3,
+   "note": "complete, 6 tool calls; URL 20 ms"
+  },
+  {
+   "id": "speed-why-this-shift-slow",
+   "case": "speed-why-this-shift-slow",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 15.0,
+   "note": "complete, 6 tool calls; URL 20 ms"
+  },
+  {
+   "id": "volume-grade-running-most",
+   "case": "volume-grade-running-most",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 8.7,
+   "note": "complete, 2 tool calls; URL 9 ms"
+  },
+  {
+   "id": "volume-output-of-the-shift",
+   "case": "volume-output-of-the-shift",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 7.5,
+   "note": "complete, 2 tool calls; URL 8 ms"
+  },
+  {
+   "id": "volume-throughput-this-week",
+   "case": "volume-throughput-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 7.5,
+   "note": "complete, 2 tool calls; URL 9 ms"
+  },
+  {
+   "id": "speed-how-fast-in-august",
+   "case": "speed-how-fast-in-august",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 16.8,
+   "note": "complete, 4 tool calls; URL 19 ms"
+  },
+  {
+   "id": "speed-make-speed-target-this-week",
+   "case": "speed-make-speed-target-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 17.9,
+   "note": "complete, 4 tool calls; URL 18 ms"
+  },
+  {
+   "id": "speed-what-speed-did-we-make-this-month",
+   "case": "speed-what-speed-did-we-make-this-month",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 18.4,
+   "note": "complete, 4 tool calls; URL 17 ms"
+  },
+  {
+   "id": "speed-and-output-this-week",
+   "case": "speed-and-output-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 16.1,
+   "note": "complete, 4 tool calls; URL 16 ms"
+  },
+  {
+   "id": "speed-how-fast-did-we-make-grade-this-week",
+   "case": "speed-how-fast-did-we-make-grade-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 5.8,
+   "note": "complete, 2 tool calls; URL 6 ms"
+  },
+  {
+   "id": "overview-why-shift-slow-this-week",
+   "case": "overview-why-shift-slow-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 27.1,
+   "note": "complete, 6 tool calls; URL 28 ms"
+  },
+  {
+   "id": "overview-were-we-slow-this-week-month-control",
+   "case": "overview-were-we-slow-this-week-month-control",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 28.5,
+   "note": "complete, 6 tool calls; URL 28 ms"
+  },
+  {
+   "id": "overview-what-killed-us-this-week",
+   "case": "overview-what-killed-us-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 27.0,
+   "note": "complete, 6 tool calls; URL 27 ms"
+  },
+  {
+   "id": "speed-how-much-speed-did-we-lose",
+   "case": "speed-how-much-speed-did-we-lose",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 8.1,
+   "note": "complete, 3 tool calls; URL 14 ms"
+  },
+  {
+   "id": "speed-which-shift-lost-the-most-speed",
+   "case": "speed-which-shift-lost-the-most-speed",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 13.9,
+   "note": "complete, 3 tool calls; URL 10 ms"
+  },
+  {
+   "id": "speed-where-did-we-lose-the-most-speed",
+   "case": "speed-where-did-we-lose-the-most-speed",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 7.9,
+   "note": "complete, 3 tool calls; URL 10 ms"
+  },
+  {
+   "id": "speed-share-of-time-at-speed",
+   "case": "speed-share-of-time-at-speed",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 9.6,
+   "note": "complete, 3 tool calls; URL 10 ms"
+  },
+  {
+   "id": "overview-why-grade-slow-this-week",
+   "case": "overview-why-grade-slow-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 31.2,
+   "note": "complete, 6 tool calls; URL 29 ms"
+  },
+  {
+   "id": "overview-why-grade-slow",
+   "case": "overview-why-grade-slow",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 20.8,
+   "note": "complete, 6 tool calls; URL 16 ms"
+  },
+  {
+   "id": "overview-why-were-we-slower",
+   "case": "overview-why-were-we-slower",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 15.4,
+   "note": "complete, 6 tool calls; URL 16 ms"
+  },
+  {
+   "id": "speed-how-fast-did-we-make-grade",
+   "case": "speed-how-fast-did-we-make-grade",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 7.5,
+   "note": "complete, 2 tool calls; URL 7 ms"
+  },
+  {
+   "id": "overview-was-this-a-bad-week",
+   "case": "overview-was-this-a-bad-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 28.5,
+   "note": "complete, 6 tool calls; URL 30 ms"
+  },
+  {
+   "id": "overview-why-slow-on-stops-this-week",
+   "case": "overview-why-slow-on-stops-this-week",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 29.4,
+   "note": "complete, 6 tool calls; URL 29 ms"
+  },
+  {
+   "id": "overview-were-we-slow-in-august-445-control",
+   "case": "overview-were-we-slow-in-august-445-control",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 22.5,
+   "note": "complete, 6 tool calls; URL 22 ms"
+  },
+  {
+   "id": "overview-why-slow-this-period",
+   "case": "overview-why-slow-this-period",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 27.3,
+   "note": "complete, 6 tool calls; URL 26 ms"
+  },
+  {
+   "id": "overview-second-shift-slow-this-week-all-shifts",
+   "case": "overview-second-shift-slow-this-week-all-shifts",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 23.3,
+   "note": "complete, 6 tool calls; URL 24 ms"
+  },
+  {
+   "id": "setup-how-fast-did-we-change-paper",
+   "case": "setup-how-fast-did-we-change-paper",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 13.5,
+   "note": "complete, 3 tool calls; URL 13 ms"
+  },
+  {
+   "id": "period-control-how-fast-did-we-change-paper",
+   "case": "period-control-how-fast-did-we-change-paper",
+   "type": "refusal",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 0.1,
+   "note": "refused: Switch Period to Day for the setup matrix; that evidence is "
+  },
+  {
+   "id": "setup-how-fast-were-the-changeovers",
+   "case": "setup-how-fast-were-the-changeovers",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 12.6,
+   "note": "complete, 3 tool calls; URL 13 ms"
+  },
+  {
+   "id": "speed-fpm-by-grade-after-changeovers",
+   "case": "speed-fpm-by-grade-after-changeovers",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 7.2,
+   "note": "complete, 2 tool calls; URL 7 ms"
+  },
+  {
+   "id": "speed-running-between-changeovers",
+   "case": "speed-running-between-changeovers",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 9.1,
+   "note": "complete, 3 tool calls; URL 8 ms"
+  },
+  {
+   "id": "overview-why-slow-on-changeovers",
+   "case": "overview-why-slow-on-changeovers",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 14.9,
+   "note": "complete, 6 tool calls; URL 15 ms"
+  },
+  {
+   "id": "slow-vs-normal-on-stops-not-a-speed-trend",
+   "case": "slow-vs-normal-on-stops-not-a-speed-trend",
+   "type": "routing",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 14.6,
+   "note": "complete, 6 tool calls; URL 15 ms"
   },
   {
    "id": "dry-end-waste",
@@ -70,8 +510,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 12.2,
-   "note": "complete, 3 tool calls; URL 12 ms"
+   "ms": 11.1,
+   "note": "complete, 3 tool calls; URL 11 ms"
   },
   {
    "id": "rankings-all",
@@ -80,8 +520,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 11.9,
-   "note": "complete, 4 tool calls; URL 14 ms"
+   "ms": 15.0,
+   "note": "complete, 4 tool calls; URL 13 ms"
   },
   {
    "id": "setup-matrix",
@@ -90,7 +530,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 10.9,
+   "ms": 11.9,
    "note": "complete, 3 tool calls; URL 13 ms"
   },
   {
@@ -100,8 +540,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 8.6,
-   "note": "complete, 2 tool calls; URL 9 ms"
+   "ms": 9.6,
+   "note": "complete, 2 tool calls; URL 10 ms"
   },
   {
    "id": "notes",
@@ -110,8 +550,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 7.1,
-   "note": "complete, 2 tool calls; URL 7 ms"
+   "ms": 7.7,
+   "note": "complete, 2 tool calls; URL 8 ms"
   },
   {
    "id": "compare-all",
@@ -120,8 +560,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 37.2,
-   "note": "complete, 15 tool calls; URL 36 ms"
+   "ms": 42.0,
+   "note": "complete, 15 tool calls; URL 53 ms"
   },
   {
    "id": "followup-compare",
@@ -131,7 +571,7 @@
    "mode": "offline",
    "outcome": "pass",
    "ms": 43.4,
-   "note": "complete, 16 tool calls; URL 40 ms"
+   "note": "complete, 16 tool calls; URL 52 ms"
   },
   {
    "id": "period-month-vs-last",
@@ -141,7 +581,7 @@
    "mode": "offline",
    "outcome": "pass",
    "ms": 20.9,
-   "note": "complete, 2 tool calls; URL 26 ms"
+   "note": "complete, 2 tool calls; URL 17 ms"
   },
   {
    "id": "period-month-vs-previous",
@@ -150,8 +590,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 22.8,
-   "note": "complete, 2 tool calls; URL 22 ms"
+   "ms": 16.0,
+   "note": "complete, 2 tool calls; URL 16 ms"
   },
   {
    "id": "period-week-vs-previous",
@@ -160,8 +600,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 14.2,
-   "note": "complete, 2 tool calls; URL 15 ms"
+   "ms": 13.4,
+   "note": "complete, 2 tool calls; URL 14 ms"
   },
   {
    "id": "period-shift-vs-previous-day",
@@ -170,8 +610,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 21.0,
-   "note": "complete, 2 tool calls; URL 16 ms"
+   "ms": 12.2,
+   "note": "complete, 2 tool calls; URL 12 ms"
   },
   {
    "id": "period-shift-3-this-month",
@@ -180,8 +620,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 31.2,
-   "note": "complete, 2 tool calls; URL 19 ms"
+   "ms": 13.3,
+   "note": "complete, 2 tool calls; URL 14 ms"
   },
   {
    "id": "period-september-vs-august",
@@ -190,8 +630,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 19.0,
-   "note": "complete, 2 tool calls; URL 18 ms"
+   "ms": 14.7,
+   "note": "complete, 2 tool calls; URL 15 ms"
   },
   {
    "id": "period-august-vs-september",
@@ -200,8 +640,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 17.1,
-   "note": "complete, 2 tool calls; URL 20 ms"
+   "ms": 14.9,
+   "note": "complete, 2 tool calls; URL 17 ms"
   },
   {
    "id": "period-august-only",
@@ -210,8 +650,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 14.3,
-   "note": "complete, 2 tool calls; URL 18 ms"
+   "ms": 9.2,
+   "note": "complete, 2 tool calls; URL 10 ms"
   },
   {
    "id": "period-shift-week",
@@ -220,8 +660,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.7,
-   "note": "complete, 2 tool calls; URL 18 ms"
+   "ms": 10.8,
+   "note": "complete, 2 tool calls; URL 16 ms"
   },
   {
    "id": "period-pareto-selected-shift",
@@ -230,7 +670,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 6.1,
+   "ms": 5.4,
    "note": "complete, 2 tool calls; URL 6 ms"
   },
   {
@@ -240,8 +680,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.3,
-   "note": "complete, 2 tool calls; URL 5 ms"
+   "ms": 4.7,
+   "note": "complete, 2 tool calls; URL 4 ms"
   },
   {
    "id": "period-pareto-week-place-count",
@@ -250,8 +690,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 6.0,
-   "note": "complete, 2 tool calls; URL 4 ms"
+   "ms": 4.6,
+   "note": "complete, 2 tool calls; URL 5 ms"
   },
   {
    "id": "period-bond-or-warp",
@@ -260,8 +700,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 14.3,
-   "note": "complete, 2 tool calls; URL 14 ms"
+   "ms": 11.3,
+   "note": "complete, 2 tool calls; URL 11 ms"
   },
   {
    "id": "period-waste-month",
@@ -270,8 +710,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.3,
-   "note": "complete, 2 tool calls; URL 24 ms"
+   "ms": 14.8,
+   "note": "complete, 2 tool calls; URL 16 ms"
   },
   {
    "id": "period-waste-week",
@@ -280,8 +720,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.9,
-   "note": "complete, 2 tool calls; URL 14 ms"
+   "ms": 12.0,
+   "note": "complete, 2 tool calls; URL 12 ms"
   },
   {
    "id": "period-stops-per-day",
@@ -290,8 +730,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.0,
-   "note": "complete, 2 tool calls; URL 3 ms"
+   "ms": 3.9,
+   "note": "complete, 2 tool calls; URL 4 ms"
   },
   {
    "id": "period-stops-month",
@@ -300,7 +740,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.5,
+   "ms": 4.2,
    "note": "complete, 2 tool calls; URL 4 ms"
   },
   {
@@ -310,8 +750,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 10.9,
-   "note": "complete, 2 tool calls; URL 7 ms"
+   "ms": 7.6,
+   "note": "complete, 2 tool calls; URL 8 ms"
   },
   {
    "id": "period-rollstock-month",
@@ -320,7 +760,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.7,
+   "ms": 7.4,
    "note": "complete, 2 tool calls; URL 6 ms"
   },
   {
@@ -330,8 +770,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 9.1,
-   "note": "complete, 2 tool calls; URL 9 ms"
+   "ms": 13.6,
+   "note": "complete, 2 tool calls; URL 15 ms"
   },
   {
    "id": "period-grade-named-week",
@@ -340,8 +780,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 6.6,
-   "note": "complete, 2 tool calls; URL 6 ms"
+   "ms": 9.9,
+   "note": "complete, 2 tool calls; URL 7 ms"
   },
   {
    "id": "period-overrun-week",
@@ -350,8 +790,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.9,
-   "note": "complete, 2 tool calls; URL 3 ms"
+   "ms": 3.9,
+   "note": "complete, 2 tool calls; URL 4 ms"
   },
   {
    "id": "period-overrun-selected-shift",
@@ -360,8 +800,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.0,
-   "note": "complete, 2 tool calls; URL 3 ms"
+   "ms": 3.8,
+   "note": "complete, 2 tool calls; URL 4 ms"
   },
   {
    "id": "period-grade-downtime",
@@ -370,8 +810,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.8,
-   "note": "complete, 2 tool calls; URL 6 ms"
+   "ms": 8.8,
+   "note": "complete, 2 tool calls; URL 7 ms"
   },
   {
    "id": "period-run-length-trend",
@@ -380,8 +820,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 38.5,
-   "note": "complete, 2 tool calls; URL 39 ms"
+   "ms": 33.8,
+   "note": "complete, 2 tool calls; URL 35 ms"
   },
   {
    "id": "period-paper-change-length-shift",
@@ -390,8 +830,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 14.8,
-   "note": "complete, 2 tool calls; URL 14 ms"
+   "ms": 11.5,
+   "note": "complete, 2 tool calls; URL 12 ms"
   },
   {
    "id": "period-warp-kind-month",
@@ -400,8 +840,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.9,
-   "note": "complete, 2 tool calls; URL 17 ms"
+   "ms": 13.7,
+   "note": "complete, 2 tool calls; URL 13 ms"
   },
   {
    "id": "period-moisture-trend",
@@ -410,8 +850,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 44.9,
-   "note": "complete, 2 tool calls; URL 50 ms"
+   "ms": 36.4,
+   "note": "complete, 2 tool calls; URL 36 ms"
   },
   {
    "id": "period-fiscal-vs-previous",
@@ -420,8 +860,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.8,
-   "note": "complete, 2 tool calls; URL 18 ms"
+   "ms": 13.7,
+   "note": "complete, 2 tool calls; URL 14 ms"
   },
   {
    "id": "period-month-unequal-days",
@@ -430,8 +870,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.2,
-   "note": "complete, 2 tool calls; URL 19 ms"
+   "ms": 14.2,
+   "note": "complete, 2 tool calls; URL 14 ms"
   },
   {
    "id": "period-speed-opportunity-month",
@@ -440,8 +880,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 10.9,
-   "note": "complete, 2 tool calls; URL 12 ms"
+   "ms": 11.1,
+   "note": "complete, 2 tool calls; URL 11 ms"
   },
   {
    "id": "period-speed-opportunity-crew-shift",
@@ -450,7 +890,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 6.0,
+   "ms": 6.5,
    "note": "complete, 2 tool calls; URL 7 ms"
   },
   {
@@ -460,8 +900,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 40.4,
-   "note": "complete, 2 tool calls; URL 44 ms"
+   "ms": 36.5,
+   "note": "complete, 2 tool calls; URL 37 ms"
   },
   {
    "id": "period-trend-downtime-4w",
@@ -470,8 +910,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 25.6,
-   "note": "complete, 2 tool calls; URL 25 ms"
+   "ms": 21.6,
+   "note": "complete, 2 tool calls; URL 22 ms"
   },
   {
    "id": "period-trend-minutes-per-stop",
@@ -480,8 +920,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 43.6,
-   "note": "complete, 2 tool calls; URL 41 ms"
+   "ms": 36.9,
+   "note": "complete, 2 tool calls; URL 37 ms"
   },
   {
    "id": "period-trend-warp-weekly",
@@ -490,8 +930,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 52.3,
-   "note": "complete, 2 tool calls; URL 41 ms"
+   "ms": 40.1,
+   "note": "complete, 2 tool calls; URL 38 ms"
   },
   {
    "id": "period-ambiguous-last-week",
@@ -500,7 +940,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 0.1,
+   "ms": 0.0,
    "note": "refused: Ambiguous window: say which window to compare, for example '"
   },
   {
@@ -510,8 +950,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 34.9,
-   "note": "complete, 6 tool calls; URL 31 ms"
+   "ms": 32.1,
+   "note": "complete, 6 tool calls; URL 29 ms"
   },
   {
    "id": "period-control-month-pareto",
@@ -520,8 +960,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.8,
-   "note": "complete, 2 tool calls; URL 4 ms"
+   "ms": 4.8,
+   "note": "complete, 2 tool calls; URL 5 ms"
   },
   {
    "id": "period-control-fiscal-stops",
@@ -530,8 +970,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.2,
-   "note": "complete, 2 tool calls; URL 3 ms"
+   "ms": 3.4,
+   "note": "complete, 2 tool calls; URL 4 ms"
   },
   {
    "id": "period-control-named-window-wins",
@@ -540,8 +980,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.8,
-   "note": "complete, 2 tool calls; URL 4 ms"
+   "ms": 4.8,
+   "note": "complete, 2 tool calls; URL 6 ms"
   },
   {
    "id": "period-control-compare-shifts",
@@ -550,8 +990,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 41.5,
-   "note": "complete, 6 tool calls; URL 40 ms"
+   "ms": 37.5,
+   "note": "complete, 6 tool calls; URL 37 ms"
   },
   {
    "id": "period-control-setup-matrix",
@@ -560,7 +1000,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 0.0,
+   "ms": 0.1,
    "note": "refused: Switch Period to Day for the setup matrix; that evidence is "
   },
   {
@@ -570,8 +1010,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 13.6,
-   "note": "complete, 6 tool calls; URL 15 ms"
+   "ms": 16.9,
+   "note": "complete, 6 tool calls; URL 16 ms"
   },
   {
    "id": "downtime-minutes",
@@ -580,7 +1020,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 8.2,
+   "ms": 6.7,
    "note": "complete, 3 tool calls; URL 7 ms"
   },
   {
@@ -590,7 +1030,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 9.0,
+   "ms": 8.5,
    "note": "complete, 2 tool calls; URL 8 ms"
   },
   {
@@ -600,8 +1040,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 25.4,
-   "note": "complete, 9 tool calls; URL 26 ms"
+   "ms": 28.0,
+   "note": "complete, 9 tool calls; URL 28 ms"
   },
   {
    "id": "chart-honesty",
@@ -610,8 +1050,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 11.3,
-   "note": "partial, 3 tool calls; URL 10 ms"
+   "ms": 13.2,
+   "note": "partial, 3 tool calls; URL 13 ms"
   },
   {
    "id": "story-trim-creep",
@@ -620,8 +1060,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 75.7,
-   "note": "complete, 6 tool calls; URL 104 ms"
+   "ms": 59.8,
+   "note": "complete, 6 tool calls; URL 93 ms"
   },
   {
    "id": "story-trim-creep@anthropic",
@@ -630,7 +1070,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 113.9,
+   "ms": 98.1,
    "note": "complete, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -640,8 +1080,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 27.7,
-   "note": "complete, 6 tool calls; URL 59 ms"
+   "ms": 23.7,
+   "note": "complete, 6 tool calls; URL 55 ms"
   },
   {
    "id": "story-splicer3-week@anthropic",
@@ -650,7 +1090,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 63.6,
+   "ms": 41.5,
    "note": "complete, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -660,8 +1100,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 104.5,
-   "note": "complete, 8 tool calls; URL 114 ms"
+   "ms": 64.7,
+   "note": "complete, 8 tool calls; URL 70 ms"
   },
   {
    "id": "story-monday-warp@anthropic",
@@ -670,7 +1110,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 151.8,
+   "ms": 105.4,
    "note": "complete, 4 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -680,7 +1120,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 20.5,
+   "ms": 16.4,
    "note": "partial, 6 tool calls; URL 18 ms"
   },
   {
@@ -720,7 +1160,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 0.9,
+   "ms": 0.7,
    "note": "unavailable, 1 tool calls; URL 1 ms"
   },
   {
@@ -730,7 +1170,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 0.9,
+   "ms": 0.7,
    "note": "unavailable, 1 tool calls; URL 1 ms"
   },
   {
@@ -740,7 +1180,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 0.1,
+   "ms": 0.0,
    "note": "refused: Selected shift only: choose Production-day comparison or cha"
   },
   {
@@ -760,8 +1200,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.0,
-   "note": "complete, 3 tool calls; URL 17 ms"
+   "ms": 12.5,
+   "note": "complete, 3 tool calls; URL 11 ms"
   },
   {
    "id": "injection-user-text",
@@ -770,8 +1210,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.0,
-   "note": "complete, 6 tool calls; URL 16 ms"
+   "ms": 15.3,
+   "note": "complete, 6 tool calls; URL 17 ms"
   },
   {
    "id": "injection-user-text@anthropic",
@@ -780,7 +1220,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 21.5,
+   "ms": 25.8,
    "note": "complete, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -790,8 +1230,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 13.2,
-   "note": "complete, 6 tool calls; URL 15 ms"
+   "ms": 15.6,
+   "note": "complete, 6 tool calls; URL 21 ms"
   },
   {
    "id": "not-measured-glue-temperature@anthropic",
@@ -800,7 +1240,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 3.6,
+   "ms": 3.7,
    "note": "unavailable, 1 model calls"
   },
   {
@@ -820,7 +1260,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 18.9,
+   "ms": 10.6,
    "note": "unavailable, 2 model calls"
   },
   {
@@ -830,7 +1270,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 0.2,
+   "ms": 0.0,
    "note": "refused: Offline mode supports shift performance, downtime, speed, qu"
   },
   {
@@ -840,8 +1280,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 30.3,
-   "note": "complete, 4 tool calls; URL 52 ms"
+   "ms": 17.1,
+   "note": "complete, 4 tool calls; URL 53 ms"
   },
   {
    "id": "dq-corrupt-record-reported",
@@ -850,8 +1290,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 19.3,
-   "note": "complete, 3 tool calls; URL 15 ms"
+   "ms": 13.7,
+   "note": "complete, 3 tool calls; URL 14 ms"
   },
   {
    "id": "dq-other-shift-stays-complete",
@@ -860,8 +1300,8 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.0,
-   "note": "complete, 6 tool calls; URL 16 ms"
+   "ms": 16.3,
+   "note": "complete, 6 tool calls; URL 15 ms"
   },
   {
    "id": "live-why-slow@anthropic",
@@ -870,7 +1310,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 31.3,
+   "ms": 44.1,
    "note": "complete, 5 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -880,7 +1320,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 22.0,
+   "ms": 33.4,
    "note": "complete, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -890,7 +1330,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 19.8,
+   "ms": 23.6,
    "note": "partial, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -900,7 +1340,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 15.5,
+   "ms": 17.3,
    "note": "complete, 4 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -910,7 +1350,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 27.6,
+   "ms": 21.2,
    "note": "complete, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -920,7 +1360,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 20.5,
+   "ms": 22.9,
    "note": "complete, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -930,7 +1370,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 3.3,
+   "ms": 4.0,
    "note": "unavailable, 1 model calls"
   },
   {
@@ -940,7 +1380,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 3.5,
+   "ms": 3.6,
    "note": "unavailable, 1 model calls"
   },
   {
@@ -950,7 +1390,7 @@
    "provider": "anthropic",
    "mode": "live",
    "outcome": "pass",
-   "ms": 11.8,
+   "ms": 12.3,
    "note": "complete, 3 model calls; prompt changed since the fixture was recorded; re-record with --live"
   },
   {
@@ -964,74 +1404,64 @@
    "note": "plan_rejected, 0 tool calls"
   },
   {
-   "id": "money-shift-dollars",
-   "case": "money-shift-dollars",
+   "id": "analyst-plan-all-shifts-nine-steps",
+   "case": "analyst-plan-all-shifts-nine-steps",
    "type": "routing",
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 14.4,
-   "note": "complete, 2 tool calls; URL 18 ms"
+   "ms": 58.1,
+   "note": "complete, 9 tool calls"
   },
   {
-   "id": "money-opportunities-month",
-   "case": "money-opportunities-month",
+   "id": "analyst-plan-too-many-steps",
+   "case": "analyst-plan-too-many-steps",
+   "type": "refusal",
+   "provider": null,
+   "mode": "offline",
+   "outcome": "pass",
+   "ms": 0.3,
+   "note": "plan_rejected, 0 tool calls"
+  },
+  {
+   "id": "analyst-plan-all-shifts-period-kpis",
+   "case": "analyst-plan-all-shifts-period-kpis",
    "type": "routing",
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 27.7,
-   "note": "complete, 2 tool calls; URL 32 ms"
+   "ms": 36.9,
+   "note": "complete, 3 tool calls"
   },
   {
-   "id": "money-costing-us-week-shift-2",
-   "case": "money-costing-us-week-shift-2",
-   "type": "routing",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 24.0,
-   "note": "complete, 2 tool calls; URL 27 ms"
-  },
-  {
-   "id": "money-period-control-opportunities",
-   "case": "money-period-control-opportunities",
-   "type": "routing",
+   "id": "analyst-fastest-shift-contradicted",
+   "case": "analyst-fastest-shift-contradicted",
+   "type": "faithfulness",
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
    "ms": 24.3,
-   "note": "complete, 2 tool calls; URL 25 ms"
+   "note": "complete, 6 tool calls"
   },
   {
-   "id": "money-margin-not-set",
-   "case": "money-margin-not-set",
-   "type": "refusal",
+   "id": "analyst-fastest-shift-consistent",
+   "case": "analyst-fastest-shift-consistent",
+   "type": "faithfulness",
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 13.9,
-   "note": "complete, 2 tool calls; URL 13 ms"
+   "ms": 22.2,
+   "note": "complete, 6 tool calls"
   },
   {
-   "id": "money-compare-in-dollars-refused",
-   "case": "money-compare-in-dollars-refused",
-   "type": "refusal",
+   "id": "analyst-orderings-per-shift",
+   "case": "analyst-orderings-per-shift",
+   "type": "faithfulness",
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 0.1,
-   "note": "refused: Dollars come with where the money went this shift, the lever"
-  },
-  {
-   "id": "money-costing-us-most-minutes-pareto",
-   "case": "money-costing-us-most-minutes-pareto",
-   "type": "routing",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 4.7,
-   "note": "complete, 2 tool calls; URL 6 ms"
+   "ms": 22.4,
+   "note": "complete, 6 tool calls"
   },
   {
    "id": "value-kpi-september-all",
@@ -1040,7 +1470,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 20.1,
+   "ms": 15.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1050,7 +1480,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.4,
+   "ms": 10.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1060,7 +1490,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 23.2,
+   "ms": 12.2,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1070,7 +1500,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.0,
+   "ms": 10.4,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1080,7 +1510,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 19.8,
+   "ms": 12.6,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1090,7 +1520,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 14.5,
+   "ms": 15.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1100,7 +1530,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 17.2,
+   "ms": 13.4,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1110,7 +1540,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.8,
+   "ms": 9.2,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1120,7 +1550,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.4,
+   "ms": 11.6,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1130,7 +1560,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 17.2,
+   "ms": 11.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1140,7 +1570,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 17.3,
+   "ms": 10.9,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1150,7 +1580,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.6,
+   "ms": 11.7,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1160,7 +1590,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.8,
+   "ms": 11.5,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1170,7 +1600,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.7,
+   "ms": 11.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1180,7 +1610,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.0,
+   "ms": 10.6,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1190,7 +1620,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 20.2,
+   "ms": 12.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1200,7 +1630,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.3,
+   "ms": 10.1,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1210,7 +1640,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.6,
+   "ms": 9.9,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1220,7 +1650,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 17.2,
+   "ms": 12.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1230,7 +1660,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 18.5,
+   "ms": 15.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1240,7 +1670,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 16.8,
+   "ms": 11.4,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1260,7 +1690,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.6,
+   "ms": 4.1,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1270,7 +1700,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.0,
+   "ms": 4.1,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1280,7 +1710,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.9,
+   "ms": 4.4,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1290,7 +1720,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.5,
+   "ms": 3.9,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1300,7 +1730,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.1,
+   "ms": 4.4,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1310,7 +1740,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 17.8,
+   "ms": 13.7,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1320,7 +1750,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 14.1,
+   "ms": 10.1,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1330,7 +1760,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 15.7,
+   "ms": 11.6,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1340,7 +1770,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.2,
+   "ms": 3.6,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1350,7 +1780,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.2,
+   "ms": 3.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1360,7 +1790,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.8,
+   "ms": 3.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1370,7 +1800,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 8.0,
+   "ms": 8.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1380,7 +1810,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.1,
+   "ms": 11.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1390,7 +1820,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.9,
+   "ms": 10.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1400,7 +1830,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.9,
+   "ms": 8.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1410,7 +1840,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.2,
+   "ms": 7.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1420,7 +1850,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 9.3,
+   "ms": 13.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1430,7 +1860,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.9,
+   "ms": 4.6,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1440,7 +1870,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 3.3,
+   "ms": 5.1,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1450,7 +1880,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 11.3,
+   "ms": 14.4,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1460,7 +1890,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 6.6,
+   "ms": 9.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1470,7 +1900,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 63.8,
+   "ms": 51.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1480,7 +1910,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 55.6,
+   "ms": 43.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1490,7 +1920,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 59.1,
+   "ms": 36.5,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1500,7 +1930,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 32.4,
+   "ms": 23.2,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1510,7 +1940,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 7.3,
+   "ms": 8.1,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1520,7 +1950,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.4,
+   "ms": 7.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1530,7 +1960,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.8,
+   "ms": 6.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1540,7 +1970,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.5,
+   "ms": 3.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1550,7 +1980,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.5,
+   "ms": 2.9,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1570,7 +2000,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 9.0,
+   "ms": 5.9,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1580,7 +2010,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.7,
+   "ms": 6.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1590,7 +2020,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.4,
+   "ms": 5.5,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1600,7 +2030,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.7,
+   "ms": 5.2,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1620,7 +2050,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.5,
+   "ms": 2.8,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1630,7 +2060,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.5,
+   "ms": 2.9,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1640,7 +2070,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 8.8,
+   "ms": 5.6,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1650,7 +2080,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 5.7,
+   "ms": 8.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1660,7 +2090,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.7,
+   "ms": 6.3,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1670,7 +2100,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.4,
+   "ms": 5.9,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1680,7 +2110,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.8,
+   "ms": 3.0,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1690,7 +2120,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.7,
+   "ms": 3.4,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1700,7 +2130,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 2.5,
+   "ms": 3.2,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1710,7 +2140,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 8.8,
+   "ms": 6.1,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1720,7 +2150,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.8,
+   "ms": 5.7,
    "note": "complete, 1 tool calls"
   },
   {
@@ -1730,77 +2160,7 @@
    "provider": null,
    "mode": "offline",
    "outcome": "pass",
-   "ms": 4.8,
-   "note": "complete, 1 tool calls"
-  },
-  {
-   "id": "value-dollars-shift-0914-shift-2",
-   "case": "value-dollars-shift-0914-shift-2",
-   "type": "value",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 11.4,
-   "note": "complete, 1 tool calls"
-  },
-  {
-   "id": "value-dollars-shift-0930-shift-1",
-   "case": "value-dollars-shift-0930-shift-1",
-   "type": "value",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 10.4,
-   "note": "complete, 1 tool calls"
-  },
-  {
-   "id": "value-dollars-shift-0914-shift-2-rates",
-   "case": "value-dollars-shift-0914-shift-2-rates",
-   "type": "value",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 11.1,
-   "note": "complete, 1 tool calls"
-  },
-  {
-   "id": "value-dollars-waste-september",
-   "case": "value-dollars-waste-september",
-   "type": "value",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 19.8,
-   "note": "complete, 1 tool calls"
-  },
-  {
-   "id": "value-dollars-pareto-week-0907-shift-2",
-   "case": "value-dollars-pareto-week-0907-shift-2",
-   "type": "value",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 4.0,
-   "note": "complete, 1 tool calls"
-  },
-  {
-   "id": "value-dollars-opportunities-september",
-   "case": "value-dollars-opportunities-september",
-   "type": "value",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 27.5,
-   "note": "complete, 1 tool calls"
-  },
-  {
-   "id": "value-dollars-opportunities-week-0914-shift-2-margin",
-   "case": "value-dollars-opportunities-week-0914-shift-2-margin",
-   "type": "value",
-   "provider": null,
-   "mode": "offline",
-   "outcome": "pass",
-   "ms": 23.9,
+   "ms": 4.6,
    "note": "complete, 1 tool calls"
   }
  ]

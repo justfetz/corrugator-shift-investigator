@@ -24,7 +24,7 @@ Every number on the mockup is real: production day 2026-09-14, shift 2, from the
 6. **Follow-up chips** generated from the answer: Show the order changes · Which setups ran over trim? · Compare with shift 1 · Ask the analyst about this.
 7. **Footer**: the permalink (`/corr/1/day/2026-09-14/shift/2?q=why-slow`, #20), "What came back, per query" (the folded trace, #33), Markdown and PDF exports.
 
-**Earlier cards** collapse to one line (`Show the downtime breakdown · Shift 2 · 52 ms · $299 downtime · Open`) so the thread stays scannable.
+**Earlier cards** collapse to one line (`Show the downtime breakdown · Shift 2 · 52 ms · $299 downtime · Open`) so the thread stays scannable. *Superseded on 2026-11-10 (issue #86, the owner's call: "mimic Datasette Agent"): the thread is a chat transcript, the newest card at the bottom above an ask bar pinned to the bottom of the window, earlier cards whole above it and nothing collapsed.*
 
 **Phone (390 px).** Same card, one column, the rail behind a button, chart first, query box collapsed to a line.
 
@@ -50,6 +50,6 @@ Every number on the mockup is real: production day 2026-09-14, shift 2, from the
 
 ## What is built so far
 
-`built/` holds renders of the running app at the mockup's sizes, written by `node tests/layout_check.cjs <url> docs/design/2026-11-09-ask-and-answer/built` (see [TESTING](../../TESTING.md)): `desktop.png` (1440×1040, "Why was this shift slow?" answered), `desktop-three.png` (three questions: one open card, two collapsed), `phone.png` and `phone-questions.png` (390×844, the card and the rail sheet). Compare them with `desktop.png` and `phone.png` here.
+`built/` holds renders of the running app at the mockup's sizes, written by `node tests/layout_check.cjs <url> docs/design/2026-11-09-ask-and-answer/built` (see [TESTING](../../TESTING.md)): `desktop.png` (1440×1040, "Why was this shift slow?" answered), `desktop-three.png` (three questions in quick succession: the open card at the bottom, the earlier ones above it), `phone.png` and `phone-questions.png` (390×844, the card and the rail sheet). Compare them with `desktop.png` and `phone.png` here. The chat flow of issue #86 adds `desktop-chat.png` and `phone-chat.png` (three questions typed and sent with Enter at 1280×720 and 390×844: the newest answer in view, the ask bar pinned, the rail unmoved and, at 1280×720, without a scroll of its own), `desktop-new-pill.png` (scrolled up during a reveal: the **↓ new** pill) and `desktop-reload.png` (after a reload: the thread restored above the addressed card).
 
 Issue #63 built the shell with the data the app already had. Where the picture shows something a later issue owns, the shell leaves the place and does not fake the content: no dollar line and no dollars on bars or tiles (#31; the rates panel is a labelled placeholder), no follow-up chips and no links on bars (#21), no permalink (#20), no paced reveal (#44). Two things differ from the picture because the real answer is bigger than the mock's: the summary paragraph sits between the query box and the charts, and the query box shows the open step's SQL in a pane beside the list of steps instead of under its line, which is what lets the card fit in 1040 px.

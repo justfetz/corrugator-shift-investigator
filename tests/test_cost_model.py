@@ -209,19 +209,27 @@ def test_invalid_server_rates_fail_at_boot(monkeypatch):
         Workbench()
 
 
-def test_openai_planner_request_with_a_priced_waste_result_fits_the_cap(store, tmp_path):
-    """After one priced waste breakdown the next planner request stays under the 24,000-byte cap."""
+def test_openai_planner_request_with_a_priced_waste_result_is_byte_for_byte_mains(store, tmp_path):
+    """The dollars add nothing to the OpenAI planner loop: neither money tool is offered, and the compact
+    result a priced waste breakdown hands the next request is the unpriced one's, byte for byte. The cap is
+    main's own: since #74 widened get_grade_totals, main's request after one waste breakdown is 24,040 bytes
+    against the 24,000-byte cap, with or without the money tools (measured on af23a4d)."""
+    import json
+    from copy import deepcopy
     from investigator.openai_provider import Budget, OpenAIPlanner, OPENAI_OMITTED_TOOLS
-    sizes = []
+    window = {'period': 'month', 'anchor': DAY}
+    plain = deepcopy(store.get_waste_breakdown(window=window, shift=2))
+    priced = cost_model.attach('get_waste_breakdown', deepcopy(plain), rates())
+    assert priced['provenance'] and all('usd' in row for row in priced['rows'])
+    compact = lambda data: json.dumps(compact_result({'result_id': 'r1', 'tool': 'get_waste_breakdown', 'ok': True,
+                                                      'arguments': {'window': window, 'shift': 2}, 'data': data}))
+    assert compact(priced) == compact(plain)
+    offered = []
 
     def send(payload, key, timeout):
-        import json
-        sizes.append(len(json.dumps(payload).encode()))
-        assert not {t['name'] for t in payload['tools']} & OPENAI_OMITTED_TOOLS
-        call = ('get_waste_breakdown', {'window': {'period': 'month', 'anchor': DAY}, 'shift': 2}) if len(sizes) == 1 else ('cannot_answer', {'reason': 'done'})
+        offered.append({t['name'] for t in payload['tools']})
         return {'status': 'completed', 'usage': {'input_tokens': 1, 'output_tokens': 1},
-                'output': [{'type': 'function_call', 'id': 'fc', 'call_id': f'c{len(sizes)}', 'name': call[0], 'arguments': json.dumps(call[1])}]}
-    import json
+                'output': [{'type': 'function_call', 'id': 'fc', 'call_id': 'c1', 'name': 'cannot_answer', 'arguments': json.dumps({'reason': 'done'})}]}
     planner = OpenAIPlanner('sk-fake-test-key-not-a-real-credential', Budget(tmp_path / 'b.db'), send)
     Agent(store.day_analysis(DAY), planner, store=store, max_seconds=60).ask('Is it bond or warp this month?', Context(DAY, 2, scope='shift'))
-    assert len(sizes) == 2 and sizes[1] < 24000, sizes
+    assert offered and not offered[0] & OPENAI_OMITTED_TOOLS and 'get_waste_breakdown' in offered[0]

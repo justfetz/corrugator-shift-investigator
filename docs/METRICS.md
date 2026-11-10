@@ -1,6 +1,6 @@
 # Metrics, targets, and calendar interpretation
 
-This is the calculation reference for the current synthetic workbench. The data source is the record store (`record_store.py`): two production months, August and September 2026, Monday to Friday, generated once from seed 2026 (`synth.py`, [RECORDS](RECORDS.md)). The daily tools live in `analysis.py`, the period tools in `record_store.py`, the period reports in `periods.py`; `fixture.py` is the legacy one-day XML generator kept for its own tests. These definitions describe what the code measures; they do not establish causal explanations or achievable savings.
+This is the calculation reference for the current synthetic workbench. The data source is the record store (`record_store.py`): two production months, August and September 2026, Monday to Friday, generated once from seed 2026 (`synth.py`, [RECORDS](RECORDS.md)). The daily tools live in `analysis.py`, the period tools in `record_store.py`, the period reports in `periods.py`, and both of the last read the precomputed per-shift sums of the `shift_kpis` table ([below](#the-shift_kpis-table)); `fixture.py` is the legacy one-day XML generator kept for its own tests. These definitions describe what the code measures; they do not establish causal explanations or achievable savings.
 
 ## Quantities and denominators
 
@@ -24,13 +24,13 @@ For each valid setup, let F be gross machine lineal feet, G gross square feet, T
 
 Example: 10 minutes at a 900 target and 10 minutes at a 500 target have a combined target of 14,000 feet. If those runs produce 10,500 feet, attainment is 75%. It is not obtained by taking an unweighted average of their individual percentages.
 
-Period speed is total feet / (480 × number of observed shifts). Period downtime percentages average shift percentages because every supported shift has exactly the same 480-minute denominator. Period waste is weighted by gross area. The current implementation reconstructs target footage from each daily footage/attainment pair; it does not retain an independent raw target-footage field in the period response. Zero or wholly invalid shifts would require additional handling before supporting external data.
+Period speed is total feet / (480 × number of observed shifts). Period downtime percentages average shift percentages because every supported shift has exactly the same 480-minute denominator. Period waste is weighted by gross area. The period report reads each shift's row of the daily matrix from `shift_kpis` (one lookup per window, no per-day rebuild) and reconstructs target footage from each footage/attainment pair; the raw target footage is the table's `target_ft`. Zero or wholly invalid shifts would require additional handling before supporting external data.
 
 In the daily tools `maintenance_pct` is unplanned Maintenance only; the planned window is reported separately as `pm_pct` (stop kind `PM`), and `downtime_pct` is every stop. Dry-end rejects in the record families are per knife position and reason (`BOND`, `WARP`, `MISALIGNMENT`); the quality tools read per-reason areas from the `rejects` table, so a setup with three reasons contributes to three rows (the fixture wrote one reason per setup). The record families carry no order quantity ledger: in the order matrix `requested_sheets`, `remaining_before`, `remaining_after` and `planned_overrun_sheets` are null, `planned_sheets` is this record's `nominal_cuts × outs`, `produced_sheets` is `actual_cuts × outs`, and the knife column is `knife 1/2/3` from `cutoff_allocation` (the fixture's upper/lower only covers two positions).
 
 ## Period tools (record store)
 
-The six period tools (`get_period_kpis`, `compare_periods`, `get_downtime_pareto`, `get_waste_breakdown`, `get_stops_profile`, `get_trend`) read the whole store. Every percentage is a ratio of summed numerators and denominators over the window, never an average of per-day or per-shift percentages: September side trim is sum(trim sq ft) / sum(gross sq ft) over the month's 4,115 setup records, not the mean of 22 daily percentages (the test suite pins that the two differ). Deltas are the difference of the two displayed tiles, so a tile reconciles on screen. An optional `shift` filter restricts every sum to one shift; under the Selected shift only scope the selected shift is enforced.
+The six period tools (`get_period_kpis`, `compare_periods`, `get_downtime_pareto`, `get_waste_breakdown`, `get_stops_profile`, `get_trend`) read the whole store; the tiles (`get_period_kpis`, `compare_periods`, `get_waste_breakdown`, `get_trend`) sum `shift_kpis` rows, and the stop-level and setup-level tools (the Pareto, the stops profile, grade totals, rollstock, overrun, speed opportunity, the reject sub-reasons) stay on the raw tables. Every percentage is a ratio of summed numerators and denominators over the window, never an average of per-day or per-shift percentages: September side trim is sum(trim sq ft) / sum(gross sq ft) over the month's 4,115 setup records, not the mean of 22 daily percentages (the test suite pins that the two differ). Deltas are the difference of the two displayed tiles, so a tile reconciles on screen. An optional `shift` filter restricts every sum to one shift; under the Selected shift only scope the selected shift is enforced.
 
 | Window | Current | Previous |
 | --- | --- | --- |
@@ -70,6 +70,48 @@ A window is `day`, `week` (Mon–Fri), `month` (calendar) or `fiscal`: the 4-4-5
 `get_rollstock` is paper consumed, read from the wet-end records (one per paper run) rather than the setups: per board grade and web width, paper runs, lineal feet, MSF and the share of the window's feet, feet per run, and the previous window's runs, feet and MSF with deltas; the envelope carries the window totals. MSF here is the paper footprint, lineal feet × web width / 12 / 1,000, the same area the board records call gross, so the window total agrees with the volume tile except for runs that straddle the window's edge (a run counts whole on the day it started here, while the tile splits it by setup date: about 60 MSF of September's 160,000); the records carry no basis weight, so tons and cost are not computed and the envelope says so. Under all shifts a run counts whole on the production day its first setup started (the wet-end record's date). Under one shift the wet-end table has no shift, so the tool takes the setups that shift ran on each run: the feet are that shift's setup feet, the run count is distinct wet ends, and a run that spans two shifts is counted in both; the `attribution_note` states which rule applied.
 
 `get_speed_opportunity` answers "where could we run faster" the way a superintendent would check it: per board grade and web width (or crew), over every setup of the window with at least two running minutes (shorter setups never reach steady speed; they are counted in `excluded_short_setups`, never dropped silently): typical speed without stops as a ratio of sums, the median setup speed, the **best fifth** (the fastest fifth of the cell's setups by speed without stops, `ntile(5)`, again a ratio of sums, never the peak), both as percent of the grade target, the gap, and **opportunity hours** = running minutes now minus the minutes the same lineal feet would take at the best-fifth speed. Beside it sits the dry-end reject percent of the fast fifth against the rest: a positive `reject_penalty_points` means the fast setups rejected more, so that part of the gap is a limit rather than an opportunity. A cell with fewer than ten setups reports `insufficient`. The records carry no temperatures, so the heat-transfer ceiling on heavy grades and doublewall (bond needs its temperature range) is stated as an open owner input in every envelope.
+
+## The shift_kpis table
+
+The authoritative KPI inventory. `shift_kpis` holds one row per production day, shift and variant (`corrupt` false: the records as generated; true: the data-quality demo's bad-trim record injected into the day's first shift-2 setup), 258 rows for the two months. `build_shift_kpis` in `record_store.py` computes it once from the six tables: at image build into the prebuilt folder (`python -m investigator.prebuilt`, issue #19), where the store loads it with the rest, or at boot when the store generates. Validation runs once there with the per-day Analysis's rules; a setup that fails is left out of every setup column and counted in `excluded_setups`, and its shift's `coverage` is `incomplete`.
+
+Every measure is a raw numerator or denominator, never a percentage, so any window's tile is a ratio of the sums of these columns, never an average of percentages. The third column names the formula rows each column feeds: tile keys of the period tools' table above, and fields of the period report's daily matrix (which carries the daily KPI tool's fields). `tests/test_shift_kpis.py` reads this table and the database's own column list and fails when they differ.
+
+| Column | Type | Formula row |
+| --- | --- | --- |
+| `production_date` | `DATE` | key: the production day (07:00 to 07:00) |
+| `shift` | `INTEGER` | key: shift 1, 2 or 3; the tools' shift filter |
+| `corrupt` | `BOOLEAN` | key: false for the records as generated, true for the data-quality demo |
+| `crew` | `VARCHAR` | key: the shift record's crew label, the shift's note in the report |
+| `coverage` | `VARCHAR` | key: complete, or incomplete when a setup of the shift failed validation |
+| `excluded_setups` | `INTEGER` | key: setups that failed validation, left out of every setup column |
+| `setups` | `INTEGER` | Dry-end setups: `setups`, `valid_setups`, `lineal_per_setup` |
+| `paper_changes` | `INTEGER` | Paper changes, distinct wet-end IDs in the shift: the daily `paper_changes`, `lineal_per_wet_end` |
+| `wet_end_ids` | `VARCHAR[]` | Paper changes over a window, distinct IDs across the window's rows, so a run that crosses a shift boundary counts once: `paper_changes`, `lineal_per_paper_change` |
+| `lineal_ft` | `DOUBLE` | sum(F): `lineal_ft`, `observed_lineal_ft`, `observed_shift_fpm`, `speed_run_fpm`, `speed_all_fpm`, `lineal_per_setup`, `lineal_per_paper_change`, `lineal_per_wet_end`, `throughput_in` |
+| `target_ft` | `DOUBLE` | sum(v × m), the grade-weighted target footage: `speed_to_target_pct` |
+| `elapsed_seconds` | `DOUBLE` | sum(m) of the setup records: `speed_run_fpm` |
+| `setup_stop_seconds` | `DOUBLE` | Stop seconds inside the setup records, subtracted from elapsed: `speed_run_fpm` |
+| `gross_sqft` | `DOUBLE` | sum(G): `volume_msf`, `msf_per_day`, `gross_sqft`, `estimated_good_sqft`, `throughput_in`, the denominator of every % of gross tile |
+| `trim_sqft` | `DOUBLE` | sum(T): `trim_pct`, `estimated_good_sqft`, `unexplained_pct` |
+| `shear_sqft` | `DOUBLE` | sum(S): `shear_pct`, `estimated_good_sqft`, `unexplained_pct` |
+| `reject_sqft` | `DOUBLE` | sum(R): `dry_end_pct`, `estimated_good_sqft`, `unexplained_pct` |
+| `bond_sqft` | `DOUBLE` | Reject lines of the BOND family: `bond_pct` |
+| `warp_sqft` | `DOUBLE` | Reject lines of the WARP family: `warp_pct` |
+| `misalignment_sqft` | `DOUBLE` | Reject lines of the MISALIGNMENT family: `misalignment_pct` |
+| `moisture_sqft` | `DOUBLE` | Reject lines of the MOISTURE family: `moisture_pct` |
+| `setups_above_trim_target` | `INTEGER` | Setups whose own trim is above 3.25 % of their gross: `setups_above_trim_target` |
+| `grade_gross_sqft` | `MAP(VARCHAR, DOUBLE)` | Grade mix: sum(G) per board grade (a window sums the maps; the values add to `gross_sqft`) |
+| `scheduled_seconds` | `DOUBLE` | Scheduled shift time: `speed_all_fpm`, `downtime_pct`, `maintenance_pm_pct`, `operator_pct` |
+| `bale_sqft` | `DOUBLE` | The shift's bale scale reading: `bale_pct`, `bale_msf`, `unexplained_pct` |
+| `stops` | `INTEGER` | Count of stop records: `stops`, `minutes_per_stop` |
+| `stop_seconds` | `DOUBLE` | All stop seconds: `downtime_pct`, `downtime_minutes`, `minutes_per_stop` |
+| `maintenance_seconds` | `DOUBLE` | Unplanned Maintenance stop seconds: `maintenance_pct`, `maintenance_pm_pct` |
+| `pm_seconds` | `DOUBLE` | Planned (PM) stop seconds: `pm_pct`, `maintenance_pm_pct` |
+| `operator_seconds` | `DOUBLE` | Operator stop seconds: `operator_pct` |
+| `source_ids` | `VARCHAR[]` | The setup records summed, the evidence of every daily matrix row: `source_ids` |
+
+The daily matrix keeps the daily KPI tool's fixed 480-minute shift for `observed_shift_fpm` and 28,800 seconds for its downtime percentages; the period tiles use `scheduled_seconds`. The stop-level and setup-level tools, and the report's recurring-downtime table and notes, read the raw tables.
 
 ## Cost model: data to dollars (issue #31)
 
@@ -130,9 +172,9 @@ field and the narrative validator substitutes every dollar from the tool result.
 
 A money word beside another question never replaces it. Downtime, rejects, waste, the Pareto, the
 overview and the comparison carry their dollars on the rows, so "which reason is costing us the most
-minutes" is the Pareto, priced. A comparison, trend, rollstock, grade, over/under-run, stops-per-day,
-summary, matrix, notes or ranking asked "in dollars" is refused with what to ask instead, not
-answered as the levers alone.
+minutes" is the Pareto, priced. A comparison, trend, speed against normal, volume ("how much did we
+make in dollars"), rollstock, grade, over/under-run, stops-per-day, summary, matrix, notes or ranking
+asked "in dollars" is refused with what to ask instead, not answered as the levers alone.
 
 The live paths: the narrative may cite `usd`, `usd_per_year`, `paper_usd`, `machine_time_usd` and
 `contribution_usd` (the formula text and intermediate quantities stay off the packet). The OpenAI

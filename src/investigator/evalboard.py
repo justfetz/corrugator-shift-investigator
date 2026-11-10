@@ -124,6 +124,8 @@ def describe_expect(expect):
         want = expect['charts']
         lines.append(f'Draws at least {want.get("min", 0)} chart(s)' if isinstance(want, dict)
                      else ('Draws no chart' if want == 0 else f'Draws exactly {want} chart' + ('' if want == 1 else 's')))
+    if 'chart_units' in expect:
+        lines.append('Charts in ' + _words(expect['chart_units']) + ', in that order')
     if 'tables' in expect:
         lines.append('Shows the table' + ('' if len(expect['tables']) == 1 else 's') + ' ' + _words(expect['tables'])
                      if expect['tables'] else 'Shows no table')
@@ -153,6 +155,13 @@ def describe_expect(expect):
         lines.append(f'The model\'s interpretation is "{expect["narrative_status"]}"')
     if 'narrative_not_match' in expect:
         lines.append(f'The interpretation never matches /{expect["narrative_not_match"]}/')
+    if 'narrative_match' in expect:
+        lines.append(f'An interpretation paragraph matches /{expect["narrative_match"]}/')
+    if 'comparisons_withdrawn' in expect:
+        n = expect['comparisons_withdrawn']
+        lines.append(f'{n} paragraph' + (' is' if n == 1 else 's are') + ' withdrawn because the ordering it asserts contradicts the values it cites, '
+                     'and one limitation line says so (issue #79)' if n else
+                     'No comparison is withdrawn: every ordering the interpretation asserts agrees with the values it cites (issue #79)')
     if 'history_length' in expect:
         lines.append(f'Carries {expect["history_length"]} questions of history to the next turn')
     if 'max_cost_usd' in expect:

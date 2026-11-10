@@ -1,5 +1,8 @@
 'use strict';
-const $ = id => document.getElementById(id);
+// While a card of the thread is drawn into its own containers (#86), `slots` maps the card's container ids to them;
+// otherwise every id is the page's own element.
+let slots = null;
+const $ = id => (slots&&slots[id])||document.getElementById(id);
 let config, sessionId = null, latest = null;
 const PROVIDERS={openai:{name:'OpenAI',header:'X-OpenAI-Key'},anthropic:{name:'Anthropic',header:'X-Anthropic-Key'}};
 function provider(){ return PROVIDERS[$('mode').value]||null; }
@@ -141,23 +144,25 @@ function pushAddress(url,replace=false){ if(!nav||currentAddress()===url)return;
 function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?[bareUrl(url)]:[])].slice(-maxPriors()); }   // follow=false: the period report is a view, not a question in the conversation
 // Back, forward or a pasted address: the controls follow the URL, and the view becomes the open card of the
 // thread. A view this page has shown opens its card again without a request; any other is fetched as JSON from
-// the same address and lands in a new card, through the same render entry as an asked question.
-async function restore(url){
+// the same address and lands in a new card, through the same render entry as an asked question. On a reload, `hint`
+// is the stored card for this address (#86): its title and question, rather than the address as the title.
+async function restore(url,hint=null){
  if(!applyUrl(url))return false;
  renderQuestionChips(); sessionEpoch++; sessionId=null; $('api-key').value='';   // the scope may have changed under the open card: a fresh server conversation
  const held=thread.find(r=>r.state==='done'&&r.url===url);
- if(held){ held.epoch=sessionEpoch; openId=held.id; followView(url,!held.report); renderCard(); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
- if(!queryOf(url).has('measure')){ openId=null; conversation=[]; renderCard(); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
+ if(held){ held.epoch=sessionEpoch; openId=held.id; followView(url,!held.report); renderCard(); scheduleFollow(true); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
+ if(!queryOf(url).has('measure')){ openId=null; conversation=[]; renderCard(); scheduleFollow(true); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
  // Nothing is disabled while this loads, so the conversation is this address's own priors from now on: a question
  // asked meanwhile, or a chip link, never carries the previous day's views (the grammar refuses those).
  conversation=priorsOf(url).slice(-maxPriors());
  $('status').textContent='Loading this address…';
- const scope=currentScope(), epoch=sessionEpoch, rec={id:++seq,question:bareUrl(url),title:bareUrl(url),scope,answered:null,mode:'offline',report:queryOf(url).get('measure')==='report',corrupt:$('corrupt').checked,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
- thread.push(rec); openId=rec.id; renderCard(); updateScope();
+ const named=hint&&typeof hint.title==='string'&&typeof hint.question==='string';
+ const scope=currentScope(), epoch=sessionEpoch, rec={id:++seq,question:named?hint.question:bareUrl(url),title:named?hint.title:bareUrl(url),scope,answered:null,mode:'offline',report:queryOf(url).get('measure')==='report',corrupt:$('corrupt').checked,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null,askUrl:url,analysed:!!(hint&&hint.analysed)};
+ thread.push(rec); openId=rec.id; renderCard(); scheduleFollow(true); updateScope(); saveThread();
  try{
   const response=await fetch(url,{headers:{Accept:'application/json'}});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-  rec.url=result.url||url; rec.question=rec.title=bareUrl(rec.url);
+  rec.url=result.url||url; if(!named)rec.question=rec.title=bareUrl(rec.url);
   // Only while nothing has moved on since: a scope change or another answer owns the conversation and the address bar.
   if(epoch===sessionEpoch&&openId===rec.id&&currentAddress()===url){ followView(rec.url,!rec.report); if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url); }   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
   land(rec,result); $('status').textContent=readyText();
@@ -313,7 +318,7 @@ function speedChart(chart,wrap){
    labelText(svg,r[chart.x],f.x0-8,y+ty,f.chars);
    svg.append(barPath(f.x0,y+by,(Number(r[chart.y])/max)*(f.x1-f.x0),bh,chart.coverage==='complete'?'bar cur':'bar incomplete'));
    if(r.target_fpm){const x=f.x0+r.target_fpm/max*(f.x1-f.x0);svg.append(svgNode('line',{x1:x,x2:x,y1:y+by-3,y2:y+by+bh+3,class:'target'}));}
-   const detail=r.target_fpm?`${r[chart.x]} / ${r.grade||'grade-weighted'}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. Includes downtime.`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;
+   const detail=r.target_fpm?`${chart.x==='grade'?r.grade:`${r[chart.x]} / ${r.grade||'grade-weighted'}`}: ${Number(r[chart.y]).toFixed(1)} ft/min; target ${r.target_fpm.toFixed(1)}; ${r.speed_to_target_pct.toFixed(1)}% of target. ${chart.y==='speed_run_fpm'?'Without stops.':'Includes downtime.'}`:`${r[chart.x]}: ${Number(r[chart.y]).toFixed(1)} ${chart.unit}`;
    const value=svgNode('text',{x:f.x1+8,y:y+ty,tabindex:0,'aria-label':detail,class:'val'},r.target_fpm?`${Number(r[chart.y]).toFixed(1)} / ${r.speed_to_target_pct.toFixed(1)}%`:Number(r[chart.y]).toFixed(1));value.append(svgNode('title',{},detail));svg.append(value);
   });
   box.append(svg);
@@ -416,7 +421,7 @@ function showChart(chart) {
  const title=chart.title||`Shift ${chart.shift} · ${chart.unit==='minutes'?'Recorded downtime':isSpeed?'Wet-end speed (bars) / grade target (marks)':'Dry-end rejects'}`;
  const notes=[];
  if(chart.coverage!=='complete')notes.push({text:'Incomplete data: observed values only.',cls:'warning-note'});
- if(isSpeed)notes.push('Value = ft/min / % of target; the mark is the grade target. Elapsed time includes downtime; hover a value for the grade.');
+ if(isSpeed)notes.push(chart.y==='speed_run_fpm'?'Value = ft/min without stops / % of target; the mark is the grade target.':'Value = ft/min / % of target; the mark is the grade target. Elapsed time includes downtime; hover a value for the grade.');
  const wrap=chartCard(title,notes);
  if(!rows.length)wrap.append(node('p','No records match this filter.','muted'));
  else if(chart.type==='line')lineChart(chart,wrap);
@@ -523,6 +528,7 @@ async function primeKpis(){
   if(!entry)return;
   renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
   const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”, the address ${result.url||''}. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
+  scheduleFollow();
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
 
@@ -542,8 +548,11 @@ function copyText(text,button){
  try{ if(typeof navigator!=='undefined'&&navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(()=>done('Copied'),()=>done('Copy failed')); else done('Copy unavailable'); }catch(e){done('Copy failed');}
 }
 function revealStep(i){ try{ $('execution').open=true; const step=document.getElementById(`step-${i}`); if(step)step.open=true; }catch(e){} }
-function revealQuery(i){ try{ const q=document.getElementById(`query-${i}`); if(q){q.hidden=false;q.open=true;} }catch(e){} }   // a query folded behind "N more queries" opens when something links to it
-function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; a.addEventListener('click',()=>revealQuery(i)); return a; }
+const hrefOf=a=>String((typeof a.getAttribute==='function'?a.getAttribute('href'):a.href)||'');
+// A query folded behind "N more queries" opens when something links to it. The box is found from the link's own href
+// when it is clicked, so a card that moved up into the thread (its ids prefixed, #86) opens its own box.
+function revealQuery(link){ try{ const q=document.getElementById(hrefOf(link).replace(/^#/,'')); if(q){q.hidden=false;q.open=true;} }catch(e){} }
+function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; a.addEventListener('click',()=>revealQuery(a)); return a; }
 function queryBox(entry,i){
  const d=node('details',undefined,'query '+(entry.ok?'ok':'failed')); d.id=`query-${i}`;
  const sum=node('summary',undefined,'query-sum');
@@ -609,23 +618,26 @@ function showResult(result) {
  for(const entry of shiftKpis)shiftTiles(entry,result,shiftKpis.length>1);
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)showChart(chart);
- afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip
+ if(!slots)afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip. An earlier card drawn into its own containers has no trail (#86)
  $('calls').textContent=`${result.status?result.status+' · ':''}${usageText(result.usage)}`;
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
 }
 
-// ---- The thread of answer cards (issue #63). One card is open: its title line, query box, summary, charts,
-// tiles and exports fill the fixed containers of #card. Earlier answers are one line each under it, newest on
-// top, with an Open button. Submitting draws the open card as a skeleton in the same task as the click, and
-// the answer fills that card in place; nothing on the page is disabled while a question is out. The thread
-// lives in this page's memory; an offline answer's address is in the address bar (issue #20, restore() above).
+// ---- The thread of answer cards (issues #63, #86). One card is open: its title line, query box, summary, charts,
+// tiles and exports fill the fixed containers of #card, at the bottom of the transcript, right above the ask bar.
+// Earlier answers sit above it, newest nearest (in the DOM they follow #card, newest first; the stylesheet stacks
+// them oldest at the top). Each keeps its whole card under a title line with an Open button: nothing is collapsed
+// when a new question arrives, it only moves up. Submitting draws the open card as a skeleton in the same task as
+// the click, and the answer fills that card in place; nothing on the page is disabled while a question is out. An
+// offline answer's address is in the address bar (issue #20, restore() above); the thread survives a reload of the
+// tab (sessionStorage, replayed offline: saveThread() below).
 let thread=[], openId=null, seq=0, sessionEpoch=0;
 let queue=Promise.resolve();   // questions go to the server one at a time, in the order asked, so each carries the session the one before it left
 const latestRun=new Map();   // session id -> its latest run id: the only run /api/report can still print
 const clock=()=>typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
 const msText=ms=>ms>=10000?`${(ms/1000).toFixed(1)} s`:`${Math.max(1,Math.round(ms))} ms`;
-const IDLE_TEXT='Pick a question on the left or type one above. The answer lands here as one card: the queries that ran, the summary, the charts and the KPI tiles.';
+const IDLE_TEXT='Pick a question on the left or type one in the box below. Each answer lands as one card at the bottom of this thread: the queries that ran, the summary, the charts and the KPI tiles; earlier answers move up.';
 function scopeWho(s){ return s.scope==='day'?'All shifts':`Shift ${s.shift}`; }
 function windowText(s){   // "Mon 14 Sep 2026"
  const d=utc(s.day); if(Number.isNaN(d.getTime()))return String(s.day);
@@ -655,28 +667,82 @@ function answeredScope(s,result){
 }
 function entryWho(rec){ return (rec.answered&&rec.answered.who)||scopeWho(rec.scope); }
 function entryLabel(rec){ return `${entryWho(rec)} · ${(rec.answered&&rec.answered.window)||windowText(rec.scope)}`; }
-function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 93 ms
- const parts=[entryLabel(rec),rec.mode];
+function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries · 93 ms, or … · analyst · 2 model calls · 1.8 s (#65)
+ const analyst=!!PROVIDERS[rec.mode], parts=[entryLabel(rec),analyst?'analyst':rec.mode];
  if(rec.state==='pending')parts.push('asking…');
  else if(rec.state==='error')parts.push('failed');
+ else if(analyst){const n=Number(rec.result.usage&&rec.result.usage.model_calls)||0;parts.push(`${n} model ${n===1?'call':'calls'}`);}
  else{const n=(rec.result.trace||[]).length;parts.push(`${n} ${n===1?'query':'queries'}`);}
- if(rec.ms!==null)parts.push(msText(rec.ms));
+ if(rec.ms!==null)parts.push(analyst&&rec.ms>=1000?`${(rec.ms/1000).toFixed(1)} s`:msText(rec.ms));   // a model round reads in seconds: analyst · 2 model calls · 1.8 s
  return parts.join(' · ');
 }
-function clearCard(){ for(const id of ['queries','messages','charts','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('calls').textContent=''; stepIndex=new Map(); }
+function clearCard(){ if(pace)finishReveal(); for(const id of ['queries','messages','charts','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('calls').textContent=''; stepIndex=new Map(); }
 function skeleton(){   // grey blocks where the query box, the summary and the two charts will land
  const q=node('div',undefined,'skel-block'); for(const w of ['w60','w45','w70','w45'])q.append(node('span',undefined,'skel '+w)); $('queries').append(q);
  const m=node('div',undefined,'skel-block'); for(const w of ['w90','w70'])m.append(node('span',undefined,'skel '+w)); $('messages').append(m);
  $('charts').append(node('div',undefined,'chart skel-chart'),node('div',undefined,'chart skel-chart'));
 }
-function renderEarlier(){
- const box=$('earlier'); box.replaceChildren();
- for(const rec of thread.filter(r=>r.id!==openId).sort((a,b)=>b.id-a.id)){
-  const line=node('article',undefined,'card earlier'+(rec.state==='error'?' failed':''));line.setAttribute('aria-label',`Earlier answer: ${rec.title}`);
-  const text=node('div',undefined,'earlier-text');text.append(node('strong',rec.title),node('span',`${entryWho(rec)} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':msText(rec.ms)}`));
-  const open=node('button','Open','secondary');open.type='button';open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);open.addEventListener('click',()=>{openCard(rec);focusCard();});
-  line.append(text,open);box.append(line);
+// An earlier card (#86): its title line (title, who · ms, Open) and, once it has settled, its whole card beneath.
+// The body is the open card's own nodes moved up when another card took its place (harvest), so nothing is drawn
+// twice and open folds stay open; a card that settled while another was open is drawn once into its own containers
+// (drawBody). Either way it is kept on the record and only redrawn when what it shows changes (bodyKey).
+const BODY_SLOTS=['queries','messages','charts','heatmaps','kpis','metrics','tables'];   // in the card's order; the trail and the exports stay with the open card
+const settled=rec=>rec.state==='done'||rec.state==='error';
+function bodyKey(rec){ return `${rec.state}|${rec.analysed?1:0}|${analystMode()||''}`; }   // the analyst offer is the one part that changes after a card settles
+function entryOf(rec){
+ if(rec.entry)return rec.entry;
+ const line=node('article',undefined,'card earlier'), text=node('div',undefined,'earlier-text'), title=node('strong'), meta=node('span'), open=node('button','Open','secondary');
+ open.type='button';open.title='Make this the open card at the bottom: its address, exports and the full result of each query';open.addEventListener('click',()=>{openCard(rec);focusCard();});
+ text.append(title,meta);line.append(text,open);
+ return rec.entry={line,text,title,meta,open,body:null,key:null};
+}
+function setBody(v,body,key){ v.body=body; v.key=key; v.line.replaceChildren(v.text,v.open,...(body?[body]:[])); }
+// A card moved into the thread keeps its links: its query boxes' ids and the links to them get the card's own prefix,
+// and "What came back" (the per-step data, which stays with the open card) is hidden; Open brings it back.
+function relabel(el,prefix){
+ for(const child of [...(el.children||[])]){
+  if(typeof child.id==='string'&&/^query-\d+$/.test(child.id))child.id=prefix+child.id;
+  const href=hrefOf(child); if(/^#query-\d+$/.test(href))child.setAttribute('href','#'+prefix+href.slice(1));
+  if(typeof child.className==='string'&&/\bcame-back\b/.test(child.className))child.hidden=true;
+  relabel(child,prefix);
  }
+}
+function bodyShell(){ const body=node('div',undefined,'entry-body'), own={}; for(const id of BODY_SLOTS){ own[id]=node('div',undefined,id); body.append(own[id]); } return {body,own}; }
+function harvest(rec,key){
+ if(pace)finishReveal();   // a card still revealing settles first: what moves up is the finished answer
+ const {body,own}=bodyShell();
+ for(const id of BODY_SLOTS)own[id].append(...$(id).children);
+ relabel(body,`card-${rec.id}-`);
+ setBody(entryOf(rec),body,key);
+}
+function drawBody(rec){
+ const {body,own}=bodyShell(), kept={latest,stepIndex};
+ slots={...own,trace:node('div'),context:node('div'),calls:node('span')};   // the trail is drawn for the open card only
+ try{ paintAnswer(rec); analystOffer(rec); }
+ finally{ slots=null; latest=kept.latest; stepIndex=kept.stepIndex; }
+ relabel(body,`card-${rec.id}-`);
+ return body;
+}
+// Keep the lines that stay where they are attached: re-inserting a drawn card would lose its place for scroll
+// anchoring and restart its charts' animation. (The unit tests' DOM stub has no insertBefore and is simply replaced.)
+function syncChildren(box,want){
+ const have=[...box.children];
+ if(have.length===want.length&&have.every((e,i)=>e===want[i]))return;
+ if(typeof box.insertBefore!=='function'){box.replaceChildren(...want);return;}
+ for(const e of have)if(!want.includes(e))e.remove();
+ want.forEach((e,i)=>{ const at=box.children[i]; if(at!==e)box.insertBefore(e,at||null); });
+}
+function renderEarlier(){
+ const lines=[];
+ for(const rec of thread.filter(r=>r.id!==openId).sort((a,b)=>b.id-a.id)){
+  const v=entryOf(rec);
+  if(settled(rec)&&v.key!==bodyKey(rec))setBody(v,drawBody(rec),bodyKey(rec));
+  v.line.className='card earlier'+(rec.state==='error'?' failed':'')+(v.body?' drawn':'');v.line.setAttribute('aria-label',`Earlier answer: ${rec.title}`);
+  v.title.textContent=rec.title;v.meta.textContent=`${entryWho(rec)} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':rec.state==='stored'?'not reloaded: Open loads it':msText(rec.ms)}`;
+  v.open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);
+  lines.push(v.line);
+ }
+ syncChildren($('earlier'),lines);
 }
 // The ms on the title line is the wall time in this browser from submit to the rendered card; the tooltip splits
 // out the server's own time in the queries.
@@ -684,33 +750,172 @@ function paintMeta(rec){
  const meta=$('card-meta'); meta.textContent=rec?cardMeta(rec):'';
  if(!rec||rec.state!=='done'||rec.ms===null){meta.title='';return;}
  const r=rec.result, server=typeof r.elapsed_ms==='number'?r.elapsed_ms:(r.trace||[]).reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
- meta.title=`${Math.round(rec.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${r.mode}.`;
+ meta.title=`${Math.round(rec.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${PROVIDERS[rec.mode]?PROVIDERS[rec.mode].name+' analyst, '+r.mode:r.mode}.`;
 }
 function syncPdf(){ if(latest)$('pdf').hidden=!latest.url&&latestRun.get(latest.session_id)!==latest.run_id; }   // an addressed answer prints from its address; a model's answer only while it is its session's latest run (re-checked when another lands)
 // Opening a card: an addressed answer of the current scope puts its address in the bar and the conversation follows
 // it, so the next question is a follow-up of the card on screen. A card asked under another scope keeps the rail's
 // address: the rail, not the card, is what the address encodes.
-function openCard(rec){ openId=rec.id; renderCard(); if(rec.state==='done'&&rec.url&&rec.epoch===sessionEpoch){ followView(rec.url,!rec.report); pushAddress(rec.url); updateScope(); } }
-function focusCard(){ try{$('card-title').focus?.();}catch(e){} }   // keyboard focus follows the card when the control that had it goes away
+function openCard(rec){ if(rec.state==='stored')replayOne(rec);   /* a card kept but not reloaded (#86) loads when it is opened */ openId=rec.id; renderCard(); scheduleFollow(true); if(rec.state==='done'&&rec.url&&rec.epoch===sessionEpoch){ followView(rec.url,!rec.report); pushAddress(rec.url); updateScope(); } }
+function focusCard(){ try{$('card-title').focus?.({preventScroll:true});}catch(e){} }   // keyboard focus follows the card when the control that had it goes away; the pane's follow rule does the scrolling (#86)
+// A settled answer's own content, into the card's containers: the open card's, or an earlier card's own (#86).
+// Returns the summary the reveal paces, for an offline answer.
+function paintAnswer(rec){
+ if(rec.state==='error'){message('Could not complete',[rec.error],'error');if(PROVIDERS[rec.mode])message(null,['The analyst could not answer; no answer was fabricated. The offline answer stands.'],'muted');return null;}
+ if(PROVIDERS[rec.mode]){paintAnalyst(rec);return null;}
+ if(rec.note)message('Note',[rec.note]);
+ const summary=message('',rec.result.sections||[]);showResult(rec.result);
+ return summary;
+}
+let shownId=null, shownKey=null;   // the record #card shows now, and the bodyKey of what was drawn for it
 function renderCard(){
  const rec=thread.find(r=>r.id===openId)||null, card=$('card');
+ if(shownId!==null&&(!rec||rec.id!==shownId)){ const prev=thread.find(r=>r.id===shownId); if(prev&&shownKey!==null)harvest(prev,shownKey); }   // the card that was open moves up whole
  clearCard();
- if(!rec){card.className='card answer idle';card.setAttribute('aria-label','Answer');card.setAttribute('aria-busy','false');$('card-title').textContent='Ask about a shift';paintMeta(null);$('messages').append(node('p',IDLE_TEXT,'empty'));$('card-foot').hidden=true;latest=null;renderEarlier();return;}
+ shownId=rec?rec.id:null; shownKey=rec&&settled(rec)?bodyKey(rec):null;
+ if(rec)rec.entry=null;   // it is the open card now, not a line of the thread
+ if(!rec){card.className='card answer idle';card.setAttribute('aria-label','Answer');card.setAttribute('aria-busy','false');$('card-title').textContent='Ask about a shift';paintMeta(null);$('messages').append(node('p',IDLE_TEXT,'empty'));$('card-foot').hidden=true;latest=null;renderEarlier();scheduleFollow();return;}
  $('card-title').textContent=rec.title;$('card-title').title=rec.question;paintMeta(rec);
  card.setAttribute('aria-label',`Answer: ${rec.title}`);card.setAttribute('aria-busy',String(rec.state==='pending'));
  if(rec.state==='pending'&&rec.live){card.className='card answer streaming';paintLive(rec);$('card-foot').hidden=true;latest=null;}
  else if(rec.state==='pending'){card.className='card answer skeleton';skeleton();$('card-foot').hidden=true;latest=null;}
- else if(rec.state==='error'){card.className='card answer failed';message('Could not complete',[rec.error],'error');if(PROVIDERS[rec.mode])message(null,['The analyst could not answer; no answer was fabricated. The offline answer stands.'],'muted');$('card-foot').hidden=true;latest=null;}
- else if(PROVIDERS[rec.mode]){card.className='card answer';paintAnalyst(rec);$('card-foot').hidden=false;syncPdf();}
+ else if(rec.state==='error'){card.className='card answer failed';paintAnswer(rec);$('card-foot').hidden=true;latest=null;}
+ else if(PROVIDERS[rec.mode]){card.className='card answer';paintAnswer(rec);$('card-foot').hidden=false;syncPdf();}
  else{
   card.className='card answer';
-  if(rec.note)message('Note',[rec.note]);
-  message('',rec.result.sections||[]);showResult(rec.result);
+  const summary=paintAnswer(rec);
   $('card-foot').hidden=false;syncPdf();
+  if(rec.state==='done'&&!rec.revealed){ rec.revealed=true; pendingReveal={summary,t0:rec.t0}; }   // first time this answer is drawn: it is revealed once, reopening shows it settled
  }
  if(rec.state!=='pending')analystOffer(rec);
  renderEarlier();
+ scheduleFollow();
+ if(pendingReveal){ const {summary,t0}=pendingReveal; pendingReveal=null; reveal(summary,t0); }
 }
+// ---- The transcript pane (issue #86). The page itself does not scroll: the rail and the ask bar stay where they are
+// and only #transcript scrolls. The open card is the newest, at the bottom. While it fills (skeleton, landed answer,
+// reveal steps, streamed narrative), the pane follows it: its bottom sits at the pane's bottom while it fits, and once
+// it is taller than the pane its title line stays at the top, so the answer is read from its first word. The rule
+// never scrolls up on its own, and never pulls a reader back down: any move up, however small (a trackpad scrolls in
+// steps of a few pixels), stops it. Once the reader is more than FOLLOW_SLACK px from the newest content and more has
+// arrived, a "↓ new" pill says so; clicking it, or scrolling back down to within FOLLOW_SLACK px, resumes following.
+// Asking, or opening a card, always brings the open card into view.
+const FOLLOW_SLACK=80, FOLLOW_GAP=12;
+let following=true, unseen=false, lastTop=0, followQueued=false, followForce=false, followFresh=false;
+function paneOf(){ const p=$('transcript'); return p&&typeof p.scrollTop==='number'&&typeof p.scrollHeight==='number'&&typeof p.clientHeight==='number'?p:null; }   // null in the unit tests' layout-less stub, unless a test gives it numbers
+function followTarget(p){
+ const card=$('card'), max=Math.max(0,p.scrollHeight-p.clientHeight);
+ if(typeof card.offsetTop!=='number'||typeof card.offsetHeight!=='number')return max;
+ return Math.max(0,Math.min(max,card.offsetTop-FOLLOW_GAP,card.offsetTop+card.offsetHeight+FOLLOW_GAP-p.clientHeight));
+}
+function syncPill(){ $('new-pill').hidden=following||!unseen; }
+// fresh: the change is at the bottom (the open card), so a reader who scrolled away has something new below.
+function follow(force=false,fresh=true){
+ const p=paneOf(); if(!p)return;
+ if(force){ following=true; unseen=false; }
+ const target=followTarget(p);
+ if(!following){ if(fresh&&target-p.scrollTop>FOLLOW_SLACK)unseen=true; syncPill(); return; }
+ if(force||p.scrollTop<target)p.scrollTop=target;
+ lastTop=p.scrollTop; syncPill();
+}
+// Coalesced to the next frame: layout is read once, where the browser lays out anyway, and never inside the measured
+// submit-to-rendered time on the title line. Without a frame scheduler (the unit tests' stub) it runs at once.
+function scheduleFollow(force=false,fresh=true){
+ followForce=followForce||force; followFresh=followFresh||fresh;
+ if(typeof requestAnimationFrame!=='function'){ const f=followForce, n=followFresh; followForce=followFresh=false; follow(f,n); return; }
+ if(followQueued)return; followQueued=true;
+ requestAnimationFrame(()=>{ followQueued=false; const f=followForce, n=followFresh; followForce=followFresh=false; follow(f,n); });
+}
+// Only a move up stops the following; the distance to the follow point decides only when it resumes. A scroll event
+// is dispatched a frame after the scroll, so by then a card may have landed and moved the follow point: the event of
+// our own scroll, or of the browser's scroll anchoring (which moves down when content grows above), is not a move up
+// and must not read as the reader leaving. A user's scroll event always runs before the frame's follow step.
+function onPaneScroll(){
+ const p=paneOf(); if(!p)return;
+ const top=p.scrollTop, gap=followTarget(p)-top;
+ if(top<lastTop){ following=false; if(gap<=FOLLOW_SLACK)unseen=false; }
+ else if(gap<=FOLLOW_SLACK){ following=true; unseen=false; }
+ lastTop=top; syncPill();
+}
+$('transcript').addEventListener('scroll',onPaneScroll,{passive:true});
+$('new-pill').addEventListener('click',()=>{ follow(true); try{$('card-title').focus?.({preventScroll:true});}catch(e){} });   // lands on the newest content; focus goes with it, the button having gone
+if(typeof window!=='undefined'&&typeof window.addEventListener==='function')window.addEventListener('resize',()=>{ if(following)scheduleFollow(false,false); });
+// ---- The ask bar's keys (#86): Enter sends, Shift+Enter is a new line, and "/" focuses the box from anywhere else.
+// The box grows with what is typed, up to about six lines.
+function fitQuestion(){ const q=$('question'); if(!q.style||typeof q.scrollHeight!=='number')return; q.style.height='auto'; q.style.height=Math.min(q.scrollHeight,148)+'px'; }
+$('question').addEventListener('keydown',event=>{ if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229){ event.preventDefault(); typed(); } });   // an IME composing a word keeps its Enter
+$('question').addEventListener('input',fitQuestion);
+function editable(el){ const tag=el&&typeof el.tagName==='string'?el.tagName.toUpperCase():''; return tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||!!(el&&el.isContentEditable); }
+function onKey(event){
+ skipReveal();   // any key ends a reveal at once (#65)
+ if(!event||event.key!=='/'||event.ctrlKey||event.metaKey||event.altKey||editable(event.target))return;
+ if(event.preventDefault)event.preventDefault();   // the slash is not typed into the box it focuses
+ if(railOpen()){closeRail();}
+ try{$('question').focus?.();}catch(e){}
+}
+// ---- The reveal (issue #65). The answer is complete and in the DOM before this runs: the pacing only changes
+// when the parts of it become visible, in the order of the reasoning. The query lines tick in about 80 ms apart;
+// the summary's visible paragraphs type word by word at reading speed (faster when the answer is long, so it is all
+// there by about 1.5 s), the first figure landing at once; the charts bloom once the first sentence is down; the
+// tiles and tables are there from the first frame, like a gauge. Nothing is typed that is not already the text of
+// the finished card: each paragraph shows a prefix of its own textContent, and the end state is that text. A click
+// or any key ends it at once; prefers-reduced-motion, or a page without a frame scheduler, shows everything at once.
+let pendingReveal=null, pace=null;
+const PACE={query_ms:80,queries_ms:480,type_after_ms:160,first_by_ms:400,frame_ms:17,cps:50,type_ms:1000};
+function reducedMotion(){ try{return typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;} }
+function addClass(e,c){ e.className=((e.className||'')+' '+c).trim(); }
+function dropClass(e,c){ e.className=(e.className||'').split(' ').filter(x=>x&&x!==c).join(' '); }
+// The end of the leading chunk of a paragraph: through its first figure, which lands with the first frame of typing.
+// A shift's number is its name, not its figure: "Shift 2: 616.2 ft/min" lands through 616.2.
+function firstFigureEnd(text){ const re=/\d[\d,.]*/g; let m; while((m=re.exec(text))&&/\bShift $/.test(text.slice(0,m.index))); if(!m)return 0; const end=m.index+m[0].length; const space=text.slice(end).search(/\s/); return space<0?text.length:end+space; }
+function sentenceEnd(text){ const m=/[.!?](\s|$)/.exec(text); return m?m.index+1:text.length; }
+function wordEnd(text,n){ if(n>=text.length)return text.length; if(n<=0)return 0; const space=text.slice(n).search(/\s/); return space<0?text.length:n+space; }
+function finishReveal(skipped=false){
+ const p=pace; if(!p)return; pace=null; p.done=true;
+ for(const q of p.queries)dropClass(q,'pace-wait');
+ for(const t of p.typed){ t.el.textContent=t.text; dropClass(t.el,'typing'); }
+ for(const e of p.later)dropClass(e,'pace-wait');
+ for(const e of p.blooms){ dropClass(e,'pace-wait'); if(skipped)dropClass(e,'bloom'); }   // skipped: the charts show drawn, no growth still to run
+ if(p.card)p.card.setAttribute('data-reveal','done');
+ scheduleFollow();   // the last words are down: the pane follows them (#86)
+}
+function skipReveal(){ if(pace)finishReveal(true); }
+function reveal(summary,submitted){
+ if(pace)finishReveal();   // a newer card: the one before is settled first
+ if(reducedMotion()||typeof requestAnimationFrame!=='function'||!summary)return;
+ const queries=$('queries').children.filter?$('queries').children.filter(e=>/^query\b/.test(e.className||'')):[...$('queries').children].filter(e=>/^query\b/.test(e.className||''));
+ const kids=summary.children?[...summary.children]:[];
+ const typed=kids.filter(e=>e.tag==='p'||e.tagName==='P').map(el=>({el,text:el.textContent}));
+ const later=[...kids.filter(e=>!typed.some(t=>t.el===e)),...[...$('messages').children].filter(e=>e!==summary&&!/\bmessage\b/.test(e.className||''))];   // the note disclosure and the analyst offer arrive with the last word
+ const blooms=[...$('charts').children,...$('heatmaps').children];
+ const total=typed.reduce((n,t)=>n+t.text.length,0), step=queries.length?Math.min(PACE.query_ms,PACE.queries_ms/queries.length):0;
+ // The first figure is due 400 ms after the submit, not after the land: a slow land shortens the wait before the
+ // lead chunk (by a frame's margin), and past that point it lands on the reveal's first frame.
+ const now=clock(), since=typeof submitted==='number'?now-submitted:0;
+ const start=Math.max(0,Math.min(PACE.type_after_ms,queries.length*step,PACE.first_by_ms-PACE.frame_ms-since));
+ const p={t0:now,queries,typed,later,blooms,step,start,cps:Math.max(PACE.cps,total/(PACE.type_ms/1000)),lead:typed.length?firstFigureEnd(typed[0].text):0,first:typed.length?sentenceEnd(typed[0].text):0,bloomed:false,done:false,card:$('card')};
+ pace=p; p.card.setAttribute('data-reveal','running');
+ queries.forEach((q,i)=>{ if(i*step>0)addClass(q,'pace-wait'); });
+ for(const t of typed){ t.el.textContent=''; addClass(t.el,'typing'); }
+ for(const e of later)addClass(e,'pace-wait');
+ for(const e of blooms)addClass(e,'pace-wait');
+ const frame=()=>{ if(pace!==p)return; tickReveal(p); follow(); if(pace===p)requestAnimationFrame(frame); };   // each step of the reveal is a step of the follow rule (#86): this is a frame already, so no second one
+ tickReveal(p); if(pace===p)requestAnimationFrame(frame);
+}
+function tickReveal(p){
+ const t=clock()-p.t0;
+ p.queries.forEach((q,i)=>{ if(t>=i*p.step)dropClass(q,'pace-wait'); });
+ if(t<p.start)return;
+ let budget=Math.max(p.lead,Math.floor((t-p.start)*p.cps/1000)), all=true;
+ p.typed.forEach((x,i)=>{
+  const n=wordEnd(x.text,budget); budget-=x.text.length;
+  if(n>0||i===0){ x.el.textContent=x.text.slice(0,Math.max(0,n)); }
+  if(n>=x.text.length)dropClass(x.el,'typing'); else all=false;
+  if(i===0&&!p.bloomed&&n>=p.first){ p.bloomed=true; for(const e of p.blooms){ dropClass(e,'pace-wait'); addClass(e,'bloom'); } }
+ });
+ if(all&&p.queries.every((q,i)=>t>=i*p.step))finishReveal();
+}
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function'){ document.addEventListener('keydown',onKey,true); document.addEventListener('pointerdown',skipReveal,true); }
 // ---- Ask the analyst (issues #23, #67). The model is opt-in per question: the ask bar's button for the typed
 // question, or the button under an offline answer for that answer's question. Either opens its own card. The
 // server streams newline-delimited JSON events: start, plan (the queries the model chose, in one call), a step
@@ -735,6 +940,7 @@ function paintLive(rec){
  }
  const card=message(null,[],'analyst'); card.append(node('p',live.state,'muted analyst-state'));
  for(const [,p] of [...live.paragraphs].sort((a,b)=>a[0]-b[0]))if(!p.hidden)card.append(node('p',`${KIND_LABEL[p.kind]||'Note'}: ${p.text}`,'analyst-p'+(p.final?'':' streaming')));
+ scheduleFollow();   // the streamed narrative is followed like the reveal (#86)
 }
 // The finished analyst card. When the analyst's own queries ran, their evidence is the card's; when the plan was
 // refused (nothing ran), the notes say so and the offline evidence it was asked from stays on the card.
@@ -742,6 +948,12 @@ function paintAnalyst(rec){
  const r=rec.result, ran=(r.trace||[]).some(e=>e.ok), offline=rec.source&&rec.source.result;
  if(ran)showResult(r); else if(offline)showResult(offline);
  const card=message(null,[],'analyst');
+ if(r.status==='plan_rejected'){   // issue #78: a refused plan degrades, it does not stop; one quiet line under the offline evidence
+  const over=r.plan_rejection, calls=(r.usage&&r.usage.model_calls)||0;
+  card.append(node('p',over?`The analyst proposed ${over.proposed} queries; the limit is ${over.limit}, so none ran.`:(r.sections||[]).filter(t=>!/^Investigation stopped/.test(t)).join(' '),'analyst-p muted'));
+  const state=node('p',`analyst · plan rejected · ${calls} model call${calls===1?'':'s'}`,'muted analyst-state'); if(r.usage)state.title=usageText(r.usage); card.append(state);
+  return;
+ }
  const notes=ran?(r.sections||[]).filter(t=>/^(Investigation stopped|The model narrative|The requested)/.test(t)):(r.sections||[]);
  if(r.narrative_status!=='available'||r.status!=='complete')for(const text of notes)card.append(node('p',text,'analyst-p warning-note'));
  for(const item of r.narrative||[]){
@@ -763,7 +975,8 @@ function analystOffer(rec){
 }
 // The one render entry for an answer, asked or opened from an address: the record takes the result and its card
 // (open or one line in the thread) is drawn again. The ms is submit to rendered.
-function settleCard(rec){ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); rec.ms=clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();} }
+// A card replayed on a reload (#86) keeps the time it was first answered in.
+function settleCard(rec){ if(!thread.includes(rec))return; if(openId===rec.id)renderCard(); else rec.revealed=true;   /* landed behind another card: it opens settled (#65) */ rec.ms=typeof rec.keepMs==='number'?rec.keepMs:clock()-rec.t0; if(openId===rec.id)paintMeta(rec); else{renderEarlier();syncPdf();scheduleFollow(false,false);} saveThread(); }
 function land(rec,result){
  if(result.session_id)latestRun.set(result.session_id,result.run_id);
  rec.result=result; rec.answered=answeredScope(rec.scope,result); rec.state='done'; settleCard(rec);
@@ -782,11 +995,13 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
  const twin=thread.find(r=>r.state==='pending'&&r.epoch===epoch&&r.question===question&&r.mode===recMode&&r.report===report&&r.corrupt===corrupt&&['day','period','shift','scope'].every(k=>r.scope[k]===scope[k]));
  if(twin){ if(openId!==twin.id)openCard(twin); return twin.done; }
  const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,source:source||null,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null,live:null};
- thread.push(rec);openId=rec.id;renderCard();   // the skeleton card is in the DOM before this task yields: within one frame of the submit
+ thread.push(rec);openId=rec.id;renderCard();scheduleFollow(true);   // the skeleton card is in the DOM before this task yields: within one frame of the submit; the pane brings it into view (#86)
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
  // What the visitor chose is read now; the request itself waits its turn. Two questions out at once would both carry
  // the conversation as it was before either was answered, and the follow-up context would lose one.
  const headers={}, p=PROVIDERS[rec.mode]||null, turn=queue, address={day:scope.day,shift:String(scope.shift),scope:scope.scope,period:scope.period,corrupt}; let release; queue=new Promise(resolve=>{release=resolve;});
+ // The offline address of this question, for a reload of the tab (#86): an analyst's card comes back as the offline answer.
+ rec.askUrl=report?reportUrl(address,epoch===sessionEpoch?conversation:[]):questionUrl(question,address,epoch===sessionEpoch?conversation:[]); saveThread();
  if(p && $('api-key').value && !(config&&config.public))headers[p.header]=$('api-key').value;
  if(p)$('api-key').value='';   // the key is cleared when it is sent; an offline question leaves it for the analyst
  rec.done=(async()=>{
@@ -822,7 +1037,9 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
     }
    }else{
     const priors=current?conversation:[];
-    response=await fetch(report?reportUrl(address,priors):questionUrl(question,address,priors),{headers:{Accept:'application/json'}});
+    rec.askUrl=report?reportUrl(address,priors):questionUrl(question,address,priors);
+    saveThread();   // the stored address now carries the real priors, not the ones at submit time
+    response=await fetch(rec.askUrl,{headers:{Accept:'application/json'}});
    }
    const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
    if(p&&current){
@@ -853,7 +1070,51 @@ $('came-back').addEventListener('click',()=>{ $('execution').open=true; });
 // A scope change starts a new server conversation (the follow-up context belongs to the old scope) but keeps the
 // thread: every card carries its own scope in its title line. Only "Clear the thread" empties it.
 function rescope(){ sessionEpoch++;sessionId=null;conversation=[];$('api-key').value='';pushAddress(scopeUrl());$('status').textContent=readyText();if(!thread.length)renderCard();updateScope();primeKpis(); }
-function reset(){ thread=[];openId=null;renderCard();rescope(); }
+function reset(){ thread=[];openId=null;renderCard();scheduleFollow(true);saveThread();rescope(); }
+// ---- The thread survives a reload of the tab (#86). Each card is kept as the address that answers it offline (an
+// analyst's card as the offline answer it was asked from) with its title line, in sessionStorage: this tab only, never
+// sent anywhere. On load the address bar's card is restore()'s, as before (#20); the cards above it are GETs of their
+// own addresses, never /api/ask, and land settled, in their order. A model's narrative is not kept or replayed: its
+// card comes back as the offline answer, with the analyst button. Each replay is an answer the server counts against
+// the visitor's rate limit, so a reload fetches only the newest few (a quarter of that limit, at most REPLAY_MAX); the
+// older cards come back as their title lines, and Open loads one.
+const THREAD_KEY='csi-thread', THREAD_MAX=24, REPLAY_MAX=8, REPLAYABLE=/^\/(corr\/|q\?)/;   // same-origin paths only
+function replayBudget(){ const limit=Number(config&&config.demo_guards&&config.demo_guards.rate_limit_per_min)||0; return limit>0?Math.min(REPLAY_MAX,Math.max(1,Math.floor(limit/4))):REPLAY_MAX; }
+function tabStore(){ try{ return typeof sessionStorage!=='undefined'&&sessionStorage?sessionStorage:null; }catch(e){ return null; } }
+function replayUrl(r){ return PROVIDERS[r.mode]?((r.source&&r.source.url)||r.askUrl):(r.url||r.askUrl); }
+function saveThread(){
+ const store=tabStore(); if(!store)return;
+ const cards=thread.map(r=>({url:replayUrl(r),title:r.title,question:r.question,scope:{day:r.scope.day,period:r.scope.period,shift:r.scope.shift,scope:r.scope.scope},corrupt:!!r.corrupt,report:!!r.report,analysed:!PROVIDERS[r.mode]&&!!r.analysed,ms:PROVIDERS[r.mode]?null:r.state==='done'?r.ms:typeof r.keepMs==='number'?r.keepMs:null}))
+  .filter(c=>typeof c.url==='string'&&REPLAYABLE.test(c.url)).slice(-THREAD_MAX);
+ try{ if(cards.length)store.setItem(THREAD_KEY,JSON.stringify(cards)); else store.removeItem(THREAD_KEY); }catch(e){ /* storage full or blocked: the thread is a convenience */ }
+}
+function storedThread(){
+ const store=tabStore(); if(!store)return [];
+ try{ const cards=JSON.parse(store.getItem(THREAD_KEY)||'[]'); return Array.isArray(cards)?cards.filter(c=>c&&typeof c.url==='string'&&REPLAYABLE.test(c.url)&&c.scope&&typeof c.scope.day==='string').slice(-THREAD_MAX):[]; }catch(e){ return []; }
+}
+function sameScope(rec){ const s=currentScope(); return rec.scope.day===s.day&&rec.scope.period===s.period&&rec.scope.scope===s.scope&&Number(rec.scope.shift)===s.shift&&!!rec.corrupt===$('corrupt').checked; }
+function replayThread(cards){
+ const from=Math.max(0,cards.length-replayBudget());
+ cards.forEach((c,i)=>{
+  const rec={id:++seq,question:typeof c.question==='string'?c.question:c.url,title:typeof c.title==='string'?c.title:c.url,scope:{day:c.scope.day,period:c.scope.period,shift:Number(c.scope.shift),scope:c.scope.scope},answered:null,mode:'offline',report:!!c.report,corrupt:!!c.corrupt,epoch:-1,source:null,state:'stored',t0:clock(),ms:null,keepMs:typeof c.ms==='number'?c.ms:null,result:null,error:null,note:null,url:null,live:null,revealed:true,analysed:!!c.analysed,askUrl:c.url};
+  thread.push(rec);
+  if(i>=from)replayOne(rec);
+ });
+ if(cards.length)renderEarlier();
+}
+function replayOne(rec){
+ rec.state='pending'; rec.t0=clock();
+ rec.done=(async()=>{
+  try{
+   const response=await fetch(rec.askUrl,{headers:{Accept:'application/json'}}), result=await response.json();
+   if(!response.ok)throw new Error(result.error||'Request failed');
+   rec.url=result.url||null; if(rec.url&&sameScope(rec))rec.epoch=sessionEpoch;   // a card of the rail's scope opens into the conversation, as it did before the reload
+   land(rec,result);
+   if(openId===rec.id&&rec.url&&rec.epoch===sessionEpoch){ followView(rec.url,!rec.report); pushAddress(rec.url); updateScope(); }   // opened while it loaded
+  }catch(error){ rec.error=error.message; rec.state='error'; settleCard(rec); }
+ })();
+ return rec.done;
+}
 $('mode').addEventListener('change',()=>{rescope();const p=provider();syncKeyLabel();$('api-key').value='';$('mode-badge').textContent=p?`Synthetic data / ${p.name} selected`:'Synthetic data / Offline planner';$('mode-help').textContent=p?(config&&config.public?`Public demo: Ask the analyst has ${p.name} choose which bounded tools to run and writes the interpretation with this site's own key under a spend cap; no visitor key is accepted. Ask and the canned questions stay offline.`:`${p.name} receives your question, bounded history and synthetic tool results. Your key passes through this local server to ${p.name} for this request, is not saved, and the field clears on submit. Live calls incur API charges. Ask and the canned questions stay offline.`):'Offline mode uses a rule-based planner for the supported example questions. No model calls or API charges.';});
 $('reset').addEventListener('click',reset);$('day').addEventListener('change',dayChanged);$('day-prev').addEventListener('click',()=>stepDay(-1));$('day-next').addEventListener('click',()=>stepDay(1));$('corrupt').addEventListener('change',rescope);$('shift').addEventListener('change',rescope);$('scope').addEventListener('change',rescope);$('period').addEventListener('change',periodChanged);
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
@@ -887,10 +1148,12 @@ async function init(){
  applyPublicMode();updateScope();
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
  if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
- const address=currentAddress();
- if(!(address&&CANONICAL.test(pathOf(address))&&await restore(address))){pushAddress(scopeUrl(),true);primeKpis();}
+ const address=currentAddress(), addressable=!!(address&&CANONICAL.test(pathOf(address))), cards=storedThread();
+ let addressed=-1; if(addressable)for(let i=cards.length-1;i>=0;i--)if(cards[i].url===address){addressed=i;break;}
+ replayThread(cards.filter((c,i)=>i!==addressed));   // the thread above the addressed card comes back first, in its order (#86)
+ if(!(addressable&&await restore(address,addressed>=0?cards[addressed]:null))){pushAddress(scopeUrl(),true);primeKpis();}
  const context=document.modelContext;
- if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;return ask(input.question,{mode:'offline'});}},{signal:lifecycle.signal});}
+ if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;fitQuestion();return ask(input.question,{mode:'offline'});}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}
 }
 init();
