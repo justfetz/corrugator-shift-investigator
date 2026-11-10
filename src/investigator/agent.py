@@ -58,8 +58,8 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_stops_profile", "Stops, minutes and minutes per stop for each production day of a window, plus its Monday-to-Friday weekday profile.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
-        ("get_grade_totals", "Totals by board grade for a window: setups, wet ends, lineal ft, volume MSF and share, speed without stops and elapsed speed from the setup clocks, percent of grade target, setup stops, trim and dry-end percent; previous window's volume beside. Use for 'how much 275-BC did we run', 'which grade is slowest against target'.",
-         {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
+        ("get_grade_totals", "Totals by board grade for a window: setups, wet ends, lineal ft, volume MSF and share, speed without stops and elapsed speed from the setup clocks, percent of grade target, setup stops, trim and dry-end percent; previous window's volume beside. measure chooses the lead and the chart: volume (MSF, default) or speed (ft/min without stops against each grade's target). Use for 'how much 275-BC did we run' (volume), 'fpm by grade', 'which grade is slowest against target' (speed).",
+         {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER, "measure": {"type": "string", "enum": ["volume", "speed"]}}, ["window"]),
         ("get_rollstock", "Paper consumed (rollstock) in a window, from the wet-end paper-run records: lineal feet and MSF per board grade and web width, paper runs and feet per run, previous window alongside with deltas. MSF is the paper footprint (feet x width); no basis weight, so no tons. Use for 'how much paper did we consume this month', 'rollstock consumed this week'.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_overrun", "Over/under-run by knife for a window: nominal cuts vs actual cuts as cuts, sheets and percent of nominal, with the share of customer lines inside, over and under the +-band; last row is all knives.",
@@ -93,7 +93,9 @@ CHARTABLE = {
                             lambda d: 'previous_minutes' if d['measure'] == 'minutes' else 'previous_stops'),
     'get_waste_breakdown': ('label', 'pct_of_gross', '% of gross', 'bar', 'previous_pct_of_gross'),
     'get_stops_profile': ('production_day', 'stops', 'stops', 'bar', None),
-    'get_grade_totals': ('grade', 'volume_msf', 'MSF', 'bar', 'previous_volume_msf'),
+    'get_grade_totals': ('grade', lambda d: 'speed_run_fpm' if d.get('measure') == 'speed' else 'volume_msf',
+                         lambda d: 'ft/min' if d.get('measure') == 'speed' else 'MSF', 'bar',
+                         lambda d: None if d.get('measure') == 'speed' else 'previous_volume_msf'),
     'get_overrun': ('knife', 'overrun_pct', '% of nominal cuts', 'range', None),
     'get_rollstock': ('label', 'msf', 'MSF', 'bar', 'previous_msf'),
     'get_speed_opportunity': ('label', 'opportunity_hours', 'hours', 'bar', None),
@@ -206,6 +208,12 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
                "'compare this period to the previous period' (4-4-5 accounting periods), 'where is the speed opportunity this month'.")
 
 
+# Measure words decide the intent; grouping words (by grade, by width, by crew) only choose the breakdown.
+SPEED_WORDS = r"\b(speeds?|fpm|ft/min|feet per minute|fast|faster|fastest|running|pace|slow|slower|slowest)\b"
+VOLUME_WORDS = r"\b(throughput|output|volume|made|make|produced?|msf|lineal|footage)\b"
+BASELINE_WORDS = r"\b(normal|usual|typical|baseline)\b"
+
+
 def parse_period_request(lower, current, shifts):
     """Route plain period phrasing to the store tools; None when the question is about one day."""
     months = [MONTH_NAMES[m] for m in re.findall(r"\b(" + "|".join(MONTH_NAMES) + r")\b", lower)]
@@ -221,8 +229,11 @@ def parse_period_request(lower, current, shifts):
     grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
     rollstock = bool(re.search(r"roll[- ]?stock|\bpaper (consum|usage|used\b)|\bconsum\w*\b.*\bpaper\b|\bpaper\b.*\bconsum|how much paper\b|\brolls? (of paper )?(consumed|used)", lower))
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
+    speed = bool(re.search(SPEED_WORDS, lower))
+    grade = grade or bool(speed and re.search(r"\bgrades?\b", lower))    # "how fast are we running this grade"
+    baseline = speed and bool(re.search(BASELINE_WORDS, lower))         # "are we running slower than normal" (#76 adds the baseline)
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
-    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock):
+    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock or baseline):
         return None
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
@@ -243,9 +254,14 @@ def parse_period_request(lower, current, shifts):
     elif rollstock:
         plan = [("get_rollstock", {"window": window, "shift": shift})]
         intent = 'period_rollstock'
+    elif baseline and not trend:
+        metric = 'speed_run_fpm' if re.search(r"without stops|running speed", lower) else 'speed_all_fpm'
+        plan = [("get_trend", {"metric": metric, "weeks": 8, "anchor": anchor, "shift": shift})]
+        intent = 'period_trend'
     elif grade:
-        plan = [("get_grade_totals", {"window": window, "shift": shift})]
-        intent = 'period_grade'
+        # a speed word makes it speed grouped by grade; the grade word alone is volume by grade
+        plan = [("get_grade_totals", {"window": window, "shift": shift, **({"measure": "speed"} if speed else {})})]
+        intent = 'period_speed' if speed else 'period_grade'
     elif trend:
         metric = next((m for pattern, m in TREND_WORDS if re.search(pattern, lower)), None)
         if metric is None:
@@ -267,6 +283,9 @@ def parse_period_request(lower, current, shifts):
     elif waste:
         plan = [("get_waste_breakdown", {"window": window, "shift": shift})]
         intent = 'period_waste'
+    elif speed and period and not months:
+        # "average speed this week", "our speed vs last week": the speed answer over the named window
+        return period_plan('speed', window, shifts, 'reason', current)
     elif len(set(months)) >= 2:
         first, second = months[0], months[1]
         plan = [("compare_periods", {"current_window": {"period": "month", "anchor": f"{year}-{first:02d}-01"},
@@ -334,8 +353,14 @@ def _parse_request(text, current):
     intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
         'quality' if re.search(r'warp|bond|misalignment|reject|quality|waste', lower) else
         'downtime' if re.search(r'downtime|maintenance|operator|equipment|stops', lower) else
-        'speed' if re.search(r'speed|feet per minute|fpm', lower) else
+        'speed' if re.search(r'speed|feet per minute|fpm|ft/min|\b(fast|faster|fastest|pace|slower|slowest)\b', lower) else
         'overview' if re.search(r'slow|bad|killed|shift|loss', lower) else None)
+    if intent is None and re.search(VOLUME_WORDS, lower) or intent is None and re.search(r"\bhow much\b.*\b(did|do) we (run|make|produce)\b", lower):
+        # "throughput", "how much did we make": volume by grade (MSF, lineal) over the selected window
+        window = period_window(current) or {"period": "day", "anchor": current.production_day}
+        shift = current.shift if current.scope == 'shift' else named[0] if len(named) == 1 else None
+        return {"intent": "period_grade", "shifts": [shift] if shift else [], "kind": None, "group_by": "reason", "want_chart": True,
+                "ranking_metrics": [], "plan": [{"tool": "get_grade_totals", "arguments": {"window": window, "shift": shift}}]}
     if intent is None:
         raise ValueError("Offline mode supports shift performance, downtime, speed, quality and comparisons. Try an example question. " + PERIOD_HELP)
     kind = None
@@ -376,7 +401,7 @@ def period_plan(intent, window, named, group_by, current):
         if intent in ('summary', 'overview', 'quality'):
             plan.append(("get_waste_breakdown", {"window": window, "shift": shift}))
         if intent == 'speed':
-            plan.append(("get_grade_totals", {"window": window, "shift": shift}))
+            plan.append(("get_grade_totals", {"window": window, "shift": shift, "measure": "speed"}))
     return {"intent": "period_" + intent, "shifts": [s for s in per_shift if s], "kind": None, "group_by": group_by, "want_chart": True,
             "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
@@ -395,8 +420,10 @@ def chart_for(rid, result):
     chart = {'type': kind, 'source_result_id': rid, 'shift': data['shift'], 'coverage': data['coverage'],
              'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
     if result['tool'] in PERIOD_TOOLS:
-        chart['title'] = f"{CHART_TITLES.get(result['tool'], result['tool'].replace('_', ' '))}: {data['window']['label']}" + \
-            (f" vs {data['previous_window']['label']}" if data.get('previous_window') else '') + \
+        name = 'Speed by grade vs target (ft/min without stops)' if data.get('measure') == 'speed' else \
+            CHART_TITLES.get(result['tool'], result['tool'].replace('_', ' '))
+        chart['title'] = f"{name}: {data['window']['label']}" + \
+            (f" vs {data['previous_window']['label']}" if data.get('previous_window') and data.get('measure') != 'speed' else '') + \
             (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)')
         if y2:
             chart['y2'] = y2  # paired bars: current beside previous
@@ -856,6 +883,11 @@ class Agent:
                 f'{r["weekday"]}: {num(r["stops_per_day"])} stops per day and {num(r["minutes_per_day"])} min per day over {num(r["days"])} day(s)'
                 for r in data['weekday_profile'] if r['days']) + '.')
         elif tool == 'get_grade_totals':
+            if data.get('measure') == 'speed':
+                lines.append('Speed by grade, without stops, against each grade target: ' + ('; '.join(
+                    f'{r["grade"]}: {num(r["speed_run_fpm"])} ft/min = {num(r["speed_to_target_pct"])}% of the {num(r["target_fpm"])} target '
+                    f'({num(r["speed_elapsed_fpm"])} ft/min elapsed, {num(r["setups"])} setups)'
+                    for r in data['rows']) or 'no setups in this window') + '.')
             lines.append(f'Totals by grade ({num(data["total_volume_msf"])} MSF in the window): ' + ('; '.join(
                 f'{r["grade"]}: {num(r["volume_msf"])} MSF ({num(r["share_of_volume_pct"])}%), {num(r["lineal_ft"])} ft over {num(r["setups"])} setups / {num(r["wet_ends"])} wet ends, '
                 f'{num(r["speed_run_fpm"])} ft/min without stops = {num(r["speed_to_target_pct"])}% of the {num(r["target_fpm"])} target, '

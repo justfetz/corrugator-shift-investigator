@@ -92,6 +92,41 @@ def test_the_owner_examples_resolve():
     assert PATH.match('/corr/1/day/2026-09-14/shift/2.json') and not PATH.match('/corr/1/day/2026-09-14/shift/4')
 
 
+def test_speed_by_grade_and_speed_over_a_window_are_fpm_urls():
+    """Issue #74: a measure word decides the intent, a grouping word only the breakdown. `fpm by grade`
+    is measure=fpm&by=grade (speed against each grade target, charted in ft/min) under every grain, and
+    `fpm` over a named window is the period speed plan, not the generic KPI tiles."""
+    store = default_store()
+    for grain, period in (('day', 'day'), ('week', 'week'), ('month', 'month'), ('period', 'fiscal')):
+        resolved = resolve_url(f'/corr/1/{grain}/2026-09-14?measure=fpm&by=grade', store)
+        assert resolved['request']['plan'] == [{'tool': 'get_grade_totals', 'arguments': {
+            'window': {'period': period, 'anchor': '2026-09-14'}, 'shift': None, 'measure': 'speed'}}]
+        assert page_url(resolved) == f'/corr/1/{grain}/2026-09-14?measure=fpm&by=grade'
+    week = resolve_url('/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week', store)
+    assert [(s['tool'], s['arguments']['window']['period']) for s in week['request']['plan']] == [('get_period_kpis', 'week'), ('get_grade_totals', 'week')]
+    assert week['request']['plan'][1]['arguments']['measure'] == 'speed'
+    assert resolve_url('/corr/1/day/2026-09-14?measure=fpm&by=grade&window=month&shifts=3', store)['request']['plan'][0]['arguments'] == \
+        {'window': {'period': 'month', 'anchor': '2026-09-14'}, 'shift': 3, 'measure': 'speed'}
+    for text, url in (('fpm by grade', '/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade'),
+                      ('Which grade is slowest against target this month?', '/corr/1/day/2026-09-14/shift/2?measure=fpm&window=month&by=grade'),
+                      ('volume by grade this month', '/corr/1/day/2026-09-14/shift/2?measure=grade&window=month'),
+                      ('average speed this week', '/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week')):
+        context = Context('2026-09-14', 2)
+        context.scope = 'shift'
+        assert canonical_url(parse_request(text, context), context) == url, text
+    analysis = store.day_analysis('2026-09-14', False)
+    try:
+        context = Context('2026-09-14', 2)
+        context.scope = 'shift'
+        result = Agent(analysis).ask('fpm by grade', context)
+        assert [(c['unit'], c['y']) for c in result['charts']] == [('ft/min', 'speed_run_fpm')] and 'y2' not in result['charts'][0]
+        assert result['charts'][0]['title'].startswith('Speed by grade vs target')
+    finally:
+        analysis.close()
+    with pytest.raises(ValueError, match='measure is volume or speed'):
+        store.get_grade_totals({'period': 'week', 'anchor': '2026-09-14'}, measure='tons')
+
+
 def test_every_measure_has_a_meaning_under_every_grain():
     """Each measure resolves (or is refused with the router's own reason) under each grain and scope."""
     store = default_store()
@@ -134,6 +169,9 @@ def test_every_measure_has_a_meaning_under_every_grain():
     ('/corr/1/day/2026-09-14/shift/2?measure=overview&shifts=1', 'Selected shift only'),
     ('/corr/1/day/2026-09-14?measure=overview&shifts=1,1', 'distinct shifts'),
     ('/corr/1/day/2026-09-14?measure=waste&shifts=1,2', 'runs for one shift'),
+    ('/corr/1/day/2026-09-14?measure=fpm&by=width', 'by is grade for measure=fpm'),
+    ('/corr/1/day/2026-09-14?measure=fpm&by=grade&shifts=1,2', 'not split by shift'),
+    ('/corr/1/day/2026-09-14?measure=fpm&kind=maintenance', 'kind= does not apply'),
     ('/corr/1/day/2026-09-14?measure=kpis&corrupt=yes', 'corrupt is 1'),
     ('/corr/1/day/2026-09-14?measure=kpis&format=xml', 'format is json or pdf'),
     ('/corr/1/day/2026-09-14.json?measure=kpis&format=pdf', 'does not take format='),

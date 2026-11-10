@@ -150,6 +150,364 @@
    }
   },
   {
+   "id": "speed-fpm-by-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "fpm by grade",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "charts": 1,
+    "chart_units": [
+     "ft/min"
+    ],
+    "sections_match": "^Speed by grade, without stops, against each grade target: .* ft/min = .*% of the .* target"
+   }
+  },
+  {
+   "id": "speed-how-fast",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast did we run?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ],
+    "chart_units": [
+     "ft/min"
+    ]
+   }
+  },
+  {
+   "id": "speed-how-fast-this-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast are we running this grade",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "ft/min"
+    ]
+   }
+  },
+  {
+   "id": "volume-throughput",
+   "type": "routing",
+   "mode": "offline",
+   "question": "throughput",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "MSF"
+    ]
+   }
+  },
+  {
+   "id": "volume-how-much-did-we-make",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how much did we make",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "MSF"
+    ]
+   }
+  },
+  {
+   "id": "speed-average-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "average speed this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "sections_match": "speed with stops .* ft/min"
+   }
+  },
+  {
+   "id": "speed-vs-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "what is our speed vs last week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_grade_totals",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-slower-than-normal",
+   "type": "routing",
+   "mode": "offline",
+   "question": "are we running slower than normal",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=trend&metric=speed_all_fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_trend",
+      "arguments": {
+       "metric": "speed_all_fpm",
+       "weeks": 8,
+       "anchor": "2026-09-14",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_trend",
+     "render_chart"
+    ],
+    "chart_units": [
+     "ft/min"
+    ]
+   }
+  },
+  {
+   "id": "speed-what-was-our-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "what was our speed?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-bare-word",
+   "type": "routing",
+   "mode": "offline",
+   "question": "speed",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-to-target-lower",
+   "type": "routing",
+   "mode": "offline",
+   "question": "speed to target",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-were-we-slow-on-2",
+   "type": "routing",
+   "mode": "offline",
+   "question": "were we slow on 2?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "speed-why-this-shift-slow",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why was this shift slow",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
    "id": "dry-end-waste",
    "type": "routing",
    "mode": "offline",
