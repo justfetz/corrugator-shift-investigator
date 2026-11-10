@@ -224,15 +224,23 @@ DIAGNOSIS_WORDS = r"\b(slow|bad|killed)\b|\bwhy\b.*\bslow(er|est)?\b"
 BASELINE_WORDS = r"\b(normal|usual|typical|baseline)\b"
 # A loss word ("slow ... on stops") keeps a "slow" question on downtime or waste, not speed.
 LOSS_WORDS = r"\b(stops?|downtime|waste|trim|rejects?|quality)\b"
+# A paper change or changeover is a setup: a speed word beside one ("how fast did we change paper",
+# "how quick were the changeovers") describes the change, not the line speed, so it is the setup matrix.
+CHANGE_WORDS = r"\bchang\w* (the |our |of )?paper\b|\bpaper changes\b|\bchangeovers?\b"
+SETUP_WORDS = r"matrix|setup|" + CHANGE_WORDS
 
 
 def speed_or_volume(lower):
     """The one speed-versus-volume decision, shared by the day and the period parse paths: 'speed',
-    'volume' or None. A speed word decides speed unless a volume cue sits beside it ("how much",
-    "most", "share"); a bare volume word beside a speed word does not veto it, so "did we make our
-    speed target this week" and "speed and output" are speed. A volume word, or "how much did we
-    run/make", alone decides volume."""
+    'volume' or None. A speed word decides speed unless a volume cue attached to a volume ask sits
+    beside it ("how much did we make", "ran the most", "share of output"; a loose "most" or "how much"
+    does not count); a bare volume word beside a speed word does not veto it, so "did we make our
+    speed target this week" and "speed and output" are speed. A speed word beside a paper change or
+    changeover is about the setup, not the line, so it decides neither. A volume word, or "how much
+    did we run/make", alone decides volume."""
     if re.search(SPEED_WORDS, lower):
+        if re.search(CHANGE_WORDS, lower):
+            return None
         return 'volume' if re.search(VOLUME_CUES, lower) else 'speed'
     if re.search(VOLUME_WORDS, lower) or re.search(VOLUME_ASKS, lower):
         return 'volume'
@@ -398,7 +406,7 @@ def _parse_request(text, current):
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
         raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
     measure = speed_or_volume(lower)
-    intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(DIAGNOSIS_WORDS, lower) else (
+    intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(SETUP_WORDS, lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(DIAGNOSIS_WORDS, lower) else (
         'quality' if re.search(r'warp|bond|misalignment|reject|quality|waste', lower) else
         'downtime' if re.search(r'downtime|maintenance|operator|equipment|stops', lower) else
         measure if measure else

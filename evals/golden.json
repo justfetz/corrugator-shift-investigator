@@ -1469,6 +1469,36 @@
    }
   },
   {
+   "id": "setup-how-fast-did-we-change-paper",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast did we change paper",
+   "note": "Review of PR 81 (optional item): 'fast' here describes the paper change, not line speed. It was refused on main and became measure=fpm in this PR; it is a setup question, answered by the setup matrix.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_setup_matrix",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "period-control-how-fast-did-we-change-paper",
+   "type": "refusal",
+   "mode": "offline",
+   "period": "week",
+   "question": "how fast were the changeovers",
+   "note": "Review of PR 81 (optional item): under Week a changeover-speed question is the setup matrix, which is per shift and per day, so it is refused with the window to switch to, like 'Show setup matrix'; never a line-speed plan.",
+   "expect": {
+    "raises": "Switch Period to Day"
+   }
+  },
+  {
    "id": "slow-vs-normal-on-stops-not-a-speed-trend",
    "type": "routing",
    "mode": "offline",
