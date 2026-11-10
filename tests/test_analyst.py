@@ -225,6 +225,10 @@ def test_the_plan_prompt_states_the_cap_and_steers_all_shift_questions(analysis,
     one, every = calls[0]['system'], calls[1]['system']
     assert 'At most 5 steps (1 shift in scope' in one and 'One to six' not in one and 'All three shifts are in scope' not in one
     assert 'At most 9 steps (3 shifts in scope' in every and 'All three shifts are in scope' in every and 'get_period_kpis' in every
+    # The scope rule and the comparison rule share one prompt: the first must not tell the model to
+    # pass shift null for a which-shift question that the second tells it to plan once per shift.
+    assert 'shift null for all three shifts' not in every and 'once per shift' in every
+    assert 'except when the question compares shifts' in every
     catalog = json.loads(every[every.index('Tool catalog:\n') + len('Tool catalog:\n'):])
     first_daily = next(i for i, s in enumerate(catalog) if s['name'] == 'get_shift_kpis')
     assert catalog[0]['name'] == 'get_period_kpis' and all('shift' in s['parameters']['properties'] for s in catalog)
