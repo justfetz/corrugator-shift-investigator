@@ -40,9 +40,16 @@ Every number on the mockup is real: production day 2026-09-14, shift 2, from the
 | Part of the picture | Issue |
 | --- | --- |
 | Query box at the top of the card; trace folded below | #40 |
+| The shell itself: rail, ask bar, card frame with the title line, skeleton on submit, collapsed earlier cards, phone column | #63 |
 | Permalink, URL as state, rail controls re-ask | #20 |
 | Bars, tiles and rows link to their next question; follow-up chips | #21 |
 | Dollar line, rates panel, unit toggle, dollars on bars | #31 |
 | Ask the analyst: one planning call, streams under the deterministic answer | #23 |
 | Thread of cards, skeleton, paced reveal, Markdown export | #44 |
 | Evals badge in the header → `/evals` | #26 |
+
+## What is built so far
+
+`built/` holds renders of the running app at the mockup's sizes, written by `node tests/layout_check.cjs <url> docs/design/2026-11-09-ask-and-answer/built` (see [TESTING](../../TESTING.md)): `desktop.png` (1440×1040, "Why was this shift slow?" answered), `desktop-three.png` (three questions: one open card, two collapsed), `phone.png` and `phone-questions.png` (390×844, the card and the rail sheet). Compare them with `desktop.png` and `phone.png` here.
+
+Issue #63 built the shell with the data the app already had. Where the picture shows something a later issue owns, the shell leaves the place and does not fake the content: no dollar line and no dollars on bars or tiles (#31; the rates panel is a labelled placeholder), no follow-up chips and no links on bars (#21), no permalink (#20), no paced reveal (#44). Two things differ from the picture because the real answer is bigger than the mock's: the summary paragraph sits between the query box and the charts, and the query box shows the open step's SQL in a pane beside the list of steps instead of under its line, which is what lets the card fit in 1040 px.

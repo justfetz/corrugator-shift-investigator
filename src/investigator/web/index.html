@@ -1,43 +1,64 @@
 <!doctype html>
 <html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/trail.js" defer></script><script src="/app.js" defer></script></head>
-<body>
+<body class="shell-page">
 <header class="app"><div class="wrap">
-<div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>a corrugator’s shift, week, month or 4-4-5 period, from synthetic records</span></div>
-<a class="nav-btn" href="/guide">How it’s built</a>
-<span class="badge" id="mode-badge">Synthetic data / Offline planner</span>
+<div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Corrugator Shift Investigator</b><span class="badge" id="mode-badge">Synthetic data / Offline planner</span></div>
+<a class="top-link" href="/guide">How it works</a>
+<a id="evals-badge" class="evals-badge" href="/evals" hidden></a>
 <button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button>
-<section class="scope-bar" aria-label="Investigation scope">
-<div class="scope-row">
-<div class="field"><span class="field-label" id="day-label">Day</span><div class="day-picker"><button type="button" id="day-prev" class="step" aria-label="Previous production day">‹</button><input id="day" type="date" min="2026-08-03" max="2026-09-30" value="2026-09-14" required aria-labelledby="day-label"><button type="button" id="day-next" class="step" aria-label="Next production day">›</button></div></div>
-<div class="field"><span class="field-label" id="period-label">Period</span><div class="seg" id="period-seg" role="group" aria-labelledby="period-label"></div>
-<select id="period" hidden aria-hidden="true" tabindex="-1"><option value="day">Production day</option><option value="week">Week ending on date</option><option value="month">Calendar month</option><option value="accounting">4-4-5 accounting period</option></select></div>
+</div></header>
+<div class="shell">
+<aside id="rail" class="rail" aria-label="Context and canned questions">
+<button type="button" id="rail-close" class="secondary rail-close">Close</button>
+<section class="panel" aria-label="Investigation scope">
+<h2 class="panel-title">Looking at</h2>
+<div class="field"><span class="field-label" id="day-label">Production day</span><div class="day-picker"><button type="button" id="day-prev" class="step" aria-label="Previous production day">‹</button><input id="day" type="date" min="2026-08-03" max="2026-09-30" value="2026-09-14" required aria-labelledby="day-label"><button type="button" id="day-next" class="step" aria-label="Next production day">›</button></div></div>
+<p id="day-note" class="day-note" role="alert" hidden></p>
 <div class="field"><span class="field-label" id="shift-label">Shift</span><div class="seg" id="shift-seg" role="group" aria-labelledby="shift-label"></div>
 <select id="shift" hidden aria-hidden="true" tabindex="-1"><option value="1">1st / 07:00-15:00</option><option value="2" selected>2nd / 15:00-23:00</option><option value="3">3rd / 23:00-07:00</option></select>
 <select id="scope" hidden aria-hidden="true" tabindex="-1"><option value="shift">One shift / 8 hours</option><option value="day">All shifts / full 24-hour day</option></select></div>
-<label class="field mode-field"><span class="field-label">Agent</span><select id="mode"><option value="offline">Offline / free</option><option value="openai">OpenAI / your key</option><option value="anthropic">Anthropic / your key</option></select></label>
-<label id="key-label" class="field" hidden><span id="key-label-text" class="field-label">OpenAI API key (optional if configured on server)</span><input id="api-key" type="password" autocomplete="off" maxlength="512" placeholder="Used for this request only"></label>
-<details class="advanced" id="advanced"><summary>Advanced</summary>
-<label class="check switch"><input id="corrupt" type="checkbox"><span>Include a bad trim record</span><small>Injects one invalid setup into shift 2 so the affected metrics read Incomplete and the rejected value shows in the trail.</small></label>
-</details>
-<button id="reset" class="secondary" type="button">Reset</button>
-</div>
-</section>
-</div></header>
-<main class="wrap">
+<div class="field"><span class="field-label" id="period-label">Window</span><div class="seg" id="period-seg" role="group" aria-labelledby="period-label"></div>
+<select id="period" hidden aria-hidden="true" tabindex="-1"><option value="day">Production day</option><option value="week">Week ending on date</option><option value="month">Calendar month</option><option value="accounting">4-4-5 accounting period</option></select></div>
 <p id="scope-help" class="scope-sentence" aria-live="polite"></p>
-<p id="day-note" class="day-note" role="alert" hidden></p>
-<div class="grid">
-<section class="card conversation" aria-label="Ask">
-<p class="muted" id="mode-help">Ask about performance, downtime, speed or quality. Offline mode uses a small rule-based planner.</p>
-<details class="examples-fold" open><summary>Example questions</summary><div class="examples" id="examples" aria-label="Example questions by intent"></div></details>
-<form id="ask"><label for="question">Ask about the selected scope</label><textarea id="question" rows="3" maxlength="2000" placeholder="Why was this shift slow? Which downtime reason cost the most minutes this week? Which grade is eating the most downtime this month?"></textarea><div class="form-footer"><span id="status" role="status">Ready / no API costs</span><span class="form-actions"><button id="report" class="secondary" type="button" hidden title="The deterministic period report: output heatmap, daily matrix, recurring downtime and notes for the selected window">Period report</button><button id="submit" type="submit">Investigate</button></span></div></form>
-<a id="evals-badge" class="evals-badge" href="/evals" hidden></a>
-<section id="queries" class="queries" aria-label="Queries that produced this answer"></section>
-<div id="messages" aria-live="polite"><p class="empty">Answers appear here: the evidence lines, the model’s interpretation when a model is selected, and the charts on the right.</p></div>
-<p class="scope-note">Results identify investigation leads, not proven causes or guaranteed improvements. A model, when selected, chooses what to look at; it never supplies a number. <a href="/guide#asking-questions">How to ask and interpret answers</a>.</p>
 </section>
-<section class="card results" aria-live="polite" aria-busy="false"><div class="section-heading"><h2>Evidence</h2><div class="report-actions"><button id="pdf" class="secondary" disabled>Download PDF</button><button id="download" class="secondary" disabled>Save text</button></div></div><div id="charts"></div><div id="heatmaps" aria-label="Period output heatmap"></div><div id="kpis" class="kpis" aria-label="Period KPI tiles"></div><div id="metrics" class="metrics"><p class="muted">Calculated metrics appear here.</p></div></section>
+<section class="panel" aria-label="Canned questions">
+<h2 class="panel-title">Ask in one click</h2>
+<div class="canned-list" id="examples"></div>
+<details class="more-questions" id="more-fold"><summary>More questions</summary><div class="canned-list" id="examples-more"></div></details>
+<button id="report" class="canned" type="button" hidden title="The deterministic period report: output heatmap, daily matrix, recurring downtime and notes for the selected window">Period report</button>
+<p class="panel-note">Every canned question is a fixed query. No model, no wait.</p>
+</section>
+<section class="panel rates" aria-label="Your rates">
+<h2 class="panel-title">Your rates</h2>
+<dl class="rates-grid"><dt>Paper</dt><dd>$55 / MSF</dd><dt>Machine time</dt><dd>$1,200 / hr</dd><dt>Board margin</dt><dd class="unset">not set</dd></dl>
+<p class="panel-note">Placeholders: nothing on the page is priced in dollars yet.</p>
+<button id="rates-change" class="secondary" type="button" disabled title="Editable rates arrive with the cost model (issue #31)">Change rates</button>
+</section>
+<details class="panel advanced" id="advanced"><summary>Agent and advanced</summary>
+<label class="field mode-field"><span class="field-label">Agent for Ask the analyst</span><select id="mode"><option value="offline">Offline / free</option><option value="openai">OpenAI / your key</option><option value="anthropic">Anthropic / your key</option></select></label>
+<label id="key-label" class="field" hidden><span id="key-label-text" class="field-label">OpenAI API key (optional if configured on server)</span><input id="api-key" type="password" autocomplete="off" maxlength="512" placeholder="Used for this request only"></label>
+<p class="panel-note" id="mode-help">Offline mode uses a small rule-based planner. No model calls or API charges.</p>
+<label class="check switch"><input id="corrupt" type="checkbox"><span>Include a bad trim record</span><small>Injects one invalid setup into shift 2 so the affected metrics read Incomplete and the rejected value shows in the trail.</small></label>
+<button id="reset" class="secondary" type="button">Clear the thread</button>
+</details>
+</aside>
+<main>
+<form id="ask" class="askbar"><label for="question" class="sr-only">Ask about a shift</label><input id="question" type="text" maxlength="2000" autocomplete="off" placeholder="Ask about this shift: speed, downtime, waste, setups, orders, notes"><span id="status" role="status">Ready / no API costs</span><button id="submit" type="submit">Ask</button><button id="analyst" class="secondary analyst" type="button" hidden title="A model picks the tools and writes the interpretation; every number still comes from the queries"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Ask the analyst</button><button id="rail-toggle" class="secondary rail-toggle" type="button" aria-expanded="false" aria-controls="rail">Questions</button></form>
+<article id="card" class="card answer idle" aria-label="Answer" aria-busy="false">
+<header class="card-head"><h2 id="card-title" tabindex="-1">Ask about a shift</h2><div id="card-meta" class="card-meta"></div></header>
+<section id="queries" class="queries" aria-label="Queries that produced this answer"></section>
+<div id="messages" aria-live="polite"><p class="empty">Pick a question on the left or type one above. The answer lands here as one card: the queries that ran, the summary, the charts and the KPI tiles.</p></div>
+<div id="charts"></div>
+<div id="heatmaps" aria-label="Period output heatmap"></div>
+<div id="kpis" class="kpis" aria-label="Period KPI tiles"></div>
+<div id="metrics" class="metrics" aria-label="Shift KPI tiles"></div>
+<footer id="card-foot" class="card-foot" hidden><span id="calls"></span><span class="report-actions"><a id="came-back" href="#execution">What came back, per query</a><button id="download" class="secondary" type="button">Markdown</button><button id="pdf" class="secondary" type="button">PDF</button></span></footer>
+<div id="tables"></div>
+<details id="execution"><summary>What came back, per query</summary><p class="muted">The full result of each query in the box above: window, coverage, excluded records and the result JSON. An execution trace of tools and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details>
+</article>
+<div id="earlier" class="earlier-list" aria-label="Earlier answers"></div>
+<p class="scope-note">Results identify investigation leads, not proven causes or guaranteed improvements. A model, when selected, chooses what to look at; it never supplies a number. <a href="/guide#asking-questions">How to ask and interpret answers</a>.</p>
+<footer class="page-foot">43 synthetic production days (Mon–Fri, 3 Aug – 30 Sep 2026) · 07:00 production-day boundary · PDF downloads only; email not connected · <a href="/guide">How this agent is built</a><span id="evals-foot" hidden> · <a href="/evals">Golden evals: every case and the score history</a></span></footer>
+</main>
 </div>
-<section class="card supporting"><details class="supporting-fold" open><summary>Supporting data and how the agent got here</summary><div id="tables"></div><details id="execution"><summary>What came back, per query <span id="calls"></span></summary><p class="muted">The full result of each query in the box above: window, coverage, excluded records and the result JSON. An execution trace of tools and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details></details></section>
-<footer>43 synthetic production days (Mon–Fri, 3 Aug – 30 Sep 2026) · 07:00 production-day boundary · PDF downloads only; email not connected · <a href="/guide">How this agent is built</a><span id="evals-foot" hidden> · <a href="/evals">Golden evals: every case and the score history</a></span></footer>
-</main></body></html>
+</body></html>
