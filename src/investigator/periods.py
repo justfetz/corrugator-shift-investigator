@@ -1,16 +1,17 @@
-"""Deterministic period reports; only validated synthetic daily analysis is read.
+"""Deterministic period reports; only validated synthetic records are read.
 
-Daily snapshots come from the record store (`RecordStore.day_analysis`), so
-the calendar is the store's Monday-Friday production calendar: weekends are
-plant-down, never missing data, and a window is complete when every weekday
-in it has three validated shifts.
+Every tile, ranking and heatmap cell is a lookup of the store's precomputed
+`shift_kpis` rows (one per production day and shift, validated once when the
+store is built; issue #34); the recurring-downtime table and the notes read the
+raw stop records. The calendar is the store's Monday-Friday production calendar:
+weekends are plant-down, never missing data, and a window is complete when every
+weekday in it has three validated shifts.
 """
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from datetime import date, timedelta
-import threading
 import time
 from uuid import uuid4
-from .record_store import DEFAULT_MONTHS, FISCAL_START, default_store
+from .record_store import DEFAULT_MONTHS, FISCAL_START, default_store, shift_note
 from .synth import production_days
 
 FIRST = production_days(DEFAULT_MONTHS)[0]
@@ -62,59 +63,92 @@ def window(day, period, first=FIRST, last=LAST):
     return start, end, (old_start, old_end), 'Calendar month'
 
 
+SHIFT_SECONDS = 28800   # the daily KPI tool's fixed eight-hour denominator (analysis.get_shift_kpis)
+# One window's shift rows: the precomputed numerators and denominators, nothing recomputed per day.
+KPI_SQL = ("SELECT * FROM shift_kpis WHERE corrupt = ? AND production_date BETWEEN ? AND ? "
+           "AND list_contains(?, shift) ORDER BY production_date, shift")
+# The stop records of both windows, in the order the per-day notes tool lists them.
+STOP_SQL = ("SELECT production_date, shift, stop_id, kind, place, reason, seconds, note, "
+            "strftime(started, '%Y-%m-%d %H:%M:%S') AS start, strftime(ended, '%Y-%m-%d %H:%M:%S') AS \"end\" "
+            "FROM stops WHERE production_date BETWEEN ? AND ? AND list_contains(?, shift) "
+            "ORDER BY production_date, shift, start, stop_id")
+STOP_ROW_LIMIT = 5000   # two five-week windows of every shift hold about 2,300 stops
+
+
+def shift_matrix_row(k):
+    """The daily KPI tool's row (analysis.get_shift_kpis) from one shift_kpis row: the same
+    ratios of the same sums, so the daily matrix reads as it did when every day was rebuilt."""
+    n, feet, gross = k['setups'], k['lineal_ft'], k['gross_sqft']
+    def ratio(a, b, scale=1):
+        return a/b*scale if n and b else None
+    return {'valid_setups': n, 'paper_changes': k['paper_changes'],
+            'speed_to_target_pct': ratio(feet, k['target_ft'], 100),
+            'observed_lineal_ft': feet if n else None, 'observed_shift_fpm': feet/480 if n else None,
+            'gross_sqft': gross if n else None,
+            'estimated_good_sqft': gross-k['trim_sqft']-k['shear_sqft']-k['reject_sqft'] if n else None,
+            'throughput_in': ratio(gross, feet, 12),
+            'trim_pct': ratio(k['trim_sqft'], gross, 100), 'shear_pct': ratio(k['shear_sqft'], gross, 100),
+            'dry_end_pct': ratio(k['reject_sqft'], gross, 100),
+            'maintenance_pct': k['maintenance_seconds']/SHIFT_SECONDS*100,
+            'operator_pct': k['operator_seconds']/SHIFT_SECONDS*100,
+            'pm_pct': k['pm_seconds']/SHIFT_SECONDS*100,
+            'downtime_pct': k['stop_seconds']/SHIFT_SECONDS*100,
+            'lineal_per_setup': ratio(feet, n), 'lineal_per_wet_end': ratio(feet, k['paper_changes']),
+            'setups_above_trim_target': k['setups_above_trim_target'], 'source_ids': list(k['source_ids'])}
+
+
 class PeriodReports:
     def __init__(self, store=None):
         self.store = store if store is not None else default_store()
         self.first = date.fromisoformat(self.store.first_day)
         self.last = date.fromisoformat(self.store.last_day)
-        self.cache = OrderedDict()
-        self.cache_lock = threading.Lock()   # the POST path and the URL path (issue #20) share one cache
-
-    def snapshot(self, day, corrupt=False):
-        key = (day.isoformat(), corrupt)
-        with self.cache_lock:
-            if key not in self.cache:
-                a = self.store.day_analysis(day.isoformat(), corrupt)
-                try:
-                    self.cache[key] = {'version': a.version, 'shifts': {
-                        s: {'kpis': a.get_shift_kpis(s), 'notes': a.get_shift_notes(s)} for s in (1,2,3)}}
-                finally:
-                    a.close()
-                if len(self.cache)>60:
-                    self.cache.popitem(last=False)
-            self.cache.move_to_end(key)
-            return self.cache[key]
 
     def investigate(self, day, shift, scope, period, corrupt=False):
         started = time.monotonic()
+        if type(corrupt) is not bool:
+            raise ValueError('Invalid data-quality option')
         start, end, (old_start, old_end), period_name = window(day, period, self.first, self.last)
         shifts = [shift] if scope == 'shift' else [1,2,3]
+        if any(type(s) is not int or s not in (1, 2, 3) for s in shifts):
+            raise ValueError('Shift must be 1, 2 or 3')
         expected = len(weekdays(start, end))          # weekends are plant-down, not missing days
         expected_old = len(weekdays(old_start, old_end))
         current, previous, note_rows, versions = [], [], [], {}
         stops = defaultdict(lambda: {'current_count':0,'previous_count':0,'current_minutes':0.0,'previous_minutes':0.0})
         daily_stops = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'minutes': 0.0}))
+        kpi_parameters = []
         for label, begin, finish, target in [('current',start,end,current),('previous',old_start,old_end,previous)]:
-            for d in weekdays(begin, finish):
-                if d.isoformat() not in self.store.production_days:
-                    continue
-                snapshot = self.snapshot(d, corrupt)
-                versions[d.isoformat()] = snapshot['version']
-                for s in shifts:
-                    data = snapshot['shifts'][s]
-                    row = dict(data['kpis']['rows'][0], day=d.isoformat(), shift=s, coverage=data['kpis']['coverage'])
-                    target.append(row)
-                    for note in data['notes']['rows']:
-                        if note['record_type']=='Downtime':
-                            item=stops[(note['kind'],note['place'],note['reason'])]
-                            item[label+'_count']+=1
-                            item[label+'_minutes']+=note['down_minutes']
-                            if label == 'current':
-                                day_item = daily_stops[d.isoformat()][(note['kind'],note['place'],note['reason'])]
-                                day_item['count'] += 1
-                                day_item['minutes'] += note['down_minutes']
-                        if label=='current':
-                            note_rows.append(dict(note, day=d.isoformat(), shift=s))
+            params = [corrupt, begin.isoformat(), finish.isoformat(), shifts]
+            kpi_parameters.append(params)
+            for k in self.store._fetch(KPI_SQL, params):
+                d = k['production_date'].isoformat()
+                versions[d] = self.store.day_version(d, corrupt)
+                target.append(dict(shift_matrix_row(k), day=d, shift=k['shift'], coverage=k['coverage']))
+                if label == 'current':
+                    note_rows.append({'record_type': 'Shift', 'record_id': f"Shift {k['shift']}", 'start': '', 'end': '',
+                                      'kind': '', 'place': '', 'reason': '', 'down_minutes': None, 'notes': shift_note(k['crew']),
+                                      'source_ids': [f"shift-{k['shift']}"], 'day': d, 'shift': k['shift']})
+        stop_parameters = [old_start.isoformat(), end.isoformat(), shifts]
+        shift_notes = {(n['day'], n['shift']): i for i, n in enumerate(note_rows)}
+        downtime_notes = defaultdict(list)
+        for st in self.store._fetch(STOP_SQL, stop_parameters, limit=STOP_ROW_LIMIT):
+            moment = st['production_date']
+            label = 'current' if start <= moment <= end else 'previous' if old_start <= moment <= old_end else None
+            if label is None:
+                continue
+            d, minutes, key = moment.isoformat(), st['seconds']/60, (st['kind'], st['place'], st['reason'])
+            item = stops[key]
+            item[label+'_count'] += 1
+            item[label+'_minutes'] += minutes
+            if label == 'current':
+                day_item = daily_stops[d][key]
+                day_item['count'] += 1
+                day_item['minutes'] += minutes
+                downtime_notes[(d, st['shift'])].append({'record_type': 'Downtime', 'record_id': st['stop_id'],
+                    'start': st['start'], 'end': st['end'], 'kind': st['kind'], 'place': st['place'], 'reason': st['reason'],
+                    'down_minutes': minutes, 'notes': st['note'], 'source_ids': [st['stop_id']], 'day': d, 'shift': st['shift']})
+        # Each shift's note first, then its stops by start: the per-day notes tool's order.
+        note_rows = [row for note in note_rows for row in (note, *downtime_notes[(note['day'], note['shift'])])]
         if not current:
             raise ValueError(f'No production days between {start} and {end}: the dataset covers {self.first} to {self.last}')
         complete = len(current)==expected*len(shifts) and all(r['coverage']=='complete' for r in current)
@@ -166,11 +200,10 @@ class PeriodReports:
                 {'title':'Shift rankings: 1 = best in this period; no combined score','rows':rankings,'coverage':'complete' if complete else 'incomplete','source_result_id':rid},
                 {'title':'Daily shift matrix','rows':current,'coverage':'complete' if complete else 'incomplete','source_result_id':rid},
                 {'title':'Reported shift and downtime notes (synthetic, unverified)','rows':note_rows,'coverage':'complete' if complete else 'incomplete','source_result_id':rid}]
-        daily_trace=self.snapshot(date.fromisoformat(current[0]['day']),corrupt)['shifts'][shifts[0]]['kpis']['trace']
         trace={'result_id':rid,'tool':'get_period_report','arguments':{'day':day,'period':period,'scope':scope,'shift':shift},
                'ok':True,'elapsed_ms':(time.monotonic()-started)*1000,'data':{'range':label,'coverage':'complete' if complete else 'incomplete',
-               'rows':[totals],'dataset_versions':versions,'calculation':'Sum raw numerators and denominators from validated daily SQL tools. Fixed 480 minutes per shift. Speed target weighted by elapsed grade time.',
-               'daily_sql':daily_trace['sql'],'daily_parameters':daily_trace['parameters']}}   # the per-day KPI query with its bound values (#40)
+               'rows':[totals],'dataset_versions':versions,'calculation':'Sum raw numerators and denominators of the precomputed shift_kpis rows (one per validated production day and shift). Fixed 480 minutes per shift. Speed target weighted by elapsed grade time.',
+               'trace':{'sql':';\n'.join([KPI_SQL, KPI_SQL, STOP_SQL]),'parameters':[*kpi_parameters, stop_parameters]}}}   # the lookups with their bound values (#40)
         heatmap_rows=[]
         for n in range((end-start).days+1):
             moment = start+timedelta(days=n)
