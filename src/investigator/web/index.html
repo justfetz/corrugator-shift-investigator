@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/trail.js" defer></script><script src="/app.js" defer></script></head>
+<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/trail.js" defer></script><script src="/app.js" defer></script></head>
 <body class="shell-page">
 <header class="app"><div class="wrap">
 <div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Corrugator Shift Investigator</b><span class="badge" id="mode-badge">Synthetic data / Offline planner</span></div>
@@ -21,7 +21,7 @@
 <select id="period" hidden aria-hidden="true" tabindex="-1"><option value="day">Production day</option><option value="week">Week ending on date</option><option value="month">Calendar month</option><option value="accounting">4-4-5 accounting period</option></select></div>
 <p id="scope-help" class="scope-sentence" aria-live="polite"></p>
 </section>
-<section class="panel" aria-label="Canned questions">
+<section class="panel asks" aria-label="Canned questions">
 <h2 class="panel-title">Ask in one click</h2>
 <div class="canned-list" id="examples"></div>
 <details class="more-questions" id="more-fold"><summary>More questions</summary><div class="canned-list" id="examples-more"></div></details>
@@ -43,11 +43,13 @@
 </details>
 </aside>
 <main>
-<form id="ask" class="askbar"><label for="question" class="sr-only">Ask about a shift</label><input id="question" type="text" maxlength="2000" autocomplete="off" placeholder="Ask about this shift: speed, downtime, waste, setups, orders, notes"><span id="status" role="status">Ready / no API costs</span><button id="submit" type="submit">Ask</button><button id="analyst" class="secondary analyst" type="button" hidden title="A model picks the tools and writes the interpretation; every number still comes from the queries"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Ask the analyst</button><button id="rail-toggle" class="secondary rail-toggle" type="button" aria-expanded="false" aria-controls="rail">Questions</button></form>
+<div class="composer"><button type="button" id="new-pill" class="new-pill" hidden aria-label="Jump to the newest answer">↓ new</button>
+<form id="ask" class="askbar"><label for="question" class="sr-only">Ask about a shift</label><textarea id="question" rows="1" maxlength="2000" autocomplete="off" enterkeyhint="send" aria-describedby="ask-keys" placeholder="Ask about this shift: speed, downtime, waste, setups, orders, notes"></textarea><span id="ask-keys" class="sr-only">Enter sends, Shift+Enter starts a new line, slash focuses this box from anywhere.</span><span id="status" role="status">Ready / no API costs</span><button id="submit" type="submit">Ask</button><button id="analyst" class="secondary analyst" type="button" hidden title="A model picks the tools and writes the interpretation; every number still comes from the queries"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>Ask the analyst</button><button id="rail-toggle" class="secondary rail-toggle" type="button" aria-expanded="false" aria-controls="rail">Questions</button></form></div>
+<div id="transcript" class="transcript" role="region" aria-label="Answers, oldest first; the newest is at the bottom">
 <article id="card" class="card answer idle" aria-label="Answer" aria-busy="false">
 <header class="card-head"><h2 id="card-title" tabindex="-1">Ask about a shift</h2><div id="card-meta" class="card-meta"></div></header>
 <section id="queries" class="queries" aria-label="Queries that produced this answer"></section>
-<div id="messages" aria-live="polite"><p class="empty">Pick a question on the left or type one above. The answer lands here as one card: the queries that ran, the summary, the charts and the KPI tiles.</p></div>
+<div id="messages" aria-live="polite"><p class="empty">Pick a question on the left or type one in the box below. Each answer lands as one card at the bottom of this thread: the queries that ran, the summary, the charts and the KPI tiles; earlier answers move up.</p></div>
 <div id="charts"></div>
 <div id="heatmaps" aria-label="Period output heatmap"></div>
 <div id="kpis" class="kpis" aria-label="Period KPI tiles"></div>
@@ -59,6 +61,7 @@
 <div id="earlier" class="earlier-list" aria-label="Earlier answers"></div>
 <p class="scope-note">Results identify investigation leads, not proven causes or guaranteed improvements. A model, when selected, chooses what to look at; it never supplies a number. <a href="/guide#asking-questions">How to ask and interpret answers</a>.</p>
 <footer class="page-foot">43 synthetic production days (Mon–Fri, 3 Aug – 30 Sep 2026) · 07:00 production-day boundary · PDF downloads only; email not connected · <a href="/guide">How this agent is built</a><span id="evals-foot" hidden> · <a href="/evals">Golden evals: every case and the score history</a></span></footer>
+</div>
 </main>
 </div>
 </body></html>
