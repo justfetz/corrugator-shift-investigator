@@ -107,7 +107,6 @@ const GRAIN={day:'day',week:'week',month:'month',accounting:'period'}, GRAIN_PER
 const CANONICAL=/^\/corr\/[^/]+\/(day|week|month|period)\/(\d{4}-\d{2}-\d{2})(?:\/shift\/([123]))?(?:\.json)?$/;
 const nav=(typeof window!=='undefined'&&window.history&&window.location)?window:null;
 let conversation=[];     // this conversation's earlier views, carried as after= so offline follow-ups need no session
-let navigating=false;    // restoring a view from the address: controls follow the URL, nothing is pushed
 function machine(){ return (config&&config.machine)||'1'; }
 // The controls as an address needs them, read when a question is asked: a queued question keeps the scope it was asked under.
 function controls(){ return {day:$('day').value,shift:$('shift').value,scope:$('scope').value,period:$('period').value,corrupt:$('corrupt').checked}; }
@@ -133,32 +132,33 @@ function applyUrl(url){
  $('corrupt').checked=query.get('corrupt')==='1';
  return true;
 }
-function pushAddress(url,replace=false){ if(!nav||navigating||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
+function pushAddress(url,replace=false){ if(!nav||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
 function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?[bareUrl(url)]:[])].slice(-maxPriors()); }   // follow=false: the period report is a view, not a question in the conversation
 // Back, forward or a pasted address: the controls follow the URL, and the view becomes the open card of the
 // thread. A view this page has shown opens its card again without a request; any other is fetched as JSON from
 // the same address and lands in a new card, through the same render entry as an asked question.
 async function restore(url){
  if(!applyUrl(url))return false;
- navigating=true;
+ renderQuestionChips(); sessionEpoch++; sessionId=null; $('api-key').value='';   // the scope may have changed under the open card: a fresh server conversation
+ const held=thread.find(r=>r.state==='done'&&r.url===url);
+ if(held){ held.epoch=sessionEpoch; openId=held.id; followView(url,!held.report); renderCard(); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
+ if(!new URLSearchParams(url.split('?')[1]||'').has('measure')){ openId=null; conversation=[]; renderCard(); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
+ // Nothing is disabled while this loads, so the conversation is this address's own priors from now on: a question
+ // asked meanwhile, or a chip link, never carries the previous day's views (the grammar refuses those).
+ conversation=priorsOf(url).slice(-maxPriors());
+ $('status').textContent='Loading this address…';
+ const scope=currentScope(), epoch=sessionEpoch, rec={id:++seq,question:bareUrl(url),title:bareUrl(url),scope,answered:null,mode:'offline',report:new URLSearchParams(url.split('?')[1]||'').get('measure')==='report',corrupt:$('corrupt').checked,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
+ thread.push(rec); openId=rec.id; renderCard(); updateScope();
  try{
-  renderQuestionChips(); sessionEpoch++; sessionId=null; $('api-key').value='';   // the scope may have changed under the open card: a fresh server conversation
-  const held=thread.find(r=>r.state==='done'&&r.url===url);
-  if(held){ openId=held.id; followView(url,!held.report); renderCard(); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
-  if(!new URLSearchParams(url.split('?')[1]||'').has('measure')){ openId=null; conversation=[]; renderCard(); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
-  $('status').textContent='Loading this address…';
-  const scope=currentScope(), rec={id:++seq,question:bareUrl(url),title:bareUrl(url),scope,answered:null,mode:'offline',report:new URLSearchParams(url.split('?')[1]||'').get('measure')==='report',corrupt:$('corrupt').checked,epoch:sessionEpoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
-  thread.push(rec); openId=rec.id; renderCard(); updateScope();
-  try{
-   const response=await fetch(url,{headers:{Accept:'application/json'}});
-   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
-   rec.url=result.url||url; rec.question=rec.title=bareUrl(rec.url); followView(rec.url,!rec.report);
-   if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url);   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
-   land(rec,result); $('status').textContent=readyText();
-  }catch(error){ rec.error=error.message; rec.state='error'; settleCard(rec); $('status').textContent='Ready to retry'; }
-  finally{ updateScope(); }
-  return true;
- }finally{navigating=false;}
+  const response=await fetch(url,{headers:{Accept:'application/json'}});
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
+  rec.url=result.url||url; rec.question=rec.title=bareUrl(rec.url);
+  // Only while nothing has moved on since: a scope change or another answer owns the conversation and the address bar.
+  if(epoch===sessionEpoch&&openId===rec.id&&currentAddress()===url){ followView(rec.url,!rec.report); if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url); }   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
+  land(rec,result); $('status').textContent=readyText();
+ }catch(error){ rec.error=error.message; rec.state='error'; settleCard(rec); $('status').textContent='Ready to retry'; }
+ finally{ updateScope(); }
+ return true;
 }
 if(nav&&nav.addEventListener)nav.addEventListener('popstate',()=>{restore(currentAddress()).catch(()=>{});});
 function periodChanged(){ renderQuestionChips(); rescope(); }
@@ -669,7 +669,7 @@ function renderEarlier(){
  for(const rec of thread.filter(r=>r.id!==openId).sort((a,b)=>b.id-a.id)){
   const line=node('article',undefined,'card earlier'+(rec.state==='error'?' failed':''));line.setAttribute('aria-label',`Earlier answer: ${rec.title}`);
   const text=node('div',undefined,'earlier-text');text.append(node('strong',rec.title),node('span',`${entryWho(rec)} · ${rec.state==='pending'?'asking…':rec.state==='error'?'failed':msText(rec.ms)}`));
-  const open=node('button','Open','secondary');open.type='button';open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);open.addEventListener('click',()=>{openId=rec.id;renderCard();focusCard();});
+  const open=node('button','Open','secondary');open.type='button';open.setAttribute('aria-label',`Open the answer to: ${rec.title}`);open.addEventListener('click',()=>{openCard(rec);focusCard();});
   line.append(text,open);box.append(line);
  }
 }
@@ -682,6 +682,10 @@ function paintMeta(rec){
  meta.title=`${Math.round(rec.ms)} ms from submit to the rendered card in this browser; ${server.toFixed(0)} ms of it in the queries on the server. Planner: ${r.mode}.`;
 }
 function syncPdf(){ if(latest)$('pdf').hidden=!latest.url&&latestRun.get(latest.session_id)!==latest.run_id; }   // an addressed answer prints from its address; a model's answer only while it is its session's latest run (re-checked when another lands)
+// Opening a card: an addressed answer of the current scope puts its address in the bar and the conversation follows
+// it, so the next question is a follow-up of the card on screen. A card asked under another scope keeps the rail's
+// address: the rail, not the card, is what the address encodes.
+function openCard(rec){ openId=rec.id; renderCard(); if(rec.state==='done'&&rec.url&&rec.epoch===sessionEpoch){ followView(rec.url,!rec.report); pushAddress(rec.url); updateScope(); } }
 function focusCard(){ try{$('card-title').focus?.();}catch(e){} }   // keyboard focus follows the card when the control that had it goes away
 function renderCard(){
  const rec=thread.find(r=>r.id===openId)||null, card=$('card');
@@ -717,7 +721,7 @@ async function ask(question,{report=false,mode='offline',title}={}) {
  // The same question, still out, asked again (a double click): it is the card already waiting, not a second
  // request. Nothing is disabled to prevent it, so this is what keeps a second paid round from going out.
  const twin=thread.find(r=>r.state==='pending'&&r.epoch===epoch&&r.question===question&&r.mode===recMode&&r.report===report&&r.corrupt===corrupt&&['day','period','shift','scope'].every(k=>r.scope[k]===scope[k]));
- if(twin){ if(openId!==twin.id){openId=twin.id;renderCard();} return twin.done; }
+ if(twin){ if(openId!==twin.id)openCard(twin); return twin.done; }
  const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null};
  thread.push(rec);openId=rec.id;renderCard();   // the skeleton card is in the DOM before this task yields: within one frame of the submit
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';

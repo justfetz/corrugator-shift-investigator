@@ -459,6 +459,8 @@ const issue63=issue17.then(async()=>{
  const s1={day:'2026-09-14',period:'day',shift:1,scope:'shift'};
  assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s1)},answered:answeredScope(${JSON.stringify(s1)},${JSON.stringify(windowed(september))})})`,context),'All shifts · September 2026 (2026-09-01 to 2026-09-30)');   // the rail says shift 1, 14 Sep; the query ran all shifts over the month
  assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s1)},answered:answeredScope(${JSON.stringify(s1)},${JSON.stringify(windowed({period:'day',anchor:'2026-09-14',start:'2026-09-14',end:'2026-09-14',label:'2026-09-14 (Mon)'}))})})`,context),'Shift 1 · Mon 14 Sep 2026');   // the rail's own window keeps the rail's wording
+ const s2={...s1,shift:2};
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s2)},answered:answeredScope(${JSON.stringify(s2)},${JSON.stringify({trace:[{ok:true,data:{window:september,shift:2,rows:[]}}]})})})`,context),'Shift 2 · September 2026 (2026-09-01 to 2026-09-30)');   // the review's case: the shift kept, only the window is the tool's
  const sm={...s1,period:'month'};
  assert.equal(vm.runInContext(`answeredScope(${JSON.stringify(sm)},${JSON.stringify(windowed(september))}).window`,context),null);   // a month on the rail is the same month the tool ran
 
@@ -521,6 +523,12 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const pdfLink=links.find(l=>l.download&&l.download.endsWith('.pdf'));
  assert.ok(pdfLink&&pdfLink.href===second.url+'&format=pdf',pdfLink&&pdfLink.href);
  assert.equal(fetched.length,0);
+ // Open on an earlier card of this scope puts its address in the bar, and the next question follows it (#63 merge)
+ history.length=0;
+ elements.earlier.children[0].children[1].events.click();
+ assert.equal(elements['card-title'].textContent,'Why was this shift slow?');assert.deepEqual(history,[['push',first.url]]);
+ assert.equal(vm.runInContext('JSON.stringify(conversation)',ctx2),JSON.stringify([first.url]));
+ elements.earlier.children[0].children[1].events.click();assert.deepEqual(history.slice(-1),[['push',second.url]]);   // and back to the newest
  // back: the earlier view is restored from memory, the controls follow the address, no request is made
  fetched.length=0;
  location.pathname='/corr/1/day/2026-09-14/shift/2';location.search='?measure=overview';
@@ -534,6 +542,13 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.deepEqual(fetched.map(f=>f[0]),['/corr/1/day/2026-09-15?measure=fpm']);
  assert.equal(elements.day.value,'2026-09-15');assert.equal(elements.scope.value,'day');
  assert.equal(elements['card-title'].textContent,'/corr/1/day/2026-09-15?measure=fpm');assert.equal(elements.card.className,'card answer');   // a new card in the thread, through the same render entry
+ assert.equal(vm.runInContext('JSON.stringify(conversation)',ctx2),JSON.stringify(['/corr/1/day/2026-09-15?measure=fpm']));   // the conversation is the new address's own, never the previous day's after= chain
+ // an address that fails to load still leaves the conversation on its own priors (none here), so the next question is not refused
+ const okFetch=ctx2.fetch; ctx2.fetch=async(path,init)=>{fetched.push([path]);if(path.startsWith('/corr/1/day/2026-09-11'))return {ok:false,status:429,json:async()=>({error:'too many questions, slow down'})};return okFetch(path,init);};
+ location.pathname='/corr/1/day/2026-09-11';location.search='?measure=waste';
+ await win.listeners.popstate();await new Promise(r=>setTimeout(r,20));
+ assert.equal(elements.card.className,'card answer failed');assert.equal(vm.runInContext('JSON.stringify(conversation)',ctx2),JSON.stringify([]));
+ ctx2.fetch=okFetch;
  // a bare scope address on popstate clears the view and primes; a control change pushes the new scope address
  fetched.length=0;history.length=0;
  location.pathname='/corr/1/week/2026-09-14/shift/1';location.search='';
