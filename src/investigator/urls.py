@@ -103,6 +103,9 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                 pareto = next(step['arguments'] for step in plan if step['tool'] == 'get_downtime_pareto')
                 if pareto['group_by'] != 'reason':
                     params.append(('by', pareto['group_by']))
+        elif tools == ('get_grade_totals',) and first.get('measure') == 'speed':
+            measure = 'fpm'                                                     # speed grouped by grade
+            params.append(('by', 'grade'))
         elif tools == ('get_period_kpis',):
             measure = 'kpis'
             if first.get('compare') is False:
@@ -129,7 +132,7 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
         else:
             raise ValueError(f'No canonical URL for the plan {tools}')
         if window_param:
-            if tools in PERIOD_SHAPES:
+            if tools in PERIOD_SHAPES and measure not in ('fpm', 'overview'):
                 raise ValueError('The period form of a day-shaped question runs over the Period control, never another window')
             params.append(('window', window_param))
         named = [s for s in shifts if s is not None]
@@ -265,10 +268,14 @@ def resolve_url(url, store, max_turns=4, depth=0):
 
 def _used(measure, fields):
     """The modifier fields a measure reads, so a stray one is refused rather than ignored."""
-    if measure in ('overview', 'downtime', 'compare'):
+    if measure == 'overview':
+        return {'by', 'kind', 'window'}
+    if measure in ('downtime', 'compare'):
         return {'by', 'kind'}
     if measure == 'rank':
         return {'rank'}
+    if measure == 'fpm':
+        return {'by', 'window'}
     if measure == 'kpis':
         return {'window', 'compare'}
     if measure == 'pareto':
@@ -324,7 +331,11 @@ def _request(measure, fields, context, window):
             metrics = fields['rank'].split(',')
             if any(m not in RANK_METRICS for m in metrics) or len(set(metrics)) != len(metrics):
                 raise ValueError('rank lists speed, downtime and/or quality')
-        if context.period != 'day':
+        if measure == 'fpm' and 'by' in fields:
+            return _speed_by_grade(fields['by'], shifts, context, window)
+        if context.period != 'day' or (measure in ('fpm', 'overview') and 'window' in fields):
+            if kind is not None:
+                raise ValueError('kind= narrows the day overview and downtime; the period form groups the downtime Pareto with by=kind instead')
             return period_plan(intent, window, shifts, group_by, context)
         return {'intent': intent, 'shifts': shifts or ([1, 2, 3] if scope == 'day' else [shift]), 'kind': kind,
                 'group_by': group_by, 'want_chart': True, 'ranking_metrics': metrics}
@@ -375,6 +386,21 @@ def _request(measure, fields, context, window):
               'trend': 'period_trend', 'rollstock': 'period_rollstock'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
+
+
+def _speed_by_grade(by, shifts, context, window):
+    """`measure=fpm&by=grade`: speed without stops against each grade's target over the window
+    (the Period control's, or `window=`), one shift or all shifts."""
+    if by != 'grade':
+        raise ValueError('by is grade for measure=fpm (speed by grade)')
+    if context.scope == 'shift':
+        shift = context.shift
+    elif len(shifts) > 1:
+        raise ValueError('measure=fpm&by=grade runs for one shift (shifts=3) or all shifts; it is not split by shift')
+    else:
+        shift = shifts[0] if shifts else None
+    return {'intent': 'period_speed', 'shifts': [shift] if shift else [], 'kind': None, 'group_by': 'reason', 'want_chart': True,
+            'ranking_metrics': [], 'plan': [{'tool': 'get_grade_totals', 'arguments': {'window': window, 'shift': shift, 'measure': 'speed'}}]}
 
 
 def _compare_anchor(value, period):

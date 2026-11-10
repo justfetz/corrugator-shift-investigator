@@ -22,7 +22,7 @@ fails the build when the committed value goldens are not what the generator prod
 
 | Type | What it proves | How it is checked |
 | --- | --- | --- |
-| routing | the planner picked the right tools with the right arguments | required tool calls (argument subset), optional allow-list, call count, chart and table counts, selected shifts; `expect.url`, the canonical address the question resolves to (`GET /q` must redirect there) |
+| routing | the planner picked the right tools with the right arguments | required tool calls (argument subset), optional allow-list, call count, chart and table counts, chart units in order (`chart_units`), selected shifts; `expect.url`, the canonical address the question resolves to (`GET /q` must redirect there) |
 | faithfulness | every number in the answer came out of a tool row | each numeric token in the prose must equal some tool-row value under one of the application's formats (`.1f`, `.2f`, `,.0f`, `g`, …), a row count, a below-target count, or a stated rule constant; a refused call's own message, quoted verbatim, is tool output too |
 | grounding | findings cite evidence that exists and nothing is silently dropped | narrative citations resolve to `(result_id, row, field)` in the trace; non-limitation paragraphs cite something; a requested chart that could not be drawn is disclosed |
 | refusal | out-of-scope requests are refused rather than answered | expected `ValueError` text, or a `partial`/`unavailable` status with the disclaimer, or forbidden phrases absent; a window before the dataset is unavailable, never zero; a weekend day is refused with the calendar reason |
@@ -218,7 +218,7 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`169/169 golden · 11 ms p50`) is `evals.badge` of
+- The badge on the main page (`169/169 golden · 13 ms p50`) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its

@@ -155,8 +155,8 @@ def test_plan_allowlist_and_arguments():
         ({'steps': [{'tool': 'get_rankings', 'arguments': {'shift': 2, 'metric': ['speed']}}]}, 'argument value its schema does not allow'),
         ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 1}}]}, 'outside the selected scope'),
         ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2}, 'why': 'x'}]}, 'not a tool with arguments'),
-        ({'steps': []}, 'no steps or too many'),
-        ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2}}] * 7}, 'no steps or too many'),
+        ({'steps': []}, 'it has no steps'),
+        ({'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2}}] * 6}, 'more queries than the limit allows'),   # one shift: five
         ({'steps': 'get_shift_kpis'}, 'not a JSON object with a list of steps'),
         (None, 'not a JSON object'),
     ]:
@@ -168,6 +168,73 @@ def test_plan_allowlist_and_arguments():
     assert check({'steps': [{'tool': 'get_period_kpis', 'arguments': {'window': window, 'shift': 2}}]}, period='week')[1] is None
     assert check({'steps': [{'tool': 'get_period_kpis', 'arguments': {'window': window, 'shift': None}}]}, period='week')[1]   # shift scope
     assert parse_plan('```json\n{"steps": []}\n```') == {'steps': []} and parse_plan('no json') is None and parse_plan('[1]') is None
+
+
+def all_shift_steps(*tools):
+    return [{'tool': tool, 'arguments': {'shift': shift, **extra}} for tool, extra in tools for shift in (1, 2, 3)]
+
+
+NINE = all_shift_steps(('get_shift_overview', {}), ('get_rankings', {'metric': 'speed'}), ('get_downtime_breakdown', {'group_by': 'reason'}))
+
+
+def test_the_step_cap_scales_with_the_shifts_in_scope():
+    """Issue #78: two steps per shift in scope plus three. One shift: five; all three shifts: nine."""
+    from investigator.agent import plan_step_cap
+    assert plan_step_cap([2]) == 5 and plan_step_cap([1, 2, 3]) == 9
+    one = {'steps': [{'tool': 'get_shift_kpis', 'arguments': {'shift': 2}}, {'tool': 'get_shift_overview', 'arguments': {'shift': 2}},
+                     {'tool': 'get_wet_end_performance', 'arguments': {'shift': 2}}, {'tool': 'get_quality_breakdown', 'arguments': {'shift': 2}},
+                     {'tool': 'get_shift_notes', 'arguments': {'shift': 2}}]}
+    assert check(one)[1] is None
+    assert check({'steps': NINE}, allowed=(1, 2, 3), scope='day')[1] is None and len(check({'steps': NINE}, allowed=(1, 2, 3), scope='day')[0]) == 9
+    twelve = NINE + all_shift_steps(('get_quality_breakdown', {}))
+    steps, reason = check({'steps': twelve}, allowed=(1, 2, 3), scope='day')
+    assert steps == [] and reason == 'it proposes more queries than the limit allows' and not any(c.isdigit() for c in reason)
+
+
+def test_a_rejected_plan_degrades_with_its_counts(analysis, tmp_path):
+    """A plan over the cap runs nothing, keeps no 'Investigation stopped' banner, and reports its counts
+    as fields (the card's one line), never as digits in the answer's text."""
+    calls, events = [], []
+    day = Context(DAY, 2)
+    day.scope = 'day'
+    twelve = json.dumps({'steps': NINE + all_shift_steps(('get_quality_breakdown', {}))})
+    result = Agent(analysis, planner=analyst(tmp_path, scripted(twelve, calls=calls))).ask_planned('What shift was fastest and why?', day, events.append)
+    assert result['status'] == 'plan_rejected' and result['trace'] == [] and events == [] and len(calls) == 1
+    assert result['plan_rejection'] == {'proposed': 12, 'limit': 9}
+    assert not any(s.startswith('Investigation stopped') for s in result['sections'])
+    assert any('more queries than the limit allows' in s and 'offline answer stands' in s for s in result['sections'])
+    # another reason for refusal carries no counts, even when the plan is also long
+    shaped = json.dumps({'steps': NINE + all_shift_steps(('get_quality_breakdown', {})), 'x': 1})
+    odd = Agent(analysis, planner=analyst(tmp_path, scripted(shaped))).ask_planned('What shift was fastest and why?', day)
+    assert odd['status'] == 'plan_rejected' and 'plan_rejection' not in odd
+    # another reason for refusal carries no counts
+    bad = json.dumps({'steps': [{'tool': 'run_sql', 'arguments': {}}]})
+    other = Agent(analysis, planner=analyst(tmp_path, scripted(bad))).ask_planned('Why slow?', context())
+    assert other['status'] == 'plan_rejected' and 'plan_rejection' not in other
+    # nine steps on all shifts run, every one of them
+    ran = Agent(analysis, planner=analyst(tmp_path, scripted(json.dumps({'steps': NINE}), NARRATIVE))).ask_planned('What shift was fastest and why?', day)
+    assert ran['status'] == 'complete' and len(ran['trace']) == 9 and all(e['ok'] for e in ran['trace'])
+
+
+def test_the_plan_prompt_states_the_cap_and_steers_all_shift_questions(analysis, tmp_path):
+    calls = []
+    Agent(analysis, planner=analyst(tmp_path, scripted('{"unavailable": "x"}', calls=calls))).ask_planned('Why slow?', context())
+    day = Context(DAY, 2)
+    day.scope = 'day'
+    Agent(analysis, planner=analyst(tmp_path, scripted('{"unavailable": "x"}', calls=calls))).ask_planned('What shift was fastest and why?', day)
+    one, every = calls[0]['system'], calls[1]['system']
+    assert 'At most 5 steps (1 shift in scope' in one and 'One to six' not in one and 'All three shifts are in scope' not in one
+    assert 'At most 9 steps (3 shifts in scope' in every and 'All three shifts are in scope' in every and 'get_period_kpis' in every
+    # The scope rule and the comparison rule share one prompt: the first must not tell the model to
+    # pass shift null for a which-shift question that the second tells it to plan once per shift.
+    assert 'shift null for all three shifts' not in every and 'once per shift' in every
+    assert 'except when the question compares shifts' in every
+    catalog = json.loads(every[every.index('Tool catalog:\n') + len('Tool catalog:\n'):])
+    first_daily = next(i for i, s in enumerate(catalog) if s['name'] == 'get_shift_kpis')
+    assert catalog[0]['name'] == 'get_period_kpis' and all('shift' in s['parameters']['properties'] for s in catalog)
+    assert all(s['name'] not in PLAN_TOOLS or s['name'] in {t['name'] for t in catalog} for s in catalog) and first_daily > 5
+    single = json.loads(one[one.index('Tool catalog:\n') + len('Tool catalog:\n'):])
+    assert single[0]['name'] == 'get_shift_kpis'   # one shift: the catalog keeps its order
 
 
 # ---------------------------------------------------------------- the two-call round

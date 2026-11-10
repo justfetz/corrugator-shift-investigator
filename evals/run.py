@@ -464,6 +464,10 @@ def expectations(expect, result):
             failures.append(f'{n} charts, expected {want}')
         if isinstance(want, dict) and n < want.get('min', 0):
             failures.append(f'{n} charts, expected at least {want["min"]}')
+    if 'chart_units' in expect:
+        units = [c.get('unit') for c in result['charts']]
+        if units != expect['chart_units']:
+            failures.append(f'chart units {units}, expected {expect["chart_units"]}')
     if 'tables' in expect:
         titles = sorted(t['title'] for t in result['tables'])
         if titles != sorted(expect['tables']):

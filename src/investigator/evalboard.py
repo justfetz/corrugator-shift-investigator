@@ -124,6 +124,8 @@ def describe_expect(expect):
         want = expect['charts']
         lines.append(f'Draws at least {want.get("min", 0)} chart(s)' if isinstance(want, dict)
                      else ('Draws no chart' if want == 0 else f'Draws exactly {want} chart' + ('' if want == 1 else 's')))
+    if 'chart_units' in expect:
+        lines.append('Charts in ' + _words(expect['chart_units']) + ', in that order')
     if 'tables' in expect:
         lines.append('Shows the table' + ('' if len(expect['tables']) == 1 else 's') + ' ' + _words(expect['tables'])
                      if expect['tables'] else 'Shows no table')
