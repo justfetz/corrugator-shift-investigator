@@ -151,11 +151,11 @@ def test_september_review_is_archived():
 def test_main_redeploys_every_weekday_night_and_by_hand():
     """Issue #35: the dataset is the year ending yesterday, fixed per image, so main is rebuilt and
     redeployed on a schedule (and on demand); the push trigger stays."""
-    import yaml
-    workflow = yaml.safe_load(DEPLOY.read_text())
-    triggers = workflow[True] if True in workflow else workflow['on']   # YAML 1.1 reads the key `on` as True
-    assert triggers['push'] == {'branches': ['main']} and 'workflow_dispatch' in triggers
-    assert triggers['schedule'] == [{'cron': '0 9 * * 1-5'}]
+    text = DEPLOY.read_text()
+    on = text.split('\non:\n', 1)[1].split('\npermissions:', 1)[0]   # the trigger block, as plain text (CI has no YAML library)
+    assert re.search(r"^  push:\n    branches: \[main\]$", on, re.M), on
+    assert re.search(r"^  schedule:\n    - cron: '0 9 \* \* 1-5'", on, re.M), on
+    assert re.search(r"^  workflow_dispatch:$", on, re.M), on
 
 
 def test_the_image_prebuilds_the_demo_year_and_the_golden_year():

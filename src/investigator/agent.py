@@ -283,7 +283,12 @@ def parse_period_request(lower, current, shifts):
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
     anchor = current.production_day
-    year = anchor[:4]
+    def month_start(month):
+        """A bare month name means the latest month of that name starting on or before the selected
+        day: the dataset is a rolling year across a calendar year end (issue #35), so "December"
+        asked in September 2026 is December 2025, not a December after the data."""
+        year = int(anchor[:4]) - (1 if month > int(anchor[5:7]) else 0)
+        return f"{year:04d}-{month:02d}-01"
     shift = current.shift if current.scope == 'shift' else shifts[0] if len(shifts) == 1 else None
     # A question that names no window gets the Period control's window (week, month, 4-4-5), else the day.
     selected = getattr(current, 'period', 'day')
@@ -336,22 +341,22 @@ def parse_period_request(lower, current, shifts):
         # stays on the baseline branch above (the interim speed trend until #76).
         if not (period or months):
             return None
-        return period_plan('overview', {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"} if months else window, shifts, group_by_words(lower), current)
+        return period_plan('overview', {"period": "month", "anchor": month_start(months[0])} if months else window, shifts, group_by_words(lower), current)
     elif speed and period and len(set(months)) < 2:
         # "average speed this week", "our speed vs last week", "how fast did we run in August": the speed
         # answer over the named window (two named months stay on compare_periods, the one two-window table)
-        return period_plan('speed', {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"} if months else window, shifts, 'reason', current)
+        return period_plan('speed', {"period": "month", "anchor": month_start(months[0])} if months else window, shifts, 'reason', current)
     elif volume and period and len(set(months)) < 2 and not re.search(r"\bper\b", lower):   # ratios (lineal per setup) stay on the tiles
         # "what was our throughput this week", "how much did we make in August": volume by grade over the window
-        plan = [("get_grade_totals", {"window": {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"} if months else window, "shift": shift})]
+        plan = [("get_grade_totals", {"window": {"period": "month", "anchor": month_start(months[0])} if months else window, "shift": shift})]
         intent = 'period_grade'
     elif len(set(months)) >= 2:
         first, second = months[0], months[1]
-        plan = [("compare_periods", {"current_window": {"period": "month", "anchor": f"{year}-{first:02d}-01"},
-                                     "previous_window": {"period": "month", "anchor": f"{year}-{second:02d}-01"}, "shift": shift})]
+        plan = [("compare_periods", {"current_window": {"period": "month", "anchor": month_start(first)},
+                                     "previous_window": {"period": "month", "anchor": month_start(second)}, "shift": shift})]
         intent = 'period_compare'
     elif months:
-        plan = [("get_period_kpis", {"window": {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"}, "compare": True, "shift": shift})]
+        plan = [("get_period_kpis", {"window": {"period": "month", "anchor": month_start(months[0])}, "compare": True, "shift": shift})]
         intent = 'period_compare'
     else:
         plan = [("get_period_kpis", {"window": window, "compare": True, "shift": shift})]

@@ -88,7 +88,7 @@ Read it the way the tools do: 5,239.9 lineal feet × 87 inches / 12 = 37,989 gro
 
 Each line is one rule the generator keeps for every record of both months and the test in `tests/test_records_invariants.py` (unless named otherwise) that walks every record to prove it.
 
-- The calendar is 43 weekdays × 3 shifts of 480 minutes at 07:00 / 15:00 / 23:00, labelled by the production day that starts at 07:00 — `test_calendar_is_three_shifts_per_weekday_of_both_months`.
+- The calendar is every weekday × 3 shifts of 480 minutes at 07:00 / 15:00 / 23:00, labelled by the production day that starts at 07:00 (the invariant tests walk August and September 2026: 43 weekdays) — `test_calendar_is_three_shifts_per_weekday_of_both_months`.
 - The web is centered: ordered widths × outs plus trim equal the web width, with 1 to 7 inches of trim per side — `test_web_geometry_is_centered_within_trim_limits`.
 - Knives share travel: every knife's nominal cuts × cutoff equal the order travel within one cutoff, and counted cuts stay within ±10 % of nominal, mostly within ±2 % — `test_lineal_consistency_and_overrun_window`.
 - Area reconciles: gross = lineal × width / 12; chops are whole 34-inch cuts; trim = order travel × trim inches / 12; each reject line is sheets × width × length / 144 and they sum to `kqf_sqft`; a setup's speed is lineal over elapsed minutes including its stops — `test_setup_area_accounting`.

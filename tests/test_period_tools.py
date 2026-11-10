@@ -448,6 +448,10 @@ ROUTES = [
     ("how did September go versus August", "compare_periods", {"current_window": {"period": "month", "anchor": "2026-09-01"},
                                                                  "previous_window": {"period": "month", "anchor": "2026-08-01"}}),
     ("How did August go?", "get_period_kpis", {"window": {"period": "month", "anchor": "2026-08-01"}, "compare": True}),
+    # a bare month name is the latest such month on or before the day: the year spans a year end (issue #35)
+    ("How did December go?", "get_period_kpis", {"window": {"period": "month", "anchor": "2025-12-01"}, "compare": True}),
+    ("how did October go versus September", "compare_periods", {"current_window": {"period": "month", "anchor": "2025-10-01"},
+                                                                  "previous_window": {"period": "month", "anchor": "2026-09-01"}}),
     ("which downtime reason cost the most minutes", "get_downtime_pareto", {"window": {"period": "day", "anchor": DAY}, "group_by": "reason", "measure": "minutes"}),
     ("which downtime reason cost the most minutes this month", "get_downtime_pareto", {"window": {"period": "month", "anchor": DAY}, "group_by": "reason"}),
     ("where did we stop most often this week", "get_downtime_pareto", {"window": {"period": "week", "anchor": DAY}, "group_by": "place", "measure": "count"}),

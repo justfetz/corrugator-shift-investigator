@@ -36,7 +36,7 @@ To materialize and validate all XML days:
 .\.venv\Scripts\python -m investigator.archive
 ```
 
-This writes the legacy one-day XML fixture for 30 days / 90 shifts under ignored artifacts/month, with a file/hash/seed manifest. It is the older generator kept for its own tests; it is not the dataset in the day selector, which comes from the two-month record store (write those files with `synth.write_jsonl`, see RECORDS.md).
+This writes the legacy one-day XML fixture for 30 days / 90 shifts under ignored artifacts/month, with a file/hash/seed manifest. It is the older generator kept for its own tests; it is not the dataset in the day selector, which comes from the rolling-year record store (write those files with `synth.write_jsonl`, see RECORDS.md).
 
 The offline planner is deliberately limited. Unsupported questions return a clear error. The optional OpenAI adapter selects tools alongside the offline router. Application code formats the calculated summaries in either mode; daily OpenAI mode adds a separate model interpretation. See AGENT_CONTRACT.md for permissions and limits.
 
@@ -58,7 +58,7 @@ These plain phrasings run the period tools over the whole year (offline, no mode
 - "Where is the speed opportunity this month?", "Which crews run faster, and does it cost rejects?" — typical versus best-fifth speed by grade and width or crew, in hours, with the dry-end rate of the fast setups beside it.
 - "Which warp are we seeing this month, up warp or twist warp?" — the waste breakdown with the reported sub-reasons.
 
-The window is anchored on the selected day: a week is its Monday–Friday production week, a month its calendar month. Windows before 3 August 2026 are unavailable, never zero, and deltas are withheld unless both windows are complete. "Yesterday" and "today" still ask you to use the day control, and a bare "Compare last week" is refused as ambiguous. Every percentage is a ratio of sums over the window (METRICS.md).
+The window is anchored on the selected day: a week is its Monday–Friday production week, a month its calendar month. Windows outside the rolling year are unavailable, never zero, and deltas are withheld unless both windows are complete. A month named without a year is the latest such month on or before the selected day ("December" asked in September 2026 is December 2025). "Yesterday" and "today" still ask you to use the day control, and a bare "Compare last week" is refused as ambiguous. Every percentage is a ratio of sums over the window (METRICS.md).
 
 
 ## Optional model: Ask the analyst
@@ -86,7 +86,7 @@ For “How can we be better?”, first choose an objective: fewer downtime minut
 
 Choose Window **Day**, then the Orders example. Each row is an order fragment on a knife. Width and length are sheet dimensions in inches; outs multiply cuts to get sheets. Requested and planned totals repeat when an order continues. Compare remaining before/after to see what each fragment produced, and planned overrun to see cutoff rounding. The same order keeps its dimensions and grade across shift boundaries. Completed gross production includes rejects; it is not accepted delivery. See METRICS.md for the simulation choices and time/area audits.
 
-Use the production day and the Window buttons for the production days 3 August – 30 September 2026 (Monday to Friday). A single shift is the default: both the offline parser and the model tool dispatcher enforce it. Choose **All shifts** explicitly to compare shifts. Changing day, period, shift or mode resets the visible conversation. Question wording cannot override the selected shift, and under Week, Month or 4-4-5 a daily tool is refused whatever the planner proposes.
+Use the production day and the Window buttons for the production days of the rolling year (Monday to Friday; the page footer names the first and last day). A single shift is the default: both the offline parser and the model tool dispatcher enforce it. Choose **All shifts** explicitly to compare shifts. Changing day, period, shift or mode resets the visible conversation. Question wording cannot override the selected shift, and under Week, Month or 4-4-5 a daily tool is refused whatever the planner proposes.
 
 The Setup matrix lists setup ID, wet-end ID, grade, timestamps, width, footage, speed/target, stop count and allocated downtime. Stops use half-open intervals: overlap seconds = max(0, min(stop end, setup end) - max(stop start, setup start)). A stop crossing a setup boundary counts in both intersected setups, but its minutes are divided, not duplicated. Invalid setups are excluded with incomplete coverage.
 

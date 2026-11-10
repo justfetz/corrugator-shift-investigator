@@ -2060,7 +2060,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "How did August go?",
-   "note": "One named month: the month tiles with the previous month alongside. The year window (issue #35) holds July, so the comparison is complete and every delta is shown; the unequal production days (21 vs 23) are flagged. A month with no records reads unavailable, never zero (october-unavailable-never-zero).",
+   "note": "One named month: the month tiles with the previous month alongside. The year window (issue #35) holds July, so the comparison is complete and every delta is shown; the unequal production days (21 vs 23) are flagged. A month with no records reads unavailable, never zero (month-before-dataset-unavailable-never-zero).",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=kpis&window=2026-08",
     "status": "complete",
@@ -2079,6 +2079,70 @@
     ],
     "sections_match": "August 2026 .*, all shifts, versus July 2026 .*Window coverage: complete; previous complete",
     "sections_not_match": "\\(previous 0(\\.00)? "
+   }
+  },
+  {
+   "id": "period-december-last-year",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "How did December go?",
+   "note": "A bare month name means the latest month of that name that starts on or before the selected day: from 14 September 2026 that is December 2025, inside the year window (issue #35). Resolved to the selected day's calendar year it would be December 2026, after the window, refused as outside the dataset.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=kpis&window=2025-12",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2025-12-01"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": "December 2025 .*, all shifts, versus November 2025 .*Window coverage: complete; previous complete"
+   }
+  },
+  {
+   "id": "period-january-vs-december",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-01-14",
+   "question": "Compare January with December",
+   "note": "Two bare month names across a year end: from 14 January 2026, January is this January and December the one before it (issue #35).",
+   "expect": {
+    "url": "/corr/1/day/2026-01-14?measure=kpis&window=2026-01&compare=2025-12",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "compare_periods",
+      "arguments": {
+       "current_window": {
+        "period": "month",
+        "anchor": "2026-01-01"
+       },
+       "previous_window": {
+        "period": "month",
+        "anchor": "2025-12-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "compare_periods",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "compare_periods"
+    ],
+    "sections_match": "January 2026 .*, all shifts, versus December 2025"
    }
   },
   {
@@ -3464,27 +3528,29 @@
    }
   },
   {
-   "id": "october-unavailable-never-zero",
+   "id": "month-before-dataset-unavailable-never-zero",
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "question": "How did October go?",
-   "note": "October 2026 is after the last production day of the golden window (2026-09-30; until issue #35 the case asked about July, then before the first day). The period tool refuses the window; the answer carries no October tile and no zero, and the status is unavailable (the reason itself is checked by october-reason-surfaced).",
+   "day": "2025-10-15",
+   "question": "How did August go?",
+   "note": "Asked on 15 October 2025, August means August 2025, before the year's first production day (30 September 2025). The period tool refuses the window; the answer carries no August tile and no zero, and the status is unavailable (the reason itself is checked by month-before-dataset-reason-surfaced). Asked about July on 14 September 2026 until issue #35 took July into the year.",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
     "charts": 0,
-    "sections_not_match": "October 2026|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
+    "sections_not_match": "August 2025|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
    }
   },
   {
-   "id": "october-reason-surfaced",
+   "id": "month-before-dataset-reason-surfaced",
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "question": "How did October go?",
-   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2025-09-30 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it; asked about July until the year window (issue #35) took July in.",
+   "day": "2025-10-15",
+   "question": "How did August go?",
+   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2025-09-30 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it; asked about July on 14 September 2026 until the year window (issue #35) took July in.",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,

@@ -60,7 +60,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context  # noqa: E402
-from investigator.record_store import AS_OF_ENV, RecordStore, dataset_window, default_store  # noqa: E402
+from investigator.record_store import RecordStore, dataset_window, default_store  # noqa: E402
 
 GOLDEN = ROOT / 'evals' / 'golden.json'
 VALUES = ROOT / 'evals' / 'golden_values.json'
@@ -105,9 +105,10 @@ _GOLDEN_STORE = {}
 
 def golden_store():
     """The store the golden set is scored against: the rolling window ending GOLDEN_AS_OF. It is the
-    process's default store when that holds the same window (the command line and CI pin
-    INVESTIGATOR_AS_OF to GOLDEN_AS_OF); otherwise (the deployed /evals page, whose demo window ends
-    yesterday) a second store built once, from the GOLDEN_PREBUILT_ENV folder when the image has it."""
+    process's default store when that holds the same window (pytest, whose tests/conftest.py pins
+    INVESTIGATOR_AS_OF to GOLDEN_AS_OF; or a command line that sets it); otherwise (the command line
+    without it, the deployed /evals page whose demo window ends yesterday) a second store built once,
+    from the GOLDEN_PREBUILT_ENV folder when the image has it, else generated (about 12 s)."""
     if 'store' not in _GOLDEN_STORE:
         window = dataset_window(as_of=GOLDEN_AS_OF)
         if dataset_window() == window:

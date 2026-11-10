@@ -1,4 +1,4 @@
-"""Seeded story answer keys for the two-month synthetic dataset.
+"""Seeded story answer keys for the synthetic dataset (dated in August and September 2026).
 
 THESE ANSWER KEYS ARE NOT EXPOSED THROUGH ANY TOOL. Only the generator
 (`synth.py`) reads this module, to plant the effects in the records. The

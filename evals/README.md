@@ -121,10 +121,11 @@ previous window is before the dataset, so its tiles must come back `null`, not `
 **The golden window** (issue #35). The app's dataset is a rolling year that the
 nightly deploy moves; the golden set is not. `run.py` scores every case against
 the store of the year ending `GOLDEN_AS_OF` (2026-09-30): the process's own store
-when it already holds that window (`tests/conftest.py` and CI pin
-`INVESTIGATOR_AS_OF=2026-09-30`), otherwise a second store built once, from the
-prebuilt folder `INVESTIGATOR_GOLDEN_PREBUILT` names when the image carries it
-(the deployed `/evals` page). Every production day is generated from its own
+when it already holds that window (pytest, whose `tests/conftest.py` pins
+`INVESTIGATOR_AS_OF=2026-09-30`, or a command line that sets it), otherwise a
+second store built once: from the prebuilt folder `INVESTIGATOR_GOLDEN_PREBUILT`
+names when the image carries it (the deployed `/evals` page), else generated
+(about 12 s of a plain `python3 evals/run.py`). Every production day is generated from its own
 date-keyed draws, so the golden window's days are the same days any later
 window holds.
 
@@ -294,9 +295,9 @@ and replays through it until it is re-recorded.
 A case may carry `known_defect`. It is run, shown as `xfail` in the table with
 the defect text, and does not count against the exit status; when it starts
 passing the note says to remove the marker. None is marked today. The last one,
-`july-reason-surfaced` (now `october-reason-surfaced`: since issue #35 July is
-inside the year window, so the case asks about the month after the golden
-window's last day), recorded that an investigation whose only tool call was
+`july-reason-surfaced` (now `month-before-dataset-reason-surfaced`: since issue
+#35 July is inside the year window, so the case asks about August 2025, before
+the year's first day), recorded that an investigation whose only tool call was
 refused ended `planner_error` with the window reason left in the trace; the
 agent now answers `unavailable` with the tool's own reason as the text (the
 offline planner and both live adapters alike), and the case is an ordinary
