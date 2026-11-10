@@ -823,11 +823,13 @@ class Agent:
             sections.insert(0,'The requested financial objective is unavailable: these records contain no costs, revenue or measured intervention outcomes. Production evidence alone cannot establish profit or achievable savings.')
         narrative=[]
         narrative_status='not_requested'
+        withdrawn=None   # paragraphs the ordering check took out (issue #79); counted in usage when a narrative was written
         if narrate is not None:
             narrative_status='unavailable'
             if status in ('complete','partial') and evidence:
                 try:
                     narrative=narrate(text,evidence)
+                    withdrawn=sum(p.pop('withdrawn',0) for p in narrative)
                     narrative_status='available'
                     for p in narrative:
                         cited={c.split(', ')[2] for c in p['citations'] if len(c.split(', '))>=4}
@@ -837,6 +839,7 @@ class Agent:
                         'Calculated evidence',*sections]
                 except ValueError as exc:
                     # Our own validator / provider message (never model text): say which rule refused it.
+                    withdrawn=getattr(exc,'withdrawn',None)
                     reason=getattr(exc,'public_message',None) or str(exc)
                     sections.insert(0,f'The model narrative failed validation ({reason[:160]}). Calculated evidence and charts are retained.')
                 except Exception:
@@ -859,7 +862,8 @@ class Agent:
                 'charts': charts,
                 'tables': [dict(title=v['tool'], source_result_id=v['result_id'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings',*PERIOD_TOOLS)],
                 'trace': traces, 'context': context_out,
-                'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0}), **getattr(self.planner, 'timings', {})},
+                'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0}), **getattr(self.planner, 'timings', {}),
+                          **({'comparisons_withdrawn': withdrawn} if withdrawn is not None else {})},
                 'limitations': 'Synthetic data. Setup counts are shift records: a continuing setup appears in both shifts. Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled. Recorded reasons are observations, not proven root causes. Model prose is interpretation requiring human review; reference validation does not prove causality. Offline mode understands only supported question patterns; live mode depends on provider access.'}
 
     @staticmethod

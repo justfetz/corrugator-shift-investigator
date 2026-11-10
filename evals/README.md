@@ -222,7 +222,7 @@ page writes here.
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 155 cases make 161 runs because six offline cases also have a
+recorded variant: 163 cases make 169 runs because six offline cases also have a
 recording. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can
@@ -236,6 +236,35 @@ might return through the real plan check and tool execution
 (`Agent.ask_planned`) with no model: it is an offline case, free and
 deterministic. That is how "an out-of-list tool refuses the whole plan" is a
 golden case rather than a hope about a model.
+
+A plan case may also carry `narrative`: the lines a model might stream, with
+placeholders such as `{{r1.0.observed_shift_fpm}}`. They are fed in small deltas
+through the real stream validator (`NarrativeStream`), so a narrative a model
+wrote is a golden case too. Two cases of issue #79 replay the live exchange
+in which the analyst wrote "Shift 2 ran fastest at 562.75 ft/min including
+downtime, against 608.92 ft/min on Shift 1 and 592.11 ft/min on Shift 3" over
+its own KPI rows: `analyst-fastest-shift-contradicted` must withdraw that line
+(`comparisons_withdrawn: 1`, with the limitation line *A comparison was withdrawn
+because it contradicted its own figures.*) and keep the rest, and
+`analyst-fastest-shift-consistent`, the corrected line, must survive whole
+(`narrative_match`, `comparisons_withdrawn: 0`). A third,
+`analyst-orderings-per-shift`, holds what review of the first check found: two
+true lines it withdrew ("the largest stop reason" of each shift's own breakdown;
+"fastest" beside a speed-to-target pair) must be kept, and a false comparison
+whose subjects are named in words ("Shift 2 ran faster than Shift 1, … against
+…") must be withdrawn. Every run that writes a
+narrative counts the withdrawn lines in `usage.comparisons_withdrawn`, and the
+summary prints them per kind of run:
+`comparisons withdrawn: replayed anthropic 0 in 11 narratives  offline 2 in 3 narratives`.
+
+A plan case marked `live: true` runs its question against the real analyst only
+under `--live` (its `plan` and `narrative` are not used then); unrecorded, it
+adds no skipped `@live` row, since its offline row already puts the round
+through the real checks. The acceptance run of issue #79 is five of those:
+
+```
+for i in 1 2 3 4 5; do python3 evals/run.py --live --provider anthropic --only analyst-fastest-shift-contradicted --no-record | grep -E '^analyst|comparisons withdrawn'; done
+```
 
 The Anthropic analyst (issue #23) makes two streamed calls: one plan, one
 narrative. `--live --provider anthropic` records that shape: the fixture is
@@ -258,10 +287,37 @@ agent now answers `unavailable` with the tool's own reason as the text (the
 offline planner and both live adapters alike), and the case is an ordinary
 passing refusal case.
 
+## The narrative rubric
+
+What a live narrative is judged on (the DeepEval judge of issue #25 scores each
+line separately; the deterministic checks enforce what they can):
+
+1. *Grounded*: every number in the narrative appears in a tool result. Enforced:
+   values arrive only through placeholders, and the faithfulness invariant checks
+   every numeric token.
+2. *Recorded, not proven*: losses are stated as what the data recorded; no causal
+   claim the tools did not make. Pattern checks only (`forbidden`, `narrative_not_match`).
+3. *Prescribes nothing*: no "should", no action list. Judge only.
+4. *Unavailable is not zero*: a value a tool returned as unavailable is never
+   rendered as 0 or dropped silently. Enforced for nulls (they render as the word).
+5. *Comparisons are consistent with the cited figures* (issue #79): an ordering
+   word (*fastest*, *most*, *below*, *rose*) agrees with the values the line cites.
+   Enforced for the orderings whose subject the rules in `narrative.py` can pin
+   down (`ordering_contradicted`); a claim they leave alone is the judge's.
+
 ## What this does not prove
 
 The pattern checks on live narrative (`narrative_not_match`, `forbidden`) are
 heuristics: a narrative can avoid the forbidden phrases and still give poor
 advice. They catch the specific failures listed in `docs/TESTING.md`, not prose
 quality in general. Read the recorded fixtures when a live case passes for the
-first time.
+first time. The ordering check is rule-based in the same way: it withdraws a
+line only when it can tell which cited value a word is about, so a subject named
+only by a pronoun ("Shift 2 ran … . It was the fastest of the three."), an
+ordering word it does not know ("Shift 2 led the day"), an ordering over values
+the line does not cite, or a comparison across two fields, is not caught by it.
+Actual against target is the case that matters: `actual_fpm` and `target_fpm`
+are different fields of the same row, so "ran above target at 467.45 ft/min
+against a target of 500.00 ft/min" is kept even though it is false. Covering it
+means pairing a row's `*_fpm` with its `target_fpm` in `_placed_pair`; until
+then it is the judge's (#25).
