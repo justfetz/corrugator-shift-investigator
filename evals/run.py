@@ -82,6 +82,7 @@ RULE_CONSTANTS = {'2.5', '1', '3.25', '0.4', '480', '12', '0'}
 NUMBER = re.compile(r'\d[\d,]*(?:\.\d+)?')
 RUN_ID = re.compile(r'[0-9a-f]{32}:\d+')
 CITATION = re.compile(r'^(?:Shift (\d)|All shifts), (\w+), ([0-9a-f]{32}:\d+), row (\d+)$')
+COMPARISON_WITHDRAWN_LINE = 'A comparison was withdrawn because it contradicted its own figures.'
 
 
 # ---------------------------------------------------------------- cases
@@ -247,19 +248,29 @@ class ScriptedPlanner:
 
 
 class ScriptedAnalyst:
-    """Returns one fixed plan and writes no narrative: a `plan` case puts a plan a model might
-    return through the real plan check and tool execution (`Agent.ask_planned`) without a model."""
+    """Returns one fixed plan and, when the case scripts one, the narrative lines a model might
+    stream: a `plan` case puts both through the real plan check, tool execution and stream
+    validator (`Agent.ask_planned`, `NarrativeStream`) without a model. Without `narrative` it
+    writes none."""
     planned = True
     mode = 'scripted plan (golden); no language model'
 
-    def __init__(self, plan):
+    def __init__(self, plan, narrative=None):
         self._plan = plan
+        self._narrative = narrative
 
     def plan(self, context):
         return json.loads(json.dumps(self._plan))
 
     def narrate(self, question, evidence, emit=None):
-        raise ValueError('a scripted plan has no narrative')
+        if self._narrative is None:
+            raise ValueError('a scripted plan has no narrative')
+        from investigator.narrative import NarrativeStream, evidence_packet
+        stream = NarrativeStream(evidence_packet(evidence), emit)
+        text = '\n'.join(self._narrative) + '\n'
+        for i in range(0, len(text), 9):   # small text deltas, the way a model's stream arrives
+            stream.feed(text[i:i + 9])
+        return stream.finish()
 
 
 def run_turn(agent, text, context):
@@ -474,8 +485,19 @@ def expectations(expect, result):
         hits = [t[:60] for t in prose if re.search(expect['narrative_not_match'], t, re.I)]
         if hits:
             failures.append(f'narrative matches forbidden /{expect["narrative_not_match"]}/: {hits[0]!r}')
+    if 'narrative_match' in expect and not any(re.search(expect['narrative_match'], t, re.I) for t in prose):
+        failures.append(f'no interpretation paragraph matches /{expect["narrative_match"]}/')
     if 'narrative_status' in expect and result.get('narrative_status') != expect['narrative_status']:
         failures.append(f'narrative_status {result.get("narrative_status")!r}, expected {expect["narrative_status"]!r}')
+    if 'comparisons_withdrawn' in expect:
+        # Issue #79: a paragraph whose ordering words contradict its own cited values is withdrawn,
+        # counted, and disclosed in one limitation line (the issue's wording, not imported from the app).
+        want, got = expect['comparisons_withdrawn'], result['usage'].get('comparisons_withdrawn', 0)
+        disclosed = any(p['kind'] == 'limitation' and p['text'] == COMPARISON_WITHDRAWN_LINE for p in result.get('narrative', []))
+        if got != want:
+            failures.append(f'{got} comparisons withdrawn, expected {want}')
+        if disclosed != bool(want):
+            failures.append(f'the limitation line {COMPARISON_WITHDRAWN_LINE!r} is ' + ('missing' if want else 'shown with nothing withdrawn'))
     if 'history_length' in expect and len(result['context']['history']) != expect['history_length']:
         failures.append(f'history length {len(result["context"]["history"])}, expected {expect["history_length"]}')
     if 'max_cost_usd' in expect and result['usage'].get('cost_usd', 0) > expect['max_cost_usd']:
@@ -854,7 +876,7 @@ def _run_case(case, provider, live, record, scratch):
                 return Agent(analysis, planner=ScriptedPlanner(case['tool'], case['arguments']))
         elif case.get('plan') is not None:
             def make_agent(analysis):
-                return Agent(analysis, planner=ScriptedAnalyst(case['plan']))
+                return Agent(analysis, planner=ScriptedAnalyst(case['plan'], case.get('narrative')))
         else:
             def make_agent(analysis):
                 return Agent(analysis)
@@ -1013,7 +1035,9 @@ def percentiles(values):
 
 def plan_rows(cases, live, provider):
     """(case, provider or None) pairs: every offline case once, plus a live variant per
-    provider for `mode: live` cases and cases marked `live: true`."""
+    provider for `mode: live` cases and cases marked `live: true`. An unrecorded live variant
+    shows as a skipped `@live` row, except for a scripted analyst case (`plan`): its offline
+    row already puts the round through the real checks, and its live variant runs on demand."""
     plan = []
     for case in cases:
         if case['mode'] == 'offline':
@@ -1024,7 +1048,7 @@ def plan_rows(cases, live, provider):
             else:
                 recorded = [p for p in PROVIDERS if fixture_path(case['id'], p).exists()]
                 plan.extend((case, p) for p in recorded)
-                if not recorded:
+                if not recorded and case.get('plan') is None:
                     plan.append((case, '?'))
     return plan
 
@@ -1065,7 +1089,8 @@ def main(argv=None):
             rows.append({'id': label, 'case': case['id'], 'type': case['type'], 'provider': case_provider,
                          'mode': 'live' if case_provider or label.endswith('@live') else 'offline',
                          'outcome': outcome, 'failures': failures, 'note': note, 'ms': round(ms, 1),
-                         'url_ms': round(URL_MS[case['id']], 1) if not case_provider and case['id'] in URL_MS else None})
+                         'url_ms': round(URL_MS[case['id']], 1) if not case_provider and case['id'] in URL_MS else None,
+                         'comparisons_withdrawn': usage.get('comparisons_withdrawn')})   # None: no narrative was written
             if args.live and case_provider and outcome != 'skip':   # a real provider answered: its clock is worth keeping
                 rows[-1].update(called=True, model_calls=usage.get('model_calls'), first_token_ms=usage.get('first_token_ms'))
     finally:
@@ -1121,6 +1146,9 @@ def main(argv=None):
     if timed:
         print('live latency: ' + '  '.join(f'{k} {v:.0f} ms' for k, v in timed.items() if isinstance(v, (int, float)) and k != 'model_calls_max')
               + f'  model calls per case: at most {timed["model_calls_max"]}')
+    withdrawn = comparisons_withdrawn(rows)
+    if withdrawn:
+        print('comparisons withdrawn: ' + '  '.join(f'{label} {n} in {k} narrative{"" if k == 1 else "s"}' for label, (n, k) in withdrawn.items()))
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)
     skipped = sum(r['outcome'] == 'skip' for r in rows)
     xfailed = sum(r['outcome'] == 'xfail' for r in rows)
@@ -1172,6 +1200,20 @@ def live_latency(rows):
     if first:
         out['first_token_p50'] = percentiles(first)['p50']
     out['model_calls_max'] = max((r.get('model_calls') or 0) for r in called)
+    return out
+
+
+def comparisons_withdrawn(rows):
+    """Issue #79: paragraphs the stream validator withdrew because their ordering words ("fastest",
+    "below", "rose") contradicted the values they cite, summed per kind of run, with the number of
+    narratives written: {'offline': (n, narratives), 'replayed anthropic': ..., 'live anthropic': ...}."""
+    out = {}
+    for r in rows:
+        if r.get('comparisons_withdrawn') is None:
+            continue
+        label = 'offline' if not r['provider'] else f'{"live" if r.get("called") else "replayed"} {r["provider"]}'
+        n, k = out.get(label, (0, 0))
+        out[label] = (n + r['comparisons_withdrawn'], k + 1)
     return out
 
 

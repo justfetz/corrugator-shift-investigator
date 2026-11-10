@@ -153,6 +153,13 @@ def describe_expect(expect):
         lines.append(f'The model\'s interpretation is "{expect["narrative_status"]}"')
     if 'narrative_not_match' in expect:
         lines.append(f'The interpretation never matches /{expect["narrative_not_match"]}/')
+    if 'narrative_match' in expect:
+        lines.append(f'An interpretation paragraph matches /{expect["narrative_match"]}/')
+    if 'comparisons_withdrawn' in expect:
+        n = expect['comparisons_withdrawn']
+        lines.append(f'{n} paragraph' + (' is' if n == 1 else 's are') + ' withdrawn because the ordering it asserts contradicts the values it cites, '
+                     'and one limitation line says so (issue #79)' if n else
+                     'No comparison is withdrawn: every ordering the interpretation asserts agrees with the values it cites (issue #79)')
     if 'history_length' in expect:
         lines.append(f'Carries {expect["history_length"]} questions of history to the next turn')
     if 'max_cost_usd' in expect:
