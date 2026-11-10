@@ -829,7 +829,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.ok(t.els.metrics.children.length===7&&!t.els.metrics.children.some(waiting));   // the tiles land at once, like a gauge
  assert.equal(t.els.tables.children.length,1);assert.ok(!waiting(t.els.tables.children[0]));   // tables appear at once
  assert.ok(t.els.charts.children.length===2&&t.els.charts.children.every(waiting));   // 4. the charts wait for the first sentence
- assert.deepEqual(typedText(t.els),['','','']);
+ assert.deepEqual(typedText(t.els),visible.map(()=>''));   // one empty paragraph per visible section, nothing typed yet
  await t.at(40+120);assert.deepEqual(queryLines(t.els).map(waiting),[false,false,true,true,true,true]);   // 80 ms apart
  // 3. the first figure of the first sentence is on screen within 400 ms of the submit (the bar is the 400 ms of the issue)
  await t.at(40+170);
