@@ -314,5 +314,10 @@ quality in general. Read the recorded fixtures when a live case passes for the
 first time. The ordering check is rule-based in the same way: it withdraws a
 line only when it can tell which cited value a word is about, so a subject named
 only by a pronoun ("Shift 2 ran … . It was the fastest of the three."), an
-ordering word it does not know ("Shift 2 led the day"), or an ordering over values
-the line does not cite, is not caught by it.
+ordering word it does not know ("Shift 2 led the day"), an ordering over values
+the line does not cite, or a comparison across two fields, is not caught by it.
+Actual against target is the case that matters: `actual_fpm` and `target_fpm`
+are different fields of the same row, so "ran above target at 467.45 ft/min
+against a target of 500.00 ft/min" is kept even though it is false. Covering it
+means pairing a row's `*_fpm` with its `target_fpm` in `_placed_pair`; until
+then it is the judge's (#25).
