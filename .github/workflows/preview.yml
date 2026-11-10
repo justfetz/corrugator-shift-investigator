@@ -24,6 +24,13 @@ permissions:
 concurrency:
   # One run per PR at a time. A new push cancels the deploy it supersedes; the close job never
   # cancels and is never skipped: it queues behind an in-flight deploy and then removes its tag.
+  # Runs of DIFFERENT pull requests, and the main deploy, are not serialized against each other,
+  # although all of them write the one service: every write below goes through
+  # .github/scripts/cloud_run_update.sh, which runs a write again when Cloud Run rejected it
+  # because another run's write landed first (ABORTED: Conflict for resource; seen when PR #54's
+  # close job removed its tag as PR #50's build finished). One repository-wide group instead would
+  # not do: GitHub keeps one pending run per group, so a third pull request's push would cancel
+  # the second's preview outright, and every preview would wait behind a main deploy.
   group: preview-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: ${{ github.event.action != 'closed' }}
 env:
@@ -104,7 +111,10 @@ jobs:
           set -euo pipefail
           SUFFIX="${TAG}-$(echo "$HEAD_SHA" | cut -c1-7)-${{ github.run_number }}"   # unique per push, prefix exact for cleanup
           echo "REVISION=${SERVICE}-${SUFFIX}" >> "$GITHUB_ENV"
-          gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
+          # Through the helper: Cloud Run rejects the write when another run changed the service in
+          # the second between gcloud's re-read after the build and its write; a rejected write is
+          # run again (a rebuild, about a minute) instead of failing the preview.
+          bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
             --no-traffic --tag "$TAG" --revision-suffix "$SUFFIX" \
             --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}" --quiet
       - name: Smoke-test the preview and check production traffic is unchanged
@@ -160,8 +170,16 @@ jobs:
           python3 .github/scripts/preview_origins.py orphans "$SERVICE" /tmp/service.json "$REVISION" < /tmp/revisions.json | while IFS=$'\t' read -r NAME FLAG; do
             if [ "$FLAG" = "latest" ]; then echo "::notice::$NAME has no tag and no traffic but is the service's latest created revision; Cloud Run refuses to delete it until another revision exists, so the next deploy (main or any preview) sweeps it"; continue; fi
             echo "deleting $NAME"
-            gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet \
-              || echo "::warning::could not delete $NAME; the next run retries"
+            if ! bash .github/scripts/cloud_run_update.sh gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet; then
+              # Every run sweeps every orphan, so another run may have deleted it first: gone (NOT_FOUND) is the goal.
+              # Anything else, a describe that failed for another reason included, is reported and the next run retries.
+              if ! gcloud run revisions describe "$NAME" --project "$PROJECT_ID" --region "$REGION" > /dev/null 2> /tmp/revision.err \
+                 && grep -qiE 'NOT_FOUND|could not be found|not found|Cannot find revision' /tmp/revision.err; then
+                echo "$NAME is already gone; another run deleted it first"
+              else
+                cat /tmp/revision.err; echo "::warning::could not delete $NAME; the next run retries"
+              fi
+            fi
           done
   cleanup:
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
@@ -215,7 +233,7 @@ jobs:
             echo "::error::could not describe $SERVICE; a leaked preview would go unnoticed, so this fails"; exit 1
           fi
           if [ -n "$(python3 .github/scripts/preview_origins.py url "$TAG" < /tmp/service.json | cut -d= -f2-)" ]; then
-            gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --remove-tags "$TAG" --quiet
+            bash .github/scripts/cloud_run_update.sh gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --remove-tags "$TAG" --quiet
             echo "tag $TAG removed; the preview URL no longer serves"
           else
             echo "tag $TAG was not serving"
@@ -225,7 +243,16 @@ jobs:
           python3 .github/scripts/preview_origins.py orphans "$SERVICE" /tmp/service.json < /tmp/revisions.json | while IFS=$'\t' read -r NAME FLAG; do
             if [ "$FLAG" = "latest" ]; then echo "::notice::$NAME has no tag and no traffic but is the service's latest created revision; Cloud Run refuses to delete it until another revision exists, so the next deploy (main or any preview) sweeps it"; continue; fi
             echo "deleting $NAME"
-            gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet
+            if ! bash .github/scripts/cloud_run_update.sh gcloud run revisions delete "$NAME" --project "$PROJECT_ID" --region "$REGION" --quiet; then
+              # Another run's sweep may have deleted it first: gone (NOT_FOUND) is the goal. Anything else, a describe
+              # that failed for another reason included, fails the job as a failed delete always has.
+              if ! gcloud run revisions describe "$NAME" --project "$PROJECT_ID" --region "$REGION" > /dev/null 2> /tmp/revision.err \
+                 && grep -qiE 'NOT_FOUND|could not be found|not found|Cannot find revision' /tmp/revision.err; then
+                echo "$NAME is already gone; another run deleted it first"
+              else
+                cat /tmp/revision.err; echo "::error::could not delete $NAME"; exit 1
+              fi
+            fi
           done
       - name: Note it on the pull request
         run: |
