@@ -2514,6 +2514,75 @@
     "narrative_match": "^Shift 1 ran fastest at [0-9.,]+ ft/min including downtime, against [0-9.,]+ ft/min on Shift 2 and [0-9.,]+ ft/min on Shift 3\\.$",
     "comparisons_withdrawn": 0
    }
+  },
+  {
+   "id": "analyst-orderings-per-shift",
+   "type": "faithfulness",
+   "mode": "offline",
+   "day": "2026-08-26",
+   "scope": "day",
+   "question": "What shift was fastest and why?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 1,
+       "group_by": "reason",
+       "kind": null
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason",
+       "kind": null
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 3,
+       "group_by": "reason",
+       "kind": null
+      }
+     }
+    ]
+   },
+   "narrative": [
+    "finding: On Shift 2 the largest stop reason was {{r5.0.category}} at {{r5.0.down_minutes}} minutes, while on Shift 1 it was {{r4.0.category}} at {{r4.0.down_minutes}} minutes.",
+    "finding: Shift 1 ran fastest at {{r1.0.observed_shift_fpm}} ft/min even though Shift 2 ran closer to target, {{r2.0.speed_to_target_pct}} percent against {{r1.0.speed_to_target_pct}}.",
+    "hypothesis: Uncertain: Shift 2 ran faster than Shift 1, {{r2.0.observed_shift_fpm}} ft/min against {{r1.0.observed_shift_fpm}} ft/min, perhaps because it stopped less.",
+    "limitation: One production day; grade mix is not compared."
+   ],
+   "note": "Issue #79, found in review of the first ordering check. The first two lines are true and must be kept: a \"largest\" said of each shift's own downtime breakdown ranks that shift's reasons, not one shift's top reason against another's; and \"fastest\" is said of the ft/min value beside it, not of the speed-to-target pair later in the sentence (on this day Shift 1 has the highest ft/min and Shift 2 the highest percent of target). The third line is false and must be withdrawn: its subjects are named in words (\"Shift 2 ran faster than Shift 1\") and its values follow after a comma.",
+   "expect": {
+    "status": "complete",
+    "tool_calls": 6,
+    "narrative_status": "available",
+    "narrative_match": "^Shift 1 ran fastest at [0-9.,]+ ft/min even though Shift 2 ran closer to target",
+    "narrative_not_match": "ran faster than Shift 1",
+    "comparisons_withdrawn": 1
+   }
   }
  ]
 }
