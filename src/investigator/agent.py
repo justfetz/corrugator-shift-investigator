@@ -222,9 +222,11 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
                "'where is the money this month' (levers in dollars), 'where did the money go this shift'.")
 
 
-# "Where is the money", "what's costing us", "opportunities": the money questions (issue #31). Plain
-# "cost" is not one ("which reason cost the most minutes" is the Pareto, "does it cost rejects" speed).
+# "Where is the money", "what's costing us", "opportunities", "contribution", "margin": the money questions
+# (issue #31). Plain "cost" is not one ("which reason cost the most minutes" is the Pareto, "does it cost
+# rejects" speed), nor is "contributed" ("which reasons contributed the most square feet").
 MONEY = re.compile(r"\bmoney\b|\bdollars?\b|\$|\bcosting\b|\bcost us\b|\bwhat (does|did|do) .{1,60}\bcost\b|"
+                   r"\bcontributions?\b|\bmargins?\b|"
                    r"\bopportunities\b|\bwhere (should|do|can) we look\b|\bwhere to look\b")
 MONEY_ONLY = ("Dollars come with where the money went this shift, the levers in a window ('where is the money this month'), "
               "and the downtime, waste, rejects and speed-opportunity answers. A comparison, trend, speed against normal, "
