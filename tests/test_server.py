@@ -96,7 +96,9 @@ def test_config_reports_the_production_calendar_and_refuses_other_days(running):
     assert any('Full comparison unavailable' in s for s in result['sections'])   # July is before the dataset
     assert result['trace'][0]['tool']=='get_period_report'
     assert result['tables'] and all(tbl['source_result_id']==result['trace'][0]['result_id'] for tbl in result['tables'])   # #40: period tables name their step
-    report=result['trace'][0]['data'];assert report['daily_sql'].count('?')==len(report['daily_parameters'])>0 and set(report['daily_parameters'])=={2}   # #40: the per-day SQL with its bound values
+    lookup=result['trace'][0]['data']['trace']   # #40: the report's SQL with its bound values; #34: shift_kpis lookups, no per-day rebuild
+    assert lookup['sql'].count('?')==sum(len(p) for p in lookup['parameters'])>0 and all(p[-1]==[2] for p in lookup['parameters'])
+    assert lookup['sql'].count('FROM shift_kpis')==2
     # A question under Week is investigated over that week by the period tools (no longer the canned report).
     status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'period':'week','question':'Why was this shift slow? Chart downtime by reason.'}),headers)
     result=json.loads(body)

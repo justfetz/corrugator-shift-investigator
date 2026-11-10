@@ -52,8 +52,9 @@ def test_prebuilt_store_is_identical_to_a_generated_one(folder, generated):
         assert store.content_hash == generated.content_hash
         assert store.counts == generated.counts
         assert store.production_days == generated.production_days
-        for table in TABLES:
+        for table in (*TABLES, "shift_kpis"):   # shift_kpis: built at image build, loaded, never recomputed (#34)
             assert _rows(store, table) == _rows(generated, table), table
+        assert store._db.execute("SELECT count(*) FROM shift_kpis").fetchone()[0] == 2 * len(store.production_days) * 3
         # the per-day objects drive the Analysis: an answer must be byte-identical either way
         day = "2026-09-14"
         a, b = store.day_analysis(day), generated.day_analysis(day)
