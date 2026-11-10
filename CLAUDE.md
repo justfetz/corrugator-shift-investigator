@@ -4,15 +4,15 @@ Guidance for Claude Code sessions in `corrugator-shift-investigator`. The repo i
 
 ## What this is
 
-A bounded agent that investigates why a corrugator shift was bad, on synthetic data. The offline router and parameterized DuckDB tools compute every number; a model (Anthropic or OpenAI, server key only) may choose tools and write the narrative, never the numbers. The public demo runs on Cloud Run with the offline planner by default. Target behavior: Datasette-fast. A question answers in tens of milliseconds and the URL is the state. The ordered backlog is issues #17 to #29.
+A bounded agent that investigates why a corrugator shift was bad, on synthetic data. The offline router and parameterized DuckDB tools compute every number; a model (Anthropic or OpenAI, server key only) may choose tools and write the narrative, never the numbers. The public demo runs on Cloud Run; every question is answered by the offline planner first, and the model is an opt-in, streamed "Ask the analyst" per answer that never holds the shared lock. Target behavior: Datasette-fast. A question answers in tens of milliseconds and the URL is the state. The ordered backlog is issues #17 to #29.
 
 ## Commands
 
 ```bash
 pip install -e . pytest                              # Python >= 3.11; deps are duckdb and reportlab
-python -m pytest -q                                  # 626 tests, about two minutes
+python -m pytest -q                                  # 668 tests, about two minutes
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
-python3 evals/run.py                                 # 160 golden cases offline, each also over its URL, about 10 s; the regression gate
+python3 evals/run.py                                 # 161 golden cases offline, each also over its URL, about 10 s; the regression gate
 python3 evals/run.py --live --provider anthropic     # needs ANTHROPIC_API_KEY; records fixtures under evals/fixtures/
 python3 evals/make_value_goldens.py                  # only after an intended generator change
 python -m investigator.server --port 7860            # local workbench at http://127.0.0.1:7860
@@ -20,8 +20,8 @@ python -m investigator.server --port 7860            # local workbench at http:/
 
 ## Layout
 
-- `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`, the URL path `/q` and `/corr/…`, `/evals`, `/evals.json`, `/api/evals/run`) · `urls.py` (the URL grammar: `canonical_url` of a parsed request and its inverse `resolve_url`) · `agent.py` (bounded tool loop and the offline `parse_request`) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `evalboard.py` (the `/evals` page's data; runs a case offline or replays its fixture, never a model) · `web/` (`app.js`, `index.html`, `evals.js`, `evals.html`, `trail.js`, `style.css`)
-- `evals/`: `golden.json` (87 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl` and `last_run.json` (written together by `--track`, shipped in the image, shown on `/evals`), `README.md` (the seven case types)
+- `src/investigator/`: `server.py` (http.server; `/api/config`, `/api/ask`, `/api/report`, the URL path `/q` and `/corr/…`, `/evals`, `/evals.json`, `/api/evals/run`) · `urls.py` (the URL grammar: `canonical_url` of a parsed request and its inverse `resolve_url`) · `agent.py` (bounded tool loop, the offline `parse_request`, and `ask_planned`: the analyst's one checked plan) · `analysis.py` (parameterized DuckDB tools) · `record_store.py` (two synthetic months in DuckDB; loads the prebuilt folder when `INVESTIGATOR_PREBUILT` names one) · `prebuilt.py` (`python -m investigator.prebuilt <folder>`, run at image build) · `synth.py`, `fixture.py`, `archive.py` (generators) · `anthropic_provider.py`, `openai_provider.py` · `narrative.py` · `chart.py`, `pdf_charts.py`, `reports.py`, `periods.py` · `evalboard.py` (the `/evals` page's data; runs a case offline or replays its fixture, never a model) · `web/` (`app.js`, `index.html`, `evals.js`, `evals.html`, `trail.js`, `style.css`)
+- `evals/`: `golden.json` (88 cases), `golden_values.json` (67), `run.py`, `fixtures/`, `history.jsonl` and `last_run.json` (written together by `--track`, shipped in the image, shown on `/evals`), `README.md` (the seven case types)
 - `tests/`: pytest suites and `test_ui.cjs`
 - `docs/`: `AGENT_CONTRACT.md`, `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md`, `URLS.md` (the public URL grammar; keep `urls.py` and it in step) · `archive/` (historical reviews, not current)
 - `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run), `preview.yml` (each PR gets a no-traffic tagged revision; its URL is a PR comment); `.github/scripts/` holds their helpers

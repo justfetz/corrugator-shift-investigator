@@ -53,6 +53,10 @@ These plain phrasings run the period tools over the whole two months (offline, n
 The window is anchored on the selected day: a week is its Monday–Friday production week, a month its calendar month. Windows before 3 August 2026 are unavailable, never zero, and deltas are withheld unless both windows are complete. "Yesterday" and "today" still ask you to use the day control, and a bare "Compare last week" is refused as ambiguous. Every percentage is a ratio of sums over the window (METRICS.md).
 
 
+## Optional model: Ask the analyst
+
+Every question is answered offline first. When a provider is available (the hosted demo's own Anthropic key, or a provider chosen in the Agent control with your key on the loopback workbench), the answer carries an **Ask the analyst** button. It streams: the queries the model planned appear in the query box as they run, then the interpretation is written under the answer with every value substituted from a query row. A paragraph that fails validation is withdrawn; a refused plan leaves the offline answer as it is with a one-line note.
+
 ## Optional OpenAI mode
 
 ### Does the key summarize for me?
