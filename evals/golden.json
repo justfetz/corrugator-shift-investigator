@@ -4541,6 +4541,61 @@
    "expect": {
     "raises": "in dollars is not available yet"
    }
+  },
+  {
+   "id": "money-bad-week-in-dollars-overview",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Why was this week so bad in dollars?",
+   "note": "Merge of main into #31a: main answers a diagnosis over a window with the period overview; the money word took it to the levers alone. The overview stays, and its Pareto and waste rows carry their dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ],
+    "sections_match": "Shift 2 in dollars: .*min x \\$1,200/hr machine time"
+   }
   }
  ]
 }
