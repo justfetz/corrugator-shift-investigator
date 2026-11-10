@@ -132,7 +132,7 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
         else:
             raise ValueError(f'No canonical URL for the plan {tools}')
         if window_param:
-            if tools in PERIOD_SHAPES and measure != 'fpm':
+            if tools in PERIOD_SHAPES and measure not in ('fpm', 'overview'):
                 raise ValueError('The period form of a day-shaped question runs over the Period control, never another window')
             params.append(('window', window_param))
         named = [s for s in shifts if s is not None]
@@ -268,7 +268,9 @@ def resolve_url(url, store, max_turns=4, depth=0):
 
 def _used(measure, fields):
     """The modifier fields a measure reads, so a stray one is refused rather than ignored."""
-    if measure in ('overview', 'downtime', 'compare'):
+    if measure == 'overview':
+        return {'by', 'kind', 'window'}
+    if measure in ('downtime', 'compare'):
         return {'by', 'kind'}
     if measure == 'rank':
         return {'rank'}
@@ -331,7 +333,7 @@ def _request(measure, fields, context, window):
                 raise ValueError('rank lists speed, downtime and/or quality')
         if measure == 'fpm' and 'by' in fields:
             return _speed_by_grade(fields['by'], shifts, context, window)
-        if context.period != 'day' or (measure == 'fpm' and 'window' in fields):
+        if context.period != 'day' or (measure in ('fpm', 'overview') and 'window' in fields):
             return period_plan(intent, window, shifts, group_by, context)
         return {'intent': intent, 'shifts': shifts or ([1, 2, 3] if scope == 'day' else [shift]), 'kind': kind,
                 'group_by': group_by, 'want_chart': True, 'ranking_metrics': metrics}

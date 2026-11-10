@@ -380,6 +380,7 @@
    "type": "routing",
    "mode": "offline",
    "question": "are we running slower than normal",
+   "note": "Interim route until issue #76 builds baselines: 'slower than normal' reads the weekly speed trend. When #76 lands this case's expect.url moves to the baseline answer; that change is the planned route, not a weakened case.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=trend&metric=speed_all_fpm",
     "status": "complete",
@@ -630,6 +631,326 @@
     "tools_only": [
      "get_period_kpis",
      "get_grade_totals",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-make-speed-target-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "did we make our speed target this week",
+   "note": "Review of PR 81: 'make' beside a speed word does not veto speed. The period path once read it as volume while the day path read 'did we make our speed target' as speed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "sections_match": "speed with stops .* ft/min"
+   }
+  },
+  {
+   "id": "speed-what-speed-did-we-make-this-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "what speed did we make this month",
+   "note": "Review of PR 81: one speed-versus-volume rule for both parse paths; 'made/make' is a bare volume word, not a volume cue.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_grade_totals",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-and-output-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "speed and output this week",
+   "note": "Review of PR 81: a bare volume word ('output') beside a speed word stays speed, as it does with no window named.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_grade_totals",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speed-how-fast-did-we-make-grade-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "how fast did we make 275-BC this week",
+   "note": "Review of PR 81: a speed word with a grade is speed grouped by grade over the window, never volume by grade.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "chart_units": [
+     "ft/min"
+    ]
+   }
+  },
+  {
+   "id": "overview-why-shift-slow-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "why was this shift slow this week",
+   "note": "Review of PR 81: a why/slow cue stays on the overview form at every grain (KPIs, downtime Pareto, waste), as 'why was this shift slow' does on the day; a speed plan alone loses the diagnosis.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ],
+    "charts": 3
+   }
+  },
+  {
+   "id": "overview-were-we-slow-this-week-month-control",
+   "type": "routing",
+   "mode": "offline",
+   "period": "month",
+   "question": "were we slow this week",
+   "note": "Review of PR 81: under the Month control the question's own window (this week) carries the overview form as window=week.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ],
+    "charts": 3
+   }
+  },
+  {
+   "id": "overview-what-killed-us-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "what killed us this week",
+   "note": "Review of PR 81: 'killed' is a diagnosis cue; over a window it is the overview, not the KPI tiles alone.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
      "render_chart"
     ]
    }

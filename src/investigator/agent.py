@@ -214,9 +214,31 @@ SPEED_WORDS = r"\b(speeds?|fpm|ft/min|feet per minute|fast|faster|fastest|pace|s
 # A volume cue next to a speed word ("how much 275-BC did we run", "which grade ran the most") keeps it volume.
 VOLUME_CUES = r"\b(how much|most|least|share)\b"
 VOLUME_WORDS = r"\b(throughput|output|volume|made|make|produced?|msf|lineal|footage)\b"
+VOLUME_ASKS = r"\bhow much\b.*\b(did|do|have) we (run|make|made|produce)\b"
+# A diagnosis cue asks why the result was bad, so it is answered by the overview (KPIs, downtime, waste,
+# speed) at every grain, never by a speed plan alone: "why was this shift slow this week".
+DIAGNOSIS_WORDS = r"\b(slow|bad|killed)\b|\bwhy\b.*\bslow(er|est)?\b"
 BASELINE_WORDS = r"\b(normal|usual|typical|baseline)\b"
 # A loss word ("slow ... on stops") keeps a "slow" question on downtime or waste, not speed.
 LOSS_WORDS = r"\b(stops?|downtime|waste|trim|rejects?|quality)\b"
+
+
+def speed_or_volume(lower):
+    """The one speed-versus-volume decision, shared by the day and the period parse paths: 'speed',
+    'volume' or None. A speed word decides speed unless a volume cue sits beside it ("how much",
+    "most", "share"); a bare volume word beside a speed word does not veto it, so "did we make our
+    speed target this week" and "speed and output" are speed. A volume word, or "how much did we
+    run/make", alone decides volume."""
+    if re.search(SPEED_WORDS, lower):
+        return 'volume' if re.search(VOLUME_CUES, lower) else 'speed'
+    if re.search(VOLUME_WORDS, lower) or re.search(VOLUME_ASKS, lower):
+        return 'volume'
+    return None
+
+
+def group_by_words(lower):
+    """The downtime grouping a question names: equipment (place), maintenance-vs-operator (kind) or reason."""
+    return 'place' if 'equipment' in lower or 'place' in lower else 'kind' if 'maintenance' in lower and 'operator' in lower else 'reason'
 
 
 def parse_period_request(lower, current, shifts):
@@ -234,8 +256,10 @@ def parse_period_request(lower, current, shifts):
     grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
     rollstock = bool(re.search(r"roll[- ]?stock|\bpaper (consum|usage|used\b)|\bconsum\w*\b.*\bpaper\b|\bpaper\b.*\bconsum|how much paper\b|\brolls? (of paper )?(consumed|used)", lower))
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
-    volume = bool(re.search(VOLUME_WORDS, lower))
-    speed = bool(re.search(SPEED_WORDS, lower)) and not (volume or re.search(VOLUME_CUES, lower) or re.search(LOSS_WORDS, lower))
+    measure = speed_or_volume(lower)
+    volume = measure == 'volume'
+    speed = measure == 'speed' and not re.search(LOSS_WORDS, lower)
+    diagnose = bool(re.search(DIAGNOSIS_WORDS, lower))
     grade = grade or bool(speed and re.search(r"\bgrades?\b", lower))    # "how fast are we running this grade"
     baseline = speed and bool(re.search(BASELINE_WORDS, lower))         # "are we running slower than normal" (#76 adds the baseline)
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
@@ -289,6 +313,10 @@ def parse_period_request(lower, current, shifts):
     elif waste:
         plan = [("get_waste_breakdown", {"window": window, "shift": shift})]
         intent = 'period_waste'
+    elif diagnose and period and len(set(months)) < 2:
+        # "why was this shift slow this week", "were we slow in August": the overview over the window,
+        # as the day path answers "why was this shift slow" (a speed plan alone has no downtime or waste)
+        return period_plan('overview', {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"} if months else window, shifts, group_by_words(lower), current)
     elif speed and period and len(set(months)) < 2:
         # "average speed this week", "our speed vs last week", "how fast did we run in August": the speed
         # answer over the named window (two named months stay on compare_periods, the one two-window table)
@@ -361,11 +389,11 @@ def _parse_request(text, current):
     shifts = shifts or ([1,2,3] if current.scope=='day' else [current.shift])
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
         raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
-    intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
+    measure = speed_or_volume(lower)
+    intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(DIAGNOSIS_WORDS, lower) else (
         'quality' if re.search(r'warp|bond|misalignment|reject|quality|waste', lower) else
         'downtime' if re.search(r'downtime|maintenance|operator|equipment|stops', lower) else
-        'speed' if re.search(r'speed|feet per minute|fpm|ft/min|\b(fast|faster|fastest|pace|slower|slowest)\b', lower) else
-        'volume' if re.search(VOLUME_WORDS, lower) or re.search(r"\bhow much\b.*\b(did|do) we (run|make|produce)\b", lower) else
+        measure if measure else
         'overview' if re.search(r'slow|bad|killed|shift|loss', lower) else None)
     if intent == 'volume':
         # "throughput", "how much did we make": volume by grade (MSF, lineal) over the selected window
@@ -380,7 +408,7 @@ def _parse_request(text, current):
         kind = 'Maintenance'
     elif 'operator' in lower and 'maintenance' not in lower:
         kind = 'Operator'
-    group_by = 'place' if 'equipment' in lower or 'place' in lower else 'kind' if 'maintenance' in lower and 'operator' in lower else 'reason'
+    group_by = group_by_words(lower)
     window = period_window(current)
     if window is not None:
         return period_plan(intent, window, named, group_by, current)

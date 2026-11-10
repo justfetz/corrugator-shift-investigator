@@ -127,6 +127,28 @@ def test_speed_by_grade_and_speed_over_a_window_are_fpm_urls():
         store.get_grade_totals({'period': 'week', 'anchor': '2026-09-14'}, measure='tons')
 
 
+def test_one_speed_or_volume_rule_and_why_slow_is_overview_at_every_grain():
+    """Review of PR 81: the day and the period parse paths share one speed-versus-volume rule (a bare
+    volume word beside a speed word does not veto it), and a why/slow cue keeps the overview form over a
+    named window (`measure=overview&window=`), which the grammar resolves back to the same plan."""
+    for text in ('did we make our speed target', 'what speed did we make', 'speed and output'):
+        context = Context('2026-09-14', 2)
+        context.scope = 'shift'
+        assert canonical_url(parse_request(text, context), context) == '/corr/1/day/2026-09-14/shift/2?measure=fpm', text
+        assert canonical_url(parse_request(text + ' this week', context), context) == \
+            '/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week', text
+    for period, url in (('day', '/corr/1/day/2026-09-14/shift/2?measure=overview&window=week'),
+                        ('week', '/corr/1/week/2026-09-14/shift/2?measure=overview'),
+                        ('month', '/corr/1/month/2026-09-14/shift/2?measure=overview&window=week')):
+        context = Context('2026-09-14', 2, period=period)
+        context.scope = 'shift'
+        assert canonical_url(parse_request('why was this shift slow this week', context), context) == url, period
+    resolved = resolve_url('/corr/1/day/2026-09-14/shift/2?measure=overview&window=2026-08', default_store())
+    assert [(s['tool'], s['arguments']['window']) for s in resolved['request']['plan']] == [
+        (tool, {'period': 'month', 'anchor': '2026-08-01'}) for tool in ('get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown')]
+    assert page_url(resolved) == '/corr/1/day/2026-09-14/shift/2?measure=overview&window=2026-08'
+
+
 def test_every_measure_has_a_meaning_under_every_grain():
     """Each measure resolves (or is refused with the router's own reason) under each grain and scope."""
     store = default_store()
@@ -162,7 +184,7 @@ def test_every_measure_has_a_meaning_under_every_grain():
     ('/corr/1/day/2026-09-14?measure=trend', 'metric is one of'),
     ('/corr/1/day/2026-09-14?measure=trend&metric=trim_pct&weeks=30', '1 to 26'),
     ('/corr/1/day/2026-09-14?measure=waste&metric=trim_pct', 'metric= does not apply'),
-    ('/corr/1/day/2026-09-14?measure=overview&window=week', 'window= does not apply'),
+    ('/corr/1/day/2026-09-14?measure=downtime&window=week', 'window= does not apply'),
     ('/corr/1/day/2026-09-14?measure=kpis&window=2026-13', 'window is week, month, period'),
     ('/corr/1/day/2026-09-14?measure=kpis&compare=last', 'compare is prev, none'),
     ('/corr/1/week/2026-09-14?measure=kpis&compare=2026-08', 'compare takes a date'),

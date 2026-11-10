@@ -36,7 +36,7 @@ store measures run one record-store tool over a window.
 
 | `measure=` | Under `day` | Under `week`, `month`, `period` |
 | --- | --- | --- |
-| `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
+| `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow"); with `window=` the period form over that window ("why was this shift slow this week", "were we slow in August") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
 | `summary` | `get_shift_overview` in one call, three charts | the same three store tools as `overview` |
 | `downtime` | KPIs and downtime by `by=` (`kind=` narrows) | the Pareto alone: an alias of `pareto` |
 | `fpm` | KPIs and wet-end speed against grade targets; with `window=` the period form over that window ("average speed this week", "our speed vs last week"); with `by=grade` speed without stops against each grade target, charted in ft/min ("fpm by grade") | KPI tiles and speed by grade against target; `by=grade` the speed-by-grade table alone |
@@ -83,6 +83,7 @@ the measure does not read, or a shift outside the selected scope is a 400 with t
 | "How did September go versus August?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=kpis&window=2026-09&compare=2026-08` |
 | "fpm by grade" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade` |
 | "Average speed this week" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week` |
+| "Why was this shift slow this week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=overview&window=week` |
 | "Trend of lineal per setup over six weeks" | `/corr/1/day/2026-09-14?measure=trend&metric=lineal_per_setup&weeks=6` |
 | "Compare that with first shift", after "Why was second shift slow?" — all shifts | `/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
