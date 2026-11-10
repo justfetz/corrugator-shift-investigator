@@ -18,6 +18,7 @@ import re
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from .agent import Context, PERIOD_WORDS, TREND_METRICS, asked_for, period_plan
+from .cost_model import format_rates, parse_rates
 
 # URL grain <-> the Period control (web and /api/ask) <-> the period tools' name for it.
 GRAIN_TO_CONTROL = {'day': 'day', 'week': 'week', 'month': 'month', 'period': 'accounting'}
@@ -28,12 +29,13 @@ CONTROL_TO_GRAIN = {v: k for k, v in GRAIN_TO_CONTROL.items()}
 # run the daily tools; under a ranged grain they take their period form (agent.period_plan).
 INTENT_MEASURES = {'summary': 'summary', 'overview': 'overview', 'downtime': 'downtime', 'speed': 'fpm',
                    'quality': 'quality', 'compare': 'compare', 'matrix': 'setups', 'orders': 'orders',
-                   'notes': 'notes', 'ranking': 'rank'}
+                   'notes': 'notes', 'ranking': 'rank', 'dollars': 'dollars'}
 MEASURE_INTENTS = {v: k for k, v in INTENT_MEASURES.items()}
 # One record-store tool each; `kpis` becomes compare_periods when `compare=` names a window.
 STORE_MEASURES = {'kpis': 'get_period_kpis', 'pareto': 'get_downtime_pareto', 'waste': 'get_waste_breakdown',
                   'stops': 'get_stops_profile', 'grade': 'get_grade_totals', 'overrun': 'get_overrun',
-                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock'}
+                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock',
+                  'money': 'get_opportunities'}
 TOOL_MEASURES = {v: k for k, v in STORE_MEASURES.items()}
 # Plans the period form of a day-shaped intent runs that are more than one store tool (agent.period_plan),
 # by their tools in order. Under a ranged grain `downtime` is the Pareto alone, `quality` the waste breakdown
@@ -44,8 +46,8 @@ UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothin
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
 QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'shifts', 'rank', 'want',
-                'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'want', 'corrupt', 'after')
+                'rates', 'corrupt', 'after', 'format')
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'want', 'rates', 'corrupt', 'after')
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
 MAX_URL = 2000
 PATH = re.compile(r'^/corr/(?P<machine>[A-Za-z0-9_.-]{1,32})/(?P<grain>day|week|month|period)/'
@@ -149,6 +151,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
     if wants:
         params.append(('want', ','.join(wants)))
     params.insert(0, ('measure', measure))
+    if getattr(context, 'rates', None):
+        params.append(('rates', format_rates(context.rates)))   # the assumptions the answer was priced with ride in the link
     if corrupt:
         params.append(('corrupt', '1'))
     for prior in after:
@@ -241,6 +245,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
     tool_period = GRAIN_TO_TOOL[grain]
     context = Context(day, shift, period=tool_period)
     context.scope = scope
+    context.rates = parse_rates(fields.get('rates'))
     window = _window(fields.get('window'), tool_period, day)
     if measure == 'report':
         if grain == 'day':
@@ -440,7 +445,7 @@ def _request(measure, fields, context, window):
             plan.append((STORE_MEASURES[measure], {'window': window, 'shift': s}))
     intent = {'kpis': 'period_compare', 'pareto': 'period_pareto', 'waste': 'period_waste', 'stops': 'period_stops',
               'grade': 'period_grade', 'overrun': 'period_overrun', 'opportunity': 'period_speed_opportunity',
-              'trend': 'period_trend', 'rollstock': 'period_rollstock'}[measure]
+              'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
 

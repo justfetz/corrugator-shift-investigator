@@ -4353,6 +4353,510 @@
     "narrative_not_match": "ran faster than Shift 1",
     "comparisons_withdrawn": 1
    }
+  },
+  {
+   "id": "money-shift-dollars",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Where did the money go this shift?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": "Shift 2 in dollars: \\$[\\d,]+ of recorded losses this shift .* per year at the post's volumes; contribution margin not set"
+   }
+  },
+  {
+   "id": "money-opportunities-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Where is the money this month?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=money&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Where to look, levers ranked by dollars per year \\(all shifts\\): 1\\. .*Speed gap to best-fifth speed.*Downtime: Order change \\(setup time\\).*do not prescribe a machine adjustment"
+   }
+  },
+  {
+   "id": "money-costing-us-week-shift-2",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What's costing us on shift 2 this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=money&window=week&shifts=2",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1
+   }
+  },
+  {
+   "id": "money-period-control-opportunities",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "period": "month",
+   "question": "What are the opportunities?",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14/shift/2?measure=money",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1
+   }
+  },
+  {
+   "id": "money-margin-not-set",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "How much contribution did we lose in dollars this shift?",
+   "note": "No board margin is configured: contribution is 'margin not set', never $0, and is never added to the dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": "contribution margin not set",
+    "sections_not_match": "contribution \\$0\\b|contribution \\$0\\.00"
+   }
+  },
+  {
+   "id": "money-compare-in-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Compare September with August in dollars",
+   "note": "Review of #31a: the money words used to win and answer September's levers alone, dropping the comparison. A shape with no dollars yet is refused with what to ask.",
+   "expect": {
+    "raises": "in dollars is not available yet"
+   }
+  },
+  {
+   "id": "money-costing-us-most-minutes-pareto",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Which downtime reason is costing us the most minutes this month?",
+   "note": "Review of #31a: 'costing us' is a money word, but the question is the Pareto, whose rows carry their dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Shift 2 in dollars: .*min x \\$1,200/hr machine time.*per year: x "
+   }
+  },
+  {
+   "id": "money-volume-in-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "How much did we make in dollars?",
+   "note": "Merge of main into #31a: main's volume intent (get_grade_totals, which carries no dollars) would answer this without a dollar in it, against the rule that a money word never replaces the question. Volume in dollars is refused with what to ask instead.",
+   "expect": {
+    "raises": "in dollars is not available yet"
+   }
+  },
+  {
+   "id": "money-slower-than-normal-in-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Are we running slower than normal in dollars?",
+   "note": "Merge of main into #31a: main's baseline question is a speed trend (get_trend); in dollars it fell to the shift's dollars and dropped the comparison with normal. A trend in dollars is refused.",
+   "expect": {
+    "raises": "in dollars is not available yet"
+   }
+  },
+  {
+   "id": "money-bad-week-in-dollars-overview",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Why was this week so bad in dollars?",
+   "note": "Merge of main into #31a: main answers a diagnosis over a window with the period overview; the money word took it to the levers alone. The overview stays, and its Pareto and waste rows carry their dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "get_downtime_pareto",
+     "get_waste_breakdown",
+     "render_chart"
+    ],
+    "sections_match": "Shift 2 in dollars: .*min x \\$1,200/hr machine time"
+   }
+  },
+  {
+   "id": "money-what-did-waste-cost-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What did waste cost this shift?",
+   "note": "Review of #31a: on the day grain 'waste' chose the dry-end reject breakdown, so the answer priced rejects alone and left out side trim and shear. What waste costs is trim, shear and dry-end together: the shift's dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": "^Where the money went, ranked by dollars: (?=.*\\bSide trim: \\$[\\d,]+ )(?=.*\\bShear chops: \\$[\\d,]+ )(?=.*\\bDry-end: [A-Z]+: \\$[\\d,]+ )"
+   }
+  },
+  {
+   "id": "money-contribution-per-msf",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What is our contribution per MSF?",
+   "note": "Review of #31a: 'contribution' was not a money word, so 'per MSF' made it the volume by grade. Contribution is the margin rate: the shift's dollars, with contribution reported as margin not set, never $0.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "sections_match": "contribution margin not set",
+    "sections_not_match": "contribution \\$0\\b|contribution \\$0\\.00"
+   }
+  },
+  {
+   "id": "money-margin-this-shift",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What's our margin on this shift?",
+   "note": "Review of #31a: 'margin' was not a money word, so the question fell to the shift overview. It is the shift's dollars, with the margin reported as not set.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "sections_match": "contribution margin not set"
+   }
+  },
+  {
+   "id": "money-slow-running-cost-week-levers",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What did slow running cost us this week?",
+   "note": "Reviewer pass on the #31a fixes: the diagnosis reset caught a bare 'slow', so the cost of slow running became the overview and the speed gap went unpriced. A why/bad/killed question keeps the overview; the cost of running slow is the levers, speed gap first among them.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=money&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": "Where to look, levers ranked by dollars per year .*Speed gap to best-fifth speed"
+   }
+  },
+  {
+   "id": "money-costing-us-output-week",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What's costing us output this week?",
+   "note": "Reviewer pass on the #31a fixes: a volume word beside 'costing us' was read as a volume ask and refused. What costs us output is a loss question: the levers.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=money&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-lost-output-cost-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What did lost output cost us in dollars?",
+   "note": "Reviewer pass on the #31a fixes: 'lost output' was refused as a volume ask. Lost output is a loss: the shift's dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "money-make-per-hour-in-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "How much did we make per hour in dollars?",
+   "note": "Reviewer pass on the #31a fixes: any 'per' exempted a volume ask, so output per hour in dollars was answered with the shift's losses. Only a ratio of a money word (contribution or cost per MSF) is exempt.",
+   "expect": {
+    "raises": "in dollars is not available yet"
+   }
+  },
+  {
+   "id": "contributions-to-waste-not-money",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What were the biggest contributions to waste this shift?",
+   "note": "Reviewer pass on the #31a fixes: 'contribution' became a money word, and 'contributions to waste' (what contributed) went to the shift's dollars. 'Contribution to' is not the margin: the reject breakdown, as on main.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quality",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_quality_breakdown",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_quality_breakdown",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "margin-of-error-not-money",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "What's our margin of error?",
+   "note": "Reviewer pass on the #31a fixes: 'margin' became a money word, so a margin of error was answered with the shift's dollars. It is not the board margin; offline mode does not answer it.",
+   "expect": {
+    "raises": "Offline mode supports shift performance"
+   }
+  },
+  {
+   "id": "money-why-grade-slow-week-overview",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Why was 275-BC slow this week in dollars?",
+   "note": "Reviewer pass on the #31a fixes: the grade word refused it before the diagnosis rule ran. Main answers the question without dollars with the overview (a grade word does not make a diagnosis speed by grade); in dollars it is the same overview, its Pareto and waste rows priced.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": "Shift 2 in dollars: "
+   }
   }
  ]
 }
