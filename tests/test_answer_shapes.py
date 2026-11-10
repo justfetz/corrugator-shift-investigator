@@ -104,7 +104,7 @@ def test_why_slow_renders_headline_findings_chart_and_where_to_look_each_number_
     assert not any('ft/min including downtime;' in s for s in sections), 'the generic KPI paragraph is gone'
 
 
-# One question per intent of the offline router, in the scope it is asked in. The URL grammar resolves two period
+# One question per intent of the offline router, in the scope it is asked in. The URL grammar resolves three period
 # intents as aliases of others (urls.PERIOD_FORMS: a day-shaped downtime or quality question under a ranged window is
 # the Pareto or the waste breakdown, the same plan and the same canonical address), so they share that answer.
 INTENT_QUESTIONS = [
@@ -118,6 +118,7 @@ INTENT_QUESTIONS = [
     ('quality', 'Show dry-end quality waste', 'shift', 'day'),
     ('downtime', 'Show downtime by reason', 'shift', 'day'),
     ('speed', 'Show speed to target', 'shift', 'day'),
+    ('dollars', 'Where did the money go this shift?', 'shift', 'day'),
     ('period_compare', 'Compare this week to last', 'day', 'day'),
     ('period_overview', 'Why was this shift slow?', 'shift', 'week'),
     ('period_summary', 'Summarize this shift', 'shift', 'week'),
@@ -130,6 +131,7 @@ INTENT_QUESTIONS = [
     ('period_rollstock', 'How much paper did we consume this month?', 'day', 'day'),
     ('period_overrun', 'Over/under-run by knife this week', 'day', 'day'),
     ('period_speed_opportunity', 'Where is the speed opportunity this month?', 'day', 'day'),
+    ('period_money', 'Where is the money this month?', 'day', 'day'),
 ]
 ALIASES = [('period_downtime', 'Show downtime by reason', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]
 
@@ -153,6 +155,18 @@ def test_no_two_intents_share_an_opening_sentence():
         assert context.history[-1]['intent'] == alias
         week, _ = ask({'period_pareto': 'Which downtime reason cost the most minutes?', 'period_waste': 'Waste breakdown'}[canonical], scope='day', period='week')
         assert opening(result['sections']) == opening(week['sections'])
+    # dollars over a window (`measure=dollars` under a ranged grain, intent period_dollars) is the levers' plan
+    from investigator.urls import resolve_url
+    store = default_store()
+    resolved = resolve_url('/corr/1/week/2026-09-14?measure=dollars', store)
+    assert resolved['request']['intent'] == 'period_dollars'
+    analysis = store.day_analysis(DAY)
+    try:
+        dollars = Agent(analysis, store=store).ask(resolved['text'], resolved['context'], request=resolved['request'])
+    finally:
+        analysis.close()
+    money, _ = ask('Where is the money?', scope='day', period='week')
+    assert opening(dollars['sections']) == opening(money['sections'])
 
 
 def test_every_rank_word_is_true_on_every_day():
@@ -216,6 +230,19 @@ def test_an_analyst_plan_keeps_a_finding_for_every_result():
     assert 1 in cited
 
 
+def tool_text(trace):
+    """Long strings a tool returned (thirty characters or more): formulas and notes the answer may quote verbatim."""
+    out = set()
+    for step in trace:
+        if not step.get('ok'):
+            continue
+        data = step['data']
+        records = [*data.get('rows', []), *(data.get('details') or [])]
+        values = [v for r in records for v in r.values()] + list(data.values())
+        out |= {v for v in values if isinstance(v, str) and len(v) >= 30}
+    return out
+
+
 def golden_answers():
     for case in GOLDEN:
         if case.get('mode') != 'offline' or not (case.get('question') or case.get('turns')):
@@ -245,8 +272,11 @@ def test_no_section_runs_on_and_every_where_to_look_question_routes(case):
         analysis.close()
     if result is None:
         return
+    quoted = sorted(tool_text(result['trace']), key=len, reverse=True)
     for section in result['sections']:
         text = plain(section)
+        for string in quoted:   # a tool's own text quoted whole (the cost model's pricing formula) is evidence, not the answer's prose
+            text = text.replace(string, ' ')
         assert len(text.split()) <= MAX_WORDS, f'{len(text.split())} words: {section!r}'
         assert len(text.split(';')) <= MAX_CLAUSES, f'{len(text.split(";"))} semicolon clauses: {section!r}'
         m = LOOK.search(section)

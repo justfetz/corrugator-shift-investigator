@@ -858,7 +858,9 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // a leading `- `). The headline and the finding bullets type; the notes fold; where to look sits under the charts.
  const NOTE=/ - reported note \(synthetic, unverified\): /, LOOK='Where to look', strip=s=>(s.startsWith('- ')?s.slice(2):s).replace(/\*\*([^*]+)\*\*/g,'$1');
  const lookAt=whySlow.sections.indexOf(LOOK), body=whySlow.sections.slice(0,lookAt), looks=whySlow.sections.slice(lookAt+1).map(strip);
- const visible=body.filter(s=>!NOTE.test(s)).map(strip), notes=body.filter(s=>NOTE.test(s));
+ // a plain line after the findings (the money's pricing, the rates) reads under the charts, in #look before where to look
+ const firstBullet=body.findIndex(s=>s.startsWith('- ')), context=body.filter((s,i)=>i>firstBullet&&!s.startsWith('- ')&&!NOTE.test(s)&&!/data incomplete|withheld|unavailable/i.test(s));
+ const visible=body.filter(s=>!NOTE.test(s)&&!context.includes(s)).map(strip), notes=body.filter(s=>NOTE.test(s));
  assert.ok(lookAt>0&&looks.length>=2&&whySlow.sections[0].startsWith('**')&&visible.length>=4,'the fixture is the why-slow shape: a headline, findings, notes, where to look');
  const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
  const setup=({reduced=false}={})=>{
@@ -892,8 +894,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.ok(t.els.metrics.children.length===7&&!t.els.metrics.children.some(waiting));   // the tiles land at once, like a gauge
  assert.equal(t.els.tables.children.length,1);assert.ok(!waiting(t.els.tables.children[0]));   // tables appear at once
  assert.ok(t.els.charts.children.length===2&&t.els.charts.children.every(waiting));   // 4. the charts wait for the first sentence
- assert.deepEqual(typedText(t.els),visible.map(()=>''));
- assert.ok(t.els.look.children.length===2&&t.els.look.children.every(waiting),'where to look arrives with the last word');
+ assert.deepEqual(typedText(t.els),visible.map(()=>''));   // one empty line per visible section, nothing typed yet
+ assert.ok(t.els.look.children.length===context.length+2&&t.els.look.children.every(waiting),'the lines under the charts and where to look arrive with the last word');
  await t.at(40+120);assert.deepEqual(queryLines(t.els).map(waiting),[false,false,true,true,true,true]);   // 80 ms apart
  // 3. the first figure of the first sentence is on screen within 400 ms of the submit (the bar is the 400 ms of the issue)
  await t.at(40+170);
@@ -912,7 +914,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.deepEqual(summaryOf(t.els).children.find(e=>e.tag==='details').children.slice(1).map(e=>e.textContent),notes);
  const details=summaryOf(t.els).children.find(e=>e.tag==='details');
  assert.deepEqual([...typedText(t.els),...details.children.slice(1).map(textOf),...lookText(t.els)],whySlow.sections.map(strip));   // every section, in order, nothing added or paraphrased: only the two markers are gone
- assert.deepEqual(lookText(t.els),[LOOK,...looks]);
+ assert.deepEqual(lookText(t.els),[...context.map(strip),LOOK,...looks]);
  const head=summaryOf(t.els).children[0];assert.equal(head.className,'headline');assert.equal(head.children.filter(e=>e.className==='figure').length,1);   // one headline, its figure in display size (#75)
  const items=summaryOf(t.els).children.find(e=>e.tag==='ul').children;assert.ok(items.length>=3&&items.length<=5&&items.every(li=>li.children.filter(e=>e.className==='figure').length===1&&li.children.some(e=>e.className==='ref')),'three to five findings, each with exactly one bold figure and its evidence link');
  assert.ok(!t.els.look.children.some(waiting));

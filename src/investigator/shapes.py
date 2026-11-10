@@ -28,7 +28,8 @@ LOOK_QUESTION = re.compile(r' → “([^”]+)”$')
 BOLD = re.compile(r'\*\*([^*]+)\*\*')
 PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile'}
 # The URL grammar resolves these period intents as the same plan (urls.PERIOD_FORMS), so they share a shape.
-ALIASES = {'period_downtime': 'period_pareto', 'period_quality': 'period_waste'}
+ALIASES = {'period_downtime': 'period_pareto', 'period_quality': 'period_waste', 'period_dollars': 'period_money'}
+MARGIN_NOT_SET = 'margin not set'   # cost_model.MARGIN_NOT_SET: no owner margin, so no contribution is priced
 WORDS = {2: 'two', 3: 'three'}
 TREND_NAMES = {'trim_pct': 'side trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry-end rejects', 'warp_pct': 'warp', 'bond_pct': 'bond',
                'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'speed_run_fpm': 'speed without stops',
@@ -69,6 +70,36 @@ def bullet(text, result, row=None, part='row'):
 
 def look(text, question):
     return f'- {text} → “{question}”'
+
+
+# ---- the money beside the quantities (issue #31): every dollar is a priced row's own field
+def money(value):
+    return 'unavailable' if value is None else f'${value:,.0f}'
+
+
+def priced(row):
+    """` · $127 ($97,795/yr)` after a quantity whose row the cost model priced; nothing for an unpriced row."""
+    if row.get('usd') is None:
+        return ''
+    return f' · {money(row["usd"])}' + (f' ({money(row["usd_per_year"])}/yr)' if row.get('usd_per_year') is not None else '')
+
+
+def money_notes(result, row=None, label=None, formula=True):
+    """The rates and the cost note on one line, after one row's pricing formula as the cost model wrote it
+    (`formula=False` on a day card, which keeps the one rates line the accepted layout has)."""
+    data = result['data']
+    if 'provenance' not in data:
+        return []
+    notes = [f'How a dollar is priced, for {row[label]}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
+    return notes + [f'{data["provenance"]} {data["cost_note"]}']
+
+
+def contribution(data):
+    if data.get('contribution_status') == MARGIN_NOT_SET:
+        return f'Contribution {MARGIN_NOT_SET}: without an owner margin no lost contribution is priced, so the dollars are paper and machine time.'
+    if data.get('total_contribution_usd') is not None:
+        return f'Contribution {money(data["total_contribution_usd"])} at the set margin, not added to the losses above.'
+    return None
 
 
 def side(value, limit, high='above', low='under'):
@@ -142,7 +173,7 @@ def order(lines):
 
 def infer_daily(evidence):
     tools = {r['tool'] for r in evidence}
-    for tool, intent in (('get_shift_overview', 'summary'), ('get_setup_matrix', 'matrix'), ('get_order_matrix', 'orders'),
+    for tool, intent in (('get_shift_dollars', 'dollars'), ('get_shift_overview', 'summary'), ('get_setup_matrix', 'matrix'), ('get_order_matrix', 'orders'),
                          ('get_rankings', 'ranking'), ('get_quality_breakdown', 'quality')):
         if tool in tools:
             return intent
@@ -158,7 +189,7 @@ def infer_daily(evidence):
 def infer_period(evidence):
     tools = {r['tool'] for r in evidence}
     kpis = tools & {'get_period_kpis', 'compare_periods'}
-    for tool, intent in (('get_speed_opportunity', 'period_speed_opportunity'), ('get_overrun', 'period_overrun'),
+    for tool, intent in (('get_opportunities', 'period_money'), ('get_speed_opportunity', 'period_speed_opportunity'), ('get_overrun', 'period_overrun'),
                          ('get_rollstock', 'period_rollstock'), ('get_trend', 'period_trend')):
         if tool in tools:
             return intent
@@ -207,7 +238,7 @@ class DailyAnswer:
     USES = {'overview': {KPIS, 'get_downtime_breakdown', 'get_wet_end_performance'}, 'speed': {KPIS, 'get_wet_end_performance'},
             'downtime': {KPIS, 'get_downtime_breakdown'}, 'quality': {KPIS, 'get_quality_breakdown'},
             'matrix': {KPIS, 'get_setup_matrix'}, 'notes': {KPIS}, 'orders': {KPIS, 'get_order_matrix'},
-            'ranking': {KPIS, 'get_rankings'}, 'summary': {'get_shift_overview'},
+            'ranking': {KPIS, 'get_rankings'}, 'summary': {'get_shift_overview'}, 'dollars': {'get_shift_dollars'},
             'compare': {KPIS, 'get_downtime_breakdown', 'get_wet_end_performance'}}
 
     def __init__(self, intent, evidence, context, inferred=False):
@@ -232,6 +263,10 @@ class DailyAnswer:
         return {'Maintenance': 'maintenance_pct', 'Operator': 'operator_pct', 'PM': 'pm_pct'}.get(kind, 'downtime_pct')
 
     def focus(self):
+        if self.intent == 'dollars' and len(self.complete) > 1:
+            totals = [(self.shifts[s]['get_shift_dollars']['data']['total_usd'], s) for s in self.complete if 'get_shift_dollars' in self.shifts[s]]
+            if totals:
+                return max(totals)[1]   # the shift that lost the most dollars
         if self.intent == 'ranking' and len(self.complete) > 1:
             # the shift whose first ranking leads: the lowest speed attainment, the most downtime or rejected area
             tops = [(r['data']['rows'][0]['value'], s, r['data'].get('metric')) for s in self.complete
@@ -267,7 +302,8 @@ class DailyAnswer:
             others += [f'- Shift {s} · {b[2:]}' for s in self.complete if s != focus for b in self.leftovers(s, all_tools=True)]
         if others:   # several shifts: the focus shift's findings say whose they are
             bullets = [f'- Shift {focus} · {b[2:]}' if b.startswith('- ') and not b.startswith('- Shift ') else b for b in bullets]
-        out = [head, *others, *bullets, *lines, *notes, *self.all_notes(focus)]
+        notes = list(dict.fromkeys(notes))   # two priced results name the same rates once
+        out = [head, *others, *bullets, *lines, *self.all_notes(focus), *notes]   # the reported notes stay with the findings; caveats read under the charts
         if looks:
             out += [LOOK, *looks]
         return out
@@ -288,10 +324,18 @@ class DailyAnswer:
         if self.generic and not all_tools:
             return []
         used = set() if all_tools else self.USES.get(self.intent, set())
-        tools = {k: r for k, r in self.shifts[shift].items() if not k.startswith('all:') and k not in used and k != 'get_shift_notes'}
-        if all_tools:
-            tools.pop('get_shift_kpis', None)   # the other shift's own bullet already states its KPIs
-        return [b for key, result in tools.items() for b in self.findings_of(result, self.shifts[shift])[0]]
+        out = []
+        for key, results in self.shifts[shift].items():
+            tool = key[4:] if key.startswith('all:') else None
+            if tool is None or tool == 'get_shift_notes' or (all_tools and tool == 'get_shift_kpis'):
+                continue   # notes are always listed; another shift's own bullet already states its KPIs
+            if tool == 'get_rankings':   # one finding set covers every ranking of the shift
+                results = [] if tool in used else results[:1]
+            elif tool in used:
+                results = results[1:]   # the shape read the first; a repeated call (by place after by reason) keeps its own
+            for result in results:
+                out += self.findings_of(result, self.shifts[shift])[0]
+        return out
 
     def all_notes(self, focus):
         """Reported notes of every complete shift (the client folds them into one disclosure)."""
@@ -323,6 +367,9 @@ class DailyAnswer:
         if self.intent == 'ranking':
             ranking = next((r for r in tools.get('all:get_rankings', []) if r['data']['rows']), None)
             return self.ranked(ranking, 0, prefix=f'Shift {shift}, ') if ranking else None
+        if self.intent == 'dollars' and tools.get('get_shift_dollars'):
+            d = tools['get_shift_dollars']
+            return bullet(f'Shift {shift}: **{money(d["data"]["total_usd"])}** of recorded losses · {money(d["data"]["total_usd_per_year"])} per year', d)
         return None
 
     # ---- findings shared by several shapes
@@ -334,7 +381,7 @@ class DailyAnswer:
             return None
         noun = {'reason': 'reasons', 'place': 'places', 'kind': 'kinds'}.get(dt['arguments'].get('group_by', 'reason'), 'reasons')
         rank = f'the largest of {len(rows)} {noun}' if len(rows) > 1 else f'the only one of the {noun}'
-        return bullet(f'{prefix}{rows[i]["category"]}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, {rank}', dt, i)
+        return bullet(f'{prefix}{rows[i]["category"]}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, {rank}{priced(rows[i])}', dt, i)
 
     @staticmethod
     def slowest_run(we, prefix=''):
@@ -399,7 +446,15 @@ class DailyAnswer:
             looks.append(self.regroup(dt, s))
         if row['dry_end_pct'] > 1:
             looks.append(look('The dry-end rejects by reason, above the 1% flag', f'Show dry-end rejects by reason{self.suffix(s)}'))
-        return head, [b for b in bullets if b], [], looks
+        notes = self.priced_notes(dt, 'down_minutes', 'category') if dt else []
+        return head, [b for b in bullets if b], notes, looks
+
+    @staticmethod
+    def priced_notes(result, key, label):
+        """The money notes of a priced daily result, its formula shown for the row with the most of `key`."""
+        rows = result['data']['rows']
+        i = argmax(rows, key)
+        return money_notes(result, rows[i] if i is not None else None, label, formula=False)
 
     def regroup(self, dt, s):
         if dt['arguments'].get('group_by', 'reason') == 'reason':
@@ -440,8 +495,8 @@ class DailyAnswer:
             head = (f'**{f2(row["downtime_pct"])}%** of the shift in recorded downtime{self.clause(s, low=False)} · maintenance '
                     f'{f2(row["maintenance_pct"])}% · operator {f2(row["operator_pct"])}% {ref(k, 0)}')
         rows = dt['data']['rows']
-        bullets = [bullet(f'{r["category"]}: **{f2(r["down_minutes"])} min**, {f2(r["shift_percent"])}% of the shift', dt, i) for i, r in enumerate(rows)]
-        notes = [] if rows else ['No recorded stops in this filter.']
+        bullets = [bullet(f'{r["category"]}: **{f2(r["down_minutes"])} min**, {f2(r["shift_percent"])}% of the shift{priced(r)}', dt, i) for i, r in enumerate(rows)]
+        notes = (self.priced_notes(dt, 'down_minutes', 'category') if rows else ['No recorded stops in this filter.'])
         looks = [look('The reported notes on those stops (synthetic, unverified)', f'Show the shift notes{self.suffix(s)}'),
                  look('The stop minutes allocated to each setup', f'Show the setup matrix{self.suffix(s)}'), self.regroup(dt, s)]
         return head, bullets, notes, looks
@@ -454,8 +509,8 @@ class DailyAnswer:
             return self.shape_generic(s)
         de = row['dry_end_pct']
         head = f'**{f2(de)}%** of gross rejected at the dry end{self.clause(s, low=False)}, {side(de, 1)} the 1% flag {ref(k, 0)}'
-        bullets = [bullet(f'{r["reason"]}: **{f1(r["rejected_sqft"])} sq ft**', q, i) for i, r in enumerate(q['data']['rows'])]
-        notes = [] if bullets else ['No dry-end rejects recorded.']
+        bullets = [bullet(f'{r["reason"]}: **{f1(r["rejected_sqft"])} sq ft**{priced(r)}', q, i) for i, r in enumerate(q['data']['rows'])]
+        notes = self.priced_notes(q, 'rejected_sqft', 'reason') if bullets else ['No dry-end rejects recorded.']
         details = q['data'].get('details') or []
         if details:
             bullets += ['Reported sub-reasons'] + [bullet(f'{d["detail"]} ({d["reason"].lower()}): **{f1(d["rejected_sqft"])} sq ft**', q, i, 'detail')
@@ -587,7 +642,22 @@ class DailyAnswer:
         if slow:
             looks.append(look(f'The setups on {slow["wet_end_id"]}, the slowest run of shift {lowest}', f'Show the setup matrix{sfx}'))
         looks.append(look(f'The downtime of shift {lowest} by equipment', f'Show downtime by equipment{sfx}'))
-        return head, [b for b in bullets if b], [], looks
+        dt = tools.get('get_downtime_breakdown')
+        return head, [b for b in bullets if b], self.priced_notes(dt, 'down_minutes', 'category') if dt else [], looks
+
+    def shape_dollars(self, s):
+        """Where the money went in one shift (get_shift_dollars): the total, then each gap ranked by dollars as the tool ranked it."""
+        d = self.shifts[s].get('get_shift_dollars')
+        if not d:
+            return self.shape_generic(s)
+        data, rows = d['data'], d['data']['rows']
+        head = f'**{money(data["total_usd"])}** of recorded losses{self.clause(s, low=False)} · {money(data["total_usd_per_year"])} per year at the post\'s volumes {ref(d)}'
+        bullets = [bullet(f'{r["rank"]}. {r["gap"]}: **{money(r["usd"])}**' + (f' · {money(r["usd_per_year"])}/yr' if r.get('usd_per_year') is not None else ''), d, i)
+                   for i, r in enumerate(rows)]
+        notes = [x for x in [contribution(data)] if x] + (money_notes(d, rows[0], 'gap') if rows else money_notes(d))
+        looks = [look('The downtime behind the machine-time dollars, by reason', f'Show the downtime breakdown{self.suffix(s)}'),
+                 look('The rejected area behind the dry-end dollars, by reason', f'Show dry-end rejects by reason{self.suffix(s)}')]
+        return head, bullets, notes, looks
 
     def focus_of(self, field):
         scored = [(self.kpis(self.shifts[s])[1] or {}).get(field) for s in self.complete]
@@ -601,12 +671,14 @@ class DailyAnswer:
             row = data['rows'][0]
             return [bullet(f'Speed: **{f1(row["observed_shift_fpm"])} ft/min** including downtime · {f1(row["speed_to_target_pct"])}% of grade target', result, 0)], []
         if tool == 'get_downtime_breakdown':
-            return [bullet(f'{r["category"]}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift', result, i)
-                    for i, r in enumerate(data['rows'])], []
+            by = {'reason': '', 'place': ' at ', 'kind': ' of kind '}.get(result['arguments'].get('group_by', 'reason'), '')
+            return [bullet(f'{by.strip().capitalize() + " " if by else ""}{r["category"]}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift{priced(r)}', result, i)
+                    for i, r in enumerate(data['rows'])], self.priced_notes(result, 'down_minutes', 'category')
         if tool == 'get_wet_end_performance':
             return [b for b in (self.slowest_run(result)[0], self.below(result)) if b], []
         if tool == 'get_quality_breakdown':
-            return [bullet(f'{r["reason"]}: **{f1(r["rejected_sqft"])} sq ft** rejected at the dry end', result, i) for i, r in enumerate(data['rows'])], []
+            return [bullet(f'{r["reason"]}: **{f1(r["rejected_sqft"])} sq ft** rejected at the dry end{priced(r)}', result, i)
+                    for i, r in enumerate(data['rows'])], self.priced_notes(result, 'rejected_sqft', 'reason')
         if tool == 'get_setup_matrix':
             return [bullet(f'Setup matrix: **{len(data["rows"])}** valid setups', result)], [
                 'Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.']
@@ -615,6 +687,8 @@ class DailyAnswer:
                 'Requested and planned quantities repeat on continuing orders; sum produced sheets only.']
         if tool == 'get_rankings':
             return [self.ranked(r, 0) for r in tools.get('all:get_rankings', []) if r['data']['rows']], []
+        if tool == 'get_shift_dollars':
+            return [bullet(f'Recorded losses: **{money(data["total_usd"])}** · {money(data["total_usd_per_year"])} per year', result)], money_notes(result)
         return [], []
 
     def shape_generic(self, s):
@@ -622,8 +696,10 @@ class DailyAnswer:
         self.generic = True
         tools = self.shifts[s]
         bullets, notes = [], []
-        for key, result in tools.items():
-            if not key.startswith('all:') and key != 'get_shift_notes':
+        for key, results in tools.items():
+            if not key.startswith('all:') or key == 'all:get_shift_notes':
+                continue
+            for result in results[:1] if key == 'all:get_rankings' else results:   # every call, a repeated one too
                 more, caveats = self.findings_of(result, tools)
                 bullets += more
                 notes += [c for c in caveats if c not in notes]
@@ -688,7 +764,8 @@ class PeriodAnswer:
             'period_summary': ('get_period_kpis', 'compare_periods'), 'period_speed': ('get_grade_totals',),
             'period_grade': ('get_grade_totals',), 'period_pareto': ('get_downtime_pareto',), 'period_waste': ('get_waste_breakdown',),
             'period_stops': ('get_stops_profile',), 'period_trend': ('get_trend',), 'period_rollstock': ('get_rollstock',),
-            'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',)}
+            'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',),
+            'period_money': ('get_opportunities',)}
 
     KPI_TOOLS = ('get_period_kpis', 'compare_periods')
     USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
@@ -721,29 +798,41 @@ class PeriodAnswer:
             self.intent = infer_period([r for k, r in tools.items() if not k.startswith('all:')])
             lead = next(tools[t] for t in self.LEAD[self.intent] if t in tools)
         head, bullets, notes, looks = getattr(self, self.intent)(tools, lead)
-        others = []
+        others, windows = [], [window_head(lead['data'])]
         for s in keys:
             if s == focus:
                 continue
             other = next((self.shifts[s][t] for t in lead_tools if t in self.shifts[s]), None)
             if other:
                 others.append(self.brief(other))
-        # any other result (an analyst's own plan) keeps its own finding: its headline, as a bullet
+                windows.append(window_head(other['data']))   # each shift's window and coverage
+        # any other result (an analyst's own plan, a repeated call) keeps its own finding: its headline, as a bullet
         used = set(self.USES.get(self.intent, lead_tools)) | set(lead_tools)
         for s in keys:
-            for key, result in self.shifts[s].items():
-                if key.startswith('all:') or (s == focus and key in used) or (s != focus and key in lead_tools):
+            if s != focus and not self.inferred:
+                continue
+            for key, results in self.shifts[s].items():
+                if not key.startswith('all:'):
                     continue
-                if s != focus and not self.inferred:
-                    continue
-                line = self.brief(result)
-                if line and line not in others:
-                    bullets = [*bullets, line]
-        out = [head, *others, *[b for b in bullets if b], window_head(lead['data']), *notes]
+                tool = key[4:]
+                skip = 1 if (s == focus and tool in used) or (s != focus and tool in lead_tools) else 0
+                for result in results[skip:]:
+                    line = self.brief(result)
+                    if line and line not in others:
+                        bullets = [*bullets, line]
+        if not self.whole(lead['data']):
+            notes = [f'The window is incomplete (coverage {lead["data"]["coverage"]}): observed values only, and rankings are withheld.', *notes]
+        notes = list(dict.fromkeys(notes))
+        out = [head, *others, *[b for b in bullets if b], *dict.fromkeys(windows), *notes]
         looks = [x for x in looks if x]
         if looks:
             out += [LOOK, *looks]
         return out
+
+    @staticmethod
+    def whole(data):
+        """A complete window: only then are its rows ranked (an incomplete one is observed values, never a ranking)."""
+        return data.get('coverage') == 'complete'
 
     def where(self, data):
         """`on shift 2` for a window narrowed to a shift under the all-shift scope."""
@@ -757,7 +846,7 @@ class PeriodAnswer:
             i, row = self.metric(result, 'volume_msf')
             return bullet(f'{label}: **{pval(row["current"], "MSF")} MSF** · {delta_clause(row)}', result, i)
         head = self.headline_of(result)
-        return '- ' + label + ': ' + head if head else None
+        return '- ' + label + ': ' + head.replace(self.where(data), '', 1) if head else None
 
     def headline_of(self, result):
         tools = {result['tool']: result}
@@ -804,25 +893,35 @@ class PeriodAnswer:
         data = k['data']
         i, row = self.metric(k, 'speed_all_fpm')
         head = f'**{pval(row["current"], "ft/min")} ft/min** with stops{self.where(data)} · {delta_clause(row)} {ref(k, i)}'
-        return head, self.loss_bullets(tools, k), self.kpi_notes(data), self.window_looks(data, ('stops', 'grade', 'trend'))
+        return head, self.loss_bullets(tools, k), self.kpi_notes(data) + self.loss_notes(tools), self.window_looks(data, ('stops', 'grade', 'trend'))
 
     def period_summary(self, tools, k):
         data = k['data']
         i, vol = self.metric(k, 'volume_msf')
         head = f'**{pval(vol["current"], "MSF")} MSF** produced{self.where(data)} · {delta_clause(vol)} {ref(k, i)}'
-        return head, [self.kpi_bullet(k, 'speed_all_fpm'), *self.loss_bullets(tools, k)], self.kpi_notes(data), self.window_looks(data, ('stops', 'grade', 'trend'))
+        return head, [self.kpi_bullet(k, 'speed_all_fpm'), *self.loss_bullets(tools, k)], self.kpi_notes(data) + self.loss_notes(tools), self.window_looks(data, ('stops', 'grade', 'trend'))
 
     def loss_bullets(self, tools, k):
         bullets = []
         pareto, waste = tools.get('get_downtime_pareto'), tools.get('get_waste_breakdown')
         if pareto and pareto['data']['rows']:
             r = pareto['data']['rows'][0]
-            bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes', pareto, 0))
+            bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, 0))
         if waste:
             i, r = self.largest_waste(waste)
             if r:
-                bullets.append(bullet(f'{r["label"]}: **{pval(r["pct_of_gross"])}%** of gross, the largest waste · {self.points(r)}', waste, i))
+                rank = ', the largest waste' if self.whole(waste['data']) else ''
+                bullets.append(bullet(f'{r["label"]}: **{pval(r["pct_of_gross"])}%** of gross{rank} · {self.points(r)}{priced(r)}', waste, i))
         return bullets + [self.kpi_bullet(k, 'downtime_pct'), self.kpi_bullet(k, 'dry_end_pct')]
+
+    @staticmethod
+    def loss_notes(tools):
+        notes = []
+        for key, label in (('get_downtime_pareto', 'category'), ('get_waste_breakdown', 'label')):
+            result = tools.get(key)
+            if result and result['data']['rows']:
+                notes += money_notes(result, result['data']['rows'][0], label)
+        return notes
 
     @staticmethod
     def largest_waste(waste):
@@ -846,20 +945,25 @@ class PeriodAnswer:
         if k:
             j, run = self.metric(k, 'speed_run_fpm')
             head = f'**{pval(run["current"], "ft/min")} ft/min** without stops{self.where(data)} · {delta_clause(run)} {ref(k, j)}'
-        elif order:
+        elif order and self.whole(data):
             i = order[0][1]
             r = rows[i]
             head = f'Slowest: {r["grade"]} at **{f1(r["speed_run_fpm"])} ft/min**{self.where(data)} · {f1(r["speed_to_target_pct"])}% of its {f0(r["target_fpm"])} target {ref(g, i)}'
+        elif order:
+            head = f'**{len(rows)}** grades observed{self.where(data)} in an incomplete window · their speeds against target, not ranked {ref(g)}'
         else:
             head = f'No setups in this window{self.where(data)} {ref(g)}'
+        shown = order[:3] if self.whole(data) else [(None, i) for i in range(len(rows))]   # an incomplete window is listed, never ranked
         bullets = ([self.kpi_bullet(k, 'speed_all_fpm')] if k else []) + [
             bullet(f'{rows[i]["grade"]}: **{f1(rows[i]["speed_run_fpm"])} ft/min** · {f1(rows[i]["speed_to_target_pct"])}% of target · {n(rows[i]["setups"])} setups', g, i)
-            for _, i in order[:3]]
+            for _, i in shown]
         notes = (self.kpi_notes(k['data']) if k else []) + sentences(data.get('speed_note'))
         wp, sfx = self.wp(data), self.sfx(data)
         looks = []
-        if order:
+        if order and self.whole(data):
             looks.append(look(f'{rows[order[0][1]]["grade"]} by web width, typical against best-fifth speed', f'Where is the speed opportunity{wp or ""}{sfx}?'))
+        elif order:
+            looks.append(look('Each grade by web width, typical against best-fifth speed', f'Where is the speed opportunity{wp or ""}{sfx}?'))
         looks.append(look('Running speed week by week', f'Trend of running speed over eight weeks{sfx}'))
         return head, bullets, notes, looks
 
@@ -880,7 +984,8 @@ class PeriodAnswer:
         if rows:
             r = rows[0]
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
-            head = f'**{fig}** at {r["category"]}{self.where(data)}, the largest of {len(rows)} {noun} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"} {ref(p, 0)}'
+            rank = f', the largest of {len(rows)} {noun}' if self.whole(data) else ''
+            head = f'**{fig}** at {r["category"]}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"}{priced(r)} {ref(p, 0)}'
         else:
             head = f'No recorded stops in this window{self.where(data)} {ref(p)}'
         bullets = []
@@ -888,17 +993,19 @@ class PeriodAnswer:
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
             other = f'over {n(r["stops"])} stops' if minutes else f'· {pval(r["minutes"])} min'
             previous = f'previous {pval(r["previous_minutes"])} min' if r.get('previous_minutes') is not None else 'previous unavailable'
-            bullets.append(bullet(f'{r["category"]}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}', p, i))
-        return head, bullets, ['Recorded reasons are symptoms, not proven causes.'], self.window_looks(data, ('stops', 'trend_downtime', 'waste'))
+            bullets.append(bullet(f'{r["category"]}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{priced(r)}', p, i))
+        notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[0], 'category') if rows else [])
+        return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'waste'))
 
     def period_waste(self, tools, w):
         data, rows = w['data'], w['data']['rows']
         i, r = self.largest_waste(w)
         if r:
-            head = f'**{pval(r["pct_of_gross"])}%** of gross in {r["label"].lower()}{self.where(data)}, the largest waste · {self.points(r)} {ref(w, i)}'
+            rank = ', the largest waste' if self.whole(data) else ''
+            head = f'**{pval(r["pct_of_gross"])}%** of gross in {r["label"].lower()}{self.where(data)}{rank} · {self.points(r)}{priced(r)} {ref(w, i)}'
         else:
             head = f'No waste recorded in this window{self.where(data)} {ref(w)}'
-        bullets = [bullet(f'{x["label"]}: **{pval(x["pct_of_gross"])}%** of gross · {f1(x["sqft"])} sq ft · {self.points(x)}', w, j)
+        bullets = [bullet(f'{x["label"]}: **{pval(x["pct_of_gross"])}%** of gross · {f1(x["sqft"])} sq ft · {self.points(x)}{priced(x)}', w, j)
                    for j, x in enumerate(rows) if j != i]
         details = data.get('details') or []
         if details:
@@ -908,6 +1015,7 @@ class PeriodAnswer:
         notes = ['Bale is a scale reading; unexplained is bale minus trim, shear and rejects.']
         if details:
             notes.append('Sub-reasons are reported observations, not proven causes.')
+        notes += money_notes(w, r, 'label') if r else []
         return head, bullets, notes, self.window_looks(data, ('trend_dry_end', 'grade', 'pareto'))
 
     def period_stops(self, tools, st):
@@ -915,8 +1023,8 @@ class PeriodAnswer:
         i = argmax(rows, 'stops')
         if i is not None:
             r = rows[i]
-            rank = f'the most of {len(rows)} production days' if len(rows) > 1 else 'the only production day'
-            head = f'**{n(r["stops"])} stops** on {r["production_day"]} ({r["weekday"]}){self.where(data)}, {rank} · {pval(r["minutes"])} min {ref(st, i)}'
+            rank = (f', the most of {len(rows)} production days' if len(rows) > 1 else ', the only production day') if self.whole(data) else ''
+            head = f'**{n(r["stops"])} stops** on {r["production_day"]} ({r["weekday"]}){self.where(data)}{rank} · {pval(r["minutes"])} min {ref(st, i)}'
         else:
             head = f'No production days in this window{self.where(data)} {ref(st)}'
         profile = [(j, p) for j, p in enumerate(data.get('weekday_profile') or []) if p['days']]
@@ -939,7 +1047,8 @@ class PeriodAnswer:
         last = len(rows) - 1
         head = f'{value(rows[last])} in the week of {rows[last]["week_start"]}{self.where(data)}, the latest of {len(rows)} weeks of {TREND_NAMES.get(data["metric"], data["metric"])} {ref(t, last)}'
         bullets, used = [], {last}
-        for label, i in (('the first week of the series', 0), ('the highest', argmax(rows, 'value')), ('the lowest', argmin(rows, 'value'))):
+        among = '' if self.whole(data) else ' of the weeks with records'
+        for label, i in (('the first week of the series', 0), ('the highest' + among, argmax(rows, 'value')), ('the lowest' + among, argmin(rows, 'value'))):
             if i is not None and i not in used:
                 used.add(i)
                 bullets.append(bullet(f'Week of {rows[i]["week_start"]}: {value(rows[i])}, {label}', t, i))
@@ -990,17 +1099,34 @@ class PeriodAnswer:
         head = (f'**{f2(data["total_opportunity_hours"])} hours**{self.where(data)} if every cell ran at its best-fifth speed · '
                 f'{n(data["excluded_short_setups"])} setups under {data["min_run_minutes"]:g} running minutes excluded {ref(s)}')
         order = sorted((-x['opportunity_hours'], i) for i, x in enumerate(rows) if x.get('opportunity_hours') is not None)[:3]
+        if not self.whole(data):
+            order = [(None, i) for i in range(len(rows))]   # an incomplete window is listed in the tool's order, never ranked
         bullets = []
         for _, i in order:
             x = rows[i]
             bullets.append(bullet(f'{x["label"]}: **{f2(x["opportunity_hours"])} hours** · typical {f1(x["typical_fpm"])} ft/min ({f1(x["typical_pct_of_target"])}% of target) '
                                   f'vs best fifth {f1(x["best_fifth_fpm"])} ({f1(x["best_fifth_pct_of_target"])}%) · dry-end {f2(x["best_fifth_dry_end_pct"])}% on the fast fifth '
-                                  f'vs {f2(x["rest_dry_end_pct"])}% on the rest', s, i))
+                                  f'vs {f2(x["rest_dry_end_pct"])}% on the rest{priced(x)}', s, i))
         notes = []
         if data.get('thin_cells'):
             notes.append(f'{len(data["thin_cells"])} cells with fewer than {n(data["min_setups"])} setups are listed in the evidence but not ranked.')
         notes += sentences(data.get('method_note')) + sentences(data.get('temperature_note'))
+        notes += money_notes(s, rows[order[0][1]], 'label') if order else []
         return head, bullets, notes, self.window_looks(data, ('speed', 'trend_speed'))
+
+    def period_money(self, tools, o):
+        """Where the money is over a window (get_opportunities): the levers' total a year, then each lever as the tool ranked it."""
+        data, rows = o['data'], o['data']['rows']
+        if data.get('total_usd_per_year') is not None:
+            head = f'**{money(data["total_usd_per_year"])} a year** across {len(rows)} levers{self.where(data)} · {money(data["total_usd"])} in this window {ref(o)}'
+        else:
+            head = f'**{money(data["total_usd"])}** across {len(rows)} levers in this window{self.where(data)} {ref(o)}'
+        bullets = [bullet(f'{r["rank"]}. {r["lever"]}: **{money(r["usd_per_year"])}/yr**' if r.get('usd_per_year') is not None else
+                          f'{r["rank"]}. {r["lever"]}: **{money(r["usd"])}** in the window', o, i) + ''
+                   for i, r in enumerate(rows)]
+        bullets = [b[:b.rindex(' (query')] + f' · {r["records"]}' + b[b.rindex(' (query'):] for b, r in zip(bullets, rows)]
+        notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + (money_notes(o, rows[0], 'lever') if rows else money_notes(o))
+        return head, bullets, notes, self.window_looks(data, ('opportunity', 'pareto', 'waste'))
 
     def window_looks(self, data, kinds):
         """Where-to-look lines over the same window (or the trends that end on the selected day)."""

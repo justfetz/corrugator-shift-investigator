@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 import pytest
@@ -59,7 +60,8 @@ def test_responses_loop_and_no_key_in_payload(tmp_path):
         assert 'Knife jam' in result['narrative'][0]['text']
         assert '12.00 minutes' in result['narrative'][0]['text']
         assert len(result['charts'])==1
-        assert 'Knife jam: **12.00 min** of recorded downtime, 2.50% of the shift (query 1 · row 0)' in result['sections']   # the analyst's evidence, shaped: a headline with its bold figure and evidence (#75)
+        assert any(re.fullmatch(r'Knife jam: \*\*12\.00 min\*\* of recorded downtime, 2\.50% of the shift · \$[0-9,]+ \(\$[0-9,]+/yr\) \(query 1 · row 0\)', s)
+                   for s in result['sections'])   # the analyst's evidence, shaped: a headline with its bold figure, its dollars and its evidence (#75)
         assert KEY not in json.dumps(result)
     finally:
         planner.close();a.close()

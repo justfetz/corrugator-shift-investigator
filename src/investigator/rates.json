@@ -1,0 +1,22 @@
+{
+ "about": "The cost model's rates and assumptions (issue #31). Every dollar the tools return is a quantity from the records times one of these. Defaults are the owner's post; nothing here is a real plant's figure. Override a rate with INVESTIGATOR_RATES=paper:55,hour:1200,margin:40 on the server, or rates= on a request or URL (docs/METRICS.md, Cost model).",
+ "post": "https://justfetz.github.io/posts/corrugator-dashboard.html",
+ "rates": [
+  {"id": "paper_usd_msf", "short": "paper", "label": "Paper", "unit": "$/MSF", "default": 55,
+   "source": "post", "note": "Paper cost per thousand square feet of board; prices waste."},
+  {"id": "machine_usd_hour", "short": "hour", "label": "Machine time", "unit": "$/hr", "default": 1200,
+   "source": "post", "note": "Bottleneck shadow price of corrugator time (the post: more than $1,200 an hour); prices downtime, the speed gap and the run time shear and rejects consumed."},
+  {"id": "margin_usd_msf", "short": "margin", "label": "Board contribution margin", "unit": "$/MSF", "default": null,
+   "source": "owner to set", "note": "Not in the post. Prices the board not made; until it is set every contribution figure reads 'margin not set', never $0."},
+  {"id": "trim_target_pct", "short": "trim", "label": "Side-trim target", "unit": "% of gross", "default": 3.25,
+   "source": "process rule", "note": "The setup trim flag of the process context; trim points over it are the trim lever."}
+ ],
+ "assumptions": [
+  {"id": "volume_sqft_day", "label": "Volume per machine", "unit": "sq ft/day", "value": 7000000, "source": "post"},
+  {"id": "annual_msf_per_machine", "label": "Annual volume per machine", "unit": "MSF/yr", "value": 1800000, "source": "post",
+   "note": "The post's 3.6M MSF a year across two machines."},
+  {"id": "net_width_in", "label": "Net width", "unit": "in", "value": 96, "source": "post", "note": "On a 110 in machine."},
+  {"id": "scheduled_min_day", "label": "Scheduled time", "unit": "min/day", "value": 1440, "source": "post"},
+  {"id": "required_fpm", "label": "Required run speed at 10% downtime", "unit": "ft/min", "value": 675, "source": "post"}
+ ]
+}

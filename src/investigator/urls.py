@@ -18,6 +18,7 @@ import re
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from .agent import Context, PERIOD_WORDS, TREND_METRICS, asked_for, period_plan
+from .cost_model import format_rates, parse_rates
 
 # URL grain <-> the Period control (web and /api/ask) <-> the period tools' name for it.
 GRAIN_TO_CONTROL = {'day': 'day', 'week': 'week', 'month': 'month', 'period': 'accounting'}
@@ -28,12 +29,13 @@ CONTROL_TO_GRAIN = {v: k for k, v in GRAIN_TO_CONTROL.items()}
 # run the daily tools; under a ranged grain they take their period form (agent.period_plan).
 INTENT_MEASURES = {'summary': 'summary', 'overview': 'overview', 'downtime': 'downtime', 'speed': 'fpm',
                    'quality': 'quality', 'compare': 'compare', 'matrix': 'setups', 'orders': 'orders',
-                   'notes': 'notes', 'ranking': 'rank'}
+                   'notes': 'notes', 'ranking': 'rank', 'dollars': 'dollars'}
 MEASURE_INTENTS = {v: k for k, v in INTENT_MEASURES.items()}
 # One record-store tool each; `kpis` becomes compare_periods when `compare=` names a window.
 STORE_MEASURES = {'kpis': 'get_period_kpis', 'pareto': 'get_downtime_pareto', 'waste': 'get_waste_breakdown',
                   'stops': 'get_stops_profile', 'grade': 'get_grade_totals', 'overrun': 'get_overrun',
-                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock'}
+                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock',
+                  'money': 'get_opportunities'}
 TOOL_MEASURES = {v: k for k, v in STORE_MEASURES.items()}
 # Plans the period form of a day-shaped intent runs that are more than one store tool (agent.period_plan),
 # by their tools in order. Under a ranged grain `downtime` is the Pareto alone, `quality` the waste breakdown
@@ -44,8 +46,8 @@ UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothin
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
 QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'shifts', 'rank', 'want',
-                'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'want', 'corrupt', 'after')
+                'rates', 'corrupt', 'after', 'format')
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'want', 'rates', 'corrupt', 'after')
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
 MAX_URL = 2000
 PATH = re.compile(r'^/corr/(?P<machine>[A-Za-z0-9_.-]{1,32})/(?P<grain>day|week|month|period)/'
@@ -57,6 +59,9 @@ MEASURE_HELP = ('measure is one of ' + ', '.join([*INTENT_MEASURES.values(), *ST
 WASTE_BY = {'grade': 'grade', 'setup': 'setups'}          # waste by grade is the grade totals, by setup the setup matrix
 PREVIOUS_BESIDE = ('pareto', 'waste', 'grade', 'rollstock')   # store answers that carry the previous window already
 PERIOD_FORMS = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis'}   # the store form each takes against a previous window
+# Store measures that run once per listed shift (`shifts=1,3`): kpis under every grain, and under a ranged grain the
+# Pareto and the waste breakdown too, since there `downtime` and `quality` split over named shifts are those (issue #90).
+SPLIT_MEASURES = tuple(PERIOD_FORMS.values())
 KPI_LED = ('overview', 'summary', 'fpm')                  # day measures whose answer leads with the KPI tiles
 
 
@@ -149,6 +154,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
     if wants:
         params.append(('want', ','.join(wants)))
     params.insert(0, ('measure', measure))
+    if getattr(context, 'rates', None):
+        params.append(('rates', format_rates(context.rates)))   # the assumptions the answer was priced with ride in the link
     if corrupt:
         params.append(('corrupt', '1'))
     for prior in after:
@@ -241,6 +248,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
     tool_period = GRAIN_TO_TOOL[grain]
     context = Context(day, shift, period=tool_period)
     context.scope = scope
+    context.rates = parse_rates(fields.get('rates'))
     window = _window(fields.get('window'), tool_period, day)
     if measure == 'report':
         if grain == 'day':
@@ -400,10 +408,11 @@ def _request(measure, fields, context, window):
         raise ValueError(f'Unknown measure {measure!r}; ' + MEASURE_HELP)
     if scope == 'shift':
         per_shift = [shift]
-    elif measure == 'kpis':
-        per_shift = shifts or [None]
+    elif measure in SPLIT_MEASURES and (measure == 'kpis' or context.period != 'day'):
+        per_shift = shifts or [None]   # one per listed shift: the period form of compare, downtime and quality (issue #90)
     elif len(shifts) > 1:
-        raise ValueError(f'measure={measure} runs for one shift (shifts=3) or all shifts; it is not split by shift')
+        raise ValueError(f'measure={measure} runs for one shift (shifts=3) or all shifts; it is not split by shift' +
+                         (' under Day' if measure in SPLIT_MEASURES else ''))
     else:
         per_shift = shifts or [None]
     plan = []
@@ -440,7 +449,7 @@ def _request(measure, fields, context, window):
             plan.append((STORE_MEASURES[measure], {'window': window, 'shift': s}))
     intent = {'kpis': 'period_compare', 'pareto': 'period_pareto', 'waste': 'period_waste', 'stops': 'period_stops',
               'grade': 'period_grade', 'overrun': 'period_overrun', 'opportunity': 'period_speed_opportunity',
-              'trend': 'period_trend', 'rollstock': 'period_rollstock'}[measure]
+              'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
 
@@ -500,10 +509,11 @@ def redirect_target(url, resolved):
 def redirect_for(url, store, max_turns=4):
     """The address the server redirects `url` to, or None: `url` is canonical, or refused (the caller answers
     the refusal), or its canonical spelling would not land on the same state. The last guard is for a plan
-    `canonical_url` writes in a form `resolve_url` refuses (a ranged-grain downtime or quality split over named
-    shifts becomes `measure=pareto&shifts=1,3`): that URL answers at its own address, as it did before issue
-    #70, instead of redirecting to a 400. A target is always a fixed point that runs the same plan over the same
-    shifts; which stated objectives the address keeps (`want=`) is canonical_url's own rule."""
+    `canonical_url` would write in a form `resolve_url` refuses: that URL answers at its own address instead of
+    redirecting to a 400 (no plan does since issue #90, which made a ranged-grain downtime or quality split over
+    named shifts resolve as `measure=pareto&shifts=1,3`; the sweep in test_urls.py holds it at none). A target is
+    always a fixed point that runs the same plan over the same shifts; which stated objectives the address keeps
+    (`want=`) is canonical_url's own rule."""
     try:
         resolved = resolve_url(url, store, max_turns)
         target = redirect_target(url, resolved)

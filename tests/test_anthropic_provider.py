@@ -263,6 +263,22 @@ def test_transport_headers_and_fixed_destination(monkeypatch):
     assert captured['timeout'] == 7 and captured['closed'] is True
 
 
+def test_the_money_tools_are_not_offered_to_the_anthropic_planner_or_the_analyst_plan():
+    """Review of #31a: the planner and plan prompts still say costs are unavailable, so neither the tool
+    loop's catalog nor the analyst's plan catalog lists get_shift_dollars or get_opportunities until #23 /
+    #31b retune them (as the OpenAI loop already leaves them out); every other investigation tool stays."""
+    from investigator.anthropic_provider import ANTHROPIC_OMITTED_TOOLS, plan_catalog
+    assert ANTHROPIC_OMITTED_TOOLS == {'get_shift_dollars', 'get_opportunities'}
+    assert ANTHROPIC_OMITTED_TOOLS <= {s['name'] for s in TOOL_SCHEMAS}
+    loop = {t['name'] for t in anthropic_tools(TOOL_SCHEMAS)}
+    for all_shifts in (False, True):
+        plan = {t['name'] for t in plan_catalog(TOOL_SCHEMAS, all_shifts=all_shifts)}
+        assert not plan & ANTHROPIC_OMITTED_TOOLS
+        assert plan == {s['name'] for s in TOOL_SCHEMAS} - ANTHROPIC_OMITTED_TOOLS - {'render_chart'}
+    assert not loop & ANTHROPIC_OMITTED_TOOLS
+    assert loop == {s['name'] for s in TOOL_SCHEMAS} - ANTHROPIC_OMITTED_TOOLS | {'finish', 'cannot_answer'}
+
+
 def test_mapped_tool_schemas_use_anyof_for_nullable_filters():
     """The strict validator rejects list-valued types with enums and None members (live runs 1 and 2)."""
     from investigator.agent import TOOL_SCHEMAS
