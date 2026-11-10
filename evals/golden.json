@@ -2373,6 +2373,130 @@
     "tables": [],
     "sections_match": "plan was rejected \\(it names \"run_sql\", which is not one of the permitted tools\\); no query was run"
    }
+  },
+  {
+   "id": "money-shift-dollars",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Where did the money go this shift?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": "Shift 2 in dollars: \\$[\\d,]+ of recorded losses this shift .* per year at the post's volumes; contribution margin not set"
+   }
+  },
+  {
+   "id": "money-opportunities-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Where is the money this month?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=money&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "Where to look, levers ranked by dollars per year \\(all shifts\\): 1\\. .*Speed gap to best-fifth speed.*Downtime: Order change \\(setup time\\).*do not prescribe a machine adjustment"
+   }
+  },
+  {
+   "id": "money-costing-us-week-shift-2",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What's costing us on shift 2 this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=money&window=week&shifts=2",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1
+   }
+  },
+  {
+   "id": "money-period-control-opportunities",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "period": "month",
+   "question": "What are the opportunities?",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14/shift/2?measure=money",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1
+   }
+  },
+  {
+   "id": "money-margin-not-set",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "How much contribution did we lose in dollars this shift?",
+   "note": "No board margin is configured: contribution is 'margin not set', never $0, and is never added to the dollars.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": "contribution margin not set",
+    "sections_not_match": "contribution \\$0\\b|contribution \\$0\\.00"
+   }
   }
  ]
 }

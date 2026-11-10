@@ -13,6 +13,8 @@ import time
 from typing import Protocol
 from uuid import uuid4
 
+from . import cost_model
+
 TOOL_SCHEMAS = [
     {"name": name, "description": description, "parameters": {
         "type": "object", "properties": {"shift": {"type": "integer", "enum": [1, 2, 3]}, **extra},
@@ -30,6 +32,7 @@ TOOL_SCHEMAS = [
         ("get_shift_notes", "Read untrusted synthetic shift notes and individual downtime notes; not proven causes.", {}),
         ("get_rankings", "Rank lowest wet-end speed attainment or highest downtime/quality losses. Incomplete data is withheld.", {
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
+        ("get_shift_dollars", "Where the money went this shift: each downtime reason, the speed gap to 675 ft/min, trim, shear and each dry-end reason priced at the assumed rates, ranked by dollars (paper, machine time, per year; contribution null until a margin is set).", {}),
     ]
 ]
 # Period tools read the whole record store (two production months) instead of one day.
@@ -66,6 +69,8 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_speed_opportunity", "Where could we run faster: per grade and web width (or crew), typical speed without stops vs the best fifth of setups, gap, % of target for both, opportunity hours, and the dry-end reject % of the fast fifth against the rest (a positive penalty means the gain costs rejects). Peak speeds never used; setups under the minimum run time excluded and counted.",
          {"window": WINDOW_SCHEMA, "slice_by": {"type": "string", "enum": ["width", "crew"]}, "shift": SHIFT_FILTER}, ["window"]),
+        ("get_opportunities", "Where the money is in a window: levers ranked in $/yr at the assumed rates (speed gap to best fifth, trim over target, each downtime reason, shear, each dry-end reason), each with its records. Ranks levers; prescribes no adjustment.",
+         {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_trend", "Weekly series (Mon-Fri production weeks) of one allow-listed metric, ending with the week containing the anchor.",
          {"metric": {"type": "string", "enum": TREND_METRICS}, "weeks": {"type": "integer", "description": "1-26, default 8"},
           "anchor": {"type": "string", "description": "YYYY-MM-DD; use the selected production day"}, "shift": SHIFT_FILTER}, ["metric"]),
@@ -80,7 +85,8 @@ CHART_TITLES = {'get_period_kpis': 'KPI tiles', 'compare_periods': 'KPI comparis
                 'get_waste_breakdown': 'Waste breakdown', 'get_stops_profile': 'Stops per production day', 'get_trend': 'Weekly trend',
                 'get_grade_totals': 'Volume by grade (MSF)', 'get_overrun': 'Over/under-run by knife',
                 'get_rollstock': 'Paper consumed by grade and width (MSF)',
-                'get_speed_opportunity': 'Speed opportunity (hours at best-fifth speed)'}
+                'get_speed_opportunity': 'Speed opportunity (hours at best-fifth speed)',
+                'get_opportunities': 'Where the money is ($ per year)'}
 # Chartable results: tool -> (x field, y field or a function of the result data, unit or a function, chart type).
 CHARTABLE = {
     'get_downtime_breakdown': ('category', 'down_minutes', 'minutes', 'bar', None),
@@ -98,6 +104,8 @@ CHARTABLE = {
     'get_rollstock': ('label', 'msf', 'MSF', 'bar', 'previous_msf'),
     'get_speed_opportunity': ('label', 'opportunity_hours', 'hours', 'bar', None),
     'get_trend': ('week_start', 'value', lambda d: d['unit'], 'line', None),
+    'get_shift_dollars': ('gap', 'usd', '$ this shift', 'bar', None),
+    'get_opportunities': ('lever', 'usd_per_year', '$ per year', 'bar', None),
 }
 
 PROCESS_CONTEXT = """All records are synthetic. Production day starts 07:00; three 480-minute shifts.
@@ -124,6 +132,7 @@ class Context:
     dataset_version: str = ""
     scope: str = "day"
     period: str = "day"   # the Period control: day | week | month | fiscal; a ranged period routes to the period tools
+    rates: dict = field(default_factory=dict)   # the visitor's rate overrides (cost_model.parse_rates); {} = the defaults
 
 
 def period_window(context):
@@ -157,6 +166,9 @@ class OfflinePlanner:
             if intent == 'summary':
                 plan.append(('get_shift_overview',{'shift':shift}))
                 continue
+            if intent == 'dollars':
+                plan.append(("get_shift_dollars", {"shift": shift}))
+                continue
             plan.append(("get_shift_kpis", {"shift": shift}))
             if intent in ("overview", "downtime", "compare"):
                 plan.append(("get_downtime_breakdown", {"shift": shift, "group_by": context["group_by"], "kind": context["kind"]}))
@@ -175,6 +187,7 @@ class OfflinePlanner:
                     plan.append(("get_rankings", {"shift": shift, "metric": metric}))
             if intent == "quality":
                 plan.append(("get_quality_breakdown", {"shift": shift}))
+
         completed = [(r["tool"], r["arguments"]) for r in results]
         for tool, args in plan:
             if (tool, args) not in completed:
@@ -203,7 +216,14 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
                "'how did September go versus August', 'how did shift 2 go compared with last week', "
                "'which downtime reason cost the most minutes', 'is it bond or warp', 'stops per day this week', "
                "'trend of trim over eight weeks', 'volume by grade this month', 'how much paper did we consume this month', 'over/under-run by knife this week', "
-               "'compare this period to the previous period' (4-4-5 accounting periods), 'where is the speed opportunity this month'.")
+               "'compare this period to the previous period' (4-4-5 accounting periods), 'where is the speed opportunity this month', "
+               "'where is the money this month' (levers in dollars), 'where did the money go this shift'.")
+
+
+# "Where is the money", "what's costing us", "opportunities": the money questions (issue #31). Plain
+# "cost" is not one ("which reason cost the most minutes" is the Pareto, "does it cost rejects" speed).
+MONEY = re.compile(r"\bmoney\b|\bdollars?\b|\$|\bcosting\b|\bcost us\b|\bwhat (does|did|do) .{1,60}\bcost\b|"
+                   r"\bopportunities\b|\bwhere (should|do|can) we look\b|\bwhere to look\b")
 
 
 def parse_period_request(lower, current, shifts):
@@ -222,7 +242,11 @@ def parse_period_request(lower, current, shifts):
     rollstock = bool(re.search(r"roll[- ]?stock|\bpaper (consum|usage|used\b)|\bconsum\w*\b.*\bpaper\b|\bpaper\b.*\bconsum|how much paper\b|\brolls? (of paper )?(consumed|used)", lower))
     overrun = bool(re.search(r"over[- ]?run|under[- ]?run|over/under|overs? and unders?|cut range|nominal (vs|versus|against) actual|actual (vs|versus|against) nominal", lower))
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
-    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock):
+    money = bool(MONEY.search(lower)) and not speed_opp
+    ranged = getattr(current, 'period', 'day') != 'day'
+    if money and not (period or ranged):
+        return None   # a money question about the day: get_shift_dollars, routed by the day router
+    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock or money):
         return None
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
@@ -233,7 +257,10 @@ def parse_period_request(lower, current, shifts):
     selected = getattr(current, 'period', 'day')
     selected = None if selected == 'day' else selected
     window = {"period": period or selected or 'day', "anchor": anchor}
-    if speed_opp:
+    if money:
+        plan = [("get_opportunities", {"window": window, "shift": shift})]
+        intent = 'period_money'
+    elif speed_opp:
         slice_by = 'crew' if re.search(r"\bcrews?\b|\bteams?\b", lower) else 'width'
         plan = [("get_speed_opportunity", {"window": {"period": period or selected or 'month', "anchor": anchor}, "slice_by": slice_by, "shift": shift})]
         intent = 'period_speed_opportunity'
@@ -331,7 +358,7 @@ def _parse_request(text, current):
     shifts = shifts or ([1,2,3] if current.scope=='day' else [current.shift])
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
         raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
-    intent = 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
+    intent = 'dollars' if MONEY.search(lower) else 'summary' if re.search(r'\b(summarize|summary)\b',lower) else 'orders' if re.search(r'\b(order|orders|quantities|outs)\b',lower) else 'ranking' if 'rank' in lower else 'matrix' if re.search(r'matrix|setup|paper changes', lower) else 'notes' if 'notes' in lower else 'compare' if compare else 'overview' if re.search(r'\b(slow|bad|killed)\b', lower) else (
         'quality' if re.search(r'warp|bond|misalignment|reject|quality|waste', lower) else
         'downtime' if re.search(r'downtime|maintenance|operator|equipment|stops', lower) else
         'speed' if re.search(r'speed|feet per minute|fpm', lower) else
@@ -369,6 +396,8 @@ def period_plan(intent, window, named, group_by, current):
         per_shift = [None]                 # all three shifts together
     plan = []
     for shift in per_shift:
+        if intent == 'dollars':
+            plan.append(("get_opportunities", {"window": window, "shift": shift}))
         if intent in ('summary', 'overview', 'compare', 'speed'):
             plan.append(("get_period_kpis", {"window": window, "compare": True, "shift": shift}))
         if intent in ('summary', 'overview', 'downtime'):
@@ -382,7 +411,7 @@ def period_plan(intent, window, named, group_by, current):
 
 
 DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_end_performance': 'Wet-end speed vs grade target',
-                      'get_quality_breakdown': 'Dry-end rejects by reason'}
+                      'get_quality_breakdown': 'Dry-end rejects by reason', 'get_shift_dollars': 'Where the money went ($)'}
 
 
 def chart_for(rid, result):
@@ -493,7 +522,7 @@ class Agent:
         # other visitors wait (issue #23). Offline callers hold that lock themselves and pass nothing.
         self.guard = guard if guard is not None else nullcontext()
 
-    def _execute(self, name, arguments, store):
+    def _execute(self, name, arguments, store, rates=None):
         if not isinstance(arguments, dict):
             raise ValueError('Tool arguments must be an object')
         known = {s['name']: s for s in TOOL_SCHEMAS}
@@ -510,17 +539,26 @@ class Agent:
             if not result['ok'] or result['tool'] not in CHARTABLE:
                 raise ValueError('Result cannot be charted')
             return chart_for(rid, result)
+        rates = rates or cost_model.effective()
         if name in PERIOD_TOOLS:
             if self.store is None:
                 raise ValueError('Period tools need the record store; this dataset is a single-day fixture')
             shift = arguments.get('shift')
             if shift is not None and (type(shift) is not int or shift not in (1, 2, 3)):
                 raise ValueError('Shift must be 1, 2, 3 or null')
-            return getattr(self.store, name)(**arguments)
+            if name == 'get_opportunities':
+                return cost_model.opportunities(self.store, rates=rates, **arguments)
+            return cost_model.attach(name, getattr(self.store, name)(**arguments), rates)
         shift = arguments['shift']
         if type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Shift must be 1, 2 or 3')
-        return getattr(self.analysis, name)(**arguments)
+        if name == 'get_shift_dollars':
+            return cost_model.shift_dollars(self.analysis, shift, rates)
+        data = getattr(self.analysis, name)(**arguments)
+        if name in cost_model.PRICED_TOOLS:
+            gross = self.analysis.get_shift_kpis(shift)['rows'][0]['gross_sqft'] if name == 'get_quality_breakdown' else None
+            cost_model.attach(name, data, rates, gross)
+        return data
 
     def ask(self, text, context, request=None, emit=None):
         """Answer `text` in `context`. `request` is a request already parsed from the text (or
@@ -538,6 +576,7 @@ class Agent:
                     'group_by': 'reason', 'want_chart': True, 'asked': asked_for(text)}
             allowed_shifts, period = self._enter(context)
             history = deepcopy(context.history[-self.max_turns:])
+        rates = cost_model.effective(getattr(context, 'rates', None))
         run_id = uuid4().hex
         store = OrderedDict()
         traces = []
@@ -585,7 +624,7 @@ class Agent:
                         if problem:
                             raise ValueError(problem)
                     with self.guard:
-                        data = self._execute(action['tool'], action['arguments'], store)
+                        data = self._execute(action['tool'], action['arguments'], store, rates)
                     result = {'result_id': rid, **action, 'ok': True, 'data': data}
                 except (ValueError, TypeError, KeyError) as exc:
                     result = {'result_id': rid, **action, 'ok': False, 'error': {'code': 'invalid_tool_call', 'message': str(exc)}}
@@ -637,6 +676,7 @@ class Agent:
         with self.guard:
             allowed_shifts, period = self._enter(context)
             history = deepcopy(context.history[-self.max_turns:])
+        rates = cost_model.effective(getattr(context, 'rates', None))
         run_id = uuid4().hex
         store, traces = OrderedDict(), []
         started = time.monotonic()
@@ -668,7 +708,7 @@ class Agent:
             tick = time.perf_counter()
             try:
                 with self.guard:
-                    data = self._execute(action['tool'], action['arguments'], store)
+                    data = self._execute(action['tool'], action['arguments'], store, rates)
                 result = {'result_id': rid, **action, 'ok': True, 'data': data}
             except (ValueError, TypeError, KeyError) as exc:
                 result = {'result_id': rid, **action, 'ok': False, 'error': {'code': 'invalid_tool_call', 'message': str(exc)}}
@@ -775,9 +815,13 @@ class Agent:
             shift = data['shift']
             if result['tool'] in PERIOD_TOOLS:
                 lines.extend(Agent._period_lines(result['tool'], data))
+                lines.extend(Agent._dollar_lines(result['tool'], data))
                 continue
             if data['coverage'] != 'complete':
                 lines.append(f'Shift {shift}: data incomplete; {len(data["excluded_records"])} excluded records. Do not rank its observed production totals.')
+                continue
+            if result['tool'] == 'get_shift_dollars':
+                lines.extend(Agent._dollar_lines(result['tool'], data))
                 continue
             if result['tool'] in ('get_shift_kpis','get_shift_overview'):
                 row = data['rows'][0]
@@ -800,6 +844,39 @@ class Agent:
                 lines.append(f'Shift {shift} dry-end rejects: '+ '; '.join(f'{r["reason"]}: {r["rejected_sqft"]:,.1f} sq ft' for r in data['rows'])+'.')
                 if data.get('details'):
                     lines.append(f'Shift {shift} reported sub-reasons: ' + '; '.join(f'{d["detail"]}: {d["rejected_sqft"]:,.1f} sq ft' for d in data['details']) + '.')
+            lines.extend(Agent._dollar_lines(result['tool'], data))
+        return lines
+
+    @staticmethod
+    def _dollar_lines(tool, data):
+        """The money beside the quantities (issue #31): each row's formula as the tool wrote it, the
+        totals, and the rates it used. Every number is a tool value; the rates are assumptions."""
+        if tool not in (*cost_model.PRICED_TOOLS, 'get_shift_dollars', 'get_opportunities') or 'provenance' not in data:
+            return []
+        scope = f'Shift {data["shift"]}' if data['shift'] else 'All shifts'
+        rows = data['rows']
+        def money(value):
+            return 'unavailable' if value is None else f'${value:,.0f}'
+        def contribution(value, status):
+            return f'contribution {cost_model.MARGIN_NOT_SET}' if status == cost_model.MARGIN_NOT_SET else f'contribution {money(value)} (not added)'
+        name = {'get_quality_breakdown': 'reason', 'get_downtime_breakdown': 'category', 'get_downtime_pareto': 'category',
+                'get_waste_breakdown': 'label', 'get_speed_opportunity': 'label', 'get_shift_dollars': 'gap', 'get_opportunities': 'lever'}[tool]
+        lines = []
+        if tool == 'get_shift_dollars':
+            lines.append(f'{scope} in dollars: {money(data["total_usd"])} of recorded losses this shift (paper {money(data["total_paper_usd"])}, '
+                         f'machine time {money(data["total_machine_time_usd"])}), {money(data["total_usd_per_year"])} per year at the post\'s volumes; '
+                         f'{contribution(data["total_contribution_usd"], data["contribution_status"])}.')
+            lines.append('Where the money went, ranked by dollars: ' + ('; '.join(
+                f'{r["rank"]}. {r["gap"]}: {money(r["usd"])} ({money(r["usd_per_year"])}/yr): {r["usd_basis"]}' for r in rows) or 'no recorded losses') + '.')
+        elif tool == 'get_opportunities':
+            lines.append(f'Where to look, levers ranked by dollars per year ({scope.lower()}): ' + ('; '.join(
+                f'{r["rank"]}. {r["lever"]}: {money(r["usd_per_year"])}/yr ({money(r["usd"])} in the window; {r["records"]}): {r["usd_basis"]}' for r in rows) or 'no levers') +
+                f'. Levers together {money(data["total_usd_per_year"])} per year; {contribution(data["total_contribution_usd"], data["contribution_status"])}. ' + data['method_note'])
+        else:
+            lines.append(f'{scope} in dollars: ' + ('; '.join(
+                f'{r[name]}: {money(r["usd"])}' + (f' ({money(r["usd_per_year"])}/yr)' if r['usd_per_year'] is not None else '') + f': {r["usd_basis"]}'
+                for r in rows) or 'nothing to price') + '.')
+        lines.append(data['provenance'] + ' ' + data['cost_note'])
         return lines
 
     @staticmethod

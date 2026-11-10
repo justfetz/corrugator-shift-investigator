@@ -40,8 +40,11 @@ def compact_result(result):
     if compact.get('data'):
         compact['data'].pop('trace',None)
         compact['data'].pop('components',None)
+        compact['data'].pop('cost_note',None)   # the dollar formulas and rate rows are for the reader; `provenance` names the rates
+        compact['data'].pop('rates',None)
         for row in compact['data'].get('rows',[]):
             row.pop('source_ids',None)
+            row.pop('usd_basis',None)
         compact['data']['excluded_records']=[{'record_id':r['record_id'],'error':r['error']} for r in compact['data'].get('excluded_records',[])]
         if result['tool'] in ('get_setup_matrix','get_order_matrix') and len(compact['data'].get('rows', []))>12:
             compact['data']['row_count']=len(compact['data']['rows'])

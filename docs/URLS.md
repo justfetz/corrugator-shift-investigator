@@ -47,6 +47,8 @@ store measures run one record-store tool over a window.
 | `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
 | `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
+| `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars | the money levers: normalizes to `money` |
+| `money` | `get_opportunities` over the window: the levers ranked in $/yr | the same |
 | `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |
 | `report` | refused: a day is investigated with a question | the deterministic period report (heatmap, daily matrix, recurring downtime, notes) |
 
@@ -63,12 +65,13 @@ Modifiers, each refused when it does not apply to the measure:
 | `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's) | all three for day plans, all shifts together for store tools |
 | `rank=` | `speed`, `downtime`, `quality` | all three |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
+| `rates=` | the visitor's rates, `paper:<$/MSF>`, `hour:<$/hr>`, `margin:<$/MSF>`, `trim:<% target>`, comma-separated in that order (docs/METRICS.md, Cost model); every measure takes it, and the answer's provenance line names each rate as "yours" | the server's rates (`INVESTIGATOR_RATES`, else the post's) |
 | `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
 | `after=` | the earlier views of this conversation, each a canonical address without its own chain, at most 8; the agent keeps its `max_turns`. A period report in the chain is kept on the address but, as on the session path, enters no history | none |
 | `format=` | `json`, `pdf` | the page |
 
 One state has one spelling: the fields come in the order above, defaults are omitted, and a few
-aliases normalize (`downtime`, `quality` and `compare` under a ranged grain). `resolve_url` is tolerant
+aliases normalize (`downtime`, `quality`, `compare` and `dollars` under a ranged grain). `resolve_url` is tolerant
 of a hand-typed alias and strict about everything else: an unknown field, a repeated field, a modifier
 the measure does not read, or a shift outside the selected scope is a 400 with the reason.
 
@@ -83,6 +86,8 @@ the measure does not read, or a shift outside the selected scope is a 400 with t
 | "How did September go versus August?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=kpis&window=2026-09&compare=2026-08` |
 | "Trend of lineal per setup over six weeks" | `/corr/1/day/2026-09-14?measure=trend&metric=lineal_per_setup&weeks=6` |
 | "Compare that with first shift", after "Why was second shift slow?" — all shifts | `/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2` |
+| "Where did the money go this shift?" — Day, shift 2, paper at $60 | `/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:60` |
+| "Where is the money this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
 | the scope's own KPI tiles (what the page primes on load) | `/corr/1/week/2026-09-14.json?measure=kpis` |
 
@@ -122,4 +127,4 @@ answer is a link to `…&format=pdf`. Live mode keeps the session and the POST.
 
 ## Room left in the grammar
 
-Dollars (#31) add `rates=` later; it is not a field today and is refused like any unknown field.
+`rates=` (#31) carries the assumptions an answer was priced with; an unknown rate key, a repeated one or a value outside 0 < v (at most 100,000, or 100 for the trim target) is a 400 with the reason. `/q` takes `rates=` too and keeps it on the redirect.

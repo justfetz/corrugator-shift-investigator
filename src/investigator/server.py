@@ -38,6 +38,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from .agent import Agent, Context, TOOL_SCHEMAS, parse_request
 from .anthropic_provider import resolve_model
+from .cost_model import parse_rates
 from .evalboard import EvalBoard, evals_dir
 from .record_store import DEFAULT_MONTHS, default_store
 from .synth import production_days
@@ -255,7 +256,7 @@ class Workbench:
         for key, value in parse_qsl(query, keep_blank_values=True):
             if key == 'after':
                 after.append(value)
-            elif key in fields or key not in ('q', 'day', 'shift', 'scope', 'period', 'corrupt'):
+            elif key in fields or key not in ('q', 'day', 'shift', 'scope', 'period', 'corrupt', 'rates'):
                 raise ValueError('Invalid request fields')
             else:
                 fields[key] = value
@@ -277,6 +278,7 @@ class Workbench:
             raise ValueError('Invalid data-quality option')
         context = Context(day, int(shift), period='fiscal' if period == 'accounting' else period)
         context.scope = scope
+        context.rates = parse_rates(fields.get('rates'))
         request = parse_request(question, context)   # the refusals of the offline router, verbatim
         return canonical_url(request, context, corrupt == '1', self.store.machine_id, after)
 
@@ -298,7 +300,7 @@ class Workbench:
     def prepare(self, payload, api_key=None, anthropic_key=None):
         """Validate a question and bind it to its session: everything before the investigation runs.
         Call with the lock held. Returns the job `run_offline` or `run_live` takes."""
-        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period', 'report'}:
+        if not isinstance(payload, dict) or set(payload)-{'question', 'day', 'shift', 'session_id', 'corrupt', 'mode', 'scope', 'period', 'report', 'rates'}:
             raise ValueError('Invalid request fields')
         scope = payload.get('scope', 'shift')
         if scope not in ('shift', 'day'):
@@ -333,6 +335,7 @@ class Workbench:
         corrupt = payload.get('corrupt', False)
         if type(corrupt) is not bool:
             raise ValueError('Invalid data-quality option')
+        rates = parse_rates(payload.get('rates'))   # 'paper:55,margin:40'; the visitor's assumptions, never a key
         session_id = payload.get('session_id')
         if session_id is not None and not isinstance(session_id, str):
             raise ValueError('Invalid session id')
@@ -347,7 +350,7 @@ class Workbench:
             self.daily_round()  # counted before the model is asked; failed rounds still count
         tool_period = 'fiscal' if period == 'accounting' else period   # the period tools' name for the 4-4-5 window
         job = {'mode': mode, 'report': report, 'question': question, 'day': day, 'shift': shift, 'scope': scope, 'period': period,
-               'tool_period': tool_period, 'corrupt': corrupt, 'key': (day, corrupt), 'session_reset': session_reset,
+               'tool_period': tool_period, 'corrupt': corrupt, 'key': (day, corrupt), 'session_reset': session_reset, 'rates': rates,
                'api_key': api_key, 'anthropic_key': anthropic_key}
         if session_id is None:
             session_id = secrets.token_urlsafe(24)
@@ -368,6 +371,7 @@ class Workbench:
             self.sessions[session_id] = context
         context.shift = job['shift']
         context.scope = job['scope']
+        context.rates = job.get('rates') or {}
         self.sessions.move_to_end(session_id)
         return context
 
