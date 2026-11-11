@@ -143,6 +143,7 @@ def test_agreement_is_per_line_over_the_same_text_only():
         '1 owner grades saved (target 20); no judged run to compare them with, so no agreement measured yet'
     assert judging.agreement_text(judging.agreement(judged, [grade('n3', 'old-text')])) == \
         '1 owner grades saved (target 20), none of the text the judge scored; no agreement measured yet'
+    assert judging.agreement_text(judging.agreement(judged, [])) == '0 owner grades saved (target 20); no agreement measured yet'
 
 
 def test_a_grade_is_checked_against_the_text_the_page_showed_and_saved_whole(tmp_path):

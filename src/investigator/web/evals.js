@@ -115,7 +115,7 @@ function renderJudge(isPublic){
   :'No judged run is tracked yet: the owner runs python3 evals/run.py --judge --track with the judge model’s key'];
  parts.push(a.matched?`agreement with the owner over ${a.matched} narrative${a.matched===1?'':'s'} graded as the same text (bar ${j.bar_pct}% per line)`
    +(a.unmatched?`; ${a.unmatched} grade${a.unmatched===1?'':'s'} set aside (changed text or not judged)`:'')
-  :`${j.graded} owner grade${j.graded===1?'':'s'} saved (target ${j.target})${last?', none of the text the judge scored':''}; no agreement measured yet`);
+  :`${j.graded} owner grade${j.graded===1?'':'s'} saved (target ${j.target})${last&&j.graded?', none of the text the judge scored':''}; no agreement measured yet`);
  $('judge-summary').textContent=parts.join(' · ');
  const head=node('thead'), hr=node('tr'); for(const label of ['Rubric line','What it asks','Judge passes','Agreement with the owner']){const th=node('th',label);th.scope='col';hr.append(th);} head.append(hr);
  const body=node('tbody');

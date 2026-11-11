@@ -491,6 +491,8 @@ def agreement(judged, grades):
 def agreement_text(result):
     """One line for the eval table: per criterion `agree/n pct% (kappa k)`, or what is still missing. `graded` counts
     the grades saved; only those of the judged text count toward agreement."""
+    if not result['graded']:
+        return f'0 owner grades saved (target {result["target"]}); no agreement measured yet'
     if not result['judged']:
         return f'{result["graded"]} owner grades saved (target {result["target"]}); no judged run to compare them with, so no agreement measured yet'
     if not result['matched']:
