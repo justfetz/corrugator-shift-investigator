@@ -67,13 +67,15 @@ def report_pdf(result):
                   ('downtime_pct','Down %'),('heavy_hitter','Heavy hitter'),('heavy_hitter_minutes','Heavy min')]
         elif chart.get('type')=='range':
             cols=[('knife','Knife'),('nominal_cuts','Nominal cuts'),('actual_cuts','Actual cuts'),('overrun_pct','Over/under %'),('lines_inside_band_pct','In band %')]
+        elif chart.get('type')=='waterfall':
+            cols=[('label','Bucket'),('gap_fpm','Gap ft/min'),('share_of_gap_pct','Share of gap %'),('gap_lineal_ft','Lineal ft'),('top_item','Largest reason / grade'),('top_item_fpm','Largest ft/min')]
         elif chart.get('y')=='msf':
             cols=[('label','Grade / width'),('paper_runs','Paper runs'),('lineal_ft','Lineal ft'),('msf','MSF'),('previous_msf','Prev MSF'),('delta_msf','Delta MSF')]
         elif chart.get('y')=='volume_msf':
             cols=[('grade','Grade'),('volume_msf','MSF'),('previous_volume_msf','Prev MSF'),('speed_run_fpm','ft/min w/o stops'),('speed_to_target_pct','% of target')]
         else:
             cols=[(chart['x'],{'label':'Grade / slice','grade':'Grade','knife':'Knife','category':'Category','week_start':'Week of','production_day':'Day'}.get(chart['x'],'Run / day / reason')),(chart['y'],chart['unit'])]
-        if chart['unit']=='ft/min':cols.extend([('target_fpm','Target ft/min'),('speed_to_target_pct','% of target')])
+        if chart['unit']=='ft/min' and chart.get('type')!='waterfall':cols.extend([('target_fpm','Target ft/min'),('speed_to_target_pct','% of target')])
         table((chart.get('title') or f'Shift {chart.get("shift", "selected scope")}: {chart["unit"]} evidence')+(' (data)' if drawing is not None else ''),chart['rows'],cols,12)
     for item in result.get('tables',[]):
         if item['title']=='get_speed_opportunity' and item['rows']:
@@ -98,6 +100,8 @@ def report_pdf(result):
             cols=[('record_id','Record'),('day','Day'),('place','Place'),('notes','Reported note')]
         elif 'rank' in row:
             cols=[('rank','Rank'),('item','Item'),('value','Value'),('unit','Unit / direction')]
+        elif 'bucket' in row and 'gap_fpm' in row:
+            cols=[('label','Bucket'),('gap_fpm','Gap ft/min'),('share_of_gap_pct','Share %'),('current_loss_fpm','Loss ft/min'),('reference_loss_fpm','Reference loss'),('top_item','Largest'),('usd','$ machine time')]
         elif 'opportunity_hours' in row:
             cols=[('label','Grade / slice'),('setups','Setups'),('typical_fpm','Typical ft/min'),('best_fifth_fpm','Best fifth'),('opportunity_hours','Hours'),('best_fifth_dry_end_pct','Dry-end % fast'),('rest_dry_end_pct','Dry-end % rest'),('status','Status')]
         elif 'paper_runs' in row:

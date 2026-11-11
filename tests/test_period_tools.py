@@ -598,7 +598,7 @@ def test_period_tool_schemas_are_declared():
     assert PERIOD_TOOLS <= names and PERIOD_TOOLS == {"get_period_kpis", "compare_periods", "get_downtime_pareto",
                                                      "get_waste_breakdown", "get_stops_profile", "get_trend",
                                                      "get_grade_totals", "get_overrun", "get_speed_opportunity", "get_rollstock",
-                                                     "get_opportunities"}
+                                                     "get_opportunities", "get_speed_variance"}
     for schema in TOOL_SCHEMAS:
         if schema["name"] in PERIOD_TOOLS:
             assert schema["parameters"]["additionalProperties"] is False and "shift" in schema["parameters"]["properties"]
