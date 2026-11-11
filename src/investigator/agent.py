@@ -921,6 +921,8 @@ def chart_for(rid, result):
     y, unit, y2 = (v(data) if callable(v) else v for v in (y, unit, y2))
     chart = {'type': kind, 'source_result_id': rid, 'shift': data['shift'], 'coverage': data['coverage'],
              'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
+    if result['tool'] == 'get_opportunities' and data.get('lens'):
+        chart['lens'] = data['lens']   # the levers' order is the lens's (issue #101): web/money.js re-ranks the chart by it
     if result['tool'] == 'get_speed_variance':
         # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
         start_label = {'baseline': 'Baseline speed', 'previous': 'Previous', 'shift': f"Shift {data.get('against_shift')}"}[data['against']]

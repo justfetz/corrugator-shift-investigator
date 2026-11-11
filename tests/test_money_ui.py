@@ -128,7 +128,12 @@ PARITY_URLS = ('/corr/1/day/2026-09-14/shift/2?measure=dollars', '/corr/1/day/20
                '/corr/1/week/2026-09-14/shift/2?measure=speedvar', '/corr/1/month/2026-09-14?measure=speedvar',
                '/corr/1/week/2026-09-14/shift/2?measure=overview', '/corr/1/month/2026-09-14/shift/1?measure=kpis',
                '/corr/1/day/2026-09-14/shift/3?measure=summary', '/corr/1/day/2026-09-14?measure=dollars&shifts=1,3',
-               '/corr/1/month/2026-09-14?measure=kpis')
+               '/corr/1/month/2026-09-14?measure=kpis',
+               # issue #101: the two lenses (supervisor: schedule-driven levers unranked; ownership: all of trim first) and the
+               # speed variance whose grade mix is schedule-driven and unpriced
+               '/corr/1/month/2026-09-14?measure=money&lens=supervisor', '/corr/1/month/2026-09-14?measure=money&lens=ownership',
+               '/corr/1/week/2026-09-14/shift/2?measure=money&lens=supervisor', '/corr/1/week/2026-09-14/shift/2?measure=money&lens=ownership',
+               '/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=3,1')
 PARITY_RATES = ('paper:60,hour:1350.5,margin:35,trim:3.1', 'paper:41.37,hour:5000', 'margin:12.5,trim:4', 'trim:2.5',
                 'hour:1', 'paper:99999.99,margin:0.01')
 

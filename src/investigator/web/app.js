@@ -875,12 +875,12 @@ function moneyFacts(m){
  if(dropped.length)warning=`Shift ${dropped.join(' and ')}: data incomplete, not counted in these dollars; they are the complete shifts'.`;
  else if(d.coverage!=='complete')warning=`Incomplete data: ${excluded||'some'} excluded record${excluded===1?'':'s'}. These dollars are the observed records only, not the whole ${levers?'window':day?'day':'shift'}; do not rank them.`;
  const rows=d.rows.map(r=>({name:r.gap||r.lever,bucket:bucketOf(r),usd:r.usd||0,year:r.usd_per_year,minutes:r.machine_minutes||0,share:Money.share(r),
-  area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),rows:[r]}));
+  area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),control:r.control||null,trim:r.kind==='trim',rows:[r]}));
  const counted=day?(d.shifts||[]).filter(x=>!dropped.includes(x.shift)).map(x=>x.shift):[];
  // each counted shift's own total a year: its get_shift_dollars step beside the day total, re-priced with it
  const own=day?counted.map(n=>(m.result.trace||[]).find(x=>x.ok&&x.tool==='get_shift_dollars'&&x.data&&x.data.shift===n&&x.data.production_day===d.production_day)):[];
  const perShift=day&&own.length&&own.every(Boolean)?own.map(x=>`shift ${x.data.shift} ${Money.short(atRates(m,x).total_usd_per_year)}/yr`).join(' · '):null;
- return {levers,day,data:d,rows,cfg,rates,warning,
+ return {levers,day,data:d,rows,cfg,rates,warning,lens:levers?d.lens||'all':null,
   total:d.total_usd, year:d.total_usd_per_year, paper:d.total_paper_usd, machine:d.total_machine_time_usd, contribution:d.total_contribution_usd,
   buckets:(d.buckets||[]).map(b=>[b.bucket,b.usd]),
   when:levers?WHEN[d.window&&d.window.period]||'this window':day?((d.shifts||[]).length===3?'this day':'these shifts'):'this shift',
@@ -931,17 +931,27 @@ function unitLabel(r,mode,yearly){
 function rowFormula(r){ return r.rows[0].usd_basis; }
 function rowRecords(r){ const x=r.rows[0]; return x.records||(Array.isArray(x.shifts)?`shift${x.shifts.length===1?'':'s'} ${x.shifts.join(', ')}`:Array.isArray(x.source_ids)?`${x.source_ids.length} records`:''); }
 const PANEL_ROWS=8;
+// The lens orders the levers before the unit does (issue #101), as the server ranks them: under the supervisor lens the
+// controllable levers come first, the schedule-driven ones (side trim, planned maintenance) after them, unranked; under
+// the ownership lens side trim, all of it, is first. Within those, the unit shown ranks them.
+function lensOrder(rows,lens){
+ if(lens==='supervisor')return [...rows.filter(r=>r.control==='controllable'),...rows.filter(r=>r.control!=='controllable')];
+ if(lens==='ownership'){ const i=rows.findIndex(r=>r.trim); return i<0?rows:[rows[i],...rows.filter((_,j)=>j!==i)]; }
+ return rows;
+}
 // The opportunities panel: the card's levers (or gaps) ranked by the unit shown, $/yr in dollars, with the rate and
 // formula of each bar on hover and the same rows as a table behind a flip.
 function opportunityPanel(f,m,rec){
  const mode=unitMode()||'usd', yearly=true, wrap=node('div',undefined,'chart money-panel');   // every money query has its rows' own $/yr
  wrap.append(node('h3',`${f.levers?'Where the money is':'Where the money went'} · ${f.who} · ${f.label}`));
- wrap.append(node('p',(f.levers?'Each lever is a gap priced at your rates: the speed gap to each cell\'s best fifth, side trim over the target, each recorded stop, all shear and dry-end waste. ':f.day?'Each gap of the day, its shifts\' records summed and priced once on the day, at your rates. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?'Ranked by dollars a year at this rate':'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
+ wrap.append(node('p',(f.levers?(f.lens==='ownership'?'The total cost of the waste recorded at your rates, side trim first. ':
+  f.lens==='supervisor'?'The controllable losses at your rates, ranked; the schedule-driven ones (side trim, planned maintenance) after them, unranked. ':
+  'Each lever is a gap priced at your rates: the speed of each run under its grade\'s trailing-year speed, side trim over the target, each recorded stop, all shear and dry-end waste. '):f.day?'Each gap of the day, its shifts\' records summed and priced once on the day, at your rates. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?'Ranked by dollars a year at this rate':'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
  const box=node('div',undefined,'money-box'); wrap.append(box);
  let table=false, all=false;
  const draw=()=>{
   box.replaceChildren();
-  const ranked=[...f.rows].sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1)||(a.name<b.name?-1:a.name>b.name?1:0));
+  const ranked=lensOrder([...f.rows].sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1)||(a.name<b.name?-1:a.name>b.name?1:0)),f.lens);
   const shown=all?ranked:ranked.slice(0,PANEL_ROWS);
   if(table)box.append(moneyTable(ranked,f));
   else box.append(moneyBars(shown,mode,yearly,true));
@@ -967,7 +977,7 @@ function moneyBars(rows,mode,yearly,wide=false){
  rows.forEach((r,i)=>{ const y=f.top+i*28, v=Number(unitValue(r,mode,yearly))||0;
   labelText(svg,r.name,f.x0-8,y+18,f.chars);
   svg.append(barPath(f.x0,y+6,(v/max)*(f.x1-f.x0),15,'bar priced'));
-  const detail=[`${r.name}: ${Money.money(r.usd)}${r.year!==null&&r.year!==undefined?` · ${Money.money(r.year)}/yr at this rate`:''}${r.minutes?` · ${Money.fmt(r.minutes,1)} machine min`:''}`,rowFormula(r),rowRecords(r)].filter(Boolean).join('. ')+'.';
+  const detail=[`${r.name}: ${Money.money(r.usd)}${r.year!==null&&r.year!==undefined?` · ${Money.money(r.year)}/yr at this rate`:''}${r.minutes?` · ${Money.fmt(r.minutes,1)} machine min`:''}${r.control?` · ${r.control}`:''}`,rowFormula(r),rowRecords(r)].filter(Boolean).join('. ')+'.';
   const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,'aria-label':detail,class:'val'},unitLabel(r,mode,yearly)); t.append(svgNode('title',{},detail)); svg.append(t); });
  return svg;
 }

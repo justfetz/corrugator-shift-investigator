@@ -280,9 +280,9 @@ def speed_variance_dollars(data, rates):
             row.update(priced_for(row['gap_lineal_ft']))
     priced = [r for r in data['rows'] if r.get('control') != 'schedule-driven' and r['usd'] is not None]
 
-    def total(key, places=2):
+    def total(key, places=2):   # left to right (_add), as web/money.js re-derives it at other rates
         values = [r[key] for r in priced if r[key] is not None]
-        return round(sum(values), places) if values else None
+        return round(_add(values), places) if values else None
     # the margin's status is the rates', not the gap's: a faster window still prices its loss buckets
     data.update({'controllable_machine_minutes': total('machine_minutes'), 'controllable_usd': total('usd'),
                  'controllable_usd_per_year': total('usd_per_year', 0) if priced and all(r['usd_per_year'] is not None for r in priced) else None,
@@ -637,8 +637,9 @@ def opportunities(store, window, shift, rates, lens='all'):
             'source_rows': {'waste': waste['source_rows'], 'stops': pareto['source_rows'], 'runs': len(speed['runs'])},
             'trace': _trace([waste, pareto, speed_part]), 'gross_sqft': gross, 'scheduled_minutes': minutes,
             **_totals(rows), **summary(rows),
-            'controllable_levers': len(controllable), 'controllable_usd': round(sum(r['usd'] or 0 for r in controllable), 2),
-            'controllable_usd_per_year': round(sum(r['usd_per_year'] or 0 for r in controllable), 0) if all(r['usd_per_year'] is not None for r in controllable) else None,
+            # the controllable losses in their ranked order, added left to right (_add) as web/money.js re-derives them
+            'controllable_levers': len(controllable), 'controllable_usd': round(_add(r['usd'] or 0 for r in controllable), 2),
+            'controllable_usd_per_year': round(_add(r['usd_per_year'] or 0 for r in controllable), 0) if all(r['usd_per_year'] is not None for r in controllable) else None,
             'runs_under_baseline': speed['runs_under'], 'baseline_since': speed['since'], 'baseline_through': speed['through'],
             'method_note': notes}
     return _envelope(data, rates)

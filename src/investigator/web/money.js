@@ -12,7 +12,8 @@ const Money=(()=>{
  const PAPER=new Set(['trim','waste','paper']), TIME=new Set(['downtime','speed']);
  const MONEY_TOOLS=new Set(['get_shift_dollars','get_opportunities','get_day_dollars']);
  const WINDOW_FIELDS=['usd','paper_usd','machine_time_usd','contribution_usd'], YEAR_FIELDS=['usd_per_year','contribution_usd_per_year'];
- const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','gap_usd','gap_contribution_usd'], TOTAL_YEAR=['total_usd_per_year','gap_usd_per_year'];
+ const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','controllable_usd','controllable_contribution_usd'],
+  TOTAL_YEAR=['total_usd_per_year','controllable_usd_per_year'];
  const LABEL_KEYS=['gap','lever','category','label','reason'];
  // Python's f'{x:.{d}f}': correctly rounded on the binary value, a tie to even (toFixed breaks a tie upward).
  // A double is a tie at d places only when x * 2^(d+1) is an odd integer.
@@ -126,6 +127,24 @@ const Money=(()=>{
   rows.forEach((r,i)=>{r.rank=i+1;});
   return rows;
  }
+ // cost_model.opportunities (issue #101): the levers in the order and with the ranks the lens gives them. ownership: side
+ // trim, all of it, first always (every owner asks what trim costs), then the rest by dollars a year; supervisor: the
+ // controllable levers ranked, the schedule-driven ones after them by dollars a year with no rank; all: every lever.
+ function rankLevers(rows,lens){
+  const byYear=(a,b)=>((b.usd_per_year||0)-(a.usd_per_year||0))||(a.lever<b.lever?-1:a.lever>b.lever?1:0);
+  if(lens==='ownership'){ const [first,...rest]=rows; rest.sort(byYear); rows.splice(0,rows.length,first,...rest); rows.forEach((r,i)=>{r.rank=i+1;}); return rows; }
+  if(lens==='supervisor'){
+   const mine=rows.filter(r=>r.control==='controllable').sort(byYear), rest=rows.filter(r=>r.control!=='controllable').sort(byYear);
+   mine.forEach((r,i)=>{r.rank=i+1;}); rest.forEach(r=>{r.rank=null;}); rows.splice(0,rows.length,...mine,...rest); return rows;
+  }
+  return rank(rows,'usd_per_year');
+ }
+ // The controllable losses (cost_model.opportunities): the controllable levers in their ranked order, added left to right.
+ function controllable(rows){
+  const mine=rows.filter(r=>r.control==='controllable'), years=mine.map(r=>r.usd_per_year);
+  return {controllable_levers:mine.length,controllable_usd:round(add(mine.map(r=>r.usd||0)),2),
+   controllable_usd_per_year:years.some(v=>v===null||v===undefined)?null:round(add(years.map(v=>v||0)),0)};
+ }
  function totals(rows,cfg){   // cost_model._totals
   const total=key=>{ const vs=rows.map(r=>r[key]).filter(v=>v!==null&&v!==undefined); return vs.length?round(add(vs),2):0; };
   const out={total_usd:total('usd'),total_paper_usd:total('paper_usd'),total_machine_time_usd:total('machine_time_usd')};
@@ -171,21 +190,29 @@ const Money=(()=>{
  // totals redone; the rates rows and the provenance line rewritten. `byIndex` (not enumerable) keeps the re-priced rows
  // in the result's own order, so a reference to "row 3" still finds its row after the ranking moved it.
  // get_speed_variance (cost_model.speed_variance_dollars): a bucket's feet over the reference speed are its machine
- // minutes; its formula starts with that division, which is rate-free and kept; the gap as a whole is on the envelope.
+ // minutes; its formula starts with that division, which is rate-free and kept. The grade mix is schedule-driven and
+ // never priced (issue #101); the envelope's controllable dollars are the priced buckets in the tool's order, added
+ // left to right, and the gap as a whole is not priced.
  const SPEEDVAR_LEAD=/^.*? reference speed = /;
  function speedVariance(data,byIndex,out,rates,cfg){
   byIndex.forEach((r,i)=>{ const was=data.rows[i]; if(!was.price_terms)return; const lead=SPEEDVAR_LEAD.exec(was.usd_basis||''); if(lead)r.usd_basis=lead[0]+r.usd_basis; });
-  if(!('reference_speed_fpm' in data))return;
-  const feet=data.gap_lineal_ft, ref=data.reference_speed_fpm;
-  const gap=feet===null||feet===undefined||!ref||feet<=0?{...NOT_PRICED}:price('speed',feet/ref,rates,null,data.scheduled_minutes,cfg);
-  Object.assign(out,{gap_machine_minutes:gap.machine_minutes,gap_usd:gap.usd,gap_usd_per_year:gap.usd_per_year,gap_contribution_usd:gap.contribution_usd,
+  if(!('controllable_usd' in data))return;   // a chart of it has the rows only
+  const priced=byIndex.filter(r=>r.control!=='schedule-driven'&&r.usd!==null&&r.usd!==undefined);
+  const total=(key,places=2)=>{ const vs=priced.map(r=>r[key]).filter(v=>v!==null&&v!==undefined); return vs.length?round(add(vs),places):null; };
+  Object.assign(out,{controllable_machine_minutes:total('machine_minutes'),controllable_usd:total('usd'),
+   controllable_usd_per_year:priced.length&&priced.every(r=>r.usd_per_year!==null&&r.usd_per_year!==undefined)?total('usd_per_year',0):null,
+   controllable_contribution_usd:total('contribution_usd'),
    contribution_status:rates.values.margin_usd_msf===null||rates.values.margin_usd_msf===undefined?cfg.margin_not_set:'set'});
  }
  function reprice(tool,data,rates,cfg){
   if(!priced(data))return data;
   const rows=Array.isArray(data.rows)?data.rows:[], byIndex=rows.map(r=>repriceRow(tool,r,rates,cfg)), out={...data,rows:[...byIndex]};
   if(tool==='get_speed_variance')speedVariance(data,byIndex,out,rates,cfg);   // a chart of it has the rows only
-  if(MONEY_TOOLS.has(tool)){ rank(out.rows,tool==='get_opportunities'?'usd_per_year':'usd'); Object.assign(out,totals(out.rows,cfg)); if('buckets' in data)Object.assign(out,summary(out.rows)); }
+  if(MONEY_TOOLS.has(tool)){
+   if(tool==='get_opportunities')rankLevers(out.rows,data.lens); else rank(out.rows,'usd');
+   Object.assign(out,totals(out.rows,cfg)); if('buckets' in data)Object.assign(out,summary(out.rows));
+   if(tool==='get_opportunities'&&'controllable_usd' in data)Object.assign(out,controllable(out.rows));
+  }
   if(data.trim_over_terms)Object.assign(out,trimOver(data.trim_over_terms,rates,cfg));
   if(Array.isArray(data.tile_money))out.tile_money=data.tile_money.map(t=>tile(t,rates,cfg));
   if('provenance' in data){ out.rates=rateRows(rates,cfg); out.provenance=provenance(rates,cfg); }
@@ -204,11 +231,13 @@ const Money=(()=>{
  const TOKEN=/\$\d{1,3}(?:,\d{3})*(?!\d|,\d|\.\d|\/(?:MSF|hr))/g, REF=/\(query (\d+)(?: · (row|detail|weekday) (\d+))?\)$/, YEARLY=/^(?:\/yr|\/year| a year| per year)/;
  function contributionLine(data,cfg){   // shapes.contribution
   if(data.contribution_status===cfg.margin_not_set)return `Contribution ${cfg.margin_not_set}: without an owner margin no lost contribution is priced, so the dollars are paper and machine time.`;
-  if(data.gap_contribution_usd!==null&&data.gap_contribution_usd!==undefined)return `Contribution ${money(data.gap_contribution_usd)} for the whole gap at the set margin, not added to the machine time.`;   // shapes.period_speedvar
+  if('controllable_contribution_usd' in data)   // shapes.period_speedvar: the controllable buckets' contribution, the mix never priced
+   return data.controllable_contribution_usd===null||data.controllable_contribution_usd===undefined?null:
+    `Contribution ${money(data.controllable_contribution_usd)} for the controllable buckets at the set margin, not added to the machine time.`;
   if(data.total_contribution_usd!==null&&data.total_contribution_usd!==undefined)return `Contribution ${money(data.total_contribution_usd)} at the set margin, not added to the losses above.`;
   return null;
  }
- const CONTRIBUTION=/^Contribution (?:.+ at the set margin, not added to the losses above\.|.+ for the whole gap at the set margin, not added to the machine time\.|.+: without an owner margin no lost contribution is priced, so the dollars are paper and machine time\.)$/;
+ const CONTRIBUTION=/^Contribution (?:.+ at the set margin, not added to the losses above\.|.+ for the controllable buckets at the set margin, not added to the machine time\.|.+: without an owner margin no lost contribution is priced, so the dollars are paper and machine time\.)$/;
  // steps: index = query number - 1; each {tool, before, after} for a priced step, null otherwise.
  function repriceSections(sections,steps,rates,cfg){
   const live=steps.filter(Boolean); if(!live.length)return sections;
@@ -287,19 +316,24 @@ const Money=(()=>{
   return [top,...others,...gaps,...rest,...notes,...looks.map(l=>l.replace(new RegExp(` for shift ${was}”$`),` for shift ${focus.shift}”`))];
  }
  // "- 3. Side trim: $4,383 · … (query 1 · row 2)": a money tool's ranked list, put in its re-priced order and renumbered.
+ // Every line that cites a money tool's row takes the row's place in the re-ranked rows, which is what the server cites.
+ // The numbered lines of one result fill its numbered slots in rank order, wherever the answer put those slots (the
+ // supervisor lens lists five beside the headline and the other controllable levers under a label, issue #101), and
+ // its unnumbered lines (the levers a lens shows unranked) fill theirs in row order.
  function reorder(lines,steps){
   const RANKED=/^- ((?:Shift \d · )?)(\d+)\. /;
-  const key=line=>{ const m=REF.exec(line); if(!RANKED.test(line)||!m||m[2]!=='row')return null; const s=steps[Number(m[1])-1]; return s&&MONEY_TOOLS.has(s.tool)?{s,i:Number(m[3])}:null; };
-  const out=[...lines];
-  for(let a=0;a<out.length;){
-   const k=key(out[a]); if(!k){a++;continue;}
-   let b=a; const block=[]; while(b<out.length){ const kb=key(out[b]); if(!kb||kb.s!==k.s)break; block.push({line:out[b],rank:kb.s.after.byIndex[kb.i].rank}); b++; }
-   block.sort((x,y)=>x.rank-y.rank).forEach((x,j)=>{ out[a+j]=x.line.replace(RANKED,(m,who)=>`- ${who}${x.rank}. `).replace(/ · row \d+\)$/,` · row ${x.rank-1})`); });   // the row a line cites is its place in the ranked rows, as the server writes it
-   a=b;
+  const cite=line=>{ const m=REF.exec(line); if(!line.startsWith('- ')||!m||m[2]!=='row')return null; const s=steps[Number(m[1])-1]; return s&&MONEY_TOOLS.has(s.tool)?{s,i:Number(m[3])}:null; };
+  const out=[...lines], groups=new Map();
+  out.forEach((line,at)=>{ const k=cite(line); if(!k)return; const g=groups.get(k.s)||{ranked:[],plain:[]}; (RANKED.test(line)?g.ranked:g.plain).push({at,line,i:k.i}); groups.set(k.s,g); });
+  for(const [s,g] of groups){
+   const pos=x=>s.after.rows.indexOf(s.after.byIndex[x.i]);
+   const fill=(slots,write)=>{ const sorted=[...slots].sort((x,y)=>pos(x)-pos(y)); slots.forEach((slot,j)=>{ out[slot.at]=write(sorted[j]); }); };
+   fill(g.ranked,x=>x.line.replace(RANKED,(m,who)=>`- ${who}${s.after.byIndex[x.i].rank}. `).replace(/ · row \d+\)$/,` · row ${pos(x)})`));
+   fill(g.plain,x=>x.line.replace(/ · row \d+\)$/,` · row ${pos(x)})`));
   }
   return out;
  }
- return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,totals,summary,bucketOf,trimOver,tile,
+ return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,rankLevers,controllable,totals,summary,bucketOf,trimOver,tile,
   repriceSections,contributionLine,PAPER,TIME,MONEY_TOOLS};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Money;

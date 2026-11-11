@@ -1227,7 +1227,11 @@ class PeriodAnswer:
         head = (f'**{money(data["controllable_usd_per_year"])} a year** in controllable losses across {n(data["controllable_levers"])} levers{self.where(data)} · '
                 f'{money(data["controllable_usd"])} in this window {ref(o)}' if data.get('controllable_usd_per_year') is not None else
                 f'**{money(data["controllable_usd"])}** in controllable losses in this window{self.where(data)} {ref(o)}')
+        # every controllable lever is listed: the five largest beside the headline, the others after, so a rate the visitor
+        # changes can move a lever across that line in the browser (web/money.js re-ranks them as the server does)
         bullets = [self.lever_line(o, i, r) for i, r in mine[:5]]
+        if len(mine) > 5:
+            bullets += ['The other controllable levers'] + [self.lever_line(o, i, r) for i, r in mine[5:]]
         rest = [(i, r) for i, r in enumerate(rows) if r['control'] != 'controllable']
         if rest:
             bullets += ['Schedule-driven, shown apart'] + [self.lever_line(o, i, r, numbered=False) for i, r in rest]
