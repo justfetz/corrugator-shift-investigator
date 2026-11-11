@@ -61,12 +61,16 @@ sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
 from investigator.cost_model import parse_rates  # noqa: E402
-from investigator.record_store import default_store  # noqa: E402
+from investigator.record_store import RecordStore, dataset_window, default_store  # noqa: E402
 
 GOLDEN = ROOT / 'evals' / 'golden.json'
 VALUES = ROOT / 'evals' / 'golden_values.json'
 FIXTURES = ROOT / 'evals' / 'fixtures'
 DEFAULT_DAY = '2026-09-14'
+# The golden set is scored against the rolling window that ends on this day (issue #35), whatever
+# window the process serving it holds: the demo's moves every night, the goldens' never does.
+GOLDEN_AS_OF = '2026-09-30'
+GOLDEN_PREBUILT_ENV = 'INVESTIGATOR_GOLDEN_PREBUILT'   # the image's prebuilt folder for that window (Dockerfile)
 TYPES = ('routing', 'faithfulness', 'grounding', 'refusal', 'value', 'investigation', 'data_quality')
 # Pass rate a live provider must reach per type; offline cases pass or fail one by one.
 THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 1.0,
@@ -103,11 +107,35 @@ def load_cases():
 
 
 _VALUES_STATUS = {}
+_GOLDEN_STORE = {}
+
+
+def golden_store():
+    """The store the golden set is scored against: the rolling window ending GOLDEN_AS_OF. It is the
+    process's default store when that holds the same window (pytest, whose tests/conftest.py pins
+    INVESTIGATOR_AS_OF to GOLDEN_AS_OF; or a command line that sets it); otherwise (the command line
+    without it, the deployed /evals page whose demo window ends yesterday) a second store built once,
+    from the GOLDEN_PREBUILT_ENV folder when the image has it, else generated (about 12 s)."""
+    if 'store' not in _GOLDEN_STORE:
+        window = dataset_window(as_of=GOLDEN_AS_OF)
+        if dataset_window() == window:
+            _GOLDEN_STORE['store'] = default_store()
+        else:
+            _GOLDEN_STORE['store'] = RecordStore(window=window, prebuilt=os.environ.get(GOLDEN_PREBUILT_ENV, ''))
+    return _GOLDEN_STORE['store']
+
+
+def golden_hash():
+    """The dataset hash the value goldens were generated for (golden_values.json), without building a store."""
+    try:
+        return json.loads(VALUES.read_text()).get('content_hash')
+    except (OSError, ValueError):
+        return None
 
 
 def dataset_version():
-    """The live store's content hash; recordings and value goldens are scored only against it."""
-    return default_store().content_hash
+    """The golden store's content hash; recordings and value goldens are scored only against it."""
+    return golden_store().content_hash
 
 
 def stale_values():
@@ -117,7 +145,7 @@ def stale_values():
             _VALUES_STATUS['message'] = 'golden_values.json missing; run python3 evals/make_value_goldens.py'
         else:
             recorded = json.loads(VALUES.read_text()).get('content_hash')
-            live = default_store().content_hash
+            live = golden_store().content_hash
             _VALUES_STATUS['message'] = None if recorded == live else (
                 f'golden_values.json was generated for dataset {str(recorded)[:12]}, the live store is {live[:12]}: '
                 'stale goldens; run python3 evals/make_value_goldens.py')
@@ -133,7 +161,7 @@ def dataset(day, corrupt=False):
     """A production day of the record store (the app's data source), built once per run."""
     key = (day, corrupt)
     if key not in _DATASETS:
-        _DATASETS[key] = default_store().day_analysis(day, corrupt=corrupt)
+        _DATASETS[key] = golden_store().day_analysis(day, corrupt=corrupt)
     return _DATASETS[key]
 
 
@@ -151,10 +179,10 @@ URL_MS = {}   # case id -> server time of its answers over GET, for the table an
 
 
 def local_server():
-    """One loopback workbench per run, started on first use, over the same default store."""
+    """One loopback workbench per run, started on first use, over the same golden store."""
     if 'server' not in _SERVER:
         from investigator.server import make_server
-        server = make_server(0)
+        server = make_server(0, store=golden_store())
         server.app.request_limit = 1_000_000   # the harness is not a visitor: the per-minute window is for people
         thread = Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -199,6 +227,8 @@ def via_url(case, expect, turns, redirect_only=False):
     for text in turns:
         params = [('day', case.get('day', DEFAULT_DAY)), ('shift', case.get('shift', 2)), ('scope', case.get('scope', 'shift')),
                   ('period', 'accounting' if period == 'fiscal' else period)]
+        if case.get('rates'):
+            params.append(('rates', case['rates']))   # the case's rate overrides, as the page sends them (issue #31b)
         if case.get('corrupt'):
             params.append(('corrupt', '1'))
         params.append(('q', text))
@@ -1034,7 +1064,9 @@ def _run_case(case, provider, live, record, scratch):
                 # The question's own shift and window win over the case's controls (issue #105), as on the server:
                 # the turn runs in the scope it names, on that day's records. A turn that stays on the controls' day
                 # carries the follow-up history back; one on another day starts its own, as /q drops the priors.
-                turn = context if case['type'] == 'value' else question_scope(text, context, default_store().production_days)
+                # against the golden year's own days (issue #35): the process's default store is the window ending
+                # yesterday, a different calendar, and building it inside the timed turn cost the first case 10 s
+                turn = context if case['type'] == 'value' else question_scope(text, context, golden_store().production_days)
                 results.append(run_turn(make_agent(dataset(turn.production_day, case.get('corrupt', False))), text, turn))
                 if turn is not context and turn.production_day == context.production_day:
                     context.history = turn.history

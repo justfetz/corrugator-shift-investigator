@@ -170,7 +170,7 @@ def answer_sections(intent, evidence, context, period_tools):
     """The sections of an offline answer: headline, bullets, caveats and where to look."""
     intent = ALIASES.get(intent, intent)
     period = [r for r in evidence if r['tool'] in period_tools]
-    daily = [r for r in evidence if r['tool'] not in period_tools]
+    daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] != 'get_day_dollars']   # the day's total is the card's (#31b)
     lines = []
     if period:
         own = intent.startswith('period_')
@@ -1298,7 +1298,9 @@ class PeriodAnswer:
 
     def period_speedvar(self, tools, v):
         """The speed gap and the share of each bucket (get_speed_variance), then the three largest buckets with the
-        stop reason or grade that leads each. The shares are the envelope's; every bullet is one bucket row."""
+        stop reason or grade that leads each, and any bucket pulling against the gap that is larger than the third
+        of them when that third adds to it (owner, PR #91: stops at -85% beside setups at 3.1%). The shares are the
+        envelope's; every bullet is one bucket row."""
         data, rows = v['data'], v['data']['rows']
         reference = {'baseline': 'baseline', 'previous': 'the previous window', 'shift': f'shift {data.get("against_shift")}'}[data['against']]
         pct = lambda x: f0(x) if abs(x) >= 9.95 else f1(x)   # "stops 45%", "mix 0.5%"
@@ -1309,7 +1311,13 @@ class PeriodAnswer:
         sign = -1 if data['gap_fpm'] < 0 else 1
         whole = self.whole(data)
         bullets = []
-        for i, r in enumerate(rows[:3] if whole else rows):   # an incomplete window is listed in the tool's order, never ranked
+        listed = list(range(min(3, len(rows)))) if whole else list(range(len(rows)))   # an incomplete window is listed in the tool's order, never ranked
+        if whole and len(rows) > 3 and rows[2]['gap_fpm'] * sign >= 0:
+            # the tool lists the buckets adding to the gap first, then the offsets: an offset larger than the third
+            # contributor still gets its line, so a big pull the other way never hides behind a small push
+            listed += [k for k in range(3, len(rows)) if rows[k]['gap_fpm'] * sign < 0 and abs(rows[k]['gap_fpm']) > abs(rows[2]['gap_fpm'])]
+        for i in listed:
+            r = rows[i]
             toward = r['gap_fpm'] * sign >= 0
             share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
             top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'

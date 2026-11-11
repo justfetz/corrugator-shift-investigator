@@ -75,16 +75,15 @@ def test_sessions_and_day_scope():
 
 def test_config_reports_the_production_calendar_and_refuses_other_days(running):
     from investigator.record_store import default_store
-    from investigator.server import DAYS
     store=default_store()
     config=json.loads(request(running,'GET','/api/config')[2])
-    assert config['days']==store.production_days==DAYS
-    assert (config['first_day'],config['last_day'],config['production_calendar'])==('2026-08-03','2026-09-30','Mon-Fri')
+    assert config['days']==store.production_days and len(config['days'])==262   # the year ending 2026-09-30 (issue #35)
+    assert (config['first_day'],config['last_day'],config['production_calendar'])==('2025-09-30','2026-09-30','Mon-Fri')
     assert config['dataset_hash']==store.content_hash and len(config['dataset_hash'])==64
-    assert len(config['days'])==43 and '2026-08-03' in config['days'] and '2026-09-12' not in config['days']
+    assert '2026-08-03' in config['days'] and '2025-09-30' in config['days'] and '2026-09-12' not in config['days']
     assert {t['name'] for t in config['tools']}>={'get_period_kpis','compare_periods','get_downtime_pareto','get_waste_breakdown','get_stops_profile','get_trend'}
     headers={'Content-Type':'application/json','X-Workbench-Token':config['token']}
-    for day,message in (('2026-09-12','Saturday'),('2026-09-13','Sunday'),('2026-07-31','outside the dataset'),('2026-10-01','outside the dataset'),('2026/09/14','YYYY-MM-DD')):
+    for day,message in (('2026-09-12','Saturday'),('2026-09-13','Sunday'),('2025-09-29','outside the dataset'),('2026-10-01','outside the dataset'),('2026/09/14','YYYY-MM-DD')):
         status,_,body=request(running,'POST','/api/ask',json.dumps({'day':day,'shift':2,'question':'Show speed'}),headers)
         assert status==400 and message in json.loads(body)['error'], (day,body)
     status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-08-03','shift':1,'question':'Show speed'}),headers)
@@ -96,7 +95,11 @@ def test_config_reports_the_production_calendar_and_refuses_other_days(running):
     status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2026-08-12','shift':2,'period':'month','question':'Build month report','report':True}),headers)
     result=json.loads(body)
     assert status==200 and result['period_label']=='2026-08-01 to 2026-08-31' and result['status']=='complete'
-    assert any('Full comparison unavailable' in s for s in result['sections'])   # July is before the dataset
+    assert any(s.startswith('Previous period 2026-07-01 to 2026-07-31') for s in result['sections'])   # July is inside the year (issue #35)
+    status,_,body=request(running,'POST','/api/ask',json.dumps({'day':'2025-10-15','shift':2,'period':'month','question':'Build month report','report':True}),headers)
+    result=json.loads(body)
+    assert status==200 and result['period_label']=='2025-10-01 to 2025-10-31' and result['status']=='complete'
+    assert any('Full comparison unavailable' in s for s in result['sections'])   # September 2025 holds one day of the year
     assert result['trace'][0]['tool']=='get_period_report'
     assert result['tables'] and all(tbl['source_result_id']==result['trace'][0]['result_id'] for tbl in result['tables'])   # #40: period tables name their step
     lookup=result['trace'][0]['data']['trace']   # #40: the report's SQL with its bound values; #34: shift_kpis lookups, no per-day rebuild
@@ -170,6 +173,7 @@ def test_public_mode_hostname_embed_and_health(public):
         health=json.loads(health)
         assert code==200 and health['ok'] is True and health['public'] is True
         assert health['store']['source'] in ('prebuilt','generated') and health['store']['boot_ms']>=0 and len(health['store']['dataset_hash'])==12   # issue #19
+        assert health['store']['window']=={'as_of':'2026-09-30','first_day':'2025-09-30','last_day':'2026-09-30','production_days':262}   # issue #35
     config=json.loads(request(public,'GET','/api/config')[2])
     assert config['public'] is True and config['live_model_available'] is False
 
@@ -526,7 +530,7 @@ def test_the_url_path_refuses_like_the_post_path(running):
         ('/q?day=2026-09-14&shift=2&period=year&q=Show+speed',400,'accounting period'),
         ('/q?day=2026-09-14&shift=2&mode=openai&q=Show+speed',400,'Invalid request fields'),
         ('/q?day=2026-09-14&shift=2&scope=shift&q=Compare+shift+1+with+shift+3',400,'Selected shift only'),   # one named shift moves instead (#105)
-        ('/q?day=2026-08-04&shift=2&scope=shift&q=How+much+downtime+last+week',400,'before the records'),
+        ('/q?day=2025-09-30&shift=2&scope=shift&q=How+much+downtime+last+week',400,'before the records'),
         ('/q?day=2026-09-14&shift=2&period=week&q=Show+setup+matrix',400,'Switch Period to Day'),
         ('/corr/1/day/2026-09-14/shift/2.json',400,'Add measure='),
         ('/corr/1/day/2026-09-14/shift/2.json?measure=overview&bogus=1',400,'Unknown query field'),

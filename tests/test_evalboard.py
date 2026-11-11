@@ -16,6 +16,14 @@ ROOT = Path(__file__).resolve().parent.parent
 GOLDEN = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
 VALUES = json.loads((ROOT / 'evals' / 'golden_values.json').read_text())['cases']
 HISTORY = [json.loads(line) for line in (ROOT / 'evals' / 'history.jsonl').read_text().splitlines() if line.strip()]
+RERECORD = 'python3 evals/run.py --live --provider anthropic --track'
+
+
+def recording_is_current(case_id, provider='anthropic'):
+    """A committed recording replays only against the dataset it was recorded on. Issue #35 regenerated
+    every day, so the recordings are stale until the owner re-records them with a key (RERECORD)."""
+    recording = json.loads((ROOT / 'evals' / 'fixtures' / provider / f'{case_id}.json').read_text())
+    return recording.get('dataset_version') == json.loads((ROOT / 'evals' / 'golden_values.json').read_text())['content_hash']
 
 
 def serve(public=None):
@@ -155,6 +163,11 @@ def test_live_cases_replay_the_recording_and_never_call_a_model(running, monkeyp
     monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-must-never-be-used')   # a server key changes nothing: the page replays
     monkeypatch.setenv('OPENAI_API_KEY', 'sk-must-never-be-used')
     status, result = run(running, {'id': 'live-why-slow@anthropic'})
+    if not recording_is_current('live-why-slow'):
+        # a recording from another dataset is reported stale and skipped, never scored, and still never calls a model
+        assert status == 200 and result['outcome'] == 'skip' and result['note'].startswith('stale recording') and result['model_called'] is False
+        assert result['recording']['stale'] is True and result['turns'] == []
+        pytest.skip(f'the live-why-slow recording is stale (issue #35 regenerated the days); re-record with {RERECORD}')
     assert status == 200 and result['outcome'] == 'pass' and result['mode'] == 'live' and result['model_called'] is False
     fixture = json.loads((ROOT / 'evals' / 'fixtures' / 'anthropic' / 'live-why-slow.json').read_text())
     recording = result['recording']
@@ -220,7 +233,8 @@ def test_public_demo_serves_the_board_and_runs_only_from_its_own_origin(monkeypa
         assert request(server, 'GET', '/evals.json', headers={'Host': 'demo.example'})[0] == 200
         assert run(server, {'id': 'why-slow'})[0] == 403                 # no Origin
         status, result = run(server, {'id': 'injection-user-text@anthropic'}, Origin='https://demo.example')
-        assert status == 200 and result['outcome'] == 'pass' and result['model_called'] is False
+        expected = 'pass' if recording_is_current('injection-user-text') else 'skip'   # stale until re-recorded (issue #35)
+        assert status == 200 and result['outcome'] == expected and result['model_called'] is False
     finally:
         server.shutdown()
         thread.join()

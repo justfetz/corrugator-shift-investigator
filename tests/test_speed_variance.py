@@ -14,6 +14,10 @@ from investigator.record_store import SPEEDVAR_BUCKETS, default_store
 from investigator.urls import canonical_url, redirect_for, resolve_url
 
 DAY = "2026-09-14"
+# A week whose stops offset (shift 1's Thursday planned maintenance) is the third of the tool's rows for shift 3 against
+# shift 1 (issue #35). In the week of 14 September it comes after three contributors and gets its line by size instead
+# (test_an_offset_larger_than_the_third_contributor_gets_a_line).
+OFFSET_WEEK = "2026-01-26"
 BUCKETS = [key for key, _ in SPEEDVAR_BUCKETS]
 
 
@@ -112,7 +116,8 @@ def test_one_shift_against_another_is_the_mirror_of_the_reverse(store):
     (("week", 2, "baseline", 1), "against_shift is only for against=shift"),
     (("week", None, "shift", 1), "give shift and against_shift"),
     (("week", 2, "shift", 2), "another shift"),
-    (("month", None, "previous", None, "2026-08-14"), "outside the record store: ask against the baseline instead"),
+    # September 2025 holds the year's first day; its previous window, August 2025, is before it (issue #35: July 2026 is inside)
+    (("month", None, "previous", None, "2025-09-30"), "outside the record store: ask against the baseline instead"),
 ])
 def test_refusals_say_what_to_change(store, args, message):
     with pytest.raises(ValueError, match=message):
@@ -132,7 +137,7 @@ def test_each_controllable_loss_bucket_is_priced_as_machine_time_and_the_mix_and
         if row["gap_lineal_ft"] > 0:
             minutes = row["gap_lineal_ft"] / data["reference_speed_fpm"]
             assert row["machine_minutes"] == round(minutes, 2) and row["usd"] == round(minutes / 60 * 1200, 2)
-            assert "lineal ft / 615.8 ft/min reference speed" in row["usd_basis"]
+            assert "lineal ft / 595.9 ft/min reference speed" in row["usd_basis"]   # shift 1's speed with stops that week, in the golden year
         else:
             assert row["usd"] is None and row["usd_basis"] == cost_model.GAIN
     priced = [r["usd"] for r in data["rows"] if r["bucket"] != "mix" and r["usd"] is not None]
@@ -241,9 +246,9 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
 
 def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(store):
     """Review of #92: "offset" pulls against the gap. Shift 1 against shift 3 this week is a gain (above); its stops
-    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card and is priced as machine
+    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card (the week of 26 January in the year, its third row) and is priced as machine
     time, while the gain buckets and the gap itself are not; the contribution status is the rates', not the gap's."""
-    data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3), cost_model.effective())
+    data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3, anchor=OFFSET_WEEK), cost_model.effective())
     assert data["direction"] == "above" and data["gap_fpm"] < 0 and "gap_usd" not in data
     assert data["contribution_status"] == "margin not set"
     for row in data["rows"]:
@@ -252,14 +257,34 @@ def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(stor
             assert row["usd_basis"] == cost_model.SCHEDULE_DRIVEN_MIX
         elif row["gap_fpm"] < 0:
             assert row["usd_basis"] == cost_model.GAIN
-    agent = Agent(store.day_analysis(DAY))
-    sections = agent.ask("Why did speed differ on shift 1 versus shift 3 this week?", Context(DAY, 2, scope="day"))["sections"]
+    agent = Agent(store.day_analysis(OFFSET_WEEK))
+    sections = agent.ask("Why did speed differ on shift 1 versus shift 3 this week?", Context(OFFSET_WEEK, 2, scope="day"))["sections"]
     assert sections[0].startswith("Speed gap **") and " on shift 1 above shift 3: " in sections[0]
     stops = next(s for s in sections if s.startswith("- Stops: "))
     assert "the other way, an offset" in stops and " · $" in stops
     assert ("Shift 1 is faster than shift 3, so the gap is a gain and is not priced; the controllable buckets that ran worse are priced "
             "as machine time.") in sections
     assert any(s.startswith("Contribution margin not set") for s in sections) and not any(s.startswith("The whole gap is") for s in sections)
+
+
+def test_an_offset_larger_than_the_third_contributor_gets_a_line(store):
+    """Owner, PR #91: the card lists the three buckets adding to the gap, and a bucket pulling against it gets a line
+    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 14 September: below-target
+    running, grade mix and setups (1.3 ft/min) add to the gap; stops (35.6 ft/min, -85%) pull against it."""
+    agent = Agent(store.day_analysis(DAY))
+    sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(DAY, 2, scope="day"))["sections"]
+    lines = [s for s in sections if s.startswith("- ")][:4]
+    assert [s.split(":")[0] for s in lines] == ["- Below target", "- Grade mix", "- Setups", "- Stops"]
+    assert all("of the gap" in s for s in lines[:3]) and "the other way, an offset" in lines[3]
+    assert lines[3].endswith("(query 1 · row 3)") and "largest Planned maintenance" in lines[3]   # its own row of the tool
+    # an offset smaller than the third contributor stays off: shift 2 against shift 1 in the week of 4 May 2026
+    agent = Agent(store.day_analysis("2026-05-04"))
+    sections = agent.ask("Why did speed differ on shift 2 versus shift 1 this week?", Context("2026-05-04", 2, scope="day"))["sections"]
+    data = variance(store, "week", 2, "shift", 1, anchor="2026-05-04")
+    offsets = [r for r in data["rows"] if r["gap_fpm"] * data["gap_fpm"] < 0]
+    assert offsets and abs(offsets[0]["gap_fpm"]) < abs(data["rows"][2]["gap_fpm"])
+    assert not any("the other way, an offset" in s for s in sections)
+    assert len([s for s in sections if s.startswith("- ") and " ft/min** " in s]) == 3
 
 
 def test_the_waterfall_draws_in_the_pdf(store):

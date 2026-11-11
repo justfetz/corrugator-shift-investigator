@@ -12,13 +12,9 @@ from datetime import date, timedelta
 import time
 from uuid import uuid4
 from . import targets
-from .record_store import DEFAULT_MONTHS, FISCAL_START, default_store, shift_note
-from .synth import production_days
+from .record_store import FISCAL_START, default_store, fiscal_bounds, fiscal_period, shift_note
 
-FIRST = production_days(DEFAULT_MONTHS)[0]
-LAST = production_days(DEFAULT_MONTHS)[-1]
 ACCOUNTING_445_START = FISCAL_START  # shared with the period tools: one 4-4-5 calendar in the app
-ACCOUNTING_WEEKS = (4, 4, 5) * 4
 
 
 def weekdays(start, end):
@@ -27,24 +23,13 @@ def weekdays(start, end):
 
 
 def accounting_window(anchor):
-    """Return the containing 4-4-5 period and the immediately prior period."""
-    offset = (anchor-ACCOUNTING_445_START).days
-    if offset < 0:
-        raise ValueError('Date precedes the configured demo accounting year')
-    elapsed = 0
-    for index, weeks in enumerate(ACCOUNTING_WEEKS):
-        days = weeks*7
-        if offset < elapsed+days:
-            start = ACCOUNTING_445_START+timedelta(days=elapsed)
-            end = start+timedelta(days=days-1)
-            prior_days = ACCOUNTING_WEEKS[index-1]*7 if index else ACCOUNTING_WEEKS[-1]*7
-            old_end = start-timedelta(days=1)
-            return start, end, (old_end-timedelta(days=prior_days-1), old_end), index+1, weeks
-        elapsed += days
-    raise ValueError('Date is outside the configured demo accounting year')
+    """Return the containing 4-4-5 period and the immediately prior period: (start, end, (prior start,
+    prior end), period number 1-12, weeks). The period tools' calendar, so it is defined for every date."""
+    start, end, _, number, weeks = fiscal_period(anchor)
+    return start, end, fiscal_period(start - timedelta(days=1))[:2], number, weeks
 
 
-def window(day, period, first=FIRST, last=LAST):
+def window(day, period, first, last):
     anchor = date.fromisoformat(day)
     if not first <= anchor <= last or period not in ('week', 'month', 'accounting'):
         raise ValueError('Choose a supported calendar date and period')
@@ -55,7 +40,7 @@ def window(day, period, first=FIRST, last=LAST):
         return start, end, previous, 'Production week (Mon-Fri)'
     if period == 'accounting':
         start, end, previous, number, weeks = accounting_window(anchor)
-        return start, end, previous, f'4-4-5 P{number} ({weeks} weeks)'
+        return start, end, previous, fiscal_bounds(anchor)[2]   # "4-4-5 P2 (4 weeks)"; a prior year's period says so
     start = anchor.replace(day=1)
     next_month = (start.replace(day=28)+timedelta(days=4)).replace(day=1)
     end = next_month-timedelta(days=1)

@@ -99,20 +99,20 @@ def test_every_tool_call_refused_surfaces_the_reason_as_unavailable():
     reason is the visible answer (status unavailable), not a planner_error with the
     reason buried in the trace. No chart, no table, no zero is invented."""
     from investigator.record_store import default_store
-    analysis=default_store().day_analysis('2026-09-14')
+    analysis=default_store().day_analysis('2025-10-15')
     try:
         for scope in ('day','shift'):
-            context=Context('2026-09-14',2,scope=scope)
-            result=Agent(analysis).ask('How did July go?',context)
+            context=Context('2025-10-15',2,scope=scope)
+            result=Agent(analysis).ask('How did August go?',context)   # August 2025, before the year's first day (issue #35; was July)
             assert result['status']=='unavailable'
             [step]=result['trace']
             assert step['tool']=='get_period_kpis' and not step['ok']
             reason=step['error']['message']
-            assert 'outside the dataset range 2026-08-03 to 2026-09-30' in reason
+            assert 'outside the dataset range 2025-09-30 to 2026-09-30' in reason
             assert reason in result['sections'] and result['sections'][0].startswith('Investigation stopped: unavailable')
             assert result['charts']==[] and result['tables']==[] and result['evidence_ids']==[]
-            assert not any('July 2026' in s or ' 0 MSF' in s or '0.0 ft' in s for s in result['sections'])
-            assert context.history[-1]['question']=='How did July go?'
+            assert not any('August 2025' in s or ' 0 MSF' in s or '0.0 ft' in s for s in result['sections'])
+            assert context.history[-1]['question']=='How did August go?'
     finally:
         analysis.close()
 

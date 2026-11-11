@@ -2,6 +2,12 @@
 # repository has a GCP_PROJECT_ID variable. No-op otherwise.
 # Builds from source (Cloud Build uses the Dockerfile), scale-to-zero, two instances max.
 #
+# Nightly (issue #35): the dataset is the year ending yesterday, fixed when the image is built
+# (Dockerfile), so the schedule below rebuilds and redeploys main every weekday and the demo's
+# window moves by a day; the smoke test fails a deploy whose window does not end yesterday.
+# Nothing is loaded: the new day is generated from its date. One Cloud Build a night. Run it by
+# hand from the Actions tab (workflow_dispatch) to move the window now.
+#
 # Keyless (issue #28): the job authenticates with Workload Identity Federation. GitHub mints a
 # short-lived OIDC token for this run, Google exchanges it for the deployer service account's
 # credentials, and nothing long-lived is stored anywhere. Repository VARIABLES (never secrets):
@@ -14,6 +20,8 @@ name: Deploy Cloud Run
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 13 * * 1-5'   # 13:00 UTC Monday to Friday (07:00 or 08:00 in Chicago, after the overnight shift ends): the window ends on the UTC date before the run
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,6 +38,9 @@ jobs:
       REGION: ${{ vars.GCP_REGION || 'us-central1' }}
       SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
       EMBED_ORIGINS: ${{ vars.PUBLIC_DEMO_EMBED_ORIGINS || 'https://justfetz.github.io' }}
+      # Custom domains mapped to the service (Cloud Run domain mapping, set up by the owner). They are
+      # appended to the allow-list so the analyst POST from https://shift.talktomymachine.ai is accepted.
+      CUSTOM_ORIGINS: ${{ vars.PUBLIC_DEMO_CUSTOM_ORIGINS || 'https://shift.talktomymachine.ai' }}
       LIVE_MODEL: ${{ vars.PUBLIC_DEMO_LIVE_MODEL || '0' }}
       # Secret Manager secret NAMES (never values). Empty = that provider is not mounted.
       # Both providers are opt-in by naming their secret; an unset variable mounts nothing.
@@ -101,6 +112,7 @@ jobs:
           KNOWN=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json 2>/dev/null \
                   | python3 -c 'import json,sys,re; print(",".join(sorted(set(re.findall(r"https://[a-z0-9.-]+\.run\.app", json.dumps(json.load(sys.stdin).get("status", {})))))))' || true)
           ORIGINS="$DETERMINISTIC"; [ -n "$KNOWN" ] && ORIGINS="${KNOWN},${DETERMINISTIC}"
+          [ -n "${CUSTOM_ORIGINS:-}" ] && ORIGINS="${ORIGINS},${CUSTOM_ORIGINS}"
           echo "ORIGINS=${ORIGINS}" >> "$GITHUB_ENV"
           echo "allow-listing: ${ORIGINS}"
       - name: Deploy from source
@@ -119,7 +131,7 @@ jobs:
           if [ "$LIVE_MODEL" = "1" ]; then
             # Mount only the secrets that actually exist in the project; a named-but-missing secret
             # is a loud warning, not a failed deploy, so the first live deploy can land before every
-            # provider is provisioned. OpenAI keeps its historical default name.
+            # provider is provisioned. Neither secret name has a default: an unset variable skips that provider.
             SECRETS=""
             for pair in "OPENAI_API_KEY=${OPENAI_SECRET}" "ANTHROPIC_API_KEY=${ANTHROPIC_SECRET}"; do
               name="${pair#*=}"; [ -z "$name" ] && continue
@@ -157,6 +169,8 @@ jobs:
           SHA_LEN=$(( 63 - ${#SERVICE} - 1 - 5 - ${#TAIL} - 5 )); [ "$SHA_LEN" -gt 7 ] && SHA_LEN=7
           if [ "$SHA_LEN" -lt 1 ]; then echo "::error::the service name $SERVICE (${#SERVICE} characters) leaves no room for a revision suffix inside Cloud Run's 63-character revision name"; exit 1; fi
           SUFFIX="main-${GITHUB_SHA:0:$SHA_LEN}${TAIL}"
+          # The UTC day the build starts on: the image's window ends the day before (issue #35), and the smoke test checks it.
+          echo "RUN_DAY=$(date -u +%F)" >> "$GITHUB_ENV"
           echo "SUFFIX=${SUFFIX}" >> "$GITHUB_ENV"; echo "REVISION=${SERVICE}-${SUFFIX}" >> "$GITHUB_ENV"
           bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
             --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
@@ -195,15 +209,33 @@ jobs:
           gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json \
             | python3 -c 'import json,sys; t=json.load(sys.stdin)["status"]["traffic"]; print(t); assert any(x.get("revisionName")==sys.argv[1] and x.get("percent")==100 for x in t), sys.argv[1]+" does not carry 100% of the traffic"' "$REVISION"
       - name: Smoke test
+        # Only the service's own URLs count. A tagged preview revision (pr-<n>---..., preview.yml) answers on
+        # this service and is in ORIGINS for the allow-list, but it runs a pull request's image: it must not
+        # pass this test, answer the live-mode check, or be reported as where main is live.
+        # Of the URLs that answer, "Live at" names (and the live-mode check reads) the one ranked first, whatever
+        # ORIGINS' sorted order: the deterministic <service>-<project number>.<region>.run.app URL (the README
+        # publishes it), then a custom domain (CUSTOM_ORIGINS), then the legacy <service>-<hash>-<region code>.a.run.app.
         run: |
           set -euo pipefail
-          LIVE=""
+          LIVE=""; LIVE_RANK=9
           for URL in $(echo "$ORIGINS" | tr ',' ' '); do
+            # preview.yml tags each PR's revision pr-<number>, served at https://pr-<number>---<service URL>; match only that,
+            # since a CLOUD_RUN_SERVICE name may itself contain "---"
+            if [[ "$URL" =~ ^https://pr-[0-9]+--- ]]; then echo "skip $URL (a preview tag, not main)"; continue; fi
+            # a curl that fails before any body arrives (e.g. "Could not resolve host") leaves the -o file alone, so
+            # clear it: otherwise this URL's line would show the previous URL's body next to HTTP 000
+            rm -f /tmp/healthz.txt
             CODE=$(curl -sS -o /tmp/healthz.txt -w '%{http_code}' --max-time 30 "$URL/api/health" || true)
             echo "GET $URL/api/health -> HTTP $CODE $(head -c 200 /tmp/healthz.txt 2>/dev/null)"
-            [ "$CODE" = "200" ] && LIVE="$URL"
+            [ "$CODE" = "200" ] || continue
+            case "$URL" in *.a.run.app) RANK=3 ;; *.run.app) RANK=1 ;; *) RANK=2 ;; esac
+            if [ "$RANK" -lt "$LIVE_RANK" ]; then LIVE="$URL"; LIVE_RANK="$RANK"; fi
           done
           test -n "$LIVE"
+          # The window ends yesterday (issue #35): as_of is the day before the build, last_day the last production day
+          # (Mon-Fri) on or before it. An image layer that froze an older window fails here instead of passing silently.
+          curl -sS --max-time 30 -o /tmp/health.json "$LIVE/api/health"
+          python3 .github/scripts/check_window.py /tmp/health.json "$RUN_DAY"
           CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
           echo "live modes: $(echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); print(c.get("live_modes") or c.get("live_model_available"))')"
           if [ "$LIVE_MODEL" = "1" ]; then echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); sys.exit(0 if (c.get("live_modes") or c.get("live_model_available")) else 1)'; fi

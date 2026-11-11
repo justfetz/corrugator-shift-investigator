@@ -5,10 +5,14 @@ second DuckDB query, so a wrong mapping cannot agree with itself.
 """
 from collections import defaultdict
 from datetime import date
+import json
+from pathlib import Path
 import pytest
 from investigator.fixture import GRADES
 from investigator.record_store import CORRUPT_TRIM_SQFT, RecordStore, default_store
-from investigator.synth import generate_months, production_days
+from investigator.synth import generate_months, window_days
+
+GOLDEN_VALUES = Path(__file__).resolve().parents[1] / "evals" / "golden_values.json"
 
 DAY = "2026-09-14"   # a Monday in the second month
 
@@ -30,17 +34,24 @@ def day_records(data, day):
             [sh for sh in data["shifts"] if sh.production_date == key])
 
 
-def test_store_is_the_default_months_built_once(store, data):
-    assert store.content_hash == data["content_hash"]
-    assert store.production_days == [d.isoformat() for d in production_days((("2026", 8), ("2026", 9)))]
-    assert (store.first_day, store.last_day) == ("2026-08-03", "2026-09-30")
-    assert len(store.production_days) == 43 and all(date.fromisoformat(d).weekday() < 5 for d in store.production_days)
-    assert store.counts == {name: len(data[family]) for name, family in
-                            (("setups", "dry_end_setups"), ("wet_ends", "wet_ends"), ("shifts", "shifts"), ("stops", "stops"))} | \
-        {"customers": sum(len(s.customers) for s in data["dry_end_setups"]),
-         "rejects": sum(len(s.rejects) for s in data["dry_end_setups"])}
+def test_store_is_the_rolling_year_built_once(store, data):
+    """The year ending INVESTIGATOR_AS_OF (2026-09-30 in tests): every weekday from 30 September 2025.
+    Its hash is the one the value goldens were generated for (from synth.generate_window), and its rows
+    for August and September 2026 are exactly the two months generated on their own."""
+    assert store.content_hash == json.loads(GOLDEN_VALUES.read_text())["content_hash"]
+    assert store.window == (date(2025, 9, 30), date(2026, 9, 30)) and store.as_of == date(2026, 9, 30)
+    assert store.production_days == [d.isoformat() for d in window_days(date(2026, 9, 30))]
+    assert (store.first_day, store.last_day) == ("2025-09-30", "2026-09-30")
+    assert len(store.production_days) == 262 and all(date.fromisoformat(d).weekday() < 5 for d in store.production_days)
+    two_months = {"setups": len(data["dry_end_setups"]), "wet_ends": len(data["wet_ends"]), "shifts": len(data["shifts"]),
+                  "stops": len(data["stops"]), "customers": sum(len(s.customers) for s in data["dry_end_setups"]),
+                  "rejects": sum(len(s.rejects) for s in data["dry_end_setups"])}
+    for table, count in two_months.items():
+        sql = f"SELECT count(*) AS n FROM {table} WHERE production_date BETWEEN DATE '2026-08-01' AND DATE '2026-09-30'"
+        assert store._fetch(sql, [])[0]["n"] == count, table
+    assert store.counts["shifts"] == 3 * 262 and store.counts["setups"] > 5 * two_months["setups"]
     assert default_store() is store
-    assert store.boot_seconds < 15
+    assert store.boot_seconds < 60
 
 
 def test_shift_kpis_reconcile_to_summed_setup_records(store, data):
@@ -79,10 +90,14 @@ def test_shift_kpis_reconcile_to_summed_setup_records(store, data):
 
 
 def test_split_setups_sit_in_the_shift_their_half_falls_in(store, data):
-    setups, _, _ = day_records(data, DAY)
+    # Splits happen at the 15:00 and 23:00 boundaries (no record crosses a production day, issue #35):
+    # 70 in the two months; 14 September has none, so take the first September day that has one.
+    day = next(d for d in store.production_days if d.startswith("2026-09")
+               and any(s.change_code == "S" for s in day_records(data, d)[0]))
+    setups, _, _ = day_records(data, day)
     split = [s for s in setups if s.change_code == "S"]
     assert split, "the chosen day has no shift-split setup"
-    analysis = store.day_analysis(DAY)
+    analysis = store.day_analysis(day)
     try:
         for s in split:
             parent = next(p for p in setups if p.setup_id == s.split_from_setup_id)
@@ -160,7 +175,7 @@ def test_corrupt_flag_injects_the_bad_trim_record(store, data):
 
 
 @pytest.mark.parametrize("day, message", [
-    ("2026-09-12", "Saturday"), ("2026-09-13", "Sunday"), ("2026-07-31", "outside the dataset"),
+    ("2026-09-12", "Saturday"), ("2026-09-13", "Sunday"), ("2025-09-29", "outside the dataset"),
     ("2026-10-01", "outside the dataset"), ("14-09-2026", "YYYY-MM-DD"), (20260914, "YYYY-MM-DD")])
 def test_weekend_and_out_of_range_days_are_refused(store, day, message):
     with pytest.raises(ValueError, match=message):
@@ -177,8 +192,8 @@ def test_every_production_day_loads_clean(store):
             analysis.close()
 
 
-def test_other_months_build_their_own_calendar():
-    small = RecordStore(seed=5, months=(("2026", 9),))
+def test_other_windows_build_their_own_calendar():
+    small = RecordStore(seed=5, window=(date(2026, 9, 1), date(2026, 9, 30)), prebuilt="")
     try:
         assert small.production_days[0] == "2026-09-01" and small.production_days[-1] == "2026-09-30"
         assert small.content_hash != default_store().content_hash

@@ -80,7 +80,7 @@ store measures run one record-store tool over a window.
 | `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
 | `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
-| `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars | the money levers: normalizes to `money` |
+| `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars; over more than one shift (all shifts, or `shifts=`) also `get_day_dollars` for those shifts, the total the card states (#31b) | the money levers: normalizes to `money` |
 | `money` | `get_opportunities` over the window: the levers ranked in $/yr, each controllable or schedule-driven; `lens=` reads them the owner's way | the same |
 | `speedvar` | `get_speed_variance` over the window: the speed gap against each grade's trailing-year baseline split into stops, setups, running under baseline and grade mix ("top 3 contributors to speed variation", "what drove speed", "speed loss breakdown"); `against=` changes the reference; `shifts=` lists one decomposition per shift, or with `against=shift` the shift explained and the one it is measured against | the same |
 | `review` | `get_downtime_review` (issue #101): maintenance and operator downtime against their bands, every reason ranked by % of scheduled minutes with stops and minutes per stop, PM last as scheduled time, and the flags with their supervisor slot and recurrence; the all-shifts downtime of a production day ("top downtime reasons yesterday", "show downtime by reason" under all shifts) | the same over the window |
@@ -91,7 +91,7 @@ Modifiers, each refused when it does not apply to the measure:
 
 | Field | Values | Default |
 | --- | --- | --- |
-| `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: July answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
+| `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: a month outside the rolling year answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
 | `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity; `grade` for `fpm` | `reason`; `width`; none |
 | `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
@@ -102,7 +102,7 @@ Modifiers, each refused when it does not apply to the measure:
 | `rank=` | `speed`, `downtime`, `quality` | all three |
 | `lens=` | `supervisor` (the controllable losses ranked; side trim and planned maintenance schedule-driven, after), `ownership` (the total cost of waste, side trim first), for `money` (issue #101) | every lever ranked |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
-| `rates=` | the visitor's rates, `paper:<$/MSF>`, `hour:<$/hr>`, `margin:<$/MSF>`, `trim:<% target>`, comma-separated in that order, at most two decimals each (docs/METRICS.md, Cost model); every measure takes it, and the answer's provenance line names each rate as "yours" | the server's rates (`INVESTIGATOR_RATES`, else the post's) |
+| `rates=` | the visitor's rates, `paper:<$/MSF>`, `hour:<$/hr>`, `margin:<$/MSF>`, `trim:<% target>`, comma-separated in that order, at most two decimals each, ASCII digits only ([the cost model](COST_MODEL.md#overrides)); every measure takes it, and the answer's provenance line names each rate as "yours". The page writes it (#31b): a rate changed in the rail's rates panel (**Change rates**) re-prices the page in the browser and is written into the address bar (replaced, not pushed), into every question asked after it and into the canned questions' links; a prior view (`after=`) never carries it. The period report has no dollars of its own but keeps it, since its card carries the money of its window | the server's rates (`INVESTIGATOR_RATES`, else the post's) |
 | `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
 | `after=` | the earlier views of this conversation, each a canonical address without its own chain, at most 8; the agent keeps its `max_turns`. A period report in the chain is kept on the address but, as on the session path, enters no history | none |
 | `format=` | `json`, `pdf` | the page |
