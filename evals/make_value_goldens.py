@@ -271,10 +271,52 @@ def kpi_values(plain, cur, prev, shift):
     return values, coverage
 
 
+def tile_parts_sum(parts, rates):
+    """A tile's dollars by hand: one pricing call per part, summed, as the tool rows of the same scope are."""
+    priced = [money(kind, q, gross, minutes, rates, quantum) for kind, q, gross, minutes, quantum in parts]
+    usd = [e["usd"] for e in priced if e["usd"][0] is not None]
+    if not usd:
+        return {"usd": exact(None)}
+    return {"usd": [round(sum(u[0] for u in usd), 6), sum(u[1] for u in usd)],
+            "usd_per_year": exact(None) if len(usd) < len(priced) else
+                [round(sum(e["usd_per_year"][0] for e in priced), 3), sum(e["usd_per_year"][1] for e in priced)]}
+
+
+WINDOW_TILE_SUMS = {"trim_pct": ("trim", "trim"), "shear_pct": ("shear", "waste"), "dry_end_pct": ("rejects", "waste"),
+                    "bond_pct": ("bond", "waste"), "warp_pct": ("warp", "waste"), "misalignment_pct": ("misalignment", "waste"),
+                    "moisture_pct": ("moisture", "waste"), "bale_pct": ("bale", "paper")}
+
+
+def window_tile_values(plain, span, shift, rates_text=None):
+    """The dollars on a window's KPI tiles by hand (the #31b review: from the tool, not the tile's rounded value): each
+    waste tile its category's area to 0.1 sq ft on the window's gross, the stop tiles each stop reason's minutes to
+    0.01 (the Pareto's rows), maintenance and PM and operator their minutes, on the window's scheduled minutes."""
+    rates = rates_of(rates_text)
+    t = plain.sums(*span, shift)
+    if not t["gross"]:
+        return {}
+    gross, minutes = round(t["gross"], 1), window_minutes(plain, span, shift)
+    one = lambda kind, q: tile_parts_sum([(kind, q, gross, minutes, 0)], rates)
+    values = {f"tile_money:metric={m}": one(kind, round(t[key], 1)) for m, (key, kind) in WINDOW_TILE_SUMS.items()}
+    # the dry-end tile is its reject reasons' rows, as the waste breakdown and the levers price them (and the chip sums)
+    values["tile_money:metric=dry_end_pct"] = tile_parts_sum([("waste", round(t[r], 1), gross, minutes, 0)
+                                                              for r in ("bond", "warp", "misalignment", "moisture")], rates)
+    values["tile_money:metric=unexplained_pct"] = one("paper", round(t["bale"] - t["trim"] - t["shear"] - t["rejects"], 1))
+    reasons = defaultdict(float)
+    for st in plain.between("stops", *span, shift):
+        reasons[st.reason] += st.duration_sec / 60
+    stops = tile_parts_sum([("downtime", round(m, 2), gross, minutes, 0) for m in reasons.values()], rates)   # whole seconds / 60 never ties at 0.005
+    values["tile_money:metric=downtime_pct"] = {**stops, "metrics": exact(["downtime_pct", "downtime_minutes", "stops"])}   # one entry, three tiles
+    values["tile_money:metric=maintenance_pm_pct"] = one("downtime", round(t["maintenance_pm_seconds"] / 60, 2))
+    values["tile_money:metric=operator_pct"] = one("downtime", round(t["operator_seconds"] / 60, 2))
+    return values
+
+
 def kpi_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
     cur = window(period, anchor)
     prev = previous(period, *cur)
     values, coverage = kpi_values(plain, cur, prev, shift)
+    values.update(window_tile_values(plain, cur, shift))
     return case(id, "get_period_kpis", {"window": {"period": period, "anchor": anchor}, "compare": True, "shift": shift},
                 {"coverage": coverage, "row_count": len(TILES), "values": values}, day=day, note=note)
 
@@ -697,10 +739,9 @@ def window_minutes(plain, span, shift):
     return len(days) * (480 if shift else 1440)
 
 
-def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
-    """get_shift_dollars by hand: each downtime reason, the speed gap to 675 ft/min over running time,
-    side trim, shear and each dry-end reason, priced and ranked by dollars."""
-    rates = rates_of(rates_text)
+def shift_gaps(plain, day, shift):
+    """get_shift_dollars' gaps by hand, before pricing: {gap: (pricing kind, quantity)} and the shift's gross area.
+    Each downtime reason, the speed gap to 675 ft/min over running time, side trim, shear and each dry-end reason."""
     span = (date.fromisoformat(day),) * 2
     setups, _ = day_setups(plain, day, shift)
     stops = plain.between("stops", *span, shift)
@@ -712,23 +753,121 @@ def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
     for s in setups:
         for r in s.rejects:
             rejects[r.reason] += r.sqft
-    gaps = {f"Downtime: {r}": money("downtime", m, gross, 480, rates) for r, m in reasons.items()}
+    gaps = {f"Downtime: {r}": ("downtime", m) for r, m in reasons.items()}
     running = 480 - sum(st.duration_sec for st in stops) / 60
-    gaps["Speed gap to 675 ft/min"] = money("speed", max(0.0, 675 * running - feet) / 675, gross, 480, rates)
-    gaps["Side trim"] = money("trim", sum(s.trim_sqft for s in setups), gross, 480, rates)
-    gaps["Shear chops"] = money("waste", sum(s.chop_sqft for s in setups), gross, 480, rates)
-    gaps.update({f"Dry-end: {r}": money("waste", a, gross, 480, rates) for r, a in rejects.items()})
-    values = {f"rows:gap={g}": e for g, e in gaps.items()}
-    top = max(gaps, key=lambda g: (gaps[g]["usd"][0], [-ord(c) for c in g]))
-    values["#0"] = {"gap": exact(top)}
+    gaps["Speed gap to 675 ft/min"] = ("speed", max(0.0, 675 * running - feet) / 675)
+    gaps["Side trim"] = ("trim", sum(s.trim_sqft for s in setups))
+    gaps["Shear chops"] = ("waste", sum(s.chop_sqft for s in setups))
+    gaps.update({f"Dry-end: {r}": ("waste", a) for r, a in rejects.items()})
+    return gaps, gross
+
+
+def gap_bucket(gap):
+    """The chip a gap adds to on the card (cost_model.bucket_of): order changes are setups, other stops are stops."""
+    if gap.startswith("Downtime: Order change"):
+        return "Setups"
+    for prefix, name in (("Downtime", "Stops"), ("Speed", "Speed"), ("Side trim", "Trim"), ("Shear", "Shear"), ("Dry-end", "Dry-end")):
+        if gap.startswith(prefix):
+            return name
+    return "Other waste"
+
+
+def money_summary(gaps, priced, gross, minutes, rates, trim_sqft=None):
+    """The card's summary of a money answer by hand (issue #31b review): each chip's bucket total, the arithmetic's
+    sums (the area priced as paper, the minutes of the stops, the speed gap and the run time waste took, the MSF not
+    made) and side trim's points over the target with their paper dollars a year at the post's volume (points / 100
+    x 1.8M MSF x paper). Each figure the server states is held here, so none of them is the browser's own."""
+    values = {}
+    buckets = defaultdict(list)
+    for g, e in priced.items():
+        buckets[gap_bucket(g)].append(e)
+    for b, es in buckets.items():
+        values[f"buckets:bucket={b}"] = {"usd": [round(sum(e["usd"][0] for e in es), 6), 0.011 * len(es)],
+                                         "usd_per_year": [round(sum(e["usd_per_year"][0] for e in es), 3), 1.01 * len(es)]}
+    values["buckets:#0"] = {"bucket": exact(max(buckets, key=lambda b: sum(e["usd"][0] for e in buckets[b])))}
+    of = lambda kind: [q for k, q in gaps.values() if k == kind]
+    area = sum(q for k, q in gaps.values() if k in SQFT_KINDS)
+    waste_min = sum(q / 1000 / MSF_PER_MIN for q in of("waste"))
+    machine = sum(of("downtime")) + sum(of("speed")) + waste_min
     n = len(gaps)
-    values["$"] = {"total_usd": [round(sum(e["usd"][0] for e in gaps.values()), 6), 0.011 * n],
-                   "total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in gaps.values()), 3), 1.01 * n],
+    values["$"] = {"area_sqft": num(area, 1), "area_msf": num(area / 1000, 3), "stop_minutes": [round(sum(of("downtime")), 6), 0.006 * len(of("downtime"))],
+                   "speed_minutes": [round(sum(of("speed")), 6), 0.006], "waste_run_minutes": [round(waste_min, 6), 0.006 * len(of("waste"))],
+                   "machine_minutes": [round(machine, 6), 0.006 * n],
+                   "msf_not_made": [round(sum(of("downtime")) * MSF_PER_MIN + sum(of("speed")) * MSF_PER_MIN + sum(of("waste")) / 1000, 6), 0.0011 * n]}
+    if trim_sqft is not None:   # the arithmetic's trim line (get_opportunities has it as a lever row instead)
+        paper, _, _, target = rates
+        pct = trim_sqft / gross * 100
+        over = max(0.0, pct - target)
+        values["$"].update({"trim_pct_of_gross": num(pct, 4), "trim_target_pct": exact(target), "trim_points_over": [round(over, 6), 0.0001],
+                            "trim_over_usd": [round(over / 100 * gross / 1000 * paper, 6), 0.011],
+                            "trim_over_usd_per_year": [round(over / 100 * ANNUAL_MSF * paper, 3), 1.01]})
+    return values
+
+
+def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
+    """get_shift_dollars by hand: each gap of shift_gaps priced on the shift's gross and 480 minutes and ranked by
+    dollars, with the card's summary (money_summary)."""
+    rates = rates_of(rates_text)
+    gaps, gross = shift_gaps(plain, day, shift)
+    priced = {g: money(kind, q, gross, 480, rates) for g, (kind, q) in gaps.items()}
+    values = {f"rows:gap={g}": e for g, e in priced.items()}
+    top = max(priced, key=lambda g: (priced[g]["usd"][0], [-ord(c) for c in g]))
+    values["#0"] = {"gap": exact(top)}
+    n = len(priced)
+    summary = money_summary(gaps, priced, gross, 480, rates, gaps["Side trim"][1])
+    values.update({k: v for k, v in summary.items() if k != "$"})
+    # The dollars on the shift's KPI tiles (#31b review): the speed gap, side trim and each dry-end reason as these rows
+    # price them (so the dry-end tile is the Dry-end chip), and the maintenance and operator stops' minutes.
+    kinds = defaultdict(float)
+    for st in plain.between("stops", *(date.fromisoformat(day),) * 2, shift):
+        kinds[st.kind] += st.duration_sec / 60
+    tiles = {"observed_shift_fpm": [gaps["Speed gap to 675 ft/min"]], "maintenance_pct": [("downtime", kinds["Maintenance"])],
+             "operator_pct": [("downtime", kinds["Operator"])], "trim_pct": [gaps["Side trim"]],
+             "dry_end_pct": [q for g, q in gaps.items() if g.startswith("Dry-end")]}
+    values.update({f"tile_money:metric={k}": tile_parts_sum([(kind, q, gross, 480, 0) for kind, q in v], rates) for k, v in tiles.items()})
+    values["$"] = {"total_usd": [round(sum(e["usd"][0] for e in priced.values()), 6), 0.011 * n],
+                   "total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in priced.values()), 3), 1.01 * n],
                    "total_contribution_usd": exact(None) if rates[2] is None else
-                       [round(sum(e["contribution_usd"][0] for e in gaps.values()), 6), 0.011 * n],
-                   "contribution_status": exact("margin not set" if rates[2] is None else "set")}
+                       [round(sum(e["contribution_usd"][0] for e in priced.values()), 6), 0.011 * n],
+                   "contribution_status": exact("margin not set" if rates[2] is None else "set"), **summary["$"]}
     return case(id, "get_shift_dollars", {"shift": shift}, {"coverage": "complete", "row_count": n, "values": values},
                 day=day, note=note, rates=rates_text)
+
+
+def day_dollars_case(plain, id, day, rates_text=None, shifts=(1, 2, 3), corrupt=False, note=""):
+    """get_day_dollars by hand (issue #31b review): the card's total for the day's shifts (all three, or the ones a
+    question named). Each gap of shift_gaps summed over those shifts that are complete, rounded as the window tools
+    round (0.1 sq ft, 0.01 min), and priced once, on their gross area (to 0.1) and 480 minutes each, so its dollars a
+    year are the day's own; with the card's summary over those rows. On corrupt data shift 2 holds a refused record,
+    so it is named in excluded_shifts and left out, and the day is priced over the other shifts' 480 minutes each."""
+    rates = rates_of(rates_text)
+    bad = {2} if corrupt and 2 in shifts else set()
+    counted = [n for n in shifts if n not in bad]
+    gaps, gross = {}, 0.0
+    for shift in counted:
+        mine, g = shift_gaps(plain, day, shift)
+        gross += g
+        for gap, (kind, q) in mine.items():
+            gaps[gap] = (kind, gaps.get(gap, (kind, 0.0))[1] + q)
+    gaps = {g: (kind, round(q, 2 if kind in ("downtime", "speed") else 1)) for g, (kind, q) in gaps.items()}
+    gross, minutes = round(gross, 1), 480 * len(counted)
+    priced = {g: money(kind, q, gross, minutes, rates) for g, (kind, q) in gaps.items()}
+    values = {f"rows:gap={g}": e for g, e in priced.items()}
+    values["#0"] = {"gap": exact(max(priced, key=lambda g: (priced[g]["usd"][0], [-ord(c) for c in g])))}
+    for shift in shifts:   # each shift named with its coverage; its own total is its get_shift_dollars step
+        values[f"shifts:shift={shift}"] = {"coverage": exact("incomplete" if shift in bad else "complete")}
+    n = len(priced)
+    summary = money_summary(gaps, priced, gross, minutes, rates, gaps["Side trim"][1])
+    values.update({k: v for k, v in summary.items() if k != "$"})
+    values["$"] = {"shift": exact(None), "excluded_shifts": exact(sorted(bad)), "scheduled_minutes": exact(minutes), "gross_sqft": num(gross, 1),
+                   "total_usd": [round(sum(e["usd"][0] for e in priced.values()), 6), 0.011 * n],
+                   "total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in priced.values()), 3), 1.01 * n],
+                   "contribution_status": exact("margin not set" if rates[2] is None else "set"), **summary["$"]}
+    expect = {"coverage": "complete", "row_count": n, "values": values}
+    if bad:
+        expect["excluded_records"] = day_setups(plain, day, 2, corrupt=True)[1]
+    arguments = {"shifts": list(shifts)}
+    return case(id, "get_day_dollars", arguments, expect, day=day, corrupt=corrupt, note=note, rates=rates_text)
 
 
 def waste_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, *, day="2026-09-14", note=""):
@@ -770,24 +909,33 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
     cells = [v["opportunity_hours"][0] for k, v in speed.items() if k.startswith("label=")]
     hours = round(sum(round(h, 2) for h in cells), 2)
     levers = {"Speed gap to best-fifth speed": money("speed", hours * 60, gross, scheduled, rates, 1.2)}
+    terms = {"Speed gap to best-fifth speed": ("speed", hours * 60)}
     trim_pct = round(t["trim"] / t["gross"] * 100, 4)
     over = max(0.0, trim_pct - rates[3])
     levers[f"Side trim over the {rates[3]:g}% target"] = money("trim", over / 100 * gross, gross, scheduled, rates, 1e-4 / 100 * gross)
+    terms[f"Side trim over the {rates[3]:g}% target"] = ("trim", over / 100 * gross)
     minutes, stops = defaultdict(float), defaultdict(int)
     for st in plain.between("stops", *span, shift):
         minutes[st.reason] += st.duration_sec / 60
         stops[st.reason] += 1
     for r, m in minutes.items():
         levers[f"Downtime: {r}" + (" (setup time)" if r == "Order change" else "")] = money("downtime", round(m, 2), gross, scheduled, rates, 0.01)
+        terms[f"Downtime: {r}" + (" (setup time)" if r == "Order change" else "")] = ("downtime", round(m, 2))
     labels = {"shear": "Shear chops", "bond": "Dry-end: bond", "warp": "Dry-end: warp", "misalignment": "Dry-end: misalignment", "moisture": "Dry-end: moisture"}
     for key, label in labels.items():
         if round(t[key], 1):
             levers[f"{label} (all recorded)"] = money("waste", round(t[key], 1), gross, scheduled, rates, 0.1)
+            terms[f"{label} (all recorded)"] = ("waste", round(t[key], 1))
     values = {f"rows:lever={k}": e for k, e in levers.items()}
+    summary = money_summary(terms, levers, gross, scheduled, rates)   # the panel's chips and the arithmetic's sums (#31b review)
+    summary["$"]["speed_minutes"][1] = 1.21   # the speed lever prices hours shown to 0.01 (0.6 min a cell at most)
+    summary["$"]["machine_minutes"][1] += 1.2
+    summary["$"]["msf_not_made"][1] += 1.2 * MSF_PER_MIN
+    values.update({k: v for k, v in summary.items() if k != "$"})
     values["#0"] = {"lever": exact(max(levers, key=lambda k: levers[k]["usd_per_year"][0]))}
     values["$"] = {"total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in levers.values()), 3),
                                           sum(e["usd_per_year"][1] for e in levers.values())],
-                   "contribution_status": exact("margin not set" if rates[2] is None else "set")}
+                   "contribution_status": exact("margin not set" if rates[2] is None else "set"), **summary["$"]}
     return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift},
                 {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note, rates=rates_text)
 
@@ -881,6 +1029,20 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="target", again
 def generate():
     """The golden window's record families."""
     return generate_window(date.fromisoformat(AS_OF), seed=SEED, machine_id=MACHINE)
+
+
+def client_case():
+    """get_shift_dollars at other rates held to the client formula (issue #31b): the figures web/money.js makes,
+    in the browser, of the same shift's quantities at the post's rates (evals/client_money.json, written by
+    evals/make_client_money.py). Every field is exact: the card and the server must not disagree by a cent."""
+    doc = json.loads((ROOT / "evals" / "client_money.json").read_text())
+    out = doc["output"]
+    values = {f"rows:gap={r['gap']}": {k: exact(v) for k, v in r.items() if k != "gap"} for r in out["rows"]}
+    values["$"] = {k: exact(v) for k, v in out.items() if k != "rows"}
+    return case("value-dollars-shift-0914-shift-2-client", "get_shift_dollars", {"shift": doc["shift"]},
+                {"coverage": "complete", "row_count": len(out["rows"]), "values": values}, day=doc["day"], rates=doc["rates"],
+                note="The card re-prices this shift in the browser at paper $60, machine time $1,350.50, a $35 margin and a 3.1% "
+                     "trim target; the server's own answer at those rates must give the same figures, field for field.")
 
 
 def build(data=None):
@@ -986,6 +1148,15 @@ def build(data=None):
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0930-shift-1", "2026-09-30", 1))
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0914-shift-2-rates", "2026-09-14", 2, "paper:66,hour:1500,margin:40",
                                     note="The same shift with paper x1.2, machine time x1.25 and a $40/MSF margin: each dollar scales with its own rate only."))
+    cases.append(day_dollars_case(plain, "value-dollars-day-0914", "2026-09-14",
+                                  note="The card's all-shifts total for the day: each gap summed over the three shifts and priced once on the day, "
+                                       "with each shift's own total beside it (issue #31b review: the server's figure, not the browser's)."))
+    cases.append(day_dollars_case(plain, "value-dollars-day-0914-rates", "2026-09-14", "paper:60,hour:1350.5,margin:35,trim:3.1"))
+    cases.append(day_dollars_case(plain, "value-dollars-day-0914-shifts-1-3", "2026-09-14", shifts=(1, 3),
+                                  note="A question about shifts 1 and 3: the day total covers those two shifts and their 960 minutes, never shift 2."))
+    cases.append(day_dollars_case(plain, "value-dollars-day-0914-corrupt", "2026-09-14", corrupt=True,
+                                  note="Shift 2 holds the refused trim record: it is named in excluded_shifts and left out, and the day is priced "
+                                       "over shifts 1 and 3 alone (their gross and 960 minutes), with the excluded record reported."))
     cases.append(waste_dollars_case(plain, "value-dollars-waste-september", "month", "2026-09-14",
                                     note="What waste genuinely costs: each bucket's MSF x paper, plus the run time shear and rejects took."))
     cases.append(pareto_dollars_case(plain, "value-dollars-pareto-week-0907-shift-2", "week", "2026-09-09", 2))
@@ -1001,6 +1172,7 @@ def build(data=None):
                                note="Against the previous week: each loss is this week's feet below target per scheduled minute minus the week before's; an offset bucket is not priced."))
     cases.append(speedvar_case(plain, "value-speedvar-week-0914-shift-3-vs-shift-1", "week", "2026-09-14", 3, "shift", 1,
                                note="Shift 3 against shift 1 over the same week: shift 1's Thursday planned maintenance makes stops an offset; the heavier grade mix of shift 3 is part of its gap."))
+    cases.append(client_case())
     assert len({c["id"] for c in cases}) == len(cases)
     return {
         "about": "GENERATED by evals/make_value_goldens.py from plain Python sums over synth.generate_window() for the year "

@@ -53,7 +53,7 @@ STRICT_TOOLS = frozenset()
 # still say costs are unavailable, so a planner offered them would be told two things. The dollars still
 # reach the analyst on the priced rows of the tools it does plan. #23 / #31b retune the prompts and
 # offer them; the OpenAI loop leaves them out for its byte cap (openai_provider.OPENAI_OMITTED_TOOLS).
-ANTHROPIC_OMITTED_TOOLS = frozenset({'get_shift_dollars', 'get_opportunities'})
+ANTHROPIC_OMITTED_TOOLS = frozenset({'get_shift_dollars', 'get_opportunities', 'get_day_dollars'})
 CONTROL_TOOLS = [
     {'name': 'finish', 'description': 'Finish with successful evidence result IDs.', 'strict': False,
      'input_schema': {'type': 'object', 'properties': {'result_ids': {'type': 'array', 'items': {'type': 'string'}}},
