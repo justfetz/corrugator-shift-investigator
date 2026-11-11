@@ -111,9 +111,9 @@ def stop_minutes(records, start, end, shift):
     """Recorded (kind, place, reason) -> [count, minutes] from the record families, by hand."""
     out={}
     for st in records['stops']:
-        if start<=st.production_date<=end and st.shift_number==shift:
+        if start<=st.production_date<=end and st.shift==shift:
             item=out.setdefault((st.kind,st.place,st.reason),[0,0.0])
-            item[0]+=1; item[1]+=st.duration_sec/60
+            item[0]+=1; item[1]+=st.seconds/60
     return out
 
 

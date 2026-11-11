@@ -16,8 +16,9 @@ REPO = Path(__file__).resolve().parents[1]
 # Pinned hash of August and September 2026 at seed 2026: byte-identical output
 # is the determinism claim. Change this constant only with an intended
 # generator change, and say so in the commit. (Issue #35, per-day seeding:
-# was d9143ff1d15029b5992069d664eb8430d3e0aaed617b82a953f84e0a4964e6c5.)
-PINNED_HASH = "b07c2a7933dbb0339b843d9e1a78f36f3c1b544c3c37135f94da3092aecb38c7"
+# was d9143ff1d15029b5992069d664eb8430d3e0aaed617b82a953f84e0a4964e6c5. Issue #100, record
+# contract v2 with orders scheduled into setups: was b07c2a7933dbb0339b843d9e1a78f36f3c1b544c3c37135f94da3092aecb38c7.)
+PINNED_HASH = "75b41f403942ebe39fbd229ea5c31c8ff7e67fee6ceea256f7943c459c24170e"
 
 
 def day_bytes(data, day):
@@ -37,7 +38,7 @@ def test_same_seed_is_byte_identical_and_fast(tmp_path):
     for name in R.FAMILIES:
         assert (tmp_path / "a" / f"{name}.jsonl").read_bytes() == (tmp_path / "b" / f"{name}.jsonl").read_bytes()
         assert (tmp_path / "a" / f"{name}.jsonl").read_bytes() == jsonl_bytes(first[name])
-    assert first["manifest"]["counts"] == {name: len(first[name]) for name in R.FAMILIES}
+    assert first["manifest"]["counts"] == {name: len(first[name]) for name in R.ALL_FAMILIES}
     assert first["manifest"]["schema"] == R.SCHEMA
 
 
@@ -82,7 +83,8 @@ def test_two_store_windows_hold_identical_rows_for_a_shared_day():
     try:
         for table in (*TABLES, "shift_kpis"):
             columns = [c[0] for c in a._db.execute(f"DESCRIBE {table}").fetchall()]
-            sql = f"SELECT * FROM {table} WHERE production_date = DATE '2026-09-14' ORDER BY {', '.join(columns)}"
+            day = "WHERE production_date = DATE '2026-09-14' " if "production_date" in columns else ""   # customers: the dimension
+            sql = f"SELECT * FROM {table} {day}ORDER BY {', '.join(columns)}"
             rows = a._db.execute(sql).fetchall()
             assert rows and rows == b._db.execute(sql).fetchall(), table
         x, y = a.day_analysis("2026-09-14"), b.day_analysis("2026-09-14")
@@ -101,7 +103,7 @@ def test_order_numbers_are_unique_across_days():
     data = generate_months(months=(("2026", 9),))
     days_of = {}
     for setup in data["dry_end_setups"]:
-        for c in setup.customers:
+        for c in setup.lanes:
             assert c.order_number.startswith("SO-" + setup.production_date[2:]), (c.order_number, setup.production_date)
             days_of.setdefault(c.order_number, set()).add(setup.production_date)
     assert all(len(days) == 1 for days in days_of.values()) and len(days_of) > 22 * 100
@@ -119,12 +121,12 @@ def test_jsonl_round_trip_restores_equal_records(tmp_path):
     write_jsonl(data, tmp_path)
     loaded = read_jsonl(tmp_path)
     assert loaded["content_hash"] == data["content_hash"]
-    for name in R.FAMILIES:
+    for name in R.ALL_FAMILIES:
         assert loaded[name] == data[name]
-        assert all(isinstance(r, R.FAMILIES[name]) for r in loaded[name])
+        assert all(isinstance(r, R.ALL_FAMILIES[name]) for r in loaded[name])
     line = json.loads((tmp_path / "dry_end_setups.jsonl").read_text().splitlines()[0])
     assert set(line) == {f.name for f in R.DryEndSetupRecord.__dataclass_fields__.values()}
-    assert isinstance(line["customers"][0], dict) and isinstance(line["rejects"], list)
+    assert isinstance(line["lanes"][0], dict) and isinstance(line["rejects"], list)
     manifest = json.loads((tmp_path / "manifest.json").read_text())
     assert manifest["content_hash"] == data["content_hash"]
 
@@ -132,7 +134,7 @@ def test_jsonl_round_trip_restores_equal_records(tmp_path):
 def test_tampered_files_fail_the_manifest_hash(tmp_path):
     write_jsonl(generate_months(months=(("2026", 9),)), tmp_path)
     path = tmp_path / "stops.jsonl"
-    path.write_bytes(path.read_bytes().replace(b'"duration_sec":', b'"duration_sec":1', 1))
+    path.write_bytes(path.read_bytes().replace(b'"seconds":', b'"seconds":1', 1))
     with pytest.raises(ValueError, match="content hash"):
         read_jsonl(tmp_path)
 

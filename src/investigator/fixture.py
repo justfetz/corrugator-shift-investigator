@@ -4,6 +4,8 @@ from math import ceil, floor, lcm
 import random
 import xml.etree.ElementTree as ET
 
+# The one-day XML fixture's own paper widths (it predates the record contract's 90-110 in steps).
+FIXTURE_WEB_WIDTHS = (98, 95, 92, 87)
 GRADES = {"26-C": 900, "32-C": 900, "55-C": 850, "200-C": 800,
           "275-BC": 500, "275-EB": 500}
 REJECT_REASONS = ("Up warp", "Down warp", "Bond - delamination",
@@ -20,7 +22,7 @@ def _groups(rng):
     """Generate compatible orders before allocating any production time."""
     group = 0
     while True:
-        width = rng.choice((98,95,92,87))
+        width = rng.choice(FIXTURE_WEB_WIDTHS)
         grade = list(GRADES)[group % len(GRADES)]
         single = group % 5 == 4
         if single:

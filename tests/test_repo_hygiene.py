@@ -366,3 +366,26 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
             '/app/prebuilt-golden') in dockerfile
     assert 'INVESTIGATOR_PREBUILT=/app/prebuilt ' in dockerfile and 'INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden' in dockerfile
     assert not any('INVESTIGATOR_AS_OF' in line for line in dockerfile.splitlines() if line.startswith(('ENV', 'ARG')))   # never pinned
+
+
+# The record contract describes a generic corrugator dry-end setup record (owner, issue #100): no vendor or
+# product name and no source-system table or record-type name anywhere in the repository. The names are
+# spelled here in pieces, so this file does not hold them either; a base64 blob (a recorded model signature)
+# that happens to contain the letters does not count, so a match must stand alone.
+VENDOR_NAMES = ("B" + "HS", "Production" + "_Center", "BQMES" + "PAHT", "Modul" + "e Facer", "Modul" + " Facer", "P0" + "4[PGTS]")
+
+
+def test_no_vendor_or_source_system_name_appears_in_the_repository():
+    try:
+        tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, timeout=30).stdout.split()
+    except (OSError, subprocess.TimeoutExpired):
+        pytest.skip("git unavailable")
+    pattern = re.compile("(?<![A-Za-z0-9+/_])(?:" + "|".join(VENDOR_NAMES) + ")(?![A-Za-z0-9+/_])", re.IGNORECASE)
+    hits = []
+    for name in tracked:
+        try:
+            text = (ROOT / name).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        hits += [f"{name}:{text.count(chr(10), 0, m.start()) + 1}: {m.group(0)}" for m in pattern.finditer(text)]
+    assert hits == [], hits

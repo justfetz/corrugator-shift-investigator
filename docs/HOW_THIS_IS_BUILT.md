@@ -1,20 +1,21 @@
 # How this is built
 
-A ten-minute walk through the Corrugator Shift Investigator in the order the data flows: from one seed to four record families, through the invariants that hold them together, into a store and a set of bounded tools, through a planner that may only choose, out as evidence with a trail, and finally into a golden set that owns its own truth. Every section names the file that does the work and the test that proves it. Nothing here is a real plant, a vendor protocol, or a proof of cause; the last section says so plainly.
+A ten-minute walk through the Corrugator Shift Investigator in the order the data flows: from one seed to the record contract's families, through the invariants that hold them together, into a store and a set of bounded tools, through a planner that may only choose, out as evidence with a trail, and finally into a golden set that owns its own truth. Every section names the file that does the work and the test that proves it. Nothing here is a real plant, a vendor protocol, or a proof of cause; the last section says so plainly.
 
 ```
- seed 2026 + date ──► synth.generate_day() ×262 ──► four record families ──► content hash 041692146c7f…
+ seed 2026 + date ──► synth.generate_day() ×262 ──► record families ──► content hash b89074754b8d…
                      ▲                         (the year ending 2026-09-30)
-                     │                      dry-end setups  31,488
-              stories.py (answer keys)      wet ends        11,030
+                     │                      dry-end setups  33,441   (63,045 order lanes, 244,892 reject lines)
+              stories.py (answer keys)      wet ends        11,971
               read by the generator only    shifts             786
-                                            stops            6,739
+                                            stops            6,690
+                                            rolls           63,629   + the customer dimension, 49
                                                    │
                                                    ▼
                                   RecordStore: one in-memory DuckDB, built once
-                                  setups · customers · rejects · wet_ends · shifts · stops
+                    setups · setup_orders · customers · rejects · wet_ends · shifts · stops · rolls
                                       │                                  │
-                         day_analysis(day, corrupt)              six period tools
+                         day_analysis(day, corrupt)              the period tools
                          five per-day tables, validated          any day / week / month window
                          nine daily tools                        ratios of sums, previous window beside
                                       │                                  │
@@ -32,56 +33,61 @@ A ten-minute walk through the Corrugator Shift Investigator in the order the dat
                      golden_values.json ◄── make_value_goldens.py: plain sums over the records, stamped with the hash
 ```
 
-## 1. The seed and the four record families
+## 1. The seed and the record families
 
-Everything starts with `synth.generate_day(day, seed=2026)` in `src/investigator/synth.py`. It lays out one Monday-to-Friday production day — three 480-minute shifts starting 07:00, 15:00 and 23:00 — for one machine called `CORR-1`, and emits four families of plain records defined in `src/investigator/records.py`. Every random draw of the day comes from streams keyed by the seed and a date (the day's own, its week's and its month's), and nothing carries into the next day, so a day is byte-identical whatever range it is generated in (issue #35). The dataset is a rolling year: every production day from 365 days before `as_of` to `as_of`, 262 days for the year ending 2026-09-30 that the tests and the golden set read; the hosted demo's year ends on the day before its image was built and moves every night. The same seed gives byte-identical JSONL files and one SHA-256 content hash over the range; change the seed, the window or the machine id and the hash changes.
+Everything starts with `synth.generate_day(day, seed=2026)` in `src/investigator/synth.py`. For one Monday-to-Friday production day (three 480-minute shifts starting 07:00, 15:00 and 23:00) on one machine called `CORR-1`, it draws the day's orders (a customer, a sheet, a quantity, a grade) and schedules them into dry-end setups the way a corrugator scheduler does: two orders paired across the two cutoff knives to fill the web, the shorter lane setting the setup's length, the other's remainder carried into the next setup. It lays the setups out over the shifts with their stops and emits the records defined in `src/investigator/records.py`. Every random draw of the day comes from streams keyed by the seed and a date (the day's own, its week's and its month's), and nothing carries into the next day, so a day is byte-identical whatever range it is generated in (issue #35). The dataset is a rolling year: every production day from 365 days before `as_of` to `as_of`, 262 days for the year ending 2026-09-30 that the tests and the golden set read; the hosted demo's year ends on the day before its image was built and moves every night. The same seed gives byte-identical JSONL files and one SHA-256 content hash over the range; change the seed, the window or the machine id and the hash changes.
 
-The field names and units are borrowed from the shape of a corrugator controller's own record types, so the data reads like plant records to anyone who has seen plant records: a dry-end setup record ("P04P"-shaped), a wet-end record ("P04G"), a shift record ("P04T") and a stop record ("P04S"). They are *not* those records. This is the project's own documented demo schema (`demo-records/v1`, field by field in [RECORDS.md](RECORDS.md)); no vendor wire format, field semantics or protocol compatibility is claimed. The borrowed shape is the point: an agent that learns to read these will not be confused by the real thing's vocabulary, and nothing here needs a machine connection.
+The records follow [the record contract](RECORD_CONTRACT.md) (`demo-records/v2`, issue #100). It describes a generic corrugator dry-end setup record: the setup is the fact table, with its order lanes embedded as a machine writes them. Customers are a dimension. The paper runs (wet ends), their roll stock, the downtime log, the reject lines (category · reason · position) and the shifts link to it by key. Each field is mapped to the typical MES field it stands for. No vendor wire format, field semantics or protocol compatibility is claimed. The shape is the point: an agent that learns to read these will not be confused by real plant records, and nothing here needs a machine connection.
 
-One example of each, taken from Monday 14 September, shift 2, as the generator wrote it before issue #35 seeded every day by its date (the numbers in today's records differ; the shapes and the arithmetic do not):
+One example of each, from Monday 14 September, shift 2, as the generator writes it today.
 
-**Dry-end setup** — one record per knife combination. Three minutes and twenty-seven seconds of a 275-BC run on an 87-inch web, two orders across the web (a 20-inch sheet in one out and a 32-inch sheet in two outs, so 84 inches occupied and 3 inches of trim, centered), one stop inside it:
+**Dry-end setup.** Eleven minutes of a 275-BC run on 95-inch paper. Two orders across the web: a 60-inch sheet one out on knife 1, continuing from the setup before, and a 33-inch sheet one out on knife 2. That makes 93 inches used and 2 inches of trim, centered. There is one stop inside it:
 
 ```json
-{"setup_id": "CORR2026091416091908", "machine_id": "CORR-1", "start_date": "20260914", "start_time": "160919",
- "end_date": "20260914", "end_time": "162246", "lineal_ft": 5239.9, "avg_speed_fpm": 389.6, "web_width_in": 87,
- "quality_id": "275-BC", "total_nominal_ft": 5191.3, "total_produced_sqft": 37989.3, "trim_sqft": 1297.9, "trim_pct": 3.42,
- "change_code": "C", "stop_time_sec": 134, "number_of_stops": 1, "shift_number": 2, "chop_sqft": 349.2, "kqf_sqft": 388.2,
- "customers": [{"order_number": "SO-831284", "sheet_width_in": 20, "sheet_length_in": 26, "number_of_outs": 1, "cutoff_allocation": 1,
-                "nominal_cuts": 2396, "actual_cuts": 2352, "hqm_waste_sqft": 21.7, "asm_waste_sqft": 83.0, "stack_height_sheets": 80, "part_number": "P-77557"},
-               {"order_number": "SO-831286", "sheet_width_in": 32, "sheet_length_in": 58, "number_of_outs": 2, "cutoff_allocation": 2,
-                "nominal_cuts": 1074, "actual_cuts": 1081, "hqm_waste_sqft": 77.3, "asm_waste_sqft": 206.2, "stack_height_sheets": 132, "part_number": "P-38514"}],
- "rejects": [{"reason": "BOND", "cutoff_allocation": 1, "sheets": 11, "sqft": 39.7, "detail": "Delamination"}, {"reason": "WARP", "cutoff_allocation": 1, "sheets": 12, "sqft": 43.3, "detail": "Up warp"},
-             {"reason": "MISALIGNMENT", "cutoff_allocation": 1, "sheets": 6, "sqft": 21.7, "detail": "Misalignment"}, {"reason": "BOND", "cutoff_allocation": 2, "sheets": 7, "sqft": 90.2, "detail": "Paper / raw material"},
-             {"reason": "WARP", "cutoff_allocation": 2, "sheets": 9, "sqft": 116.0, "detail": "Twist warp"}, {"reason": "MOISTURE", "cutoff_allocation": 2, "sheets": 6, "sqft": 77.3, "detail": "Moisture"}],
- "production_date": "20260914", "wet_end_id": "WE20260914030", "split_from_setup_id": null}
+{"setup_id": "CORR2026091421225934", "production_date": "20260914", "shift": 2, "start_time": "212259", "end_time": "213434",
+ "run_seconds": 617, "lineal_ft": 4869.7, "scheduled_lineal_ft": 4922.5, "avg_fpm": 420.4, "web_width_in": 95, "quality_id": "275-BC",
+ "gross_sqft": 38551.8, "trim_sqft": 804.5, "trim_pct": 2.11, "shear_sqft": 336.5, "swing_knife_sqft": null, "reject_sqft": 355.6,
+ "cutoff_waste_sqft": 41.0, "stacker_waste_sqft": 27.0, "change_code": "C", "stop_seconds": 78, "stops": 1, "wet_end_id": "WE20260914033",
+ "lanes": [{"lane": 1, "cutoff_knife": 1, "order_number": "SO-2609140006", "customer_id": "CU006", "order_quantity": 2490, "outs": 1,
+            "sheet_width_in": 60, "sheet_length_in": 66, "nominal_cuts": 895, "actual_cuts": 877, "cutoff_waste_boards": 1, "stacker_waste_boards": 0},
+           {"lane": 2, "cutoff_knife": 2, "order_number": "SO-2609140012", "customer_id": "CU002", "order_quantity": 1830, "outs": 1,
+            "sheet_width_in": 33, "sheet_length_in": 59, "nominal_cuts": 1001, "actual_cuts": 981, "cutoff_waste_boards": 1, "stacker_waste_boards": 2}],
+ "rejects": [{"lane": 1, "category": "bond", "reason": "Blisters (tension blister)", "liner": "top", "side": null, "sheets": 3, "sqft": 82.5},
+             {"lane": 1, "category": "warp", "reason": "Up warp", "liner": null, "side": null, "sheets": 5, "sqft": 137.5},
+             {"lane": 2, "category": "bond", "reason": "Delamination", "liner": "top", "side": "drive", "sheets": 2, "sqft": 27.0}, "…"]}
 ```
 
-Read it the way the tools do: 5,239.9 lineal feet × 87 inches / 12 = 37,989 gross square feet, trim and chops included. The chops (349.2 sq ft, exactly eleven 34-inch full-web cuts) are subtracted to get the travel that reached the knives, and both knives' nominal cuts multiply back to that travel within one cutoff length (2,396 × 26 in and 1,074 × 58 in are both about 5,190 ft). `change_code: C` says knife 1's order continued from the previous setup while knife 2's changed. The six reject lines are per reason and per knife position; they add up to `kqf_sqft`.
+(A few fields are left out here; [the contract](RECORD_CONTRACT.md#the-setup-math) prints the whole record.) Read it the way the tools do. Lane 1 had 895 sheets left of its order and needs the least travel, so it sets the length: 895 cuts × 66 in = 4,922.5 ft, the scheduled lineal. Lane 2 runs as far as its pair, ⌊895 × 66 / 59⌋ = 1,001 cuts, ending within one 59-inch cut of lane 1, and its 829 remaining sheets carry into the next setup. The run made 1.9% less travel than planned, which is why the actual cuts are 877 and 981. Fifteen 34-inch full-web chops (336.5 sq ft) sit inside the 4,869.7 lineal ft, so gross is 4,869.7 × 95 / 12 = 38,551.8 sq ft and trim is the order travel × 2 in / 12. `change_code: C` says an order continued from the previous setup. The reject lines carry the owner's category and reason with the position as attributes; they add up to `reject_sqft`.
 
-**Wet end** — one paper run: consecutive setups sharing grade and web width. This one holds three setups, the one above in the middle; its totals are exact sums of theirs:
+**Wet end.** One paper run: consecutive setups sharing grade and web width. This one holds three setups, the one above in the middle; its totals are exact sums of theirs:
 
 ```json
-{"wet_end_id": "WE20260914030", "quality_id": "275-BC", "web_width_in": 87, "start_date": "20260914", "start_time": "160252",
- "end_date": "20260914", "end_time": "163022", "duration": "002730", "lineal_ft": 11400.9, "total_produced_sqft": 82656.6,
- "side_trim_sqft": 2823.3, "max_speed_fpm": 467.2, "avg_speed_fpm": 414.6,
- "setup_ids": ["CORR2026091416025207", "CORR2026091416091908", "CORR2026091416224609"], "shift_numbers": [2], "production_date": "20260914"}
+{"wet_end_id": "WE20260914033", "quality_id": "275-BC", "web_width_in": 95, "start_time": "210149", "end_time": "214551", "duration": "004402",
+ "lineal_ft": 17692.5, "gross_sqft": 140065.6, "trim_sqft": 4322.0, "max_fpm": 473.6, "avg_fpm": 401.8,
+ "setup_ids": ["CORR2026091421014933", "CORR2026091421225934", "CORR2026091421343435"], "shifts": [2], "production_date": "20260914"}
 ```
 
-**Shift** — 480 minutes, a crew label that is never a person, exact sums over the shift's setups, and one non-protocol field, `bale_sqft`, a scale reading of baled waste that is deliberately a little more than trim + chops + rejects so the "unexplained" tile has something honest to show:
+**Rolls.** The run fed five webs (275-BC is double wall). Each roll records the paper fed, the wraps peeled at prep, and what stayed on its core when it was spliced:
 
 ```json
-{"shift_number": 2, "production_date": "20260914", "group_name": "Crew B", "start_time": "150000", "end_time": "230000", "duration": "080000",
- "total_lineal_ft": 291063.5, "total_produced_sqft": 2252174.3, "side_trim_sqft": 72531.8, "chop_sqft": 14142.2, "reject_sqft": 25298.8,
- "max_speed_fpm": 850.0, "avg_speed_fpm": 606.4, "wet_end_ids": ["WE20260914028", "…", "WE20260914051"], "scheduled_minutes": 480, "bale_sqft": 119729.4}
+{"roll_id": "RL20260914033301", "wet_end_id": "WE20260914033", "position": "SF2 liner", "paper_grade": "42# liner", "width_in": 95,
+ "lineal_ft": 17409.9, "consumed_sqft": 137828.4, "peel_sqft": 325.3, "core_sqft": 220.1, "ended_at": "splice"}
 ```
 
-**Stop** — always inside exactly one setup, with a kind, a place, a reason and a note that is labelled unverified because it is:
+**Shift.** 480 minutes, a crew label that is never a person, exact sums over the shift's setups, and one non-protocol field, `bale_sqft`. It is a scale reading of baled waste, deliberately a little more than trim + chops + rejects + waste boards so the "unexplained" tile has something honest to show:
 
 ```json
-{"stop_id": "ST20260914161821", "start_time": "161821", "end_time": "162035", "duration_sec": 134, "kind": "Operator", "place": "Splicer 3",
- "reason": "Missed splice", "shift_number": 2, "production_date": "20260914", "setup_id": "CORR2026091416091908",
- "user_info": "Splice missed at Splicer 3; web break, chops run until the web settled (synthetic note, unverified)"}
+{"shift": 2, "production_date": "20260914", "group_name": "Crew B", "start_time": "150000", "end_time": "230000", "duration": "080000",
+ "lineal_ft": 275676.7, "gross_sqft": 2238765.7, "trim_sqft": 73113.1, "shear_sqft": 13650.9, "reject_sqft": 25855.8,
+ "cutoff_waste_sqft": 2694.5, "stacker_waste_sqft": 1488.7, "max_fpm": 854.6, "avg_fpm": 574.3,
+ "wet_end_ids": ["WE20260914022", "…", "WE20260914036"], "scheduled_minutes": 480, "bale_sqft": 123040.4}
+```
+
+**Stop.** A row of the downtime log, always inside exactly one setup, with a kind, a place, a reason and a comment that is often empty. When there is one, it is labelled unverified because it is:
+
+```json
+{"stop_id": "ST20260914212259", "setup_id": "CORR2026091421225934", "shift": 2, "start_time": "212259", "end_time": "212417",
+ "seconds": 78, "kind": "Operator", "place": "Stacker", "reason": "Order change", "comment": ""}
 ```
 
 ## 2. The invariants that hold the families together
@@ -89,16 +95,18 @@ Read it the way the tools do: 5,239.9 lineal feet × 87 inches / 12 = 37,989 gro
 Each line is one rule the generator keeps for every record of both months and the test in `tests/test_records_invariants.py` (unless named otherwise) that walks every record to prove it.
 
 - The calendar is every weekday × 3 shifts of 480 minutes at 07:00 / 15:00 / 23:00, labelled by the production day that starts at 07:00 (the invariant tests walk August and September 2026: 43 weekdays) — `test_calendar_is_three_shifts_per_weekday_of_both_months`.
-- The web is centered: ordered widths × outs plus trim equal the web width, with 1 to 7 inches of trim per side — `test_web_geometry_is_centered_within_trim_limits`.
-- Knives share travel: every knife's nominal cuts × cutoff equal the order travel within one cutoff, and counted cuts stay within ±10 % of nominal, mostly within ±2 % — `test_lineal_consistency_and_overrun_window`.
-- Area reconciles: gross = lineal × width / 12; chops are whole 34-inch cuts; trim = order travel × trim inches / 12; each reject line is sheets × width × length / 144 and they sum to `kqf_sqft`; a setup's speed is lineal over elapsed minutes including its stops — `test_setup_area_accounting`.
-- One order per knife position, and the change code tells the truth: `O` shares no order with the previous setup, `C` keeps knife 1's order, `S` continues all orders across a shift boundary — `test_one_order_per_knife_and_continuation_codes`.
+- The web is centered: the lanes' outs × sheet width fit inside the web less the recorded trim, with 1 to 7 inches of trim a side — `test_lanes_fit_the_web_less_the_trim_for_every_setup` (and over the whole year in the store, `tests/test_record_contract.py`).
+- The owner's six setup identities: used width + trim = web; a lane's travel is its cuts × sheet length; the lanes end within one knife rotation; the scheduled lineal is the longest lane; an order's scheduled sheets reach its quantity; gross = web × lineal and trim = trim inches × order travel — `test_setup_identities`, with the worked example in `tests/test_setup_math.py`.
+- Counted cuts stay within ±10 % of nominal, mostly within ±2 % — `test_lineal_consistency_and_overrun_window`.
+- Area reconciles: chops are whole 34-inch cuts; each reject line is sheets × sheet area and the dry-end lines sum to `reject_sqft`; waste boards are boards × sheet area; a setup's speed is lineal over elapsed minutes including its stops — `test_setup_area_accounting`.
+- One order per lane, and the change code tells the truth: `O` shares no order with the previous setup, `C` carries one, `S` continues all lanes across a shift boundary — `test_one_order_per_lane_and_change_codes`.
 - A wet end is the exact aggregate of its contiguous setups and spans at most two shifts — `test_wet_end_is_the_exact_aggregate_of_its_setups`.
 - A shift is the exact aggregate of its setups, and the bale reading exceeds the accounted waste by 0.1–0.4 % of gross — `test_shift_is_the_exact_aggregate_of_its_setups`.
-- Setups tile every shift with no gap; every stop sits inside one setup, stops never overlap, and a setup's stop count and seconds equal its stops — `test_time_partition_setups_tile_shifts_and_stops_sit_inside`.
+- Setups tile every shift with no gap; every stop sits inside one setup and stops never overlap; for every setup its stop rows' seconds sum to `stop_seconds` and their count is `stops` — `test_time_partition_and_the_downtime_log`.
 - Maintenance + PM downtime is 2–3 % of scheduled minutes per month and operator downtime 1–3 %, with one PM window every Thursday on shift 1, recorded as kind `PM` with its own reason `Planned maintenance` — `test_downtime_budget_per_month`.
-- Per month, side trim is 2.5–3.5 % of gross, shear chops 0.4–1.0 %, dry-end rejects 0.8–1.4 % — `test_waste_bands_per_month`.
-- Each production day makes 5.5–7.5 million gross square feet from 130–230 setup records — `test_output_per_production_day`.
+- Per month, side trim is 2.5–3.5 % of gross, shear chops 0.4–1.0 %, waste boards 0.1–0.4 %, dry-end rejects 0.9–1.3 % — `test_waste_bands_per_month`.
+- Each production day makes 6–8.5 million gross square feet from 90–160 setup records — `test_output_per_production_day`.
+- The customers are a dimension every lane points at, and the roll stock feeds every paper run with peel and core — `test_customers_are_a_dimension_every_lane_points_at`, `test_roll_stock_feeds_every_paper_run_with_peel_and_core`.
 - The same seed gives the same bytes: the content hash is pinned — `tests/test_synth_determinism.py::test_pinned_content_hash`.
 - The store's per-day tables and period tools reconcile to plain Python sums over the families, field by field — `tests/test_record_store.py`, `tests/test_period_tools.py`.
 

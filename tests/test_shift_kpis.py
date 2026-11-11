@@ -112,11 +112,14 @@ def assert_tiles_same(new, old, label):
     """The tiles of two sets of sums that agree to 4 decimals (checked just before): equal to 4 decimals,
     or one flip of the last displayed digit where a value sits on a rounding boundary and the two
     summation orders land either side of it (July against June, shift 2: lineal per paper change
-    19165.9 and 19166.0)."""
+    19165.9 and 19166.0; issue #100's regenerated records: speed with stops 604.5 and 604.6)."""
+    def unit(value):   # the last displayed place of a tile rounded to 0-4 decimals
+        return next((10.0 ** -k for k in range(5) if round(value, k) == value), 1e-4)
     assert set(new) == set(old), label
     for key, value in old.items():
         if isinstance(value, float) and isinstance(new[key], (int, float)):
-            assert round(new[key], 4) == round(value, 4) or abs(new[key] - value) <= max(1e-4, abs(value) * 1e-5), (label, key, new[key], value)
+            assert round(new[key], 4) == round(value, 4) or abs(new[key] - value) <= max(1e-4, abs(value) * 1e-5, unit(value) + 1e-9), \
+                (label, key, new[key], value)
         else:
             assert new[key] == value, (label, key)
 

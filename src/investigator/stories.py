@@ -15,8 +15,9 @@ from datetime import date
 # the week of 17 August. Afterwards side trim creeps upward by about 0.1
 # percentage point per week (the crews run wider trim allowances) until the end
 # of October, when the allowances are reset and trim returns to its pre-story
-# level; the knife / slitter jam stops rise in minutes and count, concentrating
-# on the slitter/scorer.
+# level; over the same span the knife / slitter jam stops rise in minutes and
+# count, concentrating on the slitter/scorer, and they return to their baseline
+# together with the trim from 1 November (issue #100, carried over from #91).
 SLITTER_REBUILD = {
     "pm_date": date(2026, 8, 20),          # Thursday, shift 1 PM window
     "pm_shift": 1,
@@ -26,6 +27,7 @@ SLITTER_REBUILD = {
     "trim_creep_pp_per_week": 0.10,        # added per week after pm_date
     "trim_creep_end": date(2026, 10, 31),  # the creep's last day (owner, PR #91); baseline again from 1 November
     "knife_slitter_minutes_multiplier": 3.0,   # strong enough to survive Poisson noise at the month grain
+    "knife_slitter_effect_end": date(2026, 10, 31),   # the jam effect's last day, with the trim creep (issue #100)
     "slitter_place_share_before": 0.20,    # share of knife/slitter jams at the slitter
     "slitter_place_share_after": 0.50,
 }
@@ -44,15 +46,25 @@ SPLICER3_MISSED_SPLICE = {
 
 # Story 3: warp rejects are higher on the first production day after a weekend
 # (Monday) and higher in August than in September. Rates are fractions of
-# gross square feet; bond, misalignment and moisture stay flat (dry-end total
-# about 1.0-1.1% of gross).
+# gross square feet; bond, misalignment and cracking / surface stay flat
+# (dry-end total about 1.0-1.1% of gross).
 WEEKEND_WARP = {
     "monday_multiplier": 1.5,
     "warp_rate_by_month": {8: 0.0042, 9: 0.0030},
     "bond_rate": 0.0040,
     "misalignment_rate": 0.0020,
-    "moisture_rate": 0.0010,
-    # reported sub-reason mix inside a family (fractions of that family's rejects)
-    "warp_detail_weights": {"Up warp": 0.45, "Down warp": 0.25, "Twist warp": 0.20, "S-warp": 0.10},
-    "bond_detail_weights": {"Delamination": 0.60, "Paper / raw material": 0.40},
+    "cracking_rate": 0.0010,
+    # reported reason mix inside a category (reject_reasons.json names; fractions of that category's rejects)
+    "reason_weights": {
+        "warp": {"Up warp": 0.40, "Down warp": 0.25, "Twist warp": 0.18, "S warp": 0.10, "End to end warp": 0.07},
+        "bond": {"Delamination": 0.40, "Blisters (tension blister)": 0.12, "Blow out": 0.10, "Glue dam": 0.08,
+                 "Zipper board": 0.06, "Fuzzy edges": 0.06, "Loose / tight edges": 0.06, "Dry board": 0.05,
+                 "Low caliper": 0.04, "Between flutes (DW)": 0.03},
+        "misalignment": {"Misalign": 0.35, "Web walking": 0.12, "Light scores": 0.10, "Bad slit cut": 0.08,
+                         "Wrong scores": 0.08, "Score cutting": 0.07, "Slitter off line": 0.06,
+                         "Top / bottom knife not cutting to spec": 0.04, "Frozen slitters": 0.02,
+                         "Knife overheating": 0.02, "No change in slitters": 0.02, "Moon outs": 0.01,
+                         "Wrong slat cuts": 0.01, "Wrong cut outs": 0.01, "Wrong dimensions / width": 0.01},
+        "cracking": {"Cracking board": 0.55, "Wrinkles": 0.35, "Brake line": 0.10},
+    },
 }

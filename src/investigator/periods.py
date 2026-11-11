@@ -53,7 +53,7 @@ SHIFT_SECONDS = 28800   # the daily KPI tool's fixed eight-hour denominator (ana
 KPI_SQL = ("SELECT * FROM shift_kpis WHERE corrupt = ? AND production_date BETWEEN ? AND ? "
            "AND list_contains(?, shift) ORDER BY production_date, shift")
 # The stop records of both windows, in the order the per-day notes tool lists them.
-STOP_SQL = ("SELECT production_date, shift, stop_id, kind, place, reason, seconds, note, "
+STOP_SQL = ("SELECT production_date, shift, stop_id, kind, place, reason, seconds, comment AS note, "
             "strftime(started, '%Y-%m-%d %H:%M:%S') AS start, strftime(ended, '%Y-%m-%d %H:%M:%S') AS \"end\" "
             "FROM stops WHERE production_date BETWEEN ? AND ? AND list_contains(?, shift) "
             "ORDER BY production_date, shift, start, stop_id")
@@ -158,7 +158,7 @@ class PeriodReports:
         rid=uuid4().hex
         sections=[f'Synthetic {period_name} report: {label}. '+('Selected shift '+str(shift)+'.' if scope=='shift' else 'All three shifts.'),
             f'{len(current)} available shift records. {totals["valid_setups"]} valid dry-end setups; {totals["paper_changes"]} paper changes (wet-end runs).',
-            f'Estimated good output {totals["estimated_good_sqft"]:,.0f} sq ft after recorded trim, shear and dry-end rejects. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
+            f'Estimated good output {round(totals["estimated_good_sqft"], 1):,.0f} sq ft after recorded trim, shear and dry-end rejects. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
         if not complete: sections.append('Current period is incomplete: missing days or excluded records. Observed totals only; rankings withheld.')
         if complete and old_complete:
             sections.append(f'Previous period {old_start} to {old_end}: speed change {totals["observed_shift_fpm"]-old["observed_shift_fpm"]:+.1f} ft/min; maintenance change {totals["maintenance_pct"]-old["maintenance_pct"]:+.2f} percentage points.')

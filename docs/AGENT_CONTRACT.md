@@ -31,7 +31,7 @@ Period tools read the whole record store (two production months, Monday to Frida
 - get_period_kpis(window, compare, shift): the dashboard tiles with current, previous, delta, `better` direction and a `change` label; deltas withheld unless both windows are complete.
 - compare_periods(current_window, previous_window, shift): the same table for two arbitrary windows.
 - get_downtime_pareto(window, group_by reason|place|kind, measure minutes|count, shift): ordered with share and cumulative share, previous-window minutes alongside.
-- get_waste_breakdown(window, shift): trim, shear, bond, warp, misalignment, moisture, bale and unexplained (plus `details`: reported sub-reasons with share of dry-end) as sq ft and % of gross, with the previous window.
+- get_waste_breakdown(window, shift): trim, shear, the cutoff-knife and stacker waste boards, bond, warp, misalignment, cracking / surface, bale and unexplained (plus `details`: each dry-end category's reported reasons with share of dry-end) as sq ft and % of gross, with the previous window.
 - get_stops_profile(window, shift): stops, minutes and minutes per stop per production day plus the Mon–Fri weekday profile.
 - get_trend(metric, weeks 1–26, anchor, shift): weekly series of one allow-listed metric.
 - get_grade_totals(window, shift, measure volume|speed): per board grade, setups, wet ends, lineal ft, volume MSF and share, speed without stops and elapsed speed from the setup clocks, % of grade target, allocated stops and minutes, lineal per setup and per paper change, trim and dry-end %, previous window's volume. `measure` chooses only the lead and the chart, never the rows: volume (MSF beside the previous window, the default) or speed (ft/min without stops against each grade target).

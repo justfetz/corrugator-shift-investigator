@@ -200,8 +200,8 @@ def _envelope(data, rates):
 
 
 # Waste breakdown categories and how each is priced; bale is the scale's total, priced as paper.
-WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste',
-               'moisture': 'waste', 'dry_end': 'waste', 'bale': 'paper', 'unexplained': 'paper'}
+WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'cutoff': 'waste', 'stacker': 'waste', 'bond': 'waste', 'warp': 'waste',
+               'misalignment': 'waste', 'cracking': 'waste', 'dry_end': 'waste', 'bale': 'paper', 'unexplained': 'paper'}
 PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_breakdown',
                 'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
 GAIN = 'not priced: this bucket ran better than the reference (a gain, not a loss)'
@@ -347,7 +347,7 @@ def opportunities(store, window, shift, rates):
         rows.append({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if r['category'] == 'Order change' else ''),
                      'kind': 'setup' if r['category'] == 'Order change' else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
                      'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)})
-    for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
+    for key in ('shear', 'bond', 'warp', 'misalignment', 'cracking'):   # waste boards are record defaults, not levers
         r = by[key]
         if r['sqft']:
             rows.append({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft',

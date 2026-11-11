@@ -1,0 +1,115 @@
+{
+  "about": "Dry-end reject reasons as category -> reason, with position as attributes, never as reasons (issue #100). A reject line carries one category key, one reason of that category, and optionally a liner and a side from the lists the reason allows. `controllable` is who can act on it: yes (the corrugator crew), partly (receiving and roll prep), no, or unstated (the owner did not say). `counted_as` decides where the area is reported: dry_end lines are dry-end quality waste; changeover lines are counted with shear and sequencing, not dry-end quality; excluded lines are planning or administration, not production waste, reported separately. The demo generator emits only the bond, warp, misalignment and cracking categories (records.GENERATED_REJECT_CATEGORIES); the rest are the plant's list, kept so a record carrying them is classified, not guessed.",
+  "source": "owner, 2026-11-11 (issue #100): grouping owner-approved; the plant's sub-reason list, with one product name written generically (a single facer)",
+  "positions": {
+    "liner": ["top", "bottom", "medium", "DB", "SF"],
+    "side": ["drive", "operator", "middle"]
+  },
+  "categories": [
+    {"key": "bond", "label": "Bond / delamination", "cause": "temperature", "controllable": "yes", "counted_as": "dry_end",
+     "reasons": [
+       {"reason": "Delamination", "liner": ["top", "bottom", "DB", "SF"], "side": ["drive", "operator", "middle"]},
+       {"reason": "Between flutes (DW)", "liner": [], "side": ["drive", "operator", "middle"], "doublewall_only": true},
+       {"reason": "Blisters (tension blister)", "liner": ["top", "bottom"], "side": []},
+       {"reason": "Blow out", "liner": [], "side": ["middle", "drive", "operator"]},
+       {"reason": "Glue dam", "liner": [], "side": ["drive", "operator"]},
+       {"reason": "Zipper board", "liner": ["top", "bottom"], "side": []},
+       {"reason": "Fuzzy edges", "liner": [], "side": ["drive", "operator"]},
+       {"reason": "Loose / tight edges", "liner": [], "side": ["drive", "operator"]},
+       {"reason": "Dry board", "liner": [], "side": []},
+       {"reason": "Low caliper", "liner": [], "side": []}
+     ]},
+    {"key": "warp", "label": "Warp", "cause": "temperature", "controllable": "yes", "counted_as": "dry_end",
+     "reasons": [
+       {"reason": "Up warp", "liner": [], "side": []},
+       {"reason": "Down warp", "liner": [], "side": []},
+       {"reason": "Twist warp", "liner": [], "side": []},
+       {"reason": "S warp", "liner": [], "side": []},
+       {"reason": "End to end warp", "liner": [], "side": []}
+     ]},
+    {"key": "cracking", "label": "Cracking / surface", "cause": "surface", "controllable": "yes", "counted_as": "dry_end",
+     "reasons": [
+       {"reason": "Cracking board", "liner": ["top", "bottom"], "side": []},
+       {"reason": "Wrinkles", "liner": ["top", "bottom"], "side": []},
+       {"reason": "Brake line", "liner": [], "side": []}
+     ]},
+    {"key": "misalignment", "label": "Misalignment / scoring / slitting", "cause": "set-up", "controllable": "yes", "counted_as": "dry_end",
+     "reasons": [
+       {"reason": "Misalign", "liner": [], "side": ["drive", "operator"]},
+       {"reason": "Web walking", "liner": [], "side": ["drive", "operator"]},
+       {"reason": "Wrong scores", "liner": [], "side": []},
+       {"reason": "Light scores", "liner": [], "side": []},
+       {"reason": "Score cutting", "liner": [], "side": []},
+       {"reason": "Bad slit cut", "liner": [], "side": ["drive", "operator", "middle"]},
+       {"reason": "Top / bottom knife not cutting to spec", "liner": [], "side": []},
+       {"reason": "Frozen slitters", "liner": [], "side": []},
+       {"reason": "Knife overheating", "liner": [], "side": []},
+       {"reason": "No change in slitters", "liner": [], "side": []},
+       {"reason": "Slitter off line", "liner": [], "side": ["drive", "operator"]},
+       {"reason": "Moon outs", "liner": [], "side": []},
+       {"reason": "Wrong slat cuts", "liner": [], "side": []},
+       {"reason": "Wrong cut outs", "liner": [], "side": []},
+       {"reason": "Wrong dimensions / width", "liner": [], "side": []}
+     ]},
+    {"key": "handling", "label": "Handling damage", "cause": "handling", "controllable": "yes", "counted_as": "dry_end",
+     "reasons": [
+       {"reason": "Bander crush", "liner": [], "side": []},
+       {"reason": "Bander damage", "liner": [], "side": []},
+       {"reason": "Forklift damage", "liner": [], "side": []},
+       {"reason": "Top / lower stacker jam", "liner": [], "side": []},
+       {"reason": "Stacker in discharge", "liner": [], "side": []},
+       {"reason": "FF jam", "liner": [], "side": []},
+       {"reason": "Manual discharge", "liner": [], "side": []}
+     ]},
+    {"key": "paper", "label": "Paper / mill", "cause": "raw material", "controllable": "partly", "counted_as": "dry_end",
+     "reasons": [
+       {"reason": "Wrinkles in paper from mill", "liner": ["top", "bottom", "medium"], "side": []},
+       {"reason": "Marks in paper / dropped roll", "liner": ["top", "bottom", "medium"], "side": []},
+       {"reason": "Wrong paper", "liner": ["top", "bottom", "medium", "DB", "SF"], "side": []},
+       {"reason": "Wrong medium", "liner": [], "side": []},
+       {"reason": "Wrong DB / SF liner", "liner": ["DB", "SF"], "side": []},
+       {"reason": "Wrong flute size", "liner": [], "side": []},
+       {"reason": "Liner inside out", "liner": ["top", "bottom"], "side": []},
+       {"reason": "No coating", "liner": [], "side": []},
+       {"reason": "Wrong color", "liner": [], "side": []}
+     ]},
+    {"key": "changeover", "label": "Changeover", "cause": "sequencing", "controllable": "yes", "counted_as": "changeover",
+     "reasons": [
+       {"reason": "Order change", "liner": [], "side": []},
+       {"reason": "Automatic order change", "liner": [], "side": []},
+       {"reason": "Paper change", "liner": [], "side": []},
+       {"reason": "Early paper change", "liner": [], "side": []},
+       {"reason": "Waste from a paper or flute change", "liner": [], "side": []},
+       {"reason": "Cut off", "liner": [], "side": []},
+       {"reason": "Small butt", "liner": [], "side": []}
+     ]},
+    {"key": "print", "label": "Print", "cause": "print", "controllable": "unstated", "counted_as": "dry_end",
+     "reasons": [
+       {"reason": "Print wrinkle", "liner": [], "side": []},
+       {"reason": "Print / no print", "liner": [], "side": []},
+       {"reason": "Streaks in print", "liner": [], "side": []}
+     ]},
+    {"key": "planning", "label": "Planning / admin (not production waste)", "cause": "administration", "controllable": "no", "counted_as": "excluded",
+     "reasons": [
+       {"reason": "Order fill", "liner": [], "side": []},
+       {"reason": "Over scheduled", "liner": [], "side": []},
+       {"reason": "Overshipment", "liner": [], "side": []},
+       {"reason": "Max shipped", "liner": [], "side": []},
+       {"reason": "Count adjustment", "liner": [], "side": []},
+       {"reason": "Inventory write-off", "liner": [], "side": []},
+       {"reason": "Mis-tag", "liner": [], "side": []},
+       {"reason": "Tag without a unit", "liner": [], "side": []},
+       {"reason": "Lost unit - shipping", "liner": [], "side": []},
+       {"reason": "Used as dunnage", "liner": [], "side": []},
+       {"reason": "Re-arrange outs", "liner": [], "side": []},
+       {"reason": "Cap sheets", "liner": [], "side": []},
+       {"reason": "Not enough trim", "liner": [], "side": []},
+       {"reason": "Out of trim", "liner": [], "side": []},
+       {"reason": "Operator", "liner": [], "side": []},
+       {"reason": "CTS", "liner": [], "side": []},
+       {"reason": "Single facer", "liner": [], "side": []},
+       {"reason": "NULL", "liner": [], "side": []},
+       {"reason": "(blank)", "liner": [], "side": []}
+     ]}
+  ]
+}

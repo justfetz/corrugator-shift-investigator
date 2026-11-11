@@ -90,7 +90,7 @@ class LegacyPeriodReports:
         rid=uuid4().hex
         sections=[f'Synthetic {period_name} report: {label}. '+('Selected shift '+str(shift)+'.' if scope=='shift' else 'All three shifts.'),
             f'{len(current)} available shift records. {totals["valid_setups"]} valid dry-end setups; {totals["paper_changes"]} paper changes (wet-end runs).',
-            f'Estimated good output {totals["estimated_good_sqft"]:,.0f} sq ft after recorded trim, shear and dry-end rejects. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
+            f'Estimated good output {round(totals["estimated_good_sqft"], 1):,.0f} sq ft after recorded trim, shear and dry-end rejects. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
         if not complete: sections.append('Current period is incomplete: missing days or excluded records. Observed totals only; rankings withheld.')
         if complete and old_complete:
             sections.append(f'Previous period {old_start} to {old_end}: speed change {totals["observed_shift_fpm"]-old["observed_shift_fpm"]:+.1f} ft/min; maintenance change {totals["maintenance_pct"]-old["maintenance_pct"]:+.2f} percentage points.')
@@ -164,16 +164,18 @@ def legacy_sums(self, window, shift, trace):
     params = [window["start"], window["end"], *extra]
     queries = {
         "setups": "SELECT count(*) AS setup_records, count(DISTINCT wet_end_id) AS paper_changes, "
-                  "coalesce(sum(feet),0) AS lineal_ft, coalesce(sum(gross),0) AS gross_sqft, "
-                  "coalesce(sum(trim),0) AS trim_sqft, coalesce(sum(shear),0) AS shear_sqft, "
-                  "coalesce(sum(rejects),0) AS reject_sqft, coalesce(sum(seconds),0) AS elapsed_seconds, "
+                  "coalesce(sum(lineal_ft),0) AS lineal_ft, coalesce(sum(gross_sqft),0) AS gross_sqft, "
+                  "coalesce(sum(trim_sqft),0) AS trim_sqft, coalesce(sum(shear_sqft),0) AS shear_sqft, "
+                  "coalesce(sum(reject_sqft),0) AS reject_sqft, coalesce(sum(elapsed_seconds),0) AS elapsed_seconds, "
+                  "coalesce(sum(cutoff_waste_sqft),0) AS cutoff_waste_sqft, coalesce(sum(stacker_waste_sqft),0) AS stacker_waste_sqft, "
                   "coalesce(sum(stop_seconds),0) AS setup_stop_seconds, count(DISTINCT production_date) AS production_days "
                   f"FROM setups WHERE production_date BETWEEN ? AND ?{clause}",
         "shifts": "SELECT count(*) AS shift_records, coalesce(sum(scheduled_minutes),0)*60 AS scheduled_seconds, "
-                  f"coalesce(sum(bale),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
+                  f"coalesce(sum(bale_sqft),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
         "stops": f"SELECT kind, count(*) AS stops, sum(seconds) AS seconds FROM stops WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind",
-        "rejects": f"SELECT reason, sum(sqft) AS sqft FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason",
-        "details": f"SELECT reason, detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason, detail ORDER BY sum(sqft) DESC, reason, detail",
+        "rejects": f"SELECT category AS reason, sum(sqft) AS sqft FROM rejects WHERE counted_as = 'dry_end' AND production_date BETWEEN ? AND ?{clause} GROUP BY category",
+        "details": ("SELECT category AS reason, reason AS detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects "
+                    f"WHERE counted_as = 'dry_end' AND production_date BETWEEN ? AND ?{clause} GROUP BY category, reason ORDER BY sum(sqft) DESC, category, reason"),
     }
     sums = {}
     for name, sql in queries.items():
@@ -189,8 +191,8 @@ def legacy_sums(self, window, shift, trace):
              "stop_seconds": sum(r["seconds"] for r in sums["stops"]),
              "maintenance_pm_seconds": sum(r["seconds"] for k, r in by_kind.items() if k in ("Maintenance", "PM")),
              "operator_seconds": by_kind.get("Operator", {}).get("seconds", 0) or 0,
-             "bond_sqft": by_reason.get("BOND", 0.0), "warp_sqft": by_reason.get("WARP", 0.0),
-             "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0), "moisture_sqft": by_reason.get("MOISTURE", 0.0),
+             "bond_sqft": by_reason.get("bond", 0.0), "warp_sqft": by_reason.get("warp", 0.0),
+             "misalignment_sqft": by_reason.get("misalignment", 0.0), "cracking_sqft": by_reason.get("cracking", 0.0),
              "details": sums["details"],
              "source_rows": {"setups": setup["setup_records"], "shifts": shifts["shift_records"],
                              "stops": sum(r["stops"] for r in sums["stops"]), "rejects": len(sums["rejects"])}}

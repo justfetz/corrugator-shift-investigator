@@ -109,10 +109,10 @@ tool calls), half the set under 13 ms. That is wider than the 13–60 ms the iss
 quotes for single questions, because the set also holds the refusals and the
 multi-turn stories.
 
-Eleven cases carry an explicit `max_ms: 500`: the two multi-turn stories
+Twelve cases carry an explicit `max_ms: 500`: the two multi-turn stories
 (`story-monday-warp`, `story-trim-creep`), the eight- and nine-week trends
 (`period-trend-minutes-per-stop`, `period-trim-trend`, `period-trend-warp-weekly`,
-`period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
+`period-moisture-trend`, `period-cracking-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
 `value-trend-warp-8w`, `value-trend-stops-9w-missing-weeks`) and the three-shift
 compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
 other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
@@ -186,7 +186,7 @@ Monday warp. Each is scored by application rules, not by comparing prose:
 - **numbers in the prose**: the value each rule found must appear in the
   answer under one of the application's formats;
 - **forbidden claims**: regular expressions for asserting the slitter rebuild,
-  a splicer fault, or weekend moisture as the cause. The evidence holds stop
+  a splicer fault, or weekend moisture as the cause (no moisture is measured, and moisture is no reject category). The evidence holds stop
   reasons, reject reasons and trends, not diagnoses, so "coincides with",
   "warrants inspection" and "ask the crew" pass while "caused by the rebuild"
   fails.
@@ -254,11 +254,11 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`286/301 golden · 12 ms p50` while the 15 recordings are stale) is `evals.badge` of
+- The badge on the main page (`287/302 golden · 12 ms p50` while the 15 recordings are stale) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 295 cases make 301 runs because six offline cases also have a
+recorded variant: 296 cases make 302 runs because six offline cases also have a
 recording. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can

@@ -14,9 +14,10 @@ from investigator.urls import canonical_url, redirect_for, resolve_url
 
 DAY = "2026-09-14"
 # A week whose stops offset (shift 1's Thursday planned maintenance) is the third of the tool's rows for shift 3 against
-# shift 1 (issue #35). In the week of 14 September it comes after three contributors and gets its line by size instead
+# shift 1 (issue #35). In the week of 1 June 2026 it comes after three contributors and gets its line by size instead
 # (test_an_offset_larger_than_the_third_contributor_gets_a_line).
-OFFSET_WEEK = "2026-01-26"
+OFFSET_WEEK = "2026-08-03"   # issue #100 regenerated the records: the week of 26 January before
+LARGER_OFFSET_WEEK = "2026-06-01"   # an offset larger than the third contributor (the week of 14 September before #100)
 BUCKETS = [key for key, _ in SPEEDVAR_BUCKETS]
 
 
@@ -65,7 +66,7 @@ def test_speed_with_stops_is_the_kpi_tile_and_the_target_reference_is_the_usual_
         assert data["speed_all_fpm"] == tile["current"]
     # against target the reference is each grade's target at its share of the setup clock over the whole store,
     # the same for every window and shift; the mix is that minus this window's own grade targets at its mix
-    standard = store._fetch("SELECT sum(target * seconds) / sum(seconds) AS standard FROM setups", [])[0]["standard"]
+    standard = store._fetch("SELECT sum(target * elapsed_seconds) / sum(elapsed_seconds) AS standard FROM setups", [])[0]["standard"]
     month, shift_day = variance(store, "month"), variance(store, "day", 2)
     for data in (month, shift_day):
         assert data["reference_speed_fpm"] == data["reference_target_speed_fpm"] == round(standard, 1)
@@ -104,7 +105,7 @@ def test_each_loss_bucket_is_priced_as_machine_time_and_an_offset_is_not(store):
         if row["gap_lineal_ft"] > 0:
             minutes = row["gap_lineal_ft"] / data["reference_speed_fpm"]
             assert row["machine_minutes"] == round(minutes, 2) and row["usd"] == round(minutes / 60 * 1200, 2)
-            assert "lineal ft / 595.9 ft/min reference speed" in row["usd_basis"]   # shift 1's speed with stops that week, in the golden year
+            assert "lineal ft / 584.2 ft/min reference speed" in row["usd_basis"]   # shift 1's speed with stops that week, in the golden year (595.9 before #100)
         else:
             assert row["usd"] is None and row["usd_basis"] == cost_model.GAIN
     assert data["gap_usd"] == round(data["gap_lineal_ft"] / data["reference_speed_fpm"] / 60 * 1200, 2)
@@ -211,7 +212,7 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
 
 def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(store):
     """Review of #92: "offset" pulls against the gap. Shift 1 against shift 3 this week is a gain (above); its stops
-    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card (the week of 26 January in the year, its third row) and is priced as machine
+    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card (the week of 3 August 2026 in the year, its third row; the week of 26 January before issue #100 regenerated the records) and is priced as machine
     time, while the gain buckets and the gap itself are not; the contribution status is the rates', not the gap's."""
     data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3, anchor=OFFSET_WEEK), cost_model.effective())
     assert data["direction"] == "above" and data["gap_fpm"] < 0 and data["gap_usd"] is None
@@ -231,12 +232,13 @@ def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(stor
 
 def test_an_offset_larger_than_the_third_contributor_gets_a_line(store):
     """Owner, PR #91: the card lists the three buckets adding to the gap, and a bucket pulling against it gets a line
-    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 14 September: below-target
-    running, grade mix and setups (1.3 ft/min) add to the gap; stops (35.6 ft/min, -85%) pull against it."""
-    agent = Agent(store.day_analysis(DAY))
-    sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(DAY, 2, scope="day"))["sections"]
+    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 1 June 2026: grade mix, below-target
+    running and setups (0.95 ft/min) add to the gap; stops (42.9 ft/min, -64%) pull against it. (The week of 14 September
+    before issue #100 regenerated the records; there setups now pulls against the gap.)"""
+    agent = Agent(store.day_analysis(LARGER_OFFSET_WEEK))
+    sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(LARGER_OFFSET_WEEK, 2, scope="day"))["sections"]
     lines = [s for s in sections if s.startswith("- ")][:4]
-    assert [s.split(":")[0] for s in lines] == ["- Below target", "- Grade mix", "- Setups", "- Stops"]
+    assert [s.split(":")[0] for s in lines] == ["- Grade mix", "- Below target", "- Setups", "- Stops"]
     assert all("of the gap" in s for s in lines[:3]) and "the other way, an offset" in lines[3]
     assert lines[3].endswith("(query 1 · row 3)") and "largest Planned maintenance" in lines[3]   # its own row of the tool
     # an offset smaller than the third contributor stays off: shift 2 against shift 1 in the week of 4 May 2026

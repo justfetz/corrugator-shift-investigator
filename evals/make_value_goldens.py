@@ -55,13 +55,25 @@ TILES = {
     "speed_all_fpm": ("higher", 1), "downtime_pct": ("lower", 4), "downtime_minutes": ("lower", 1),
     "stops": ("lower", 0), "minutes_per_stop": ("lower", 2), "trim_pct": ("lower", 4),
     "shear_pct": ("lower", 4), "dry_end_pct": ("lower", 4), "bond_pct": ("lower", 4),
-    "warp_pct": ("lower", 4), "misalignment_pct": ("lower", 4), "moisture_pct": ("lower", 4), "bale_pct": ("lower", 4),
+    "warp_pct": ("lower", 4), "misalignment_pct": ("lower", 4), "cracking_pct": ("lower", 4), "bale_pct": ("lower", 4),
     "unexplained_pct": ("lower", 4), "maintenance_pm_pct": ("lower", 4), "operator_pct": ("lower", 4),
     "setups": ("neutral", 0), "paper_changes": ("neutral", 0),
     "lineal_per_setup": ("higher", 1), "lineal_per_paper_change": ("higher", 1), "bale_msf": ("lower", 1),
 }
 TREND_PLACES = {k: p for k, (_, p) in TILES.items()}
-WASTE = ("trim", "shear", "bond", "warp", "misalignment", "moisture", "dry_end", "bale", "unexplained")
+WASTE = ("trim", "shear", "cutoff", "stacker", "bond", "warp", "misalignment", "cracking", "dry_end", "bale", "unexplained")
+
+
+def accounted(t):
+    """The waste the bale reading accounts for: trim, shear, dry-end rejects and the lanes' waste boards."""
+    return t["trim"] + t["shear"] + t["rejects"] + t["cutoff"] + t["stacker"]
+
+
+def areas_of(t):
+    """The waste breakdown's square feet by category (WASTE order)."""
+    return {"trim": t["trim"], "shear": t["shear"], "cutoff": t["cutoff"], "stacker": t["stacker"], "bond": t["bond"],
+            "warp": t["warp"], "misalignment": t["misalignment"], "cracking": t["cracking"], "dry_end": t["rejects"],
+            "bale": t["bale"], "unexplained": t["bale"] - accounted(t)}
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri")
 
 
@@ -141,7 +153,7 @@ class Plain:
 
     def between(self, family, start, end, shift=None):
         lo, hi = start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
-        return [r for r in self.data[family] if lo <= r.production_date <= hi and (shift is None or r.shift_number == shift)]
+        return [r for r in self.data[family] if lo <= r.production_date <= hi and (shift is None or r.shift == shift)]
 
     def sums(self, start, end, shift=None):
         setups = self.between("dry_end_setups", start, end, shift)
@@ -150,21 +162,22 @@ class Plain:
         reasons, kinds = defaultdict(float), defaultdict(float)
         for s in setups:
             for r in s.rejects:
-                reasons[r.reason] += r.sqft
+                reasons[r.category] += r.sqft
         for st in stops:
-            kinds[st.kind] += st.duration_sec
+            kinds[st.kind] += st.seconds
         return {
             "setups": len(setups), "paper_changes": len({s.wet_end_id for s in setups}),
-            "feet": sum(s.lineal_ft for s in setups), "gross": sum(s.total_produced_sqft for s in setups),
-            "trim": sum(s.trim_sqft for s in setups), "shear": sum(s.chop_sqft for s in setups),
-            "rejects": sum(s.kqf_sqft for s in setups),
-            "running_minutes": sum(s.elapsed_seconds - s.stop_time_sec for s in setups) / 60,
+            "feet": sum(s.lineal_ft for s in setups), "gross": sum(s.gross_sqft for s in setups),
+            "trim": sum(s.trim_sqft for s in setups), "shear": sum(s.shear_sqft for s in setups),
+            "rejects": sum(s.reject_sqft for s in setups),
+            "cutoff": sum(s.cutoff_waste_sqft for s in setups), "stacker": sum(s.stacker_waste_sqft for s in setups),
+            "running_minutes": sum(s.elapsed_seconds - s.stop_seconds for s in setups) / 60,
             "production_days": len({s.production_date for s in setups}),
             "shift_records": len(shifts), "scheduled_seconds": sum(sh.scheduled_minutes for sh in shifts) * 60,
             "bale": sum(sh.bale_sqft for sh in shifts),
-            "stop_count": len(stops), "stop_seconds": sum(st.duration_sec for st in stops),
+            "stop_count": len(stops), "stop_seconds": sum(st.seconds for st in stops),
             "maintenance_pm_seconds": kinds["Maintenance"] + kinds["PM"], "operator_seconds": kinds["Operator"],
-            "bond": reasons["BOND"], "warp": reasons["WARP"], "misalignment": reasons["MISALIGNMENT"], "moisture": reasons["MOISTURE"],
+            "bond": reasons["bond"], "warp": reasons["warp"], "misalignment": reasons["misalignment"], "cracking": reasons["cracking"],
         }
 
     @staticmethod
@@ -186,9 +199,9 @@ class Plain:
             "trim_pct": ratio(t["trim"], gross, 100), "shear_pct": ratio(t["shear"], gross, 100),
             "dry_end_pct": ratio(t["rejects"], gross, 100), "bond_pct": ratio(t["bond"], gross, 100),
             "warp_pct": ratio(t["warp"], gross, 100), "misalignment_pct": ratio(t["misalignment"], gross, 100),
-            "moisture_pct": ratio(t["moisture"], gross, 100),
+            "cracking_pct": ratio(t["cracking"], gross, 100),
             "bale_pct": ratio(t["bale"], gross, 100),
-            "unexplained_pct": ratio(t["bale"] - t["trim"] - t["shear"] - t["rejects"], gross, 100),
+            "unexplained_pct": ratio(t["bale"] - accounted(t), gross, 100),
             "maintenance_pm_pct": ratio(t["maintenance_pm_seconds"], scheduled, 100),
             "operator_pct": ratio(t["operator_seconds"], scheduled, 100),
             "setups": None if not t["shift_records"] else t["setups"],
@@ -294,7 +307,7 @@ def pareto_case(plain, id, period, anchor, group_by, measure, shift=None, *, day
         minutes, counts = defaultdict(float), defaultdict(int)
         for st in plain.between("stops", *span, shift):
             key = getattr(st, group_by)
-            minutes[key] += st.duration_sec / 60
+            minutes[key] += st.seconds / 60
             counts[key] += 1
         return minutes, counts
     minutes, counts = grouped(cur)
@@ -325,11 +338,7 @@ def waste_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=
     prev = previous(period, *cur)
     now, before = plain.sums(*cur, shift), plain.sums(*prev, shift)
     prev_available = plain.coverage(*prev) != "unavailable"
-    def areas(t):
-        return {"trim": t["trim"], "shear": t["shear"], "bond": t["bond"], "warp": t["warp"],
-                "misalignment": t["misalignment"], "moisture": t["moisture"], "dry_end": t["rejects"], "bale": t["bale"],
-                "unexplained": t["bale"] - t["trim"] - t["shear"] - t["rejects"]}
-    a, b = areas(now), areas(before)
+    a, b = areas_of(now), areas_of(before)
     values = {}
     for key in WASTE:
         pct = a[key] / now["gross"] * 100
@@ -354,7 +363,7 @@ def profile_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", not
     per_day = defaultdict(lambda: [0, 0.0])
     for st in plain.between("stops", *cur, shift):
         per_day[st.production_date][0] += 1
-        per_day[st.production_date][1] += st.duration_sec / 60
+        per_day[st.production_date][1] += st.seconds / 60
     values, profile = {}, {name: [0, 0, 0.0] for name in WEEKDAYS}
     for text in days:
         d = date(int(text[:4]), int(text[4:6]), int(text[6:]))
@@ -385,12 +394,12 @@ def grade_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=
     for s in plain.between("dry_end_setups", *cur, shift):
         by_grade[s.quality_id].append(s)
     for s in plain.between("dry_end_setups", *prev, shift):
-        before[s.quality_id] += s.total_produced_sqft
-    total = sum(s.total_produced_sqft for group in by_grade.values() for s in group)
+        before[s.quality_id] += s.gross_sqft
+    total = sum(s.gross_sqft for group in by_grade.values() for s in group)
     values = {"$": {"total_volume_msf": num(total / 1000, 1)}}
     for grade, mine in by_grade.items():
-        gross, feet = sum(s.total_produced_sqft for s in mine), sum(s.lineal_ft for s in mine)
-        running = sum(s.elapsed_seconds - s.stop_time_sec for s in mine) / 60
+        gross, feet = sum(s.gross_sqft for s in mine), sum(s.lineal_ft for s in mine)
+        running = sum(s.elapsed_seconds - s.stop_seconds for s in mine) / 60
         elapsed = sum(s.elapsed_seconds for s in mine) / 60
         run_fpm = feet / running
         values[f"grade={grade}"] = {
@@ -399,10 +408,10 @@ def grade_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=
             "speed_run_fpm": num(run_fpm, 1), "speed_elapsed_fpm": num(feet / elapsed, 1),
             # the tool divides the displayed (1-dp) speed by the target
             "speed_to_target_pct": [round(run_fpm / GRADES[grade] * 100, 6), round(0.05 / GRADES[grade] * 100 + 0.051, 6)],
-            "setup_stops": exact(sum(s.number_of_stops for s in mine)), "setup_stop_minutes": num(sum(s.stop_time_sec for s in mine) / 60, 1),
-            "downtime_pct_of_elapsed": num(sum(s.stop_time_sec for s in mine) / sum(s.elapsed_seconds for s in mine) * 100, 4),
+            "setup_stops": exact(sum(s.stops for s in mine)), "setup_stop_minutes": num(sum(s.stop_seconds for s in mine) / 60, 1),
+            "downtime_pct_of_elapsed": num(sum(s.stop_seconds for s in mine) / sum(s.elapsed_seconds for s in mine) * 100, 4),
             "lineal_per_setup": num(feet / len(mine), 1), "lineal_per_wet_end": num(feet / len({s.wet_end_id for s in mine}), 1),
-            "trim_pct": num(sum(s.trim_sqft for s in mine) / gross * 100, 4), "dry_end_pct": num(sum(s.kqf_sqft for s in mine) / gross * 100, 4),
+            "trim_pct": num(sum(s.trim_sqft for s in mine) / gross * 100, 4), "dry_end_pct": num(sum(s.reject_sqft for s in mine) / gross * 100, 4),
             "previous_volume_msf": num(before[grade] / 1000, 1) if available else exact(None),
             "delta_volume_msf": [round(gross / 1000 - round(before[grade] / 1000, 1), 6), 0.11] if available else exact(None)}
     coverage = "complete" if plain.coverage(*cur) == "complete" and plain.coverage(*prev) == "complete" else "partial"
@@ -425,13 +434,13 @@ def rollstock_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
                 cell = out[(w.quality_id, w.web_width_in)]
                 cell["runs"].add(w.wet_end_id)
                 cell["feet"] += w.lineal_ft
-                cell["gross"] += w.total_produced_sqft
+                cell["gross"] += w.gross_sqft
         else:
             for s in plain.between("dry_end_setups", *span, shift):
                 cell = out[(s.quality_id, s.web_width_in)]
                 cell["runs"].add(s.wet_end_id)
                 cell["feet"] += s.lineal_ft
-                cell["gross"] += s.total_produced_sqft
+                cell["gross"] += s.gross_sqft
         return out
     now, before = cells(cur), cells(prev)
     total_feet = sum(c["feet"] for c in now.values())
@@ -469,8 +478,8 @@ def overrun_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", not
     cur = window(period, anchor)
     lines = defaultdict(list)
     for s in plain.between("dry_end_setups", *cur, shift):
-        for c in s.customers:
-            lines[c.cutoff_allocation].append(c)
+        for c in s.lanes:
+            lines[c.cutoff_knife].append(c)
     lines["all knives"] = [c for k in sorted(k for k in lines if k != "all knives") for c in lines[k]]
     values = {"$": {"band_pct": exact(2.0), "window_pct": exact(10.0)}}
     for key, mine in lines.items():
@@ -481,10 +490,10 @@ def overrun_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", not
         values[f"knife={label}"] = {
             "lines": exact(len(mine)), "nominal_cuts": exact(nominal), "actual_cuts": exact(actual), "delta_cuts": exact(actual - nominal),
             "overrun_pct": num((actual - nominal) / nominal * 100, 2),
-            "nominal_sheets": exact(sum(c.nominal_cuts * c.number_of_outs for c in mine)),
-            "actual_sheets": exact(sum(c.actual_cuts * c.number_of_outs for c in mine)),
-            "over_sheets": exact(sum((c.actual_cuts - c.nominal_cuts) * c.number_of_outs for c in mine if c.actual_cuts > c.nominal_cuts)),
-            "under_sheets": exact(sum((c.nominal_cuts - c.actual_cuts) * c.number_of_outs for c in mine if c.actual_cuts < c.nominal_cuts)),
+            "nominal_sheets": exact(sum(c.nominal_cuts * c.outs for c in mine)),
+            "actual_sheets": exact(sum(c.actual_cuts * c.outs for c in mine)),
+            "over_sheets": exact(sum((c.actual_cuts - c.nominal_cuts) * c.outs for c in mine if c.actual_cuts > c.nominal_cuts)),
+            "under_sheets": exact(sum((c.nominal_cuts - c.actual_cuts) * c.outs for c in mine if c.actual_cuts < c.nominal_cuts)),
             "lines_inside_band_pct": num((len(mine) - over - under) / len(mine) * 100, 1),
             "lines_over_pct": num(over / len(mine) * 100, 1), "lines_under_pct": num(under / len(mine) * 100, 1)}
     return case(id, "get_overrun", {"window": {"period": period, "anchor": anchor}, "shift": shift},
@@ -506,15 +515,15 @@ def _median(values):
 
 def speed_case(plain, id, period, anchor, slice_by="width", shift=None, *, day="2026-09-14", note=""):
     cur = window(period, anchor)
-    crews = {(sh.production_date, sh.shift_number): sh.group_name for sh in plain.between("shifts", *cur, shift)}
+    crews = {(sh.production_date, sh.shift): sh.group_name for sh in plain.between("shifts", *cur, shift)}
     cells, short = defaultdict(list), 0
     for s in plain.between("dry_end_setups", *cur, shift):
-        run_min = (s.elapsed_seconds - s.stop_time_sec) / 60
+        run_min = (s.elapsed_seconds - s.stop_seconds) / 60
         if run_min < 2.0:
             short += 1
             continue
-        key = (s.quality_id, f"{s.web_width_in:g} in" if slice_by == "width" else crews[(s.production_date, s.shift_number)])
-        cells[key].append((s.lineal_ft / run_min, s.lineal_ft, run_min, s.kqf_sqft, s.total_produced_sqft))
+        key = (s.quality_id, f"{s.web_width_in:g} in" if slice_by == "width" else crews[(s.production_date, s.shift)])
+        cells[key].append((s.lineal_ft / run_min, s.lineal_ft, run_min, s.reject_sqft, s.gross_sqft))
     values, total, thin = {}, 0.0, 0
     for (grade, slc), rows in cells.items():
         rows.sort(key=lambda r: -r[0])
@@ -579,7 +588,7 @@ def day_setups(plain, day, shift, corrupt=False):
         bad = setups.pop(0)
         excluded.append({"record_id": bad.setup_id, "shift": 2, "error_match": "Waste/gross",
                          "raw": {"trim_sqft": CORRUPT_TRIM_SQFT, "lineal_ft": bad.lineal_ft,
-                                 "total_produced_sqft": bad.total_produced_sqft}})
+                                 "gross_sqft": bad.gross_sqft}})
     return setups, excluded
 
 
@@ -587,17 +596,17 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
     setups, excluded = day_setups(plain, day, shift, corrupt)
     stops = plain.between("stops", date.fromisoformat(day), date.fromisoformat(day), shift)
     feet = sum(s.lineal_ft for s in setups)
-    gross = sum(s.total_produced_sqft for s in setups)
-    trim, shear, rejects = (sum(getattr(s, f) for s in setups) for f in ("trim_sqft", "chop_sqft", "kqf_sqft"))
+    gross = sum(s.gross_sqft for s in setups)
+    trim, shear, rejects = (sum(getattr(s, f) for s in setups) for f in ("trim_sqft", "shear_sqft", "reject_sqft"))
     kinds = defaultdict(float)
     for st in stops:
-        kinds[st.kind] += st.duration_sec
+        kinds[st.kind] += st.seconds
     wet_ends = len({s.wet_end_id for s in setups})
     row = {
         "valid_setups": exact(len(setups)), "paper_changes": exact(wet_ends),
         "speed_to_target_pct": approx(feet / sum(GRADES[s.quality_id] * s.elapsed_seconds / 60 for s in setups) * 100),
         "observed_lineal_ft": approx(feet), "observed_shift_fpm": approx(feet / 480),
-        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(s.total_produced_sqft - s.trim_sqft - s.chop_sqft - s.kqf_sqft for s in setups)),
+        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(s.gross_sqft - s.trim_sqft - s.shear_sqft - s.reject_sqft for s in setups)),
         "throughput_in": approx(gross / feet * 12),
         "trim_pct": approx(trim / gross * 100), "shear_pct": approx(shear / gross * 100), "dry_end_pct": approx(rejects / gross * 100),
         "maintenance_pct": approx(kinds["Maintenance"] / SCHEDULED_SECONDS * 100),
@@ -605,7 +614,7 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
         "pm_pct": approx(kinds["PM"] / SCHEDULED_SECONDS * 100),
         "downtime_pct": approx(sum(kinds.values()) / SCHEDULED_SECONDS * 100),
         "lineal_per_setup": approx(feet / len(setups)), "lineal_per_wet_end": approx(feet / wet_ends),
-        "setups_above_trim_target": exact(sum(1 for s in setups if s.trim_sqft / s.total_produced_sqft * 100 > 3.25)),
+        "setups_above_trim_target": exact(sum(1 for s in setups if s.trim_sqft / s.gross_sqft * 100 > 3.25)),
     }
     expect = {"coverage": "incomplete" if excluded else "complete", "row_count": 1, "values": {"#0": row}}
     if excluded:
@@ -617,7 +626,7 @@ def day_downtime_case(plain, id, day, shift, group_by="reason", kind=None, note=
     minutes = defaultdict(float)
     for st in plain.between("stops", date.fromisoformat(day), date.fromisoformat(day), shift):
         if kind is None or st.kind == kind:
-            minutes[getattr(st, group_by)] += st.duration_sec / 60
+            minutes[getattr(st, group_by)] += st.seconds / 60
     order = sorted(minutes, key=lambda c: (-minutes[c], c))
     values = {f"category={c}": {"down_minutes": approx(minutes[c]), "shift_percent": approx(minutes[c] * 60 / SCHEDULED_SECONDS * 100)}
               for c in order}
@@ -632,7 +641,7 @@ def day_quality_case(plain, id, day, shift, note=""):
     area = defaultdict(float)
     for s in setups:
         for r in s.rejects:
-            area[r.reason] += r.sqft
+            area[r.category] += r.sqft
     order = sorted(area, key=lambda c: (-area[c], c))
     values = {f"reason={r}": {"rejected_sqft": approx(area[r])} for r in order}
     values["#0"] = {"reason": exact(order[0])}
@@ -704,19 +713,19 @@ def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
     span = (date.fromisoformat(day),) * 2
     setups, _ = day_setups(plain, day, shift)
     stops = plain.between("stops", *span, shift)
-    gross = sum(s.total_produced_sqft for s in setups)
+    gross = sum(s.gross_sqft for s in setups)
     feet = sum(s.lineal_ft for s in setups)
     reasons, rejects = defaultdict(float), defaultdict(float)
     for st in stops:
-        reasons[st.reason] += st.duration_sec / 60
+        reasons[st.reason] += st.seconds / 60
     for s in setups:
         for r in s.rejects:
-            rejects[r.reason] += r.sqft
+            rejects[r.category] += r.sqft
     gaps = {f"Downtime: {r}": money("downtime", m, gross, 480, rates) for r, m in reasons.items()}
-    running = 480 - sum(st.duration_sec for st in stops) / 60
+    running = 480 - sum(st.seconds for st in stops) / 60
     gaps["Speed gap to 675 ft/min"] = money("speed", max(0.0, 675 * running - feet) / 675, gross, 480, rates)
     gaps["Side trim"] = money("trim", sum(s.trim_sqft for s in setups), gross, 480, rates)
-    gaps["Shear chops"] = money("waste", sum(s.chop_sqft for s in setups), gross, 480, rates)
+    gaps["Shear chops"] = money("waste", sum(s.shear_sqft for s in setups), gross, 480, rates)
     gaps.update({f"Dry-end: {r}": money("waste", a, gross, 480, rates) for r, a in rejects.items()})
     values = {f"rows:gap={g}": e for g, e in gaps.items()}
     top = max(gaps, key=lambda g: (gaps[g]["usd"][0], [-ord(c) for c in g]))
@@ -736,8 +745,7 @@ def waste_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, *
     rates = rates_of(rates_text)
     span = window(period, anchor)
     t = plain.sums(*span, shift)
-    areas = {"trim": t["trim"], "shear": t["shear"], "bond": t["bond"], "warp": t["warp"], "misalignment": t["misalignment"],
-             "moisture": t["moisture"], "dry_end": t["rejects"], "bale": t["bale"], "unexplained": t["bale"] - t["trim"] - t["shear"] - t["rejects"]}
+    areas = areas_of(t)
     minutes = window_minutes(plain, span, shift)
     values = {f"category={k}": money(WASTE_PRICING.get(k, "waste"), round(a, 1), t["gross"], minutes, rates, 0.1) for k, a in areas.items()}
     return case(id, "get_waste_breakdown", {"window": {"period": period, "anchor": anchor}, "shift": shift},
@@ -750,7 +758,7 @@ def pareto_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, 
     span = window(period, anchor)
     minutes = defaultdict(float)
     for st in plain.between("stops", *span, shift):
-        minutes[st.reason] += st.duration_sec / 60
+        minutes[st.reason] += st.seconds / 60
     scheduled = window_minutes(plain, span, shift)
     values = {f"category={r}": money("downtime", round(m, 2), None, scheduled, rates, 0.01) for r, m in minutes.items()}
     return case(id, "get_downtime_pareto", {"window": {"period": period, "anchor": anchor}, "group_by": "reason", "measure": "minutes", "shift": shift},
@@ -775,11 +783,12 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
     levers[f"Side trim over the {rates[3]:g}% target"] = money("trim", over / 100 * gross, gross, scheduled, rates, 1e-4 / 100 * gross)
     minutes, stops = defaultdict(float), defaultdict(int)
     for st in plain.between("stops", *span, shift):
-        minutes[st.reason] += st.duration_sec / 60
+        minutes[st.reason] += st.seconds / 60
         stops[st.reason] += 1
     for r, m in minutes.items():
         levers[f"Downtime: {r}" + (" (setup time)" if r == "Order change" else "")] = money("downtime", round(m, 2), gross, scheduled, rates, 0.01)
-    labels = {"shear": "Shear chops", "bond": "Dry-end: bond", "warp": "Dry-end: warp", "misalignment": "Dry-end: misalignment", "moisture": "Dry-end: moisture"}
+    labels = {"shear": "Shear chops", "bond": "Dry-end: bond", "warp": "Dry-end: warp", "misalignment": "Dry-end: misalignment",
+              "cracking": "Dry-end: cracking / surface"}
     for key, label in labels.items():
         if round(t[key], 1):
             levers[f"{label} (all recorded)"] = money("waste", round(t[key], 1), gross, scheduled, rates, 0.1)
@@ -803,18 +812,18 @@ def speedvar_side(plain, span, shift):
     grade_of = {s.setup_id: s.quality_id for s in setups}
     stops, setup_loss = defaultdict(lambda: [0.0, 0.0, 0]), defaultdict(float)   # reason -> [feet lost, minutes, count]
     for st in plain.between("stops", *span, shift):
-        lost = st.duration_sec / 60 * target_of[st.setup_id]
+        lost = st.seconds / 60 * target_of[st.setup_id]
         if st.reason == "Order change":
             setup_loss[grade_of[st.setup_id]] += lost
         else:
             cell = stops[st.reason]
             cell[0] += lost
-            cell[1] += st.duration_sec / 60
+            cell[1] += st.seconds / 60
             cell[2] += 1
     below, clock = defaultdict(float), defaultdict(float)
     for s in setups:
         target = GRADES[s.quality_id]
-        below[s.quality_id] += target * (s.elapsed_seconds - s.stop_time_sec) / 60 - s.lineal_ft
+        below[s.quality_id] += target * (s.elapsed_seconds - s.stop_seconds) / 60 - s.lineal_ft
         clock[s.quality_id] += s.elapsed_seconds / 60
     return {"minutes": minutes, "speed": sum(s.lineal_ft for s in setups) / minutes,
             "target": sum(GRADES[g] * m for g, m in clock.items()) / minutes,
