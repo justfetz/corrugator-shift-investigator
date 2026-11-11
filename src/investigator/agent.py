@@ -35,6 +35,11 @@ TOOL_SCHEMAS = [
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
         ("get_shift_dollars", "This shift's losses priced at the assumed rates, ranked by dollars.", {}),
     ]
+] + [
+    # The day's losses across its complete shifts (issue #31b): the all-shifts money of a Day card, from the server.
+    {"name": "get_day_dollars", "description": "The production day's losses across the listed shifts that are complete, priced once on the day at the assumed rates, ranked by dollars.",
+     "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
+                    "required": [], "additionalProperties": False}},
 ]
 # Period tools read the whole record store (a rolling year of production days) instead of one day.
 # A window is {period, anchor}: day = that Monday-Friday production day, week = the
@@ -220,6 +225,8 @@ class OfflinePlanner:
             if intent == "quality":
                 plan.append(("get_quality_breakdown", {"shift": shift}))
 
+        if intent == 'dollars' and not context.get("plan") and len(context["shifts"]) > 1:
+            plan.append(("get_day_dollars", {"shifts": sorted(context["shifts"])}))   # #31b: the day's total over the shifts asked, for the card
         completed = [(r["tool"], r["arguments"]) for r in results]
         for tool, args in plan:
             if (tool, args) not in completed:
@@ -845,7 +852,9 @@ def plan_step_cap(allowed_shifts):
 
 
 OVER_CAP = 'it proposes more queries than the limit allows'
-PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] != 'render_chart'}
+# get_day_dollars is the card's day total, which the offline planner adds (#31b): not a model's to plan, and it reads
+# every listed shift, so it stays off the analyst's allowlist (Re-review 2 of PR 109).
+PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] not in ('render_chart', 'get_day_dollars')}
 PLAN_REJECTED = "The analyst's plan was rejected ({reason}); no query was run for it. The offline answer stands on its own."
 
 
@@ -855,6 +864,8 @@ def scope_violation(tool, arguments, allowed_shifts, scope, period, production_d
         return 'Tool shift is outside the selected scope'
     if arguments.get('against_shift') is not None and arguments['against_shift'] not in allowed_shifts:
         return 'Tool shift is outside the selected scope'   # a speed variance against another shift reads that shift
+    if tool == 'get_day_dollars' and any(s not in allowed_shifts for s in (arguments.get('shifts') or [1, 2, 3])):
+        return 'Tool shift is outside the selected scope'   # the day total reads every shift it lists (all three when none)
     if tool in PERIOD_TOOLS and scope == 'shift' and arguments.get('shift') is None:
         return 'Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts'
     if period != 'day' and tool not in PERIOD_TOOLS and tool != 'render_chart':
@@ -960,7 +971,17 @@ class Agent:
                 raise ValueError('Shift must be 1, 2, 3 or null')
             if name == 'get_opportunities':
                 return cost_model.opportunities(self.store, rates=rates, **arguments)
-            return cost_model.attach(name, getattr(self.store, name)(**arguments), rates)
+            data = cost_model.attach(name, getattr(self.store, name)(**arguments), rates)
+            if name in ('get_period_kpis', 'compare_periods') and data.get('current_sums'):
+                window = arguments.get('window') or arguments.get('current_window')
+                reasons = self.store.get_downtime_pareto(window, 'reason', 'minutes', shift)['rows']
+                data['tile_money'] = cost_model.period_tiles(data, reasons, rates)   # #31b: the tiles' dollars, as the Pareto and waste rows price them
+            return data
+        if name == 'get_day_dollars':
+            shifts = arguments.get('shifts') or [1, 2, 3]
+            if not isinstance(shifts, list) or any(type(s) is not int or s not in (1, 2, 3) for s in shifts) or len(set(shifts)) != len(shifts):
+                raise ValueError('shifts lists distinct shifts from 1, 2 and 3')
+            return cost_model.day_dollars(self.analysis, rates, shifts)
         shift = arguments['shift']
         if type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Shift must be 1, 2 or 3')

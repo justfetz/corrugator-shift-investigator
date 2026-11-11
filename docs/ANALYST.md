@@ -6,7 +6,7 @@ Every question is answered by the offline planner first. The analyst is the opti
 
 - **Propose one plan.** A single model call returns a JSON plan: an ordered list of tool calls from the same catalog the offline planner uses, at most two steps per shift in scope plus three (five for one shift, nine for all three), or a reason the question cannot be answered.
 - **Write the interpretation.** A second call receives the question and a compact packet of the results and writes two to six lines. Each value in a line is a placeholder such as `{{r1.0.observed_shift_fpm}}`, which the server replaces with that row's value as the text streams.
-- **See dollars on priced rows.** The two money tools (`get_shift_dollars`, `get_opportunities`) are left out of the catalog the model is shown, because its prompt still says costs are unavailable; the plan check itself would accept them, as it accepts any tool on the allowlist. The model sees dollars only on the priced rows of the tools it plans.
+- **See dollars on priced rows.** The two money tools (`get_shift_dollars`, `get_opportunities`) are left out of the catalog the model is shown, because its prompt still says costs are unavailable; the plan check itself would accept them, as it accepts any tool on the allowlist. The day total `get_day_dollars` is the offline planner's alone: it is not on the allowlist, so a plan naming it is refused whole. The model sees dollars only on the priced rows of the tools it plans.
 - **Choose emphasis.** Which results to lead with, what to call a finding and what to call a limitation are the model's; whether they hold is checked below.
 
 ## What the model may not do

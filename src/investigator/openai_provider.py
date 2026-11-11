@@ -39,9 +39,9 @@ Profit, costs, staffing decisions, live machine state and plant-wide optimal imp
 # loop's requests stay what they were; the money questions are answered offline or by the Anthropic
 # analyst (issue #31). The speed variance (issue #92) stays out for the same cap: its schema alone is about
 # 1.3 KB, and "what drove speed" is answered offline first and by the Anthropic analyst, which plans it.
-OPENAI_OMITTED_TOOLS=frozenset({'get_shift_dollars','get_opportunities','get_speed_variance'})
+OPENAI_OMITTED_TOOLS=frozenset({'get_shift_dollars','get_opportunities','get_speed_variance','get_day_dollars'})
 DOLLAR_FIELDS=('msf','paper_usd','machine_minutes','machine_time_usd','usd','usd_per_year','msf_not_made',
-               'contribution_usd','contribution_usd_per_year','contribution_status','usd_basis')
+               'contribution_usd','contribution_usd_per_year','contribution_status','usd_basis','price_terms','share_of_window_pct')
 
 
 def compact_result(result):
@@ -52,8 +52,10 @@ def compact_result(result):
         compact['data'].pop('components',None)
         # The planner only chooses the next tool: it gets the dollars only from the two money tools (their
         # ranking is in dollars), never the formulas or rate rows, so a priced result stays inside the byte cap.
-        for key in ('cost_note','rates','provenance'):
-            compact['data'].pop(key,None)
+        for key in ('cost_note','rates','provenance','current_sums','tile_money','buckets','area_sqft','area_msf','stop_minutes','speed_minutes',
+                    'waste_run_minutes','machine_minutes','msf_not_made','trim_pct_of_gross','trim_target_pct','trim_points_over',
+                    'trim_over_usd','trim_over_usd_per_year','trim_over_basis','trim_over_terms'):
+            compact['data'].pop(key,None)   # the card's money (#31b): what the card states, not what a planner chooses by
         keep=('usd','usd_per_year') if result['tool'] in ('get_shift_dollars','get_opportunities') else ()
         for row in compact['data'].get('rows',[]):
             row.pop('source_ids',None)

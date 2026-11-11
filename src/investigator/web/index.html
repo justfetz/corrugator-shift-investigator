@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/trail.js" defer></script><script src="/app.js" defer></script></head>
+<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content"><title>Corrugator Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/trail.js" defer></script><script src="/money.js" defer></script><script src="/app.js" defer></script></head>
 <body class="shell-page">
 <header class="app"><div class="wrap">
 <div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Corrugator Shift Investigator</b><span class="badge" id="mode-badge">Synthetic data / Offline planner</span></div>
@@ -29,11 +29,13 @@
 <button id="report" class="canned" type="button" hidden title="The deterministic period report: output heatmap, daily matrix, recurring downtime and notes for the selected window">Period report</button>
 <p class="panel-note">Every canned question is a fixed query. No model, no wait.</p>
 </section>
-<section class="panel rates" aria-label="Your rates">
-<h2 class="panel-title">Your rates</h2>
-<dl class="rates-grid"><dt>Paper</dt><dd>$55 / MSF</dd><dt>Machine time</dt><dd>$1,200 / hr</dd><dt>Board margin</dt><dd class="unset">not set</dd></dl>
-<p class="panel-note">Placeholders: nothing on the page is priced in dollars yet.</p>
-<button id="rates-change" class="secondary" type="button" disabled title="Editable rates arrive with the cost model (issue #31)">Change rates</button>
+<section class="panel rates" id="rates-panel" aria-label="Your rates">
+<h2 class="panel-title" title="Assumed rates, not a plant's">Your rates</h2>
+<div class="field units-field"><span class="field-label" id="units-label">Show as</span><div class="seg" id="units-seg" role="group" aria-labelledby="units-label"></div></div>
+<dl class="rates-grid" id="rates-list"><dt>Paper</dt><dd>$55/MSF</dd><dt>Machine</dt><dd>$1,200/hr</dd><dt>Margin</dt><dd class="unset">not set</dd><dt>Trim</dt><dd>3.25%</dd></dl>
+<form id="rates-form" class="rates-form" hidden novalidate aria-label="Change rates"><div id="rates-fields" class="rates-fields"></div><div class="rates-actions"><button id="rates-reset" class="secondary" type="button">Reset to the post's rates</button><button id="rates-done" type="submit">Done</button></div></form>
+<p class="panel-note" id="rates-note">Assumed, not a plant's.</p>
+<button id="rates-change" class="secondary" type="button" aria-expanded="false" aria-controls="rates-form">Change rates</button>
 </section>
 <details class="panel advanced" id="advanced"><summary>Agent and advanced</summary>
 <label class="field mode-field"><span class="field-label">Agent for Ask the analyst</span><select id="mode"><option value="offline">Offline / free</option><option value="anthropic">Anthropic / your key</option><option value="openai">OpenAI / your key</option></select></label>
@@ -51,11 +53,13 @@
 <header class="card-head"><h2 id="card-title" tabindex="-1">Ask about a shift</h2><div id="card-meta" class="card-meta"></div></header>
 <div id="messages" aria-live="polite"><p class="empty">Pick a question on the left or type one in the box below. Each answer lands as one card at the bottom of this thread: the headline and findings, the charts, where to look, the queries behind them and the KPI tiles; earlier answers move up.</p></div>
 <div id="charts"></div>
+<section id="money" class="money" aria-label="Where the money is, at your rates"></section>
 <section id="look" class="look" aria-label="Where to look next in the records"></section>
 <section id="queries" class="queries" aria-label="Queries that produced this answer"></section>
 <div id="heatmaps" aria-label="Period output heatmap"></div>
 <div id="kpis" class="kpis" aria-label="Period KPI tiles"></div>
 <div id="metrics" class="metrics" aria-label="Shift KPI tiles"></div>
+<section id="ledger" class="ledger" aria-label="The arithmetic behind the dollars"></section>
 <footer id="card-foot" class="card-foot" hidden><span id="calls"></span><span class="report-actions"><a id="came-back" href="#execution">What came back, per query</a><button id="download" class="secondary" type="button">Markdown</button><button id="pdf" class="secondary" type="button">PDF</button></span></footer>
 <div id="tables"></div>
 <details id="execution"><summary>What came back, per query</summary><p class="muted">The full result of each query in the box above: window, coverage, excluded records and the result JSON. An execution trace of tools and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details>
