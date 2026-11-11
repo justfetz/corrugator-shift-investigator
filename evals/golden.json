@@ -3354,9 +3354,9 @@
    "mode": "offline",
    "scope": "day",
    "question": "What grades ran slowest last week?",
-   "note": "Issue #75, the owner's example: the headline names the slowest grade by percent of its target with its speed, three bullets are the three slowest grades (grade, ft/min, % of target, setups), the totals by grade are a table rather than prose, and the answer ends with where to look.",
+   "note": "Issue #75, the owner's example: the headline names the slowest grade by percent of its target with its speed, three bullets are the three slowest grades (grade, ft/min, % of target, setups), the totals by grade are a table rather than prose, and the answer ends with where to look. Issue #105: 'last week' is the week before the selected day's, 7-11 Sep from Mon 14 Sep (it was read as the selected week until then), and the controls move to it.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week&by=grade",
+    "url": "/corr/1/week/2026-09-07?measure=fpm&by=grade",
     "status": "complete",
     "tools": [
      {
@@ -3364,7 +3364,7 @@
       "arguments": {
        "window": {
         "period": "week",
-        "anchor": "2026-09-14"
+        "anchor": "2026-09-07"
        },
        "shift": null,
        "measure": "speed"
@@ -4028,9 +4028,413 @@
    "id": "shift-escape",
    "type": "refusal",
    "mode": "offline",
-   "question": "Show shift 1",
+   "question": "Compare shift 1 with shift 3",
    "expect": {
     "raises": "Selected shift only"
+   },
+   "note": "Issue #105 narrowed what escapes the selected shift: one named shift is now the question's own scope (question-names-shift-1). Comparing two other shifts needs the production-day scope, so with shift 2 selected it is still refused with the reason."
+  },
+  {
+   "id": "question-names-shift-1",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Show shift 1",
+   "note": "Issue #105: a question that names one shift is about that shift, whatever the Shift control says. Asked with shift 2 selected it runs on shift 1 and its address names shift 1 (until #105 this was the refusal shift-escape).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/1?measure=overview",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "tools": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 1
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "donwtime-first-shift-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much donwtime on 1st shift last week?",
+   "note": "Issue #105, the owner's question as typed (2026-11-11), asked with shift 2 and Day on Mon 14 Sep: the question's own shift and window win over the controls (shift 1, the week of 7-11 Sep), and \"donwtime\" reads as downtime. Over a named window the downtime answer is the Pareto. Until #105 it was refused (Selected shift only). Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/1?measure=review",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 1
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop"
+    ],
+    "tables": [
+     "get_downtime_review"
+    ]
+   }
+  },
+  {
+   "id": "downtime-1st-shift-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "downtime 1st shift last week",
+   "note": "Issue #105: the same question without the typo or the verb, on the shift 2 / Day controls. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/1?measure=review",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 1
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop"
+    ],
+    "tables": [
+     "get_downtime_review"
+    ]
+   }
+  },
+  {
+   "id": "first-shift-downtime-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "first shift downtime last week",
+   "note": "Issue #105: the shift spelled out and named first, on the shift 2 / Day controls. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/1?measure=review",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 1
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop"
+    ],
+    "tables": [
+     "get_downtime_review"
+    ]
+   }
+  },
+  {
+   "id": "third-shift-downtime-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "shift": 1,
+   "period": "week",
+   "question": "how much downtime did third shift have yesterday",
+   "note": "Issue #105, from other controls (shift 1, Week, Mon 14 Sep): yesterday is the production day before the selected one, Fri 11 Sep across the weekend, so the answer is the day's downtime for shift 3 under Day. Until #105 'yesterday' was refused outright. Issue #101: the shift's downtime headline leads with maintenance and operator downtime and their bands.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11/shift/3?measure=downtime",
+    "status": "complete",
+    "shifts": [
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 3,
+       "group_by": "reason"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_downtime_breakdown",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of the shift in maintenance and operator downtime · (on target|flag)[^·]* · maintenance [0-9.]+%, [^·]+ · operator [0-9.]+%, "
+    ]
+   }
+  },
+  {
+   "id": "downtime-last-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much downtime last month?",
+   "note": "Issue #105: 'last month' is the calendar month before the selected day's (August from 14 Sep), not the selected month; the controls move to it as for last week. August has no previous month in the records, so each row's previous is unavailable, never zero. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "expect": {
+    "url": "/corr/1/month/2026-08-03/shift/2?measure=review",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-03"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop"
+    ]
+   }
+  },
+  {
+   "id": "last-week-beside-from",
+   "type": "routing",
+   "mode": "offline",
+   "question": "downtime from maintenance last week",
+   "note": "Review of #105 (Codex on PR #108): 'from', 'over' and 'since' make a relative window a comparison base only right before it ('since last week', #99's speed-variance cue). Elsewhere in the question they leave 'last week' the window asked about, 7-11 Sep from Mon 14 Sep; the first fix read any 'from' as a base and answered the selected week. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "last-week-before-the-records",
+   "type": "refusal",
+   "mode": "offline",
+   "day": "2026-08-05",
+   "question": "How much downtime last week?",
+   "note": "Issue #105: from the first production week, last week has no production day in the records; the question is refused with the calendar reason rather than answered as zero or as this week.",
+   "expect": {
+    "raises": "before the records"
+   }
+  },
+  {
+   "id": "typo-donwtime",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much donwtime?",
+   "note": "Issue #105: a swap of two letters in a measure word is read as the measure (one edit, counting a swap as one). Issue #101: the shift's downtime headline leads with maintenance and operator downtime and their bands.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=downtime",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of the shift in maintenance and operator downtime · (on target|flag)[^·]* · maintenance [0-9.]+%, [^·]+ · operator [0-9.]+%, "
+    ]
+   }
+  },
+  {
+   "id": "typo-dowtime-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Show dowtime by reason this week",
+   "note": "Issue #105: a dropped letter, over a named window, is the downtime Pareto of the week. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "typo-wast",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much wast?",
+   "note": "Issue #105: 'wast' is one letter short of waste; the day's waste answer is the dry-end rejects.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quality",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_quality_breakdown",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "typo-spead",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What was our spead?",
+   "note": "Issue #105: one wrong letter in speed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_wet_end_performance",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "typo-nonsense-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much flurbtime?",
+   "note": "Issue #105: typo tolerance reads a word near one measure; a word near none is still refused with what offline mode supports.",
+   "expect": {
+    "raises": "Offline mode supports"
+   }
+  },
+  {
+   "id": "analyst-question-scope-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "live": true,
+   "question": "How much donwtime on 1st shift last week?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 1
+      }
+     }
+    ]
+   },
+   "narrative": [
+    "finding: {{r1.0.category}} took {{r1.0.minutes}} minutes of shift 1's recorded downtime that week, {{r1.0.share_pct}} percent of the window's minutes.",
+    "check: Ask the shift 1 crew how the {{r1.1.category}} stops were handled; there were {{r1.1.stops}} of them.",
+    "limitation: One week of one shift; recorded reasons are symptoms, not proven causes."
+   ],
+   "note": "Issue #105, the owner's analyst round (shift 2, Day, Mon 14 Sep; 'Investigation stopped: unavailable', 0 tool calls, 1 model call). The analyst was told the controls' scope (shift 2, the day) was authoritative, so a question about shift 1 last week had no permitted tool. The question's own scope is now the analyst's: the plan a model would return for it (the Pareto of shift 1 for the week of 7-11 Sep) passes the plan check and runs, and the narrative is kept. Live variant (owner key): `--live --provider anthropic --only analyst-question-scope-last-week` must complete in at most two model calls with the Pareto of shift 1 for that week.",
+   "expect": {
+    "status": "complete",
+    "tool_calls": 1,
+    "shifts": [
+     1
+    ],
+    "narrative_status": "available",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 1
+      }
+     }
+    ],
+    "sections_not_match": "plan was rejected|Investigation stopped|unavailable"
+   },
+   "expect_live": {
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 1
+      }
+     }
+    ],
+    "max_cost_usd": 0.05
    }
   },
   {
@@ -5870,9 +6274,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "What drove speed last week?",
-   "note": "Review of #92: a bare 'last week' (no comparison word) was read as this week against last week. As everywhere in the router, the window is anchored on the selected day ('what grades ran slowest last week' is its week); only a comparison word ('versus last week') makes it against=previous.",
+   "note": "Review of #92: a bare 'last week' (no comparison word) was read as this week against last week; only a comparison word ('versus', 'over', 'since', 'from last week') makes it against=previous. Issue #105 (owner, 2026-11-11) then made a bare 'last week' the week before the selected day's, 7-11 Sep from Mon 14 Sep, which the controls move to; the id predates that and is kept so the case is not read as removed. The answer is against target over that week.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=speedvar&window=week",
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=speedvar",
     "status": "complete",
     "tools": [
      {
@@ -5880,7 +6284,7 @@
       "arguments": {
        "window": {
         "period": "week",
-        "anchor": "2026-09-14"
+        "anchor": "2026-09-07"
        },
        "shift": 2,
        "against": "target"
@@ -5916,12 +6320,12 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-09-30",
+   "day": "2026-09-29",
    "scope": "day",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101, the owner's downtime rules (2026-11-10): the default scope is the previous production day, all shifts (yesterday is the record store's latest production day, 2026-09-30 in the golden window); maintenance and operator downtime lead, each and together against its band; reasons ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. On 2026-09-30 shift 1's operator downtime is over its 2.5% band.",
+   "note": "Issue #101, the owner's downtime rules (2026-11-10): the default scope is the previous production day, all shifts. Asked on Tuesday 2026-09-29, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; each flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 3 has two flags, and knife / slitter jam was over its band on its own once in the year (value-review-day-0928 computes it a second way).",
    "expect": {
-    "url": "/corr/1/day/2026-09-30?measure=review",
+    "url": "/corr/1/day/2026-09-28?measure=review",
     "status": "complete",
     "tools": [
      {
@@ -5929,7 +6333,7 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-30"
+        "anchor": "2026-09-28"
        },
        "shift": null
       }
@@ -5954,24 +6358,12 @@
     "sections_match": [
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop \\(query 1 · row 0\\)$",
      "^Flags and who to ask$",
-     "^- Shift 1, 2026-09-30: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 1 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
-     "^- Shift 1, .+ led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
-     "^2026-09-30 \\(Wed\\), all shifts\\. Window coverage: complete\\.$",
-     "Show the shift notes for shift 1"
+     "^- Shift 3, 2026-09-28: \\*\\*[0-9.]+%\\*\\* of the shift in (operator|maintenance) downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag [0-9]\\)$",
+     "^2026-09-28 \\(Mon\\), all shifts\\. Window coverage: complete\\.$",
+     "Show the shift notes for shift 3"
     ],
     "sections_not_match": "^- [0-9]+\\. Planned maintenance"
-   }
-  },
-  {
-   "id": "owner-yesterday-names-the-latest-day",
-   "type": "refusal",
-   "mode": "offline",
-   "reviewed_by": "owner",
-   "scope": "day",
-   "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101: yesterday is the record store's latest production day. With another day selected the router says which day that is rather than answer the selected one.",
-   "expect": {
-    "raises": "Yesterday is 2026-09-30, the latest production day in the records; select it in the day control first"
    }
   },
   {
@@ -6287,17 +6679,6 @@
     ],
     "charts": 1,
     "sections_not_match": "controllable losses"
-   }
-  },
-  {
-   "id": "compare-with-yesterday-refused-on-the-latest-day",
-   "type": "refusal",
-   "mode": "offline",
-   "day": "2026-09-30",
-   "question": "Compare with yesterday.",
-   "note": "Issue #101 review: on the latest production day \"yesterday\" is the selected day, so a comparison with it has no second window; it answered a one-shift card that compared nothing. It is refused with what to ask.",
-   "expect": {
-    "raises": "Yesterday is the selected day; to compare, name both windows"
    }
   },
   {

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from investigator import cost_model, targets
-from investigator.agent import Agent, Context, parse_request
+from investigator.agent import Agent, Context, parse_request, route
 from investigator.record_store import SPEED_MIN_RUN_MINUTES, default_store
 from investigator.urls import canonical_url, page_url, redirect_for, resolve_url
 
@@ -188,27 +188,25 @@ def test_a_shift_scoped_flag_counts_that_shifts_own_year(store):
 
 # ------------------------------------------------------------------ "yesterday" and the all-shift default
 
-def test_yesterday_is_the_latest_production_day_and_another_day_is_refused(store):
-    last = Context(store.last_day, 2, scope='day', last_day=store.last_day)
-    request = parse_request('What were the top downtime reasons yesterday?', last)
-    assert request['plan'] == [{'tool': 'get_downtime_review', 'arguments': {'window': {'period': 'day', 'anchor': store.last_day}, 'shift': None}}]
-    month = Context(store.last_day, 2, scope='day', period='month', last_day=store.last_day)
-    assert canonical_url(parse_request('top downtime reasons yesterday', month), month) == f'/corr/1/month/{store.last_day}?measure=review&window=day'
-    with pytest.raises(ValueError, match=f'Yesterday is {store.last_day}'):
-        parse_request('What were the top downtime reasons yesterday?', Context(DAY, 2, scope='day', last_day=store.last_day))
-    with pytest.raises(ValueError, match='switch Period to Day'):
-        parse_request('Why was this shift slow yesterday?', month)
-    with pytest.raises(ValueError, match='anchors on the selected production day'):
-        parse_request('What happened yesterday?', Context(store.last_day, 2))   # no record store to say which day yesterday is
-    for question in ('What happened today?', 'Show downtime tomorrow'):
-        with pytest.raises(ValueError, match='anchors on the selected production day'):
-            parse_request(question, last)
+def test_yesterday_moves_to_the_previous_production_day_and_answers_the_review_there(store):
+    """"Yesterday" is the production day before the selected one, and the question moves the controls to it (issue #105);
+    the owner's default downtime answer for that day, all shifts, is the review."""
+    for period in ('day', 'month'):
+        request, context = route('What were the top downtime reasons yesterday?', Context('2026-09-29', 2, scope='day', period=period),
+                                 store.production_days)
+        assert context.production_day == '2026-09-28' and request['plan'] == [
+            {'tool': 'get_downtime_review', 'arguments': {'window': {'period': 'day', 'anchor': '2026-09-28'}, 'shift': None}}]
+        assert canonical_url(request, context) == '/corr/1/day/2026-09-28?measure=review'
+    request, context = route('What went wrong yesterday?', Context('2026-09-29', 2, scope='day'), store.production_days)
+    assert request['plan'][0]['arguments'] == {'window': {'period': 'day', 'anchor': '2026-09-28'}, 'shift': None, 'lens': 'supervisor'}
+    with pytest.raises(ValueError, match='ask about yesterday on its own'):
+        route('Compare with yesterday.', Context('2026-09-29', 2), store.production_days)
 
 
 def test_a_production_days_downtime_over_all_shifts_is_the_review(store):
-    day = Context('2026-09-18', 2, scope='day', last_day=store.last_day)
+    day = Context('2026-09-18', 2, scope='day')
     assert canonical_url(parse_request('Show downtime by reason', day), day) == '/corr/1/day/2026-09-18?measure=review'
-    shift = Context('2026-09-18', 2, scope='shift', last_day=store.last_day)
+    shift = Context('2026-09-18', 2, scope='shift')
     assert canonical_url(parse_request('Show downtime by reason', shift), shift) == '/corr/1/day/2026-09-18/shift/2?measure=downtime'
     assert redirect_for('/corr/1/day/2026-09-18?measure=downtime', store) == '/corr/1/day/2026-09-18?measure=review'
     assert redirect_for('/corr/1/day/2026-09-18?measure=downtime&kind=maintenance', store) is None   # a filter keeps the per-shift plan
@@ -259,7 +257,7 @@ def test_the_supervisor_lens_ranks_the_controllable_losses_and_the_ownership_len
     ("Where's my biggest opportunity?", 'shift', 'supervisor', 'day'), ('What is our biggest opportunity this week?', 'day', 'supervisor', 'week'),
     ('What went wrong this week?', 'day', 'supervisor', 'week'), ('Where is the money this month?', 'day', None, 'month')])
 def test_the_question_picks_the_lens(store, question, scope, lens, window):
-    context = Context(DAY, 2, scope=scope, last_day=store.last_day)
+    context = Context(DAY, 2, scope=scope)
     request = parse_request(question, context)
     [step] = request['plan']
     assert step['tool'] == 'get_opportunities' and step['arguments'].get('lens') == lens and step['arguments']['window']['period'] == window
@@ -268,7 +266,7 @@ def test_the_question_picks_the_lens(store, question, scope, lens, window):
 
 
 def test_neighbouring_money_questions_keep_their_answers(store):
-    context = Context(DAY, 2, scope='shift', last_day=store.last_day)
+    context = Context(DAY, 2, scope='shift')
     assert parse_request('What did waste cost this shift?', context)['intent'] == 'dollars'
     assert parse_request('Where is the speed opportunity this month?', context)['intent'] == 'period_speed_opportunity'
     assert parse_request('What does warp cost?', context)['intent'] == 'quality'

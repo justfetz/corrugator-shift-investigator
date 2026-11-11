@@ -24,7 +24,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "Summarize performance, downtime and waste. Show supporting charts." | the shift overview with three charts | `?measure=summary` |
 | "Show speed to target" | KPIs and each wet-end run against its grade target | `?measure=fpm` |
 | "fpm by grade", "Average speed this week" | speed by grade against target; the week's speed | `?measure=fpm&by=grade`, `?measure=fpm&window=week` |
-| "What were the top downtime reasons yesterday?", "Show downtime by reason" (all shifts) | maintenance and operator downtime against their bands, reasons ranked by % of scheduled minutes with stops and minutes per stop, planned maintenance last, and each flagged shift with its supervisor slot and the leading reason's recurrence; yesterday is the latest production day | `?measure=review` |
+| "What were the top downtime reasons yesterday?", "Show downtime by reason" (all shifts) | maintenance and operator downtime against their bands, reasons ranked by % of scheduled minutes with stops and minutes per stop, planned maintenance last, and each flagged shift with its supervisor slot and the leading reason's recurrence; yesterday is the production day before the selected one | `?measure=review` |
 | "Which equipment caused the most downtime?" | downtime grouped by place | `?measure=downtime&by=place` |
 | "Which downtime reason cost the most minutes this week?" | the downtime Pareto with share and the previous window | `?measure=pareto&window=week` |
 | "Where did we stop most often this week?" | the Pareto by place, counted | `?measure=pareto&window=week&by=place&unit=count` |
@@ -52,7 +52,7 @@ With All selected, "Compare all shifts" runs KPIs, downtime and speed for each s
 A refusal says what to ask instead; it never guesses.
 
 - **No measurable goal.** "How can we be better?", "Adjust the knife settings to cut trim" and "How much will we save if we fix the splicer?" are refused: the records hold no intervention outcomes, no machine state and no costs. Choose an objective the records can answer: fewer downtime minutes, less recorded waste, or better grade-target attainment in the selected scope.
-- **Relative days.** "Yesterday" (or "the previous production day") is the latest production day in the records; with another day selected the answer names that day and asks you to select it. A comparison with yesterday is refused: yesterday is the selected day, so name both windows instead. "Today" and "tomorrow" ask you to use the day control: answers anchor on the selected production day. Under Week, Month or 4-4-5, a question about yesterday answers for that day when its answer is one record-store tool (the top downtime reasons, the Pareto, the waste breakdown, the two lenses); the per-shift views ask you to switch Window to Day.
+- **Relative days.** "What happened yesterday?" asks you to use the day control: answers anchor on the selected production day.
 - **An ambiguous window.** A bare "Compare last week" asks which two windows to compare, for example "this week compared with last week".
 - **A per-shift view over a period.** The setup matrix, orders, notes and rankings are per shift and per day; under Week, Month or 4-4-5 they ask you to switch Window back to Day.
 - **A window outside the data.** A weekend, or any window before 3 August 2026, is unavailable with its reason, never zero. A comparison is withheld unless both windows are complete.

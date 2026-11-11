@@ -194,7 +194,7 @@ def test_every_measure_has_a_meaning_under_every_grain():
     ('/corr/1/day/2026-09-14?measure=downtime&window=week', 'window= does not apply'),
     ('/corr/1/day/2026-09-14?measure=overview&window=week&kind=maintenance', 'kind= narrows the day overview'),
     ('/corr/1/week/2026-09-14?measure=overview&kind=operator', 'kind= narrows the day overview'),
-    ('/corr/1/day/2026-09-14?measure=kpis&window=2026-13', 'window is day, week, month, period'),
+    ('/corr/1/day/2026-09-14?measure=kpis&window=2026-13', 'window is week, month, period'),
     ('/corr/1/day/2026-09-14?measure=kpis&compare=last', 'compare is prev, none'),
     ('/corr/1/week/2026-09-14?measure=kpis&compare=2026-08', 'compare takes a date'),
     ('/corr/1/day/2026-09-14/shift/2?measure=overview&shifts=1', 'Selected shift only'),

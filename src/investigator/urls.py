@@ -386,11 +386,11 @@ def _window(value, tool_period, day):
     inside the dataset or not: the tool answers with its own reason)."""
     if value is None:
         return {'period': tool_period, 'anchor': day}
-    if value in GRAIN_TO_TOOL:   # `window=day`: the production day itself under Week, Month or 4-4-5 ("yesterday")
+    if value in GRAIN_TO_TOOL and value != 'day':
         return {'period': GRAIN_TO_TOOL[value], 'anchor': day}
     if re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', value):
         return {'period': 'month', 'anchor': value + '-01'}
-    raise ValueError('window is day, week, month, period (the 4-4-5 period containing the day) or a month as YYYY-MM')
+    raise ValueError('window is week, month, period (the 4-4-5 period containing the day) or a month as YYYY-MM')
 
 
 def _wants(value):
