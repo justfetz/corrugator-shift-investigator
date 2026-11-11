@@ -35,7 +35,7 @@ MEASURE_INTENTS = {v: k for k, v in INTENT_MEASURES.items()}
 STORE_MEASURES = {'kpis': 'get_period_kpis', 'pareto': 'get_downtime_pareto', 'waste': 'get_waste_breakdown',
                   'stops': 'get_stops_profile', 'grade': 'get_grade_totals', 'overrun': 'get_overrun',
                   'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock',
-                  'money': 'get_opportunities'}
+                  'money': 'get_opportunities', 'review': 'get_downtime_review'}
 TOOL_MEASURES = {v: k for k, v in STORE_MEASURES.items()}
 # Plans the period form of a day-shaped intent runs that are more than one store tool (agent.period_plan),
 # by their tools in order. Under a ranged grain `downtime` is the Pareto alone, `quality` the waste breakdown
@@ -45,9 +45,10 @@ PERIOD_SHAPES = {('get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown
 UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothing: `want=chart` changes their status
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
-QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'shifts', 'rank', 'want',
+QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'shifts', 'rank', 'lens', 'want',
                 'rates', 'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'want', 'rates', 'corrupt', 'after')
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'lens', 'want', 'rates', 'corrupt', 'after')
+LENSES = ('supervisor', 'ownership')   # get_opportunities' owner lenses (issue #101); `all` is the default and is omitted
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
 MAX_URL = 2000
 PATH = re.compile(r'^/corr/(?P<machine>[A-Za-z0-9_.-]{1,32})/(?P<grain>day|week|month|period)/'
@@ -136,6 +137,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                     params.append(('unit', first['measure']))
             elif measure == 'opportunity' and first['slice_by'] != 'width':
                 params.append(('by', first['slice_by']))
+            elif measure == 'money' and first.get('lens', 'all') != 'all':
+                params.append(('lens', first['lens']))
             elif measure == 'trend':
                 params.append(('metric', first['metric']))
                 if first.get('weeks', 8) != 8:
@@ -245,6 +248,11 @@ def resolve_url(url, store, max_turns=4, depth=0):
     if measure is None:
         raise ValueError('Add measure= to ask this scope a question; ' + MEASURE_HELP)
     measure, fields, typed = _aliases(measure, fields, grain)
+    if (measure == 'downtime' and grain == 'day' and scope == 'day' and fields.get('by', 'reason') == 'reason'
+            and not {'kind', 'shifts', 'compare', 'window'} & set(fields)):
+        # A production day's downtime over all shifts is the owner's downtime review (issue #101), as the question is.
+        fields.pop('by', None)
+        measure, typed = 'review', typed or 'measure=downtime'
     tool_period = GRAIN_TO_TOOL[grain]
     context = Context(day, shift, period=tool_period)
     context.scope = scope
@@ -262,7 +270,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
                 raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
             raise
         request['asked'] = _wants(fields.get('want'))
-    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'rank'):
+    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'rank', 'lens'):
         if key in fields and key not in _used(measure, fields):
             hint = ''
             if key == 'compare':
@@ -310,6 +318,8 @@ def _used(measure, fields):
         return {'window', 'by'}
     if measure == 'trend':
         return {'metric', 'weeks'}
+    if measure == 'money':
+        return {'window', 'lens'}
     if measure in STORE_MEASURES:
         return {'window'}
     return set()
@@ -360,11 +370,11 @@ def _window(value, tool_period, day):
     inside the dataset or not: the tool answers with its own reason)."""
     if value is None:
         return {'period': tool_period, 'anchor': day}
-    if value in GRAIN_TO_TOOL and value != 'day':
+    if value in GRAIN_TO_TOOL:   # `window=day`: the production day itself under Week, Month or 4-4-5 ("yesterday")
         return {'period': GRAIN_TO_TOOL[value], 'anchor': day}
     if re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', value):
         return {'period': 'month', 'anchor': value + '-01'}
-    raise ValueError('window is week, month, period (the 4-4-5 period containing the day) or a month as YYYY-MM')
+    raise ValueError('window is day, week, month, period (the 4-4-5 period containing the day) or a month as YYYY-MM')
 
 
 def _wants(value):
@@ -437,6 +447,11 @@ def _request(measure, fields, context, window):
             if slice_by not in ('width', 'crew'):
                 raise ValueError('by is width or crew for the speed opportunity')
             plan.append(('get_speed_opportunity', {'window': window, 'slice_by': slice_by, 'shift': s}))
+        elif measure == 'money':
+            lens = fields.get('lens')
+            if lens is not None and lens not in LENSES:
+                raise ValueError('lens is supervisor (the controllable losses ranked) or ownership (the total cost of waste, side trim first)')
+            plan.append(('get_opportunities', {'window': window, 'shift': s, **({'lens': lens} if lens else {})}))
         elif measure == 'trend':
             metric = fields.get('metric')
             if metric not in TREND_METRICS:
@@ -449,7 +464,7 @@ def _request(measure, fields, context, window):
             plan.append((STORE_MEASURES[measure], {'window': window, 'shift': s}))
     intent = {'kpis': 'period_compare', 'pareto': 'period_pareto', 'waste': 'period_waste', 'stops': 'period_stops',
               'grade': 'period_grade', 'overrun': 'period_overrun', 'opportunity': 'period_speed_opportunity',
-              'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money'}[measure]
+              'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money', 'review': 'period_review'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
 

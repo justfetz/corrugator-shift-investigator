@@ -31,7 +31,7 @@ def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
     assert tools == {'get_period_kpis', 'compare_periods', 'get_downtime_pareto', 'get_waste_breakdown',
                      'get_stops_profile', 'get_trend', 'get_grade_totals', 'get_overrun', 'get_speed_opportunity', 'get_rollstock',
                      'get_shift_kpis', 'get_downtime_breakdown', 'get_quality_breakdown',
-                     'get_shift_dollars', 'get_opportunities'}
+                     'get_shift_dollars', 'get_opportunities', 'get_downtime_review'}
     dollars = [c for c in cases if c['id'].startswith('value-dollars-')]
     assert len(dollars) >= 6 and any(c.get('rates') for c in dollars)   # issue #31: dollar cases, one with changed rates
     tiles = {key for key, *_ in KPI_CATALOG}

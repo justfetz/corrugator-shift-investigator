@@ -293,47 +293,111 @@ def shift_dollars(analysis, shift, rates):
     return _envelope(data, rates)
 
 
-def opportunities(store, window, shift, rates):
-    """`get_opportunities`: where to look for improvement in a window, the levers ranked in $/yr.
-    Levers: the speed gap to each cell's best fifth, side-trim points over the trim target, each
-    downtime reason (order change is setup time), shear and each dry-end reason. Each names the
-    records behind it. It ranks levers and names records; it never prescribes a machine adjustment."""
+LENSES = ('all', 'supervisor', 'ownership')
+# The owner's two lenses (issue #101, targets.json): which levers a supervisor controls, and why.
+CONTROL = {'speed': ('controllable', 'speed under the grade baseline'), 'trim': ('schedule-driven', 'the order mix and its web widths'),
+           'downtime': ('controllable', 'maintenance and operator downtime'), 'setup': ('controllable', 'operator downtime at order changes'),
+           'scheduled': ('schedule-driven', 'planned maintenance is scheduled time'), 'shear': ('controllable', 'sequencing'),
+           'dry_end': ('controllable', 'temperatures'), 'unexplained': ('unattributed', 'the scale reading less the recorded waste')}
+TOTAL_TRIM = 'Side trim (all recorded)'
+
+
+def _control(row, key):
+    row['control'], row['control_note'] = CONTROL[key]
+    return row
+
+
+def opportunities(store, window, shift, rates, lens='all'):
+    """`get_opportunities`: where to look for improvement in a window, the levers ranked in $/yr, each marked
+    controllable or schedule-driven (issue #101). Levers: the speed under each grade's trailing-year baseline
+    (every wet-end run against its grade's sustained speed), side-trim points over the trim target, each
+    downtime reason (order change is setup time; planned maintenance is scheduled time), shear and each
+    dry-end reason. Each names the records behind it. It ranks levers and names records; it never prescribes
+    a machine adjustment.
+
+    `lens` picks the owner's view of the same numbers: `all` ranks every lever; `supervisor` ranks the
+    controllable losses and lists the schedule-driven ones after, unranked; `ownership` is the total cost of
+    waste, side trim first (all of it, not only the points over target), then shear, each dry-end reason and
+    the unexplained remainder by dollars."""
+    if lens not in LENSES:
+        raise ValueError('lens is all, supervisor or ownership')
     waste = store.get_waste_breakdown(window, shift)
     pareto = store.get_downtime_pareto(window, 'reason', 'minutes', shift)
-    speed = store.get_speed_opportunity(window, 'width', shift)
+    speed = store.speed_baseline_gap(window, shift)
     gross = waste['gross_sqft']
     minutes = window_minutes(waste)
     by = {r['category']: r for r in waste['rows']}
     v = rates['values']
     rows = []
-    cells = [r for r in speed['rows'] if (r['opportunity_hours'] or 0) > 0]
-    rows.append({'lever': 'Speed gap to best-fifth speed', 'kind': 'speed', 'quantity': speed['total_opportunity_hours'], 'unit': 'hours',
-                 'records': f'{len(cells)} grade and width cells: ' + ', '.join(c['label'] for c in cells[:5]) + (' and more' if len(cells) > 5 else ''),
-                 **price('speed', speed['total_opportunity_hours'] * 60, rates, gross, minutes)})
     trim_pct = by['trim']['pct_of_gross']
-    over = max(0.0, (trim_pct or 0) - v['trim_target_pct'])
-    over_sqft = over / 100 * gross if gross else 0.0
-    rows.append({'lever': f'Side trim over the {v["trim_target_pct"]:g}% target', 'kind': 'trim', 'quantity': round(over, 4), 'unit': 'points',
-                 'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross' + ('' if over else ', at or under target'),
-                 **price('trim', over_sqft, rates, gross, minutes)})
-    for r in pareto['rows']:
-        rows.append({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if r['category'] == 'Order change' else ''),
-                     'kind': 'setup' if r['category'] == 'Order change' else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
-                     'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)})
-    for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
-        r = by[key]
-        if r['sqft']:
-            rows.append({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft',
-                         'records': f'{r["label"]}: {r["pct_of_gross"]}% of gross', **price('waste', r['sqft'], rates, gross, minutes)})
+    if lens == 'ownership':
+        trim = by['trim']
+        rows.append(_control({'lever': TOTAL_TRIM, 'kind': 'trim', 'quantity': trim['sqft'], 'unit': 'sq ft', 'pct_of_gross': trim_pct,
+                              'band': trim.get('band'), 'band_text': trim.get('band_text'),
+                              'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross',
+                              **price('trim', trim['sqft'], rates, gross, minutes)}, 'trim'))
+        for key, control in (('shear', 'shear'), ('bond', 'dry_end'), ('warp', 'dry_end'), ('misalignment', 'dry_end'), ('moisture', 'dry_end'),
+                             ('unexplained', 'unexplained')):
+            r = by[key]
+            if r['sqft'] and r['sqft'] > 0:
+                rows.append(_control({'lever': r['label'] + (' (all recorded)' if key != 'unexplained' else ''), 'kind': 'waste' if key != 'unexplained' else 'paper',
+                                      'quantity': r['sqft'], 'unit': 'sq ft', 'pct_of_gross': r['pct_of_gross'],
+                                      'records': f'{r["label"]}: {r["pct_of_gross"]}% of gross', **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, control))
+    else:
+        rows.append(_control({'lever': "Speed under each grade's trailing-year speed", 'kind': 'speed', 'quantity': speed['gap_minutes'], 'unit': 'min',
+                              'records': f'{speed["runs_under"]} of {len(speed["runs"])} wet-end runs under their grade baseline',
+                              **price('speed', speed['gap_minutes'], rates, gross, minutes)}, 'speed'))
+        over = max(0.0, (trim_pct or 0) - v['trim_target_pct'])
+        over_sqft = over / 100 * gross if gross else 0.0
+        rows.append(_control({'lever': f'Side trim over the {v["trim_target_pct"]:g}% target', 'kind': 'trim', 'quantity': round(over, 4), 'unit': 'points',
+                              'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross' + ('' if over else ', at or under target'),
+                              **price('trim', over_sqft, rates, gross, minutes)}, 'trim'))
+        for r in pareto['rows']:
+            planned = r['category'] == 'Planned maintenance'
+            setup = r['category'] == 'Order change'
+            rows.append(_control({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if setup else ' (scheduled time)' if planned else ''),
+                                  'kind': 'setup' if setup else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
+                                  'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)},
+                                 'scheduled' if planned else 'setup' if setup else 'downtime'))
+        for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
+            r = by[key]
+            if r['sqft']:
+                rows.append(_control({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft',
+                                      'records': f'{r["label"]}: {r["pct_of_gross"]}% of gross', **price('waste', r['sqft'], rates, gross, minutes)},
+                                     'shear' if key == 'shear' else 'dry_end'))
+    if lens == 'ownership':   # trim first, always: every owner asks what trim costs; then the rest by dollars
+        rows = rows[:1] + sorted(rows[1:], key=lambda r: (-(r['usd_per_year'] or 0), r['lever']))
+        for i, r in enumerate(rows, 1):
+            r['rank'] = i
+    elif lens == 'supervisor':   # the controllable losses ranked; the schedule-driven ones after, not ranked
+        ranked = _rank([r for r in rows if r['control'] == 'controllable'], 'usd_per_year')
+        rest = sorted([r for r in rows if r['control'] != 'controllable'], key=lambda r: (-(r['usd_per_year'] or 0), r['lever']))
+        for r in rest:
+            r['rank'] = None
+        rows = ranked + rest
+    else:
+        rows = _rank(rows, 'usd_per_year')
+    controllable = [r for r in rows if r['control'] == 'controllable']
     coverage = waste['window']['coverage']
-    data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift,
-            'dataset_version': waste['dataset_version'], 'rows': _rank(rows, 'usd_per_year'),
+    speed_part = {'trace': {'sql': speed['trace']['sql'], 'parameters': speed['trace']['parameters'], 'elapsed_ms': 0.0}}
+    notes = {'all': ('Levers are gaps priced at the rates: the speed of each wet-end run under its grade\'s trailing-year speed, side-trim '
+                     'points over the target, each recorded downtime reason, and all recorded shear and dry-end waste (no benchmark '
+                     'for those). Per year at the post\'s volumes. These name where to look and the records behind each '
+                     'lever; they do not prescribe a machine adjustment.'),
+             'supervisor': ('The supervisor lens: the controllable losses ranked, maintenance and operator downtime, the speed of each '
+                            'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste; side trim and planned maintenance '
+                            'are schedule-driven and listed after. Per year at the post\'s volumes; these name where to look, they do not '
+                            'prescribe a machine adjustment.'),
+             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then shear, each dry-end reason '
+                           'and the unexplained remainder (the scale reading less the recorded waste). Per year at the post\'s volumes.')}[lens]
+    data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
+            'dataset_version': waste['dataset_version'], 'rows': rows,
             'coverage': 'complete' if coverage == 'complete' else coverage, 'excluded_records': [],
-            'source_rows': {'waste': waste['source_rows'], 'stops': pareto['source_rows'], 'speed': speed['source_rows']},
-            'trace': _trace([waste, pareto, speed]), 'gross_sqft': gross, 'scheduled_minutes': minutes,
+            'source_rows': {'waste': waste['source_rows'], 'stops': pareto['source_rows'], 'runs': len(speed['runs'])},
+            'trace': _trace([waste, pareto, speed_part]), 'gross_sqft': gross, 'scheduled_minutes': minutes,
             **_totals(rows),
-            'method_note': ('Levers are gaps priced at the rates: the speed gap to each cell\'s best-fifth speed, side-trim points '
-                            'over the target, each recorded downtime reason, and all recorded shear and dry-end waste (no benchmark '
-                            'for those). Per year at the post\'s volumes. These name where to look and the records behind each '
-                            'lever; they do not prescribe a machine adjustment.')}
+            'controllable_levers': len(controllable), 'controllable_usd': round(sum(r['usd'] or 0 for r in controllable), 2),
+            'controllable_usd_per_year': round(sum(r['usd_per_year'] or 0 for r in controllable), 0) if all(r['usd_per_year'] is not None for r in controllable) else None,
+            'runs_under_baseline': speed['runs_under'], 'baseline_since': speed['since'], 'baseline_through': speed['through'],
+            'method_note': notes}
     return _envelope(data, rates)

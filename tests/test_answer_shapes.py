@@ -19,10 +19,10 @@ from run import RULE_CONSTANTS, renderings  # noqa: E402
 DAY = '2026-09-14'
 GOLDEN = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
 BOLD = re.compile(r'\*\*([^*]+)\*\*')
-REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday) (\d+))?\)$')
+REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday|flag) (\d+))?\)$')
 LOOK = re.compile(r' → “([^”]+)”$')
 NUMBER = re.compile(r'\d[\d,]*(?:\.\d+)?')
-PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile'}
+PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile', 'flag': 'flags'}
 MAX_WORDS = 40      # the owner's rule: no paragraph over about forty words
 MAX_CLAUSES = 3     # and no list of more than three like items joined into one sentence with semicolons
 
@@ -132,6 +132,7 @@ INTENT_QUESTIONS = [
     ('period_overrun', 'Over/under-run by knife this week', 'day', 'day'),
     ('period_speed_opportunity', 'Where is the speed opportunity this month?', 'day', 'day'),
     ('period_money', 'Where is the money this month?', 'day', 'day'),
+    ('period_review', 'What were the top downtime reasons this week?', 'day', 'day'),
 ]
 ALIASES = [('period_downtime', 'Show downtime by reason', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]
 

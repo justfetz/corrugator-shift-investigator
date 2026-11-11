@@ -15,7 +15,8 @@ For each valid setup, let F be gross machine lineal feet, G gross square feet, T
 | Estimated good output | sum(G − T − S − R) | Accounting estimate under the demo's waste convention, not accepted/sold product |
 | Maintenance / Operator | 100 × minutes of that kind / 480 | Separate measures, each with its own target |
 | Total downtime | 100 × all stop minutes / 480 | Validated non-overlapping stops only |
-| Trim / shear / dry-end waste | 100 × sum(category area) / sum(G) | Area-weighted percentages |
+| Trim / shear waste | 100 × sum(category area) / sum(G) | Area-weighted percentages of gross |
+| Dry-end waste | 100 × sum(R) / sum(G − T − S) | The owner's denominator (issue #101): the yield after trim and shear, the board that reached the dry end |
 | Throughput | 12 × sum(G) / sum(F) | Average gross web width in inches; this label does not mean output per hour |
 | Dry-end setups | Count of valid setup records | Invalid setups are excluded |
 | Paper changes | Count of distinct wet-end IDs per day and shift | Sum those counts across periods; IDs repeat between days |
@@ -49,8 +50,9 @@ A window is `day`, `week` (Mon–Fri), `month` (calendar) or `fiscal`: the 4-4-5
 | speed_all_fpm (with stops) | sum(lineal ft) / sum(scheduled shift minutes) | higher |
 | downtime_pct, downtime_minutes | sum(stop seconds) / sum(scheduled seconds) × 100; sum(stop seconds) / 60 | lower |
 | stops, minutes_per_stop | count of stop records; downtime minutes / stops | lower |
-| trim_pct, shear_pct, dry_end_pct | sum(category sq ft) / sum(gross sq ft) × 100 | lower |
-| bond_pct, warp_pct, misalignment_pct, moisture_pct | sum(reject lines of that family) / sum(gross) × 100; the four add to dry_end_pct. `get_waste_breakdown` and the daily `get_quality_breakdown` also carry `details`: the reported sub-reasons (up / down / twist / S-warp, delamination / paper) with area and share of dry-end | lower |
+| trim_pct, shear_pct | sum(category sq ft) / sum(gross sq ft) × 100 | lower |
+| dry_end_pct | sum(reject sq ft) / sum(gross − trim − shear sq ft) × 100, of the yield after trim and shear (issue #101) | lower |
+| bond_pct, warp_pct, misalignment_pct, moisture_pct | sum(reject lines of that family) / sum(gross − trim − shear) × 100; the four add to dry_end_pct.  `get_waste_breakdown` keeps every category's `pct_of_gross` (the ladder that adds up to the bale) and gives the dry-end families and their total a `pct_of_yield` beside it. `get_waste_breakdown` and the daily `get_quality_breakdown` also carry `details`: the reported sub-reasons (up / down / twist / S-warp, delamination / paper) with area and share of dry-end | lower |
 | bale_pct | sum(shift `bale_sqft`) / sum(gross) × 100 — a scale reading of baled waste, not an accounting sum | lower |
 | unexplained_pct | (sum(bale) − sum(trim + shear + rejects)) / sum(gross) × 100 — what the scale weighed beyond the accounted categories (0.1–0.4 % in this dataset) | lower |
 | maintenance_pm_pct | sum(Maintenance + PM stop seconds) / scheduled × 100 (the owner's dashboard combines planned and unplanned) | lower |
@@ -120,14 +122,14 @@ The records hold no costs. `cost_model.py` prices the tools' quantities at assum
 ([Where the money hides in a corrugator's numbers](https://justfetz.github.io/posts/corrugator-dashboard.html)).
 Every dollar is synthetic data at an assumed rate, never a real plant's figure, and every answer that
 carries dollars names its rates in a provenance line ("paper $55/MSF (post), machine time $1,200/hr
-(post), contribution margin not set (assumption: owner to set), trim target 3.25% (process rule)").
+(post), contribution margin not set (assumption: owner to set), trim target 3% (owner, 2026-11-10)").
 
 | Rate or assumption | Default | Source | `rates=` key |
 | --- | --- | --- | --- |
 | Paper cost | $55 / MSF | post | `paper` |
 | Machine time (bottleneck shadow price) | $1,200 / hr | post ("more than $1,200 an hour") | `hour` |
 | Board contribution margin | not set | not in the post; owner to set | `margin` |
-| Side-trim target | 3.25 % of gross | the process rule (setup trim flag) | `trim` |
+| Side-trim target | 3 % of gross (3.25 % is the flag, 2.75 % a home run) | owner, 2026-11-10 (`targets.json`) | `trim` |
 | Volume | 7,000,000 sq ft / day / machine; 3 shifts; 5 days a week | post | fixed |
 | Annual volume | 1.8M MSF a year per machine (the post's 3.6M across two machines), so 257 production days | post | fixed |
 | Net width | 96 in on a 110 in machine | post | fixed |
@@ -162,13 +164,21 @@ field and the narrative validator substitutes every dollar from the tool result.
   downtime; the lineal feet not made / 675 = machine minutes), side trim, shear and each dry-end reason.
   Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`, `total_usd_per_year`,
   `total_contribution_usd` (null while the margin is not set). Asked as "where did the money go this shift".
-- `get_opportunities(window, shift)`: where to look, the levers ranked in $/yr: the speed gap to each
-  cell's best-fifth speed (`get_speed_opportunity`'s total hours), side-trim points over the trim target
-  (points / 100 x gross, priced as paper: per year this is the post's trim formula), each downtime reason
-  (Order change is labelled setup time), and all recorded shear and each dry-end reason (no benchmark for
-  those, so the whole loss). Each lever names the records behind it. It ranks levers and names records; it
-  never prescribes a machine adjustment. Asked as "where is the money this month", "what's costing us",
-  "opportunities"; under the Day control "where is the money" is the shift's own `get_shift_dollars`.
+- `get_opportunities(window, shift, lens)`: where to look, the levers ranked in $/yr: the speed of each
+  wet-end run under its grade's trailing-year speed (the owner's baseline, [below](#the-owners-targets-and-bands-issue-101);
+  minutes = the run's lineal feet short of the baseline in its running minutes / the baseline), side-trim
+  points over the trim target (points / 100 x gross, priced as paper: per year this is the post's trim
+  formula), each downtime reason (Order change is labelled setup time, Planned maintenance scheduled time),
+  and all recorded shear and each dry-end reason (the whole loss). Each lever names the records behind it
+  and is marked `control`: `controllable` or `schedule-driven`, with a `control_note` (sequencing,
+  temperatures, the order mix and its web widths). It ranks levers and names records; it never prescribes
+  a machine adjustment. Asked as "where is the money this month", "what's costing us", "opportunities";
+  under the Day control "where is the money" is the shift's own `get_shift_dollars`. `lens` reads the same
+  numbers the owner's two ways: `supervisor` ranks the controllable losses and lists side trim and planned
+  maintenance after, unranked ("where's my biggest opportunity", "what went wrong yesterday");
+  `ownership` is the total cost of waste, side trim first (all of it, with its band), then shear, each
+  dry-end reason and the unexplained remainder (`control` `unattributed`) by dollars ("what does trim
+  cost", "what's trim costing us"); `all`, the default, ranks every lever.
 
 A money word beside another question never replaces it. Downtime, rejects, waste, the Pareto, the
 overview and the comparison carry their dollars on the rows, so "which reason is costing us the most
@@ -211,7 +221,32 @@ The following fictional grade settings match `fixture.GRADES`. They are supplied
 | 275-BC | 500 |
 | 275-EB | 500 |
 
-Maintenance and operator downtime each flag above 2.5%. Dry-end waste flags above 1%. Setup trim flags above 3.25% in tool evidence. The UI's aggregate trim card does not apply the per-setup threshold to a period average. Shear's 0.4–1% range is contextual guidance, not an implemented alarm. A speed-attainment card below 100% is highlighted.
+The owner's bands ([next section](#the-owners-targets-and-bands-issue-101)) replace the earlier process rules: maintenance and operator downtime each flag above 2.5%, dry-end waste above 1.25% of the yield after trim and shear (target 1%), side trim above 3.25% (target 3%), shear above 1% (target 0.75%). Setup trim still counts the setups above the 3.25% flag in tool evidence; the UI's aggregate trim card does not apply the per-setup threshold to a period average. A speed-attainment card below 100% is highlighted.
+
+## The owner's targets and bands (issue #101)
+
+`src/investigator/targets.json` holds the plant's standards from the owner's golden review of 2026-11-10, each with its source; `targets.py` reads them. A band places a figure against its standard: **home run** (at or under the home-run line), **on target** (at or under the target), **over target** (above the target, at or under the flag) or **flag** ("what's going on?", above the flag). The tools put the band on the row beside the figure, as the word (`<measure>_band`, or `band` on a one-measure row) and as the words an answer prints (`..._band_text`, which names the thresholds), so the headline shows the band without the prose typing a threshold.
+
+| Measure | Home run | Target | Flag above | Denominator | Lens |
+| --- | ---: | ---: | ---: | --- | --- |
+| Operator downtime | | 2.5 % | 2.5 % | scheduled minutes (480 a shift, 1,440 a day) | controllable |
+| Maintenance downtime | | 2.5 % | 2.5 % | scheduled minutes | controllable |
+| Operator and maintenance together | | 5 % | 5 % | scheduled minutes | controllable |
+| Side trim | 2.75 % | 3 % | 3.25 % | gross sq ft | schedule-driven |
+| Shear (chop) | 0.5 % | 0.75 % | 1 % | gross sq ft | controllable (sequencing) |
+| Dry-end waste | 0.75 % | 1 % | 1.25 % | yield after trim and shear | controllable (temperatures) |
+| Peel (roll prep) | | about 0.5 % | owner to set | roll stock consumed | controllable |
+| Core (at splice) | | about 0.1 % | owner to set | roll stock consumed | controllable |
+
+Bands ride on the daily `get_shift_kpis` row (maintenance, operator, the two together as `op_maint_pct`, trim, shear, dry-end), on the period KPI tiles (`trim_pct`, `shear_pct`, `dry_end_pct`, `operator_pct`), the waste breakdown (trim, shear, dry-end on its yield), the trend weeks of those metrics, and the downtime review. Peel and core are on record; the records carry no peel or core quantity yet, so no answer shows them.
+
+**Speed baseline.** "Good speed" for a grade (quality ID) is its sustained average over the trailing year: lineal feet over running minutes (stops out) of every setup of the grade with at least two running minutes, in the 365 days ending on the day asked about, inside the record store (`RecordStore.grade_speed_baselines`; two months until the rolling year of #35 lands). Never the maximum speed, which is a ramp-up point. `get_wet_end_performance` compares each run's running speed (stops out by interval overlap) with its grade's baseline (`baseline_fpm`, `baseline_gap_fpm`, `baseline_gap_ft`, `under_baseline`, and `runs_under_baseline` on the envelope); the cost model's speed lever sums the gap of every run of a window under it.
+
+**Downtime answers** (`get_downtime_review(window, shift)`). A production day's downtime over all shifts is the review, the owner's default: maintenance and operator downtime lead, each and together against its band as a percent of scheduled minutes; every reason, by kind, ranked by its percent of scheduled minutes with its stop count and minutes per stop; planned maintenance (PM) is scheduled time, listed last and not ranked. "Top downtime reasons" at any grain, and "yesterday" (the record store's latest production day; another selected day is refused with that day's date), take the same tool. Under one selected shift the downtime answer stays that shift's KPIs and breakdown, now ranked by percent of the shift with stops and minutes per stop, PM last.
+
+**Flags and recurrence.** A flag is a shift whose maintenance or operator downtime is over its band (2.5% of its scheduled minutes). It names the shift, the day and its supervisor slot (the shift's crew label: who to ask) and the reason that led it, and gives that reason's recurrence over the trailing year ending on the flagged day: `times_over_band`, the shifts on which the same reason, in the same kind, was over the band on its own, out of `shifts_counted`; and `weeks_in_top_five`, the Monday-to-Friday weeks in which it was among the five reasons with the most unplanned minutes, out of `weeks_counted`. A shift-scoped answer counts that shift's own history, an all-shift one the plant's. The review lists the five largest flags of its window (`flag_count` says how many fired); the daily `get_downtime_breakdown` carries its shift's flags on a record-store day. An answer cites a flag as `(query N · flag M)`.
+
+**Two lenses, one set of numbers.** Ownership: the total cost of waste in dollars, side trim first. Supervisor: the controllable losses ranked, side trim shown as schedule-driven. The question picks the lens; both are `get_opportunities` over the same quantities at the same rates (above).
 
 Changing a target affects generated footage, validation, and attainment. It is a process-rule change requiring deliberate review, not an interface preference. Do not infer a target from the best observed day. The 200,000 and 275,000–300,000 lineal examples in the README are contextual shift examples, not grade-independent thresholds.
 

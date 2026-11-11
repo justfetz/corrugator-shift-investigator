@@ -280,6 +280,7 @@ class Workbench:
         context = Context(day, int(shift), period='fiscal' if period == 'accounting' else period)
         context.scope = scope
         context.rates = parse_rates(fields.get('rates'))
+        context.last_day = self.store.last_day   # what "yesterday" names (issue #101)
         request = parse_request(question, context)   # the refusals of the offline router, verbatim
         return canonical_url(request, context, corrupt == '1', self.store.machine_id, after)
 
@@ -399,6 +400,7 @@ class Workbench:
                              + '?measure=report' + ('&corrupt=1' if job['corrupt'] else ''))
             return self._retain(result, job['session_id'], job['session_reset'])
         context = self._context(job)
+        context.last_day = self.store.last_day   # what "yesterday" names (issue #101)
         request = parse_request(job['question'], context)
         result = Agent(self._dataset(job['key']), max_turns=self.guards.max_turns).ask(job['question'], context, request=request)
         result['url'] = canonical_url(request, context, job['corrupt'], self.store.machine_id)   # the question's own address

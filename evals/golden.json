@@ -2931,7 +2931,7 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^\\*\\*[0-9.]+%\\*\\* of gross in the week of .*, the latest of 7 weeks of warp",
+     "^\\*\\*[0-9.]+%\\*\\* of yield after trim and shear in the week of .*, the latest of 7 weeks of warp",
      "^Weeks without records: 2026-07-27\\.$"
     ],
     "max_ms": 500,
@@ -3254,8 +3254,8 @@
    "expect": {
     "status": "complete",
     "sections_match": [
-     "^\\*\\*[0-9.]+%\\*\\* of the shift in recorded downtime · maintenance [0-9.]+% · operator [0-9.]+%",
-     "^- .*: \\*\\*[0-9.]+ min\\*\\*, [0-9.]+% of the shift · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$"
+     "^\\*\\*[0-9.]+%\\*\\* of the shift in maintenance and operator downtime · (on target|flag)[^·]* · maintenance [0-9.]+%, [^·]+ · operator [0-9.]+%, ",
+     "^- .*: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$"
     ]
    }
   },
@@ -3506,7 +3506,7 @@
     ],
     "tool_calls": 4,
     "sections_match": [
-     "^\\*\\*[0-9.]+%\\*\\* of gross rejected at the dry end",
+     "^\\*\\*[0-9.]+%\\*\\* of yield rejected at the dry end",
      "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, [0-9.]+% of the shift · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 3 · row 0\\)$",
      "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the slowest of [0-9]+ runs \\(query 4 · row [0-9]+\\)$"
     ]
@@ -3622,7 +3622,7 @@
     ],
     "tool_calls": 3,
     "sections_match": [
-     "^- .*: \\*\\*[0-9.]+ min\\*\\*, [0-9.]+% of the shift .*\\(query 2 · row 0\\)$",
+     "^- .*: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops?, .*\\(query 2 · row 0\\)$",
      "^- At .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, .*\\(query 3 · row 0\\)$"
     ]
    }
@@ -4944,7 +4944,7 @@
     "charts": 1,
     "sections_match": [
      "^\\*\\*\\$[0-9,]+ a year\\*\\* across [0-9]+ levers · \\$[0-9,]+ in this window \\(query 1\\)$",
-     "^- [0-9]+\\. Speed gap to best-fifth speed: \\*\\*\\$[0-9,]+/yr\\*\\*",
+     "^- [0-9]+\\. Speed under each grade's trailing-year speed: \\*\\*\\$[0-9,]+/yr\\*\\*",
      "^- [0-9]+\\. Downtime: Order change \\(setup time\\): \\*\\*\\$[0-9,]+/yr\\*\\*",
      "^September 2026 .*, all shifts\\. Window coverage",
      "do not prescribe a machine adjustment"
@@ -5258,7 +5258,7 @@
     ],
     "sections_match": [
      "^\\*\\*\\$[0-9,]+ a year\\*\\* across [0-9]+ levers",
-     "^- [0-9]+\\. Speed gap to best-fifth speed: \\*\\*\\$[0-9,]+/yr\\*\\*"
+     "^- [0-9]+\\. Speed under each grade's trailing-year speed: \\*\\*\\$[0-9,]+/yr\\*\\*"
     ]
    }
   },
@@ -5417,6 +5417,253 @@
     "sections_match": [
      "\\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query [0-9]+ · row [0-9]+\\)$",
      "^Rates: paper \\$[0-9,.]+/MSF"
+    ]
+   }
+  },
+  {
+   "id": "owner-top-downtime-reasons-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner",
+   "day": "2026-09-30",
+   "scope": "day",
+   "question": "What were the top downtime reasons yesterday?",
+   "note": "Issue #101, the owner's downtime rules (2026-11-10): the default scope is the previous production day, all shifts (yesterday is the record store's latest production day, 2026-09-30 in the golden window); maintenance and operator downtime lead, each and together against its band; reasons ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. On 2026-09-30 shift 1's operator downtime is over its 2.5% band.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-30?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-30"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · (on target|flag)[^·]* · maintenance [0-9.]+%, (on target|flag)[^·]* · operator [0-9.]+%, (on target|flag)",
+     "bullets": [
+      3,
+      5
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop \\(query 1 · row 0\\)$",
+     "^Flags and who to ask$",
+     "^- Shift 1, 2026-09-30: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 1 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 1, .+ led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
+     "^2026-09-30 \\(Wed\\), all shifts\\. Window coverage: complete\\.$",
+     "Show the shift notes for shift 1"
+    ],
+    "sections_not_match": "^- [0-9]+\\. Planned maintenance"
+   }
+  },
+  {
+   "id": "owner-yesterday-names-the-latest-day",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner",
+   "scope": "day",
+   "question": "What were the top downtime reasons yesterday?",
+   "note": "Issue #101: yesterday is the record store's latest production day. With another day selected the router says which day that is rather than answer the selected one.",
+   "expect": {
+    "raises": "Yesterday is 2026-09-30, the latest production day in the records; select it in the day control first"
+   }
+  },
+  {
+   "id": "owner-biggest-opportunity-supervisor-lens",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner",
+   "scope": "day",
+   "question": "Where's my biggest opportunity this month?",
+   "note": "Issue #101, the supervisor lens: the controllable losses ranked (maintenance and operator downtime, dry-end waste, the speed of each run under its grade's trailing-year speed, shear); side trim and planned maintenance are schedule-driven, shown apart and never ranked. Every lever is marked controllable or schedule-driven.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=supervisor",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null,
+       "lens": "supervisor"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_opportunities",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*\\$[0-9,]+ a year\\*\\* in controllable losses across [0-9]+ levers · \\$[0-9,]+ in this window \\(query 1\\)$",
+     "bullets": [
+      3,
+      5
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- 1\\. .+: \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, .+ \\(query 1 · row 0\\)$",
+     "^Schedule-driven, shown apart$",
+     "^- Side trim over the 3% target: \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · schedule-driven, the order mix and its web widths \\(query 1 · row [0-9]+\\)$",
+     "^- Downtime: Planned maintenance \\(scheduled time\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · schedule-driven, planned maintenance is scheduled time"
+    ],
+    "sections_not_match": "^- [0-9]+\\. (Side trim|Downtime: Planned maintenance)"
+   }
+  },
+  {
+   "id": "owner-what-does-trim-cost-ownership-lens",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner",
+   "scope": "day",
+   "question": "What's trim costing us this month?",
+   "note": "Issue #101, the ownership lens: the total cost of waste in dollars, side trim first (always the largest percentage; every owner asks what trim costs), with trim's band beside its figure, then shear, each dry-end reason and the unexplained remainder by dollars, and the total.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null,
+       "lens": "ownership"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_opportunities",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^Side trim costs \\*\\*\\$[0-9,]+ a year\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of gross · (home run \\(2\\.75% or under\\)|on target \\(3% or under\\)|over the 3% target, under the 3\\.25% flag|flag: over 3\\.25%, the target is 3%) \\(query 1 · row 0\\)$",
+     "bullets": [
+      3,
+      8
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- 2\\. Shear chops \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, sequencing \\(query 1 · row 1\\)$",
+     "^- [0-9]\\. Dry-end: (bond|warp) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, temperatures",
+     "^- All the waste recorded: \\*\\*\\$[0-9,]+ a year\\*\\* across [0-9]+ kinds · \\$[0-9,]+ in this window \\(query 1\\)$",
+     "The ownership lens: the total cost of the waste recorded, side trim first"
+    ]
+   }
+  },
+  {
+   "id": "owner-maintenance-flag-recurrence",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner",
+   "day": "2026-09-18",
+   "question": "Show maintenance downtime by reason",
+   "note": "Issue #101, a flagged maintenance shift: the owner's example is 60 maintenance minutes on first shift (12.5% of 480, five times target). The records hold no such shift until a 60-minute stop is planted (a follow-up on top of the rolling year, #91); the most maintenance downtime any shift has is shift 2 on 2026-09-18, a power outage plus jams, over the 2.5% band. The flag names the shift and its supervisor slot, and the recurrence of the reason that led it: over the trailing year, the shifts on which that reason was over the band on its own and the weeks it was in the five reasons with the most unplanned minutes.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-18/shift/2?measure=downtime&kind=maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_kpis",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_downtime_breakdown",
+      "arguments": {
+       "shift": 2,
+       "group_by": "reason",
+       "kind": "Maintenance"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_breakdown",
+     "get_shift_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% \\(query 1 · row 0\\)$",
+     "bullets": [
+      1,
+      5
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- Power outage: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over 1 stop, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$",
+     "^Flags and who to ask$",
+     "^- Shift 2, 2026-09-18: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 2 · flag 0\\)$",
+     "^- Shift 2, Power outage led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, shift 2 · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 2 · flag 0\\)$"
+    ]
+   }
+  },
+  {
+   "id": "owner-maintenance-flag-day-review",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner",
+   "day": "2026-09-18",
+   "scope": "day",
+   "question": "Show downtime by reason",
+   "note": "Issue #101: the same flagged shift on the all-shifts default. The day's maintenance and operator downtime sit inside their bands, and the flag still pulls in shift 2 with its supervisor slot and the recurrence of its leading reason across all shifts.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-18?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-18"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^- Shift 2, 2026-09-18: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 2, Power outage led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$"
     ]
    }
   }

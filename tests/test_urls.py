@@ -169,7 +169,9 @@ def test_every_measure_has_a_meaning_under_every_grain():
                 # one spelling per state: the address of the resolved state is the address. Under a ranged grain
                 # the day-shaped downtime, quality and compare are the Pareto, the waste breakdown and the KPI tiles,
                 # so they normalize to pareto, waste and kpis once and stay there; dollars is the money levers (get_opportunities).
-                alias = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis', 'dollars': 'money'} if grain != 'day' else {}
+                # under Day and all shifts, the day's downtime is the owner's downtime review (issue #101)
+                alias = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis', 'dollars': 'money'} if grain != 'day' else \
+                    {'downtime': 'review'} if tail == '' else {}
                 normalized = page_url(resolved)
                 assert normalized == url.replace('measure=' + measure, 'measure=' + alias.get(measure, measure)), url
                 assert page_url(resolve_url(normalized, store)) == normalized
@@ -191,7 +193,7 @@ def test_every_measure_has_a_meaning_under_every_grain():
     ('/corr/1/day/2026-09-14?measure=downtime&window=week', 'window= does not apply'),
     ('/corr/1/day/2026-09-14?measure=overview&window=week&kind=maintenance', 'kind= narrows the day overview'),
     ('/corr/1/week/2026-09-14?measure=overview&kind=operator', 'kind= narrows the day overview'),
-    ('/corr/1/day/2026-09-14?measure=kpis&window=2026-13', 'window is week, month, period'),
+    ('/corr/1/day/2026-09-14?measure=kpis&window=2026-13', 'window is day, week, month, period'),
     ('/corr/1/day/2026-09-14?measure=kpis&compare=last', 'compare is prev, none'),
     ('/corr/1/week/2026-09-14?measure=kpis&compare=2026-08', 'compare takes a date'),
     ('/corr/1/day/2026-09-14/shift/2?measure=overview&shifts=1', 'Selected shift only'),

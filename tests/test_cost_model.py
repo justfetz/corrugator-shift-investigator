@@ -95,7 +95,7 @@ def test_opportunities_rank_levers_and_name_records(store):
     years = [r['usd_per_year'] for r in data['rows']]
     assert years == sorted(years, reverse=True)
     levers = {r['lever'] for r in data['rows']}
-    assert {'Speed gap to best-fifth speed', 'Side trim over the 3% target', 'Downtime: Order change (setup time)'} <= levers
+    assert {"Speed under each grade's trailing-year speed", 'Side trim over the 3% target', 'Downtime: Order change (setup time)'} <= levers
     assert all(r['records'] for r in data['rows'])
     trim = next(r for r in data['rows'] if r['lever'].startswith('Side trim'))
     assert trim['quantity'] > 0 and trim['usd_per_year'] == pytest.approx(
@@ -172,7 +172,7 @@ def test_money_never_answers_a_different_question(question):
 @pytest.mark.parametrize('question, intent, tool', [
     ('Which downtime reason is costing us the most minutes this month?', 'period_pareto', 'get_downtime_pareto'),
     ('Which downtime reason is costing us the most minutes?', 'period_pareto', 'get_downtime_pareto'),
-    ("What's trim costing us this month?", 'period_waste', 'get_waste_breakdown'),
+    ("What's trim costing us this month?", 'period_money', 'get_opportunities'),   # the ownership lens (issue #101)
     ('Why was shift 2 slow, and what did it cost?', 'overview', None),
     ('Where should we look for the cause of the warp on shift 2?', 'quality', None),
     ('What does the speed gap cost us?', 'dollars', None),

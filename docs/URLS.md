@@ -48,7 +48,8 @@ store measures run one record-store tool over a window.
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
 | `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
 | `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars | the money levers: normalizes to `money` |
-| `money` | `get_opportunities` over the window: the levers ranked in $/yr | the same |
+| `money` | `get_opportunities` over the window: the levers ranked in $/yr, each controllable or schedule-driven; `lens=` reads them the owner's way | the same |
+| `review` | `get_downtime_review` (issue #101): maintenance and operator downtime against their bands, every reason ranked by % of scheduled minutes with stops and minutes per stop, PM last as scheduled time, and the flags with their supervisor slot and recurrence; the all-shifts downtime of a production day ("top downtime reasons yesterday", "show downtime by reason" under all shifts) | the same over the window |
 | `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |
 | `report` | refused: a day is investigated with a question | the deterministic period report (heatmap, daily matrix, recurring downtime, notes) |
 
@@ -56,7 +57,7 @@ Modifiers, each refused when it does not apply to the measure:
 
 | Field | Values | Default |
 | --- | --- | --- |
-| `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: July answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
+| `window=` | `day` (the production day itself under a ranged grain: "yesterday"), `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: July answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
 | `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity; `grade` for `fpm` | `reason`; `width`; none |
 | `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
@@ -64,6 +65,7 @@ Modifiers, each refused when it does not apply to the measure:
 | `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`); on other measures `prev` alone, as an alias (below) | `prev` |
 | `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's); a store measure takes one, except `kpis`, and `pareto` and `waste` under a ranged grain, which run once per shift | all three for day plans, all shifts together for store tools |
 | `rank=` | `speed`, `downtime`, `quality` | all three |
+| `lens=` | `supervisor` (the controllable losses ranked; side trim and planned maintenance schedule-driven, after), `ownership` (the total cost of waste, side trim first), for `money` (issue #101) | every lever ranked |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
 | `rates=` | the visitor's rates, `paper:<$/MSF>`, `hour:<$/hr>`, `margin:<$/MSF>`, `trim:<% target>`, comma-separated in that order, at most two decimals each (docs/METRICS.md, Cost model); every measure takes it, and the answer's provenance line names each rate as "yours" | the server's rates (`INVESTIGATOR_RATES`, else the post's) |
 | `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
@@ -93,6 +95,7 @@ same grain, which these answers carry already or which their store form carries.
 | `compare=prev` on `kpis`, `pareto`, `waste`, `grade`, `rollstock` | the same address without it: `prev` is the default, the previous window is beside |
 | `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
 | `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` |
+| `measure=downtime` under Day and all shifts, without `by=`, `kind=` or `shifts=` | `measure=review` (issue #101: a production day's downtime over all shifts is the owner's downtime review) |
 | `measure=dollars` under a ranged grain | `measure=money` (the levers of the window in $/yr; under Day, `dollars` is the shift's own dollars; not with several `shifts=`, as above) |
 | `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |
 | `measure=quality&compare=prev` under Day | `measure=waste` |
@@ -130,6 +133,9 @@ shows the refusal of its `.json`.
 | "Compare that with first shift", after "Why was second shift slow?" — all shifts | `/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2` |
 | "Where did the money go this shift?" — Day, shift 2, paper at $60 | `/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:60` |
 | "Where is the money this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month` |
+| "What were the top downtime reasons yesterday?" — Day 2026-09-30, all shifts | `/corr/1/day/2026-09-30?measure=review` |
+| "Where's my biggest opportunity this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month&lens=supervisor` |
+| "What's trim costing us this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
 | the scope's own KPI tiles (what the page primes on load) | `/corr/1/week/2026-09-14.json?measure=kpis` |
 

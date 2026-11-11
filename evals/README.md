@@ -54,7 +54,7 @@ Every case, whatever its type, also checks:
   where-to-look question `→ “…”` state no measurement and are not read as numbers);
 - every number on a cited line is a value of the row it cites (issue #75, `unprovenanced`): a section with a `**figure**`
   carries exactly one, and one evidence reference that resolves to a successful step of the trace and a row of
-  its result (`detail M`, `weekday M`: its sub-reason and weekday lists); every number in the figure renders a
+  its result (`detail M`, `weekday M`, `flag M`: its sub-reason, weekday and flag lists); every number in the figure renders a
   value of that row, or, with no row named, a count of the result's rows, a below-target count or a total of its
   envelope; every other number on the line is one of those, a count of the result's rows or a rule constant. A figure
   moved to the wrong row, changed by a digit, stated beside a row it does not cite, or citing a chart step fails the case.

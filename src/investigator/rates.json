@@ -8,8 +8,8 @@
    "source": "post", "note": "Bottleneck shadow price of corrugator time (the post: more than $1,200 an hour); prices downtime, the speed gap and the run time shear and rejects consumed."},
   {"id": "margin_usd_msf", "short": "margin", "label": "Board contribution margin", "unit": "$/MSF", "default": null,
    "source": "owner to set", "note": "Not in the post. Prices the board not made; until it is set every contribution figure reads 'margin not set', never $0."},
-  {"id": "trim_target_pct", "short": "trim", "label": "Side-trim target", "unit": "% of gross", "default": 3.25,
-   "source": "process rule", "note": "The setup trim flag of the process context; trim points over it are the trim lever."}
+  {"id": "trim_target_pct", "short": "trim", "label": "Side-trim target", "unit": "% of gross", "default": 3.0,
+   "source": "owner, 2026-11-10", "note": "The owner's side-trim target (targets.json, issue #101); trim points over it are the trim lever. 3.25% is the flag, 2.75% a home run."}
  ],
  "assumptions": [
   {"id": "volume_sqft_day", "label": "Volume per machine", "unit": "sq ft/day", "value": 7000000, "source": "post"},

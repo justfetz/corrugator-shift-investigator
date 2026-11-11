@@ -83,9 +83,9 @@ RULE_CONSTANTS = {'2.5', '1', '3.25', '0.4', '480', '12', '0'}
 # The answer shape (issue #75), stated here independently of the application: a bold figure, the
 # evidence a line cites, a where-to-look question, and the result field each evidence part names.
 BOLD = re.compile(r'\*\*([^*]+)\*\*')
-EVIDENCE = re.compile(r' \(query (\d+)(?: · (row|detail|weekday) (\d+))?\)')
+EVIDENCE = re.compile(r' \(query (\d+)(?: · (row|detail|weekday|flag) (\d+))?\)')
 LOOK_LINK = re.compile(r' → “([^”]+)”$')
-EVIDENCE_PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile'}
+EVIDENCE_PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile', 'flag': 'flags'}
 NUMBER = re.compile(r'\d[\d,]*(?:\.\d+)?')
 RUN_ID = re.compile(r'[0-9a-f]{32}:\d+')
 CITATION = re.compile(r'^(?:Shift (\d)|All shifts), (\w+), ([0-9a-f]{32}:\d+), row (\d+)$')
@@ -370,7 +370,7 @@ def unfaithful_numbers(lines, trace):
 def unprovenanced(lines, trace):
     """Numbers on a cited line that its cited evidence does not hold (issue #75). A line with a `**figure**`
     carries exactly one, and an evidence reference `(query N · row M)` that resolves: step N of the trace, a
-    successful tool call, row M of its rows (`detail M`, `weekday M`: of its sub-reason and weekday lists).
+    successful tool call, row M of its rows (`detail M`, `weekday M`, `flag M`: of its sub-reason, weekday and flag lists).
     Every number in the figure is a rendering of a value of that row; with no row named, of the result as a
     whole: a count of its rows, a below-target count, or a total its envelope carries. Every other number on
     the line is one of those too, a count of the result's rows, or a stated rule constant: a line never

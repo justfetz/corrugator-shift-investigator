@@ -18,6 +18,7 @@ generator's seeded answer keys are never imported here: the effects have to
 be found in the records.
 """
 from calendar import monthrange
+from collections import defaultdict
 from datetime import date, timedelta
 import hashlib
 import json
@@ -32,6 +33,7 @@ from threading import Timer
 import duckdb
 
 from . import records as R
+from . import targets
 from .analysis import Analysis, load_rows
 from .fixture import GRADES
 from .synth import generate_months, production_days
@@ -91,7 +93,7 @@ SHIFT_KPIS = (
     ("stops", "INTEGER"), ("stop_seconds", "DOUBLE"), ("maintenance_seconds", "DOUBLE"), ("pm_seconds", "DOUBLE"),
     ("operator_seconds", "DOUBLE"), ("source_ids", "VARCHAR[]"),
 )
-SHIFT_TRIM_TARGET_PCT = 3.25   # the per-setup trim flag of the daily KPI tool (analysis.get_shift_kpis)
+SHIFT_TRIM_TARGET_PCT = targets.TRIM_FLAG_PCT   # the owner's per-setup trim flag, 3.25% (targets.json); the daily KPI tool counts the same
 _SHIFT_KPIS_SQL = f"""
 WITH variants AS (SELECT * FROM (VALUES (false), (true)) v(corrupt)),
 valid AS (SELECT v.corrupt, s.* FROM setups s CROSS JOIN variants v
@@ -136,6 +138,9 @@ LEFT JOIN stop_sums st ON st.production_date = sh.production_date AND st.shift =
 ORDER BY sh.production_date, sh.shift, v.corrupt"""
 
 
+# Dry-end waste is a percent of the yield after trim and shear (gross minus side trim minus shear), the owner's
+# denominator (issue #101, targets.json); side trim, shear, bale and the unexplained remainder stay percents of gross.
+YIELD_UNIT = "% of yield after trim and shear"
 # The dashboard tiles: key, label, unit, which direction is better.
 # "neutral" means the count is context, not a score (docs/METRICS.md).
 KPI_CATALOG = (
@@ -150,11 +155,11 @@ KPI_CATALOG = (
     ("minutes_per_stop", "Minutes per stop", "min/stop", "lower"),
     ("trim_pct", "Side trim", "% of gross", "lower"),
     ("shear_pct", "Shear", "% of gross", "lower"),
-    ("dry_end_pct", "Dry-end rejects", "% of gross", "lower"),
-    ("bond_pct", "Dry-end: bond", "% of gross", "lower"),
-    ("warp_pct", "Dry-end: warp", "% of gross", "lower"),
-    ("misalignment_pct", "Dry-end: misalignment", "% of gross", "lower"),
-    ("moisture_pct", "Dry-end: moisture", "% of gross", "lower"),
+    ("dry_end_pct", "Dry-end rejects", YIELD_UNIT, "lower"),
+    ("bond_pct", "Dry-end: bond", YIELD_UNIT, "lower"),
+    ("warp_pct", "Dry-end: warp", YIELD_UNIT, "lower"),
+    ("misalignment_pct", "Dry-end: misalignment", YIELD_UNIT, "lower"),
+    ("moisture_pct", "Dry-end: moisture", YIELD_UNIT, "lower"),
     ("bale_pct", "Bale (scale reading)", "% of gross", "lower"),
     ("unexplained_pct", "Unexplained (bale minus trim, shear and rejects)", "% of gross", "lower"),
     ("maintenance_pm_pct", "Maintenance + PM downtime", "% of scheduled minutes", "lower"),
@@ -174,6 +179,8 @@ WASTE_CATEGORIES = (("trim", "Side trim"), ("shear", "Shear chops"), ("bond", "D
                     ("warp", "Dry-end: warp"), ("misalignment", "Dry-end: misalignment"), ("moisture", "Dry-end: moisture"),
                     ("dry_end", "Dry-end rejects (all reasons)"), ("bale", "Bale (scale reading)"),
                     ("unexplained", "Unexplained (bale minus accounted waste)"))
+DRY_END_CATEGORIES = ("bond", "warp", "misalignment", "moisture", "dry_end")
+WASTE_BANDS = {"trim": "trim", "shear": "shear", "dry_end": "dry_end"}   # waste category -> its band in targets.json
 _STOP_GROUPS = ("reason", "place", "kind")
 _STOP_MEASURES = ("minutes", "count")
 # Over/under-run: actual cuts against nominal cuts per knife. The band is the demo's
@@ -314,6 +321,7 @@ class RecordStore:
         self._first, self._last = self._days[self.first_day], self._days[self.last_day]
         self._by_day = {key: {"setups": [], "stops": [], "shifts": []} for key in self._days}
         self._lock = threading.RLock()
+        self._baselines = {}   # (first, last) of a trailing year -> each grade's sustained speed (grade_speed_baselines)
         self._db = duckdb.connect(":memory:", config={"threads": 2})
         for table, columns in TABLES.items():
             self._db.execute(f"CREATE TABLE {table} ({columns})")
@@ -588,6 +596,7 @@ class RecordStore:
     @staticmethod
     def _kpis(t):
         gross, scheduled = t["gross_sqft"], t["scheduled_seconds"]
+        net = gross - t["trim_sqft"] - t["shear_sqft"]   # the yield after trim and shear: dry-end waste's denominator
         running_minutes = (t["elapsed_seconds"] - t["setup_stop_seconds"]) / 60
         accounted = t["trim_sqft"] + t["shear_sqft"] + t["reject_sqft"]
         return {
@@ -601,11 +610,11 @@ class RecordStore:
             "minutes_per_stop": _ratio(t["stop_seconds"] / 60, t["stop_count"], places=2),
             "trim_pct": _ratio(t["trim_sqft"], gross, 100),
             "shear_pct": _ratio(t["shear_sqft"], gross, 100),
-            "dry_end_pct": _ratio(t["reject_sqft"], gross, 100),
-            "bond_pct": _ratio(t["bond_sqft"], gross, 100),
-            "warp_pct": _ratio(t["warp_sqft"], gross, 100),
-            "misalignment_pct": _ratio(t["misalignment_sqft"], gross, 100),
-            "moisture_pct": _ratio(t["moisture_sqft"], gross, 100),
+            "dry_end_pct": _ratio(t["reject_sqft"], net, 100),
+            "bond_pct": _ratio(t["bond_sqft"], net, 100),
+            "warp_pct": _ratio(t["warp_sqft"], net, 100),
+            "misalignment_pct": _ratio(t["misalignment_sqft"], net, 100),
+            "moisture_pct": _ratio(t["moisture_sqft"], net, 100),
             "bale_pct": _ratio(t["bale_sqft"], gross, 100),
             "unexplained_pct": _ratio(t["bale_sqft"] - accounted, gross, 100),
             "maintenance_pm_pct": _ratio(t["maintenance_pm_seconds"], scheduled, 100),
@@ -630,8 +639,11 @@ class RecordStore:
                 change = "same"
             else:
                 change = "better" if (delta < 0) == (better == "lower") else "worse"
-            rows.append({"metric": key, "label": label, "unit": unit, "current": now, "previous": before,
-                         "delta": delta, "better": better, "change": change})
+            row = {"metric": key, "label": label, "unit": unit, "current": now, "previous": before,
+                   "delta": delta, "better": better, "change": change}
+            if key in targets.KPI_BANDS:   # the owner's band on the current value (issue #101)
+                targets.mark(row, targets.KPI_BANDS[key], now)
+            rows.append(row)
         return rows
 
     @staticmethod
@@ -743,18 +755,25 @@ class RecordStore:
         a, b = areas(now), areas(before)
         available = previous["coverage"] != "unavailable"
         rows = []
+        net, prior_net = (t["gross_sqft"] - t["trim_sqft"] - t["shear_sqft"] for t in (now, before))
         for key, label in WASTE_CATEGORIES:
             pct, prior = _ratio(a[key], now["gross_sqft"], 100), _ratio(b[key], before["gross_sqft"], 100) if available else None
-            rows.append({"category": key, "label": label, "sqft": round(a[key], 1), "pct_of_gross": pct,
-                         "previous_sqft": round(b[key], 1) if available else None, "previous_pct_of_gross": prior,
-                         "delta_pct_points": round(pct - prior, 4) if pct is not None and prior is not None else None})
+            row = {"category": key, "label": label, "sqft": round(a[key], 1), "pct_of_gross": pct,
+                   "previous_sqft": round(b[key], 1) if available else None, "previous_pct_of_gross": prior,
+                   "delta_pct_points": round(pct - prior, 4) if pct is not None and prior is not None else None}
+            if key in DRY_END_CATEGORIES:   # dry-end waste is also read against the yield after trim and shear (issue #101)
+                row["pct_of_yield"] = _ratio(a[key], net, 100)
+                row["previous_pct_of_yield"] = _ratio(b[key], prior_net, 100) if available else None
+            if key in WASTE_BANDS:
+                targets.mark(row, WASTE_BANDS[key], row["pct_of_yield"] if key == "dry_end" else pct)
+            rows.append(row)
         source = {"current": now["source_rows"], "previous": before["source_rows"]}
         details = [{"reason": d["reason"], "detail": d["detail"], "sqft": round(d["sqft"], 1), "sheets": d["sheets"],
                     "pct_of_gross": _ratio(d["sqft"], now["gross_sqft"], 100),
                     "share_of_dry_end_pct": _ratio(d["sqft"], now["reject_sqft"], 100, places=1)} for d in now["details"]]
         return self._envelope("get_waste_breakdown", current, previous, shift, rows, trace, started, source,
                               gross_sqft=round(now["gross_sqft"], 1), previous_gross_sqft=round(before["gross_sqft"], 1) if available else None,
-                              details=details)
+                              yield_sqft=round(net, 1), details=details)
 
     def get_stops_profile(self, window, shift=None):
         """Stops, minutes and minutes per stop for every production day of the
@@ -818,7 +837,7 @@ class RecordStore:
         clause, extra = self._shift_clause(shift)
         sql = ("SELECT grade, max(target) AS target, count(*) AS setups, count(DISTINCT wet_end_id) AS wet_ends, "
                "sum(feet) AS feet, sum(gross) AS gross, sum(seconds) AS seconds, sum(stop_seconds) AS stop_seconds, "
-               "sum(stops) AS stops, sum(trim) AS trim, sum(rejects) AS rejects "
+               "sum(stops) AS stops, sum(trim) AS trim, sum(shear) AS shear, sum(rejects) AS rejects "
                f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY grade ORDER BY gross DESC, grade")
         fetched = {}
         for name, win in (("current", current), ("previous", previous)):
@@ -843,7 +862,7 @@ class RecordStore:
                          "downtime_pct_of_elapsed": _ratio(r["stop_seconds"], r["seconds"], 100),
                          "lineal_per_setup": _ratio(r["feet"], r["setups"], places=1),
                          "lineal_per_wet_end": _ratio(r["feet"], r["wet_ends"], places=1),
-                         "trim_pct": _ratio(r["trim"], r["gross"], 100), "dry_end_pct": _ratio(r["rejects"], r["gross"], 100),
+                         "trim_pct": _ratio(r["trim"], r["gross"], 100), "dry_end_pct": _ratio(r["rejects"], r["gross"] - r["trim"] - r["shear"], 100),
                          "previous_volume_msf": prior_msf,
                          "delta_volume_msf": round(r["gross"] / 1000 - prior_msf, 1) if prior_msf is not None else None})
         source = {"current": {"setups": sum(r["setups"] for r in fetched["current"])},
@@ -978,16 +997,16 @@ class RecordStore:
         current = self._window(window)
         clause, extra = self._shift_clause(shift)
         slice_sql = "s.width_in" if slice_by == "width" else "sh.crew"
-        sql = (f"WITH base AS (SELECT s.grade, {slice_sql} AS slice, s.target, s.feet, s.gross, s.rejects, "
+        sql = (f"WITH base AS (SELECT s.grade, {slice_sql} AS slice, s.target, s.feet, s.gross - s.trim - s.shear AS net, s.rejects, "
                "(s.seconds - s.stop_seconds) / 60 AS run_min, s.feet / ((s.seconds - s.stop_seconds) / 60) AS fpm "
                "FROM setups s JOIN shifts sh ON sh.production_date = s.production_date AND sh.shift = s.shift "
                f"WHERE s.production_date BETWEEN ? AND ?{clause.replace(' shift', ' s.shift')} AND s.seconds - s.stop_seconds >= ? * 60), "
                "ranked AS (SELECT *, ntile(5) OVER (PARTITION BY grade, slice ORDER BY fpm DESC) AS fifth FROM base) "
-               "SELECT grade, slice, max(target) AS target, count(*) AS setups, sum(feet) AS feet, sum(gross) AS gross, sum(run_min) AS run_min, "
+               "SELECT grade, slice, max(target) AS target, count(*) AS setups, sum(feet) AS feet, sum(run_min) AS run_min, "
                "quantile_cont(fpm, 0.5) AS median_fpm, "
                "sum(CASE WHEN fifth = 1 THEN feet END) AS best_feet, sum(CASE WHEN fifth = 1 THEN run_min END) AS best_run_min, "
-               "sum(CASE WHEN fifth = 1 THEN rejects END) AS best_rejects, sum(CASE WHEN fifth = 1 THEN gross END) AS best_gross, "
-               "sum(CASE WHEN fifth > 1 THEN rejects END) AS rest_rejects, sum(CASE WHEN fifth > 1 THEN gross END) AS rest_gross "
+               "sum(CASE WHEN fifth = 1 THEN rejects END) AS best_rejects, sum(CASE WHEN fifth = 1 THEN net END) AS best_net, "
+               "sum(CASE WHEN fifth > 1 THEN rejects END) AS rest_rejects, sum(CASE WHEN fifth > 1 THEN net END) AS rest_net "
                "FROM ranked GROUP BY grade, slice ORDER BY grade, slice")
         params = [current["start"], current["end"], *extra, SPEED_MIN_RUN_MINUTES]
         fetched = self._fetch(sql, params)
@@ -1002,8 +1021,8 @@ class RecordStore:
             enough = r["setups"] >= SPEED_MIN_SETUPS
             typical = r["feet"] / r["run_min"]
             best = r["best_feet"] / r["best_run_min"] if enough and r["best_run_min"] else None
-            best_pct = _ratio(r["best_rejects"], r["best_gross"], 100) if enough else None
-            rest_pct = _ratio(r["rest_rejects"], r["rest_gross"], 100) if enough else None
+            best_pct = _ratio(r["best_rejects"], r["best_net"], 100) if enough else None   # dry-end over yield (issue #101)
+            rest_pct = _ratio(r["rest_rejects"], r["rest_net"], 100) if enough else None
             rows.append({"grade": r["grade"], "slice_by": slice_by,
                          "slice": (f"{r['slice']:g} in" if slice_by == "width" else r["slice"]),
                          "label": f"{r['grade']} · " + (f"{r['slice']:g} in" if slice_by == "width" else r["slice"]),
@@ -1034,6 +1053,198 @@ class RecordStore:
                               temperature_note=("Records carry no temperatures: the heat-transfer limit on heavy grades and doublewall (bond needs its "
                                                 "temperature range) is an open owner input and is not modelled here."))
 
+    # ------------------------------------------------------------ the owner's standards (issue #101)
+
+    BASELINE_SQL = ("SELECT grade, count(*) AS setups, sum(feet) AS feet, sum(seconds - stop_seconds) / 60 AS run_min "
+                    "FROM setups WHERE production_date BETWEEN ? AND ? AND seconds - stop_seconds >= ? * 60 GROUP BY grade ORDER BY grade")
+
+    def trailing_year(self, through):
+        """(first, last) production dates of the trailing year ending on `through`: the 365 days ending on it,
+        inside the record store (which holds two months until the rolling year of issue #35 lands)."""
+        last = min(date.fromisoformat(str(through)[:10]), self._last)
+        return max(last - timedelta(days=364), self._first), last
+
+    def grade_speed_baselines(self, through):
+        """Each grade's sustained average speed over the trailing year ending on `through` (targets.json, speed):
+        lineal ft over running minutes (stops out) of every setup of the grade with at least
+        SPEED_MIN_RUN_MINUTES of running time (shorter ones never reach steady speed), a ratio of sums.
+        Never the maximum speed, which is a ramp-up point. Computed once per trailing year and kept."""
+        first, last = self.trailing_year(through)
+        cached = self._baselines.get((first, last))
+        if cached is None:
+            params = [first.isoformat(), last.isoformat(), SPEED_MIN_RUN_MINUTES]
+            rows = self._fetch(self.BASELINE_SQL, params)
+            cached = {"since": first.isoformat(), "through": last.isoformat(), "sql": self.BASELINE_SQL, "parameters": params,
+                      "grades": {r["grade"]: {"baseline_fpm": round(r["feet"] / r["run_min"], 1), "setups": r["setups"],
+                                              "run_minutes": round(r["run_min"], 1)} for r in rows if r["run_min"]}}
+            self._baselines[(first, last)] = cached
+        return cached
+
+    def speed_baseline_gap(self, window, shift=None):
+        """The speed under each grade's baseline over a window (issue #101): every wet-end run (paper run) of the
+        window against its grade's sustained speed over the trailing year ending on the window's last day. A run
+        under it has a gap: the feet it would have made at the baseline in its running minutes, less the feet it
+        made; the minutes are that gap at the baseline speed. Returns the runs, totals and the trace parts."""
+        current = self._window(window)
+        clause, extra = self._shift_clause(shift)
+        sql = ("SELECT production_date, wet_end_id, grade, sum(feet) AS feet, sum(seconds - stop_seconds) / 60 AS run_min "
+               f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY production_date, wet_end_id, grade "
+               "ORDER BY production_date, wet_end_id")
+        params = [current["start"], current["end"], *extra]
+        runs = self._fetch(sql, params, limit=20000)
+        baselines = self.grade_speed_baselines(current["end"] if current["coverage"] != "unavailable" else self.last_day)
+        out, minutes, under = [], 0.0, 0
+        for r in runs:
+            base = baselines["grades"].get(r["grade"])
+            if not base or not r["run_min"]:
+                continue
+            gap_ft = max(0.0, base["baseline_fpm"] * r["run_min"] - r["feet"])
+            minutes += gap_ft / base["baseline_fpm"]
+            under += gap_ft > 0
+            out.append({"wet_end_id": r["wet_end_id"], "grade": r["grade"], "running_fpm": round(r["feet"] / r["run_min"], 1),
+                        "baseline_fpm": base["baseline_fpm"], "gap_ft": round(gap_ft, 1)})
+        return {"window": current, "runs": out, "runs_under": under, "gap_minutes": round(minutes, 2),
+                "since": baselines["since"], "through": baselines["through"],
+                "trace": {"sql": [sql, baselines["sql"]], "parameters": [params, baselines["parameters"]]}}
+
+    # Downtime kinds the owner's bands rank (targets.json); PM is planned maintenance, scheduled time.
+    RANKED_KINDS = ("Maintenance", "Operator")
+    KIND_BANDS = {"Maintenance": "maintenance", "Operator": "operator"}
+    FLAG_LIMIT = 5   # flags listed on one answer, the largest first; flag_count says how many fired
+
+    def downtime_flags(self, start, end, shift=None, trace=None):
+        """Every shift of [start, end] (one shift, or all) whose maintenance or operator downtime is over its band
+        (2.5% of the shift's scheduled minutes), the largest first, with its crew (the supervisor slot), the reason
+        that led it and that reason's recurrence over the trailing year ending on the flagged day (targets.json,
+        recurrence): the shifts on which the same reason, in the same kind, was over the band on its own, and the
+        Mon-Fri weeks in which it was among the five reasons with the most unplanned minutes. A shift-scoped call
+        counts that shift's own history; an all-shift call the plant's. Returns (flags, count)."""
+        clause, extra = self._shift_clause(shift)
+        kinds = "', '".join(self.RANKED_KINDS)
+        shift_sql = (f"SELECT production_date, shift, crew, scheduled_minutes FROM shifts WHERE production_date BETWEEN ? AND ?{clause} "
+                     "ORDER BY production_date, shift")
+        stop_sql = (f"SELECT production_date, shift, kind, reason, count(*) AS stops, sum(seconds) / 60 AS minutes FROM stops "
+                    f"WHERE production_date BETWEEN ? AND ?{clause} AND kind IN ('{kinds}') GROUP BY ALL")
+        params = [start, end, *extra]
+        shifts = self._fetch(shift_sql, params)
+        stops = self._fetch(stop_sql, params, limit=20000)
+        for sql in (shift_sql, stop_sql):
+            if trace is not None:
+                trace["sql"].append(sql)
+                trace["parameters"].append(params)
+        by_shift = defaultdict(list)
+        for r in stops:
+            by_shift[(r["production_date"], r["shift"])].append(r)
+        fired = []
+        for sh in shifts:
+            key, scheduled = (sh["production_date"], sh["shift"]), sh["scheduled_minutes"]
+            for kind in self.RANKED_KINDS:
+                mine = [r for r in by_shift[key] if r["kind"] == kind]
+                minutes = sum(r["minutes"] for r in mine)
+                pct = _ratio(minutes, scheduled, 100)
+                measure = self.KIND_BANDS[kind]
+                if not targets.is_flag(measure, pct):
+                    continue
+                lead = max(mine, key=lambda r: (r["minutes"], r["reason"]))
+                fired.append({"production_day": sh["production_date"].isoformat(), "shift": sh["shift"], "crew": sh["crew"],
+                              "supervisor": f"the shift {sh['shift']} supervisor ({sh['crew']} on duty)",
+                              "kind": kind, "measure": f"{kind.lower()} downtime", "minutes": round(minutes, 2),
+                              "stops": sum(r["stops"] for r in mine), "scheduled_minutes": scheduled, "pct_of_shift": pct,
+                              **{k: v for k, v in targets.annotate({"v": pct}, {"v": (measure, "x")}).items() if k != "v"},
+                              "reason": lead["reason"], "reason_minutes": round(lead["minutes"], 2), "reason_stops": lead["stops"]})
+        for f in fired:
+            f["band"], f["band_text"] = f.pop("x_band"), f.pop("x_band_text")
+        fired.sort(key=lambda f: (-f["pct_of_shift"], f["production_day"], f["shift"], f["kind"]))
+        shown = fired[:self.FLAG_LIMIT]
+        if shown:
+            self._recurrence(shown, shift, trace)
+        return shown, len(fired)
+
+    def _recurrence(self, flags, shift, trace):
+        """Fill each flag's recurrence fields (see downtime_flags) from one read of the trailing years they span."""
+        years = {f["production_day"]: self.trailing_year(f["production_day"]) for f in flags}
+        first, last = min(y[0] for y in years.values()), max(y[1] for y in years.values())
+        clause, extra = self._shift_clause(shift)
+        kinds = "', '".join(self.RANKED_KINDS)
+        sql = (f"SELECT s.production_date, s.shift, s.scheduled_minutes, st.kind, st.reason, coalesce(sum(st.seconds), 0) / 60 AS minutes "
+               f"FROM shifts s LEFT JOIN stops st ON st.production_date = s.production_date AND st.shift = s.shift AND st.kind IN ('{kinds}') "
+               f"WHERE s.production_date BETWEEN ? AND ?{clause.replace(' shift', ' s.shift')} GROUP BY ALL")
+        params = [first.isoformat(), last.isoformat(), *extra]
+        rows = self._fetch(sql, params, limit=50000)
+        if trace is not None:
+            trace["sql"].append(sql)
+            trace["parameters"].append(params)
+        for f in flags:
+            since, through = years[f["production_day"]]
+            mine = [r for r in rows if since <= r["production_date"] <= through]
+            band = targets.BANDS[self.KIND_BANDS[f["kind"]]]["flag"]
+            same = [r for r in mine if r["kind"] == f["kind"] and r["reason"] == f["reason"]]
+            weekly = defaultdict(lambda: defaultdict(float))
+            for r in mine:
+                if r["kind"] is not None:
+                    monday = r["production_date"] - timedelta(days=r["production_date"].weekday())
+                    weekly[monday][(r["kind"], r["reason"])] += r["minutes"]
+            top = sum(1 for reasons in weekly.values()
+                      if (f["kind"], f["reason"]) in sorted(reasons, key=lambda k: (-reasons[k], k))[:5])
+            f.update({"recurrence_since": since.isoformat(), "recurrence_through": through.isoformat(),
+                      "shifts_counted": len({(r["production_date"], r["shift"]) for r in mine}),
+                      "times_over_band": sum(1 for r in same if r["minutes"] > band / 100 * r["scheduled_minutes"]),
+                      "weeks_counted": len(weekly), "weeks_in_top_five": top,
+                      "recurrence_scope": f"shift {shift}" if shift else "all shifts"})
+
+    def get_downtime_review(self, window, shift=None):
+        """The owner's downtime answer (issue #101, targets.json): maintenance and operator downtime first, each
+        and together against its band as a percent of scheduled minutes (480 a shift, 1,440 a production day);
+        every recorded reason, by kind, ranked by its percent of scheduled minutes with its stop count and minutes
+        per stop; planned maintenance (PM) is scheduled time, listed last and not ranked; and the flags: each shift
+        over a band, with its supervisor slot and the leading reason's recurrence over the trailing year."""
+        started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        current = self._window(window)
+        clause, extra = self._shift_clause(shift)
+        params = [current["start"], current["end"], *extra]
+        sched_sql = f"SELECT count(*) AS shifts, coalesce(sum(scheduled_minutes), 0) AS scheduled FROM shifts WHERE production_date BETWEEN ? AND ?{clause}"
+        stop_sql = (f"SELECT kind, reason, count(*) AS stops, sum(seconds) / 60 AS minutes FROM stops "
+                    f"WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind, reason")
+        sched = self._fetch(sched_sql, params)[0]
+        grouped = self._fetch(stop_sql, params)
+        for sql in (sched_sql, stop_sql):
+            trace["sql"].append(sql)
+            trace["parameters"].append(params)
+        scheduled = sched["scheduled"]
+        rows = []
+        for r in grouped:
+            planned = r["kind"] not in self.RANKED_KINDS
+            row = {"kind": r["kind"], "reason": r["reason"],
+                   "category": f"{r['reason']} · {'scheduled' if planned else r['kind'].lower()}",
+                   "stops": r["stops"], "minutes": round(r["minutes"], 2), "scheduled_minutes": scheduled,
+                   "pct_of_scheduled": _ratio(r["minutes"], scheduled, 100),
+                   "minutes_per_stop": _ratio(r["minutes"], r["stops"], places=2), "scheduled": planned}
+            if planned:
+                row.update(rank=None, band=None, band_text=None)
+            else:
+                targets.mark(row, self.KIND_BANDS[r["kind"]], row["pct_of_scheduled"])
+            rows.append(row)
+        rows.sort(key=lambda r: (r["scheduled"], -r["minutes"], r["category"]))
+        for i, r in enumerate([r for r in rows if not r["scheduled"]], 1):
+            r["rank"] = i
+        totals = {}
+        for key, kinds in (("maintenance", ("Maintenance",)), ("operator", ("Operator",)), ("op_maint", self.RANKED_KINDS), ("pm", ("PM",))):
+            mine = [r for r in grouped if r["kind"] in kinds]
+            minutes = sum(r["minutes"] for r in mine)
+            totals.update({f"{key}_minutes": round(minutes, 2), f"{key}_stops": sum(r["stops"] for r in mine),
+                           f"{key}_pct": _ratio(minutes, scheduled, 100)})
+            if key != "pm":
+                targets.annotate(totals, {f"{key}_pct": (key, key)})
+        flags, count = self.downtime_flags(current["start"], current["end"], shift, trace)
+        source = {"shifts": sched["shifts"], "stops": sum(r["stops"] for r in grouped)}
+        return self._envelope("get_downtime_review", current, None, shift, rows, trace, started, source,
+                              scheduled_minutes=scheduled, **totals, flags=flags, flag_count=count,
+                              method_note=("Each reason is ranked by its minutes over the scheduled minutes, 480 a shift; planned "
+                                           "maintenance is scheduled time and is listed last, not ranked. A flag is a shift whose "
+                                           "maintenance or operator downtime is over its band. Its recurrence counts, over the trailing "
+                                           "year, the shifts on which the same reason was over the band on its own, and the weeks it was "
+                                           "among the five reasons with the most unplanned minutes."))
+
     def get_trend(self, metric, weeks=8, anchor=None, shift=None):
         """A weekly series (Mon-Fri production weeks) of one allow-listed metric,
         ending with the week that contains the anchor."""
@@ -1050,8 +1261,11 @@ class RecordStore:
                 missing.append(w["start"])
                 continue
             value = self._kpis(self._sums(w, shift, trace))[metric]
-            rows.append({"week_start": w["start"], "week_end": w["end"], "production_days": w["production_days_observed"],
-                         "value": value, "unit": TREND_UNITS[metric], "partial": w["coverage"] != "complete"})
+            row = {"week_start": w["start"], "week_end": w["end"], "production_days": w["production_days_observed"],
+                   "value": value, "unit": TREND_UNITS[metric], "partial": w["coverage"] != "complete"}
+            if metric in targets.KPI_BANDS:
+                targets.mark(row, targets.KPI_BANDS[metric], value)
+            rows.append(row)
         window = {"period": "week", "anchor": anchor_day.isoformat(), "start": (last_start - timedelta(days=7 * (weeks - 1))).isoformat(),
                   "end": last_end.isoformat(), "label": f"{weeks} production weeks ending {last_end.isoformat()}",
                   "production_days_expected": 5 * weeks, "production_days_observed": sum(r["production_days"] for r in rows),
