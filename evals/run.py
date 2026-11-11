@@ -490,6 +490,9 @@ def invariants(mode, result, analysis, allowed_shifts):
             failures.append(f'executed unknown tool {step["tool"]}')
         if step['ok'] and step['arguments'].get('shift') is not None and step['arguments']['shift'] not in allowed_shifts:
             failures.append(f'{step["tool"]} ran for shift {step["arguments"]["shift"]} outside scope {allowed_shifts}')
+        if step['ok'] and step['arguments'].get('against_shift') is not None and step['arguments']['against_shift'] not in allowed_shifts:
+            # a speed variance against another shift reads that shift too (issue #92)
+            failures.append(f'{step["tool"]} read shift {step["arguments"]["against_shift"]} outside scope {allowed_shifts}')
     evidence_shifts = {step['data']['shift'] for step in trace if step['ok'] and step['tool'] != 'render_chart'
                        and step['data']['shift'] is not None}  # period tools report None for all shifts
     if evidence_shifts - set(allowed_shifts):

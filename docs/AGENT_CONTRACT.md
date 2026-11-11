@@ -41,6 +41,7 @@ Period tools read the whole record store (two production months, Monday to Frida
 - get_opportunities(window, shift): the levers ranked in $/yr (speed gap to best fifth, trim over target, each downtime reason, shear, each dry-end reason), each with the records behind it; ranks levers, prescribes no adjustment.
   Neither money tool is offered to a live planner yet (the Anthropic tool loop and plan catalog, the OpenAI loop); the offline router plans them.
 - get_speed_opportunity(window, slice_by width|crew, shift): per grade and width (or crew), typical speed without stops vs the best fifth of setups, % of target for both, gap, opportunity hours, dry-end % of the fast fifth vs the rest; short setups excluded and counted; no temperatures modelled.
+- get_speed_variance(window, shift, against target|previous|shift, against_shift): the gap between a reference speed and the window's speed with stops in ft/min and lineal ft, split into stops, setups (order changes), running below the grade target and grade mix, which add up to it; `details` splits each bucket by stop reason or grade; each loss bucket priced as machine time (docs/METRICS.md, Speed variance). `against_shift` is another shift, so the selected-shift scope refuses it. Offered to the Anthropic loop and the analyst's plan; the OpenAI loop leaves it out for its byte cap.
 
 Forbidden: shell, arbitrary SQL/code, external URLs, filesystem browsing, machinery control, schedule changes, subscriber access or email sending. SQL values are bound separately and grouping identifiers are allowlisted.
 

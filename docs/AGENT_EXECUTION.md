@@ -5,16 +5,16 @@ This describes the implemented code as reviewed September 7, 2026. It replaces t
 ## Three execution paths
 
 1. **Production day / Offline:** the application parses a supported question pattern and runs a predetermined bounded tool plan. Since issue #20 every such view is a URL ([URLS](URLS.md)): the browser sends the question as `GET /q?…&q=`, the server redirects to the canonical address and answers it, and the address bar is kept equal to it.
-2. **Production day / OpenAI:** the provider chooses one function at a time; application code validates scope, executes queries, and formats the numerical answer.
+2. **Production day / the analyst:** Anthropic, the default, proposes one plan that application code checks step by step before any query runs ([ANTHROPIC_DEMO](ANTHROPIC_DEMO.md)); OpenAI, the optional provider, chooses one function at a time. Either way application code validates scope, executes queries, and formats the numerical answer.
 3. **Week, month, accounting:** the server calls PeriodReports directly. There is no model call, natural-language planning, or provider permission on this path.
 
-Choosing OpenAI does not add new calculation tools, dates, or production authority. It changes who chooses the next permitted tool and adds a bounded narrative after successful evidence retrieval.
+Choosing a live provider does not add new calculation tools, dates, or production authority. It changes who chooses the next permitted tool and adds a bounded narrative after successful evidence retrieval.
 
 ## Follow one request
 
 In the UI, choose September 14, shift 2, Selected shift only, Production day, and Offline. Ask "Why was this shift slow? Chart downtime by reason."
 
-In offline mode the browser sends `GET /q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F…` with `Accept: application/json`; the server parses the question with the offline router, answers `302 Location: /corr/1/day/2026-09-14/shift/2?measure=overview`, and that address returns the answer (the browser then pushes it with `history.pushState`). No token and no session: the state is the address. A live round POSTs JSON to /api/ask with question, day, shift, scope, period, mode, corrupt, and optional session_id, with the workbench token in a header; a live BYOK request also uses X-OpenAI-Key, which is kept out of the JSON and cleared from the field on submit.
+In offline mode the browser sends `GET /q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F…` with `Accept: application/json`; the server parses the question with the offline router, answers `302 Location: /corr/1/day/2026-09-14/shift/2?measure=overview`, and that address returns the answer (the browser then pushes it with `history.pushState`). No token and no session: the state is the address. A live round POSTs JSON to /api/ask with question, day, shift, scope, period, mode, corrupt, and optional session_id, with the workbench token in a header; on the loopback workbench a key you paste travels in X-Anthropic-Key or X-OpenAI-Key, kept out of the JSON and cleared from the field on submit; the public demo ignores both headers and uses its own key.
 
 The server validates the request before selecting a dataset: the day must be one of the store's Monday–Friday production days (a weekend or out-of-range date is a 400 with the reason). `RecordStore.day_analysis` builds that day's private in-memory DuckDB tables from the record families. Up to three day/scenario Analysis objects are retained by the server.
 
@@ -93,7 +93,9 @@ Visible date, shift, scope, mode, period and corrupt-record changes reset the UI
 
 The agent now preserves the selected control shift after comparisons. A server round-trip regression verifies retained history under unchanged controls. All-shifts scope covers all three shifts by default; explicitly named shifts narrow a daily question.
 
-## OpenAI boundary and cost
+## The optional OpenAI provider: boundary and cost
+
+The Anthropic analyst's boundary, guards and cost are in [ANTHROPIC_DEMO](ANTHROPIC_DEMO.md); this section is the optional OpenAI provider's tool loop.
 
 OpenAIPlanner constructs strict Responses function schemas and requires one function call per response. A finish call supplies successful evidence IDs; application code formats calculated summaries. A separate write_narrative function returns bounded prose and field references, validated by narrative.py. Numeric placeholders are filled from evidence, then shown as Model interpretation with citations. Prose is not certified by reference validation. A cannot_answer call now displays an application-owned unavailable message with supported next steps.
 

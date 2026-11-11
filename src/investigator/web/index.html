@@ -3,7 +3,7 @@
 <body class="shell-page">
 <header class="app"><div class="wrap">
 <div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Corrugator Shift Investigator</b><span class="badge" id="mode-badge">Synthetic data / Offline planner</span></div>
-<a class="top-link" href="/guide">How it works</a>
+<a class="top-link" href="/docs">Docs</a>
 <a id="evals-badge" class="evals-badge" href="/evals" hidden></a>
 <button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button>
 </div></header>
@@ -35,8 +35,8 @@
 <button id="rates-change" class="secondary" type="button" disabled title="Editable rates arrive with the cost model (issue #31)">Change rates</button>
 </section>
 <details class="panel advanced" id="advanced"><summary>Agent and advanced</summary>
-<label class="field mode-field"><span class="field-label">Agent for Ask the analyst</span><select id="mode"><option value="offline">Offline / free</option><option value="openai">OpenAI / your key</option><option value="anthropic">Anthropic / your key</option></select></label>
-<label id="key-label" class="field" hidden><span id="key-label-text" class="field-label">OpenAI API key (optional if configured on server)</span><input id="api-key" type="password" autocomplete="off" maxlength="512" placeholder="Used for this request only"></label>
+<label class="field mode-field"><span class="field-label">Agent for Ask the analyst</span><select id="mode"><option value="offline">Offline / free</option><option value="anthropic">Anthropic / your key</option><option value="openai">OpenAI / your key</option></select></label>
+<label id="key-label" class="field" hidden><span id="key-label-text" class="field-label">API key (optional if configured on server)</span><input id="api-key" type="password" autocomplete="off" maxlength="512" placeholder="Used for this request only"></label>
 <p class="panel-note" id="mode-help">Offline mode uses a small rule-based planner. No model calls or API charges.</p>
 <label class="check switch"><input id="corrupt" type="checkbox"><span>Include a bad trim record</span><small>Injects one invalid setup into shift 2 so the affected metrics read Incomplete and the rejected value shows in the trail.</small></label>
 <button id="reset" class="secondary" type="button">Clear the thread</button>
@@ -60,8 +60,8 @@
 <details id="execution"><summary>What came back, per query</summary><p class="muted">The full result of each query in the box above: window, coverage, excluded records and the result JSON. An execution trace of tools and results—not private model reasoning.</p><div id="context"></div><div id="trace"></div></details>
 </article>
 <div id="earlier" class="earlier-list" aria-label="Earlier answers"></div>
-<p class="scope-note">Results identify investigation leads, not proven causes or guaranteed improvements. A model, when selected, chooses what to look at; it never supplies a number. <a href="/guide#asking-questions">How to ask and interpret answers</a>.</p>
-<footer class="page-foot"><span id="dataset-range">A rolling year of synthetic production days (Mon–Fri)</span> · 07:00 production-day boundary · PDF downloads only; email not connected · <a href="/guide">How this agent is built</a><span id="evals-foot" hidden> · <a href="/evals">Golden evals: every case and the score history</a></span></footer>
+<p class="scope-note">Results identify investigation leads, not proven causes or guaranteed improvements. A model, when selected, chooses what to look at; it never supplies a number. <a href="/docs/asking-questions">How to ask and interpret answers</a>.</p>
+<footer class="page-foot"><span id="dataset-range">A rolling year of synthetic production days (Mon–Fri)</span> · 07:00 production-day boundary · PDF downloads only; email not connected · <a href="/docs">Docs: how this agent is built</a><span id="evals-foot" hidden> · <a href="/evals">Golden evals: every case and the score history</a></span></footer>
 </div>
 </main>
 </div>

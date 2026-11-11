@@ -36244,6 +36244,769 @@
      }
     }
    }
+  },
+  {
+   "id": "value-speedvar-september-target",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_speed_variance",
+   "arguments": {
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "shift": null,
+    "against": "target"
+   },
+   "note": "Against each grade's target at the usual grade mix (the share of the setup clock over both months): the buckets add up to the gap taken directly.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 4,
+    "values": {
+     "$": {
+      "against": [
+       "target",
+       null
+      ],
+      "speed_all_fpm": [
+       616.033295,
+       0.051
+      ],
+      "reference_speed_fpm": [
+       692.361851,
+       0.051
+      ],
+      "target_speed_fpm": [
+       691.099037,
+       0.051
+      ],
+      "reference_target_speed_fpm": [
+       692.361851,
+       0.051
+      ],
+      "gap_fpm": [
+       76.328556,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       2418088.649612,
+       0.051
+      ],
+      "scheduled_minutes": [
+       31680,
+       0.051
+      ],
+      "direction": [
+       "below",
+       null
+      ],
+      "stops_share_pct": [
+       37.622414,
+       0.051
+      ],
+      "setups_share_pct": [
+       4.470818,
+       0.051
+      ],
+      "below_target_share_pct": [
+       56.252323,
+       0.051
+      ],
+      "mix_share_pct": [
+       1.654445,
+       0.051
+      ]
+     },
+     "bucket=stops": {
+      "gap_fpm": [
+       28.716646,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       909743.333333,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       37.622414,
+       0.051
+      ],
+      "top_item": [
+       "Planned maintenance",
+       null
+      ],
+      "top_item_fpm": [
+       11.171086,
+       0.0051
+      ],
+      "items": [
+       9,
+       null
+      ],
+      "machine_time_usd": [
+       26277.969382,
+       2.312642
+      ],
+      "usd": [
+       26277.969382,
+       2.312642
+      ],
+      "usd_per_year": [
+       307145.097,
+       28.041
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=setups": {
+      "gap_fpm": [
+       3.412511,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       108108.333333,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       4.470818,
+       0.051
+      ],
+      "top_item": [
+       "275-BC",
+       null
+      ],
+      "top_item_fpm": [
+       0.762837,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       3122.712305,
+       0.286055
+      ],
+      "usd": [
+       3122.712305,
+       0.286055
+      ],
+      "usd_per_year": [
+       36499.235,
+       4.353
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=below_target": {
+      "gap_fpm": [
+       42.936586,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       1360231.033333,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       56.252323,
+       0.051
+      ],
+      "top_item": [
+       "200-C",
+       null
+      ],
+      "top_item_fpm": [
+       7.475067,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       39290.323512,
+       3.451505
+      ],
+      "usd": [
+       39290.323512,
+       3.451505
+      ],
+      "usd_per_year": [
+       459237.548,
+       41.352
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=mix": {
+      "gap_fpm": [
+       1.262814,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       40005.949612,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       1.654445,
+       0.051
+      ],
+      "top_item": [
+       "26-C",
+       null
+      ],
+      "top_item_fpm": [
+       1.086456,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       1155.571924,
+       0.113888
+      ],
+      "usd": [
+       1155.571924,
+       0.113888
+      ],
+      "usd_per_year": [
+       13506.685,
+       2.341
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "details:item=Planned maintenance": {
+      "bucket": [
+       "stops",
+       null
+      ],
+      "gap_fpm": [
+       11.171086,
+       0.0051
+      ],
+      "minutes": [
+       503.0,
+       0.0051
+      ],
+      "stops": [
+       4,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-speedvar-week-0914-shift-2-previous",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_speed_variance",
+   "arguments": {
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-14"
+    },
+    "shift": 2,
+    "against": "previous"
+   },
+   "note": "Against the previous week: each loss is this week's feet below target per scheduled minute minus the week before's; an offset bucket is not priced.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 4,
+    "values": {
+     "$": {
+      "against": [
+       "previous",
+       null
+      ],
+      "speed_all_fpm": [
+       616.49375,
+       0.051
+      ],
+      "reference_speed_fpm": [
+       672.73575,
+       0.051
+      ],
+      "target_speed_fpm": [
+       694.170139,
+       0.051
+      ],
+      "reference_target_speed_fpm": [
+       695.121875,
+       0.051
+      ],
+      "gap_fpm": [
+       56.242,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       134980.8,
+       0.051
+      ],
+      "scheduled_minutes": [
+       2400,
+       0.051
+      ],
+      "direction": [
+       "below",
+       null
+      ],
+      "stops_share_pct": [
+       -2.653464,
+       0.051
+      ],
+      "setups_share_pct": [
+       0.135822,
+       0.051
+      ],
+      "below_target_share_pct": [
+       100.825426,
+       0.051
+      ],
+      "mix_share_pct": [
+       1.692216,
+       0.051
+      ]
+     },
+     "bucket=stops": {
+      "gap_fpm": [
+       -1.492361,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       -3581.666667,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       -2.653464,
+       0.051
+      ],
+      "top_item": [
+       "Missed splice",
+       null
+      ],
+      "top_item_fpm": [
+       -5.678819,
+       0.0051
+      ],
+      "items": [
+       8,
+       null
+      ],
+      "usd": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "not priced",
+       null
+      ]
+     },
+     "bucket=setups": {
+      "gap_fpm": [
+       0.076389,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       183.333333,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       0.135822,
+       0.051
+      ],
+      "top_item": [
+       "275-BC",
+       null
+      ],
+      "top_item_fpm": [
+       0.715278,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       5.44968,
+       0.013293
+      ],
+      "usd": [
+       5.44968,
+       0.013293
+      ],
+      "usd_per_year": [
+       840.808,
+       3.061
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=below_target": {
+      "gap_fpm": [
+       56.706236,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       136094.966667,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       100.825426,
+       0.051
+      ],
+      "top_item": [
+       "32-C",
+       null
+      ],
+      "top_item_fpm": [
+       12.050083,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       4046.231604,
+       0.377305
+      ],
+      "usd": [
+       4046.231604,
+       0.377305
+      ],
+      "usd_per_year": [
+       624275.733,
+       59.223
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=mix": {
+      "gap_fpm": [
+       0.951736,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       2284.166667,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       1.692216,
+       0.051
+      ],
+      "top_item": [
+       "55-C",
+       null
+      ],
+      "top_item_fpm": [
+       6.886699,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       67.911402,
+       0.018919
+      ],
+      "usd": [
+       67.911402,
+       0.018919
+      ],
+      "usd_per_year": [
+       10477.759,
+       3.929
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "details:item=Knife / slitter jam": {
+      "bucket": [
+       "stops",
+       null
+      ],
+      "gap_fpm": [
+       -0.413194,
+       0.0051
+      ],
+      "minutes": [
+       18.283333,
+       0.0051
+      ],
+      "stops": [
+       10,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-speedvar-week-0914-shift-3-vs-shift-1",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_speed_variance",
+   "arguments": {
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-14"
+    },
+    "shift": 3,
+    "against": "shift",
+    "against_shift": 1
+   },
+   "note": "Shift 3 against shift 1 over the same week: shift 1's Thursday planned maintenance makes stops an offset; the heavier grade mix of shift 3 is part of its gap.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 4,
+    "values": {
+     "$": {
+      "against": [
+       "shift",
+       null
+      ],
+      "speed_all_fpm": [
+       571.17,
+       0.051
+      ],
+      "reference_speed_fpm": [
+       615.79225,
+       0.051
+      ],
+      "target_speed_fpm": [
+       682.989583,
+       0.051
+      ],
+      "reference_target_speed_fpm": [
+       710.355556,
+       0.051
+      ],
+      "gap_fpm": [
+       44.62225,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       107093.4,
+       0.051
+      ],
+      "scheduled_minutes": [
+       2400,
+       0.051
+      ],
+      "direction": [
+       "below",
+       null
+      ],
+      "stops_share_pct": [
+       -90.917523,
+       0.051
+      ],
+      "setups_share_pct": [
+       -5.211183,
+       0.051
+      ],
+      "below_target_share_pct": [
+       134.80062,
+       0.051
+      ],
+      "mix_share_pct": [
+       61.328087,
+       0.051
+      ]
+     },
+     "bucket=stops": {
+      "gap_fpm": [
+       -40.569444,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       -97366.666667,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       -90.917523,
+       0.051
+      ],
+      "top_item": [
+       "Planned maintenance",
+       null
+      ],
+      "top_item_fpm": [
+       -46.875,
+       0.0051
+      ],
+      "items": [
+       8,
+       null
+      ],
+      "usd": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "not priced",
+       null
+      ]
+     },
+     "bucket=setups": {
+      "gap_fpm": [
+       -2.325347,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       -5580.833333,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       -5.211183,
+       0.051
+      ],
+      "top_item": [
+       "200-C",
+       null
+      ],
+      "top_item_fpm": [
+       -1.005556,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "usd": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "not priced",
+       null
+      ]
+     },
+     "bucket=below_target": {
+      "gap_fpm": [
+       60.151069,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       144362.566667,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       134.80062,
+       0.051
+      ],
+      "top_item": [
+       "275-BC",
+       null
+      ],
+      "top_item_fpm": [
+       12.786153,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       4688.619682,
+       0.474369
+      ],
+      "usd": [
+       4688.619682,
+       0.474369
+      ],
+      "usd_per_year": [
+       723387.037,
+       74.198
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=mix": {
+      "gap_fpm": [
+       27.365972,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       65678.333333,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       61.328087,
+       0.051
+      ],
+      "top_item": [
+       "275-BC",
+       null
+      ],
+      "top_item_fpm": [
+       14.220912,
+       0.0051
+      ],
+      "items": [
+       6,
+       null
+      ],
+      "machine_time_usd": [
+       2133.104904,
+       0.222884
+      ],
+      "usd": [
+       2133.104904,
+       0.222884
+      ],
+      "usd_per_year": [
+       329107.614,
+       35.398
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "details:item=Knife / slitter jam": {
+      "bucket": [
+       "stops",
+       null
+      ],
+      "gap_fpm": [
+       3.821528,
+       0.0051
+      ],
+      "minutes": [
+       21.45,
+       0.0051
+      ],
+      "stops": [
+       10,
+       null
+      ]
+     }
+    }
+   }
   }
  ]
 }

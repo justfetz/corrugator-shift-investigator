@@ -39,6 +39,7 @@ from urllib.parse import parse_qsl, urlsplit
 from .agent import Agent, Context, TOOL_SCHEMAS, parse_request
 from .anthropic_provider import resolve_model
 from .cost_model import effective as effective_rates, parse_rates
+from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
 from .record_store import default_store
 from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
@@ -154,6 +155,9 @@ class Workbench:
         folder = evals_dir()
         self.evals = EvalBoard(folder) if folder else None   # scored against the golden window, not this store (issue #35)
         self.evals_json = json.dumps(self.evals.board(), allow_nan=False).encode() if self.evals else None
+        # The docs site at /docs (issue #93): {path: html}, prebuilt in the image or rendered from the checkout;
+        # None when neither is there, and /docs is then a 404 like any unknown path.
+        self.docs = load_docs()
 
     @staticmethod
     def _workbench_token(public):
@@ -626,6 +630,14 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 return self._send(304, b'', 'text/html; charset=utf-8', {'ETag': etag, 'Cache-Control': 'no-cache'})
             self._send(200, data, 'text/html; charset=utf-8', {'ETag': etag, 'Cache-Control': 'no-cache'})
 
+        def _static(self, data, content_type):
+            """A static page, revalidated with an ETag like the files below (issue #33)."""
+            etag = '"' + hashlib.sha256(data).hexdigest()[:16] + '"'
+            held = [v.strip() for v in self.headers.get('If-None-Match', '').split(',')]
+            if etag in held or etag[:-1] + '-gzip"' in held:
+                return self._send(304, b'', content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
+            self._send(200, data, content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
+
         def do_GET(self):
             if not self._host_ok():
                 return self._send(403, {'error': 'Local host only'})
@@ -663,7 +675,16 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 if app.evals is None:
                     return self._send(404, {'error': 'The golden set is not shipped with this build'})
                 return self._send(200, app.evals_json, extra={'Access-Control-Allow-Origin': '*'})
-            files = {'/': ('index.html', 'text/html; charset=utf-8'), '/guide': ('guide.html', 'text/html; charset=utf-8'),
+            if url.path == '/guide':
+                # The old "How it works" page is the docs site now (issue #93). The browser keeps the fragment,
+                # and /docs carries ids for the old anchors (#asking-questions, #how-this-is-built).
+                return self._send(301, {'url': '/docs'}, extra={'Location': '/docs'})
+            if app.docs is not None and (url.path == '/docs' or url.path.startswith('/docs/')):
+                page = app.docs.get(url.path.rstrip('/'))
+                if page is None:
+                    return self._send(404, {'error': 'Not found'})
+                return self._static(page, 'text/html; charset=utf-8')
+            files = {'/': ('index.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
                      '/trail.js': ('trail.js', 'text/javascript; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
                      '/style.css': ('style.css', 'text/css; charset=utf-8')}

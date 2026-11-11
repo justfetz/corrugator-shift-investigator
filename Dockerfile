@@ -13,6 +13,8 @@ COPY pyproject.toml ./
 COPY src ./src
 # The golden set, its recorded fixtures and the tracked history, read-only, for the /evals page (issue #26).
 COPY evals ./evals
+# The Markdown behind /docs (issue #93), rendered once below; the folder's design mockups are not copied.
+COPY docs/*.md ./docs/
 # Generate the rolling year once here, not at every container start (issues #19, #35): the server
 # loads /app/prebuilt in about 200 ms instead of generating for about 12 s. The window ends
 # yesterday (UTC) at build time and is fixed for the image, whenever a container starts; the
@@ -21,8 +23,9 @@ COPY evals ./evals
 # scores against; it is loaded on the first eval run, never at boot.
 RUN pip install --no-cache-dir . && python -m investigator.prebuilt /app/prebuilt \
     && python -m investigator.prebuilt --as-of "$(python -c 'import json; print(json.load(open("evals/golden_values.json"))["as_of"])')" /app/prebuilt-golden \
+    && python -m investigator.docsite build /app/docs-site --root /app \
     && mkdir -p /app/artifacts && chown -R app:app /app
-ENV INVESTIGATOR_PREBUILT=/app/prebuilt INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden INVESTIGATOR_EVALS=/app/evals
+ENV INVESTIGATOR_PREBUILT=/app/prebuilt INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden INVESTIGATOR_EVALS=/app/evals INVESTIGATOR_DOCS=/app/docs-site
 
 USER app
 EXPOSE 7860
