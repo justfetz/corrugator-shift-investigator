@@ -3,8 +3,8 @@
 Every drawing is built from the same chart envelope the browser renders (rows the tools
 produced, never visitor HTML): horizontal bars (with the previous window as a thin bar
 when the chart carries y2), the weekly trend line (hollow markers for partial weeks), and
-the over/under-run bullet (zero mid-axis, the band shaded). The calendar heatmap stays a
-table. Colors mirror the light theme of the web UI.
+the over/under-run bullet (zero mid-axis, the band shaded) and the speed-variance waterfall.
+The calendar heatmap stays a table. Colors mirror the light theme of the web UI.
 """
 from reportlab.graphics.shapes import Drawing, Rect, Line, String, Circle
 from reportlab.lib import colors
@@ -105,9 +105,49 @@ def range_drawing(chart):
     return d
 
 
+def waterfall_drawing(chart):
+    """The speed variance (issue #92): the reference speed and the speed with stops as level marks, each bucket a
+    floating bar between the levels it joins (a loss steps left in orange, an offset right in teal). The axis spans
+    the levels and does not start at zero, as in the browser."""
+    rows = chart['rows']; row_h = 20; label_w, value_w, top = 150, 120, 8
+    n = len(rows) + 2
+    h = top + n * row_h + 24
+    d = Drawing(W, h)
+    x0, x1 = label_w + 6, W - value_w - 6
+    levels = [float(chart['start'])]
+    for r in rows:
+        levels.append(levels[-1] - float(r[chart['y']] or 0))
+    every = levels + [float(chart['end'])]
+    span = (max(every) - min(every)) or 1.0
+    lo, hi = max(0.0, min(every) - span * .2), max(every) + span * .2
+    xp = lambda v: x0 + (x1 - x0) * (v - lo) / (hi - lo)
+    ybot = h - (top + n * row_h)
+    for t in (0, .5, 1):
+        v = lo + (hi - lo) * t
+        d.add(Line(xp(v), ybot, xp(v), ybot + n * row_h, strokeColor=GRID, strokeWidth=.6))
+        d.add(String(xp(v), ybot - 10, _fmt(v), fontName='Helvetica', fontSize=7, fillColor=INK3, textAnchor='middle'))
+    def level(i, v, label):
+        yb = h - (top + (i + 1) * row_h) + 4
+        d.add(String(x0 - 6, yb + 4, _label(label), fontName='Helvetica', fontSize=7.5, fillColor=INK, textAnchor='end'))
+        d.add(Line(xp(v), yb, xp(v), yb + 12, strokeColor=PREV, strokeWidth=2))
+        d.add(String(x1 + 6, yb + 4, f'{v:,.1f} ft/min', fontName='Helvetica', fontSize=7.5, fillColor=INK))
+    level(0, levels[0], chart.get('start_label') or 'Reference speed')
+    for i, r in enumerate(rows):
+        yb = h - (top + (i + 2) * row_h) + 4
+        a, b, g = levels[i], levels[i + 1], float(r[chart['y']] or 0)
+        d.add(String(x0 - 6, yb + 4, _label(r[chart['x']]), fontName='Helvetica', fontSize=7.5, fillColor=INK, textAnchor='end'))
+        d.add(Rect(min(xp(a), xp(b)), yb + 2, max(abs(xp(b) - xp(a)), 1.5), 10, fillColor=OUT if g > 0 else TEAL, strokeColor=None))
+        share = r.get('share_of_gap_pct')
+        d.add(String(x1 + 6, yb + 4, f'{"-" if g > 0 else "+"}{abs(g):,.1f}' + (f' · {share:,.0f}%' if share is not None else ''),
+                     fontName='Helvetica', fontSize=7.5, fillColor=INK))
+    level(n - 1, float(chart['end']), chart.get('end_label') or 'Speed with stops')
+    return d
+
+
 def drawing_for(chart):
     kind = chart.get('type')
     if kind == 'line': return line_drawing(chart)
     if kind == 'range': return range_drawing(chart)
+    if kind == 'waterfall': return waterfall_drawing(chart)
     if kind == 'calendar_heatmap': return None
     return bar_drawing(chart)

@@ -71,6 +71,26 @@ A window is `day`, `week` (Mon–Fri), `month` (calendar) or `fiscal`: the 4-4-5
 
 `get_speed_opportunity` answers "where could we run faster" the way a superintendent would check it: per board grade and web width (or crew), over every setup of the window with at least two running minutes (shorter setups never reach steady speed; they are counted in `excluded_short_setups`, never dropped silently): typical speed without stops as a ratio of sums, the median setup speed, the **best fifth** (the fastest fifth of the cell's setups by speed without stops, `ntile(5)`, again a ratio of sums, never the peak), both as percent of the grade target, the gap, and **opportunity hours** = running minutes now minus the minutes the same lineal feet would take at the best-fifth speed. Beside it sits the dry-end reject percent of the fast fifth against the rest: a positive `reject_penalty_points` means the fast setups rejected more, so that part of the gap is a limit rather than an opportunity. A cell with fewer than ten setups reports `insufficient`. The records carry no temperatures, so the heat-transfer ceiling on heavy grades and doublewall (bond needs its temperature range) is stated as an open owner input in every envelope.
 
+### Speed variance (issue #92)
+
+`get_speed_variance(window, shift, against, against_shift)` answers "what were the top three contributors to speed variation": why the window's speed with stops differed from a reference, as four buckets that add up to the gap. Speed is the tile's speed with stops, lineal ft / scheduled minutes. For each side, per scheduled minute (T):
+
+| Quantity | Formula |
+| --- | --- |
+| target speed | Σ(grade target × setup clock minutes) / T: the speed the grade targets give at the side's own grade mix (the setup records fill every scheduled minute, so this is the time-weighted grade target) |
+| stops | Σ(stopped minutes × the stopped setup's grade target) / T, every recorded reason except Order change |
+| setups | the same for the Order change stops (the changeover the cost model also prices as setup time); the records carry one running speed per setup, so there is no separate ramp after a changeover |
+| below-target running | Σ(grade target × running minutes − lineal ft) / T, per grade (negative when a grade ran above its target) |
+| identity | target speed − stops − setups − below-target running = speed with stops, exactly, because each setup's clock is its running time plus its allocated stops |
+
+The gap is reference speed − this speed. **Grade mix** = the reference's target speed − this window's; each loss bucket = this side's loss − the reference's. In ft/min and as lineal ft over this window's scheduled minutes; `share_of_gap_pct` is each bucket over the gap (shares stay null when the gap is under 0.05 ft/min, and a bucket that ran the other way is an offset with a negative share). `details` splits stops by reason, setups and below-target running by grade, and the mix by grade as (reference time share − this time share) × (grade target − reference target speed); each bucket's details add up to it, and the row names the detail that leads it (`top_item`).
+
+- `against=target` (the default): the reference is each grade's target weighted by its share of the setup clock over the whole record store (both months, all shifts), with no losses. A window that ran more of a slow grade than usual is below it even if every grade made its target: that part of the gap is the mix.
+- `against=previous`: the window of the same kind just before, same shift filter; refused when it is outside the store (August against July).
+- `against=shift`: `against_shift` over the same window; `shift` is the one explained. Under the selected-shift scope another shift is out of reach and the call is refused.
+
+Each bucket is priced as machine time: its lineal ft / the reference speed = minutes at that speed, at the machine $/hr (annualized by time, contribution beside it when a margin is set). A bucket that ran better than the reference is a gain and is not priced, whichever way the gap goes (when the window is faster than its reference, its buckets that ran worse are the offsets on the card, and they are priced); the whole gap is priced on the envelope (`gap_usd`) when the window is slower, so the bucket dollars add to it only when every bucket is a loss. The answer leads with the gap and the four shares, then the three largest buckets (the ones that make the gap first, then the offsets), a waterfall from the reference speed through each bucket to the speed with stops, and where to look.
+
 ## The shift_kpis table
 
 The authoritative KPI inventory. `shift_kpis` holds one row per production day, shift and variant (`corrupt` false: the records as generated; true: the data-quality demo's bad-trim record injected into the day's first shift-2 setup), 258 rows for the two months. `build_shift_kpis` in `record_store.py` computes it once from the six tables: at image build into the prebuilt folder (`python -m investigator.prebuilt`, issue #19), where the store loads it with the rest, or at boot when the store generates. Validation runs once there with the per-day Analysis's rules; a setup that fails is left out of every setup column and counted in `excluded_setups`, and its shift's `coverage` is `incomplete`.
@@ -155,7 +175,8 @@ Three components per priced row, kept apart so that changing one rate changes on
 The fields are flat on the row, beside the quantity, so the live narrative cites them like any other
 field and the narrative validator substitutes every dollar from the tool result. They ride on
 `get_quality_breakdown`, `get_downtime_breakdown`, `get_waste_breakdown`, `get_downtime_pareto` and
-`get_speed_opportunity` (opportunity hours x 60 minutes), and on the two money tools:
+`get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each bucket's lineal feet / the
+reference speed; a bucket that ran better is not priced; above), and on the two money tools:
 
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
   reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus
