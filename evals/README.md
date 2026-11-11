@@ -42,6 +42,13 @@ outside the clock). Failures are prefixed `URL:`; the table's note carries `URL 
 summary prints the server p50 and p95 over GET. Value cases have no question and are not sent; a
 live row checks only that its question resolves to its `expect.url`.
 
+A question that names its own shift or a relative window (issue #105: "How much donwtime on 1st shift last
+week?" on the shift 2 / Day controls) runs in the scope it names on both paths: `/q` moves it, and in-process
+the runner reads it with `agent.question_scope` and answers on that day's records. The tools-inside-the-scope
+invariant takes its scope from what the case states, never from the answer: the shift of its `expect.url` for the
+last turn (a scripted analyst plan, which has no URL, states `expect.shifts`), else the case's controls, so a
+question moved to the wrong shift fails even where nothing else pins it.
+
 ## Global invariants
 
 Every case, whatever its type, also checks:

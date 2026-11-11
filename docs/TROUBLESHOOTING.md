@@ -14,7 +14,7 @@ If dependencies cannot import, use the project virtual environment and run `pyth
 
 | Symptom | Meaning and recovery |
 | --- | --- |
-| Selected shift only error | The question mentions another shift. Explicitly change the Shift control or choose All shifts / comparison. |
+| Selected shift only error | The question compares other shifts, or names several, with one shift selected. Choose All shifts / comparison. A question naming one other shift runs on that shift (issue #105). |
 | Unsupported offline question | The router recognizes a small set of patterns. Use an example button or state a metric such as downtime, speed, or quality. |
 | `unavailable` | The planner found no evidence it could answer with, or every tool call was refused. When calls were refused the answer text is the tools' own reason (for example a window outside the dataset range 2025-09-30 to 2026-09-30, the year the tests read; the demo's year ends the day before its image was built); otherwise the app shows supported next steps. Narrow the question to evidence the tools expose. |
 | `complete` but the question was not answered | Completion validates evidence references, not semantic fulfillment. Check the actual tools and results; see R4. |
