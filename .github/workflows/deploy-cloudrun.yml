@@ -123,7 +123,7 @@ jobs:
           if [ "$LIVE_MODEL" = "1" ]; then
             # Mount only the secrets that actually exist in the project; a named-but-missing secret
             # is a loud warning, not a failed deploy, so the first live deploy can land before every
-            # provider is provisioned. OpenAI keeps its historical default name.
+            # provider is provisioned. Neither secret name has a default: an unset variable skips that provider.
             SECRETS=""
             for pair in "OPENAI_API_KEY=${OPENAI_SECRET}" "ANTHROPIC_API_KEY=${ANTHROPIC_SECRET}"; do
               name="${pair#*=}"; [ -z "$name" ] && continue
@@ -202,18 +202,24 @@ jobs:
         # Only the service's own URLs count. A tagged preview revision (pr-<n>---..., preview.yml) answers on
         # this service and is in ORIGINS for the allow-list, but it runs a pull request's image: it must not
         # pass this test, answer the live-mode check, or be reported as where main is live.
+        # Of the URLs that answer, "Live at" names (and the live-mode check reads) the one ranked first, whatever
+        # ORIGINS' sorted order: the deterministic <service>-<project number>.<region>.run.app URL (the README
+        # publishes it), then a custom domain (CUSTOM_ORIGINS), then the legacy <service>-<hash>-<region code>.a.run.app.
         run: |
           set -euo pipefail
-          LIVE=""
+          LIVE=""; LIVE_RANK=9
           for URL in $(echo "$ORIGINS" | tr ',' ' '); do
             # preview.yml tags each PR's revision pr-<number>, served at https://pr-<number>---<service URL>; match only that,
             # since a CLOUD_RUN_SERVICE name may itself contain "---"
             if [[ "$URL" =~ ^https://pr-[0-9]+--- ]]; then echo "skip $URL (a preview tag, not main)"; continue; fi
+            # a curl that fails before any body arrives (e.g. "Could not resolve host") leaves the -o file alone, so
+            # clear it: otherwise this URL's line would show the previous URL's body next to HTTP 000
+            rm -f /tmp/healthz.txt
             CODE=$(curl -sS -o /tmp/healthz.txt -w '%{http_code}' --max-time 30 "$URL/api/health" || true)
             echo "GET $URL/api/health -> HTTP $CODE $(head -c 200 /tmp/healthz.txt 2>/dev/null)"
             [ "$CODE" = "200" ] || continue
-            # the deterministic <service>-<project number>.<region>.run.app URL wins when it answers: the README publishes it
-            case "$URL" in *.a.run.app) [ -n "$LIVE" ] || LIVE="$URL" ;; *) LIVE="$URL" ;; esac
+            case "$URL" in *.a.run.app) RANK=3 ;; *.run.app) RANK=1 ;; *) RANK=2 ;; esac
+            if [ "$RANK" -lt "$LIVE_RANK" ]; then LIVE="$URL"; LIVE_RANK="$RANK"; fi
           done
           test -n "$LIVE"
           CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
