@@ -1,4 +1,4 @@
-"""Seeded story answer keys for the two-month synthetic dataset.
+"""Seeded story answer keys for the synthetic dataset (dated in August to October 2026).
 
 THESE ANSWER KEYS ARE NOT EXPOSED THROUGH ANY TOOL. Only the generator
 (`synth.py`) reads this module, to plant the effects in the records. The
@@ -13,16 +13,18 @@ from datetime import date
 
 # Story 1: a slitter/scorer rebuild during the planned-maintenance window of
 # the week of 17 August. Afterwards side trim creeps upward by about 0.1
-# percentage point per week (the crews run wider trim allowances) and the
-# knife / slitter jam stops rise in minutes and count, concentrating on the
-# slitter/scorer.
+# percentage point per week (the crews run wider trim allowances) until the end
+# of October, when the allowances are reset and trim returns to its pre-story
+# level; the knife / slitter jam stops rise in minutes and count, concentrating
+# on the slitter/scorer.
 SLITTER_REBUILD = {
     "pm_date": date(2026, 8, 20),          # Thursday, shift 1 PM window
     "pm_shift": 1,
     "pm_minutes": 180,                     # the rebuild uses a longer window
     "place": "Slitter/scorer",
-    "baseline_trim_pct": 2.7,              # target before the rebuild
+    "baseline_trim_pct": 2.7,              # target before the rebuild, and again after the creep ends
     "trim_creep_pp_per_week": 0.10,        # added per week after pm_date
+    "trim_creep_end": date(2026, 10, 31),  # the creep's last day (owner, PR #91); baseline again from 1 November
     "knife_slitter_minutes_multiplier": 3.0,   # strong enough to survive Poisson noise at the month grain
     "slitter_place_share_before": 0.20,    # share of knife/slitter jams at the slitter
     "slitter_place_share_after": 0.50,

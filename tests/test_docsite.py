@@ -299,11 +299,18 @@ CASE_STUDY = ROOT / 'docs' / 'CASE_STUDY.md'
 
 
 def figure_root(tmp_path):
-    """A copy of what the docs build reads, to break one file at a time."""
+    """A copy of what the docs build reads (the recordings too), to break one file at a time."""
     for source in [p['source'] for p in docsite.pages()] + list(docsite.FIGURE_SOURCES):
         (tmp_path / source).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(ROOT / source, tmp_path / source)
+    shutil.copytree(ROOT / 'evals' / 'fixtures', tmp_path / 'evals' / 'fixtures')
     return tmp_path
+
+
+def recorded_live_cases(root, last):
+    """The newest run's live rows whose recording exists, as evals/run.py's history_line sums their cost."""
+    return [r for r in last['rows'] if r['provider']
+            and (Path(root) / 'evals' / 'fixtures' / r['provider'] / f'{r["case"]}.json').is_file()]
 
 
 def test_the_case_study_is_first_and_renders_its_diagram(site):
@@ -329,16 +336,21 @@ def test_every_case_study_figure_comes_from_a_generated_file(site):
     history = [json.loads(line) for line in (ROOT / 'evals' / 'history.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
     rows, newest = last['rows'], history[-1]
     passed = sum(r['outcome'] == 'pass' for r in rows)
-    assert f'passed {passed:,} of {len(rows):,} golden runs over {len({r["type"] for r in rows})} case types' in text
-    assert f'Last tracked run: {last["ran_at"][:10]}, commit {last["commit"]}' in text and last['dataset'] in text
+    scored = sum(r['outcome'] in ('pass', 'fail') for r in rows)
+    # Results leads with the score and the offline latency of the newest tracked run.
+    assert (f'{passed:,} of {scored:,} scored golden runs pass, and an offline answer takes '
+            f'{newest["latency_ms"]["p50"]:.0f} ms at p50 and {newest["latency_ms"]["p95"]:.0f} ms at p95, '
+            f'in the last tracked run ({last["ran_at"][:10]}, commit {last["commit"]};') in text
+    unscored = len(rows) - scored
+    assert (f'The other {unscored} runs' in text) == bool(unscored), 'skipped runs are said, never counted as failures'
+    assert last['dataset'] in text
     offline = [r for r in rows if not r['provider']]
     assert 'Offline' in text and f'{sum(r["outcome"] == "pass" for r in offline)}/{len(offline)}' in text
     assert f'{sum(r["type"] == "value" for r in rows)} cases hold a tool\'s numbers' in text
-    assert f'{newest["latency_ms"]["p50"]:.0f} ms / {newest["latency_ms"]["p95"]:.0f} ms' in text
     live = newest['live']['anthropic']
-    ran = sum(c['pass'] + c['fail'] for c in live['types'].values())
-    assert f'${live["recorded_cost_usd"] / ran:.4f} on {live["model"]}' in text
-    assert f'{len(rows):,}, up from {history[0]["cases"]} on {history[0]["ran_at"][:10]}, over {len(history)} tracked runs' in text
+    cases = len(recorded_live_cases(ROOT, last))
+    assert f'${live["recorded_cost_usd"] / cases:.4f} on {live["model"]}, over {cases} recorded cases' in text
+    assert f'{len(rows):,} now, up from {history[0]["cases"]} on {history[0]["ran_at"][:10]}, over {len(history)} tracked runs' in text
     log = (ROOT / 'docs' / 'CHANGELOG.md').read_text(encoding='utf-8')
     days = re.findall(r'^## (\S+)$', log, re.M)
     assert f'{len(re.findall(r"^- \[#", log, re.M))} pull requests merged between {min(days)} and {max(days)}' in text
@@ -347,6 +359,9 @@ def test_every_case_study_figure_comes_from_a_generated_file(site):
     paper, minute = defaults['values']['paper_usd_msf'], cost_model.price('downtime', 1, defaults)
     assert f'threshold is ${cost_model.trim_points_usd_per_year(1, defaults):,.0f} a year on one machine at ${paper}/MSF' in text
     assert f'It is ${minute["machine_time_usd"]:,.0f} of machine time' in text and f'or {minute["msf_not_made"]:g} MSF of board' in text
+    assert 'MSF: thousand square feet' in text, 'MSF is defined once, at its first use'
+    margin = defaults['values']['margin_usd_msf']
+    assert f'a contribution margin the owner sets ({"unset in the demo" if margin is None else f"${margin:,.0f}/MSF in the demo"})' in text
     assert f'{defaults["values"]["trim_target_pct"]:g}% threshold' in text
     # Every {{name}} in the source is a figure the build knows.
     names = set(docsite.FIGURE.findall(CASE_STUDY.read_text(encoding='utf-8')))
@@ -357,9 +372,15 @@ def test_a_number_typed_into_the_case_study_fails_the_build(tmp_path):
     assert docsite.typed_numbers(CASE_STUDY.read_text(encoding='utf-8')) == [], 'the committed page types no number'
     for typed in ('The set has 289 cases.', 'It answers in 14 ms.', 'Cost: $0.0027 an answer.', 'seven case types',
                   'twenty-nine runs', 'a tenth of a point', 'asked twice', 'Dated 2026-11-11.', '1. an ordered item at 50 ms',
-                  'a third of the runs', 'a fifth of the setups', '½ point', 'answers x10 faster', 'the #1 loss', 'utf8'):
+                  'a third of the runs', 'a fifth of the setups', '½ point', 'answers x10 faster', 'the #1 loss', 'utf8',
+                  # the coordinator's review on #120: a list marker other than 1., plural magnitudes, ordinals, a
+                  # reference whose number is not the issue it links to
+                  '289. golden runs pass', '1. ok\n\n289. golden runs pass', 'hundreds of cases', 'thousands of setups',
+                  'tens of milliseconds', 'millions of square feet', 'the thirteenth run', 'the nineteenth shift',
+                  'a quadruple win', '[#289](CHANGELOG.md)', f'[#289]({docsite.REPO}/issues/71)', '[#289](https://example.com/issues/289)'):
         assert docsite.typed_numbers(f'Intro.\n\n- {typed}\n'), typed
-    for fine in ('p50 and p95 of the offline run', 'see [#104](https://github.com/x/y/issues/104)', '{{evals.runs}} runs',
+    for fine in ('p50 and p95 of the offline run', f'see [#104]({docsite.REPO}/issues/104)', f'[#99]({docsite.REPO}/pull/99)',
+                 'MSF (thousand square feet)', 'a review scores every criterion', '{{evals.runs}} runs',
                  'one issue, one session, one pull request', '[the rubric](../evals/README.md#v2-rubric)', '1. a list item'):
         assert docsite.typed_numbers(fine) == [], fine
     root = figure_root(tmp_path)
@@ -403,9 +424,12 @@ def test_the_score_table_leaves_skips_and_known_defects_unscored(tmp_path):
     path.write_text(json.dumps(last), encoding='utf-8')
     values = docsite.figures(root)
     scored = len(offline) - 2
-    assert f'| **{scored}/{scored}** |' in values['evals.table'].splitlines()[2]
-    assert values['evals.passed'] == f'{len(last["rows"]) - 2:,}' and values['evals.runs'] == f'{len(last["rows"]):,}', \
-        'the headline is passed over every run, as the /evals badge counts it'
+    assert f'| **{scored}/{scored} · 2 skipped** |' in values['evals.table'].splitlines()[2]
+    rows = last['rows']
+    assert values['evals.passed'] == f'{sum(r["outcome"] == "pass" for r in rows):,}'
+    assert values['evals.scored'] == f'{sum(r["outcome"] in ("pass", "fail") for r in rows):,}', \
+        'the headline is passed over scored runs; the skipped ones are said beside it'
+    assert values['evals.runs'] == f'{len(rows):,}'
 
 
 def test_the_model_comparison_grows_a_row_per_model(tmp_path):
@@ -422,19 +446,30 @@ def test_the_model_comparison_grows_a_row_per_model(tmp_path):
     values = docsite.figures(root)
     table = values['models.table'].splitlines()
     assert values['models.count'] == str(1 + len(newest['live'])) and len(table) == 3 + len(newest['live'])
-    anthropic = newest['live']['anthropic']   # read from the file: a re-recording (#71) changes it, not this test
+    # The anthropic row, read from the files: a re-recording (#71) changes the data, not this test. Its cost divides
+    # by the newest run's live rows whose recording exists, the rows history_line summed the cost over.
+    anthropic = newest['live']['anthropic']
+    last = json.loads((root / 'evals' / 'last_run.json').read_text(encoding='utf-8'))
     counts = anthropic['types'].values()
-    ran, recorded = sum(c['pass'] + c['fail'] for c in counts), sum(c['pass'] + c['fail'] + c['skip'] for c in counts)
+    ran, unscored = sum(c['pass'] + c['fail'] for c in counts), sum(c['skip'] for c in counts)
+    passed = ' · '.join(([f'{sum(c["pass"] for c in counts)}/{ran}'] if ran or not unscored else [])
+                        + ([f'{unscored} skipped'] if unscored else []))
+    recorded = len(recorded_live_cases(root, last))
     first = (newest.get('live_ms') or {}).get('first_token_p50')
-    assert table[2] == (f'| anthropic | `{anthropic["model"]}` | {sum(c["pass"] for c in counts)}/{ran} | '
+    assert table[2] == (f'| anthropic | `{anthropic["model"]}` | {passed} | '
                         f'${anthropic["recorded_cost_usd"] / recorded:.4f} | '
                         f'{f"{first:.0f} ms" if first is not None else "not recorded yet"} | {newest["ran_at"][:10]} |')
+    assert values['live.cost_per_case'] == f'${anthropic["recorded_cost_usd"] / recorded:.4f}'
+    # A case whose recording is gone is not a recorded case.
+    gone = recorded_live_cases(root, last)[0]
+    (root / 'evals' / 'fixtures' / gone['provider'] / f'{gone["case"]}.json').unlink()
+    assert docsite.figures(root)['live.cost_per_case'] == f'${anthropic["recorded_cost_usd"] / (recorded - 1):.4f}'
     assert table[3].startswith('| openai | `gpt-small` | 2/3 | $0.0100 | 812 ms |'), \
-        'the cost is over every recorded live row, skips included, as history_line sums it'
+        'an older line has no rows here: its cost divides by its live rows, each recorded when it was written'
     skipped = {**other, 'live': {'openai': {**other['live']['openai'],
                                             'types': {'routing': {'pass': 2, 'fail': 1, 'skip': 1}}}}}
     history.write_text('\n'.join(lines[:-1] + [json.dumps(skipped), lines[-1]]) + '\n', encoding='utf-8')
-    assert '| openai | `gpt-small` | 2/3 | $0.0075 |' in docsite.figures(root)['models.table']
+    assert '| openai | `gpt-small` | 2/3 · 1 skipped | $0.0075 |' in docsite.figures(root)['models.table']
     rendered = docsite.Renderer().render(values['models.table'])
     assert rendered.count('<tr>') == 3 and '<td class="right">812 ms</td>' in rendered
 

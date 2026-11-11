@@ -139,15 +139,16 @@ def test_week_recurrence_and_counts(periods,records):
 
 
 def test_missing_previous_week_is_unavailable(periods):
-    result=periods.investigate('2026-08-03',2,'shift','week')   # first production week: nothing before it
-    assert result['status']=='complete' and result['period_label']=='2026-08-03 to 2026-08-07'
+    # The year's first full week; the week before it holds only four days of the year (it opens Tuesday 30 September 2025)
+    result=periods.investigate('2025-10-06',2,'shift','week')
+    assert result['status']=='complete' and result['period_label']=='2025-10-06 to 2025-10-10'
     assert any('Full comparison unavailable' in s for s in result['sections'])
     assert all(r['previous_minutes'] is None and r['minutes_change'] is None for r in result['tables'][0]['rows'])
     result=periods.investigate('2026-09-29',2,'shift','week')   # 28 Sep - 2 Oct: only three production days exist
     assert result['status']=='partial' and result['tables'][1]['rows']==[]
     assert len(result['tables'][2]['rows'])==3 and [r['available'] for r in result['charts'][0]['rows']]==[True,True,True,False,False]
     with pytest.raises(ValueError,match='supported calendar date'):
-        periods.investigate('2026-07-31',2,'shift','week')
+        periods.investigate('2025-09-29',2,'shift','week')   # the Monday before the year's first day
 
 
 def test_month_counts_and_weighted_totals(periods):
@@ -188,9 +189,14 @@ def test_heatmap_content_and_accounting_calendar(periods,records):
     assert not any('Full comparison unavailable' in s for s in result['sections'])
     assert {'speed_to_target_pct','downtime_pct','maintenance_pct','operator_pct','dry_end_pct','trim_pct','shear_pct'} <= set(first)
     assert '4-4-5 P2 (4 weeks)' in result['sections'][0]
-    first_period=periods.investigate('2026-08-14',2,'shift','accounting')
-    # P1's predecessor is the prior year's 5-week period, before the first production day: no full comparison
-    assert '4-4-5 P1 (4 weeks)' in first_period['sections'][0] and any('Full comparison unavailable' in s for s in first_period['sections'])
+    p1=periods.investigate('2026-08-14',2,'shift','accounting')
+    # P1's predecessor is the prior year's 5-week P12, inside the year: a full comparison (issue #35)
+    assert '4-4-5 P1 (4 weeks)' in p1['sections'][0] and not any('Full comparison unavailable' in s for s in p1['sections'])
+    assert any(s.startswith('Previous period 2026-06-29 to 2026-08-02') for s in p1['sections'])
+    first_period=periods.investigate('2025-10-15',2,'shift','accounting')
+    # the year opens inside the prior year's P3 (29 Sep - 2 Nov 2025); P2 before it holds no day: no full comparison
+    assert '4-4-5 P3 of the prior year (5 weeks)' in first_period['sections'][0] and first_period['status']=='partial'
+    assert any('Full comparison unavailable' in s for s in first_period['sections'])
 
 
 def test_accounting_period_three_discloses_missing_future_days(periods):

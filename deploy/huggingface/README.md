@@ -12,7 +12,7 @@ short_description: Ask a bounded agent why a corrugator shift was bad (synthetic
 
 # Corrugator Shift Investigator — public synthetic demo
 
-A manufacturing investigation agent you can question: speed, downtime and waste for 43 synthetic production days (August and September 2026) on one corrugator, with every number calculated by fixed DuckDB tools and the full tool trace shown under "How the agent got here".
+A manufacturing investigation agent you can question: speed, downtime and waste for a rolling year of synthetic production days on one corrugator, with every number calculated by fixed DuckDB tools and the full tool trace shown under "How the agent got here".
 
 This Space runs the **offline planner**: no model calls, no keys, no email. The synthetic records are generated deterministically at image build and loaded at start. Nothing here is a real plant.
 

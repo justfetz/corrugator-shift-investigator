@@ -90,7 +90,7 @@ Modifiers, each refused when it does not apply to the measure:
 
 | Field | Values | Default |
 | --- | --- | --- |
-| `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: July answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
+| `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: a month outside the rolling year answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
 | `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity; `grade` for `fpm` | `reason`; `width`; none |
 | `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |

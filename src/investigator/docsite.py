@@ -68,31 +68,39 @@ FIGURE_PAGES = ('docs/CASE_STUDY.md',)
 # the rates come from the installed `cost_model`.
 FIGURE_SOURCES = ('evals/last_run.json', 'evals/history.jsonl', 'docs/CHANGELOG.md')
 FIGURE = re.compile(r'\{\{\s*([a-z][a-z0-9_.]*)\s*\}\}')
-# Names that carry digits but are not figures: an issue or pull request as a link's text ([#104](...)) and a
-# percentile's name (p50, p95). Every other digit is typed, as are fraction and superscript characters.
-NAMED_DIGITS = re.compile(r'\[#\d+\]|\bp\d{2}\b')
-# A number word: counts, fractions, ordinals from third up and multiples. "one" is left alone, as an article
-# ("one issue, one session, one pull request"); "first" and "second" are left alone as order ("a second way").
+# An issue or pull request cited by its own link, [#104](<REPO>/issues/104): a name, not a figure. The number must
+# be the one the link points at, so "[#289](anything)" stays typed.
+CITED_REFERENCE = re.compile(r'\[#(\d+)\]\(\s*' + re.escape(REPO) + r'/(?:issues|pull)/\1\s*\)')
+# Other names that are not figures: a percentile's name (p50, p95) and the unit MSF spells out.
+NAMED = re.compile(r'\bp\d{2}\b|\bthousand square feet\b', re.I)
+# A number word: counts and their plurals, fractions, ordinals from third up and multiples. "one" is left alone,
+# as an article ("one issue, one session, one pull request"); "first" and "second" as order ("a second way").
 TYPED_NUMBER = re.compile(
     r'\d|[\u00b2\u00b3\u00b9\u00bc-\u00be\u2070-\u209f\u2150-\u218b]'
-    r'|\b(?:zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen'
-    r'|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand'
-    r'|million|billion|dozens?|half|halves|quarters?|thirds?|fourths?|fifths?|sixths?|sevenths?|eighths?|ninths?'
-    r'|tenths?|eleventh|twelfth|twentieth|hundredths?|thousandths?|twice|thrice|single|double|triple|tenfold|hundredfold)\b', re.I)
+    r'|\b(?:zero(?:e?s)?|twos|threes|fours|fives|sixes|sevens|eights|nines|tens|twelves|twenties|thirties|forties'
+    r'|fifties|sixties|seventies|eighties|nineties|hundreds|thousands|millions|billions|trillions?|dozens?'
+    r'|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen'
+    r'|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion'
+    r'|half|halves|quarters?|thirds?|fourths?|fifths?|sixths?|sevenths?|eighths?|ninths?|tenths?|elevenths?'
+    r'|twelfths?|thirteenths?|fourteenths?|fifteenths?|sixteenths?|seventeenths?|eighteenths?|nineteenths?'
+    r'|twentieths?|thirtieths?|fortieths?|fiftieths?|hundredths?|thousandths?|millionths?'
+    r'|twice|thrice|single|double|triple|quadruple|quintuple|tenfold|hundredfold|thousandfold)\b', re.I)
 
 
 def typed_numbers(text):
     """Every line of a figures page that types a number into its own text, as 'line N: text'.
 
-    Each line is read without its `{{figures}}`, its link addresses, its `NAMED_DIGITS` and an ordered-list
-    marker; what is left is what the writer typed, and none of it may be a figure."""
+    Each line is read without its `{{figures}}`, its `CITED_REFERENCE`s, its link addresses, its `NAMED` words
+    and a `1.` list marker; what is left is what the writer typed, and none of it may be a figure. Only `1.` is a
+    marker: an ordered list on such a page numbers every item `1.` (the renderer counts), so "289. runs" is typed."""
     out = []
     for n, line in enumerate(text.split('\n'), 1):
         bare = FIGURE.sub(' ', line)
+        bare = CITED_REFERENCE.sub(' ', bare)
         bare = re.sub(r'\]\(\s*[^)\s]*(?:\s+"[^"]*")?\s*\)', '] ', bare)
         bare = re.sub(r'<https?://[^>\s]+>', ' ', bare)
-        bare = re.sub(r'^\s*\d{1,9}[.)](?=\s)', ' ', bare)
-        bare = NAMED_DIGITS.sub(' ', bare)
+        bare = re.sub(r'^\s*1[.)](?=\s)', ' ', bare)
+        bare = NAMED.sub(' ', bare)
         if TYPED_NUMBER.search(bare):
             out.append(f'line {n}: {line.strip()}')
     return out
@@ -134,8 +142,11 @@ def figures(root=ROOT):
     - `cost_model` at its default rates (`rates.json`, the configuration the tools price with), for the dollars
       a loss is priced at: its own `price` and `trim_points_usd_per_year`, so the page moves when they do.
 
-    A live provider's recorded cost is summed over every live row with a recording (`evals/run.py`'s
-    `history_line`), so the cost per answer divides by every live row, skipped ones included."""
+    A live provider's recorded cost is summed over the live rows whose recording exists (`evals/run.py`'s
+    `history_line`), whatever their outcome, so the cost per recorded case divides by those rows, found here the
+    same way: `evals/fixtures/<provider>/<case>.json` for each of the newest run's rows. A model whose newest line
+    is an older run has no rows here; its cost divides by that line's live rows, every one of which had a recording
+    when it was written."""
     from . import cost_model   # standard library only; imported here so the changelog path never needs it
     root = Path(root)
     last = json.loads((root / 'evals/last_run.json').read_text(encoding='utf-8'))
@@ -153,6 +164,7 @@ def figures(root=ROOT):
         'evals.dataset': _code(last['dataset']),
         'evals.runs': _count(len(rows)),
         'evals.passed': _count(sum(r['outcome'] == 'pass' for r in rows)),
+        'evals.scored': _count(sum(r['outcome'] in ('pass', 'fail') for r in rows)),
         'evals.failed': _count(sum(r['outcome'] == 'fail' for r in rows)),
         'evals.types': _count(len({r['type'] for r in rows})),
         'evals.value': _count(sum(r['type'] == 'value' for r in rows)),
@@ -164,8 +176,19 @@ def figures(root=ROOT):
 
     def score(subset):
         ran = [r for r in subset if r['outcome'] in ('pass', 'fail')]
-        return f'{sum(r["outcome"] == "pass" for r in ran)}/{len(ran)}' if ran else '–'
+        unscored = len(subset) - len(ran)
+        if not subset:
+            return '–'
+        return ' · '.join(([f'{sum(r["outcome"] == "pass" for r in ran)}/{len(ran)}'] if ran else [])
+                          + ([f'{unscored} skipped'] if unscored else []))
     offline, live = [r for r in rows if not r['provider']], [r for r in rows if r['provider']]
+    skipped = [r for r in rows if r['outcome'] not in ('pass', 'fail')]
+    stale = [r for r in skipped if str(r.get('note') or '').startswith('stale recording')]
+    out['evals.skipped'] = (
+        '' if not skipped else
+        f' The other {len(skipped)} runs are live recordings that skip, never scored, until they are re-recorded '
+        f'against the current data.' if len(stale) == len(skipped) else
+        f' The other {len(skipped)} were skipped, never scored ({len(stale)} of them stale live recordings).')
     out['evals.table'] = '\n'.join([
         '| Run | ' + ' | '.join(types) + ' | All |',
         '| --- |' + ' ---: |' * (len(types) + 1),
@@ -173,32 +196,58 @@ def figures(root=ROOT):
         '| Replayed live | ' + ' | '.join(score([r for r in live if r['type'] == t]) for t in types) + f' | **{score(live)}** |'])
     latency = newest.get('latency_ms') or {}
     out['latency.p50'], out['latency.p95'] = _ms(latency.get('p50')), _ms(latency.get('p95'))
-    # Each model's newest tracked line: its live cases passed, the recorded cost per answer, the first words.
+    # The recordings behind the newest run's live rows, as history_line finds them.
+    recordings = {}
+    for r in live:
+        path = root / 'evals' / 'fixtures' / r['provider'] / f'{r["case"]}.json'
+        if path.is_file():
+            recordings.setdefault(r['provider'], []).append(json.loads(path.read_text(encoding='utf-8')))
+
+    def recorded_cases(provider, line, entry):
+        if line is newest:
+            return len(recordings.get(provider, []))
+        return sum(c.get('pass', 0) + c.get('fail', 0) + c.get('skip', 0) for c in (entry.get('types') or {}).values())
+
+    def passed_cell(entry):
+        counts = (entry.get('types') or {}).values()
+        ran = sum(c.get('pass', 0) + c.get('fail', 0) for c in counts)
+        unscored = sum(c.get('skip', 0) for c in counts)
+        return ' · '.join(([f'{sum(c.get("pass", 0) for c in counts)}/{ran}'] if ran or not unscored else [])
+                          + ([f'{unscored} skipped'] if unscored else []))
+    # Each model's newest tracked line: its live cases passed, the recorded cost per case, the first words.
     by_model = {}
     for line in history:
         for provider, entry in (line.get('live') or {}).items():
             by_model[(provider, entry.get('model') or 'unknown')] = (line, entry)
-    table = ['| Provider | Model | Live cases passed | Recorded cost per answer | First words, p50 | Tracked |',
+    table = ['| Provider | Model | Live cases passed | Recorded cost per case | First words, p50 | Tracked |',
              '| --- | --- | ---: | ---: | ---: | --- |']
     for (provider, model), (line, entry) in sorted(by_model.items()):
-        counts = entry.get('types') or {}
-        ran = sum(c.get('pass', 0) + c.get('fail', 0) for c in counts.values())
-        recorded = sum(c.get('pass', 0) + c.get('fail', 0) + c.get('skip', 0) for c in counts.values())
-        passed = sum(c.get('pass', 0) for c in counts.values())
-        cost = entry.get('recorded_cost_usd')
+        cases, cost = recorded_cases(provider, line, entry), entry.get('recorded_cost_usd')
         first = (line.get('live_ms') or {}).get('first_token_p50')
-        table.append(f'| {provider} | {_code(model)} | {passed}/{ran} | '
-                     f'{_usd(cost / recorded, 4) if recorded and cost is not None else "–"} | {_ms(first)} | {line["ran_at"][:10]} |')
+        table.append(f'| {provider} | {_code(model)} | {passed_cell(entry)} | '
+                     f'{_usd(cost / cases, 4) if cases and cost is not None else "–"} | {_ms(first)} | {line["ran_at"][:10]} |')
     out['models.table'] = '\n'.join(table)
     out['models.count'] = _count(len(by_model))
     current = newest.get('live') or {}
-    live_ran = sum(c.get('pass', 0) + c.get('fail', 0) for e in current.values() for c in (e.get('types') or {}).values())
-    live_recorded = sum(sum(c.get(k, 0) for k in ('pass', 'fail', 'skip')) for e in current.values()
-                        for c in (e.get('types') or {}).values())
+    live_cases = sum(recorded_cases(p, newest, e) for p, e in current.items())
     live_cost = sum(e.get('recorded_cost_usd') or 0 for e in current.values())
     out['live.model'] = ', '.join(_code(e.get('model') or 'unknown') for _, e in sorted(current.items())) or 'none'
-    out['live.cases'] = _count(live_ran)
-    out['live.cost_per_answer'] = _usd(live_cost / live_recorded, 4) if live_recorded else 'not recorded yet'
+    out['live.cases'] = _count(live_cases)
+    out['live.cost_per_case'] = _usd(live_cost / live_cases, 4) if live_cases else 'not recorded yet'
+    # What the recordings are: the analyst's shape when they were made, and whether they still score.
+    every = [rec for found in recordings.values() for rec in found]
+    planned = sum(rec.get('shape') == 'plan' for rec in every)
+    stale_live = [r for r in live if str(r.get('note') or '').startswith('stale recording')]
+    out['live.recordings'] = (
+        'No live round is recorded yet.' if not every else
+        f'The {len(every)} live recordings were made with '
+        + ('the one-plan analyst' if planned == len(every) else
+           "the analyst's earlier tool loop, before it became a checked plan and a streamed narrative"
+           if not planned else f'two shapes of the analyst ({planned} as a checked plan, the rest as its earlier tool loop)')
+        + ('; they were made against an earlier dataset, so they skip until they are re-recorded '
+           f'([#71]({REPO}/issues/71)), which also writes the first-words time.' if stale_live and len(stale_live) == len(live) else
+           f'; {len(stale_live)} were made against an earlier dataset and skip until re-recorded ([#71]({REPO}/issues/71)).'
+           if stale_live else ', and they are replayed and scored on every run.'))
     out['live.first_words'] = _ms((newest.get('live_ms') or {}).get('first_token_p50'))
     out['history.runs'] = _count(len(history))
     out['history.first'] = history[0]['ran_at'][:10]
@@ -214,7 +263,8 @@ def figures(root=ROOT):
     out['rates.hour'] = f'{_usd(rate["machine_usd_hour"])}/hr'
     out['rates.machine_minute'] = _usd(minute['machine_time_usd'])
     out['rates.msf_per_minute'] = f'{minute["msf_not_made"]:g} MSF'
-    out['rates.margin'] = 'not set' if rate['margin_usd_msf'] is None else f'{_usd(rate["margin_usd_msf"])}/MSF'
+    out['rates.margin'] = ('unset in the demo' if rate['margin_usd_msf'] is None
+                           else f'{_usd(rate["margin_usd_msf"])}/MSF in the demo')
     out['rates.trim_target'] = f'{rate["trim_target_pct"]:g}%'
     out['rates.trim_point_year'] = _usd(cost_model.trim_points_usd_per_year(1, defaults))
     return out

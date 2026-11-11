@@ -1,15 +1,17 @@
 # Case study: why was that shift bad?
 
-A bounded agent that answers a superintendent's question about a bad corrugator shift from synthetic records. Fixed, parameterized queries compute every number; a model, when asked, may choose the queries and write the narrative, never a number ([where a number comes from](EVALS.md#where-a-number-comes-from)). Every figure on this page is read at build from the eval history, the changelog and the cost model's rates; none is typed ([docsite.py](../src/investigator/docsite.py)). Last tracked run: {{evals.ran}}, commit {{evals.commit}}. To keep a copy, print the page or save it as PDF; the print layout drops the navigation.
+Shift Investigator answers a corrugator superintendent's morning question, such as why second shift was slow or which downtime reason cost the most minutes, from synthetic production records ([try it](OVERVIEW.md#try-it)). Fixed, parameterized queries compute every number; a model, when asked, may choose the queries and write the narrative, never a number ([where a number comes from](EVALS.md#where-a-number-comes-from)).
+
+The figures on this page are filled in from the eval history, the changelog and the cost model when the docs are built, never typed ([docsite.py](../src/investigator/docsite.py)). To keep a copy, print the page or save it as PDF; the print layout drops the navigation.
 
 ## The problem
 
 A corrugator glues paper into board at the wet end, then slits, scores and cuts it into orders at the dry end. A shift goes bad when the machine stops (maintenance or operator downtime), runs slower than its grade should, or makes board nobody ships: side trim, shear at order changes, and dry-end rejects for bond, warp or misalignment ([the records](DATA.md)). The morning question is plain: what went wrong last shift, and who do I ask?
 
-The owner's targets give each loss a band, a home run, a target and a flag, over its own denominator: downtime over scheduled minutes, trim and shear over gross square feet, dry-end waste over the yield left after trim and shear ([#101](https://github.com/justfetz/corrugator-shift-investigator/issues/101)). Putting those losses in dollars is harder than it looks:
+The owner's targets give each loss a band (home run, target, flag) over its own denominator: downtime over scheduled minutes, trim and shear over gross square feet, dry-end waste over the yield left after trim and shear ([#101](https://github.com/justfetz/corrugator-shift-investigator/issues/101)). Putting those losses in dollars is harder than it looks:
 
 - **The records hold no costs.** Every dollar is a recorded quantity at an assumed, named rate, never a plant's own figure ([cost model](COST_MODEL.md), [rates.json](../src/investigator/rates.json)).
-- **A lost minute is priced from both sides.** It is {{rates.machine_minute}} of machine time at {{rates.hour}}, or {{rates.msf_per_minute}} of board not made at a contribution margin that is {{rates.margin}}. Both price the same lost capacity, so they sit side by side and are never added ([formulas](COST_MODEL.md#formulas)).
+- **A lost minute is priced from both sides.** It is {{rates.machine_minute}} of machine time at {{rates.hour}}, or {{rates.msf_per_minute}} of board not made (MSF: thousand square feet), priced at a contribution margin the owner sets ({{rates.margin}}). Both price the same lost capacity, so they sit side by side and are never added ([formulas](COST_MODEL.md#formulas)).
 - **Trim is width, not time.** It costs paper and no run time: each point of side trim over the cost model's {{rates.trim_target}} threshold is {{rates.trim_point_year}} a year on one machine at {{rates.paper}} ([cost_model.py](../src/investigator/cost_model.py)). The owner's bands reach the tools with [#101](https://github.com/justfetz/corrugator-shift-investigator/issues/101).
 
 ## The design in one diagram
@@ -38,26 +40,27 @@ The owner's targets give each loss a band, a home run, a target and a flag, over
 
 ## How we know the numbers are right
 
-The last tracked run passed {{evals.passed}} of {{evals.runs}} golden runs over {{evals.types}} case types, on dataset {{evals.dataset}} ([numbers and evals](EVALS.md), [last_run.json](../evals/last_run.json)). Every case is browsable at `/evals` in the app ([the set in the app](EVALS.md#the-set-in-the-app-evals)).
+Every golden case has a type and expectations written down; the last tracked run, by type, on dataset {{evals.dataset}} ([numbers and evals](EVALS.md), [last_run.json](../evals/last_run.json)). Every case is browsable at `/evals` in the app ([the set in the app](EVALS.md#the-set-in-the-app-evals)).
 
 {{evals.table}}
 
 - **Value goldens are computed a second way.** {{evals.value}} cases hold a tool's numbers against plain Python sums over the records, stamped with the dataset hash ([make_value_goldens.py](../evals/make_value_goldens.py)).
-- **Each question is asked again over its URL.** After the in-process run, every offline question goes over GET: {{evals.over_url}} are answered there with no model call and inside their time budgets, and a refusal must come back with the same text ([run.py](../evals/run.py), [the URL path](../evals/README.md#the-url-path)).
+- **Each question is asked again over its URL.** After the in-process run, every offline question but a scripted analyst plan goes over GET: {{evals.over_url}} are answered there with no model call and inside their time budgets, and a refusal must come back with the same text ([run.py](../evals/run.py), [the URL path](../evals/README.md#the-url-path)).
 - **Validators guard the prose.** A digit or number word the model typed withdraws its line; so does an ordering word its cited values contradict ([narrative.py](../src/investigator/narrative.py), [test_narrative_comparisons.py](../tests/test_narrative_comparisons.py)).
-- **Live rounds are recorded** and replayed in CI through the real agent and validators ([fixtures](../evals/fixtures/), [live cases](../evals/README.md#live-cases-and-fixtures)).
+- **Live rounds are recorded** and replayed through the real agent and validators; a recording made against other data skips, never scored ([fixtures](../evals/fixtures/), [live cases](../evals/README.md#live-cases-and-fixtures)).
 - **Every pull request** runs the tests and the evals ([tests.yml](../.github/workflows/tests.yml)) and gets its own preview revision with no traffic ([preview.yml](../.github/workflows/preview.yml)); the review loop is under [built with](#built-with).
 
 ## Results
 
+**{{evals.passed}} of {{evals.scored}} scored golden runs pass, and an offline answer takes {{latency.p50}} at p50 and {{latency.p95}} at p95**, in the last tracked run ({{evals.ran}}, commit {{evals.commit}}; [history.jsonl](../evals/history.jsonl)).{{evals.skipped}}
+
 | Measure | Last tracked run | Source |
 | --- | --- | --- |
-| Offline answer, p50 / p95 | {{latency.p50}} / {{latency.p95}} | [history.jsonl](../evals/history.jsonl) |
+| Golden runs | {{evals.runs}} now, up from {{history.first_cases}} on {{history.first}}, over {{history.runs}} tracked runs | [history.jsonl](../evals/history.jsonl) |
 | Analyst, first words (p50) | {{live.first_words}} | written by the re-recording in [#71](https://github.com/justfetz/corrugator-shift-investigator/issues/71) |
-| Analyst, recorded cost per answer (earlier tool loop) | {{live.cost_per_answer}} on {{live.model}} | [history.jsonl](../evals/history.jsonl), [cost per round](ANTHROPIC_DEMO.md#cost-per-round) |
-| Golden runs | {{evals.runs}}, up from {{history.first_cases}} on {{history.first}}, over {{history.runs}} tracked runs | [history.jsonl](../evals/history.jsonl) |
+| Analyst, recorded cost per case | {{live.cost_per_case}} on {{live.model}}, over {{live.cases}} recorded cases | [history.jsonl](../evals/history.jsonl), [cost per round](ANTHROPIC_DEMO.md#cost-per-round) |
 
-The live recordings predate the one-plan analyst; re-recording them writes the first-words time ([#71](https://github.com/justfetz/corrugator-shift-investigator/issues/71)). The model comparison below holds each model's newest tracked line; the bake-off adds a row per model on the full live set ([#115](https://github.com/justfetz/corrugator-shift-investigator/issues/115)).
+{{live.recordings}} The model comparison fills in with the bake-off, a row per model from its newest tracked line ([#115](https://github.com/justfetz/corrugator-shift-investigator/issues/115)).
 
 {{models.table}}
 
