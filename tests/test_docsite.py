@@ -380,14 +380,32 @@ def test_an_unknown_figure_fails_the_build(tmp_path):
 
 
 def test_the_figures_refuse_last_run_and_history_from_different_runs(tmp_path):
-    """`evals/run.py --track` writes the two files together; a pair that disagrees is a stale figure."""
+    """`evals/run.py --track` writes the two files together; a pair that disagrees is a stale figure, by its
+    time, its commit or its dataset (Codex on #120: two runs in one minute at one commit, data regenerated)."""
     root = figure_root(tmp_path)
     history = root / 'evals' / 'history.jsonl'
     lines = history.read_text(encoding='utf-8').splitlines()
     newest = json.loads(lines[-1])
-    history.write_text('\n'.join(lines[:-1] + [json.dumps({**newest, 'commit': 'deadbee'})]) + '\n', encoding='utf-8')
-    with pytest.raises(ValueError, match='different runs'):
-        docsite.figures(root)
+    for key, other in (('commit', 'deadbee'), ('ran_at', '2026-01-01T00:00Z'), ('dataset', '000000000000')):
+        history.write_text('\n'.join(lines[:-1] + [json.dumps({**newest, key: other})]) + '\n', encoding='utf-8')
+        with pytest.raises(ValueError, match='different runs'):
+            docsite.figures(root)
+
+
+def test_the_score_table_leaves_skips_and_known_defects_unscored(tmp_path):
+    """Codex on #120: the runner and history_line score neither a skip nor a known defect (xfail)."""
+    root = figure_root(tmp_path)
+    path = root / 'evals' / 'last_run.json'
+    last = json.loads(path.read_text(encoding='utf-8'))
+    offline = [r for r in last['rows'] if not r['provider']]
+    marked = {offline[0]['id']: 'xfail', offline[1]['id']: 'skip'}
+    last['rows'] = [{**r, 'outcome': marked.get(r['id'], r['outcome'])} for r in last['rows']]
+    path.write_text(json.dumps(last), encoding='utf-8')
+    values = docsite.figures(root)
+    scored = len(offline) - 2
+    assert f'| **{scored}/{scored}** |' in values['evals.table'].splitlines()[2]
+    assert values['evals.passed'] == f'{len(last["rows"]) - 2:,}' and values['evals.runs'] == f'{len(last["rows"]):,}', \
+        'the headline is passed over every run, as the /evals badge counts it'
 
 
 def test_the_model_comparison_grows_a_row_per_model(tmp_path):
@@ -474,3 +492,17 @@ def test_a_figures_page_that_cannot_be_built_never_stops_the_workbench(tmp_path,
     finally:
         server.server_close()
         server.app.close()
+
+
+def test_a_missing_figure_source_leaves_the_rest_of_the_docs_up(tmp_path, monkeypatch):
+    """Codex on #120: a checkout with every page but no evals/history.jsonl serves every page; only the case
+    study says it could not be built. A missing page source still means no site (a wheel without the repo)."""
+    root = figure_root(tmp_path)
+    (root / 'evals' / 'history.jsonl').unlink()
+    monkeypatch.delenv('INVESTIGATOR_DOCS', raising=False)
+    monkeypatch.setattr(docsite, 'ROOT', root)
+    site = docsite.load_site()
+    assert site is not None and set(site) == {p['url'] for p in docsite.pages()}
+    assert b'could not be built here' in site['/docs/case-study'] and b'history.jsonl' in site['/docs/case-study']
+    (root / 'docs' / 'URLS.md').unlink()
+    assert docsite.load_site() is None

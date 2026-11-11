@@ -142,7 +142,8 @@ def figures(root=ROOT):
     history = [json.loads(line) for line in (root / 'evals/history.jsonl').read_text(encoding='utf-8').splitlines()
                if line.strip()]
     newest = history[-1]
-    if (newest.get('ran_at'), newest.get('commit')) != (last.get('ran_at'), last.get('commit')):
+    pair = ('ran_at', 'commit', 'dataset')
+    if [newest.get(k) for k in pair] != [last.get(k) for k in pair]:
         raise ValueError('evals/last_run.json and the newest line of evals/history.jsonl are from different runs; '
                          '`python3 evals/run.py --track` writes both')
     rows = last['rows']
@@ -157,11 +158,12 @@ def figures(root=ROOT):
         'evals.value': _count(sum(r['type'] == 'value' for r in rows)),
         'evals.over_url': _count(sum(bool(re.search(r'\bURL \d+(?:\.\d+)? ms', r.get('note') or '')) for r in rows)),
     }
-    # The golden runs by type, most cases first: offline and replayed live, passed over run.
+    # The golden runs by type, most cases first: offline and replayed live, passed over scored. A skip and a known
+    # defect (xfail) are not scored, as in the runner's own table and history_line.
     types = sorted({r['type'] for r in rows}, key=lambda t: (-sum(r['type'] == t for r in rows), t))
 
     def score(subset):
-        ran = [r for r in subset if r['outcome'] != 'skip']
+        ran = [r for r in subset if r['outcome'] in ('pass', 'fail')]
         return f'{sum(r["outcome"] == "pass" for r in ran)}/{len(ran)}' if ran else '–'
     offline, live = [r for r in rows if not r['provider']], [r for r in rows if r['provider']]
     out['evals.table'] = '\n'.join([
@@ -619,10 +621,12 @@ def load_site():
         folder = Path(named)
         return {p['url']: (folder / _filename(p['url'])).read_bytes() for p in pages()
                 if (folder / _filename(p['url'])).is_file()} or None
-    sources = [ROOT / p['source'] for p in pages()] + [ROOT / s for s in FIGURE_SOURCES]
+    sources = [ROOT / p['source'] for p in pages()]
     if not all(path.is_file() for path in sources):
         return None
-    stamp = tuple(path.stat().st_mtime_ns for path in sources)   # one render per process until a source changes
+    # A missing figure source is the lenient build's to report on its page; it does not take the site down.
+    inputs = sources + [ROOT / s for s in FIGURE_SOURCES]
+    stamp = tuple(path.stat().st_mtime_ns if path.is_file() else None for path in inputs)   # one render until one changes
     if _RENDERED.get('stamp') != stamp:
         _RENDERED.update(stamp=stamp, site=build_site(ROOT, strict=False))
     return _RENDERED['site']
