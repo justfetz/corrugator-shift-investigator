@@ -33094,27 +33094,27 @@
    "note": "Where the money went in shift 2: every gap priced at the post's rates; contribution reads 'margin not set', never $0.",
    "expect": {
     "coverage": "complete",
-    "row_count": 11,
+    "row_count": 12,
     "values": {
-     "rows:gap=Downtime: Stacker": {
+     "rows:gap=Downtime: Order change": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       45.666667,
+       53.666667,
        0.011
       ],
       "usd": [
-       45.666667,
+       53.666667,
        0.011
       ],
       "usd_per_year": [
-       35228.571,
+       41400.0,
        9.496
       ],
       "msf_not_made": [
-       12.33,
+       14.49,
        0.0011
       ],
       "contribution_usd": [
@@ -33130,25 +33130,25 @@
        null
       ]
      },
-     "rows:gap=Downtime: Order change": {
+     "rows:gap=Downtime: Glue / starch": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       127.333333,
+       26.333333,
        0.011
       ],
       "usd": [
-       127.333333,
+       26.333333,
        0.011
       ],
       "usd_per_year": [
-       98228.571,
+       20314.286,
        9.496
       ],
       "msf_not_made": [
-       34.38,
+       7.11,
        0.0011
       ],
       "contribution_usd": [
@@ -33170,19 +33170,19 @@
        null
       ],
       "machine_time_usd": [
-       93.0,
+       94.333333,
        0.011
       ],
       "usd": [
-       93.0,
+       94.333333,
        0.011
       ],
       "usd_per_year": [
-       71742.857,
+       72771.429,
        9.496
       ],
       "msf_not_made": [
-       25.11,
+       25.47,
        0.0011
       ],
       "contribution_usd": [
@@ -33198,25 +33198,59 @@
        null
       ]
      },
-     "rows:gap=Downtime: Raw material (roll)": {
+     "rows:gap=Downtime: Stacker": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       33.0,
+       39.0,
        0.011
       ],
       "usd": [
-       33.0,
+       39.0,
        0.011
       ],
       "usd_per_year": [
-       25457.143,
+       30085.714,
        9.496
       ],
       "msf_not_made": [
-       8.91,
+       10.53,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       42.0,
+       0.011
+      ],
+      "usd": [
+       42.0,
+       0.011
+      ],
+      "usd_per_year": [
+       32400.0,
+       9.496
+      ],
+      "msf_not_made": [
+       11.34,
        0.0011
       ],
       "contribution_usd": [
@@ -33238,19 +33272,19 @@
        null
       ],
       "machine_time_usd": [
-       537.616296,
+       692.346667,
        0.011
       ],
       "usd": [
-       537.616296,
+       692.346667,
        0.011
       ],
       "usd_per_year": [
-       414732.571,
+       534096.0,
        9.496
       ],
       "msf_not_made": [
-       145.1564,
+       186.9336,
        0.0011
       ],
       "contribution_usd": [
@@ -33268,7 +33302,7 @@
      },
      "rows:gap=Side trim": {
       "paper_usd": [
-       4382.752,
+       4383.6265,
        0.011
       ],
       "machine_time_usd": [
@@ -33276,11 +33310,11 @@
        0.011
       ],
       "usd": [
-       4382.752,
+       4383.6265,
        0.011
       ],
       "usd_per_year": [
-       3293262.606,
+       3267451.871,
        9.496
       ],
       "msf_not_made": [
@@ -33302,23 +33336,23 @@
      },
      "rows:gap=Shear chops": {
       "paper_usd": [
-       704.341,
+       732.1435,
        0.011
       ],
       "machine_time_usd": [
-       47.43037,
+       49.302593,
        0.011
       ],
       "usd": [
-       751.77137,
+       781.446093,
        0.011
       ],
       "usd_per_year": [
-       564891.772,
+       582471.499,
        9.496
       ],
       "msf_not_made": [
-       12.8062,
+       13.3117,
        0.0011
       ],
       "contribution_usd": [
@@ -33336,23 +33370,23 @@
      },
      "rows:gap=Dry-end: BOND": {
       "paper_usd": [
-       514.8165,
+       544.5825,
        0.011
       ],
       "machine_time_usd": [
-       34.667778,
+       36.672222,
        0.011
       ],
       "usd": [
-       549.484278,
+       581.254722,
        0.011
       ],
       "usd_per_year": [
-       412890.354,
+       433253.57,
        9.496
       ],
       "msf_not_made": [
-       9.3603,
+       9.9015,
        0.0011
       ],
       "contribution_usd": [
@@ -33370,57 +33404,23 @@
      },
      "rows:gap=Dry-end: WARP": {
       "paper_usd": [
-       617.0285,
+       602.8165,
        0.011
       ],
       "machine_time_usd": [
-       41.550741,
+       40.593704,
        0.011
       ],
       "usd": [
-       658.579241,
+       643.410204,
        0.011
       ],
       "usd_per_year": [
-       494865.871,
+       479582.801,
        9.496
       ],
       "msf_not_made": [
-       11.2187,
-       0.0011
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "rows:gap=Dry-end: MOISTURE": {
-      "paper_usd": [
-       132.726,
-       0.011
-      ],
-      "machine_time_usd": [
-       8.937778,
-       0.011
-      ],
-      "usd": [
-       141.663778,
-       0.011
-      ],
-      "usd_per_year": [
-       106448.191,
-       9.496
-      ],
-      "msf_not_made": [
-       2.4132,
+       10.9603,
        0.0011
       ],
       "contribution_usd": [
@@ -33438,23 +33438,57 @@
      },
      "rows:gap=Dry-end: MISALIGNMENT": {
       "paper_usd": [
-       249.2105,
+       268.169,
        0.011
       ],
       "machine_time_usd": [
-       16.781852,
+       18.058519,
        0.011
       ],
       "usd": [
-       265.992352,
+       286.227519,
        0.011
       ],
       "usd_per_year": [
-       199870.462,
+       213347.246,
        9.496
       ],
       "msf_not_made": [
-       4.5311,
+       4.8758,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: MOISTURE": {
+      "paper_usd": [
+       129.5415,
+       0.011
+      ],
+      "machine_time_usd": [
+       8.723333,
+       0.011
+      ],
+      "usd": [
+       138.264833,
+       0.011
+      ],
+      "usd_per_year": [
+       103059.348,
+       9.496
+      ],
+      "msf_not_made": [
+       2.3553,
        0.0011
       ],
       "contribution_usd": [
@@ -33478,12 +33512,12 @@
      },
      "$": {
       "total_usd": [
-       7586.859315,
-       0.121
+       7761.909871,
+       0.132
       ],
       "total_usd_per_year": [
-       5717618.969,
-       11.11
+       5810233.764,
+       12.120000000000001
       ],
       "total_contribution_usd": [
        null,
@@ -33508,7 +33542,7 @@
    },
    "expect": {
     "coverage": "complete",
-    "row_count": 12,
+    "row_count": 13,
     "values": {
      "rows:gap=Downtime: Missed splice": {
       "paper_usd": [
@@ -33516,19 +33550,19 @@
        null
       ],
       "machine_time_usd": [
-       63.666667,
+       113.0,
        0.011
       ],
       "usd": [
-       63.666667,
+       113.0,
        0.011
       ],
       "usd_per_year": [
-       49114.286,
-       9.522
+       87171.429,
+       9.496
       ],
       "msf_not_made": [
-       17.19,
+       30.51,
        0.0011
       ],
       "contribution_usd": [
@@ -33544,93 +33578,25 @@
        null
       ]
      },
-     "rows:gap=Downtime: Order change": {
+     "rows:gap=Downtime: Knife / slitter jam": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       116.333333,
+       88.333333,
        0.011
       ],
       "usd": [
-       116.333333,
+       88.333333,
        0.011
       ],
       "usd_per_year": [
-       89742.857,
-       9.522
+       68142.857,
+       9.496
       ],
       "msf_not_made": [
-       31.41,
-       0.0011
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "rows:gap=Downtime: Stacker": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       44.333333,
-       0.011
-      ],
-      "usd": [
-       44.333333,
-       0.011
-      ],
-      "usd_per_year": [
-       34200.0,
-       9.522
-      ],
-      "msf_not_made": [
-       11.97,
-       0.0011
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "rows:gap=Downtime: Raw material (roll)": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       84.666667,
-       0.011
-      ],
-      "usd": [
-       84.666667,
-       0.011
-      ],
-      "usd_per_year": [
-       65314.286,
-       9.522
-      ],
-      "msf_not_made": [
-       22.86,
+       23.85,
        0.0011
       ],
       "contribution_usd": [
@@ -33652,19 +33618,121 @@
        null
       ],
       "machine_time_usd": [
-       44.333333,
+       36.666667,
        0.011
       ],
       "usd": [
-       44.333333,
+       36.666667,
        0.011
       ],
       "usd_per_year": [
-       34200.0,
-       9.522
+       28285.714,
+       9.496
       ],
       "msf_not_made": [
-       11.97,
+       9.9,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Stacker": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       40.333333,
+       0.011
+      ],
+      "usd": [
+       40.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       31114.286,
+       9.496
+      ],
+      "msf_not_made": [
+       10.89,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       28.0,
+       0.011
+      ],
+      "usd": [
+       28.0,
+       0.011
+      ],
+      "usd_per_year": [
+       21600.0,
+       9.496
+      ],
+      "msf_not_made": [
+       7.56,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Order change": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       35.333333,
+       0.011
+      ],
+      "usd": [
+       35.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       27257.143,
+       9.496
+      ],
+      "msf_not_made": [
+       9.54,
        0.0011
       ],
       "contribution_usd": [
@@ -33686,19 +33754,19 @@
        null
       ],
       "machine_time_usd": [
-       919.294815,
+       317.977778,
        0.011
       ],
       "usd": [
-       919.294815,
+       317.977778,
        0.011
       ],
       "usd_per_year": [
-       709170.286,
-       9.522
+       245297.143,
+       9.496
       ],
       "msf_not_made": [
-       248.2096,
+       85.854,
        0.0011
       ],
       "contribution_usd": [
@@ -33716,7 +33784,7 @@
      },
      "rows:gap=Side trim": {
       "paper_usd": [
-       4564.516,
+       4752.8525,
        0.011
       ],
       "machine_time_usd": [
@@ -33724,12 +33792,12 @@
        0.011
       ],
       "usd": [
-       4564.516,
+       4752.8525,
        0.011
       ],
       "usd_per_year": [
-       3532173.378,
-       9.522
+       3474542.603,
+       9.496
       ],
       "msf_not_made": [
        0.0,
@@ -33750,23 +33818,23 @@
      },
      "rows:gap=Shear chops": {
       "paper_usd": [
-       666.567,
+       759.539,
        0.011
       ],
       "machine_time_usd": [
-       44.886667,
+       51.147407,
        0.011
       ],
       "usd": [
-       711.453667,
+       810.686407,
        0.011
       ],
       "usd_per_year": [
-       550546.367,
-       9.522
+       592647.144,
+       9.496
       ],
       "msf_not_made": [
-       12.1194,
+       13.8098,
        0.0011
       ],
       "contribution_usd": [
@@ -33784,23 +33852,23 @@
      },
      "rows:gap=Dry-end: BOND": {
       "paper_usd": [
-       535.8705,
+       541.552,
        0.011
       ],
       "machine_time_usd": [
-       36.085556,
+       36.468148,
        0.011
       ],
       "usd": [
-       571.956056,
+       578.020148,
        0.011
       ],
       "usd_per_year": [
-       442598.504,
-       9.522
+       422557.954,
+       9.496
       ],
       "msf_not_made": [
-       9.7431,
+       9.8464,
        0.0011
       ],
       "contribution_usd": [
@@ -33818,23 +33886,23 @@
      },
      "rows:gap=Dry-end: WARP": {
       "paper_usd": [
-       376.618,
+       397.1715,
        0.011
       ],
       "machine_time_usd": [
-       25.361481,
+       26.745556,
        0.011
       ],
       "usd": [
-       401.979481,
+       423.917056,
        0.011
       ],
       "usd_per_year": [
-       311065.012,
-       9.522
+       309901.868,
+       9.496
       ],
       "msf_not_made": [
-       6.8476,
+       7.2213,
        0.0011
       ],
       "contribution_usd": [
@@ -33852,23 +33920,23 @@
      },
      "rows:gap=Dry-end: MISALIGNMENT": {
       "paper_usd": [
-       261.844,
+       268.873,
        0.011
       ],
       "machine_time_usd": [
-       17.632593,
+       18.105926,
        0.011
       ],
       "usd": [
-       279.476593,
+       286.978926,
        0.011
       ],
       "usd_per_year": [
-       216268.226,
-       9.522
+       209794.119,
+       9.496
       ],
       "msf_not_made": [
-       4.7608,
+       4.8886,
        0.0011
       ],
       "contribution_usd": [
@@ -33886,23 +33954,23 @@
      },
      "rows:gap=Dry-end: MOISTURE": {
       "paper_usd": [
-       132.5005,
+       139.249,
        0.011
       ],
       "machine_time_usd": [
-       8.922593,
+       9.377037,
        0.011
       ],
       "usd": [
-       141.423093,
+       148.626037,
        0.011
       ],
       "usd_per_year": [
-       109437.864,
-       9.522
+       108652.119,
+       9.496
       ],
       "msf_not_made": [
-       2.4091,
+       2.5318,
        0.0011
       ],
       "contribution_usd": [
@@ -33926,12 +33994,12 @@
      },
      "$": {
       "total_usd": [
-       7943.433038,
-       0.132
+       7660.725518,
+       0.143
       ],
       "total_usd_per_year": [
-       6143831.066,
-       12.120000000000001
+       5626964.379,
+       13.13
       ],
       "total_contribution_usd": [
        null,
@@ -33958,35 +34026,35 @@
    "note": "The same shift with paper x1.2, machine time x1.25 and a $40/MSF margin: each dollar scales with its own rate only.",
    "expect": {
     "coverage": "complete",
-    "row_count": 11,
+    "row_count": 12,
     "values": {
-     "rows:gap=Downtime: Stacker": {
+     "rows:gap=Downtime: Order change": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       57.083333,
+       67.083333,
        0.011
       ],
       "usd": [
-       57.083333,
+       67.083333,
        0.011
       ],
       "usd_per_year": [
-       44035.714,
+       51750.0,
        9.496
       ],
       "msf_not_made": [
-       12.33,
+       14.49,
        0.0011
       ],
       "contribution_usd": [
-       493.2,
+       579.6,
        0.011
       ],
       "contribution_usd_per_year": [
-       380468.571,
+       447120.0,
        9.496
       ],
       "contribution_status": [
@@ -33994,33 +34062,33 @@
        null
       ]
      },
-     "rows:gap=Downtime: Order change": {
+     "rows:gap=Downtime: Glue / starch": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       159.166667,
+       32.916667,
        0.011
       ],
       "usd": [
-       159.166667,
+       32.916667,
        0.011
       ],
       "usd_per_year": [
-       122785.714,
+       25392.857,
        9.496
       ],
       "msf_not_made": [
-       34.38,
+       7.11,
        0.0011
       ],
       "contribution_usd": [
-       1375.2,
+       284.4,
        0.011
       ],
       "contribution_usd_per_year": [
-       1060868.571,
+       219394.286,
        9.496
       ],
       "contribution_status": [
@@ -34034,27 +34102,27 @@
        null
       ],
       "machine_time_usd": [
-       116.25,
+       117.916667,
        0.011
       ],
       "usd": [
-       116.25,
+       117.916667,
        0.011
       ],
       "usd_per_year": [
-       89678.571,
+       90964.286,
        9.496
       ],
       "msf_not_made": [
-       25.11,
+       25.47,
        0.0011
       ],
       "contribution_usd": [
-       1004.4,
+       1018.8,
        0.011
       ],
       "contribution_usd_per_year": [
-       774822.857,
+       785931.429,
        9.496
       ],
       "contribution_status": [
@@ -34062,33 +34130,67 @@
        null
       ]
      },
-     "rows:gap=Downtime: Raw material (roll)": {
+     "rows:gap=Downtime: Stacker": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       41.25,
+       48.75,
        0.011
       ],
       "usd": [
-       41.25,
+       48.75,
        0.011
       ],
       "usd_per_year": [
-       31821.429,
+       37607.143,
        9.496
       ],
       "msf_not_made": [
-       8.91,
+       10.53,
        0.0011
       ],
       "contribution_usd": [
-       356.4,
+       421.2,
        0.011
       ],
       "contribution_usd_per_year": [
-       274937.143,
+       324925.714,
+       9.496
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       52.5,
+       0.011
+      ],
+      "usd": [
+       52.5,
+       0.011
+      ],
+      "usd_per_year": [
+       40500.0,
+       9.496
+      ],
+      "msf_not_made": [
+       11.34,
+       0.0011
+      ],
+      "contribution_usd": [
+       453.6,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       349920.0,
        9.496
       ],
       "contribution_status": [
@@ -34102,27 +34204,27 @@
        null
       ],
       "machine_time_usd": [
-       672.02037,
+       865.433333,
        0.011
       ],
       "usd": [
-       672.02037,
+       865.433333,
        0.011
       ],
       "usd_per_year": [
-       518415.714,
+       667620.0,
        9.496
       ],
       "msf_not_made": [
-       145.1564,
+       186.9336,
        0.0011
       ],
       "contribution_usd": [
-       5806.256,
+       7477.344,
        0.011
       ],
       "contribution_usd_per_year": [
-       4479111.771,
+       5768236.8,
        9.496
       ],
       "contribution_status": [
@@ -34132,7 +34234,7 @@
      },
      "rows:gap=Side trim": {
       "paper_usd": [
-       5259.3024,
+       5260.3518,
        0.011
       ],
       "machine_time_usd": [
@@ -34140,11 +34242,11 @@
        0.011
       ],
       "usd": [
-       5259.3024,
+       5260.3518,
        0.011
       ],
       "usd_per_year": [
-       3951915.128,
+       3920942.245,
        9.496
       ],
       "msf_not_made": [
@@ -34166,31 +34268,31 @@
      },
      "rows:gap=Shear chops": {
       "paper_usd": [
-       845.2092,
+       878.5722,
        0.011
       ],
       "machine_time_usd": [
-       59.287963,
+       61.628241,
        0.011
       ],
       "usd": [
-       904.497163,
+       940.200441,
        0.011
       ],
       "usd_per_year": [
-       679652.119,
+       700803.248,
        9.496
       ],
       "msf_not_made": [
-       12.8062,
+       13.3117,
        0.0011
       ],
       "contribution_usd": [
-       512.248,
+       532.468,
        0.011
       ],
       "contribution_usd_per_year": [
-       384910.482,
+       396889.097,
        9.496
       ],
       "contribution_status": [
@@ -34200,31 +34302,31 @@
      },
      "rows:gap=Dry-end: BOND": {
       "paper_usd": [
-       617.7798,
+       653.499,
        0.011
       ],
       "machine_time_usd": [
-       43.334722,
+       45.840278,
        0.011
       ],
       "usd": [
-       661.114522,
+       699.339278,
        0.011
       ],
       "usd_per_year": [
-       496770.918,
+       521271.014,
        9.496
       ],
       "msf_not_made": [
-       9.3603,
+       9.9015,
        0.0011
       ],
       "contribution_usd": [
-       374.412,
+       396.06,
        0.011
       ],
       "contribution_usd_per_year": [
-       281338.538,
+       295213.789,
        9.496
       ],
       "contribution_status": [
@@ -34234,65 +34336,31 @@
      },
      "rows:gap=Dry-end: WARP": {
       "paper_usd": [
-       740.4342,
+       723.3798,
        0.011
       ],
       "machine_time_usd": [
-       51.938426,
+       50.74213,
        0.011
       ],
       "usd": [
-       792.372626,
+       774.12193,
        0.011
       ],
       "usd_per_year": [
-       595400.137,
+       577012.24,
        9.496
       ],
       "msf_not_made": [
-       11.2187,
+       10.9603,
        0.0011
       ],
       "contribution_usd": [
-       448.748,
+       438.412,
        0.011
       ],
       "contribution_usd_per_year": [
-       337195.673,
-       9.496
-      ],
-      "contribution_status": [
-       "set",
-       null
-      ]
-     },
-     "rows:gap=Dry-end: MOISTURE": {
-      "paper_usd": [
-       159.2712,
-       0.011
-      ],
-      "machine_time_usd": [
-       11.172222,
-       0.011
-      ],
-      "usd": [
-       170.443422,
-       0.011
-      ],
-      "usd_per_year": [
-       128073.628,
-       9.496
-      ],
-      "msf_not_made": [
-       2.4132,
-       0.0011
-      ],
-      "contribution_usd": [
-       96.528,
-       0.011
-      ],
-      "contribution_usd_per_year": [
-       72532.521,
+       326781.971,
        9.496
       ],
       "contribution_status": [
@@ -34302,31 +34370,65 @@
      },
      "rows:gap=Dry-end: MISALIGNMENT": {
       "paper_usd": [
-       299.0526,
+       321.8028,
        0.011
       ],
       "machine_time_usd": [
-       20.977315,
+       22.573148,
        0.011
       ],
       "usd": [
-       320.029915,
+       344.375948,
        0.011
       ],
       "usd_per_year": [
-       240475.06,
+       256689.715,
        9.496
       ],
       "msf_not_made": [
-       4.5311,
+       4.8758,
        0.0011
       ],
       "contribution_usd": [
-       181.244,
+       195.032,
        0.011
       ],
       "contribution_usd_per_year": [
-       136189.337,
+       145372.256,
+       9.496
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: MOISTURE": {
+      "paper_usd": [
+       155.4498,
+       0.011
+      ],
+      "machine_time_usd": [
+       10.904167,
+       0.011
+      ],
+      "usd": [
+       166.353967,
+       0.011
+      ],
+      "usd_per_year": [
+       123996.326,
+       9.496
+      ],
+      "msf_not_made": [
+       2.3553,
+       0.0011
+      ],
+      "contribution_usd": [
+       94.212,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       70223.404,
        9.496
       ],
       "contribution_status": [
@@ -34342,16 +34444,16 @@
      },
      "$": {
       "total_usd": [
-       9153.530418,
-       0.121
+       9369.343364,
+       0.132
       ],
       "total_usd_per_year": [
-       6899024.132,
-       11.11
+       7014549.074,
+       12.120000000000001
       ],
       "total_contribution_usd": [
-       10648.636,
-       0.121
+       11891.128,
+       0.132
       ],
       "contribution_status": [
        "set",
@@ -34380,7 +34482,7 @@
     "values": {
      "category=trim": {
       "paper_usd": [
-       284470.417,
+       277520.606,
        0.016555
       ],
       "machine_time_usd": [
@@ -34388,11 +34490,11 @@
        0.016555
       ],
       "usd": [
-       284470.417,
+       277520.606,
        0.016555
       ],
       "usd_per_year": [
-       3195095.712,
+       3193378.854,
        1.204
       ],
       "msf_not_made": [
@@ -34414,23 +34516,23 @@
      },
      "category=shear": {
       "paper_usd": [
-       45555.345,
+       44660.8305,
        0.016929
       ],
       "machine_time_usd": [
-       3067.7,
+       3007.463333,
        0.016929
       ],
       "usd": [
-       48623.045,
+       47668.293833,
        0.016929
       ],
       "usd_per_year": [
-       546121.049,
+       548510.339,
        1.208
       ],
       "msf_not_made": [
-       828.279,
+       812.0151,
        0.5411
       ],
       "contribution_usd": [
@@ -34448,23 +34550,23 @@
      },
      "category=bond": {
       "paper_usd": [
-       35355.0945,
+       34276.1815,
        0.016929
       ],
       "machine_time_usd": [
-       2380.814444,
+       2308.16037,
        0.016929
       ],
       "usd": [
-       37735.908944,
+       36584.34187,
        0.016929
       ],
       "usd_per_year": [
-       423839.646,
+       420969.331,
        1.208
       ],
       "msf_not_made": [
-       642.8199,
+       623.2033,
        0.5411
       ],
       "contribution_usd": [
@@ -34482,23 +34584,23 @@
      },
      "category=warp": {
       "paper_usd": [
-       28781.4285,
+       28217.4915,
        0.016929
       ],
       "machine_time_usd": [
-       1938.143333,
+       1900.167778,
        0.016929
       ],
       "usd": [
-       30719.571833,
+       30117.659278,
        0.016929
       ],
       "usd_per_year": [
-       345034.022,
+       346558.397,
        1.208
       ],
       "msf_not_made": [
-       523.2987,
+       513.0453,
        0.5411
       ],
       "contribution_usd": [
@@ -34516,23 +34618,23 @@
      },
      "category=misalignment": {
       "paper_usd": [
-       17372.553,
+       17129.8435,
        0.016929
       ],
       "machine_time_usd": [
-       1169.868889,
+       1153.524815,
        0.016929
       ],
       "usd": [
-       18542.421889,
+       18283.368315,
        0.016929
       ],
       "usd_per_year": [
-       208263.528,
+       210383.375,
        1.208
       ],
       "msf_not_made": [
-       315.8646,
+       311.4517,
        0.5411
       ],
       "contribution_usd": [
@@ -34550,23 +34652,23 @@
      },
      "category=moisture": {
       "paper_usd": [
-       8906.843,
+       8605.41,
        0.016929
       ],
       "machine_time_usd": [
-       599.787407,
+       579.488889,
        0.016929
       ],
       "usd": [
-       9506.630407,
+       9184.898889,
        0.016929
       ],
       "usd_per_year": [
-       106775.933,
+       105688.952,
        1.208
       ],
       "msf_not_made": [
-       161.9426,
+       156.462,
        0.5411
       ],
       "contribution_usd": [
@@ -34584,23 +34686,23 @@
      },
      "category=dry_end": {
       "paper_usd": [
-       90415.919,
+       88228.9265,
        0.016929
       ],
       "machine_time_usd": [
-       6088.614074,
+       5941.341852,
        0.016929
       ],
       "usd": [
-       96504.533074,
+       94170.268352,
        0.016929
       ],
       "usd_per_year": [
-       1083913.129,
+       1083600.054,
        1.208
       ],
       "msf_not_made": [
-       1643.9258,
+       1604.1623,
        0.5411
       ],
       "contribution_usd": [
@@ -34618,7 +34720,7 @@
      },
      "category=bale": {
       "paper_usd": [
-       442996.818,
+       433300.4555,
        0.016555
       ],
       "machine_time_usd": [
@@ -34626,11 +34728,11 @@
        0.016555
       ],
       "usd": [
-       442996.818,
+       433300.4555,
        0.016555
       ],
       "usd_per_year": [
-       4975621.888,
+       4985909.09,
        1.204
       ],
       "msf_not_made": [
@@ -34652,7 +34754,7 @@
      },
      "category=unexplained": {
       "paper_usd": [
-       22555.137,
+       22890.0925,
        0.016555
       ],
       "machine_time_usd": [
@@ -34660,11 +34762,11 @@
        0.016555
       ],
       "usd": [
-       22555.137,
+       22890.0925,
        0.016555
       ],
       "usd_per_year": [
-       253333.272,
+       263392.108,
        1.204
       ],
       "msf_not_made": [
@@ -34703,27 +34805,27 @@
     "shift": 2
    },
    "expect": {
-    "row_count": 7,
+    "row_count": 8,
     "values": {
-     "category=Raw material (roll)": {
+     "category=Other": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       124.0,
+       235.4,
        0.213
       ],
       "usd": [
-       124.0,
+       235.4,
        0.213
       ],
       "usd_per_year": [
-       19131.429,
+       36318.857,
        33.873
       ],
       "msf_not_made": [
-       33.48,
+       63.558,
        0.0551
       ],
       "contribution_usd": [
@@ -34745,53 +34847,19 @@
        null
       ],
       "machine_time_usd": [
-       449.6,
+       709.4,
        0.213
       ],
       "usd": [
-       449.6,
+       709.4,
        0.213
       ],
       "usd_per_year": [
-       69366.857,
+       109450.286,
        33.873
       ],
       "msf_not_made": [
-       121.392,
-       0.0551
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "category=Stacker": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       173.0,
-       0.213
-      ],
-      "usd": [
-       173.0,
-       0.213
-      ],
-      "usd_per_year": [
-       26691.429,
-       33.873
-      ],
-      "msf_not_made": [
-       46.71,
+       191.538,
        0.0551
       ],
       "contribution_usd": [
@@ -34813,19 +34881,19 @@
        null
       ],
       "machine_time_usd": [
-       229.6,
+       140.4,
        0.213
       ],
       "usd": [
-       229.6,
+       140.4,
        0.213
       ],
       "usd_per_year": [
-       35424.0,
+       21661.714,
        33.873
       ],
       "msf_not_made": [
-       61.992,
+       37.908,
        0.0551
       ],
       "contribution_usd": [
@@ -34841,25 +34909,25 @@
        null
       ]
      },
-     "category=Other": {
+     "category=Stacker": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       51.4,
+       213.0,
        0.213
       ],
       "usd": [
-       51.4,
+       213.0,
        0.213
       ],
       "usd_per_year": [
-       7930.286,
+       32862.857,
        33.873
       ],
       "msf_not_made": [
-       13.878,
+       57.51,
        0.0551
       ],
       "contribution_usd": [
@@ -34881,19 +34949,53 @@
        null
       ],
       "machine_time_usd": [
-       371.0,
+       69.0,
        0.213
       ],
       "usd": [
-       371.0,
+       69.0,
        0.213
       ],
       "usd_per_year": [
-       57240.0,
+       10645.714,
        33.873
       ],
       "msf_not_made": [
-       100.17,
+       18.63,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "category=Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       295.4,
+       0.213
+      ],
+      "usd": [
+       295.4,
+       0.213
+      ],
+      "usd_per_year": [
+       45576.0,
+       33.873
+      ],
+      "msf_not_made": [
+       79.758,
        0.0551
       ],
       "contribution_usd": [
@@ -34915,19 +35017,53 @@
        null
       ],
       "machine_time_usd": [
-       204.4,
+       166.6,
        0.213
       ],
       "usd": [
-       204.4,
+       166.6,
        0.213
       ],
       "usd_per_year": [
-       31536.0,
+       25704.0,
        33.873
       ],
       "msf_not_made": [
-       55.188,
+       44.982,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "category=Steam / moisture": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       61.4,
+       0.213
+      ],
+      "usd": [
+       61.4,
+       0.213
+      ],
+      "usd_per_year": [
+       9473.143,
+       33.873
+      ],
+      "msf_not_made": [
+       16.578,
        0.0551
       ],
       "contribution_usd": [
@@ -34970,19 +35106,19 @@
        null
       ],
       "machine_time_usd": [
-       35316.0,
+       40572.0,
        24.251
       ],
       "usd": [
-       35316.0,
+       40572.0,
        24.251
       ],
       "usd_per_year": [
-       412784.416,
+       474218.182,
        284.463
       ],
       "msf_not_made": [
-       9535.32,
+       10954.44,
        6.4811000000000005
       ],
       "contribution_usd": [
@@ -35001,23 +35137,23 @@
      "rows:lever=Side trim over the 3.25% target": {
       "paper_usd": [
        0.0,
-       8.913455
+       8.700631
       ],
       "machine_time_usd": [
        0.0,
-       8.913455
+       8.700631
       ],
       "usd": [
        0.0,
-       8.913455
+       8.700631
       ],
       "usd_per_year": [
        0.0,
-       105.193
+       102.706
       ],
       "msf_not_made": [
        0.0,
-       865.4063031200001
+       844.7177507600001
       ],
       "contribution_usd": [
        null,
@@ -35032,161 +35168,25 @@
        null
       ]
      },
-     "rows:lever=Downtime: Raw material (roll)": {
+     "rows:lever=Downtime: Glue / starch": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       2768.4,
+       1726.0,
        0.213
       ],
       "usd": [
-       2768.4,
+       1726.0,
        0.213
       ],
       "usd_per_year": [
-       32357.922,
+       20174.026,
        3.5
       ],
       "msf_not_made": [
-       747.468,
-       0.0551
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "rows:lever=Downtime: Knife / slitter jam": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       3485.4,
-       0.213
-      ],
-      "usd": [
-       3485.4,
-       0.213
-      ],
-      "usd_per_year": [
-       40738.442,
-       3.5
-      ],
-      "msf_not_made": [
-       941.058,
-       0.0551
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "rows:lever=Downtime: Order change (setup time)": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       3116.4,
-       0.213
-      ],
-      "usd": [
-       3116.4,
-       0.213
-      ],
-      "usd_per_year": [
-       36425.455,
-       3.5
-      ],
-      "msf_not_made": [
-       841.428,
-       0.0551
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "rows:lever=Downtime: Missed splice": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       3930.0,
-       0.213
-      ],
-      "usd": [
-       3930.0,
-       0.213
-      ],
-      "usd_per_year": [
-       45935.065,
-       3.5
-      ],
-      "msf_not_made": [
-       1061.1,
-       0.0551
-      ],
-      "contribution_usd": [
-       null,
-       null
-      ],
-      "contribution_usd_per_year": [
-       null,
-       null
-      ],
-      "contribution_status": [
-       "margin not set",
-       null
-      ]
-     },
-     "rows:lever=Downtime: Other": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       1615.0,
-       0.213
-      ],
-      "usd": [
-       1615.0,
-       0.213
-      ],
-      "usd_per_year": [
-       18876.623,
-       3.5
-      ],
-      "msf_not_made": [
-       436.05,
+       466.02,
        0.0551
       ],
       "contribution_usd": [
@@ -35208,19 +35208,19 @@
        null
       ],
       "machine_time_usd": [
-       2145.6,
+       2350.4,
        0.213
       ],
       "usd": [
-       2145.6,
+       2350.4,
        0.213
       ],
       "usd_per_year": [
-       25078.442,
+       27472.208,
        3.5
       ],
       "msf_not_made": [
-       579.312,
+       634.608,
        0.0551
       ],
       "contribution_usd": [
@@ -35236,25 +35236,25 @@
        null
       ]
      },
-     "rows:lever=Downtime: Glue / starch": {
+     "rows:lever=Downtime: Other": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       1730.6,
+       2284.6,
        0.213
       ],
       "usd": [
-       1730.6,
+       2284.6,
        0.213
       ],
       "usd_per_year": [
-       20227.792,
+       26703.117,
        3.5
       ],
       "msf_not_made": [
-       467.262,
+       616.842,
        0.0551
       ],
       "contribution_usd": [
@@ -35270,25 +35270,127 @@
        null
       ]
      },
-     "rows:lever=Downtime: Planned maintenance": {
+     "rows:lever=Downtime: Knife / slitter jam": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       10060.0,
+       4054.0,
        0.213
       ],
       "usd": [
-       10060.0,
+       4054.0,
        0.213
       ],
       "usd_per_year": [
-       117584.416,
+       47384.416,
        3.5
       ],
       "msf_not_made": [
-       2716.2,
+       1094.58,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:lever=Downtime: Order change (setup time)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       3262.0,
+       0.213
+      ],
+      "usd": [
+       3262.0,
+       0.213
+      ],
+      "usd_per_year": [
+       38127.273,
+       3.5
+      ],
+      "msf_not_made": [
+       880.74,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:lever=Downtime: Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       2890.4,
+       0.213
+      ],
+      "usd": [
+       2890.4,
+       0.213
+      ],
+      "usd_per_year": [
+       33783.896,
+       3.5
+      ],
+      "msf_not_made": [
+       780.408,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:lever=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       4169.4,
+       0.213
+      ],
+      "usd": [
+       4169.4,
+       0.213
+      ],
+      "usd_per_year": [
+       48733.247,
+       3.5
+      ],
+      "msf_not_made": [
+       1125.738,
        0.0551
       ],
       "contribution_usd": [
@@ -35310,19 +35412,53 @@
        null
       ],
       "machine_time_usd": [
-       393.4,
+       590.4,
        0.213
       ],
       "usd": [
-       393.4,
+       590.4,
        0.213
       ],
       "usd_per_year": [
-       4598.182,
+       6900.779,
        3.5
       ],
       "msf_not_made": [
-       106.218,
+       159.408,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:lever=Downtime: Planned maintenance": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       10440.0,
+       0.213
+      ],
+      "usd": [
+       10440.0,
+       0.213
+      ],
+      "usd_per_year": [
+       122025.974,
+       3.5
+      ],
+      "msf_not_made": [
+       2818.8,
        0.0551
       ],
       "contribution_usd": [
@@ -35344,19 +35480,19 @@
        null
       ],
       "machine_time_usd": [
-       240.0,
+       220.0,
        0.213
       ],
       "usd": [
-       240.0,
+       220.0,
        0.213
       ],
       "usd_per_year": [
-       2805.195,
+       2571.429,
        3.5
       ],
       "msf_not_made": [
-       64.8,
+       59.4,
        0.0551
       ],
       "contribution_usd": [
@@ -35374,23 +35510,23 @@
      },
      "rows:lever=Shear chops (all recorded)": {
       "paper_usd": [
-       45555.345,
+       44660.8305,
        0.016929
       ],
       "machine_time_usd": [
-       3067.7,
+       3007.463333,
        0.016929
       ],
       "usd": [
-       48623.045,
+       47668.293833,
        0.016929
       ],
       "usd_per_year": [
-       546121.049,
+       548510.339,
        1.208
       ],
       "msf_not_made": [
-       828.279,
+       812.0151,
        0.5411
       ],
       "contribution_usd": [
@@ -35408,23 +35544,23 @@
      },
      "rows:lever=Dry-end: bond (all recorded)": {
       "paper_usd": [
-       35355.0945,
+       34276.1815,
        0.016929
       ],
       "machine_time_usd": [
-       2380.814444,
+       2308.16037,
        0.016929
       ],
       "usd": [
-       37735.908944,
+       36584.34187,
        0.016929
       ],
       "usd_per_year": [
-       423839.646,
+       420969.331,
        1.208
       ],
       "msf_not_made": [
-       642.8199,
+       623.2033,
        0.5411
       ],
       "contribution_usd": [
@@ -35442,23 +35578,23 @@
      },
      "rows:lever=Dry-end: warp (all recorded)": {
       "paper_usd": [
-       28781.4285,
+       28217.4915,
        0.016929
       ],
       "machine_time_usd": [
-       1938.143333,
+       1900.167778,
        0.016929
       ],
       "usd": [
-       30719.571833,
+       30117.659278,
        0.016929
       ],
       "usd_per_year": [
-       345034.022,
+       346558.397,
        1.208
       ],
       "msf_not_made": [
-       523.2987,
+       513.0453,
        0.5411
       ],
       "contribution_usd": [
@@ -35476,23 +35612,23 @@
      },
      "rows:lever=Dry-end: misalignment (all recorded)": {
       "paper_usd": [
-       17372.553,
+       17129.8435,
        0.016929
       ],
       "machine_time_usd": [
-       1169.868889,
+       1153.524815,
        0.016929
       ],
       "usd": [
-       18542.421889,
+       18283.368315,
        0.016929
       ],
       "usd_per_year": [
-       208263.528,
+       210383.375,
        1.208
       ],
       "msf_not_made": [
-       315.8646,
+       311.4517,
        0.5411
       ],
       "contribution_usd": [
@@ -35510,23 +35646,23 @@
      },
      "rows:lever=Dry-end: moisture (all recorded)": {
       "paper_usd": [
-       8906.843,
+       8605.41,
        0.016929
       ],
       "machine_time_usd": [
-       599.787407,
+       579.488889,
        0.016929
       ],
       "usd": [
-       9506.630407,
+       9184.898889,
        0.016929
       ],
       "usd_per_year": [
-       106775.933,
+       105688.952,
        1.208
       ],
       "msf_not_made": [
-       161.9426,
+       156.462,
        0.5411
       ],
       "contribution_usd": [
@@ -35550,8 +35686,8 @@
      },
      "$": {
       "total_usd_per_year": [
-       2387446.128,
-       430.696
+       2480204.941,
+       428.209
       ],
       "contribution_status": [
        "margin not set",
@@ -35578,7 +35714,7 @@
    "note": "A $40/MSF margin and a 3% trim target: contribution is priced beside, never added, and trim points over 3% become a lever.",
    "expect": {
     "coverage": "complete",
-    "row_count": 16,
+    "row_count": 15,
     "values": {
      "rows:lever=Speed gap to best-fifth speed": {
       "paper_usd": [
@@ -35586,27 +35722,27 @@
        null
       ],
       "machine_time_usd": [
-       420.0,
+       504.0,
        286.043
       ],
       "usd": [
-       420.0,
+       504.0,
        286.043
       ],
       "usd_per_year": [
-       64800.0,
+       77760.0,
        44133.359
       ],
       "msf_not_made": [
-       113.4,
+       136.08,
        6.4811000000000005
       ],
       "contribution_usd": [
-       4536.0,
+       5443.2,
        286.043
       ],
       "contribution_usd_per_year": [
-       699840.0,
+       839808.0,
        44133.359
       ],
       "contribution_status": [
@@ -35616,66 +35752,32 @@
      },
      "rows:lever=Side trim over the 3% target": {
       "paper_usd": [
-       1561.229404,
-       1.175444
+       1425.240989,
+       1.171242
       ],
       "machine_time_usd": [
        0.0,
-       1.175444
+       1.171242
       ],
       "usd": [
-       1561.229404,
-       1.175444
+       1425.240989,
+       1.171242
       ],
       "usd_per_year": [
-       231561.0,
-       182.364
+       212157.0,
+       181.716
       ],
       "msf_not_made": [
        0.0,
-       65.53523485999999
+       65.29869758
       ],
       "contribution_usd": [
        0.0,
-       1.175444
+       1.171242
       ],
       "contribution_usd_per_year": [
        0.0,
-       182.364
-      ],
-      "contribution_status": [
-       "set",
-       null
-      ]
-     },
-     "rows:lever=Downtime: Stacker": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       79.0,
-       2.3946
-      ],
-      "usd": [
-       79.0,
-       2.3946
-      ],
-      "usd_per_year": [
-       12188.571,
-       370.463
-      ],
-      "msf_not_made": [
-       21.33,
-       0.0551
-      ],
-      "contribution_usd": [
-       853.2,
-       2.3946
-      ],
-      "contribution_usd_per_year": [
-       131636.571,
-       370.463
+       181.716
       ],
       "contribution_status": [
        "set",
@@ -35688,95 +35790,27 @@
        null
       ],
       "machine_time_usd": [
-       260.6,
+       312.4,
        2.3946
       ],
       "usd": [
-       260.6,
+       312.4,
        2.3946
       ],
       "usd_per_year": [
-       40206.857,
+       48198.857,
        370.463
       ],
       "msf_not_made": [
-       70.362,
+       84.348,
        0.0551
       ],
       "contribution_usd": [
-       2814.48,
+       3373.92,
        2.3946
       ],
       "contribution_usd_per_year": [
-       434234.057,
-       370.463
-      ],
-      "contribution_status": [
-       "set",
-       null
-      ]
-     },
-     "rows:lever=Downtime: Knife / slitter jam": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       365.6,
-       2.3946
-      ],
-      "usd": [
-       365.6,
-       2.3946
-      ],
-      "usd_per_year": [
-       56406.857,
-       370.463
-      ],
-      "msf_not_made": [
-       98.712,
-       0.0551
-      ],
-      "contribution_usd": [
-       3948.48,
-       2.3946
-      ],
-      "contribution_usd_per_year": [
-       609194.057,
-       370.463
-      ],
-      "contribution_status": [
-       "set",
-       null
-      ]
-     },
-     "rows:lever=Downtime: Raw material (roll)": {
-      "paper_usd": [
-       null,
-       null
-      ],
-      "machine_time_usd": [
-       275.0,
-       2.3946
-      ],
-      "usd": [
-       275.0,
-       2.3946
-      ],
-      "usd_per_year": [
-       42428.571,
-       370.463
-      ],
-      "msf_not_made": [
-       74.25,
-       0.0551
-      ],
-      "contribution_usd": [
-       2970.0,
-       2.3946
-      ],
-      "contribution_usd_per_year": [
-       458228.571,
+       520547.657,
        370.463
       ],
       "contribution_status": [
@@ -35790,27 +35824,95 @@
        null
       ],
       "machine_time_usd": [
-       207.0,
+       74.0,
        2.3946
       ],
       "usd": [
-       207.0,
+       74.0,
        2.3946
       ],
       "usd_per_year": [
-       31937.143,
+       11417.143,
        370.463
       ],
       "msf_not_made": [
-       55.89,
+       19.98,
        0.0551
       ],
       "contribution_usd": [
-       2235.6,
+       799.2,
        2.3946
       ],
       "contribution_usd_per_year": [
-       344921.143,
+       123305.143,
+       370.463
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:lever=Downtime: Knife / slitter jam": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       352.4,
+       2.3946
+      ],
+      "usd": [
+       352.4,
+       2.3946
+      ],
+      "usd_per_year": [
+       54370.286,
+       370.463
+      ],
+      "msf_not_made": [
+       95.148,
+       0.0551
+      ],
+      "contribution_usd": [
+       3805.92,
+       2.3946
+      ],
+      "contribution_usd_per_year": [
+       587199.086,
+       370.463
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:lever=Downtime: Stacker": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       157.4,
+       2.3946
+      ],
+      "usd": [
+       157.4,
+       2.3946
+      ],
+      "usd_per_year": [
+       24284.571,
+       370.463
+      ],
+      "msf_not_made": [
+       42.498,
+       0.0551
+      ],
+      "contribution_usd": [
+       1699.92,
+       2.3946
+      ],
+      "contribution_usd_per_year": [
+       262273.371,
        370.463
       ],
       "contribution_status": [
@@ -35824,27 +35926,27 @@
        null
       ],
       "machine_time_usd": [
-       55.6,
+       127.6,
        2.3946
       ],
       "usd": [
-       55.6,
+       127.6,
        2.3946
       ],
       "usd_per_year": [
-       8578.286,
+       19686.857,
        370.463
       ],
       "msf_not_made": [
-       15.012,
+       34.452,
        0.0551
       ],
       "contribution_usd": [
-       600.48,
+       1378.08,
        2.3946
       ],
       "contribution_usd_per_year": [
-       92645.486,
+       212618.057,
        370.463
       ],
       "contribution_status": [
@@ -35858,27 +35960,27 @@
        null
       ],
       "machine_time_usd": [
-       77.4,
+       225.0,
        2.3946
       ],
       "usd": [
-       77.4,
+       225.0,
        2.3946
       ],
       "usd_per_year": [
-       11941.714,
+       34714.286,
        370.463
       ],
       "msf_not_made": [
-       20.898,
+       60.75,
        0.0551
       ],
       "contribution_usd": [
-       835.92,
+       2430.0,
        2.3946
       ],
       "contribution_usd_per_year": [
-       128970.514,
+       374914.286,
        370.463
       ],
       "contribution_status": [
@@ -35886,33 +35988,33 @@
        null
       ]
      },
-     "rows:lever=Downtime: Power outage": {
+     "rows:lever=Downtime: Raw material (roll)": {
       "paper_usd": [
        null,
        null
       ],
       "machine_time_usd": [
-       240.0,
+       153.6,
        2.3946
       ],
       "usd": [
-       240.0,
+       153.6,
        2.3946
       ],
       "usd_per_year": [
-       37028.571,
+       23698.286,
        370.463
       ],
       "msf_not_made": [
-       64.8,
+       41.472,
        0.0551
       ],
       "contribution_usd": [
-       2592.0,
+       1658.88,
        2.3946
       ],
       "contribution_usd_per_year": [
-       399908.571,
+       255941.486,
        370.463
       ],
       "contribution_status": [
@@ -35926,27 +36028,27 @@
        null
       ],
       "machine_time_usd": [
-       39.4,
+       105.0,
        2.3946
       ],
       "usd": [
-       39.4,
+       105.0,
        2.3946
       ],
       "usd_per_year": [
-       6078.857,
+       16200.0,
        370.463
       ],
       "msf_not_made": [
-       10.638,
+       28.35,
        0.0551
       ],
       "contribution_usd": [
-       425.52,
+       1134.0,
        2.3946
       ],
       "contribution_usd_per_year": [
-       65651.657,
+       174960.0,
        370.463
       ],
       "contribution_status": [
@@ -35956,31 +36058,31 @@
      },
      "rows:lever=Shear chops (all recorded)": {
       "paper_usd": [
-       3442.241,
+       3423.827,
        0.020969
       ],
       "machine_time_usd": [
-       231.800741,
+       230.560741,
        0.020969
       ],
       "usd": [
-       3674.041741,
+       3654.387741,
        0.020969
       ],
       "usd_per_year": [
-       544932.588,
+       543980.945,
        4.245
       ],
       "msf_not_made": [
-       62.5862,
+       62.2514,
        0.5411
       ],
       "contribution_usd": [
-       2503.448,
+       2490.056,
        0.020969
       ],
       "contribution_usd_per_year": [
-       371310.533,
+       370662.095,
        4.245
       ],
       "contribution_status": [
@@ -35990,31 +36092,31 @@
      },
      "rows:lever=Dry-end: bond (all recorded)": {
       "paper_usd": [
-       2739.759,
+       2611.301,
        0.020969
       ],
       "machine_time_usd": [
-       184.495556,
+       175.845185,
        0.020969
       ],
       "usd": [
-       2924.254556,
+       2787.146185,
        0.020969
       ],
       "usd_per_year": [
-       433724.415,
+       414886.028,
        4.245
       ],
       "msf_not_made": [
-       49.8138,
+       47.4782,
        0.5411
       ],
       "contribution_usd": [
-       1992.552,
+       1899.128,
        0.020969
       ],
       "contribution_usd_per_year": [
-       295534.617,
+       282698.366,
        4.245
       ],
       "contribution_status": [
@@ -36024,31 +36126,31 @@
      },
      "rows:lever=Dry-end: warp (all recorded)": {
       "paper_usd": [
-       2169.134,
+       2176.691,
        0.020969
       ],
       "machine_time_usd": [
-       146.06963,
+       146.578519,
        0.020969
       ],
       "usd": [
-       2315.20363,
+       2323.269519,
        0.020969
       ],
       "usd_per_year": [
-       343390.194,
+       345834.771,
        4.245
       ],
       "msf_not_made": [
-       39.4388,
+       39.5762,
        0.5411
       ],
       "contribution_usd": [
-       1577.552,
+       1583.048,
        0.020969
       ],
       "contribution_usd_per_year": [
-       233981.962,
+       235647.667,
        4.245
       ],
       "contribution_status": [
@@ -36058,31 +36160,31 @@
      },
      "rows:lever=Dry-end: misalignment (all recorded)": {
       "paper_usd": [
-       1298.198,
+       1335.5705,
        0.020969
       ],
       "machine_time_usd": [
-       87.420741,
+       89.937407,
        0.020969
       ],
       "usd": [
-       1385.618741,
+       1425.507907,
        0.020969
       ],
       "usd_per_year": [
-       205514.488,
+       212196.733,
        4.245
       ],
       "msf_not_made": [
-       23.6036,
+       24.2831,
        0.5411
       ],
       "contribution_usd": [
-       944.144,
+       971.324,
        0.020969
       ],
       "contribution_usd_per_year": [
-       140035.108,
+       144588.31,
        4.245
       ],
       "contribution_status": [
@@ -36092,31 +36194,31 @@
      },
      "rows:lever=Dry-end: moisture (all recorded)": {
       "paper_usd": [
-       682.4895,
+       674.883,
        0.020969
       ],
       "machine_time_usd": [
-       45.958889,
+       45.446667,
        0.020969
       ],
       "usd": [
-       728.448389,
+       720.329667,
        0.020969
       ],
       "usd_per_year": [
-       108043.211,
+       107226.064,
        4.245
       ],
       "msf_not_made": [
-       12.4089,
+       12.2706,
        0.5411
       ],
       "contribution_usd": [
-       496.356,
+       490.824,
        0.020969
       ],
       "contribution_usd_per_year": [
-       73619.349,
+       73062.554,
        4.245
       ],
       "contribution_status": [
@@ -36132,8 +36234,8 @@
      },
      "$": {
       "total_usd_per_year": [
-       2178761.323,
-       47671.115
+       2146611.827,
+       47300.00399999999
       ],
       "contribution_status": [
        "set",
