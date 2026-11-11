@@ -264,7 +264,7 @@ const Money=(()=>{
  function candidates(line,steps,live){
   const m=REF.exec(line), out=[];
   const rowFields=(s,i)=>{ for(const f of [...WINDOW_FIELDS,...YEAR_FIELDS])out.push({old:s.before.rows[i][f],now:s.after.byIndex[i][f],year:YEAR_FIELDS.includes(f)}); };
-  const totalFields=s=>{ for(const f of [...TOTAL_WINDOW,...TOTAL_YEAR])if(f in s.before)out.push({old:s.before[f],now:s.after[f],year:TOTAL_YEAR.includes(f)}); };
+  const totalFields=s=>{ for(const f of [...TOTAL_WINDOW,...TOTAL_YEAR])if(f in s.before)out.push({old:s.before[f],now:s.after[f],year:TOTAL_YEAR.includes(f),controllable:f.startsWith('controllable_')}); };
   const step=m?steps[Number(m[1])-1]:null;
   if(m&&!step)return out;   // the line cites an unpriced query: its dollars, if any, are not this layer's
   if(step&&m[2]==='row'&&step.before.rows[Number(m[3])]){ rowFields(step,Number(m[3])); totalFields(step); }
@@ -279,9 +279,15 @@ const Money=(()=>{
   let out=line; for(const key of ['lever','records'])if(was[key]&&now[key]&&was[key]!==now[key])out=out.replace(was[key],now[key]);
   return out;
  }
+ // The controllable totals (issue #101) are stated only on the lines that name them, "… in controllable losses" (the
+ // supervisor lens) and "The controllable buckets are …" (the speed variance): such a line takes them first, and no
+ // other line takes them, so a window whose controllable total reads as its all-lever total (no planned maintenance,
+ // side trim at or under the target) re-prices each line to its own figure (review of #111).
+ const CONTROLLABLE=/\bcontrollable (?:losses|buckets)\b/;
  function repriceLine(line,steps,live){
   if(!line.includes('$'))return line;
-  const pool=candidates(line,steps,live), used=new Set();
+  const names=CONTROLLABLE.test(line), all=candidates(line,steps,live).filter(c=>names||!c.controllable);
+  const pool=names?[...all.filter(c=>c.controllable),...all.filter(c=>!c.controllable)]:all, used=new Set();
   return renamed(line,steps).replace(TOKEN,(token,at,whole)=>{
    const yearly=YEARLY.test(whole.slice(at+token.length));
    const order=[...pool.filter(c=>c.year===yearly),...pool.filter(c=>c.year!==yearly)];

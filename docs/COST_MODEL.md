@@ -179,7 +179,9 @@ written again, a ranked money list is put in its new order, and an all-shifts mo
 about the shift that lost the most at the new rates. The levers are ranked the way their lens ranks them (issue
 #101): under the supervisor lens the controllable levers are ranked and the schedule-driven ones (side trim,
 planned maintenance) follow them with no rank, however large a rate makes them; under the ownership lens all of side
-trim stays first, however small; the controllable totals the supervisor headline states are re-derived too, and the
+trim stays first, however small; the controllable totals the supervisor headline states are re-derived too (a line
+that names controllable losses or buckets takes them, and no other line does, so a window whose controllable total
+reads as its all-lever total keeps each figure its own), and the
 card's panel orders its bars by the lens before the unit. The supervisor card lists every controllable lever (five
 beside the headline, the others under a label), so a lever a rate moves into the top five is written there. The
 speed variance's controllable dollars are re-derived the same way; its grade mix is never priced. "What came back, per query" shows each query's result at the
@@ -187,8 +189,9 @@ rates in force too (what the page's own address returns from the server), so a r
 row it shows. An analyst's interpretation is not rewritten (a
 model's sentence moved to other figures could claim what no row says, or keep a comparison the new figures
 reverse): at other rates it says which rates it was written at, and the evidence under it is re-priced. So
-the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twenty-four answers
-(the two lenses on a month and on a shift's week, and a speed variance whose mix is schedule-driven, among them) at six sets of rates (`tests/money_cli.cjs parity`), and the value case
+the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twenty-five answers
+(the two lenses on a month and on a shift's week, a supervisor week with no planned maintenance and trim under its
+target, and a speed variance whose mix is schedule-driven, among them) at six sets of rates (`tests/money_cli.cjs parity`), and the value case
 `value-dollars-shift-0914-shift-2-client` holds the server's `get_shift_dollars` at other rates to the
 client's figures (`evals/client_money.json`, written by `evals/make_client_money.py`). `price_terms`
 never reaches a model (the narrative packet and the OpenAI compaction drop it). A card's money is its

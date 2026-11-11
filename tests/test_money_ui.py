@@ -133,7 +133,10 @@ PARITY_URLS = ('/corr/1/day/2026-09-14/shift/2?measure=dollars', '/corr/1/day/20
                # speed variance whose grade mix is schedule-driven and unpriced
                '/corr/1/month/2026-09-14?measure=money&lens=supervisor', '/corr/1/month/2026-09-14?measure=money&lens=ownership',
                '/corr/1/week/2026-09-14/shift/2?measure=money&lens=supervisor', '/corr/1/week/2026-09-14/shift/2?measure=money&lens=ownership',
-               '/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=3,1')
+               '/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=3,1',
+               # review of #111: a window with no planned maintenance and side trim at or under its target, where the
+               # supervisor headline's controllable total and the all-lever total read the same at the post's rates
+               '/corr/1/week/2026-08-24/shift/2?measure=money&lens=supervisor')
 PARITY_RATES = ('paper:60,hour:1350.5,margin:35,trim:3.1', 'paper:41.37,hour:5000', 'margin:12.5,trim:4', 'trim:2.5',
                 'hour:1', 'paper:99999.99,margin:0.01')
 

@@ -1356,7 +1356,9 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // changed on each card re-ranks it as the server ranks it at those rates (tests/test_money_ui.py holds every figure and
  // line to the server's own): under the supervisor lens the schedule-driven levers stay after the ranked controllable
  // ones with no rank, however large; under the ownership lens all of side trim stays first, however small.
- for(const [lens,changes,over] of [['supervisor',[[1,'5000']],{machine_usd_hour:5000}],['ownership',[[0,'1'],[1,'5000']],{paper_usd_msf:1,machine_usd_hour:5000}]]){
+ // At $1/MSF paper and $5,000/hr machine time three downtime levers move into the supervisor's five beside the headline
+ // (across its label), planned maintenance outweighs most ranked levers, and side trim is smaller than four others.
+ for(const [lens,changes,over] of [['supervisor',[[0,'1'],[1,'5000']],{paper_usd_msf:1,machine_usd_hour:5000}],['ownership',[[0,'1'],[1,'5000']],{paper_usd_msf:1,machine_usd_hour:5000}]]){
   const lensed=JSON.parse(fs.readFileSync(`tests/ui_fixtures/money_${lens}.json`,'utf8')), data=lensed.trace.find(e=>e.tool==='get_opportunities').data;
   vm.runInContext(`thread.push({id:++seq,question:'q-${lens}',title:'${lens}',scope:{day:'2026-09-14',period:'month',shift:2,scope:'day'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(lensed)},url:${JSON.stringify(lensed.url)},revealed:true});openId=seq;renderCard();`,ctx);
   els['rates-change'].events.click(); const lf=els['rates-fields'].children.map(f=>f.children[1]);
@@ -1373,6 +1375,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    assert.equal(now.controllable_usd_per_year,Money.round(mine.reduce((s,r)=>s+r.usd_per_year,0),0));
    assert.ok(prose.includes(`${Money.money(now.controllable_usd_per_year)} a year in controllable losses across ${mine.length} levers`),'the headline at the new rates');
    assert.ok(prose.includes(`1. ${mine[0].lever}: ${Money.money(mine[0].usd_per_year)}/yr`),'the first ranked lever at the new rates');
+   const at=mine.map(r=>prose.indexOf(`${r.rank}. ${r.lever}: ${Money.money(r.usd_per_year)}/yr`));
+   assert.ok(at.every((x,i)=>x>=0&&(!i||at[i-1]<x)),'every controllable lever, numbered and in rank order, across the label');
    for(const r of rest){ assert.ok(prose.includes(`${r.lever}: ${Money.money(r.usd_per_year)}/yr`),r.lever); assert.ok(!new RegExp(`\\d+\\. ${r.lever.replace(/[()]/g,'\\$&')}`).test(prose),`${r.lever} is listed unranked`); }
    assert.ok(bars.slice(-rest.length).every((bar,i)=>opens(bar,rest[i].lever)),'the panel puts the schedule-driven levers last: '+bars.join(' | '));
   }else{
