@@ -8,11 +8,11 @@ The rail's three controls are part of every question:
 
 | Control | Values | What it means |
 | --- | --- | --- |
-| Production day | Monday to Friday, 3 August to 30 September 2026 | the anchor; a day runs 07:00 to 07:00 and is labeled by its starting date |
+| Production day | Monday to Friday, the rolling year the page footer names (about 262 days, ending the day before the site was last deployed) | the anchor; a day runs 07:00 to 07:00 and is labeled by its starting date |
 | Shift | 1 (07–15), 2 (15–23), 3 (23–07), All | one 480-minute shift, or All for the whole production day and comparisons between shifts |
 | Window | Day, Week, Month, 4-4-5 | the window a question that names none is asked over: the day, its Monday-to-Friday week, its calendar month, or its 4-4-5 accounting period |
 
-A shift or window the question names wins over the controls, and the address says so: with shift 2 selected, "Why was shift 1 slow?" answers shift 1 (`/corr/1/day/2026-09-14/shift/1?measure=overview`), "this week" under Day asks about the week, and "How much downtime on 1st shift last week?" answers the week before for shift 1 (`/corr/1/week/2026-09-07/shift/1?measure=pareto`). A comparison still needs its scope: with one shift selected, "Compare that with first shift" is refused ("Selected shift only") rather than quietly querying another shift, so choose **All** first. [The URL grammar](URLS.md#the-questions-own-scope-issue-105) has the rules.
+A shift or window the question names wins over the controls, and the address says so: with shift 2 selected, "Why was shift 1 slow?" answers shift 1 (`/corr/1/day/2026-09-14/shift/1?measure=overview`), "this week" under Day asks about the week, and "How much downtime on 1st shift last week?" answers the week before for shift 1 (`/corr/1/week/2026-09-07/shift/1?measure=pareto`). A comparison still needs its scope: with one shift selected, "Compare that with first shift" is refused ("Selected shift only") rather than quietly querying another shift, so choose **All** first. [The URL grammar](URLS.md#the-questions-own-scope-issue-105) has the rules. A month named without a year is the latest month of that name on or before the selected day: "How did December go?" asked on 14 September 2026 is December 2025.
 
 ## Phrasings the offline planner answers
 
@@ -52,7 +52,7 @@ A refusal says what to ask instead; it never guesses.
 - **Today, and a day with nothing to measure.** "Yesterday" is the production day before the selected one ("Why was yesterday slow?" on Monday 14 September answers Friday 11 September), but "How did today go?" asks you to use the day control, and "What happened yesterday?" is refused like any question that names nothing to measure.
 - **An ambiguous window.** A bare "Compare last week" asks which two windows to compare, for example "this week compared with last week".
 - **A per-shift view over a period.** The setup matrix, orders, notes and rankings are per shift and per day; under Week, Month or 4-4-5 they ask you to switch Window back to Day.
-- **A window outside the data.** A weekend, or any window before 3 August 2026, is unavailable with its reason, never zero. A comparison is withheld unless both windows are complete.
+- **A window outside the data.** A weekend, or any window before the year's first day or after its last, is unavailable with its reason, never zero. A comparison is withheld unless both windows are complete.
 
 ## Reading an answer
 
@@ -62,7 +62,7 @@ Every figure names the query and row it came from: the `(query N · row M)` link
 
 ## The money on every card
 
-Every card shows its window's money, priced at the rates in force: a dollar line under the headline (`≈ $7,587 recorded losses this shift · $5.72M/yr at this rate`, a chip per bucket), the levers ranked by dollars a year under the charts (hover a bar for its formula; Table shows the same rows), dollars on each tile that measures a loss, and the arithmetic at the bottom of the card. The rates are assumptions, the owner's post by default and never a plant's: **Your rates** in the rail shows each with its source, **Change rates** edits them and re-prices the whole page in the browser with no request, and the address then carries them as `rates=`, so the link reproduces the same figures. **Show as** switches tiles and bars between minutes, percent and dollars. A contribution margin is not set until you set one: until then no lost contribution is priced, never as $0. [The cost model](COST_MODEL.md#on-the-card-issue-31b) has every formula.
+Every card shows its window's money, priced at the rates in force: a dollar line under the headline (`≈ $7,762 recorded losses this shift · $5.81M/yr at this rate`, a chip per bucket), the levers ranked by dollars a year under the charts (hover a bar for its formula; Table shows the same rows), dollars on each tile that measures a loss, and the arithmetic at the bottom of the card. The rates are assumptions, the owner's post by default and never a plant's: **Your rates** in the rail shows each with its source, **Change rates** edits them and re-prices the whole page in the browser with no request, and the address then carries them as `rates=`, so the link reproduces the same figures. **Show as** switches tiles and bars between minutes, percent and dollars. A contribution margin is not set until you set one: until then no lost contribution is priced, never as $0. [The cost model](COST_MODEL.md#on-the-card-issue-31b) has every formula.
 
 ## Every answer is an address
 

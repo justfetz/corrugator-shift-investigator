@@ -287,6 +287,9 @@ def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
     assert failures == [f'{ms:.0f} ms, budget 250 ms']
     replay = next(c for c in CASES if c['id'] == 'live-setup-matrix')   # a committed Anthropic recording
     outcome, failures, note, ms = golden.run_case(replay, 'anthropic')
+    if note.startswith('stale recording'):   # recorded on the dataset before issue #35: skipped, never scored, until re-recorded
+        assert outcome == 'skip' and failures == [] and 're-record with --live --provider anthropic' in note
+        pytest.skip('the live-setup-matrix recording is stale (issue #35); re-record with python3 evals/run.py --live --provider anthropic --track')
     assert outcome == 'pass' and ms > 250, (failures, note, ms)
 
 
@@ -294,7 +297,7 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
     a case whose question lands elsewhere, and every offline question is also answered over its URL."""
     routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c]   # an analyst-plan case is a scripted live round: no URL
-    assert len(routing) == 140 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    assert len(routing) == 147 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)
@@ -329,3 +332,18 @@ def test_a_moved_scope_is_held_to_the_scope_the_case_states():
     del plan['expect']['shifts']
     outcome, failures, _, _ = golden.run_case(plan)
     assert outcome == 'fail' and any('outside scope [2]' in f for f in failures), failures
+
+
+def test_a_question_scope_is_resolved_against_the_golden_year_not_the_process_store(monkeypatch):
+    """Issue #35 with #105: a question that names its own window ("last month") is moved against the golden year's
+    calendar, which the cases are written for. The process's default store is the year ending yesterday, a different
+    calendar; building it inside the timed turn cost the first case 10 s. Here the two coincide (conftest pins the
+    window), so the default store is replaced by one that refuses to be used."""
+    golden.golden_store()   # cached before the swap
+
+    def not_the_golden_store():
+        raise AssertionError('evals/run.py read the process default store for a golden case')
+    monkeypatch.setattr(golden, 'default_store', not_the_golden_store)
+    case = next(c for c in CASES if c['id'] == 'downtime-last-month')
+    outcome, failures, note, _ = golden.run_case(case)
+    assert outcome == 'pass', (failures, note)

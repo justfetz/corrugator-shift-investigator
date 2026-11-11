@@ -1,0 +1,862 @@
+[
+ {
+  "coverage": "complete",
+  "preview_rows": 1,
+  "result_id": "run:1",
+  "rows": [
+   {
+    "downtime_pct": 5.732638888888889,
+    "dry_end_pct": 1.1053275588556655,
+    "estimated_good_sqft": 2302504.8000000003,
+    "gross_sqft": 2412108.4999999995,
+    "lineal_per_setup": 6642.8159090909085,
+    "lineal_per_wet_end": 17193.17058823529,
+    "maintenance_pct": 2.0590277777777777,
+    "observed_lineal_ft": 292283.89999999997,
+    "observed_shift_fpm": 608.9247916666666,
+    "operator_pct": 3.6736111111111107,
+    "paper_changes": 17,
+    "pm_pct": 0.0,
+    "setups_above_trim_target": 4,
+    "shear_pct": 0.5893059951490576,
+    "speed_to_target_pct": 86.92975046842933,
+    "throughput_in": 99.03146221875375,
+    "trim_pct": 2.8492623777081345,
+    "valid_setups": 44
+   }
+  ],
+  "shift": 1,
+  "tool": "get_shift_kpis",
+  "total_rows": 1
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 1,
+  "result_id": "run:2",
+  "rows": [
+   {
+    "downtime_pct": 2.635416666666667,
+    "dry_end_pct": 1.1609658221182155,
+    "estimated_good_sqft": 2178064.4,
+    "gross_sqft": 2280627.0,
+    "lineal_per_setup": 7108.405263157895,
+    "lineal_per_wet_end": 20778.415384615386,
+    "maintenance_pct": 1.4895833333333335,
+    "observed_lineal_ft": 270119.4,
+    "observed_shift_fpm": 562.7487500000001,
+    "operator_pct": 1.1458333333333333,
+    "paper_changes": 13,
+    "pm_pct": 0.0,
+    "setups_above_trim_target": 2,
+    "shear_pct": 0.5042736054602528,
+    "speed_to_target_pct": 87.00454961496031,
+    "throughput_in": 101.31639563837324,
+    "trim_pct": 2.831883512735752,
+    "valid_setups": 38
+   }
+  ],
+  "shift": 2,
+  "tool": "get_shift_kpis",
+  "total_rows": 1
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 1,
+  "result_id": "run:3",
+  "rows": [
+   {
+    "downtime_pct": 2.642361111111111,
+    "dry_end_pct": 1.1111281787587992,
+    "estimated_good_sqft": 2230130.3999999994,
+    "gross_sqft": 2330595.2000000007,
+    "lineal_per_setup": 7479.339473684209,
+    "lineal_per_wet_end": 20301.064285714285,
+    "maintenance_pct": 0.4965277777777778,
+    "observed_lineal_ft": 284214.89999999997,
+    "observed_shift_fpm": 592.1143749999999,
+    "operator_pct": 2.1458333333333335,
+    "paper_changes": 14,
+    "pm_pct": 0.0,
+    "setups_above_trim_target": 2,
+    "shear_pct": 0.45959504250244726,
+    "speed_to_target_pct": 82.5332387951708,
+    "throughput_in": 98.4013941563233,
+    "trim_pct": 2.7399696008985153,
+    "valid_setups": 38
+   }
+  ],
+  "shift": 3,
+  "tool": "get_shift_kpis",
+  "total_rows": 1
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 5,
+  "result_id": "run:4",
+  "rows": [
+   {
+    "category": "Glue / starch",
+    "down_minutes": 9.483333333333333,
+    "shift_percent": 1.9756944444444444
+   },
+   {
+    "category": "Order change",
+    "down_minutes": 5.866666666666666,
+    "shift_percent": 1.2222222222222223
+   },
+   {
+    "category": "Stacker",
+    "down_minutes": 5.666666666666667,
+    "shift_percent": 1.1805555555555556
+   },
+   {
+    "category": "Missed splice",
+    "down_minutes": 3.35,
+    "shift_percent": 0.6979166666666666
+   },
+   {
+    "category": "Knife / slitter jam",
+    "down_minutes": 3.15,
+    "shift_percent": 0.65625
+   }
+  ],
+  "shift": 1,
+  "tool": "get_downtime_breakdown",
+  "total_rows": 5
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 5,
+  "result_id": "run:5",
+  "rows": [
+   {
+    "category": "Knife / slitter jam",
+    "down_minutes": 5.433333333333334,
+    "shift_percent": 1.1319444444444444
+   },
+   {
+    "category": "Order change",
+    "down_minutes": 3.25,
+    "shift_percent": 0.6770833333333334
+   },
+   {
+    "category": "Stacker",
+    "down_minutes": 1.7166666666666666,
+    "shift_percent": 0.3576388888888889
+   },
+   {
+    "category": "Missed splice",
+    "down_minutes": 1.5666666666666667,
+    "shift_percent": 0.3263888888888889
+   },
+   {
+    "category": "Other",
+    "down_minutes": 0.6833333333333333,
+    "shift_percent": 0.1423611111111111
+   }
+  ],
+  "shift": 2,
+  "tool": "get_downtime_breakdown",
+  "total_rows": 5
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 5,
+  "result_id": "run:6",
+  "rows": [
+   {
+    "category": "Raw material (roll)",
+    "down_minutes": 4.216666666666667,
+    "shift_percent": 0.8784722222222221
+   },
+   {
+    "category": "Stacker",
+    "down_minutes": 3.55,
+    "shift_percent": 0.7395833333333334
+   },
+   {
+    "category": "Knife / slitter jam",
+    "down_minutes": 2.3833333333333333,
+    "shift_percent": 0.4965277777777778
+   },
+   {
+    "category": "Missed splice",
+    "down_minutes": 1.65,
+    "shift_percent": 0.34375
+   },
+   {
+    "category": "Other",
+    "down_minutes": 0.8833333333333333,
+    "shift_percent": 0.18402777777777776
+   }
+  ],
+  "shift": 3,
+  "tool": "get_downtime_breakdown",
+  "total_rows": 5
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 4,
+  "result_id": "run:7",
+  "rows": [
+   {
+    "reason": "BOND",
+    "rejected_sqft": 10035.799999999996
+   },
+   {
+    "reason": "WARP",
+    "rejected_sqft": 9622.900000000001
+   },
+   {
+    "reason": "MISALIGNMENT",
+    "rejected_sqft": 4697.099999999999
+   },
+   {
+    "reason": "MOISTURE",
+    "rejected_sqft": 2305.9
+   }
+  ],
+  "shift": 1,
+  "tool": "get_quality_breakdown",
+  "total_rows": 4
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 4,
+  "result_id": "run:8",
+  "rows": [
+   {
+    "reason": "WARP",
+    "rejected_sqft": 10138.200000000003
+   },
+   {
+    "reason": "BOND",
+    "rejected_sqft": 9651.5
+   },
+   {
+    "reason": "MISALIGNMENT",
+    "rejected_sqft": 4417.700000000001
+   },
+   {
+    "reason": "MOISTURE",
+    "rejected_sqft": 2269.9
+   }
+  ],
+  "shift": 2,
+  "tool": "get_quality_breakdown",
+  "total_rows": 4
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 4,
+  "result_id": "run:9",
+  "rows": [
+   {
+    "reason": "WARP",
+    "rejected_sqft": 9933.699999999999
+   },
+   {
+    "reason": "BOND",
+    "rejected_sqft": 9070.500000000002
+   },
+   {
+    "reason": "MISALIGNMENT",
+    "rejected_sqft": 4633.199999999999
+   },
+   {
+    "reason": "MOISTURE",
+    "rejected_sqft": 2258.5000000000005
+   }
+  ],
+  "shift": 3,
+  "tool": "get_quality_breakdown",
+  "total_rows": 4
+ },
+ {
+  "coverage": "complete",
+  "day_basis_note": "Unequal production days: 22 vs 21. Compare volume per production day (MSF/day) and the ratio tiles (speed, downtime %, waste %, minutes per stop); raw volume and lineal totals are not like for like.",
+  "preview_rows": 12,
+  "previous_window_coverage": "complete",
+  "result_id": "run:10",
+  "rows": [
+   {
+    "better": "higher",
+    "change": "better",
+    "current": 160260.2,
+    "delta": 9667.2,
+    "label": "Volume",
+    "metric": "volume_msf",
+    "previous": 150593.0,
+    "unit": "MSF"
+   },
+   {
+    "better": "higher",
+    "change": "better",
+    "current": 19515934.8,
+    "delta": 1166692.5,
+    "label": "Lineal feet",
+    "metric": "lineal_ft",
+    "previous": 18349242.3,
+    "unit": "ft"
+   },
+   {
+    "better": "higher",
+    "change": "better",
+    "current": 7284.6,
+    "delta": 113.5,
+    "label": "Volume per production day",
+    "metric": "msf_per_day",
+    "previous": 7171.1,
+    "unit": "MSF/day"
+   },
+   {
+    "better": "higher",
+    "change": "better",
+    "current": 646.1,
+    "delta": 8.0,
+    "label": "Speed without stops",
+    "metric": "speed_run_fpm",
+    "previous": 638.1,
+    "unit": "ft/min"
+   },
+   {
+    "better": "higher",
+    "change": "better",
+    "current": 616.0,
+    "delta": 9.2,
+    "label": "Speed with stops",
+    "metric": "speed_all_fpm",
+    "previous": 606.8,
+    "unit": "ft/min"
+   },
+   {
+    "better": "lower",
+    "change": "better",
+    "current": 4.6535,
+    "delta": -0.2476,
+    "label": "Downtime",
+    "metric": "downtime_pct",
+    "previous": 4.9011,
+    "unit": "% of scheduled minutes"
+   },
+   {
+    "better": "lower",
+    "change": "better",
+    "current": 1474.2,
+    "delta": -7.9,
+    "label": "Downtime minutes",
+    "metric": "downtime_minutes",
+    "previous": 1482.1,
+    "unit": "min"
+   },
+   {
+    "better": "lower",
+    "change": "worse",
+    "current": 617,
+    "delta": 50,
+    "label": "Stops",
+    "metric": "stops",
+    "previous": 567,
+    "unit": "count"
+   },
+   {
+    "better": "lower",
+    "change": "better",
+    "current": 2.39,
+    "delta": -0.22,
+    "label": "Minutes per stop",
+    "metric": "minutes_per_stop",
+    "previous": 2.61,
+    "unit": "min/stop"
+   },
+   {
+    "better": "lower",
+    "change": "worse",
+    "current": 3.2274,
+    "delta": 0.3605,
+    "label": "Side trim",
+    "metric": "trim_pct",
+    "previous": 2.8669,
+    "unit": "% of gross"
+   },
+   {
+    "better": "lower",
+    "change": "worse",
+    "current": 0.5168,
+    "delta": 0.0033,
+    "label": "Shear",
+    "metric": "shear_pct",
+    "previous": 0.5135,
+    "unit": "% of gross"
+   },
+   {
+    "better": "lower",
+    "change": "better",
+    "current": 1.0258,
+    "delta": -0.1487,
+    "label": "Dry-end rejects",
+    "metric": "dry_end_pct",
+    "previous": 1.1745,
+    "unit": "% of gross"
+   }
+  ],
+  "shift": null,
+  "tool": "get_period_kpis",
+  "total_rows": 25
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 10,
+  "previous_window_coverage": "complete",
+  "result_id": "run:11",
+  "rows": [
+   {
+    "category": "Planned maintenance",
+    "cumulative_pct": 34.12,
+    "minutes": 503.0,
+    "previous_minutes": 575.0,
+    "previous_stops": 4,
+    "share_pct": 34.12,
+    "stops": 4
+   },
+   {
+    "category": "Missed splice",
+    "cumulative_pct": 47.45,
+    "minutes": 196.5,
+    "previous_minutes": 124.65,
+    "previous_stops": 81,
+    "share_pct": 13.33,
+    "stops": 128
+   },
+   {
+    "category": "Knife / slitter jam",
+    "cumulative_pct": 59.27,
+    "minutes": 174.27,
+    "previous_minutes": 118.55,
+    "previous_stops": 61,
+    "share_pct": 11.82,
+    "stops": 97
+   },
+   {
+    "category": "Order change",
+    "cumulative_pct": 69.84,
+    "minutes": 155.82,
+    "previous_minutes": 172.5,
+    "previous_stops": 132,
+    "share_pct": 10.57,
+    "stops": 126
+   },
+   {
+    "category": "Raw material (roll)",
+    "cumulative_pct": 79.23,
+    "minutes": 138.42,
+    "previous_minutes": 129.82,
+    "previous_stops": 65,
+    "share_pct": 9.39,
+    "stops": 69
+   },
+   {
+    "category": "Stacker",
+    "cumulative_pct": 86.5,
+    "minutes": 107.28,
+    "previous_minutes": 116.75,
+    "previous_stops": 93,
+    "share_pct": 7.28,
+    "stops": 87
+   },
+   {
+    "category": "Glue / starch",
+    "cumulative_pct": 92.37,
+    "minutes": 86.53,
+    "previous_minutes": 96.72,
+    "previous_stops": 55,
+    "share_pct": 5.87,
+    "stops": 49
+   },
+   {
+    "category": "Other",
+    "cumulative_pct": 97.85,
+    "minutes": 80.75,
+    "previous_minutes": 110.35,
+    "previous_stops": 66,
+    "share_pct": 5.48,
+    "stops": 49
+   },
+   {
+    "category": "Steam / moisture",
+    "cumulative_pct": 99.19,
+    "minutes": 19.67,
+    "previous_minutes": 25.77,
+    "previous_stops": 9,
+    "share_pct": 1.33,
+    "stops": 7
+   },
+   {
+    "category": "Power outage",
+    "cumulative_pct": 100.0,
+    "minutes": 12.0,
+    "previous_minutes": 12.0,
+    "previous_stops": 1,
+    "share_pct": 0.81,
+    "stops": 1
+   }
+  ],
+  "shift": null,
+  "tool": "get_downtime_pareto",
+  "total_rows": 10
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 12,
+  "result_id": "run:12",
+  "rows": [
+   {
+    "best_fifth_dry_end_pct": 0.9645,
+    "best_fifth_fpm": 495.1,
+    "best_fifth_pct_of_target": 99.0,
+    "gap_fpm": 27.6,
+    "grade": "275-BC",
+    "label": "275-BC \u00b7 98 in",
+    "lineal_ft": 891159.7,
+    "median_setup_fpm": 469.9,
+    "opportunity_hours": 1.77,
+    "reject_penalty_points": -0.0797,
+    "rest_dry_end_pct": 1.0442,
+    "run_minutes": 1906.3,
+    "setups": 122,
+    "slice": "98 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 500.0,
+    "typical_fpm": 467.5,
+    "typical_pct_of_target": 93.5
+   },
+   {
+    "best_fifth_dry_end_pct": 1.002,
+    "best_fifth_fpm": 500.4,
+    "best_fifth_pct_of_target": 100.1,
+    "gap_fpm": 31.7,
+    "grade": "275-EB",
+    "label": "275-EB \u00b7 100 in",
+    "lineal_ft": 688958.2,
+    "median_setup_fpm": 465.6,
+    "opportunity_hours": 1.55,
+    "reject_penalty_points": -0.0468,
+    "rest_dry_end_pct": 1.0488,
+    "run_minutes": 1470.2,
+    "setups": 94,
+    "slice": "100 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 500.0,
+    "typical_fpm": 468.6,
+    "typical_pct_of_target": 93.7
+   },
+   {
+    "best_fifth_dry_end_pct": 1.0004,
+    "best_fifth_fpm": 499.1,
+    "best_fifth_pct_of_target": 99.8,
+    "gap_fpm": 28.2,
+    "grade": "275-BC",
+    "label": "275-BC \u00b7 100 in",
+    "lineal_ft": 748005.8,
+    "median_setup_fpm": 468.8,
+    "opportunity_hours": 1.5,
+    "reject_penalty_points": -0.0057,
+    "rest_dry_end_pct": 1.0061,
+    "run_minutes": 1588.6,
+    "setups": 95,
+    "slice": "100 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 500.0,
+    "typical_fpm": 470.9,
+    "typical_pct_of_target": 94.2
+   },
+   {
+    "best_fifth_dry_end_pct": 1.0377,
+    "best_fifth_fpm": 494.0,
+    "best_fifth_pct_of_target": 98.8,
+    "gap_fpm": 25.5,
+    "grade": "275-EB",
+    "label": "275-EB \u00b7 98 in",
+    "lineal_ft": 803713.9,
+    "median_setup_fpm": 470.3,
+    "opportunity_hours": 1.48,
+    "reject_penalty_points": -0.0028,
+    "rest_dry_end_pct": 1.0405,
+    "run_minutes": 1715.4,
+    "setups": 107,
+    "slice": "98 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 500.0,
+    "typical_fpm": 468.5,
+    "typical_pct_of_target": 93.7
+   },
+   {
+    "best_fifth_dry_end_pct": 0.9774,
+    "best_fifth_fpm": 801.4,
+    "best_fifth_pct_of_target": 100.2,
+    "gap_fpm": 55.5,
+    "grade": "200-C",
+    "label": "200-C \u00b7 98 in",
+    "lineal_ft": 832129.8,
+    "median_setup_fpm": 746.0,
+    "opportunity_hours": 1.29,
+    "reject_penalty_points": -0.0561,
+    "rest_dry_end_pct": 1.0335,
+    "run_minutes": 1115.5,
+    "setups": 109,
+    "slice": "98 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 800.0,
+    "typical_fpm": 745.9,
+    "typical_pct_of_target": 93.2
+   },
+   {
+    "best_fifth_dry_end_pct": 1.0042,
+    "best_fifth_fpm": 902.5,
+    "best_fifth_pct_of_target": 100.3,
+    "gap_fpm": 60.5,
+    "grade": "32-C",
+    "label": "32-C \u00b7 100 in",
+    "lineal_ft": 922234.6,
+    "median_setup_fpm": 848.9,
+    "opportunity_hours": 1.22,
+    "reject_penalty_points": -0.0243,
+    "rest_dry_end_pct": 1.0285,
+    "run_minutes": 1095.4,
+    "setups": 123,
+    "slice": "100 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 900.0,
+    "typical_fpm": 841.9,
+    "typical_pct_of_target": 93.5
+   },
+   {
+    "best_fifth_dry_end_pct": 0.9869,
+    "best_fifth_fpm": 507.4,
+    "best_fifth_pct_of_target": 101.5,
+    "gap_fpm": 43.6,
+    "grade": "275-EB",
+    "label": "275-EB \u00b7 92 in",
+    "lineal_ft": 392671.1,
+    "median_setup_fpm": 462.2,
+    "opportunity_hours": 1.21,
+    "reject_penalty_points": -0.0174,
+    "rest_dry_end_pct": 1.0043,
+    "run_minutes": 846.6,
+    "setups": 55,
+    "slice": "92 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 500.0,
+    "typical_fpm": 463.8,
+    "typical_pct_of_target": 92.8
+   },
+   {
+    "best_fifth_dry_end_pct": 1.1155,
+    "best_fifth_fpm": 508.0,
+    "best_fifth_pct_of_target": 101.6,
+    "gap_fpm": 36.8,
+    "grade": "275-EB",
+    "label": "275-EB \u00b7 95 in",
+    "lineal_ft": 447891.9,
+    "median_setup_fpm": 470.9,
+    "opportunity_hours": 1.15,
+    "reject_penalty_points": 0.1084,
+    "rest_dry_end_pct": 1.0071,
+    "run_minutes": 950.5,
+    "setups": 66,
+    "slice": "95 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 500.0,
+    "typical_fpm": 471.2,
+    "typical_pct_of_target": 94.2
+   },
+   {
+    "best_fifth_dry_end_pct": 1.0831,
+    "best_fifth_fpm": 857.0,
+    "best_fifth_pct_of_target": 100.8,
+    "gap_fpm": 57.7,
+    "grade": "55-C",
+    "label": "55-C \u00b7 100 in",
+    "lineal_ft": 744686.8,
+    "median_setup_fpm": 806.4,
+    "opportunity_hours": 1.05,
+    "reject_penalty_points": 0.0237,
+    "rest_dry_end_pct": 1.0594,
+    "run_minutes": 931.6,
+    "setups": 103,
+    "slice": "100 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 850.0,
+    "typical_fpm": 799.3,
+    "typical_pct_of_target": 94.0
+   },
+   {
+    "best_fifth_dry_end_pct": 1.0383,
+    "best_fifth_fpm": 893.1,
+    "best_fifth_pct_of_target": 99.2,
+    "gap_fpm": 56.7,
+    "grade": "32-C",
+    "label": "32-C \u00b7 98 in",
+    "lineal_ft": 802380.8,
+    "median_setup_fpm": 840.3,
+    "opportunity_hours": 1.01,
+    "reject_penalty_points": -0.0051,
+    "rest_dry_end_pct": 1.0434,
+    "run_minutes": 959.3,
+    "setups": 109,
+    "slice": "98 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 900.0,
+    "typical_fpm": 836.4,
+    "typical_pct_of_target": 92.9
+   },
+   {
+    "best_fifth_dry_end_pct": 1.0536,
+    "best_fifth_fpm": 497.4,
+    "best_fifth_pct_of_target": 99.5,
+    "gap_fpm": 32.5,
+    "grade": "275-BC",
+    "label": "275-BC \u00b7 103 in",
+    "lineal_ft": 423561.6,
+    "median_setup_fpm": 469.6,
+    "opportunity_hours": 0.99,
+    "reject_penalty_points": 0.0378,
+    "rest_dry_end_pct": 1.0158,
+    "run_minutes": 911.1,
+    "setups": 59,
+    "slice": "103 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 500.0,
+    "typical_fpm": 464.9,
+    "typical_pct_of_target": 93.0
+   },
+   {
+    "best_fifth_dry_end_pct": 1.0217,
+    "best_fifth_fpm": 888.1,
+    "best_fifth_pct_of_target": 98.7,
+    "gap_fpm": 47.3,
+    "grade": "26-C",
+    "label": "26-C \u00b7 98 in",
+    "lineal_ft": 912082.7,
+    "median_setup_fpm": 842.6,
+    "opportunity_hours": 0.96,
+    "reject_penalty_points": -0.0028,
+    "rest_dry_end_pct": 1.0245,
+    "run_minutes": 1084.8,
+    "setups": 128,
+    "slice": "98 in",
+    "slice_by": "width",
+    "status": "ok",
+    "target_fpm": 900.0,
+    "typical_fpm": 840.8,
+    "typical_pct_of_target": 93.4
+   }
+  ],
+  "shift": null,
+  "tool": "get_speed_opportunity",
+  "total_rows": 42
+ },
+ {
+  "coverage": "complete",
+  "preview_rows": 9,
+  "previous_window_coverage": "complete",
+  "result_id": "run:13",
+  "rows": [
+   {
+    "category": "trim",
+    "delta_pct_points": 0.3605,
+    "label": "Side trim",
+    "pct_of_gross": 3.2274,
+    "previous_pct_of_gross": 2.8669,
+    "previous_sqft": 4317391.2,
+    "sqft": 5172189.4
+   },
+   {
+    "category": "shear",
+    "delta_pct_points": 0.0033,
+    "label": "Shear chops",
+    "pct_of_gross": 0.5168,
+    "previous_pct_of_gross": 0.5135,
+    "previous_sqft": 773289.8,
+    "sqft": 828279.0
+   },
+   {
+    "category": "bond",
+    "delta_pct_points": 0.0006,
+    "label": "Dry-end: bond",
+    "pct_of_gross": 0.4011,
+    "previous_pct_of_gross": 0.4005,
+    "previous_sqft": 603111.6,
+    "sqft": 642819.9
+   },
+   {
+    "category": "warp",
+    "delta_pct_points": -0.1456,
+    "label": "Dry-end: warp",
+    "pct_of_gross": 0.3265,
+    "previous_pct_of_gross": 0.4721,
+    "previous_sqft": 710994.2,
+    "sqft": 523298.7
+   },
+   {
+    "category": "misalignment",
+    "delta_pct_points": -0.0054,
+    "label": "Dry-end: misalignment",
+    "pct_of_gross": 0.1971,
+    "previous_pct_of_gross": 0.2025,
+    "previous_sqft": 304914.9,
+    "sqft": 315864.6
+   },
+   {
+    "category": "moisture",
+    "delta_pct_points": 0.0016,
+    "label": "Dry-end: moisture",
+    "pct_of_gross": 0.101,
+    "previous_pct_of_gross": 0.0994,
+    "previous_sqft": 149724.9,
+    "sqft": 161942.6
+   },
+   {
+    "category": "dry_end",
+    "delta_pct_points": -0.1487,
+    "label": "Dry-end rejects (all reasons)",
+    "pct_of_gross": 1.0258,
+    "previous_pct_of_gross": 1.1745,
+    "previous_sqft": 1768745.6,
+    "sqft": 1643925.8
+   },
+   {
+    "category": "bale",
+    "delta_pct_points": 0.2088,
+    "label": "Bale (scale reading)",
+    "pct_of_gross": 5.0259,
+    "previous_pct_of_gross": 4.8171,
+    "previous_sqft": 7254209.7,
+    "sqft": 8054487.6
+   },
+   {
+    "category": "unexplained",
+    "delta_pct_points": -0.0063,
+    "label": "Unexplained (bale minus accounted waste)",
+    "pct_of_gross": 0.2559,
+    "previous_pct_of_gross": 0.2622,
+    "previous_sqft": 394783.1,
+    "sqft": 410093.4
+   }
+  ],
+  "shift": null,
+  "tool": "get_waste_breakdown",
+  "total_rows": 9
+ }
+]

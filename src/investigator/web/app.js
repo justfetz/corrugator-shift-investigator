@@ -1666,6 +1666,8 @@ function applyPublicMode(){
 async function init(){
  renderSegments();renderQuestionChips();renderCard();renderUnits();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
+ // The store is a rolling year (issue #35): the footer names the window this server holds.
+ $('dataset-range').textContent=`${config.days.length} synthetic production days (Mon–Fri, ${dayText(utc(config.days[0]),{weekday:false})} – ${dayText(utc(config.days[config.days.length-1]),{weekday:false})})`;
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
  applyPublicMode();loadMoney(currentAddress());updateScope();
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).

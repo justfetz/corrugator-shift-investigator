@@ -99,9 +99,9 @@ answered offline: every one goes to the offline planner first.
 
 Every answer card carries the money of its scope, priced in the browser at the rates in force:
 
-- **The dollar line** under the headline: `≈ $7,587 recorded losses this shift · $5.72M/yr at this rate ·
-  contribution: margin not set` (a window: `≈ $13,047 in levers this week · …`; a set margin: `contribution
-  $10,649 at $40/MSF, not added`), then one chip per bucket (trim, dry-end, shear, speed, stops, setups),
+- **The dollar line** under the headline: `≈ $7,762 recorded losses this shift · $5.81M/yr at this rate ·
+  contribution: margin not set` (a window: `≈ $12,922 in levers this week · …`; a set margin: `contribution
+  $11,891 at $40/MSF, not added`), then one chip per bucket (trim, dry-end, shear, speed, stops, setups),
   largest first. On incomplete data the line and the arithmetic say so first: the dollars are the observed
   records only, and an all-shifts day counts its complete shifts and names the one left out.
 - **The opportunities panel** under the charts: horizontal bars of the levers (or a shift's gaps) ranked

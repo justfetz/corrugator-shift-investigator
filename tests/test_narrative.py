@@ -190,13 +190,16 @@ def test_period_exports_are_free(period):
 def test_period_findings_rest_on_the_rows_that_exist():
     """A trend reaching before the dataset and a month whose previous month is unavailable are
     'partial' envelopes, but their rows are exact: findings may cite them, and the packet discloses
-    the missing weeks / the previous window's coverage for the writer to state as a limitation."""
+    the missing weeks / the previous window's coverage for the writer to state as a limitation.
+    Issue #35: the app's year opens on a Tuesday, so its first week is itself partial; the exact-rows
+    case is a store over the original two months (from Monday 3 August 2026, nothing before it)."""
+    from datetime import date
     from investigator.narrative import evidence_packet
-    from investigator.record_store import default_store
-    store=default_store()
+    from investigator.record_store import RecordStore, default_store
+    store=RecordStore(window=(date(2026,8,1),date(2026,9,30)),prebuilt='')
     trend=store.get_trend('speed_all_fpm',weeks=8,anchor='2026-09-14',shift=2)
     august=store.get_period_kpis({'period':'month','anchor':'2026-08-14'})
-    day=store.day_analysis('2026-09-14')
+    day=default_store().day_analysis('2026-09-14')
     try:
         assert trend['coverage']=='partial' and trend['missing_weeks']==['2026-07-27'] and august['coverage']=='partial'
         packet=evidence_packet([{'result_id':'t:1','tool':'get_trend','ok':True,'data':trend},
@@ -207,6 +210,10 @@ def test_period_findings_rest_on_the_rows_that_exist():
             {'kind':'finding','text':'Speed reached {{0}} ft/min in the week of {{1}}.','facts':[{'result_id':'t:1','row':5,'field':'value'},{'result_id':'t:1','row':5,'field':'week_start'}]},
             {'kind':'finding','text':'August volume was {{0}} MSF.','facts':[{'result_id':'a:1','row':0,'field':'current'}]}]},packet)
         assert rendered[0]['text'].startswith('Speed reached ') and 'ft/min in the week of 2026-09-07' in rendered[0]['text']
+        # the year's own early trend: a row is a four-day week, so the packet is partial and bars findings
+        early=default_store().get_trend('speed_all_fpm',weeks=8,anchor='2025-11-12',shift=2)
+        assert early['missing_weeks']==['2025-09-22'] and early['rows'][0]['partial'] is True
+        assert evidence_packet([{'result_id':'e:1','tool':'get_trend','ok':True,'data':early}])[0]['coverage']=='partial'
         # a daily result with an excluded record stays partial and still bars findings
         corrupt=store.day_analysis('2026-09-14',corrupt=True)
         try:
@@ -219,6 +226,7 @@ def test_period_findings_rest_on_the_rows_that_exist():
             corrupt.close()
     finally:
         day.close()
+        store.close()
 
 
 def test_null_field_renders_as_the_word_unavailable():

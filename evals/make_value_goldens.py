@@ -4,9 +4,10 @@
 How the golden set is made. With synthetic data we own the truth, so an
 expected answer is never typed by hand and never read back from the tool it
 checks. This script computes every expectation a second way: plain Python
-sums over the record families that `synth.generate_months()` returns (the
-same helper style as `tests/test_period_tools.py`), with its own calendar
-arithmetic for day / week / month windows. The DuckDB path the tools use is
+sums over the record families that `synth.generate_window()` returns for the
+year ending AS_OF (the golden window, issue #35; the same helper style as
+`tests/test_period_tools.py`), with its own calendar arithmetic for day /
+week / month / 4-4-5 windows. The DuckDB path the tools use is
 not imported for any number here. The file carries the dataset content hash;
 `evals/run.py` refuses to score the value cases when the live store's hash
 differs, so a stale golden fails loudly instead of passing quietly.
@@ -17,8 +18,8 @@ differs, so a stale golden fails loudly instead of passing quietly.
 A tolerance rides with every number: it covers the tool's display rounding
 (one decimal for feet and MSF, four for percentages, two for minutes) plus
 floating-point noise between a DuckDB sum and a Python sum. Integers and
-strings are exact. `null` means the tool must also return null (a July
-window is unavailable, never zero).
+strings are exact. `null` means the tool must also return null (a window
+before the dataset's first day is unavailable, never zero).
 """
 from __future__ import annotations
 
@@ -34,10 +35,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.fixture import GRADES  # noqa: E402  grade targets: a configured table, not a computation
-from investigator.synth import generate_months  # noqa: E402
+from investigator.synth import DATASET_SPAN_DAYS, generate_window  # noqa: E402
 
 OUT = ROOT / 'evals' / 'golden_values.json'
-SEED, MONTHS, MACHINE = 2026, (("2026", 8), ("2026", 9)), "CORR-1"
+# The golden window: every production day from AS_OF minus DATASET_SPAN_DAYS to AS_OF (evals/run.py GOLDEN_AS_OF).
+SEED, AS_OF, MACHINE = 2026, "2026-09-30", "CORR-1"
+FIRST_DAY = (date.fromisoformat(AS_OF) - timedelta(days=DATASET_SPAN_DAYS)).isoformat()   # 2025-09-30, a Tuesday
 CORRUPT_TRIM_SQFT = 99999999.0   # the fixture's bad-trim value the corrupt toggle injects
 HEAVY_MAX_MS = 500               # the eight- and nine-week trends run near 100 ms uncontended and crossed the runner's 250 ms
                                  # default under 2x CPU contention; evals/README.md (Latency budget) has the numbers
@@ -78,25 +81,20 @@ def month_bounds(moment):
     return first, first.replace(day=monthrange(first.year, first.month)[1])
 
 
-FISCAL_START = date(2026, 8, 3)   # the demo 4-4-5 year starts on the dataset's first Monday
+FISCAL_START = date(2026, 8, 3)   # the demo 4-4-5 year starts on the original two months' first Monday
 
 
 def fiscal_bounds(moment):
-    """Own 4-4-5 arithmetic: periods of 4, 4, 5 weeks forward from FISCAL_START (5, 4, 4 backward)."""
-    pattern = (4, 4, 5)
-    if moment >= FISCAL_START:
-        start, i = FISCAL_START, 0
-        while True:
-            end = start + timedelta(days=pattern[i % 3] * 7 - 1)
-            if moment <= end:
-                return start, end
-            start, i = end + timedelta(days=1), i + 1
-    end, i = FISCAL_START - timedelta(days=1), -1
-    while True:
-        start = end - timedelta(days=pattern[i % 3] * 7 - 1)
-        if moment >= start:
+    """Own 4-4-5 arithmetic: 52-week years from FISCAL_START (52 weeks back for the prior year), each
+    four quarters of 4, 4 and 5 weeks."""
+    weeks_in = (moment - FISCAL_START).days // 7
+    start = FISCAL_START + timedelta(weeks=52 * (weeks_in // 52))
+    for weeks in (4, 4, 5) * 4:
+        end = start + timedelta(days=weeks * 7 - 1)
+        if moment <= end:
             return start, end
-        end, i = start - timedelta(days=1), i - 1
+        start = end + timedelta(days=1)
+    raise AssertionError("twelve periods cover the year")
 
 
 def window(period, anchor):
@@ -1028,6 +1026,11 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="target", again
 
 # ---------------------------------------------------------------- the case list
 
+def generate():
+    """The golden window's record families."""
+    return generate_window(date.fromisoformat(AS_OF), seed=SEED, machine_id=MACHINE)
+
+
 def client_case():
     """get_shift_dollars at other rates held to the client formula (issue #31b): the figures web/money.js makes,
     in the browser, of the same shift's quantities at the post's rates (evals/client_money.json, written by
@@ -1043,14 +1046,14 @@ def client_case():
 
 
 def build(data=None):
-    data = data or generate_months(seed=SEED, months=MONTHS, machine_id=MACHINE)
+    data = data or generate()
     plain = Plain(data)
     cases = []
     # Every KPI tile for September and August, all shifts and per shift.
     cases.append(kpi_case(plain, "value-kpi-september-all", "month", "2026-09-14",
                           note="September against August: every tile, delta and change label."))
     cases.append(kpi_case(plain, "value-kpi-august-all", "month", "2026-08-14",
-                          note="August's previous window is July, which is outside the dataset: previous, delta and change are null, never zero."))
+                          note="August against July, both complete inside the year: every tile, delta and change label."))
     for shift in (1, 2, 3):
         cases.append(kpi_case(plain, f"value-kpi-september-shift-{shift}", "month", "2026-09-14", shift))
         cases.append(kpi_case(plain, f"value-kpi-august-shift-{shift}", "month", "2026-08-14", shift))
@@ -1060,13 +1063,17 @@ def build(data=None):
         cases.append(kpi_case(plain, f"value-kpi-week-0914-shift-{shift}", "week", "2026-09-16", shift))
         cases.append(kpi_case(plain, f"value-kpi-day-0914-shift-{shift}", "day", "2026-09-14", shift,
                               note="A Monday: the previous production day is the Friday before."))
-    # 4-4-5 periods: P2 (31 Aug - 27 Sep) against P1 (3 - 30 Aug), equal 20-day windows; P1 against the prior year's P13.
+    # 4-4-5 periods: P2 (31 Aug - 27 Sep) against P1 (3 - 30 Aug), equal 20-day windows; P1 against the prior year's P12.
     cases.append(kpi_case(plain, "value-kpi-fiscal-p2-vs-p1", "fiscal", "2026-09-14",
                           note="Two complete 4-week periods: equal production days, raw totals comparable."))
-    cases.append(kpi_case(plain, "value-kpi-fiscal-p1-no-previous", "fiscal", "2026-08-14",
-                          note="P1's predecessor is the prior year's 5-week P13, before the dataset: previous null, deltas withheld."))
-    cases.append(kpi_case(plain, "value-kpi-first-week-no-previous", "week", "2026-08-05",
-                          note="The first week has an unavailable previous window: deltas withheld, current tiles present."))
+    cases.append(kpi_case(plain, "value-kpi-fiscal-p1-vs-prior-p12", "fiscal", "2026-08-14",
+                          note="P1 (4 weeks) against the prior year's 5-week P12 (29 Jun - 2 Aug): both complete, unequal production days (20 vs 25)."))
+    cases.append(kpi_case(plain, "value-kpi-fiscal-first-period-partial", "fiscal", "2025-10-15", day="2025-10-15",
+                          note="The window opens on Tuesday 30 Sep 2025, inside the prior year's P3 (29 Sep - 2 Nov 2025): current partial, previous P2 unavailable, deltas withheld."))
+    cases.append(kpi_case(plain, "value-kpi-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
+                          note="The window's first week (29 Sep - 3 Oct 2025) holds four production days and its previous week is before the dataset: coverage partial, previous null, deltas withheld."))
+    cases.append(kpi_case(plain, "value-kpi-first-month-previous-partial", "month", "2025-10-15", day="2025-10-15",
+                          note="October 2025 is complete; September 2025 holds one production day of the window (the 30th): previous partial, deltas withheld."))
     cases.append(kpi_case(plain, "value-kpi-last-week-partial", "week", "2026-09-29",
                           note="The week of 28 September has three production days: coverage partial, deltas withheld."))
     cases.append(compare_case(plain, "value-compare-september-vs-august", ("month", "2026-09-01"), ("month", "2026-08-01")))
@@ -1082,23 +1089,29 @@ def build(data=None):
     # The waste breakdown for both months and the story week.
     cases.append(waste_case(plain, "value-waste-september", "month", "2026-09-14"))
     cases.append(waste_case(plain, "value-waste-august", "month", "2026-08-14",
-                            note="July is unavailable: previous columns and deltas are null."))
+                            note="August against July: both complete, previous columns and deltas present."))
+    cases.append(waste_case(plain, "value-waste-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
+                            note="The window's first week: its previous week is before the dataset, so previous columns and deltas are null."))
     cases.append(waste_case(plain, "value-waste-week-0907", "week", "2026-09-09"))
     # Stops profile: the month with the Monday effect and one week for one shift.
     cases.append(profile_case(plain, "value-stops-profile-august", "month", "2026-08-14"))
     cases.append(profile_case(plain, "value-stops-profile-september", "month", "2026-09-14"))
     cases.append(profile_case(plain, "value-stops-profile-week-0914-shift-1", "week", "2026-09-14", 1))
-    # Totals by grade: both months (August's previous is July: null), one week for one shift.
+    # Totals by grade: both months, the window's first week (previous unavailable: null), one week for one shift.
     cases.append(grade_case(plain, "value-grade-totals-september", "month", "2026-09-14"))
     cases.append(grade_case(plain, "value-grade-totals-august", "month", "2026-08-14",
-                            note="July is unavailable: previous and delta volume are null, never zero."))
+                            note="August against July: previous and delta volume present."))
+    cases.append(grade_case(plain, "value-grade-totals-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
+                            note="The previous week is before the dataset: previous and delta volume are null, never zero."))
     cases.append(grade_case(plain, "value-grade-totals-week-0914-shift-2", "week", "2026-09-14", 2))
-    # Rollstock (paper consumed) from the wet-end records: both months (August's previous is July: null),
-    # and one week for one shift, where the feet are the setups that shift ran on each paper run.
+    # Rollstock (paper consumed) from the wet-end records: both months, the window's first week (previous
+    # unavailable: null), and one week for one shift, where the feet are the setups that shift ran on each paper run.
     cases.append(rollstock_case(plain, "value-rollstock-september", "month", "2026-09-14",
                                 note="Whole paper runs by the production day they started on; MSF is feet x width, no basis weight."))
     cases.append(rollstock_case(plain, "value-rollstock-august", "month", "2026-08-14",
-                                note="July is unavailable: previous feet, MSF, runs and deltas are null, never zero."))
+                                note="August against July: previous feet, MSF, runs and deltas present."))
+    cases.append(rollstock_case(plain, "value-rollstock-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
+                                note="The previous week is before the dataset: previous feet, MSF, runs and deltas are null, never zero."))
     cases.append(rollstock_case(plain, "value-rollstock-week-0914-shift-2", "week", "2026-09-14", 2,
                                 note="One shift: the setups it ran on each run; a run spanning two shifts counts in both."))
     # Over/under-run by knife: the story week for one shift, and September for all shifts.
@@ -1112,8 +1125,8 @@ def build(data=None):
     # series carry the heavy-case budget; the four-week one runs well inside the default.
     cases.append(trend_case(plain, "value-trend-trim-8w", "trim_pct", 8, "2026-09-30", day="2026-09-30", max_ms=HEAVY_MAX_MS))
     cases.append(trend_case(plain, "value-trend-warp-8w", "warp_pct", 8, "2026-09-14", max_ms=HEAVY_MAX_MS))
-    cases.append(trend_case(plain, "value-trend-stops-9w-missing-weeks", "stops", 9, "2026-09-14", max_ms=HEAVY_MAX_MS,
-                            note="Nine weeks back reaches July: two weeks are listed as missing, never as zero."))
+    cases.append(trend_case(plain, "value-trend-stops-9w-missing-weeks", "stops", 9, "2025-11-12", day="2025-11-12", max_ms=HEAVY_MAX_MS,
+                            note="Nine weeks back from 12 Nov 2025 reaches before the window: the weeks of 15 and 22 Sep are listed as missing, never as zero, and the week of 29 Sep is partial."))
     cases.append(trend_case(plain, "value-trend-msf-per-day-4w-shift-3", "msf_per_day", 4, "2026-09-14", 3))
     # The daily tools for three production days: the first day, a mid-September Monday, the last day.
     for day in ("2026-08-03", "2026-09-14", "2026-09-30"):
@@ -1162,11 +1175,11 @@ def build(data=None):
     cases.append(client_case())
     assert len({c["id"] for c in cases}) == len(cases)
     return {
-        "about": "GENERATED by evals/make_value_goldens.py from plain Python sums over synth.generate_months(); "
-                 "do not edit by hand. Each value is [expected, tolerance]; tolerance null means exact. "
-                 "evals/run.py refuses these cases when content_hash differs from the live store.",
+        "about": "GENERATED by evals/make_value_goldens.py from plain Python sums over synth.generate_window() for the year "
+                 "ending as_of; do not edit by hand. Each value is [expected, tolerance]; tolerance null means exact. "
+                 "evals/run.py scores them against the store of that window and refuses them when content_hash differs.",
         "generator": "evals/make_value_goldens.py",
-        "seed": SEED, "months": [list(m) for m in MONTHS], "machine_id": MACHINE,
+        "seed": SEED, "as_of": AS_OF, "first_day": FIRST_DAY, "machine_id": MACHINE,
         "content_hash": data["content_hash"],
         "cases": cases,
     }

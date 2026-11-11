@@ -27,9 +27,14 @@ DAY, SHIFT, RATES = '2026-09-14', 2, 'paper:60,hour:1350.5,margin:35,trim:3.1'
 DROP = ('source_ids',)
 
 
+GOLDEN_AS_OF = '2026-09-30'   # the golden window (evals/run.py GOLDEN_AS_OF, tests/conftest.py), not the rolling year ending yesterday
+
+
 def tool_input():
     """get_shift_dollars at the post's rates, as the card holds it (record ids and the SQL trace left out)."""
     os.environ.pop('INVESTIGATOR_RATES', None)
+    os.environ['INVESTIGATOR_AS_OF'] = GOLDEN_AS_OF   # before the store is imported: the tests read this window
+    os.environ.pop('INVESTIGATOR_PREBUILT', None)
     sys.path.insert(0, str(ROOT / 'src'))
     from investigator import cost_model
     from investigator.agent import Agent

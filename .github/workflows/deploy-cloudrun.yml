@@ -2,6 +2,12 @@
 # repository has a GCP_PROJECT_ID variable. No-op otherwise.
 # Builds from source (Cloud Build uses the Dockerfile), scale-to-zero, two instances max.
 #
+# Nightly (issue #35): the dataset is the year ending yesterday, fixed when the image is built
+# (Dockerfile), so the schedule below rebuilds and redeploys main every weekday and the demo's
+# window moves by a day; the smoke test fails a deploy whose window does not end yesterday.
+# Nothing is loaded: the new day is generated from its date. One Cloud Build a night. Run it by
+# hand from the Actions tab (workflow_dispatch) to move the window now.
+#
 # Keyless (issue #28): the job authenticates with Workload Identity Federation. GitHub mints a
 # short-lived OIDC token for this run, Google exchanges it for the deployer service account's
 # credentials, and nothing long-lived is stored anywhere. Repository VARIABLES (never secrets):
@@ -14,6 +20,8 @@ name: Deploy Cloud Run
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 13 * * 1-5'   # 13:00 UTC Monday to Friday (07:00 or 08:00 in Chicago, after the overnight shift ends): the window ends on the UTC date before the run
   workflow_dispatch:
 permissions:
   contents: read
@@ -161,6 +169,8 @@ jobs:
           SHA_LEN=$(( 63 - ${#SERVICE} - 1 - 5 - ${#TAIL} - 5 )); [ "$SHA_LEN" -gt 7 ] && SHA_LEN=7
           if [ "$SHA_LEN" -lt 1 ]; then echo "::error::the service name $SERVICE (${#SERVICE} characters) leaves no room for a revision suffix inside Cloud Run's 63-character revision name"; exit 1; fi
           SUFFIX="main-${GITHUB_SHA:0:$SHA_LEN}${TAIL}"
+          # The UTC day the build starts on: the image's window ends the day before (issue #35), and the smoke test checks it.
+          echo "RUN_DAY=$(date -u +%F)" >> "$GITHUB_ENV"
           echo "SUFFIX=${SUFFIX}" >> "$GITHUB_ENV"; echo "REVISION=${SERVICE}-${SUFFIX}" >> "$GITHUB_ENV"
           bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
             --allow-unauthenticated --min-instances 0 --max-instances 2 --cpu 1 --memory 1Gi \
@@ -222,6 +232,10 @@ jobs:
             if [ "$RANK" -lt "$LIVE_RANK" ]; then LIVE="$URL"; LIVE_RANK="$RANK"; fi
           done
           test -n "$LIVE"
+          # The window ends yesterday (issue #35): as_of is the day before the build, last_day the last production day
+          # (Mon-Fri) on or before it. An image layer that froze an older window fails here instead of passing silently.
+          curl -sS --max-time 30 -o /tmp/health.json "$LIVE/api/health"
+          python3 .github/scripts/check_window.py /tmp/health.json "$RUN_DAY"
           CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
           echo "live modes: $(echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); print(c.get("live_modes") or c.get("live_model_available"))')"
           if [ "$LIVE_MODEL" = "1" ]; then echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); sys.exit(0 if (c.get("live_modes") or c.get("live_model_available")) else 1)'; fi
