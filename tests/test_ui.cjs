@@ -1294,15 +1294,24 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(all(els.ledger),/Side trim 3\.33% of gross − 3% target = 0\.33 points over → \$/);
  els['rates-reset'].events.click(); assert.match(lineNow(),/contribution: margin not set$/);
 
- // all three shifts: the panel says so, and an incomplete shift is not added in; the line and the arithmetic say why
+ // all three shifts (tests/ui_fixtures/money_day.json, the server's answer on corrupt data): the card reads the day's own
+ // get_day_dollars, so the total, its $/yr, the chips and the arithmetic are the server's figures, not sums made here;
+ // the incomplete shift 2 is not added in, and the line and the arithmetic say why
  const asShift=(n,extra={})=>({...golden.input,shift:n,...extra});
- const threeAnswer={...money,url:'/corr/1/day/2026-09-14?measure=dollars&corrupt=1',trace:[1,2,3].map(n=>({tool:'get_shift_dollars',ok:true,result_id:'d:'+n,arguments:{shift:n},elapsed_ms:9,data:n===2?asShift(2,{coverage:'partial',excluded_records:[{record_id:'X',error:'bad trim'}]}):asShift(n)}))};
+ const threeAnswer=JSON.parse(fs.readFileSync('tests/ui_fixtures/money_day.json','utf8')), dayTotal=threeAnswer.trace.find(e=>e.tool==='get_day_dollars').data;
+ const before3=fetched.length;
  vm.runInContext(`thread.push({id:++seq,question:'q3',title:'All shifts',scope:{day:'2026-09-14',period:'day',shift:2,scope:'day'},answered:null,mode:'offline',report:false,corrupt:true,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(threeAnswer)},url:'/corr/1/day/2026-09-14?measure=dollars&corrupt=1',revealed:true});openId=seq;renderCard();`,ctx);
+ assert.equal(fetched.length,before3,'an answer with its own get_day_dollars asks for no money answer');
  const three=els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
  assert.match(textOf(three.children[0]),/^Shift 2: data incomplete, not counted in these dollars/);
- assert.equal(textOf(three.children[1]).split(' · ')[0],`≈ ${Money.money(Money.round(golden.input.total_usd*2,2))} recorded losses this day`);
+ assert.deepEqual(textOf(three.children[1]).split(' · ').slice(0,2),[`≈ ${Money.money(dayTotal.total_usd)} recorded losses this day`,`${Money.short(dayTotal.total_usd_per_year)}/yr at this day's rate`]);
+ assert.deepEqual(three.children[2].children.map(c=>textOf(c)),dayTotal.buckets.filter(b=>Money.money(b.usd)!=='$0').map(b=>`${b.bucket} ${Money.money(b.usd)}`),'the chips are the server\'s buckets');
  assert.match(textOf(els.money.children[0].children[0]),/^Where the money went · Shifts 1 and 3 · /);
- assert.match(all(els.ledger),/Shift 2: data incomplete, not counted/);
+ const ledger3=all(els.ledger);
+ assert.match(ledger3,/Shift 2: data incomplete, not counted/);
+ assert.ok(ledger3.includes(`${Money.fmt(dayTotal.area_sqft,0)} sq ft of trim, shear and rejects = ${Money.fmt(dayTotal.area_msf,1)} MSF`),ledger3);
+ assert.ok(ledger3.includes(`${Money.fmt(dayTotal.machine_minutes,1)} min (stops ${Money.fmt(dayTotal.stop_minutes,1)} · speed gap ${Money.fmt(dayTotal.speed_minutes,1)} · waste run time ${Money.fmt(dayTotal.waste_run_minutes,1)}) = ${Money.fmt(dayTotal.msf_not_made,1)} MSF not made`),ledger3);
+ assert.ok(ledger3.includes(`${Money.fixed(dayTotal.trim_pct_of_gross,2)}% of gross − 3.25% target = `),ledger3);
  // one shift on incomplete data: the dollars are shown as the observed records only
  const partial={...money,trace:[{...money.trace[0],data:asShift(2,{coverage:'partial',excluded_records:[{record_id:'X',error:'bad trim'}]})}]};
  vm.runInContext(`thread.push({id:++seq,question:'qp',title:'Partial',scope:{day:'2026-09-14',period:'day',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:true,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(partial)},url:'/corr/1/day/2026-09-14/shift/2?measure=dollars&corrupt=1',revealed:true});openId=seq;renderCard();`,ctx);
@@ -1337,6 +1346,28 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.ok(card.includes('Order change cost 127.33 this shift.'),'the model\'s words are as written');
  assert.match(card,/Written at the rates it was asked at \(paper \$70\/MSF \(yours\)/);
  els['rates-reset'].events.click();
+
+ // an analyst's answer about another day and shift than the rail's (#105): an analyst's card has no address of its own,
+ // so its money is read off its own queries' production_day and shift, never the rail's 14 September shift 2 (the #31b review)
+ {
+  const other=JSON.parse(JSON.stringify(whySlow));
+  for(const e of other.trace)if(e.data&&typeof e.data.production_day==='string'){ e.data.production_day='2026-09-30'; e.data.shift=1; }
+  Object.assign(other,{production_day:'2026-09-30',selected_shifts:[1],mode:'anthropic analyst',narrative:[],narrative_status:'available',usage:{tool_calls:4,model_calls:2,cost_usd:0.001},session_id:'s2',run_id:'r2',
+   context:{...other.context,production_day:'2026-09-14',shift:2,scope:'shift'}});   // a stale context: the queries decide
+  delete other.url;
+  ctx.fetch=async(path,init)=>{ if(path==='/api/ask')return {ok:true,status:200,text:async()=>JSON.stringify({type:'start'})+'\n'+JSON.stringify({type:'done',result:other})+'\n'}; return fetch31(path,init); };
+  const from=fetched.length;
+  await vm.runInContext("ask('Why was shift 1 slow on 30 September?',{mode:'anthropic',title:'analyst elsewhere'})",ctx); await tick(); await tick(); await tick();
+  const rec=vm.runInContext("thread.find(r=>r.title==='analyst elsewhere'||r.question==='Why was shift 1 slow on 30 September?'&&r.mode==='anthropic')",ctx);
+  assert.ok(rec&&rec.result&&!rec.url,'the analyst card has no address of its own');
+  assert.equal(vm.runInContext("companionUrl(thread.find(r=>r.result&&r.result.run_id==='r2'))",ctx),'/corr/1/day/2026-09-30/shift/1.json?measure=dollars');
+  assert.ok(fetched.slice(from).includes('/corr/1/day/2026-09-30/shift/1.json?measure=dollars'),'its money is asked for the answer\'s day and shift: '+fetched.slice(from).join(', '));
+  // an analyst plan over all three shifts of a day: the day's money, all shifts
+  const three=JSON.parse(JSON.stringify(other)); three.trace=[1,2,3].map(n=>({...JSON.parse(JSON.stringify(other.trace[0])),result_id:'k:'+n,data:{...other.trace[0].data,shift:n}})); three.run_id='r3';
+  vm.runInContext(`thread.push({id:++seq,question:'qa3',title:'analyst three',scope:{day:'2026-09-14',period:'day',shift:2,scope:'shift'},answered:null,mode:'anthropic',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(three)},revealed:true});`,ctx);
+  assert.equal(vm.runInContext("companionUrl(thread[thread.length-1])",ctx),'/corr/1/day/2026-09-30.json?measure=dollars');
+  ctx.fetch=fetch31;
+ }
 
  // under INVESTIGATOR_RATES, clearing your rates goes back to the server's: the button says so (Codex on #109)
  vm.runInContext("config.cost_model=JSON.parse(JSON.stringify(config.cost_model));config.cost_model.rates[0].value=61;config.cost_model.rates[0].source='server';renderRates()",ctx);

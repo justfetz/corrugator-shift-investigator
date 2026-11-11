@@ -127,6 +127,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "79,686.4 sq ft = 79.686 MSF x $55/MSF paper = $4,383; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 3.3265,
     "price_terms": {
      "kind": "trim",
      "quantity": 79686.4,
@@ -151,6 +152,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "12,806.2 sq ft = 12.806 MSF x $55/MSF paper = $704; 12.806 MSF / 5.4 MSF per min = 2.37 min x $1,200/hr machine time = $47.43; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.5346,
     "price_terms": {
      "kind": "waste",
      "quantity": 12806.2,
@@ -175,6 +177,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "11,218.7 sq ft = 11.219 MSF x $55/MSF paper = $617; 11.219 MSF / 5.4 MSF per min = 2.08 min x $1,200/hr machine time = $41.55; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.4683,
     "price_terms": {
      "kind": "waste",
      "quantity": 11218.699999999999,
@@ -199,6 +202,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "9,360.3 sq ft = 9.360 MSF x $55/MSF paper = $515; 9.360 MSF / 5.4 MSF per min = 1.73 min x $1,200/hr machine time = $34.67; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.3907,
     "price_terms": {
      "kind": "waste",
      "quantity": 9360.300000000001,
@@ -223,6 +227,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "26.88 min x $1,200/hr machine time = $538; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 5.6002,
     "price_terms": {
      "kind": "speed",
      "quantity": 26.880814814814713,
@@ -247,6 +252,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "4,531.1 sq ft = 4.531 MSF x $55/MSF paper = $249; 4.531 MSF / 5.4 MSF per min = 0.84 min x $1,200/hr machine time = $16.78; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.1892,
     "price_terms": {
      "kind": "waste",
      "quantity": 4531.099999999998,
@@ -271,6 +277,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "2,413.2 sq ft = 2.413 MSF x $55/MSF paper = $133; 2.413 MSF / 5.4 MSF per min = 0.45 min x $1,200/hr machine time = $8.94; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.1007,
     "price_terms": {
      "kind": "waste",
      "quantity": 2413.2,
@@ -295,6 +302,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "6.37 min x $1,200/hr machine time = $127; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 1.3264,
     "price_terms": {
      "kind": "downtime",
      "quantity": 6.366666666666666,
@@ -319,6 +327,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "4.65 min x $1,200/hr machine time = $93.00; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 0.9688,
     "price_terms": {
      "kind": "downtime",
      "quantity": 4.65,
@@ -343,6 +352,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "2.28 min x $1,200/hr machine time = $45.67; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 0.4757,
     "price_terms": {
      "kind": "downtime",
      "quantity": 2.283333333333333,
@@ -367,6 +377,7 @@
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
     "usd_basis": "1.65 min x $1,200/hr machine time = $33.00; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 0.3438,
     "price_terms": {
      "kind": "downtime",
      "quantity": 1.65,
@@ -386,6 +397,173 @@
   "total_usd_per_year": 5717620.0,
   "total_contribution_usd": null,
   "contribution_status": "margin not set",
+  "buckets": [
+   {
+    "bucket": "Trim",
+    "usd": 4382.75,
+    "usd_per_year": 3293263.0
+   },
+   {
+    "bucket": "Dry-end",
+    "usd": 1615.71,
+    "usd_per_year": 1214074.0
+   },
+   {
+    "bucket": "Shear",
+    "usd": 751.77,
+    "usd_per_year": 564892.0
+   },
+   {
+    "bucket": "Speed",
+    "usd": 537.62,
+    "usd_per_year": 414733.0
+   },
+   {
+    "bucket": "Stops",
+    "usd": 171.67,
+    "usd_per_year": 132429.0
+   },
+   {
+    "bucket": "Setups",
+    "usd": 127.33,
+    "usd_per_year": 98229.0
+   }
+  ],
+  "area_sqft": 120015.9,
+  "area_msf": 120.016,
+  "stop_minutes": 14.95,
+  "speed_minutes": 26.88,
+  "waste_run_minutes": 7.47,
+  "machine_minutes": 49.3,
+  "msf_not_made": 266.215,
+  "trim_pct_of_gross": 3.3265,
+  "trim_target_pct": 3.25,
+  "trim_points_over": 0.0765,
+  "trim_over_usd": 100.83,
+  "trim_over_usd_per_year": 75763.0,
+  "trim_over_basis": "1,833.2 sq ft = 1.833 MSF x $55/MSF paper = $101; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+  "trim_over_terms": {
+   "kind": "trim",
+   "quantity": 1833.2122499999903,
+   "gross_sqft": 2395482.7,
+   "minutes": 480,
+   "trim_pct": 3.326527885173205
+  },
+  "tile_money": [
+   {
+    "metric": "observed_shift_fpm",
+    "metrics": [
+     "observed_shift_fpm"
+    ],
+    "what": "the speed gap to 675 ft/min",
+    "usd": 537.62,
+    "usd_per_year": 414733.0,
+    "machine_minutes": 26.88,
+    "usd_basis": "26.88 min x $1,200/hr machine time = $538; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "parts": [
+     {
+      "kind": "speed",
+      "quantity": 26.880814814814713,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     }
+    ]
+   },
+   {
+    "metric": "maintenance_pct",
+    "metrics": [
+     "maintenance_pct"
+    ],
+    "what": "maintenance stops",
+    "usd": 93.0,
+    "usd_per_year": 71743.0,
+    "machine_minutes": 4.65,
+    "usd_basis": "4.65 min x $1,200/hr machine time = $93.00; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "parts": [
+     {
+      "kind": "downtime",
+      "quantity": 4.65,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     }
+    ]
+   },
+   {
+    "metric": "operator_pct",
+    "metrics": [
+     "operator_pct"
+    ],
+    "what": "operator stops",
+    "usd": 206.0,
+    "usd_per_year": 158914.0,
+    "machine_minutes": 10.3,
+    "usd_basis": "10.30 min x $1,200/hr machine time = $206; contribution: margin not set; per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "parts": [
+     {
+      "kind": "downtime",
+      "quantity": 10.3,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     }
+    ]
+   },
+   {
+    "metric": "dry_end_pct",
+    "metrics": [
+     "dry_end_pct"
+    ],
+    "what": "dry-end rejects",
+    "usd": 1615.71,
+    "usd_per_year": 1214074.0,
+    "machine_minutes": 5.1,
+    "usd_basis": "11,218.7 sq ft = 11.219 MSF x $55/MSF paper = $617; 11.219 MSF / 5.4 MSF per min = 2.08 min x $1,200/hr machine time = $41.55; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross) + 9,360.3 sq ft = 9.360 MSF x $55/MSF paper = $515; 9.360 MSF / 5.4 MSF per min = 1.73 min x $1,200/hr machine time = $34.67; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross) + 4,531.1 sq ft = 4.531 MSF x $55/MSF paper = $249; 4.531 MSF / 5.4 MSF per min = 0.84 min x $1,200/hr machine time = $16.78; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross) + 2,413.2 sq ft = 2.413 MSF x $55/MSF paper = $133; 2.413 MSF / 5.4 MSF per min = 0.45 min x $1,200/hr machine time = $8.94; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "parts": [
+     {
+      "kind": "waste",
+      "quantity": 11218.699999999999,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     },
+     {
+      "kind": "waste",
+      "quantity": 9360.300000000001,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     },
+     {
+      "kind": "waste",
+      "quantity": 4531.099999999998,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     },
+     {
+      "kind": "waste",
+      "quantity": 2413.2,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     }
+    ]
+   },
+   {
+    "metric": "trim_pct",
+    "metrics": [
+     "trim_pct"
+    ],
+    "what": "side trim",
+    "usd": 4382.75,
+    "usd_per_year": 3293263.0,
+    "machine_minutes": 0.0,
+    "usd_basis": "79,686.4 sq ft = 79.686 MSF x $55/MSF paper = $4,383; contribution: margin not set; per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "parts": [
+     {
+      "kind": "trim",
+      "quantity": 79686.4,
+      "gross_sqft": 2395482.7,
+      "minutes": 480
+     }
+    ]
+   }
+  ],
   "rates": [
    {
     "rate_id": "paper_usd_msf",
@@ -436,7 +614,8 @@
     "contribution_usd": 0,
     "contribution_usd_per_year": 0,
     "contribution_status": "set",
-    "usd_basis": "79,686.4 sq ft = 79.686 MSF x $60/MSF paper = $4,781; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)"
+    "usd_basis": "79,686.4 sq ft = 79.686 MSF x $60/MSF paper = $4,781; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 3.3265
    },
    {
     "gap": "Shear chops",
@@ -449,7 +628,8 @@
     "contribution_usd": 448.22,
     "contribution_usd_per_year": 336797,
     "contribution_status": "set",
-    "usd_basis": "12,806.2 sq ft = 12.806 MSF x $60/MSF paper = $768; 12.806 MSF / 5.4 MSF per min = 2.37 min x $1,350.5/hr machine time = $53.38; contribution 12.806 MSF not made x $35/MSF = $448 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)"
+    "usd_basis": "12,806.2 sq ft = 12.806 MSF x $60/MSF paper = $768; 12.806 MSF / 5.4 MSF per min = 2.37 min x $1,350.5/hr machine time = $53.38; contribution 12.806 MSF not made x $35/MSF = $448 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.5346
    },
    {
     "gap": "Dry-end: WARP",
@@ -462,7 +642,8 @@
     "contribution_usd": 392.65,
     "contribution_usd_per_year": 295046,
     "contribution_status": "set",
-    "usd_basis": "11,218.7 sq ft = 11.219 MSF x $60/MSF paper = $673; 11.219 MSF / 5.4 MSF per min = 2.08 min x $1,350.5/hr machine time = $46.76; contribution 11.219 MSF not made x $35/MSF = $393 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)"
+    "usd_basis": "11,218.7 sq ft = 11.219 MSF x $60/MSF paper = $673; 11.219 MSF / 5.4 MSF per min = 2.08 min x $1,350.5/hr machine time = $46.76; contribution 11.219 MSF not made x $35/MSF = $393 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.4683
    },
    {
     "gap": "Speed gap to 675 ft/min",
@@ -475,7 +656,8 @@
     "contribution_usd": 5080.47,
     "contribution_usd_per_year": 3919223,
     "contribution_status": "set",
-    "usd_basis": "26.88 min x $1,350.5/hr machine time = $605; contribution 145.156 MSF not made x $35/MSF = $5,080 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)"
+    "usd_basis": "26.88 min x $1,350.5/hr machine time = $605; contribution 145.156 MSF not made x $35/MSF = $5,080 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 5.6002
    },
    {
     "gap": "Dry-end: BOND",
@@ -488,7 +670,8 @@
     "contribution_usd": 327.61,
     "contribution_usd_per_year": 246171,
     "contribution_status": "set",
-    "usd_basis": "9,360.3 sq ft = 9.360 MSF x $60/MSF paper = $562; 9.360 MSF / 5.4 MSF per min = 1.73 min x $1,350.5/hr machine time = $39.02; contribution 9.360 MSF not made x $35/MSF = $328 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)"
+    "usd_basis": "9,360.3 sq ft = 9.360 MSF x $60/MSF paper = $562; 9.360 MSF / 5.4 MSF per min = 1.73 min x $1,350.5/hr machine time = $39.02; contribution 9.360 MSF not made x $35/MSF = $328 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.3907
    },
    {
     "gap": "Dry-end: MISALIGNMENT",
@@ -501,7 +684,8 @@
     "contribution_usd": 158.59,
     "contribution_usd_per_year": 119166,
     "contribution_status": "set",
-    "usd_basis": "4,531.1 sq ft = 4.531 MSF x $60/MSF paper = $272; 4.531 MSF / 5.4 MSF per min = 0.84 min x $1,350.5/hr machine time = $18.89; contribution 4.531 MSF not made x $35/MSF = $159 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)"
+    "usd_basis": "4,531.1 sq ft = 4.531 MSF x $60/MSF paper = $272; 4.531 MSF / 5.4 MSF per min = 0.84 min x $1,350.5/hr machine time = $18.89; contribution 4.531 MSF not made x $35/MSF = $159 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.1892
    },
    {
     "gap": "Dry-end: MOISTURE",
@@ -514,7 +698,8 @@
     "contribution_usd": 84.46,
     "contribution_usd_per_year": 63466,
     "contribution_status": "set",
-    "usd_basis": "2,413.2 sq ft = 2.413 MSF x $60/MSF paper = $145; 2.413 MSF / 5.4 MSF per min = 0.45 min x $1,350.5/hr machine time = $10.06; contribution 2.413 MSF not made x $35/MSF = $84.46 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)"
+    "usd_basis": "2,413.2 sq ft = 2.413 MSF x $60/MSF paper = $145; 2.413 MSF / 5.4 MSF per min = 0.45 min x $1,350.5/hr machine time = $10.06; contribution 2.413 MSF not made x $35/MSF = $84.46 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)",
+    "share_of_window_pct": 0.1007
    },
    {
     "gap": "Downtime: Order change",
@@ -527,7 +712,8 @@
     "contribution_usd": 1203.3,
     "contribution_usd_per_year": 928260,
     "contribution_status": "set",
-    "usd_basis": "6.37 min x $1,350.5/hr machine time = $143; contribution 34.380 MSF not made x $35/MSF = $1,203 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)"
+    "usd_basis": "6.37 min x $1,350.5/hr machine time = $143; contribution 34.380 MSF not made x $35/MSF = $1,203 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 1.3264
    },
    {
     "gap": "Downtime: Knife / slitter jam",
@@ -540,7 +726,8 @@
     "contribution_usd": 878.85,
     "contribution_usd_per_year": 677970,
     "contribution_status": "set",
-    "usd_basis": "4.65 min x $1,350.5/hr machine time = $105; contribution 25.110 MSF not made x $35/MSF = $879 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)"
+    "usd_basis": "4.65 min x $1,350.5/hr machine time = $105; contribution 25.110 MSF not made x $35/MSF = $879 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 0.9688
    },
    {
     "gap": "Downtime: Stacker",
@@ -553,7 +740,8 @@
     "contribution_usd": 431.55,
     "contribution_usd_per_year": 332910,
     "contribution_status": "set",
-    "usd_basis": "2.28 min x $1,350.5/hr machine time = $51.39; contribution 12.330 MSF not made x $35/MSF = $432 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)"
+    "usd_basis": "2.28 min x $1,350.5/hr machine time = $51.39; contribution 12.330 MSF not made x $35/MSF = $432 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 0.4757
    },
    {
     "gap": "Downtime: Raw material (roll)",
@@ -566,7 +754,8 @@
     "contribution_usd": 311.85,
     "contribution_usd_per_year": 240570,
     "contribution_status": "set",
-    "usd_basis": "1.65 min x $1,350.5/hr machine time = $37.14; contribution 8.910 MSF not made x $35/MSF = $312 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)"
+    "usd_basis": "1.65 min x $1,350.5/hr machine time = $37.14; contribution 8.910 MSF not made x $35/MSF = $312 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+    "share_of_window_pct": 0.3438
    }
   ],
   "total_usd": 8310.57,
@@ -575,6 +764,51 @@
   "total_usd_per_year": 6263547,
   "total_contribution_usd": 9317.55,
   "contribution_status": "set",
-  "provenance": "Rates: paper $60/MSF (yours), machine time $1,350.5/hr (yours), margin $35/MSF (yours), trim target 3.1% (yours)."
+  "provenance": "Rates: paper $60/MSF (yours), machine time $1,350.5/hr (yours), margin $35/MSF (yours), trim target 3.1% (yours).",
+  "buckets": [
+   {
+    "bucket": "Trim",
+    "usd": 4781.18,
+    "usd_per_year": 3592650
+   },
+   {
+    "bucket": "Dry-end",
+    "usd": 1766.11,
+    "usd_per_year": 1327089
+   },
+   {
+    "bucket": "Shear",
+    "usd": 821.75,
+    "usd_per_year": 617475
+   },
+   {
+    "bucket": "Speed",
+    "usd": 605.04,
+    "usd_per_year": 466747
+   },
+   {
+    "bucket": "Stops",
+    "usd": 193.19,
+    "usd_per_year": 149038
+   },
+   {
+    "bucket": "Setups",
+    "usd": 143.3,
+    "usd_per_year": 110548
+   }
+  ],
+  "area_sqft": 120015.9,
+  "area_msf": 120.016,
+  "stop_minutes": 14.95,
+  "speed_minutes": 26.88,
+  "waste_run_minutes": 7.47,
+  "machine_minutes": 49.3,
+  "msf_not_made": 266.215,
+  "trim_pct_of_gross": 3.3265,
+  "trim_target_pct": 3.1,
+  "trim_points_over": 0.2265,
+  "trim_over_usd": 325.59,
+  "trim_over_usd_per_year": 244650,
+  "trim_over_basis": "5,426.4 sq ft = 5.426 MSF x $60/MSF paper = $326; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added); per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)"
  }
 }

@@ -2950,6 +2950,17 @@
    }
   },
   {
+   "id": "refusal-rates-full-width-digits",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Where did the money go this shift?",
+   "rates": "paper:５５",
+   "note": "Review of PR 109 (item 4): Python's \\d and float() took full-width digits, so the server priced paper:５５ at $55 while web/money.js refuses it; a rate is ASCII digits only on both sides, so a link reproduces the page or is refused.",
+   "expect": {
+    "raises": "at most two decimals"
+   }
+  },
+  {
    "id": "period-control-week-why-slow",
    "type": "routing",
    "mode": "offline",

@@ -199,6 +199,8 @@ def via_url(case, expect, turns, redirect_only=False):
     for text in turns:
         params = [('day', case.get('day', DEFAULT_DAY)), ('shift', case.get('shift', 2)), ('scope', case.get('scope', 'shift')),
                   ('period', 'accounting' if period == 'fiscal' else period)]
+        if case.get('rates'):
+            params.append(('rates', case['rates']))   # the case's rate overrides, as the page sends them (issue #31b)
         if case.get('corrupt'):
             params.append(('corrupt', '1'))
         params.append(('q', text))

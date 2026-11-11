@@ -10,7 +10,7 @@
 // value-dollars-shift-0914-shift-2-client holds get_shift_dollars to this file's output.
 const Money=(()=>{
  const PAPER=new Set(['trim','waste','paper']), TIME=new Set(['downtime','speed']);
- const MONEY_TOOLS=new Set(['get_shift_dollars','get_opportunities']);
+ const MONEY_TOOLS=new Set(['get_shift_dollars','get_opportunities','get_day_dollars']);
  const WINDOW_FIELDS=['usd','paper_usd','machine_time_usd','contribution_usd'], YEAR_FIELDS=['usd_per_year','contribution_usd_per_year'];
  const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','gap_usd','gap_contribution_usd'], TOTAL_YEAR=['total_usd_per_year','gap_usd_per_year'];
  const LABEL_KEYS=['gap','lever','category','label','reason'];
@@ -72,7 +72,8 @@ const Money=(()=>{
  }
 
  // ---- pricing: cost_model.price, line for line
- const NOT_PRICED={msf:null,paper_usd:null,machine_minutes:null,machine_time_usd:null,usd:null,usd_per_year:null,msf_not_made:null,contribution_usd:null,contribution_usd_per_year:null,contribution_status:'not priced',usd_basis:'not priced: the quantity is unavailable or a negative remainder',price_terms:null};
+ const NOT_PRICED={msf:null,paper_usd:null,machine_minutes:null,machine_time_usd:null,usd:null,usd_per_year:null,msf_not_made:null,contribution_usd:null,contribution_usd_per_year:null,contribution_status:'not priced',usd_basis:'not priced: the quantity is unavailable or a negative remainder',share_of_window_pct:null,price_terms:null};
+ const add=values=>{ let total=0; for(const v of values)total+=v; return total; };   // cost_model._add: left to right
  function price(kind,quantity,rates,gross,minutes,cfg){
   const v=rates.values, C=cfg.constants, paper=v.paper_usd_msf, hour=v.machine_usd_hour, margin=v.margin_usd_msf;
   const byVolume=gross?C.annual_msf_per_machine/(gross/1000):null, byTime=minutes?C.annual_minutes/minutes:null;
@@ -104,6 +105,7 @@ const Money=(()=>{
   return {msf:msf===null?null:round(msf,3),paper_usd:round(paperUsd,2),machine_minutes:round(machineMinutes,2),machine_time_usd:round(machineUsd,2),usd:round(usd,2),
    usd_per_year:usdYear===null?null:round(usdYear,0),msf_not_made:round(notMade,3),contribution_usd:round(contribution,2),
    contribution_usd_per_year:contributionYear===null?null:round(contributionYear,0),contribution_status:status,usd_basis:parts.join('; '),
+   share_of_window_pct:(PAPER.has(kind)?gross:minutes)?round(quantity/(PAPER.has(kind)?gross:minutes)*100,4):null,
    price_terms:{kind,quantity,gross_sqft:gross||null,minutes:minutes||null}};
  }
  // One priced row at `rates`, from its own terms. The get_opportunities trim lever is re-derived first: its quantity is
@@ -125,13 +127,45 @@ const Money=(()=>{
   return rows;
  }
  function totals(rows,cfg){   // cost_model._totals
-  const total=key=>{ const vs=rows.map(r=>r[key]).filter(v=>v!==null&&v!==undefined); return vs.length?round(vs.reduce((s,v)=>s+v,0),2):0; };
+  const total=key=>{ const vs=rows.map(r=>r[key]).filter(v=>v!==null&&v!==undefined); return vs.length?round(add(vs),2):0; };
   const out={total_usd:total('usd'),total_paper_usd:total('paper_usd'),total_machine_time_usd:total('machine_time_usd')};
   const years=rows.map(r=>r.usd_per_year);
-  out.total_usd_per_year=rows.length&&!years.some(v=>v===null||v===undefined)?round(years.reduce((s,v)=>s+v,0),0):null;
+  out.total_usd_per_year=rows.length&&!years.some(v=>v===null||v===undefined)?round(add(years),0):null;
   const set=rows.every(r=>r.contribution_status!==cfg.margin_not_set);
   out.total_contribution_usd=set?total('contribution_usd'):null; out.contribution_status=set?'set':cfg.margin_not_set;
   return out;
+ }
+ // cost_model.bucket_of / summary: the chips' bucket totals and the arithmetic's sums, from the rows in their ranked order.
+ function bucketOf(row){
+  const kind=(row.price_terms&&row.price_terms.kind)||row.kind, name=String(row.gap||row.lever||'').toLowerCase();
+  if(row.kind==='setup')return 'Setups';
+  if(kind==='downtime'||kind==='speed'||kind==='trim')return {downtime:'Stops',speed:'Speed',trim:'Trim'}[kind];
+  return name.startsWith('shear')?'Shear':name.startsWith('dry-end')?'Dry-end':'Other waste';
+ }
+ function summary(rows){
+  const buckets=new Map();
+  for(const r of rows)if(r.usd!==null&&r.usd!==undefined){ const k=bucketOf(r), b=buckets.get(k)||{usd:[],year:[]}; b.usd.push(r.usd); b.year.push(r.usd_per_year); buckets.set(k,b); }
+  const out=[...buckets.entries()].map(([bucket,b])=>({bucket,usd:round(add(b.usd),2),usd_per_year:b.year.some(v=>v===null||v===undefined)?null:round(add(b.year),0)}));
+  out.sort((a,b)=>(b.usd-a.usd)||(a.bucket<b.bucket?-1:a.bucket>b.bucket?1:0));
+  const priced=rows.filter(r=>r.price_terms), minutes=kind=>round(add(priced.filter(r=>r.price_terms.kind===kind).map(r=>r.machine_minutes)),2);
+  const area=add(priced.filter(r=>PAPER.has(r.price_terms.kind)).map(r=>r.price_terms.quantity));
+  return {buckets:out,area_sqft:round(area,1),area_msf:round(area/1000,3),
+   stop_minutes:minutes('downtime'),speed_minutes:minutes('speed'),waste_run_minutes:minutes('waste'),
+   machine_minutes:round(add(priced.map(r=>r.machine_minutes)),2),msf_not_made:round(add(priced.map(r=>r.msf_not_made)),3)};
+ }
+ // cost_model.trim_over_target: the trim points over the target and their paper dollars a year, from the side trim's share.
+ function trimOver(t,rates,cfg){
+  const target=rates.values.trim_target_pct, over=Math.max(0,(t.trim_pct||0)-target);
+  const p=price('trim',t.gross_sqft?over/100*t.gross_sqft:0,rates,t.gross_sqft,t.minutes,cfg);
+  return {trim_pct_of_gross:t.trim_pct===null||t.trim_pct===undefined?null:round(t.trim_pct,4),trim_target_pct:target,trim_points_over:round(over,4),
+   trim_over_usd:p.usd,trim_over_usd_per_year:p.usd_per_year,trim_over_basis:p.usd_basis,trim_over_terms:{...p.price_terms,trim_pct:t.trim_pct||0}};
+ }
+ // cost_model.tile: a KPI tile's dollars, the sum of its parts' pricing calls.
+ function tile(t,rates,cfg){
+  const priced=(t.parts||[]).map(p=>p?price(p.kind,p.quantity,rates,p.gross_sqft,p.minutes,cfg):{...NOT_PRICED});
+  const usd=priced.map(r=>r.usd).filter(v=>v!==null&&v!==undefined), years=priced.map(r=>r.usd_per_year);
+  return {...t,usd:usd.length?round(add(usd),2):null,usd_per_year:!priced.length||years.some(v=>v===null||v===undefined)?null:round(add(years),0),
+   machine_minutes:round(add(priced.map(r=>r.machine_minutes||0)),2),usd_basis:priced.map(r=>r.usd_basis).join(' + '),parts:priced.map(r=>r.price_terms)};
  }
  // A tool result at `rates`: every priced row re-priced from its terms; the two money tools re-ranked with their
  // totals redone; the rates rows and the provenance line rewritten. `byIndex` (not enumerable) keeps the re-priced rows
@@ -148,19 +182,21 @@ const Money=(()=>{
    contribution_status:rates.values.margin_usd_msf===null||rates.values.margin_usd_msf===undefined?cfg.margin_not_set:'set'});
  }
  function reprice(tool,data,rates,cfg){
-  if(!data||!Array.isArray(data.rows)||!data.rows.some(r=>r&&r.price_terms))return data;
-  const byIndex=data.rows.map(r=>repriceRow(tool,r,rates,cfg)), out={...data,rows:[...byIndex]};
+  if(!priced(data))return data;
+  const rows=Array.isArray(data.rows)?data.rows:[], byIndex=rows.map(r=>repriceRow(tool,r,rates,cfg)), out={...data,rows:[...byIndex]};
   if(tool==='get_speed_variance')speedVariance(data,byIndex,out,rates,cfg);   // a chart of it has the rows only
-  if(MONEY_TOOLS.has(tool)){ rank(out.rows,tool==='get_opportunities'?'usd_per_year':'usd'); Object.assign(out,totals(out.rows,cfg)); }
+  if(MONEY_TOOLS.has(tool)){ rank(out.rows,tool==='get_opportunities'?'usd_per_year':'usd'); Object.assign(out,totals(out.rows,cfg)); if('buckets' in data)Object.assign(out,summary(out.rows)); }
+  if(data.trim_over_terms)Object.assign(out,trimOver(data.trim_over_terms,rates,cfg));
+  if(Array.isArray(data.tile_money))out.tile_money=data.tile_money.map(t=>tile(t,rates,cfg));
   if('provenance' in data){ out.rates=rateRows(rates,cfg); out.provenance=provenance(rates,cfg); }
   Object.defineProperty(out,'byIndex',{value:byIndex,enumerable:false});
   return out;
  }
- const priced=data=>!!(data&&Array.isArray(data.rows)&&data.rows.some(r=>r&&r.price_terms));
+ const priced=data=>!!(data&&(Array.isArray(data.tile_money)&&data.tile_money.length||data.trim_over_terms||Array.isArray(data.rows)&&data.rows.some(r=>r&&r.price_terms)));
  // A chart drawn from a priced result (render_chart): its rows at `rates`, ranked as its tool ranks them.
  const repriceChart=(chart,tool,rates,cfg)=>priced(chart)?reprice(tool,chart,rates,cfg):chart;
  // A priced row's share of its window: area rows of the gross, time rows of the scheduled minutes.
- function share(row){ const t=row&&row.price_terms; if(!t)return null; const basis=PAPER.has(t.kind)?t.gross_sqft:t.minutes; return basis?t.quantity/basis*100:null; }
+ const share=row=>row&&row.share_of_window_pct!==undefined?row.share_of_window_pct:null;   // the row's own share of its window (cost_model.price)
 
  // ---- the answer's prose at the visitor's rates (shapes.py wrote it at the request's rates). Each dollar figure is a
  // field of the row or result its line cites, written by shapes.money; it becomes the same field re-priced. The rates
@@ -263,7 +299,7 @@ const Money=(()=>{
   }
   return out;
  }
- return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,totals,
+ return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,totals,summary,bucketOf,trimOver,tile,
   repriceSections,contributionLine,PAPER,TIME,MONEY_TOOLS};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Money;

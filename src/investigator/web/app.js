@@ -593,7 +593,7 @@ function deltaChip(row,withheld){
  chip.title=change==='neutral'?'A count: context, not a score.':`${change} — ${row.better} is better for ${row.label.toLowerCase()}`;
  return chip;
 }
-function kpiTile(row,withheld,priced=null){
+function kpiTile(row,withheld,priced=null){   // priced: the tool's tile_money entry for this tile's metric (#31b)
  const tile=node('div',undefined,'tile'+(row.change&&!withheld?' '+row.change:''));
  tile.append(node('div',row.label,'l'));
  const v=node('div',undefined,'v');v.append(node('span',fmtNumber(row.current,row.unit)));const unit=unitShort(row.unit);if(unit&&row.current!==null)v.append(node('small',unit));tile.append(v);
@@ -604,7 +604,7 @@ function kpiTile(row,withheld,priced=null){
  return tile;
 }
 function orderedTiles(rows){ const rank=k=>{const i=TILE_PRIORITY.indexOf(k);return i<0?TILE_PRIORITY.length:i;}; return rows.map((r,i)=>[rank(r.metric),i,r]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]).map(x=>x[2]); }
-function renderKpiTiles(data,caption,trace=[]){
+function renderKpiTiles(data,caption){
  const box=$('kpis');box.replaceChildren();
  const withheld=data.comparison!=='complete';
  const head=node('div',undefined,'kpis-head');
@@ -612,8 +612,8 @@ function renderKpiTiles(data,caption,trace=[]){
  if(data.equal_production_days===false)head.append(node('span',`${data.production_days_current} vs ${data.production_days_previous} production days: compare MSF/day and the ratio tiles, not raw totals`,'warning-note'));
  if(caption)head.append(node('span',caption,'muted mono'));box.append(head);
  if(withheld)box.append(node('p',`Deltas withheld: ${String(data.comparison||'').replace(/^withheld:\s*/,'')||'a window is incomplete or unavailable'}. Missing days are not zero production.`,'warning-note'));
- const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows), price=periodTileMoney(data,trace);
- rows.forEach((row,i)=>{const tile=kpiTile(row,withheld,data.coverage==='complete'||data.window&&data.window.coverage==='complete'?price(row):null);if(i>=VISIBLE_TILES)tile.className+=' extra';grid.append(tile);});
+ const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows);
+ rows.forEach((row,i)=>{const tile=kpiTile(row,withheld,data.coverage==='complete'||data.window&&data.window.coverage==='complete'?tileOf(data,row.metric):null);if(i>=VISIBLE_TILES)tile.className+=' extra';grid.append(tile);});
  box.append(grid);
  if(rows.length>VISIBLE_TILES){const more=node('button',`Show ${rows.length-VISIBLE_TILES} more`,'secondary more');more.type='button';more.setAttribute('aria-expanded','false');
   more.addEventListener('click',()=>{const open=grid.className.includes('expanded');grid.className=open?'kpi-grid':'kpi-grid expanded';more.setAttribute('aria-expanded',String(!open));more.textContent=open?`Show ${rows.length-VISIBLE_TILES} more`:'Show fewer';});box.append(more);}
@@ -639,11 +639,12 @@ async function post(path,body,extraHeaders={}){
  return response;
 }
 
-// The idle card's tiles, drawn again when a rate or the unit changes.
+// The idle card's tiles, drawn again when a rate or the unit changes: the tool's tile dollars re-priced at the rates in force.
 function paintPrimed(){
  if(!primed||openId!==null)return;
- const {entry,question,result}=primed; $('kpis').replaceChildren();
- renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
+ const {entry,question,result}=primed, cfg=costCfg(); $('kpis').replaceChildren();
+ const data=cfg&&ratesKey()&&Money.priced(entry.data)?Money.reprice(entry.tool,entry.data,ratesNow(),cfg):entry.data;
+ renderKpiTiles(data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”, the address ${result.url||''}. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
 }
 async function primeKpis(){
@@ -727,31 +728,33 @@ function usageText(usage){ return usage.model_calls?`${usage.tool_calls} tool ca
 // runs *before* its frame paints, so the work is queued for the frame after: two frames deep.
 // Without a frame scheduler (tests), it renders synchronously.
 function afterPaint(f){if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>requestAnimationFrame(f));else f();}
-// The shift KPI tiles: the numbers of one get_shift_kpis row on seven tiles, one row of the card (#63).
+// The shift KPI tiles: the numbers of one get_shift_kpis row on seven tiles, one row of the card (#63). A tile that
+// measures a loss gets a money slot, filled from the card's money answer when it lands (paintTiles, #31b).
+let tileSlots=[];
 function shiftTiles(entry,result,prefix){
  const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete', who=prefix?`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · `:'';
  const n=(v,places)=>Number(v).toLocaleString(undefined,{minimumFractionDigits:places,maximumFractionDigits:places});
- for(const [label,value,unit,places,sub,bad,title] of [
-  ['Speed',r.observed_shift_fpm,'ft/min',1,`${n(r.speed_to_target_pct,1)}% of target`,r.speed_to_target_pct<100,'Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.'],
-  ['Maintenance',r.maintenance_pct,'%',2,'target 2.5%',r.maintenance_pct>2.5],
-  ['Operator',r.operator_pct,'%',2,'target 2.5%',r.operator_pct>2.5],
-  ['Dry-end waste',r.dry_end_pct,'%',2,r.dry_end_pct>1?'above 1%':'flag above 1%',r.dry_end_pct>1],
-  ['Trim',r.trim_pct,'%',2,`shear ${n(r.shear_pct,2)}%`,false],
+ for(const [label,value,unit,places,sub,bad,title,metric] of [
+  ['Speed',r.observed_shift_fpm,'ft/min',1,`${n(r.speed_to_target_pct,1)}% of target`,r.speed_to_target_pct<100,'Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.','observed_shift_fpm'],
+  ['Maintenance',r.maintenance_pct,'%',2,'target 2.5%',r.maintenance_pct>2.5,undefined,'maintenance_pct'],
+  ['Operator',r.operator_pct,'%',2,'target 2.5%',r.operator_pct>2.5,undefined,'operator_pct'],
+  ['Dry-end waste',r.dry_end_pct,'%',2,r.dry_end_pct>1?'above 1%':'flag above 1%',r.dry_end_pct>1,undefined,'dry_end_pct'],
+  ['Trim',r.trim_pct,'%',2,`shear ${n(r.shear_pct,2)}%`,false,undefined,'trim_pct'],
   ['Setups',r.valid_setups,'',0,`${n(r.paper_changes,0)} paper changes`,false,'Dry-end setups; paper changes are the count of distinct wet-end runs, as defined by the plant expert.'],
   ['Throughput',r.throughput_in,'in',1,`${n(r.lineal_per_setup,0)} ft / setup`,false]]){
   const card=node('div',undefined,'metric'+(bad||incomplete?' warning':''));card.append(node('div',who+label,'label'));if(title)card.title=title;
   const v=node('div',undefined,'value');v.append(node('span',incomplete?'Incomplete':n(value,places)));if(unit&&!incomplete)v.append(node('small',unit));card.append(v);
   card.append(node('div',incomplete?`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`:sub,'sub'+(bad||incomplete?' flag':'')));
-  if(!incomplete&&entry.tool!=='get_period_report')moneyOnTile(card,v,`${n(value,places)}${unit?' '+unit:''}`,shiftTileMoney(label,r),'this shift');   // #31b: the loss the tile measures, $/shift and $/yr (one shift's row; a report's row is a whole window, priced in its panel)
+  if(!incomplete&&metric&&entry.tool!=='get_period_report'){ const line=node('div','','usd'); card.append(line); tileSlots.push({card,v,kids:[...v.children],line,metric,native:`${n(value,places)}${unit?' '+unit:''}`,day:entry.data.production_day,shift:entry.data.shift}); }   // #31b: $/shift and $/yr once the money answer lands (a report's row is a whole window, priced in its panel)
   $('metrics').append(card);
  }
 }
 function showResult(result) {   // result: at the rates in force (#31b); its trail is what the page's own address returns at them
- latest=result;
+ latest=result; tileSlots=[];
  for(const id of ['heatmaps','kpis','tables','charts','metrics','trace'])$(id).replaceChildren();   // the open card shows one answer's evidence
  renderQueries(result);   // the query box: first below the title line, built in the first paint (#40)
  const kpiEntry=result.trace.find(e=>e.ok&&(e.tool==='get_period_kpis'||e.tool==='compare_periods'));
- if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`,result.trace);
+ if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`);
  const shiftKpis=result.trace.filter(e=>e.ok&&(e.tool==='get_shift_kpis'||e.tool==='get_shift_overview'||e.tool==='get_period_report'));
  for(const entry of shiftKpis)shiftTiles(entry,result,shiftKpis.length>1);
  for(const table of result.tables||[])showTable(table);
@@ -798,13 +801,18 @@ function pricedView(result,asked){
 }
 function viewOf(rec){ const key=ratesKey(); if(!rec.view||rec.view.key!==key||rec.view.of!==rec.result)rec.view={key,of:rec.result,...pricedView(rec.result,askedRates(rec))}; return rec.view; }
 // ---- the card's money: its own money queries, or its scope's money answer
-// The money answer of the window the card's answer ran over: a question can name its own ("How did September go
-// versus August?" under Day is about September), so the first windowed query decides, else the rail's scope.
+// The money answer of the scope the card's answer ran over, never the rail's when the answer says otherwise: a question
+// can name its own window ("How did September go versus August?" under Day is about September) or its own day and shift
+// (#105), and an analyst's answer has no address of its own (the #31b review), so its queries decide: the first
+// windowed query, else the day queries' production_day and shift (several shifts: all shifts), else the answer's context.
 function companionUrl(rec){
- const s=rec.scope, step=((rec.result&&rec.result.trace)||[]).find(e=>e.ok&&e.data&&e.data.window&&e.data.window.period&&e.data.window.start);
+ const s=rec.scope, trace=(rec.result&&rec.result.trace)||[], step=trace.find(e=>e.ok&&e.data&&e.data.window&&e.data.window.period&&e.data.window.start);
  let grain=GRAIN[s.period]||'day', day=s.day, shift=s.scope==='shift'?s.shift:null;
- const own=rec.url&&CANONICAL.exec(pathOf(rec.url));   // the answer's own address: a question can name another day and shift (#105)
+ const own=rec.url&&CANONICAL.exec(pathOf(rec.url));   // the answer's own address
+ const daily=trace.filter(e=>e.ok&&e.tool!=='render_chart'&&e.data&&typeof e.data.production_day==='string'&&!(e.data.window&&e.data.window.period)), ctx=rec.result&&rec.result.context;
  if(own){ grain=own[1]; day=own[2]; shift=own[3]?Number(own[3]):null; }
+ else if(daily.length){ const shifts=new Set(daily.map(e=>e.data.shift)); grain='day'; day=daily[0].data.production_day; shift=shifts.size===1&&typeof daily[0].data.shift==='number'?daily[0].data.shift:null; }
+ else if(ctx&&typeof ctx.production_day==='string'&&!step){ grain='day'; day=ctx.production_day; shift=ctx.scope==='shift'&&typeof ctx.shift==='number'?ctx.shift:null; }
  if(step){
   const w=step.data.window, days=storeDays()||[], first=days.find(d=>d>=w.start&&d<=w.end);
   if(first){ grain={day:'day',week:'week',month:'month',fiscal:'period'}[w.period]||grain; day=days.includes(w.anchor)?w.anchor:first; shift=typeof step.data.shift==='number'?step.data.shift:null; }
@@ -815,7 +823,7 @@ function moneyOf(rec){
  if(!costCfg()||!rec||rec.state!=='done'||!rec.result)return null;
  const m=rec.money;
  if(m&&!(m.state==='error'&&clock()-m.at>15000))return m;   // a failed money answer is asked again on a later paint, not in a loop
- if((rec.result.trace||[]).some(e=>e.ok&&Money.MONEY_TOOLS.has(e.tool)))return rec.money={state:'ready',own:true,result:rec.result,asked:askedRates(rec),url:rec.url};
+ if(moneyStep(rec.result.trace||[]))return rec.money={state:'ready',own:true,result:rec.result,asked:askedRates(rec),url:rec.url};
  const url=companionUrl(rec), fresh=rec.money={state:'pending',own:false,result:null,asked:'',url:url.replace('.json','')};
  let p=companions.get(url);
  // The money request goes out after the card's first paint (afterPaint: two frames), so it never competes with the
@@ -832,38 +840,34 @@ function bucketOf(row){
  if(/^shear/i.test(name))return 'Shear'; if(/^dry-end/i.test(name))return 'Dry-end'; return 'Other waste';
 }
 const WHEN={day:'this day',week:'this week',month:'this month',fiscal:'this 4-4-5 period'};
-// The money of a card in one shape for its line, panel and arithmetic: rows (one per lever or gap; summed by name
-// across the shifts of an all-shifts day), totals, and what the window is.
+// The one money query a card's money is read from: the day's get_day_dollars when the answer has it (an all-shifts day),
+// else its only get_shift_dollars or get_opportunities. Several money queries and no day total (an analyst's plan over
+// two shifts) are not added up here: the card takes its scope's money answer instead (moneyOf).
+function moneyStep(trace){
+ const steps=trace.filter(e=>e.ok&&Money.MONEY_TOOLS.has(e.tool));
+ return steps.find(e=>e.tool==='get_day_dollars')||(steps.length===1?steps[0]:null);
+}
+// The money of a card in one shape for its line, panel and arithmetic. Every figure is a field of the money query
+// (cost_model.summary, trim_over_target, _totals; get_day_dollars for an all-shifts day), re-priced as a whole at the
+// rates in force; nothing is summed here (the #31b review: no figure is the browser's own).
 function moneyFacts(m){
- const cfg=costCfg(), rates=ratesNow(), key=ratesKey();
- let steps=(m.result.trace||[]).map((e,i)=>e.ok&&Money.MONEY_TOOLS.has(e.tool)?{tool:e.tool,q:i+1,data:m.asked===key?e.data:Money.reprice(e.tool,e.data,rates,cfg)}:null).filter(Boolean);
- if(!steps.length)return null;
- const incomplete=steps.filter(x=>x.data.coverage!=='complete'), excluded=incomplete.reduce((n,x)=>n+((x.data.excluded_records||[]).length),0);
+ const cfg=costCfg(), rates=ratesNow(), e=moneyStep(m.result.trace||[]);
+ if(!e)return null;
+ const d=atRates(m,e), levers=e.tool==='get_opportunities', day=e.tool==='get_day_dollars';
+ const excluded=(d.excluded_records||[]).length, dropped=day?d.excluded_shifts||[]:[];
  let warning=null;
- if(steps.length>1&&incomplete.length&&incomplete.length<steps.length){
-  steps=steps.filter(x=>x.data.coverage==='complete');
-  warning=`Shift ${incomplete.map(x=>x.data.shift).join(' and ')}: data incomplete, not counted in these dollars; they are the complete shifts'.`;
- }else if(incomplete.length)warning=`Incomplete data: ${excluded||'some'} excluded record${excluded===1?'':'s'}. These dollars are the observed records only, not the whole ${steps[0].tool==='get_opportunities'?'window':'shift'}; do not rank them.`;
- const levers=steps[0].tool==='get_opportunities', d0=steps[0].data, sum=k=>steps.reduce((s,x)=>s+(x.data[k]||0),0);
- const all=steps.flatMap(x=>x.data.rows.map(r=>({...r,shift:x.data.shift})));
- const byName=new Map();
- for(const r of all){
-  const name=r.gap||r.lever, t=r.price_terms||{}, area=Money.PAPER.has(t.kind);
-  const e=byName.get(name)||{name,bucket:bucketOf(r),usd:0,year:steps.length>1?null:r.usd_per_year,minutes:0,qty:0,base:0,area,rows:[]};
-  e.usd+=r.usd||0; e.minutes+=r.machine_minutes||0; e.qty+=t.quantity||0; e.base+=(area?t.gross_sqft:t.minutes)||0; e.rows.push(r); byName.set(name,e);
- }
- const rows=[...byName.values()].map(e=>({...e,share:e.base?e.qty/e.base*100:null}));
- const buckets=new Map(); for(const r of rows)buckets.set(r.bucket,(buckets.get(r.bucket)||0)+r.usd);
- const one=steps.length===1, window=d0.window&&d0.window.period;
- return {levers,steps,all,rows,one,cfg,rates,warning,
-  total:steps.length>1?Money.round(sum('total_usd'),2):d0.total_usd, year:one?d0.total_usd_per_year:null,
-  paper:Money.round(sum('total_paper_usd'),2), machine:Money.round(sum('total_machine_time_usd'),2),
-  contribution:steps.every(x=>x.data.total_contribution_usd!==null&&x.data.total_contribution_usd!==undefined)?Money.round(sum('total_contribution_usd'),2):null,
-  buckets:[...buckets.entries()].sort((a,b)=>b[1]-a[1]),
-  when:levers?WHEN[window]||'this window':one?'this shift':'this day',
-  who:one?(d0.shift?`Shift ${d0.shift}`:'All shifts'):steps.length===3?'All three shifts':`Shifts ${steps.map(x=>x.data.shift).join(' and ')}`,
-  label:levers?(d0.window&&d0.window.label)||'':(d0.production_day||''),
-  perShift:one?null:steps.map(x=>`shift ${x.data.shift} ${Money.short(x.data.total_usd_per_year)}/yr`).join(' · ')};
+ if(dropped.length)warning=`Shift ${dropped.join(' and ')}: data incomplete, not counted in these dollars; they are the complete shifts'.`;
+ else if(d.coverage!=='complete')warning=`Incomplete data: ${excluded||'some'} excluded record${excluded===1?'':'s'}. These dollars are the observed records only, not the whole ${levers?'window':day?'day':'shift'}; do not rank them.`;
+ const rows=d.rows.map(r=>({name:r.gap||r.lever,bucket:bucketOf(r),usd:r.usd||0,year:r.usd_per_year,minutes:r.machine_minutes||0,share:Money.share(r),
+  area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),rows:[r]}));
+ const counted=day?(d.shifts||[]).filter(x=>!dropped.includes(x.shift)).map(x=>x.shift):[];
+ return {levers,day,data:d,rows,cfg,rates,warning,
+  total:d.total_usd, year:d.total_usd_per_year, paper:d.total_paper_usd, machine:d.total_machine_time_usd, contribution:d.total_contribution_usd,
+  buckets:(d.buckets||[]).map(b=>[b.bucket,b.usd]),
+  when:levers?WHEN[d.window&&d.window.period]||'this window':day?'this day':'this shift',
+  who:levers?(d.shift?`Shift ${d.shift}`:'All shifts'):day?(dropped.length?`Shifts ${counted.join(' and ')}`:'All shifts'):`Shift ${d.shift}`,
+  label:levers?(d.window&&d.window.label)||'':(d.production_day||''),
+  perShift:day?(d.shifts||[]).filter(x=>!dropped.includes(x.shift)).map(x=>`shift ${x.shift} ${Money.short(x.total_usd_per_year)}/yr`).join(' · '):null};
 }
 // The slot under the headline the dollar line fills (an analyst's card: the top of its interpretation).
 function dollarSlot(summary){
@@ -877,6 +881,7 @@ function dollarSlot(summary){
 function paintMoney(rec){
  const m=moneyOf(rec), line=rec.lineEl, panel=$('money'), ledger=$('ledger');
  panel.replaceChildren(); ledger.replaceChildren(); if(line)line.replaceChildren();
+ paintTiles(rec,m);
  if(!m)return;
  if(m.state!=='ready'){ if(line)line.append(node('p',m.state==='pending'?'Pricing this card at your rates…':`No dollars for this card: ${m.error}`,'muted dollar-wait')); return; }
  const f=moneyFacts(m); if(!f)return;
@@ -888,8 +893,7 @@ function fillDollarLine(line,f){
  if(f.warning)line.append(node('p',f.warning,'warning-note'));
  const lead=node('p',undefined,'dollar-lead');
  lead.append(node('span','≈ '),node('strong',Money.money(f.total),'figure'),node('span',` ${f.levers?'in levers':'recorded losses'} ${f.when}`));
- if(f.year!==null&&f.year!==undefined)lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',' at this rate'));
- else if(f.perShift)lead.append(node('span',` · ${f.perShift} at each shift's rate`));
+ if(f.year!==null&&f.year!==undefined)lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',f.day?' at this day\'s rate':' at this rate'));
  const margin=f.rates.values.margin_usd_msf;   // the line says plainly whether contribution is priced
  lead.append(node('span',margin===null||margin===undefined?` · contribution: ${f.cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(margin)}/MSF, not added`,'contrib'));
  const chips=node('p',undefined,'chips');
@@ -905,15 +909,15 @@ function unitLabel(r,mode,yearly){
  const year=r.year!==null&&r.year!==undefined;
  return yearly&&year?`${Money.short(r.year)}/yr`:Money.money(r.usd)+(year?` · ${Money.short(r.year)}/yr`:'');
 }
-function rowFormula(r){ return r.rows.length===1?r.rows[0].usd_basis:r.rows.map(x=>`shift ${x.shift}: ${x.usd_basis}`).join(' | '); }
-function rowRecords(r){ const x=r.rows[0]; return r.rows.length>1?`${r.rows.length} shifts`:x.records||(Array.isArray(x.source_ids)?`${x.source_ids.length} records`:''); }
+function rowFormula(r){ return r.rows[0].usd_basis; }
+function rowRecords(r){ const x=r.rows[0]; return x.records||(Array.isArray(x.shifts)?`shift${x.shifts.length===1?'':'s'} ${x.shifts.join(', ')}`:Array.isArray(x.source_ids)?`${x.source_ids.length} records`:''); }
 const PANEL_ROWS=8;
 // The opportunities panel: the card's levers (or gaps) ranked by the unit shown, $/yr in dollars, with the rate and
 // formula of each bar on hover and the same rows as a table behind a flip.
 function opportunityPanel(f,m,rec){
- const mode=unitMode()||'usd', yearly=f.one, wrap=node('div',undefined,'chart money-panel');
+ const mode=unitMode()||'usd', yearly=true, wrap=node('div',undefined,'chart money-panel');   // every money query has its rows' own $/yr
  wrap.append(node('h3',`${f.levers?'Where the money is':'Where the money went'} · ${f.who} · ${f.label}`));
- wrap.append(node('p',(f.levers?'Each lever is a gap priced at your rates: the speed gap to each cell\'s best fifth, side trim over the target, each recorded stop, all shear and dry-end waste. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?(yearly?'Ranked by dollars a year at this rate':'Ranked by dollars '+f.when):'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
+ wrap.append(node('p',(f.levers?'Each lever is a gap priced at your rates: the speed gap to each cell\'s best fifth, side trim over the target, each recorded stop, all shear and dry-end waste. ':f.day?'Each gap of the day, its shifts\' records summed and priced once on the day, at your rates. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?'Ranked by dollars a year at this rate':'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
  const box=node('div',undefined,'money-box'); wrap.append(box);
  let table=false, all=false;
  const draw=()=>{
@@ -929,8 +933,9 @@ function opportunityPanel(f,m,rec){
  };
  draw();
  const src=node('p',undefined,'muted money-src');
- if(m.own){ const step=(rec.result.trace||[]).findIndex(e=>e.ok&&Money.MONEY_TOOLS.has(e.tool)); const link=step>=0?queryLink(rec.result.trace[step].result_id):null; src.append(`From ${f.levers?'get_opportunities':'get_shift_dollars'}, this answer's own query`); if(link){src.append(' · ');src.append(link);} }
- else{ const a=node('a',f.levers?'Where is the money?':'Where did the money go?','look-q'); a.href=withRates(m.url); a.title='The money answer of this scope: its queries and its prose'; a.addEventListener('click',event=>{ if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return; if(event&&event.preventDefault)event.preventDefault(); ask('Where is the money?',{mode:'offline',title:'Where is the money?',scope:rec.scope,corrupt:rec.corrupt,source:rec}).catch(()=>{}); }); src.append(`From ${f.levers?'get_opportunities':'get_shift_dollars'} over this card's scope · `,a); }
+ const tool=f.levers?'get_opportunities':f.day?'get_day_dollars':'get_shift_dollars';
+ if(m.own){ const step=moneyStep(rec.result.trace||[]), link=step?queryLink(step.result_id):null; src.append(`From ${tool}, this answer's own query`); if(link){src.append(' · ');src.append(link);} }
+ else{ const a=node('a',f.levers?'Where is the money?':'Where did the money go?','look-q'); a.href=withRates(m.url); a.title='The money answer of this scope: its queries and its prose'; a.addEventListener('click',event=>{ if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return; if(event&&event.preventDefault)event.preventDefault(); ask('Where is the money?',{mode:'offline',title:'Where is the money?',scope:rec.scope,corrupt:rec.corrupt,source:rec}).catch(()=>{}); }); src.append(`From ${tool} over this card's scope · `,a); }
  wrap.append(src);
  return wrap;
 }
@@ -950,9 +955,9 @@ function moneyBars(rows,mode,yearly,wide=false){
 function moneyTable(rows,f){
  const wrap=node('div',undefined,'table-scroll'); wrap.tabIndex=0; wrap.setAttribute('role','region'); wrap.setAttribute('aria-label','Levers as a table');
  const table=node('table',undefined,'money-table'), head=node('thead'), tr=node('tr');
- for(const h of [f.levers?'Lever':'Gap','$ '+f.when,...(f.one?['$/yr']:[]),'Machine min','Share','How it is priced']){ const th=node('th',h); th.scope='col'; tr.append(th); }
+ for(const h of [f.levers?'Lever':'Gap','$ '+f.when,'$/yr','Machine min','Share','How it is priced']){ const th=node('th',h); th.scope='col'; tr.append(th); }
  head.append(tr); table.append(head); const body=node('tbody');
- for(const r of rows){ const row=node('tr'); for(const cell of [r.name,Money.money(r.usd),...(f.one?[r.year===null||r.year===undefined?'unavailable':Money.money(r.year)]:[]),Money.fmt(r.minutes,2),r.share===null?'unavailable':`${Money.fixed(r.share,2)}% of ${r.area?'gross':'time'}`,`${rowFormula(r)} · ${rowRecords(r)}`])row.append(node('td',cell)); body.append(row); }
+ for(const r of rows){ const row=node('tr'); for(const cell of [r.name,Money.money(r.usd),r.year===null||r.year===undefined?'unavailable':Money.money(r.year),Money.fmt(r.minutes,2),r.share===null?'unavailable':`${Money.fixed(r.share,2)}% of ${r.area?'gross':'time'}`,`${rowFormula(r)} · ${rowRecords(r)}`])row.append(node('td',cell)); body.append(row); }
  table.append(body); wrap.append(table); return wrap;
 }
 // The arithmetic, as the post closes: four short lines with this card's own numbers, each result in bold.
@@ -960,18 +965,15 @@ function arithmetic(f){
  const cfg=f.cfg, C=cfg.constants, v=f.rates.values, paper=Money.rateText(v.paper_usd_msf), hour=Money.rateText(v.machine_usd_hour,true);
  const line=(lead,parts)=>{ const p=node('p'); p.append(node('span',lead,'ledger-k')); for(const x of parts)p.append(typeof x==='string'?node('span',x):x); return p; };
  const b=text=>node('strong',text,'figure');
- const area=f.all.filter(r=>r.price_terms&&Money.PAPER.has(r.price_terms.kind)), sqft=area.reduce((s,r)=>s+r.price_terms.quantity,0);
- const time=f.all.filter(r=>r.price_terms&&Money.TIME.has(r.price_terms.kind)), waste=f.all.filter(r=>r.price_terms&&r.price_terms.kind==='waste');
- const minOf=rows=>rows.reduce((s,r)=>s+(r.machine_minutes||0),0), notMade=f.all.reduce((s,r)=>s+(r.msf_not_made||0),0);
- const stops=minOf(time.filter(r=>r.price_terms.kind==='downtime')), speed=minOf(time.filter(r=>r.price_terms.kind==='speed')), run=minOf(waste);
+ const d=f.data;   // the money query's own sums (cost_model.summary): the area priced as paper, the machine minutes by kind, the MSF not made
  const out=[node('h3','The arithmetic, at your rates','label')];
  if(f.warning)out.push(node('p',f.warning,'warning-note'));
- out.push(line('Paper ',[`${Money.fmt(sqft,0)} sq ft of ${f.levers?'trim over target, shear and rejects':'trim, shear and rejects'} = `,b(`${Money.fmt(sqft/1000,1)} MSF`),` × $${paper}/MSF = `,b(Money.money(f.paper))]));
- out.push(line('Machine time ',[`${Money.fmt(stops+speed+run,1)} min (stops ${Money.fmt(stops,1)} · speed gap ${Money.fmt(speed,1)} · waste run time ${Money.fmt(run,1)}) = `,b(`${Money.fmt(notMade,1)} MSF not made`),` at ${Money.gText(C.required_fpm)} ft/min (${Money.gText(C.msf_per_minute)} MSF a minute) × $${hour}/hr = `,b(Money.money(f.machine))]));
+ out.push(line('Paper ',[`${Money.fmt(d.area_sqft,0)} sq ft of ${f.levers?'trim over target, shear and rejects':'trim, shear and rejects'} = `,b(`${Money.fmt(d.area_msf,1)} MSF`),` × $${paper}/MSF = `,b(Money.money(f.paper))]));
+ out.push(line('Machine time ',[`${Money.fmt(d.machine_minutes,1)} min (stops ${Money.fmt(d.stop_minutes,1)} · speed gap ${Money.fmt(d.speed_minutes,1)} · waste run time ${Money.fmt(d.waste_run_minutes,1)}) = `,b(`${Money.fmt(d.msf_not_made,1)} MSF not made`),` at ${Money.gText(C.required_fpm)} ft/min (${Money.gText(C.msf_per_minute)} MSF a minute) × $${hour}/hr = `,b(Money.money(f.machine))]));
  out.push(trimLine(f,line,b));
  const total=[`= `,b(Money.money(f.total)),` ${f.when}`];
- if(f.year!==null&&f.year!==undefined)total.push(' · ',b(`${Money.money(f.year)}/yr`),' at this rate');
- else if(f.perShift)total.push(` · per year at each shift's rate: ${f.perShift.replace(/ at each shift's rate$/,'')}`);
+ if(f.year!==null&&f.year!==undefined)total.push(' · ',b(`${Money.money(f.year)}/yr`),f.day?' at this day\'s rate':' at this rate');
+ if(f.perShift)total.push(` (each shift at its own rate: ${f.perShift})`);
  total.push(v.margin_usd_msf===null||v.margin_usd_msf===undefined?` · contribution: ${cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(v.margin_usd_msf)}/MSF, beside the losses, not added`);
  out.push(line('Total ',total));
  const prov=node('p',`${Money.provenance(f.rates,cfg)} ${cfg.note}`,'muted provenance'); out.push(prov);
@@ -981,65 +983,39 @@ function arithmetic(f){
 function trimLine(f,line,b){
  const v=f.rates.values, target=Money.rateText(v.trim_target_pct), cfg=f.cfg, C=cfg.constants;
  if(f.levers){
-  const r=f.all.find(x=>x.kind==='trim'); if(!r)return line('Side trim ',['no trim lever in this window']);
+  const r=f.data.rows.find(x=>x.kind==='trim'); if(!r)return line('Side trim ',['no trim lever in this window']);
   const pct=r.price_terms.trim_pct;
   if(!r.quantity)return line('Side trim ',[`${Money.fixed(pct,2)}% of gross, at or under the ${target}% target: `,b('no trim lever'),' this window']);
   return line('Side trim ',[`${Money.fixed(pct,2)}% of gross − ${target}% target = `,b(`${Money.fixed(r.quantity,2)} points over`),' → ',b(`${Money.money(r.usd_per_year)}/yr`),` at the post's volume (points / 100 × ${Money.group(String(C.annual_msf_per_machine))} MSF a year × $${Money.rateText(v.paper_usd_msf)}/MSF)`]);
  }
- const trims=f.all.filter(x=>x.price_terms&&x.price_terms.kind==='trim'); if(!trims.length)return line('Side trim ',['no side trim recorded']);
- const sq=trims.reduce((s,x)=>s+x.price_terms.quantity,0), gross=trims.reduce((s,x)=>s+(x.price_terms.gross_sqft||0),0), pct=gross?sq/gross*100:0, over=Math.max(0,pct-v.trim_target_pct);
- if(!over)return line('Side trim ',[`${Money.fixed(pct,2)}% of gross, at or under the ${target}% target: `,b('no trim lever')]);
- const priced=Money.price('trim',over/100*gross,f.rates,gross,trims.reduce((s,x)=>s+(x.price_terms.minutes||0),0),cfg);   // the post's trim formula, through the same pricing call
- return line('Side trim ',[`${Money.fixed(pct,2)}% of gross − ${target}% target = `,b(`${Money.fixed(over,2)} points over`),' → ',b(`${Money.money(priced.usd_per_year)}/yr`),` at the post's volume (points / 100 × ${Money.group(String(C.annual_msf_per_machine))} MSF a year × $${Money.rateText(v.paper_usd_msf)}/MSF, worked here from the Side trim row)`]);
+ const d=f.data; if(d.trim_pct_of_gross===null||d.trim_pct_of_gross===undefined)return line('Side trim ',['no side trim recorded']);   // trim_over_target, the server's
+ if(!d.trim_points_over)return line('Side trim ',[`${Money.fixed(d.trim_pct_of_gross,2)}% of gross, at or under the ${target}% target: `,b('no trim lever')]);
+ return line('Side trim ',[`${Money.fixed(d.trim_pct_of_gross,2)}% of gross − ${target}% target = `,b(`${Money.fixed(d.trim_points_over,2)} points over`),' → ',b(`${Money.money(d.trim_over_usd_per_year)}/yr`),` at the post's volume (points / 100 × ${Money.group(String(C.annual_msf_per_machine))} MSF a year × $${Money.rateText(v.paper_usd_msf)}/MSF)`]);
 }
-// ---- dollars on the tiles: each tile's own quantity priced as the tools price it
-function tileMoney(kind,quantity,gross,minutes,what){ const cfg=costCfg(); if(!cfg||quantity===null||quantity===undefined||!Number.isFinite(quantity))return null; return {what,...Money.price(kind,quantity,ratesNow(),gross,minutes,cfg)}; }
-function shiftTileMoney(label,r){
- const cfg=costCfg(); if(!cfg||!r||!r.gross_sqft)return null;
- const C=cfg.constants, g=r.gross_sqft, m=C.shift_minutes;
- if(label==='Speed'){ const running=m-(r.downtime_pct||0)*m/100; return tileMoney('speed',Math.max(0,C.required_fpm*running-r.observed_lineal_ft)/C.required_fpm,g,m,`the speed gap to ${Money.gText(C.required_fpm)} ft/min`); }   // cost_model.shift_dollars's speed gap
- if(label==='Maintenance')return tileMoney('downtime',r.maintenance_pct*m/100,g,m,'maintenance stops');
- if(label==='Operator')return tileMoney('downtime',r.operator_pct*m/100,g,m,'operator stops');
- if(label==='Dry-end waste')return tileMoney('waste',r.dry_end_pct*g/100,g,m,'dry-end rejects');
- if(label==='Trim')return tileMoney('trim',r.trim_pct*g/100,g,m,'side trim');
- return null;
-}
-const WASTE_METRIC={trim:'trim_pct',shear:'shear_pct',bond:'bond_pct',warp:'warp_pct',misalignment:'misalignment_pct',moisture:'moisture_pct',dry_end:'dry_end_pct',bale:'bale_pct',unexplained:'unexplained_pct'};
-// A window's tiles: each priced from the tile's own value, except that a waste tile takes the card's priced
-// get_waste_breakdown row of the same window and shift when it has one, so the tile and the finding agree to the dollar.
-function periodTileMoney(data,trace=[]){
- const cfg=costCfg(); if(!cfg||!data||!Array.isArray(data.rows))return ()=>null;
- const w=data.window||{}, waste=trace.find(e=>e.ok&&e.tool==='get_waste_breakdown'&&e.data.window&&e.data.window.start===w.start&&e.data.window.end===w.end&&e.data.shift===data.shift);
- const exact=waste?Object.fromEntries(waste.data.rows.filter(r=>WASTE_METRIC[r.category]&&r.usd!==null&&r.usd!==undefined).map(r=>[WASTE_METRIC[r.category],{what:String(r.label||r.category).toLowerCase(),...r}])):{};
- const rows=Object.fromEntries(data.rows.map(r=>[r.metric,r])), cur=k=>rows[k]?rows[k].current:null;
- const days=data.production_days_current??(data.window&&data.window.production_days_observed), vol=cur('volume_msf');
- if(!vol||!days)return ()=>null;
- const C=cfg.constants, g=vol*1000, m=days*C.shift_minutes*(data.shift?1:3);
- const P=(kind,q,what)=>tileMoney(kind,q,g,m,what);
- return row=>{
-  const v=row.current; if(v===null||v===undefined)return null;
-  if(exact[row.metric])return exact[row.metric];
-  switch(row.metric){
-   case 'downtime_pct': return P('downtime',v*m/100,'all stops');
-   case 'downtime_minutes': return P('downtime',v,'all stops');
-   case 'stops': return cur('downtime_minutes')===null?null:P('downtime',cur('downtime_minutes'),'all stops');
-   case 'maintenance_pm_pct': return P('downtime',v*m/100,'maintenance and PM stops');
-   case 'operator_pct': return P('downtime',v*m/100,'operator stops');
-   case 'trim_pct': return P('trim',v*g/100,'side trim');
-   case 'shear_pct': case 'dry_end_pct': case 'bond_pct': case 'warp_pct': case 'misalignment_pct': case 'moisture_pct': return P('waste',v*g/100,String(row.label||row.metric).toLowerCase());
-   case 'bale_pct': case 'unexplained_pct': return P('paper',v*g/100,String(row.label||row.metric).toLowerCase());
-  }
-  return null;
- };
+// ---- dollars on the tiles: the tool's own tile_money (cost_model.shift_tiles / period_tiles), one entry a tile, each the
+// pricing calls of the rows it agrees with (the waste breakdown's category, the Pareto's reasons, get_shift_dollars' gaps).
+// The step is re-priced with the rest of the answer (pricedView), so a tile never prices a rounded display value.
+function tileOf(data,metric){ if(!costCfg()||!data||!Array.isArray(data.tile_money))return null; return data.tile_money.find(t=>(t.metrics||[t.metric]).includes(metric))||null; }
+// A money query at the rates in force: verbatim at the rates it was asked at, else re-priced as a whole.
+function atRates(m,e){ const cfg=costCfg(), key=ratesKey(); return m.asked===key?e.data:Money.reprice(e.tool,e.data,ratesNow(),cfg); }
+// The shift tiles' dollars: the card's money answer's get_shift_dollars for the tile's own day and shift (its tile_money,
+// the calls its rows make), so a tile and its chip agree to the cent. Drawn again on every paint, from the tile as first drawn.
+function paintTiles(rec,m){
+ for(const slot of rec.tiles||[]){
+  slot.v.replaceChildren(...slot.kids); slot.line.textContent=''; slot.line.title='';
+  if(!m||m.state!=='ready'||!m.result)continue;
+  const e=(m.result.trace||[]).find(x=>x.ok&&x.tool==='get_shift_dollars'&&x.data&&x.data.production_day===slot.day&&x.data.shift===slot.shift);
+  if(e)moneyOnTile(slot.card,slot.v,slot.native,tileOf(atRates(m,e),slot.metric),'this shift',slot.line);
+ }
 }
 // A tile's money line, and in minutes or dollars its value shown in that unit (the tile's own reading moves to the line).
-function moneyOnTile(tile,valueEl,native,priced,when){
+function moneyOnTile(tile,valueEl,native,priced,when,slot=null){
  if(!priced||priced.usd===null)return;
  const mode=unitMode(), year=priced.usd_per_year===null?null:`${Money.short(priced.usd_per_year)}/yr`;
  let text=[`${Money.money(priced.usd)} ${when}`,year].filter(Boolean).join(' · ');
  if(mode==='usd'){ valueEl.replaceChildren(node('span',Money.money(priced.usd))); text=[year,native].filter(Boolean).join(' · '); }
  else if(mode==='min'){ valueEl.replaceChildren(node('span',Money.fmt(priced.machine_minutes,1)),node('small','min')); text=[Money.money(priced.usd),year,native].filter(Boolean).join(' · '); }
- const line=node('div',text,'usd'); line.title=`${priced.what}: ${priced.usd_basis}`; tile.append(line);
+ const line=slot||node('div',text,'usd'); line.textContent=text; line.title=`${priced.what}: ${priced.usd_basis}`; if(!slot)tile.append(line);
 }
 // ---- the charts in the unit shown: a priced chart in another unit than its own is drawn as ranked bars of that unit
 function chartUnits(chart){ const mode=unitMode(); if(!mode||!Money.priced(chart))return null; const u=String(chart.unit||''); if(mode==='min'&&u==='minutes'||mode==='pct'&&u==='% of gross')return null; return mode; }
@@ -1255,7 +1231,7 @@ function paintAnswer(rec){
  if(PROVIDERS[rec.mode]){paintAnalyst(rec);return null;}
  if(rec.note)message('Note',[rec.note]);
  const view=viewOf(rec);   // the answer at the rates in force (#31b)
- const summary=message('',view.sections,'',rec); rec.lineEl=dollarSlot(summary); showResult(view.result); paintMoney(rec);
+ const summary=message('',view.sections,'',rec); rec.lineEl=dollarSlot(summary); showResult(view.result); rec.tiles=tileSlots; paintMoney(rec);
  return summary;
 }
 let shownId=null, shownKey=null;   // the record #card shows now, and the bodyKey of what was drawn for it
@@ -1456,7 +1432,7 @@ function paintLive(rec){
 function paintAnalyst(rec){
  const view=viewOf(rec), r=view.result, ran=(r.trace||[]).some(e=>e.ok), offline=rec.source&&rec.source.result;
  if(ran)showResult(r); else if(offline)showResult(pricedView(offline,askedRates(rec.source)).result);
- const card=message(null,[],'analyst'); rec.lineEl=dollarSlot(card); paintMoney(rec);
+ rec.tiles=tileSlots; const card=message(null,[],'analyst'); rec.lineEl=dollarSlot(card); paintMoney(rec);
  if(r.status==='plan_rejected'){   // issue #78: a refused plan degrades, it does not stop; one quiet line under the offline evidence
   const over=r.plan_rejection, calls=(r.usage&&r.usage.model_calls)||0;
   card.append(node('p',over?`The analyst proposed ${over.proposed} queries; the limit is ${over.limit}, so none ran.`:(r.sections||[]).filter(t=>!/^Investigation stopped/.test(t)).join(' '),'analyst-p muted'));

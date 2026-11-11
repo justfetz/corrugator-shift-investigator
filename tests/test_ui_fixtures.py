@@ -38,3 +38,22 @@ def test_money_week_ui_fixture_is_the_offline_answer_of_its_url():
     no_id = lambda charts: [{k: v for k, v in c.items() if k != 'source_result_id'} for c in charts]   # a run's own result id
     assert no_id(saved['charts']) == no_id(fresh['charts']), f'charts drifted; refresh with: {refresh}'
     assert [e['data'] for e in saved['trace'] if e['tool'] == 'get_opportunities'] == [{**e['data'], 'trace': saved['trace'][0]['data']['trace']} for e in fresh['trace'] if e['tool'] == 'get_opportunities'], refresh
+
+
+DAY = Path(__file__).parent / 'ui_fixtures' / 'money_day.json'
+
+
+def test_money_day_ui_fixture_is_the_offline_answer_of_its_url():
+    """Issue #31b's all-shifts day card on corrupt data: shift 2 is incomplete, so the day's money (get_day_dollars, the
+    server's own total) counts shifts 1 and 3 and names shift 2 in excluded_shifts."""
+    saved = json.loads(DAY.read_text())
+    result, _ = Workbench().answer_url(saved['url'])
+    result.pop('report_markdown', None)
+    fresh = json.loads(json.dumps(result))
+    refresh = REFRESH.replace('why_slow', 'money_day').replace('/corr/1/day/2026-09-14/shift/2?measure=overview', saved['url'])
+    assert saved['url'] == '/corr/1/day/2026-09-14?measure=dollars&corrupt=1'
+    for key in ('sections', 'url'):
+        assert saved[key] == fresh[key], f'{key} drifted; refresh with: {refresh}'
+    day = lambda r: [{k: v for k, v in e['data'].items() if k != 'trace'} for e in r['trace'] if e['tool'] == 'get_day_dollars']
+    assert day(saved) == day(fresh), refresh
+    assert day(saved)[0]['excluded_shifts'] == [2]

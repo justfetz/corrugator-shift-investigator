@@ -35,6 +35,10 @@ TOOL_SCHEMAS = [
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
         ("get_shift_dollars", "This shift's losses priced at the assumed rates, ranked by dollars.", {}),
     ]
+] + [
+    # The day's losses across its complete shifts (issue #31b): the all-shifts money of a Day card, from the server.
+    {"name": "get_day_dollars", "description": "The production day's losses across its complete shifts, priced at the assumed rates, ranked by dollars.",
+     "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
 ]
 # Period tools read the whole record store (two production months) instead of one day.
 # A window is {period, anchor}: day = that Monday-Friday production day, week = the
@@ -220,6 +224,8 @@ class OfflinePlanner:
             if intent == "quality":
                 plan.append(("get_quality_breakdown", {"shift": shift}))
 
+        if intent == 'dollars' and not context.get("plan") and len(context["shifts"]) > 1:
+            plan.append(("get_day_dollars", {}))   # #31b: the day's total across its complete shifts, for the card
         completed = [(r["tool"], r["arguments"]) for r in results]
         for tool, args in plan:
             if (tool, args) not in completed:
@@ -955,7 +961,14 @@ class Agent:
                 raise ValueError('Shift must be 1, 2, 3 or null')
             if name == 'get_opportunities':
                 return cost_model.opportunities(self.store, rates=rates, **arguments)
-            return cost_model.attach(name, getattr(self.store, name)(**arguments), rates)
+            data = cost_model.attach(name, getattr(self.store, name)(**arguments), rates)
+            if name in ('get_period_kpis', 'compare_periods') and data.get('current_sums'):
+                window = arguments.get('window') or arguments.get('current_window')
+                reasons = self.store.get_downtime_pareto(window, 'reason', 'minutes', shift)['rows']
+                data['tile_money'] = cost_model.period_tiles(data, reasons, rates)   # #31b: the tiles' dollars, as the Pareto and waste rows price them
+            return data
+        if name == 'get_day_dollars':
+            return cost_model.day_dollars(self.analysis, rates)
         shift = arguments['shift']
         if type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Shift must be 1, 2 or 3')
