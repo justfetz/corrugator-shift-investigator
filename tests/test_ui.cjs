@@ -179,6 +179,18 @@ assert.ok(marks.some(e=>e.textContent==='Value = ft/min without stops / % of tar
 assert.ok(marks.some(e=>e['aria-label']==='32-C: 828.4 ft/min; target 900.0; 92.0% of target. Without stops.'));
 assert.ok(!marks.some(e=>/Includes downtime/.test((e.textContent||'')+(e['aria-label']||''))));
 
+// Speed variance (issue #92): a waterfall from the reference speed through each bucket to the speed with stops;
+// a loss bar steps left in the warm series, an offset right in the cool one, and the two ends are level marks.
+elements.charts.replaceChildren();
+vm.runInContext(`showChart({type:'waterfall',title:'Speed gap by contributor (ft/min): week against shift 1 (shift 3)',shift:3,coverage:'complete',unit:'ft/min',x:'label',y:'gap_fpm',start:615.8,end:571.2,start_label:'Shift 1',end_label:'Shift 3',rows:[{bucket:'below_target',label:'Below target',gap_fpm:60.15,share_of_gap_pct:134.8,top_item:'275-BC',top_item_fpm:12.79},{bucket:'mix',label:'Grade mix',gap_fpm:27.37,share_of_gap_pct:61.3,top_item:'275-BC',top_item_fpm:14.22},{bucket:'setups',label:'Setups',gap_fpm:-2.33,share_of_gap_pct:-5.2,top_item:'32-C',top_item_fpm:-1.1},{bucket:'stops',label:'Stops',gap_fpm:-40.57,share_of_gap_pct:-90.9,top_item:'Planned maintenance',top_item_fpm:-33.5}]})`,context);
+marks=walk(elements.charts);
+assert.equal(marks.filter(e=>e.class==='bar loss').length,2);assert.equal(marks.filter(e=>e.class==='bar offset').length,2);
+assert.equal(marks.filter(e=>e.class==='level').length,2);assert.equal(marks.filter(e=>e.class==='connector').length,5);
+assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='615.8 ft/min'));assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='571.2 ft/min'));
+assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='−60.1 · 135%'));assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='+40.6 · -91%'));
+assert.ok(marks.some(e=>e['aria-label']==='Shift 1: 615.8 ft/min'));assert.ok(marks.some(e=>e['aria-label']==='Stops: +40.6 ft/min, -90.9% of the gap; largest Planned maintenance, 33.5 ft/min; 530.6 → 571.2 ft/min.'));
+assert.ok(marks.some(e=>/does not start at zero/.test(e.textContent||'')));assert.ok(marks.some(e=>e.className==='lg'));
+
 // ---- Messages: consecutive reported-note lines fold into one disclosure.
 elements.messages.replaceChildren();
 vm.runInContext(`message('Investigator',['Shift 2: 600 ft/min.','Shift 2, ST1 - reported note (synthetic, unverified): a','Shift 2, ST2 - reported note (synthetic, unverified): b','Done.'])`,context);

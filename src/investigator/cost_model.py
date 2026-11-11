@@ -203,7 +203,8 @@ def _envelope(data, rates):
 WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste',
                'moisture': 'waste', 'dry_end': 'waste', 'bale': 'paper', 'unexplained': 'paper'}
 PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_breakdown',
-                'get_downtime_pareto', 'get_speed_opportunity')
+                'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
+OFFSET = 'not priced: an offset (this bucket ran better than the reference), not a loss'
 
 
 def window_minutes(data):
@@ -217,6 +218,8 @@ def attach(tool, data, rates, gross_sqft=None):
     `gross_sqft` is the shift's gross area for the daily quality breakdown (its annual basis)."""
     if tool not in PRICED_TOOLS:
         return data
+    if tool == 'get_speed_variance':
+        return _envelope(speed_variance_dollars(data, rates), rates)
     for row in data['rows']:
         if tool == 'get_quality_breakdown':
             row.update(price('waste', row['rejected_sqft'], rates, gross_sqft, SHIFT_MINUTES))
@@ -229,6 +232,27 @@ def attach(tool, data, rates, gross_sqft=None):
         elif tool == 'get_speed_opportunity':
             row.update(price('speed', row['opportunity_hours'] * 60, rates, None, window_minutes(data)))
     return _envelope(data, rates)
+
+
+def speed_variance_dollars(data, rates):
+    """Each speed-variance bucket as machine time (issue #92): its lineal feet over the reference speed
+    are the minutes the corrugator would need at that speed to make them, priced like the speed gap.
+    A bucket that ran better than the reference is an offset and is not priced; the gap as a whole is
+    priced on the envelope (`gap_usd`), so the bucket dollars add up to it only when no bucket offsets."""
+    minutes, reference = data['scheduled_minutes'], data['reference_speed_fpm']
+
+    def priced_for(feet):
+        if feet is None or not reference or feet <= 0:
+            return {**price('speed', None, rates), 'usd_basis': OFFSET} if feet is not None and feet < 0 else price('speed', None, rates)
+        out = price('speed', feet / reference, rates, None, minutes)
+        out['usd_basis'] = f'{feet:,.1f} lineal ft / {reference:,.1f} ft/min reference speed = ' + out['usd_basis']
+        return out
+    for row in data['rows']:
+        row.update(priced_for(row['gap_lineal_ft']))
+    gap = priced_for(data['gap_lineal_ft'])
+    data.update({'gap_machine_minutes': gap['machine_minutes'], 'gap_usd': gap['usd'], 'gap_usd_per_year': gap['usd_per_year'],
+                 'gap_contribution_usd': gap['contribution_usd'], 'contribution_status': gap['contribution_status']})
+    return data
 
 
 # ------------------------------------------------------------------ the two money tools
