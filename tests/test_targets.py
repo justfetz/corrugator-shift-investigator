@@ -276,3 +276,15 @@ def test_neighbouring_money_questions_keep_their_answers(store):
         resolve_url('/corr/1/day/2026-09-14?measure=money&lens=owner', store)
     with pytest.raises(ValueError, match='lens= does not apply'):
         resolve_url('/corr/1/day/2026-09-14?measure=waste&lens=ownership', store)
+
+
+def test_recurrence_counts_a_reason_that_crossed_its_band_on_its_own(store):
+    """Every shift of the trailing year on which the reason alone was over its band counts; here the flag's own shift is not one
+    of them (the jam alone was 1.94% of it) and 2026-08-25 shift 3 is. The value golden value-review-day-0928 pins it too."""
+    flags, _ = store.downtime_flags('2026-09-28', '2026-09-28')
+    jam = next(f for f in flags if f['reason'] == 'Knife / slitter jam')
+    assert jam['times_over_band'] >= 1 and jam['shift'] == 3
+    over = store._fetch("SELECT production_date, shift, sum(seconds) / 60 AS minutes FROM stops WHERE kind = 'Maintenance' "
+                        "AND reason = 'Knife / slitter jam' AND production_date BETWEEN ? AND ? GROUP BY ALL HAVING sum(seconds) / 60 > 12",
+                        [jam['recurrence_since'], '2026-09-28'])
+    assert jam['times_over_band'] == len(over) == 1 and over[0]['production_date'].isoformat() == '2026-08-25' and over[0]['shift'] == 3

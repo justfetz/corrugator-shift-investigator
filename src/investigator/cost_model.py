@@ -408,13 +408,14 @@ def opportunities(store, window, shift, rates, lens='all'):
     coverage = waste['window']['coverage']
     speed_part = {'trace': {'sql': speed['trace']['sql'], 'parameters': speed['trace']['parameters'], 'elapsed_ms': 0.0}}
     notes = {'all': ('Levers are gaps priced at the rates: the speed of each wet-end run under its grade\'s trailing-year speed, side-trim '
-                     'points over the target, each recorded downtime reason, and all recorded shear and dry-end waste (no benchmark '
-                     'for those). Per year at the post\'s volumes. These name where to look and the records behind each '
-                     'lever; they do not prescribe a machine adjustment.'),
+                     'points over the target, and each recorded downtime reason. Shear and dry-end waste are priced in full, all '
+                     'recorded, not over their targets. Per year at the post\'s volumes. These name where to look and the records behind '
+                     'each lever; they do not prescribe a machine adjustment.'),
              'supervisor': ('The supervisor lens: the controllable losses ranked, maintenance and operator downtime, the speed of each '
                             'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste; side trim and planned maintenance '
-                            'are schedule-driven and listed after. Per year at the post\'s volumes; these name where to look, they do not '
-                            'prescribe a machine adjustment.'),
+                            'are schedule-driven and listed after. Shear and dry-end waste are priced in full, all recorded, not over their '
+                            'targets. Peel and core are controllable too, but the records carry no peel or core quantity. Per year at the '
+                            'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
              'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then shear, each dry-end reason '
                            'and the unexplained remainder (the scale reading less the recorded waste). Per year at the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,

@@ -389,6 +389,10 @@ YESTERDAY = r"\byesterday('s)?\b|\b(last|previous|prior) production day\b"
 # maintenance and operator first, with the flags. A Pareto phrasing ("cost the most minutes", "most often") stays the Pareto.
 SUPERVISOR_WORDS = (r"\b(biggest|largest|best|main|top)\s+opportunit(y|ies)\b|\bwhat went wrong\b"
                     r"|\bwhere('s| is) (my|our) (biggest |largest |best )?opportunit(y|ies)\b")
+# A subject named beside "what went wrong" ("with speed", "with trim", "on downtime") keeps its own answer:
+# the supervisor lens is the question that names no measure.
+SUBJECT_WORDS = (r"\b(speeds?|fpm|fast|slow|trim|shear|chops?|waste|rejects?|warp|bond|misalignment|moisture|quality|dry[- ]end"
+                 r"|downtime|stops?|stoppages?|maintenance|operator|setups?|changeovers?|volume|output|paper|rollstock|grades?)\b")
 TOP_WORDS = r"\b(top|biggest|largest|worst|main)\b"
 DOWNTIME_WORDS = r"\b(downtime|stops?|stoppages?)\b"
 
@@ -416,13 +420,15 @@ def parse_period_request(lower, current, shifts, day=False):
     grade = grade or bool(speed and re.search(r"\bgrades?\b", lower))    # "how fast are we running this grade"
     baseline = speed and bool(re.search(BASELINE_WORDS, lower))         # "are we running slower than normal" (#76 adds the baseline)
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
-    review = bool(re.search(DOWNTIME_WORDS, lower) and (re.search(TOP_WORDS, lower) or day) and not pareto)
+    review = bool(re.search(DOWNTIME_WORDS, lower) and (re.search(TOP_WORDS, lower) or day or re.search(r"\bwhat went wrong\b", lower))
+                  and not pareto)
     # a trend of speed stays the trend; a "why ... slow" stays the overview (diagnose, below)
     speedvar = bool(re.search(SPEED_VARIANCE, lower)) and not speed_opp and not trend
     money = bool(MONEY.search(lower)) and not speed_opp
     # The owner's two lenses on the levers (issue #101): what trim costs is the ownership lens (the total cost of waste,
     # side trim first); "where's my biggest opportunity", "what went wrong" the supervisor lens (the controllable losses).
-    lens = ('supervisor' if re.search(SUPERVISOR_WORDS, lower) and not speed_opp else
+    lens = ('supervisor' if re.search(SUPERVISOR_WORDS, lower) and not speed_opp
+            and not (re.search(r"\bwhat went wrong\b", lower) and re.search(SUBJECT_WORDS, lower)) else
             'ownership' if money and re.search(r"\btrim\b", lower) and not re.search(MONEY_REJECT_WORDS + r"|\b(shear|downtime|stops?|speed)\b", lower)
             else None)
     money = money or bool(lens)
@@ -573,6 +579,11 @@ def _parse_request(text, current):
         raise ValueError("Offline mode anchors on the selected production day; use the day control. Period questions name a window: this week, this month, September versus August.")
     if day and current.production_day != current.last_day:
         raise ValueError(f"Yesterday is {current.last_day}, the latest production day in the records; select it in the day control first")
+    if day and re.search(r"\b(compare|comparison|versus|vs|than|against)\b", lower):
+        # "Compare with yesterday", "yesterday versus last week": the selected day is yesterday, so the comparison has
+        # no second window the router can name; it never answers the day alone as if it had compared
+        raise ValueError("Yesterday is the selected day; to compare, name both windows: 'this week compared with last week', "
+                         "or select a day and ask 'compare this shift with the previous production day'")
     shifts = []
     patterns = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
     for shift, pattern in patterns.items():
@@ -663,19 +674,24 @@ def period_plan(intent, window, named, group_by, current):
     else:
         per_shift = [None]                 # all three shifts together
     plan = []
+    # The owner's downtime answer (issue #101): downtime by reason over a window is the review (maintenance and operator
+    # first, ranked by % of scheduled minutes, planned maintenance last, the flags); by equipment or kind it stays the Pareto.
+    review = intent == 'downtime' and group_by == 'reason'
     for shift in per_shift:
         if intent == 'dollars':
             plan.append(("get_opportunities", {"window": window, "shift": shift}))
         if intent in ('summary', 'overview', 'compare', 'speed'):
             plan.append(("get_period_kpis", {"window": window, "compare": True, "shift": shift}))
-        if intent in ('summary', 'overview', 'downtime'):
+        if review:
+            plan.append(("get_downtime_review", {"window": window, "shift": shift}))
+        elif intent in ('summary', 'overview', 'downtime'):
             plan.append(("get_downtime_pareto", {"window": window, "group_by": group_by, "measure": "minutes", "shift": shift}))
         if intent in ('summary', 'overview', 'quality'):
             plan.append(("get_waste_breakdown", {"window": window, "shift": shift}))
         if intent == 'speed':
             plan.append(("get_grade_totals", {"window": window, "shift": shift, "measure": "speed"}))
-    return {"intent": "period_" + intent, "shifts": [s for s in per_shift if s], "kind": None, "group_by": group_by, "want_chart": True,
-            "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
+    return {"intent": "period_review" if review else "period_" + intent, "shifts": [s for s in per_shift if s], "kind": None,
+            "group_by": group_by, "want_chart": True, "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
 
 FIRST_CHART = {'overview': 'get_wet_end_performance', 'compare': 'get_wet_end_performance'}   # intent -> the tool whose chart leads

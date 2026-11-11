@@ -34606,6 +34606,1509 @@
    }
   },
   {
+   "id": "value-review-day-0928",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-28",
+   "tool": "get_downtime_review",
+   "arguments": {
+    "window": {
+     "period": "day",
+     "anchor": "2026-09-28"
+    },
+    "shift": null
+   },
+   "note": "Two flags on shift 3; knife / slitter jam was over its band on its own once in the year, so recurrence is not zero.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 8,
+    "values": {
+     "category=Stacker \u00b7 maintenance": {
+      "stops": [
+       2,
+       null
+      ],
+      "minutes": [
+       3.316667,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.230324,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.658333,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       7,
+       null
+      ]
+     },
+     "category=Order change \u00b7 operator": {
+      "stops": [
+       6,
+       null
+      ],
+      "minutes": [
+       7.783333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.540509,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.297222,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       3,
+       null
+      ]
+     },
+     "category=Missed splice \u00b7 operator": {
+      "stops": [
+       5,
+       null
+      ],
+      "minutes": [
+       7.7,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.534722,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.54,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       4,
+       null
+      ]
+     },
+     "category=Raw material (roll) \u00b7 operator": {
+      "stops": [
+       5,
+       null
+      ],
+      "minutes": [
+       10.566667,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.733796,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       2.113333,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       2,
+       null
+      ]
+     },
+     "category=Glue / starch \u00b7 operator": {
+      "stops": [
+       3,
+       null
+      ],
+      "minutes": [
+       4.033333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.280093,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.344444,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       5,
+       null
+      ]
+     },
+     "category=Knife / slitter jam \u00b7 maintenance": {
+      "stops": [
+       7,
+       null
+      ],
+      "minutes": [
+       14.2,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.986111,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       2.028571,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       1,
+       null
+      ]
+     },
+     "category=Stacker \u00b7 operator": {
+      "stops": [
+       2,
+       null
+      ],
+      "minutes": [
+       2.95,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.204861,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.475,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       8,
+       null
+      ]
+     },
+     "category=Other \u00b7 maintenance": {
+      "stops": [
+       2,
+       null
+      ],
+      "minutes": [
+       3.983333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.27662,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.991667,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       6,
+       null
+      ]
+     },
+     "flags:#0": {
+      "production_day": [
+       "2026-09-28",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Raw material (roll)",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       16.5,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.4375,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       6.166667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       123,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       9,
+       null
+      ],
+      "weeks_counted": [
+       9,
+       null
+      ]
+     },
+     "flags:#1": {
+      "production_day": [
+       "2026-09-28",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Maintenance",
+       null
+      ],
+      "reason": [
+       "Knife / slitter jam",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       13.3,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.770833,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       9.316667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       123,
+       null
+      ],
+      "times_over_band": [
+       1,
+       null
+      ],
+      "weeks_in_top_five": [
+       7,
+       null
+      ],
+      "weeks_counted": [
+       9,
+       null
+      ]
+     },
+     "$": {
+      "scheduled_minutes": [
+       1440,
+       null
+      ],
+      "maintenance_minutes": [
+       21.5,
+       0.0051
+      ],
+      "maintenance_stops": [
+       11,
+       null
+      ],
+      "maintenance_pct": [
+       1.493056,
+       5.1e-05
+      ],
+      "operator_minutes": [
+       33.033333,
+       0.0051
+      ],
+      "operator_stops": [
+       21,
+       null
+      ],
+      "operator_pct": [
+       2.293981,
+       5.1e-05
+      ],
+      "op_maint_minutes": [
+       54.533333,
+       0.0051
+      ],
+      "op_maint_stops": [
+       32,
+       null
+      ],
+      "op_maint_pct": [
+       3.787037,
+       5.1e-05
+      ],
+      "pm_minutes": [
+       0,
+       0.0051
+      ],
+      "pm_stops": [
+       0,
+       null
+      ],
+      "pm_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "flag_count": [
+       2,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-dollars-supervisor-september",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_opportunities",
+   "arguments": {
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "shift": null,
+    "lens": "supervisor"
+   },
+   "note": "The supervisor lens: the controllable losses ranked, schedule-driven trim and planned maintenance unranked.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 17,
+    "values": {
+     "rows:lever=Speed under each grade's trailing-year speed": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       6684.8,
+       0.213
+      ],
+      "usd": [
+       6684.8,
+       0.213
+      ],
+      "usd_per_year": [
+       78134.026,
+       3.5
+      ],
+      "msf_not_made": [
+       1804.896,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       6,
+       null
+      ]
+     },
+     "rows:lever=Side trim over the 3% target": {
+      "paper_usd": [
+       20043.746066,
+       8.913455
+      ],
+      "machine_time_usd": [
+       0.0,
+       8.913455
+      ],
+      "usd": [
+       20043.746066,
+       8.913455
+      ],
+      "usd_per_year": [
+       225126.0,
+       105.193
+      ],
+      "msf_not_made": [
+       0.0,
+       865.4063031200001
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "schedule-driven",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       2768.4,
+       0.213
+      ],
+      "usd": [
+       2768.4,
+       0.213
+      ],
+      "usd_per_year": [
+       32357.922,
+       3.5
+      ],
+      "msf_not_made": [
+       747.468,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       10,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Knife / slitter jam": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       3485.4,
+       0.213
+      ],
+      "usd": [
+       3485.4,
+       0.213
+      ],
+      "usd_per_year": [
+       40738.442,
+       3.5
+      ],
+      "msf_not_made": [
+       941.058,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       8,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Order change (setup time)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       3116.4,
+       0.213
+      ],
+      "usd": [
+       3116.4,
+       0.213
+      ],
+      "usd_per_year": [
+       36425.455,
+       3.5
+      ],
+      "msf_not_made": [
+       841.428,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       9,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       3930.0,
+       0.213
+      ],
+      "usd": [
+       3930.0,
+       0.213
+      ],
+      "usd_per_year": [
+       45935.065,
+       3.5
+      ],
+      "msf_not_made": [
+       1061.1,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       7,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Other": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       1615.0,
+       0.213
+      ],
+      "usd": [
+       1615.0,
+       0.213
+      ],
+      "usd_per_year": [
+       18876.623,
+       3.5
+      ],
+      "msf_not_made": [
+       436.05,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       13,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Stacker": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       2145.6,
+       0.213
+      ],
+      "usd": [
+       2145.6,
+       0.213
+      ],
+      "usd_per_year": [
+       25078.442,
+       3.5
+      ],
+      "msf_not_made": [
+       579.312,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       11,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Glue / starch": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       1730.6,
+       0.213
+      ],
+      "usd": [
+       1730.6,
+       0.213
+      ],
+      "usd_per_year": [
+       20227.792,
+       3.5
+      ],
+      "msf_not_made": [
+       467.262,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       12,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Planned maintenance (scheduled time)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       10060.0,
+       0.213
+      ],
+      "usd": [
+       10060.0,
+       0.213
+      ],
+      "usd_per_year": [
+       117584.416,
+       3.5
+      ],
+      "msf_not_made": [
+       2716.2,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "schedule-driven",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Steam / moisture": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       393.4,
+       0.213
+      ],
+      "usd": [
+       393.4,
+       0.213
+      ],
+      "usd_per_year": [
+       4598.182,
+       3.5
+      ],
+      "msf_not_made": [
+       106.218,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       14,
+       null
+      ]
+     },
+     "rows:lever=Downtime: Power outage": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       240.0,
+       0.213
+      ],
+      "usd": [
+       240.0,
+       0.213
+      ],
+      "usd_per_year": [
+       2805.195,
+       3.5
+      ],
+      "msf_not_made": [
+       64.8,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       15,
+       null
+      ]
+     },
+     "rows:lever=Shear chops (all recorded)": {
+      "paper_usd": [
+       45555.345,
+       0.016929
+      ],
+      "machine_time_usd": [
+       3067.7,
+       0.016929
+      ],
+      "usd": [
+       48623.045,
+       0.016929
+      ],
+      "usd_per_year": [
+       546121.049,
+       1.208
+      ],
+      "msf_not_made": [
+       828.279,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       1,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: bond (all recorded)": {
+      "paper_usd": [
+       35355.0945,
+       0.016929
+      ],
+      "machine_time_usd": [
+       2380.814444,
+       0.016929
+      ],
+      "usd": [
+       37735.908944,
+       0.016929
+      ],
+      "usd_per_year": [
+       423839.646,
+       1.208
+      ],
+      "msf_not_made": [
+       642.8199,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       2,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: warp (all recorded)": {
+      "paper_usd": [
+       28781.4285,
+       0.016929
+      ],
+      "machine_time_usd": [
+       1938.143333,
+       0.016929
+      ],
+      "usd": [
+       30719.571833,
+       0.016929
+      ],
+      "usd_per_year": [
+       345034.022,
+       1.208
+      ],
+      "msf_not_made": [
+       523.2987,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       3,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: misalignment (all recorded)": {
+      "paper_usd": [
+       17372.553,
+       0.016929
+      ],
+      "machine_time_usd": [
+       1169.868889,
+       0.016929
+      ],
+      "usd": [
+       18542.421889,
+       0.016929
+      ],
+      "usd_per_year": [
+       208263.528,
+       1.208
+      ],
+      "msf_not_made": [
+       315.8646,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       4,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: moisture (all recorded)": {
+      "paper_usd": [
+       8906.843,
+       0.016929
+      ],
+      "machine_time_usd": [
+       599.787407,
+       0.016929
+      ],
+      "usd": [
+       9506.630407,
+       0.016929
+      ],
+      "usd_per_year": [
+       106775.933,
+       1.208
+      ],
+      "msf_not_made": [
+       161.9426,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       5,
+       null
+      ]
+     },
+     "#0": {
+      "lever": [
+       "Shear chops (all recorded)",
+       null
+      ],
+      "rank": [
+       1,
+       null
+      ]
+     },
+     "$": {
+      "total_usd_per_year": [
+       2277921.738,
+       149.733
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "controllable_levers": [
+       15,
+       null
+      ],
+      "controllable_usd_per_year": [
+       1935211.322,
+       41.04
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-dollars-ownership-september",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_opportunities",
+   "arguments": {
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "shift": null,
+    "lens": "ownership"
+   },
+   "note": "The ownership lens: the total cost of waste, side trim first.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 7,
+    "values": {
+     "rows:lever=Side trim (all recorded)": {
+      "paper_usd": [
+       284470.417,
+       0.016555
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.016555
+      ],
+      "usd": [
+       284470.417,
+       0.016555
+      ],
+      "usd_per_year": [
+       3195095.712,
+       1.204
+      ],
+      "msf_not_made": [
+       0.0,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "schedule-driven",
+       null
+      ],
+      "rank": [
+       1,
+       null
+      ]
+     },
+     "rows:lever=Shear chops (all recorded)": {
+      "paper_usd": [
+       45555.345,
+       0.016929
+      ],
+      "machine_time_usd": [
+       3067.7,
+       0.016929
+      ],
+      "usd": [
+       48623.045,
+       0.016929
+      ],
+      "usd_per_year": [
+       546121.049,
+       1.208
+      ],
+      "msf_not_made": [
+       828.279,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       2,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: bond (all recorded)": {
+      "paper_usd": [
+       35355.0945,
+       0.016929
+      ],
+      "machine_time_usd": [
+       2380.814444,
+       0.016929
+      ],
+      "usd": [
+       37735.908944,
+       0.016929
+      ],
+      "usd_per_year": [
+       423839.646,
+       1.208
+      ],
+      "msf_not_made": [
+       642.8199,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       3,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: warp (all recorded)": {
+      "paper_usd": [
+       28781.4285,
+       0.016929
+      ],
+      "machine_time_usd": [
+       1938.143333,
+       0.016929
+      ],
+      "usd": [
+       30719.571833,
+       0.016929
+      ],
+      "usd_per_year": [
+       345034.022,
+       1.208
+      ],
+      "msf_not_made": [
+       523.2987,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       4,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: misalignment (all recorded)": {
+      "paper_usd": [
+       17372.553,
+       0.016929
+      ],
+      "machine_time_usd": [
+       1169.868889,
+       0.016929
+      ],
+      "usd": [
+       18542.421889,
+       0.016929
+      ],
+      "usd_per_year": [
+       208263.528,
+       1.208
+      ],
+      "msf_not_made": [
+       315.8646,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       6,
+       null
+      ]
+     },
+     "rows:lever=Dry-end: moisture (all recorded)": {
+      "paper_usd": [
+       8906.843,
+       0.016929
+      ],
+      "machine_time_usd": [
+       599.787407,
+       0.016929
+      ],
+      "usd": [
+       9506.630407,
+       0.016929
+      ],
+      "usd_per_year": [
+       106775.933,
+       1.208
+      ],
+      "msf_not_made": [
+       161.9426,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       7,
+       null
+      ]
+     },
+     "rows:lever=Unexplained (bale minus accounted waste)": {
+      "paper_usd": [
+       22555.137,
+       0.016555
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.016555
+      ],
+      "usd": [
+       22555.137,
+       0.016555
+      ],
+      "usd_per_year": [
+       253333.272,
+       1.204
+      ],
+      "msf_not_made": [
+       0.0,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "unattributed",
+       null
+      ],
+      "rank": [
+       5,
+       null
+      ]
+     },
+     "#0": {
+      "lever": [
+       "Side trim (all recorded)",
+       null
+      ],
+      "pct_of_gross": [
+       3.227369,
+       5.1e-05
+      ]
+     },
+     "$": {
+      "total_usd_per_year": [
+       5078463.162,
+       8.448
+      ],
+      "total_usd": [
+       452153.132073,
+       0.117755
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "value-speedvar-september-target",
    "type": "value",
    "mode": "offline",

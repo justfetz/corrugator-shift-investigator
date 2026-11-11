@@ -771,7 +771,7 @@ def pareto_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, 
                 {"row_count": len(minutes), "values": values}, day=day, note=note, rates=rates_text)
 
 
-def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *, day="2026-09-14", note=""):
+def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *, day="2026-09-14", note="", lens=None):
     """get_opportunities by hand: the speed gap to each cell's best fifth (the speed case's own hours),
     trim points over the target, each downtime reason and the recorded shear and dry-end waste, priced
     and ranked by dollars a year."""
@@ -799,11 +799,48 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
     control = {k: "schedule-driven" if k.startswith("Side trim") or k.endswith("(scheduled time)") else "controllable" for k in levers}
     values = {f"rows:lever={k}": {**e, "control": exact(control[k])} for k, e in levers.items()}
     values["#0"] = {"lever": exact(max(levers, key=lambda k: levers[k]["usd_per_year"][0]))}
+    if lens == "supervisor":   # the controllable levers ranked by dollars a year; the schedule-driven ones carry no rank
+        mine = sorted((k for k in levers if control[k] == "controllable"), key=lambda k: -levers[k]["usd_per_year"][0])
+        values["#0"] = {"lever": exact(mine[0]), "rank": exact(1)}
+        for k in levers:
+            values[f"rows:lever={k}"]["rank"] = exact(mine.index(k) + 1 if k in mine else None)
+        controllable = {"controllable_levers": exact(len(mine)),
+                        "controllable_usd_per_year": [round(sum(levers[k]["usd_per_year"][0] for k in mine), 3), sum(levers[k]["usd_per_year"][1] for k in mine)]}
     values["$"] = {"total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in levers.values()), 3),
                                           sum(e["usd_per_year"][1] for e in levers.values())],
                    "contribution_status": exact("margin not set" if rates[2] is None else "set")}
-    return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift},
+    if lens == "supervisor":
+        values["$"].update(controllable)
+    arguments = {"window": {"period": period, "anchor": anchor}, "shift": shift, **({"lens": lens} if lens else {})}
+    return case(id, "get_opportunities", arguments,
                 {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note, rates=rates_text)
+
+
+def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
+    """get_opportunities with lens=ownership by hand: the total cost of each waste the records hold, side trim first
+    (all of it, priced as paper), then shear, each dry-end reason (paper plus the run time they took) and the
+    unexplained remainder (paper), by dollars a year; the total of them all."""
+    rates = rates_of(None)
+    span = window(period, anchor)
+    t = plain.sums(*span, shift)
+    gross = round(t["gross"], 1)
+    scheduled = window_minutes(plain, span, shift)
+    trim = "Side trim (all recorded)"
+    levers = {trim: (money("trim", round(t["trim"], 1), gross, scheduled, rates, 0.1), "schedule-driven")}
+    for key, label in (("shear", "Shear chops (all recorded)"), ("bond", "Dry-end: bond (all recorded)"), ("warp", "Dry-end: warp (all recorded)"),
+                       ("misalignment", "Dry-end: misalignment (all recorded)"), ("moisture", "Dry-end: moisture (all recorded)")):
+        if round(t[key], 1) > 0:
+            levers[label] = (money("waste", round(t[key], 1), gross, scheduled, rates, 0.1), "controllable")
+    unexplained = round(t["bale"] - t["trim"] - t["shear"] - t["rejects"], 1)
+    if unexplained > 0:
+        levers["Unexplained (bale minus accounted waste)"] = (money("paper", unexplained, gross, scheduled, rates, 0.1), "unattributed")
+    order = [trim] + sorted((k for k in levers if k != trim), key=lambda k: -levers[k][0]["usd_per_year"][0])
+    values = {f"rows:lever={k}": {**levers[k][0], "control": exact(levers[k][1]), "rank": exact(order.index(k) + 1)} for k in levers}
+    values["#0"] = {"lever": exact(trim), "pct_of_gross": num(t["trim"] / t["gross"] * 100, 4)}
+    values["$"] = {"total_usd_per_year": [round(sum(e["usd_per_year"][0] for e, _ in levers.values()), 3), sum(e["usd_per_year"][1] for e, _ in levers.values())],
+                   "total_usd": [round(sum(e["usd"][0] for e, _ in levers.values()), 6), sum(e["usd"][1] for e, _ in levers.values())]}
+    return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift, "lens": "ownership"},
+                {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note)
 
 
 def baseline_gap(plain, span, shift):
@@ -1097,6 +1134,13 @@ def build(data=None):
                              note="The most maintenance downtime any shift has: a power outage plus jams; recurrence counts shift 2's own year."))
     cases.append(review_case(plain, "value-review-september", "month", "2026-09-14",
                              note="A month: the five largest flags of many, each with its own trailing year."))
+    cases.append(review_case(plain, "value-review-day-0928", "day", "2026-09-28", day="2026-09-28",
+                             note="Two flags on shift 3; knife / slitter jam was over its band on its own once in the year, so recurrence is not zero."))
+    # the owner's two lenses on the same levers (issue #101), totals recomputed here, not with the cost model
+    cases.append(opportunities_case(plain, "value-dollars-supervisor-september", "month", "2026-09-14", lens="supervisor",
+                                    note="The supervisor lens: the controllable losses ranked, schedule-driven trim and planned maintenance unranked."))
+    cases.append(ownership_case(plain, "value-dollars-ownership-september", "month", "2026-09-14",
+                                note="The ownership lens: the total cost of waste, side trim first."))
     # Speed variance (issue #92): the gap split into stops, setups, below-target running and grade mix, by hand,
     # against target (the usual grade mix), against the previous week, and one shift against another.
     cases.append(speedvar_case(plain, "value-speedvar-september-target", "month", "2026-09-14",

@@ -299,8 +299,11 @@ class Analysis:
                     self.get_quality_breakdown(shift)]
         row=data['rows'][0]
         stops,speed,quality=(c['rows'] for c in components)
-        row.update({'largest_downtime_reason':stops[0]['category'] if stops else 'No recorded stops',
-                    'largest_downtime_minutes':stops[0]['down_minutes'] if stops else 0,
+        # the largest unplanned reason: planned maintenance is scheduled time and sorts last (issue #101)
+        lead=next((r for r in stops if not r['scheduled']), stops[0] if stops else None)
+        row.update({'largest_downtime_reason':lead['category'] if lead else 'No recorded stops',
+                    'largest_downtime_minutes':lead['down_minutes'] if lead else 0,
+                    'largest_downtime_scheduled':bool(lead and lead['scheduled']),
                     'largest_reject_reason':quality[0]['reason'] if quality else 'No recorded rejects',
                     'largest_reject_sqft':quality[0]['rejected_sqft'] if quality else 0,
                     'wet_end_runs_below_target':sum(r['actual_fpm']<r['target_fpm'] for r in speed),

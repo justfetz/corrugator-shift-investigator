@@ -135,7 +135,8 @@ INTENT_QUESTIONS = [
     ('period_speedvar', 'What were the top 3 contributors to speed variations?', 'shift', 'day'),
     ('period_review', 'What were the top downtime reasons this week?', 'day', 'day'),
 ]
-ALIASES = [('period_downtime', 'Show downtime by reason', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]
+# downtime by reason over a window is the owner's review (issue #101); by equipment it is still the Pareto's alias
+ALIASES = [('period_downtime', 'Show downtime by equipment', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]
 
 
 def opening(sections):
@@ -155,7 +156,7 @@ def test_no_two_intents_share_an_opening_sentence():
     for alias, question, canonical in ALIASES:   # the same plan answers the same way
         result, context = ask(question, scope='day', period='week')
         assert context.history[-1]['intent'] == alias
-        week, _ = ask({'period_pareto': 'Which downtime reason cost the most minutes?', 'period_waste': 'Waste breakdown'}[canonical], scope='day', period='week')
+        week, _ = ask({'period_pareto': 'Which equipment cost the most downtime minutes?', 'period_waste': 'Waste breakdown'}[canonical], scope='day', period='week')
         assert opening(result['sections']) == opening(week['sections'])
     # dollars over a window (`measure=dollars` under a ranged grain, intent period_dollars) is the levers' plan
     from investigator.urls import resolve_url

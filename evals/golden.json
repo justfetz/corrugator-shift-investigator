@@ -3144,9 +3144,9 @@
    "period": "week",
    "scope": "day",
    "question": "Downtime by reason for first shift and third shift",
-   "note": "Issue #90: under a ranged grain, downtime split over two named shifts is one Pareto per shift; its address measure=pareto&shifts=1,3 must resolve back to the same two Paretos (it was a 400).",
+   "note": "Issue #90: under a ranged grain, downtime split over two named shifts is one answer per shift, and its address must resolve back to the same two (it was a 400). Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, ranked by % of scheduled minutes, planned maintenance last), so the split is one review per shift at measure=review&shifts=1,3.",
    "expect": {
-    "url": "/corr/1/week/2026-09-14?measure=pareto&shifts=1,3",
+    "url": "/corr/1/week/2026-09-14?measure=review&shifts=1,3",
     "status": "complete",
     "shifts": [
      1,
@@ -3154,32 +3154,28 @@
     ],
     "tools": [
      {
-      "tool": "get_downtime_pareto",
+      "tool": "get_downtime_review",
       "arguments": {
        "window": {
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "group_by": "reason",
-       "measure": "minutes",
        "shift": 1
       }
      },
      {
-      "tool": "get_downtime_pareto",
+      "tool": "get_downtime_review",
       "arguments": {
        "window": {
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "group_by": "reason",
-       "measure": "minutes",
        "shift": 3
       }
      }
     ],
     "charts": 2,
-    "sections_match": "Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), shift 3, versus Week 2026-09-07"
+    "sections_match": "Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), shift 3\\. Window coverage: complete\\."
    }
   },
   {
@@ -3553,7 +3549,7 @@
      }
     ]
    },
-   "note": "Issue #75 review: a mixed period plan answers in the trend's shape and keeps the Pareto and the waste breakdown as bullets with their own evidence.",
+   "note": "Issue #75 review: a mixed period plan answers in the trend's shape and keeps the Pareto and the waste breakdown as bullets with their own evidence. Issue #101: planned maintenance (the week's row 0) is scheduled time and never leads, so the Pareto's finding is the largest unplanned reason, row 1.",
    "expect": {
     "status_in": [
      "complete"
@@ -3561,7 +3557,7 @@
     "tool_calls": 3,
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of gross in the week of 2026-09-14",
-     "^- All shifts: \\*\\*[0-9.,]+ min\\*\\* at .*\\(query 1 · row 0\\)$",
+     "^- All shifts: \\*\\*[0-9.,]+ min\\*\\* at .*, the largest unplanned reason .*\\(query 1 · row 1\\)$",
      "^- All shifts: \\*\\*[0-9.]+%\\*\\* of gross in side trim.*\\(query 2 · row 0\\)$"
     ]
    }
@@ -6160,6 +6156,162 @@
      "^- Shift 2, 2026-09-18: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
      "^- Shift 2, Power outage led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$"
     ]
+   }
+  },
+  {
+   "id": "week-downtime-by-reason-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "period": "week",
+   "scope": "day",
+   "question": "Show downtime by reason",
+   "note": "Issue #101 review: under Week, Month or 4-4-5 downtime by reason answered with the Pareto, led by planned maintenance (125.00 min that week). The owner's downtime rules apply at every grain: maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes",
+     "^Scheduled time, not ranked$",
+     "^- Planned maintenance: \\*\\*[0-9.]+ min\\*\\* over "
+    ],
+    "sections_not_match": "^- [0-9]+\\. Planned maintenance"
+   }
+  },
+  {
+   "id": "pareto-planned-maintenance-never-leads",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Which downtime reason cost the most minutes this week?",
+   "note": "Issue #101 review: the week's Pareto opened with planned maintenance, which the owner counts as scheduled time. The tool's rows are unchanged; the answer leads with the largest unplanned reason and lists planned maintenance last, marked.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ min\\*\\* at .+, the largest unplanned reason · ",
+     "^- Planned maintenance: \\*\\*[0-9.,]+ min\\*\\* .* · scheduled time, not an unplanned loss"
+    ],
+    "sections_not_match": "^\\*\\*[0-9.,]+ min\\*\\* at Planned maintenance"
+   }
+  },
+  {
+   "id": "what-went-wrong-with-speed-keeps-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What went wrong with speed this week?",
+   "note": "Issue #101 review: \"what went wrong\" is the supervisor lens only when the question names no measure; with speed named it stays the speed answer over the week.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "measure": "speed"
+      }
+     }
+    ],
+    "sections_not_match": "controllable losses"
+   }
+  },
+  {
+   "id": "what-went-wrong-with-downtime-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What went wrong with downtime this week?",
+   "note": "Issue #101 review: with downtime named, \"what went wrong\" is the owner's downtime review over the week, not the money lens.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_not_match": "controllable losses"
+   }
+  },
+  {
+   "id": "compare-with-yesterday-refused-on-the-latest-day",
+   "type": "refusal",
+   "mode": "offline",
+   "day": "2026-09-30",
+   "question": "Compare with yesterday.",
+   "note": "Issue #101 review: on the latest production day \"yesterday\" is the selected day, so a comparison with it has no second window; it answered a one-shift card that compared nothing. It is refused with what to ask.",
+   "expect": {
+    "raises": "Yesterday is the selected day; to compare, name both windows"
+   }
+  },
+  {
+   "id": "summary-names-the-largest-unplanned-reason",
+   "type": "faithfulness",
+   "mode": "offline",
+   "day": "2026-09-17",
+   "shift": 1,
+   "question": "Summarize performance, downtime and waste. Show supporting charts.",
+   "note": "Issue #101 review: planned maintenance sorts last in the downtime breakdown, so the summary's first reason is the largest unplanned one (Knife / slitter jam, 3.42 min, beside 125.00 min of planned maintenance); it must say so rather than call it the largest downtime reason.",
+   "expect": {
+    "status": "complete",
+    "sections_match": "^- .+: \\*\\*[0-9.]+ min\\*\\*, the largest unplanned downtime reason \\(query 1 · row 0\\)$",
+    "sections_not_match": "the largest downtime reason"
    }
   }
  ]

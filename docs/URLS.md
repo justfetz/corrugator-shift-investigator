@@ -38,7 +38,7 @@ store measures run one record-store tool over a window.
 | --- | --- | --- |
 | `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow"); with `window=` the period form over that window ("why was this shift slow this week", "were we slow in August") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
 | `summary` | `get_shift_overview` in one call, three charts | the same three store tools as `overview` |
-| `downtime` | KPIs and downtime by `by=` (`kind=` narrows) | the Pareto alone: an alias of `pareto` |
+| `downtime` | KPIs and downtime by `by=` (`kind=` narrows); under all shifts by reason, an alias of `review` (issue #101) | by reason, an alias of `review`; by `by=place` or `kind`, an alias of `pareto` |
 | `fpm` | KPIs and wet-end speed against grade targets; with `window=` the period form over that window ("average speed this week", "our speed vs last week"); with `by=grade` speed without stops against each grade target, charted in ft/min ("fpm by grade") | KPI tiles and speed by grade against target; `by=grade` the speed-by-grade table alone |
 | `quality` | KPIs and dry-end rejects by reason | the waste breakdown alone: an alias of `waste` |
 | `compare` | KPIs, downtime and speed per shift (`shifts=` or all three) | KPI tiles per shift: an alias of `kpis` with `shifts=` |
@@ -97,7 +97,7 @@ same grain, which these answers carry already or which their store form carries.
 | `compare=prev` on `kpis`, `pareto`, `waste`, `grade`, `rollstock` | the same address without it: `prev` is the default, the previous window is beside |
 | `measure=speedvar&compare=prev` | `measure=speedvar&against=previous` (the speed variance against the previous window of the same grain); `against=target` spelled out is dropped as the default |
 | `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
-| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` |
+| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=review` (by reason, issue #101; `by=place` or `kind`, or `compare=prev`, `measure=pareto`), `waste`, `kpis` |
 | `measure=downtime` under Day and all shifts, without `by=`, `kind=` or `shifts=` | `measure=review` (issue #101: a production day's downtime over all shifts is the owner's downtime review) |
 | `measure=dollars` under a ranged grain | `measure=money` (the levers of the window in $/yr; under Day, `dollars` is the shift's own dollars; not with several `shifts=`, as above) |
 | `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |

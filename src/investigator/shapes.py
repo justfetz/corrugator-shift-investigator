@@ -128,6 +128,7 @@ def flag_lines(result, flags):
     return out
 
 
+PLANNED = ('Planned maintenance', 'PM')   # the Pareto's planned-maintenance category, by reason and by kind: scheduled time
 FIRST_REASONS = 3   # the card shows five findings (web/app.js BULLETS_SHOWN): three reasons, then a flag and its recurrence
 
 
@@ -651,7 +652,8 @@ class DailyAnswer:
                 f'{f1(row["speed_to_target_pct"])}% of grade target{self.rank()} {ref(o, 0)}')
         bullets = []
         if row['largest_downtime_minutes']:
-            bullets.append(bullet(f'{row["largest_downtime_reason"]}: **{f2(row["largest_downtime_minutes"])} min**, the largest downtime reason', o, 0))
+            kind = 'scheduled time, the only downtime' if row.get('largest_downtime_scheduled') else 'the largest unplanned downtime reason'
+            bullets.append(bullet(f'{row["largest_downtime_reason"]}: **{f2(row["largest_downtime_minutes"])} min**, {kind}', o, 0))
         if row['largest_reject_sqft']:
             bullets.append(bullet(f'{row["largest_reject_reason"]}: **{f1(row["largest_reject_sqft"])} sq ft**, the largest dry-end reject reason', o, 0))
         if row['wet_end_runs_observed']:
@@ -955,8 +957,10 @@ class PeriodAnswer:
         bullets = []
         pareto, waste = tools.get('get_downtime_pareto'), tools.get('get_waste_breakdown')
         if pareto and pareto['data']['rows']:
-            r = pareto['data']['rows'][0]
-            bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, 0))
+            rows = pareto['data']['rows']
+            i = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED), 0)   # planned maintenance never leads (#101)
+            r = rows[i]
+            bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, i))
         if waste:
             i, r = self.largest_waste(waste)
             if r:
@@ -1031,20 +1035,25 @@ class PeriodAnswer:
         data, rows = p['data'], p['data']['rows']
         minutes = data.get('measure', 'minutes') == 'minutes'
         noun = {'reason': 'reasons', 'place': 'places', 'kind': 'kinds'}.get(data.get('group_by'), 'reasons')
+        # Planned maintenance is scheduled time (issue #101): it never leads; it is listed where the tool put it, marked.
+        lead = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED), 0)
         if rows:
-            r = rows[0]
+            r = rows[lead]
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
-            rank = f', the largest of {len(rows)} {noun}' if self.whole(data) else ''
-            head = f'**{fig}** at {r["category"]}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"}{priced(r)} {ref(p, 0)}'
+            rank = (', the largest unplanned reason' if lead else f', the largest of {len(rows)} {noun}') if self.whole(data) else ''
+            head = f'**{fig}** at {r["category"]}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"}{priced(r)} {ref(p, lead)}'
         else:
             head = f'No recorded stops in this window{self.where(data)} {ref(p)}'
         bullets = []
-        for i, r in enumerate(rows[1:], 1):
+        for i, r in sorted(enumerate(rows), key=lambda x: (x[1]['category'] in PLANNED, x[0])):   # scheduled time drops to the bottom
+            if i == lead:
+                continue
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
             other = f'over {n(r["stops"])} stops' if minutes else f'· {pval(r["minutes"])} min'
             previous = f'previous {pval(r["previous_minutes"])} min' if r.get('previous_minutes') is not None else 'previous unavailable'
-            bullets.append(bullet(f'{r["category"]}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{priced(r)}', p, i))
-        notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[0], 'category') if rows else [])
+            planned = ' · scheduled time, not an unplanned loss' if r['category'] in PLANNED else ''
+            bullets.append(bullet(f'{r["category"]}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{planned}{priced(r)}', p, i))
+        notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[lead], 'category') if rows else [])
         return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'waste'))
 
     def period_waste(self, tools, w):

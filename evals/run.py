@@ -79,7 +79,7 @@ DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
-RULE_CONSTANTS = {'2.5', '1', '3.25', '0.4', '480', '12', '0'}
+RULE_CONSTANTS = {'2.5', '1', '3.25', '480', '12', '0'}   # 0.4 (shear guidance) retired by the owner's bands, issue #101
 # The answer shape (issue #75), stated here independently of the application: a bold figure, the
 # evidence a line cites, a where-to-look question, and the result field each evidence part names.
 BOLD = re.compile(r'\*\*([^*]+)\*\*')

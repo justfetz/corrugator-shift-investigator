@@ -64,7 +64,7 @@ PREVIOUS_BESIDE = ('pareto', 'waste', 'grade', 'rollstock')   # store answers th
 PERIOD_FORMS = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis'}   # the store form each takes against a previous window
 # Store measures that run once per listed shift (`shifts=1,3`): kpis under every grain, and under a ranged grain the
 # Pareto and the waste breakdown too, since there `downtime` and `quality` split over named shifts are those (issue #90).
-SPLIT_MEASURES = tuple(PERIOD_FORMS.values())
+SPLIT_MEASURES = (*PERIOD_FORMS.values(), 'review')   # downtime by reason over a window is the review (issue #101), split the same way
 KPI_LED = ('overview', 'summary', 'fpm')                  # day measures whose answer leads with the KPI tiles
 
 
@@ -371,6 +371,8 @@ def _aliases(measure, fields, grain):
                     raise ValueError(f'{key}= does not apply to measure={measure}&compare=prev under Day: against the previous '
                                      f'production day it becomes measure={target}, which ' +
                                      ('groups the Pareto with by=kind instead' if target == 'pareto' else f'takes no {key}='))
+        if target == 'downtime' and grain != 'day':
+            target = 'pareto'   # against the previous window: the Pareto carries it; the review (downtime by reason) does not
         if target is not None:
             del out['compare']
             typed.append('compare=prev')
