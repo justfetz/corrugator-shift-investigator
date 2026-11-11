@@ -186,6 +186,17 @@ def test_smoke_test_reports_main_and_never_a_preview(tmp_path):
     assert code == 0 and log.rstrip().endswith(f'Live at {MAIN_HASH}'), log
 
 
+def test_smoke_test_skips_only_preview_tags_not_a_service_named_with_triple_hyphens(tmp_path):
+    """Codex on #110: CLOUD_RUN_SERVICE may itself contain '---'; only preview.yml's `pr-<n>` tag URLs are skipped."""
+    main_hash = 'https://line---demo-4s5ogdb7lq-uc.a.run.app'
+    main = 'https://line---demo-65612311806.us-central1.run.app'
+    preview = 'https://pr-7---line---demo-4s5ogdb7lq-uc.a.run.app'
+    code, log, requested = smoke(tmp_path, up=[main_hash, main, preview], live=[main], live_model='1',
+                                 origins=(main_hash, main, preview))
+    assert code == 0 and log.rstrip().endswith(f'Live at {main}'), log
+    assert preview not in ' '.join(requested) and f'{main}/api/config' in requested
+
+
 def test_smoke_test_fails_when_only_a_preview_answers(tmp_path):
     code, log, _ = smoke(tmp_path, up=PREVIEWS, live=PREVIEWS)
     assert code != 0 and 'Live at' not in log, 'main is down: a healthy preview must not pass the deploy'
