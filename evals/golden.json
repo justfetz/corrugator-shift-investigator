@@ -3462,10 +3462,10 @@
    "id": "speed-all-shifts-rank-follows-the-ranked-measure",
    "type": "faithfulness",
    "mode": "offline",
-   "day": "2026-08-05",
+   "day": "2026-08-12",
    "scope": "day",
    "question": "Show speed to target",
-   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-05 shift 3 is lowest in percent of target but not in ft/min (shift 2 ran 579.8 ft/min to its 595.2): the headline must not call its ft/min the lowest.",
+   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-12 shift 2 is lowest in percent of target (85.3%) but not in ft/min (shift 1 ran 567.6 ft/min to its 580.5): the headline must not call its ft/min the lowest. Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3481,10 +3481,10 @@
    "id": "summary-all-shifts-rank-follows-the-ranked-measure",
    "type": "faithfulness",
    "mode": "offline",
-   "day": "2026-08-05",
+   "day": "2026-08-12",
    "scope": "day",
    "question": "Summarize this shift",
-   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 2 made fewer feet on 2026-08-05).",
+   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 1 made fewer feet on 2026-08-12: 272,462 lineal ft against shift 2's 278,622). Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3500,10 +3500,10 @@
    "id": "speed-run-over-target-is-the-highest-not-the-closest",
    "type": "faithfulness",
    "mode": "offline",
-   "day": "2026-08-10",
-   "shift": 3,
+   "day": "2026-08-05",
+   "shift": 1,
    "question": "Show speed to target",
-   "note": "Issue #75 review: a run above its target (101.3% on 2026-08-10, shift 3) is the highest against target, not the closest to it (another run sits at 100.07%).",
+   "note": "Issue #75 review: a run above its target (101.9% on 2026-08-05, shift 1) is the highest against target, not the closest to it (another run sits at 99.85%). Re-anchored from 2026-08-10, shift 3 for the year window (issue #35), where no run reaches its target.",
    "expect": {
     "status": "complete",
     "sections_match": "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the highest of [0-9]+ runs \\(query 2 · row [0-9]+\\)$",
@@ -3516,7 +3516,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Show rankings",
-   "note": "Issue #75 review: with all shifts, the rankings headline names the lowest speed attainment across the shifts (shift 3's WE20260914039 on 2026-09-14), not shift 1's first-ranked run.",
+   "note": "Issue #75 review: with all shifts, the rankings headline names the lowest speed attainment across the shifts (shift 3's WE20260914044 on 2026-09-14), not shift 1's first-ranked run.",
    "expect": {
     "status": "complete",
     "shifts": [
