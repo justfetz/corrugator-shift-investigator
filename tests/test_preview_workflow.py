@@ -326,3 +326,14 @@ def test_the_already_gone_pattern_matches_what_gcloud_actually_prints():
     assert matches('ERROR: (gcloud.run.revisions.describe) NOT_FOUND: Resource not found')
     assert not matches('ERROR: (gcloud.run.revisions.describe) PERMISSION_DENIED: The caller does not have permission')
     assert not matches('ERROR: (gcloud.run.revisions.delete) ABORTED: Conflict for resource')
+
+
+def test_the_custom_domain_is_allow_listed_and_survives_a_preview():
+    """shift.talktomymachine.ai (a Cloud Run domain mapping) is appended to production's allow-list by the
+    deploy, and a preview deploy keeps it: base_origins reads PUBLIC_DEMO_ORIGIN from the running template."""
+    wf = (ROOT / '.github/workflows/deploy-cloudrun.yml').read_text()
+    assert "CUSTOM_ORIGINS: ${{ vars.PUBLIC_DEMO_CUSTOM_ORIGINS || 'https://shift.talktomymachine.ai' }}" in wf
+    assert 'ORIGINS="${ORIGINS},${CUSTOM_ORIGINS}"' in wf
+    custom = 'https://shift.talktomymachine.ai'
+    svc = service_json(env_origins=f'{LEGACY},{DETERMINISTIC},{custom}')
+    assert po.base_origins(svc) == [LEGACY, DETERMINISTIC, custom]
