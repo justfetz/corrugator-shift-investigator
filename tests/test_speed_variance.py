@@ -13,6 +13,9 @@ from investigator.record_store import SPEEDVAR_BUCKETS, default_store
 from investigator.urls import canonical_url, redirect_for, resolve_url
 
 DAY = "2026-09-14"
+# A week whose stops offset (shift 1's Thursday planned maintenance) ranks among the three bullets of shift 3 against
+# shift 1: in the year window (issue #35) the week of 14 September has three buckets toward the gap, so the offset is fourth.
+OFFSET_WEEK = "2026-01-26"
 BUCKETS = [key for key, _ in SPEEDVAR_BUCKETS]
 
 
@@ -85,7 +88,8 @@ def test_one_shift_against_another_is_the_mirror_of_the_reverse(store):
     (("week", 2, "target", 1), "against_shift is only for against=shift"),
     (("week", None, "shift", 1), "give shift and against_shift"),
     (("week", 2, "shift", 2), "another shift"),
-    (("month", None, "previous", None, "2026-08-14"), "outside the record store: ask against target instead"),
+    # September 2025 holds the year's first day; its previous window, August 2025, is before it (issue #35: July 2026 is inside)
+    (("month", None, "previous", None, "2025-09-30"), "outside the record store: ask against target instead"),
 ])
 def test_refusals_say_what_to_change(store, args, message):
     with pytest.raises(ValueError, match=message):
@@ -99,7 +103,7 @@ def test_each_loss_bucket_is_priced_as_machine_time_and_an_offset_is_not(store):
         if row["gap_lineal_ft"] > 0:
             minutes = row["gap_lineal_ft"] / data["reference_speed_fpm"]
             assert row["machine_minutes"] == round(minutes, 2) and row["usd"] == round(minutes / 60 * 1200, 2)
-            assert "lineal ft / 615.8 ft/min reference speed" in row["usd_basis"]
+            assert "lineal ft / 595.9 ft/min reference speed" in row["usd_basis"]   # shift 1's speed with stops that week, in the golden year
         else:
             assert row["usd"] is None and row["usd_basis"] == cost_model.GAIN
     assert data["gap_usd"] == round(data["gap_lineal_ft"] / data["reference_speed_fpm"] / 60 * 1200, 2)
@@ -206,17 +210,17 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
 
 def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(store):
     """Review of #92: "offset" pulls against the gap. Shift 1 against shift 3 this week is a gain (above); its stops
-    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card and is priced as machine
+    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card (the week of 26 January in the year) and is priced as machine
     time, while the gain buckets and the gap itself are not; the contribution status is the rates', not the gap's."""
-    data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3), cost_model.effective())
+    data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3, anchor=OFFSET_WEEK), cost_model.effective())
     assert data["direction"] == "above" and data["gap_fpm"] < 0 and data["gap_usd"] is None
     assert data["contribution_status"] == "margin not set"
     for row in data["rows"]:
         assert (row["usd"] is not None) == (row["gap_fpm"] > 0)
         if row["gap_fpm"] < 0:
             assert row["usd_basis"] == cost_model.GAIN
-    agent = Agent(store.day_analysis(DAY))
-    sections = agent.ask("Why did speed differ on shift 1 versus shift 3 this week?", Context(DAY, 2, scope="day"))["sections"]
+    agent = Agent(store.day_analysis(OFFSET_WEEK))
+    sections = agent.ask("Why did speed differ on shift 1 versus shift 3 this week?", Context(OFFSET_WEEK, 2, scope="day"))["sections"]
     assert sections[0].startswith("Speed gap **") and " on shift 1 above shift 3: " in sections[0]
     stops = next(s for s in sections if s.startswith("- Stops: "))
     assert "the other way, an offset" in stops and " · $" in stops
