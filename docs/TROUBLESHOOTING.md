@@ -44,13 +44,13 @@ The period heatmap title error is repaired. If an old server still displays `'sh
 
 Daily report PDF byte-format and session checks pass automated tests. That does not establish full visual PDF quality. PDF tables are summaries, with disclosed row limits; exports are not a screen capture or full evidence archive. A stale/foreign session-and-run reference is rejected. Reports live in memory and disappear on restart or eviction. Each session retains only its latest result.
 
-## OpenAI/BYOK
+## The analyst and your own key
 
-Narrative unavailable means the writer call failed, reached a shared limit or returned invalid references/format. The calculated evidence and charts remain available. The writer shares the ten-call budget with planning. Numeric claims must use fact placeholders and known fields; prose still needs human review. No automatic retry occurs.
+Narrative unavailable means the writer call failed, reached a shared limit or returned invalid references/format. The calculated evidence and charts remain available. An Anthropic round is two calls (plan and narrative); an OpenAI round's writer shares its ten-call budget with planning. Numeric claims must use fact placeholders and known fields; prose still needs human review. No automatic retry occurs.
 
-No key is needed for offline questions or period reports. A live mode works under any period: the daily tools answer under Day, the period tools under Week, Month and 4-4-5. The key field clears on submit and mode/scope resets; a second investigation requires re-entry unless a server environment key is configured. The app does not load `.env` automatically.
+No key is needed for offline questions or period reports. A live mode works under any period: the daily tools answer under Day, the period tools under Week, Month and 4-4-5. On the hosted demo there is no key field: the analyst uses the site's own key. On the loopback workbench the key field clears on submit and mode/scope resets; a second investigation requires re-entry unless a server environment key is configured. The app does not load `.env` automatically.
 
-If a live question fails, inspect the displayed error before retrying: there are no automatic provider retries, and a failed or uncertain attempt can retain its spending reservation. The application's local budget and your provider billing/account limits are different controls. Do not delete `artifacts/model-budget.sqlite3` to clear an exhausted budget. See [BYOK behavior](OPENAI_BYOK.md).
+If a live question fails, inspect the displayed error before retrying: there are no automatic provider retries, and a failed or uncertain attempt can retain its spending reservation. The application's local budget and your provider billing/account limits are different controls. Do not delete `artifacts/model-budget.sqlite3` to clear an exhausted budget. See [the analyst](ANALYST.md), and [OpenAI, the optional provider](OPENAI_BYOK.md) for that provider's key handling.
 
 Never enter a key into the question box. Questions and bounded synthetic evidence are sent to the provider in live mode. Do not put sensitive plant data into a question: this demo has no real-data privacy workflow. Live quality and account/model compatibility remain unverified.
 

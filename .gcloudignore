@@ -2,5 +2,7 @@
 .git
 artifacts
 tests
-docs
+# docs/*.md is uploaded: the image renders it into /docs (issue #93)
+docs/archive
+docs/design
 **/__pycache__

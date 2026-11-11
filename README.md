@@ -8,12 +8,14 @@ For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics
 
 | I want to… | Start here |
 | --- | --- |
+| Read all of it in the app, with a table of contents | `/docs` on the running server, rendered from these files ([overview](docs/OVERVIEW.md)) |
 | Read how the whole thing is built, in pipeline order, in ten minutes | [How this is built](docs/HOW_THIS_IS_BUILT.md) |
 | Install, run, ask questions, and read reports | [Workbench how-to](docs/WORKBENCH.md) |
 | Check a formula, target, calendar boundary, or heatmap color | [Metrics and interpretation](docs/METRICS.md) |
 | Understand the agent, tools, context and data flow | [Execution walkthrough](docs/AGENT_EXECUTION.md) and [agent contract](docs/AGENT_CONTRACT.md) |
 | Link to a question: the URL grammar every offline view has (the Datasette model) | [URLs](docs/URLS.md) |
-| Use a key and understand the spending guard | [OpenAI/BYOK](docs/OPENAI_BYOK.md) |
+| Know what the model may and may not do | [The analyst](docs/ANALYST.md) (Anthropic by default) |
+| Use OpenAI, the optional provider, with your own key | [OpenAI/BYOK](docs/OPENAI_BYOK.md) |
 | Run the hosted demo on Anthropic with the server's key, rate limit and daily cap | [Anthropic demo](docs/ANTHROPIC_DEMO.md) |
 | Recover from an error or unexpected answer | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Verify the app or evaluate live question quality | [Testing and evaluation](docs/TESTING.md) |
@@ -37,7 +39,7 @@ python3 evals/run.py --live --provider anthropic     # the live cases against a 
 
 **Where it runs.** The public demo runs on Google Cloud Run, deployed from `main` by GitHub Actions through Workload Identity Federation, with no stored key once the cutover in [deployment](docs/DEPLOYMENT.md) is done. It answers with the free offline planner by default. Choosing Anthropic in the Agent control runs the planner on the Messages API (`claude-haiku-5-5`) under a key the server holds, a per-visitor rate limit, a daily cap on model rounds and a console spend limit ([Anthropic demo](docs/ANTHROPIC_DEMO.md)); OpenAI is a bring-your-own-key option on the local workbench only. Either model chooses which bounded tools to run and writes a short interpretation whose numbers application code fills from cited evidence; every number is calculated by fixed queries. Fifteen live Anthropic recordings are replayed in CI by the golden set ([evals](evals/README.md)); visual PDF layout is still checked by hand.
 
-**Status: local learning workbench and hosted public demo.** Set `PUBLIC_DEMO_ORIGIN` (see [deployment](docs/DEPLOYMENT.md)) to run the synthetic demo in a container with no visitor keys; a `Dockerfile` and deploy workflows for Google Cloud Run (the live demo) and Hugging Face Spaces are included. The left rail selects a production day, a shift (or all three) and a window (Day, Week, Month or 4-4-5) and offers the canned questions; each answer is a card with its queries, summary, charts and KPI tiles; a question is answered over that window by the daily tools (Day) or the period tools (Week, Month, 4-4-5), and the Period report button builds the deterministic heatmap, daily matrix, recurring downtime and notes for the window. 43 selectable production days (Monday to Friday, August and September 2026, one seed), tested SQL tools, a bounded offline planner, follow-up context, evidence-linked charts, PDF export. Email delivery is not connected. See [Run the workbench](docs/WORKBENCH.md), the user-facing `/guide` page, and the [deployment readiness plan](docs/DEPLOYMENT.md).
+**Status: local learning workbench and hosted public demo.** Set `PUBLIC_DEMO_ORIGIN` (see [deployment](docs/DEPLOYMENT.md)) to run the synthetic demo in a container with no visitor keys; a `Dockerfile` and deploy workflows for Google Cloud Run (the live demo) and Hugging Face Spaces are included. The left rail selects a production day, a shift (or all three) and a window (Day, Week, Month or 4-4-5) and offers the canned questions; each answer is a card with its queries, summary, charts and KPI tiles; a question is answered over that window by the daily tools (Day) or the period tools (Week, Month, 4-4-5), and the Period report button builds the deterministic heatmap, daily matrix, recurring downtime and notes for the window. 43 selectable production days (Monday to Friday, August and September 2026, one seed), tested SQL tools, a bounded offline planner, follow-up context, evidence-linked charts, PDF export. Email delivery is not connected. See [Run the workbench](docs/WORKBENCH.md), the in-app docs at `/docs`, and the [deployment readiness plan](docs/DEPLOYMENT.md).
 
 ## 1. Start with a job a person actually needs done
 
@@ -161,7 +163,7 @@ Read [How a question becomes evidence and a chart](docs/AGENT_EXECUTION.md) for 
 
 ## Inspect the working agent boundary
 
-Start with [the local interface walkthrough](docs/WORKBENCH.md), then read [the agent contract](docs/AGENT_CONTRACT.md) and [execution guide](docs/AGENT_EXECUTION.md). The offline router makes tool behavior reproducible alongside optional live-model integration. The in-app build guide explains the same boundary.
+Start with [the local interface walkthrough](docs/WORKBENCH.md), then read [the agent contract](docs/AGENT_CONTRACT.md) and [execution guide](docs/AGENT_EXECUTION.md). The offline router makes tool behavior reproducible alongside optional live-model integration. The in-app docs (`/docs`) explain the same boundary.
 
 
 ## Connect a live model
@@ -172,7 +174,7 @@ A model does not give the investigator missing plant knowledge. Anthropic (the h
 
 “How can we be better?” is a starting point, not a measurable objective. Narrow it to “Which recorded downtime reasons took the most minutes in this shift?”, “Which wet-end runs were furthest below their grade targets?”, or “Which reject reasons contributed the most square feet?” Use the example buttons for these investigations in free offline mode.
 
-Read an answer as **recorded finding → investigation question → human verification**. A large knife-jam total identifies a place to investigate; it does not establish a worn component, an operator mistake, or the correct adjustment. Check the underlying events and notes with the crew before proposing a change. A target gap is not automatically recoverable output, and this dataset cannot establish savings, profitability, or the best plant-wide improvement. It has no measured intervention outcomes or live machine state, and its records hold no costs: the dollars the investigator shows are the synthetic records priced at assumed rates (paper, machine time, margin; [the cost model](docs/METRICS.md)), not the plant's.
+Read an answer as **recorded finding → investigation question → human verification**. A large knife-jam total identifies a place to investigate; it does not establish a worn component, an operator mistake, or the correct adjustment. Check the underlying events and notes with the crew before proposing a change. A target gap is not automatically recoverable output, and this dataset cannot establish savings, profitability, or the best plant-wide improvement. It has no measured intervention outcomes or live machine state, and its records hold no costs: the dollars the investigator shows are the synthetic records priced at assumed rates (paper, machine time, margin; [the cost model](docs/COST_MODEL.md)), not the plant's.
 
 If the requested evidence is unavailable, narrow the question or collect the missing information. A completed investigation means the tool run finished, not that a root cause was proved. Tool restrictions and evidence-based summaries limit unsupported claims, but the model can still choose an unhelpful investigation. Live question quality is scored by the golden set's live cases (`python3 evals/run.py --live --provider anthropic`), whose recordings replay in CI; the pattern checks on prose are heuristics, so read a recording when a case first passes.
 
