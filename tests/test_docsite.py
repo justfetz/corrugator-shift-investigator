@@ -147,6 +147,23 @@ def test_the_renderer_escapes_everything_and_renders_the_subset():
     assert r.headings[0][:2] == (1, 'title-scriptalert1script')
 
 
+def test_indented_code_blocks_keep_their_lines():
+    """Codex on #107: METRICS.md's four-space formula blocks were folded into one paragraph."""
+    out = docsite.Renderer().render('\n'.join([
+        'Intro text', '    still the same paragraph (an indented line cannot interrupt one)', '',
+        '    a = lcm(x)', '    b = a_b * 2', '', '      c = <d>', '', 'After.', '',
+        '- item', '', '      code in the item']))
+    assert out.startswith('<p>Intro text still the same paragraph (an indented line cannot interrupt one)</p>')
+    assert '<pre><code>a = lcm(x)\nb = a_b * 2\n\n  c = &lt;d&gt;</code></pre>\n<p>After.</p>' in out
+    assert '<li><p>item</p>\n<pre><code>code in the item</code></pre></li>' in out
+
+
+def test_the_metrics_formulas_render_as_code(site):
+    page = site['/docs/metrics'].decode()
+    assert '<pre><code>common_inches = lcm(cutoff lengths)\nplanned_travel_inches = ' in page
+    assert '<pre><code>density = (value − minimum) / (maximum − minimum)\nalpha = 0.22 + 0.78 × density\n' in page
+
+
 def test_a_nul_in_the_source_cannot_forge_a_held_span():
     """The inline renderer holds finished spans behind NUL-delimited markers; a NUL in a document must
     neither splice one span's markup into another's attribute nor loop forever."""

@@ -127,6 +127,83 @@ def test_credential_choice_fails_only_when_neither_is_available(tmp_path):
     assert (code, output) == (1, '') and 'unset: GCP_DEPLOYER_SERVICE_ACCOUNT' in log
 
 
+MAIN_HASH = 'https://corrugator-shift-investigator-4s5ogdb7lq-uc.a.run.app'
+MAIN = 'https://corrugator-shift-investigator-65612311806.us-central1.run.app'
+PREVIEWS = ['https://pr-107---corrugator-shift-investigator-4s5ogdb7lq-uc.a.run.app',
+            'https://pr-91---corrugator-shift-investigator-4s5ogdb7lq-uc.a.run.app']
+CURL_STUB = """#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+url = args[-1]
+base = url.rsplit('/api/', 1)[0]
+open(os.environ['STUB_LOG'], 'a').write(url + '\\n')
+up = base in os.environ.get('STUB_UP', '').split()
+if url.endswith('/api/health'):
+    open(args[args.index('-o') + 1], 'w').write(json.dumps({'ok': True}) if up else 'down')
+    sys.stdout.write('200' if up else '503')
+elif up:
+    sys.stdout.write(json.dumps({'live_modes': ['anthropic'] if base in os.environ.get('STUB_LIVE', '').split() else []}))
+else:
+    sys.exit(22)
+"""
+
+
+def step_script(text, name):
+    """The shell of a workflow step's `run: |` block, dedented."""
+    start = text.index('run: |\n', text.index(f'- name: {name}')) + len('run: |\n')
+    lines = []
+    for line in text[start:].splitlines():
+        if line.strip() and not line.startswith(' ' * 10):
+            break
+        lines.append(line)
+    return textwrap.dedent('\n'.join(lines)) + '\n'
+
+
+def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREVIEWS)):
+    """Run the main deploy's smoke test against a stub curl; returns (exit code, log, URLs requested)."""
+    stub = tmp_path / 'bin'
+    stub.mkdir(exist_ok=True)
+    (stub / 'curl').write_text(CURL_STUB)
+    (stub / 'curl').chmod(0o755)
+    log = tmp_path / 'requests.log'
+    log.write_text('')
+    env = {**os.environ, 'PATH': f'{stub}:{os.environ["PATH"]}', 'ORIGINS': ','.join(origins), 'LIVE_MODEL': live_model,
+           'STUB_UP': ' '.join(up), 'STUB_LIVE': ' '.join(live), 'STUB_LOG': str(log)}
+    proc = subprocess.run(['bash', '-c', step_script(DEPLOY.read_text(encoding='utf-8'), 'Smoke test')],
+                          env=env, capture_output=True, text=True)
+    return proc.returncode, proc.stdout + proc.stderr, log.read_text().split()
+
+
+def test_smoke_test_reports_main_and_never_a_preview(tmp_path):
+    """A tagged preview revision (pr-<n>---…) answers on the same service and sits in ORIGINS for the allow-list,
+    but it runs a pull request's image: run 74 printed `Live at https://pr-91---…` and read pr-91's /api/config."""
+    code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN, MAIN_HASH], live_model='1')
+    assert code == 0, log
+    assert log.rstrip().endswith(f'Live at {MAIN}'), 'the deterministic URL, the one the README publishes'
+    assert not any('---' in url for url in requested), 'a preview is neither probed nor asked for its config'
+    assert f'{MAIN}/api/config' in requested
+    code, log, _ = smoke(tmp_path, up=[MAIN_HASH, *PREVIEWS], live=[MAIN_HASH])   # no deterministic URL on this project
+    assert code == 0 and log.rstrip().endswith(f'Live at {MAIN_HASH}'), log
+
+
+def test_smoke_test_skips_only_preview_tags_not_a_service_named_with_triple_hyphens(tmp_path):
+    """Codex on #110: CLOUD_RUN_SERVICE may itself contain '---'; only preview.yml's `pr-<n>` tag URLs are skipped."""
+    main_hash = 'https://line---demo-4s5ogdb7lq-uc.a.run.app'
+    main = 'https://line---demo-65612311806.us-central1.run.app'
+    preview = 'https://pr-7---line---demo-4s5ogdb7lq-uc.a.run.app'
+    code, log, requested = smoke(tmp_path, up=[main_hash, main, preview], live=[main], live_model='1',
+                                 origins=(main_hash, main, preview))
+    assert code == 0 and log.rstrip().endswith(f'Live at {main}'), log
+    assert preview not in ' '.join(requested) and f'{main}/api/config' in requested
+
+
+def test_smoke_test_fails_when_only_a_preview_answers(tmp_path):
+    code, log, _ = smoke(tmp_path, up=PREVIEWS, live=PREVIEWS)
+    assert code != 0 and 'Live at' not in log, 'main is down: a healthy preview must not pass the deploy'
+    code, log, _ = smoke(tmp_path, up=[MAIN, *PREVIEWS], live=PREVIEWS, live_model='1')
+    assert code != 0, "PUBLIC_DEMO_LIVE_MODEL=1 checks main's own live modes, not a preview's"
+
+
 def test_relative_markdown_links_resolve():
     """Every relative link in the current docs points at a file that exists (the September review moved)."""
     pages = [ROOT / 'README.md', ROOT / 'CLAUDE.md', *(ROOT / 'docs').glob('*.md'), ROOT / 'evals' / 'README.md',
