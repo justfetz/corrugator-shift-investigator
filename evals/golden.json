@@ -5749,7 +5749,7 @@
      "render_chart"
     ],
     "sections_match": [
-     "^The whole gap is \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); an offset bucket is not priced\\.$",
+     "^The whole gap is \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); a bucket that ran better than the reference is not priced\\.$",
      "^Contribution margin not set"
     ]
    }
@@ -5827,6 +5827,92 @@
      "\\(both months, all shifts\\): [0-9.,]+ ft/min\\.$",
      "^This window ran [0-9.,]+ ft/min with stops; its grade targets at its own mix make [0-9.,]+ ft/min\\.$"
     ]
+   }
+  },
+  {
+   "id": "speedvar-this-month-versus-august",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What drove speed this month versus August?",
+   "note": "Review of #92: a named month beside 'this month' took the named month as the window and answered August against target. This month (September, the selected day's) is explained against the month before it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=2026-09&against=previous",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_variance",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-01"
+       },
+       "shift": null,
+       "against": "previous"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_speed_variance",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "speedvar-previous-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What drove speed this shift versus the previous shift?",
+   "note": "Review of #92: 'versus the previous shift' was dropped and the shift answered against target. The tool compares named shifts over one window; the question is refused with what to ask.",
+   "expect": {
+    "raises": "Name the two shifts to compare"
+   }
+  },
+  {
+   "id": "speedvar-last-week-is-the-selected-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What drove speed last week?",
+   "note": "Review of #92: a bare 'last week' (no comparison word) was read as this week against last week. As everywhere in the router, the window is anchored on the selected day ('what grades ran slowest last week' is its week); only a comparison word ('versus last week') makes it against=previous.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=speedvar&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_variance",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2,
+       "against": "target"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "speedvar-faster-than-reference-offsets",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Why did speed differ on shift 1 versus shift 3 this week?",
+   "note": "Review of #92: when a window is faster than its reference the gap is a gain. Its buckets that ran worse pull the other way: offsets, priced as machine time (they are losses); the gain itself is not priced, and the contribution note stays.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "sections_match": [
+     "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 1 above shift 3: ",
+     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row [0-9]\\)$",
+     "^Shift 1 is faster than shift 3, so the gap is a gain and is not priced; the buckets that ran worse are priced as machine time\\.$",
+     "^Contribution margin not set"
+    ],
+    "sections_not_match": "^The whole gap is"
    }
   }
  ]

@@ -89,7 +89,7 @@ The gap is reference speed − this speed. **Grade mix** = the reference's targe
 - `against=previous`: the window of the same kind just before, same shift filter; refused when it is outside the store (August against July).
 - `against=shift`: `against_shift` over the same window; `shift` is the one explained. Under the selected-shift scope another shift is out of reach and the call is refused.
 
-Each bucket is priced as machine time: its lineal ft / the reference speed = minutes at that speed, at the machine $/hr (annualized by time, contribution beside it when a margin is set). An offset bucket is not priced; the whole gap is priced on the envelope (`gap_usd`), so the bucket dollars add to it only when no bucket offsets. The answer leads with the gap and the four shares, then the three largest buckets (the ones that make the gap first, then the offsets), a waterfall from the reference speed through each bucket to the speed with stops, and where to look.
+Each bucket is priced as machine time: its lineal ft / the reference speed = minutes at that speed, at the machine $/hr (annualized by time, contribution beside it when a margin is set). A bucket that ran better than the reference is a gain and is not priced, whichever way the gap goes (when the window is faster than its reference, its buckets that ran worse are the offsets on the card, and they are priced); the whole gap is priced on the envelope (`gap_usd`) when the window is slower, so the bucket dollars add to it only when every bucket is a loss. The answer leads with the gap and the four shares, then the three largest buckets (the ones that make the gap first, then the offsets), a waterfall from the reference speed through each bucket to the speed with stops, and where to look.
 
 ## The shift_kpis table
 
@@ -176,7 +176,7 @@ The fields are flat on the row, beside the quantity, so the live narrative cites
 field and the narrative validator substitutes every dollar from the tool result. They ride on
 `get_quality_breakdown`, `get_downtime_breakdown`, `get_waste_breakdown`, `get_downtime_pareto` and
 `get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each bucket's lineal feet / the
-reference speed, offsets unpriced; above), and on the two money tools:
+reference speed; a bucket that ran better is not priced; above), and on the two money tools:
 
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
   reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus

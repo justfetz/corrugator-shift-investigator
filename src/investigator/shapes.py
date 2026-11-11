@@ -1154,10 +1154,15 @@ class PeriodAnswer:
             bullets.append(bullet(f'{r["label"]}: **{f1(abs(r["gap_fpm"]))} ft/min** {"of the gap" if toward else "the other way, an offset"}{share}'
                                   f' · {f0(abs(r["gap_lineal_ft"]))} lineal ft{top}{priced(r)}', v, i))
         notes = sentences(data.get('reference_note')) + sentences(data.get('method_note'))
+        # "an offset" pulls against the gap; what is priced is a loss against the reference, whichever way the gap goes
         if data.get('gap_usd') is not None:
             notes.append(f'The whole gap is {money(data["gap_usd"])} of machine time' +
                          (f' ({money(data["gap_usd_per_year"])}/yr at the post\'s volumes)' if data.get('gap_usd_per_year') is not None else '') +
-                         '; an offset bucket is not priced.')
+                         '; a bucket that ran better than the reference is not priced.')
+        elif data['direction'] == 'above':
+            subject = f'Shift {data["shift"]}' if data['against'] == 'shift' else 'This window'
+            notes.append(f'{subject} is faster than {reference}, so the gap is a gain and is not priced; the buckets that ran worse '
+                         'are priced as machine time.')
         if data.get('contribution_status') == MARGIN_NOT_SET:
             notes.append(contribution(data))
         elif data.get('gap_contribution_usd') is not None:

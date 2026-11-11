@@ -299,9 +299,13 @@ SPEED_VARIANCE = (rf"\bspeed (?:variations?|variances?|variability|loss(?:es)?)\
                   rf"|\bwhy (?:did |does |has |had |do )?{LINE}speed (?:vary|varied|varies|differ|differed|change|changed|drop|dropped|fall|fell)\b"
                   rf"|\bwhy (?:was|is|were|are) {LINE}speed (?:below|under|short of|off|behind) (?:the |our )?target\b"
                   rf"|\bbreak ?down (?:of )?{LINE}speed\b|\bwhere (?:did|do|are) we (?:lose|losing|lost) {LINE}speed\b")
-# A speed variance against the previous window: "vs last week", "than the month before", "week over week".
-PREVIOUS_CUE = (r"\b(?:last|previous|prior) (?:week|month|production day|day|period)\b"
-                r"|\b(?:week|month|day|period) (?:before|over (?:week|month|day|period))\b")
+# A speed variance against the previous window takes a comparison word: "versus last week", "compared with the
+# previous month", "than the week before", "week over week". A bare "last week" is the selected day's week, as
+# everywhere in the router ("what grades ran slowest last week").
+PREVIOUS_CUE = (r"\b(?:versus|vs\.?|compared (?:with|to)|than|against|from|over|since)\s+(?:the\s+)?(?:last|previous|prior)\s+"
+                r"(?:week|month|production day|day|period)\b|\b(?:week|month|day|period) (?:before|over (?:week|month|day|period))\b")
+# "versus the previous shift", "the other shifts": a shift the question does not name (refused with what to ask)
+UNNAMED_SHIFT = r"\b(?:previous|last|prior|next|other)\s+shifts?\b"
 EVERY_SHIFT = r"\bbetween (?:the )?shifts\b|\b(?:each|every|by|per) shift\b|\ball (?:three )?shifts\b|\bacross (?:the )?shifts\b"
 SHIFT_PATTERNS = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
 
@@ -312,12 +316,24 @@ def named_shifts(lower):
     return [shift for _, shift in sorted(found)]
 
 
+def question_months(lower, anchor):
+    """The months a question names, in its order; beside a named month, "this month" is the selected day's month
+    ("this month versus August" is [9, 8]). Alone, "this month" is the window of the Period word, not a named month."""
+    found = [(m.start(), MONTH_NAMES[m.group(1)]) for m in re.finditer(r"\b(" + "|".join(MONTH_NAMES) + r")\b", lower)]
+    if found:
+        found += [(m.start(), int(anchor[5:7])) for m in re.finditer(r"\b(?:this|current) month\b", lower)]
+    return [month for _, month in sorted(found)]
+
+
 def speedvar_plan(lower, current, window, shift, months):
     """The steps of a speed-variance question (issue #92). Two named shifts: the first against the second.
     "Between shifts", "each shift": one decomposition per shift against target (or the previous window).
-    A last/previous window, or a named month against the month before it: against the previous window.
-    Otherwise against target, each grade's target at the usual grade mix."""
+    A comparison with the last/previous window, or a month against the month before it: against the previous
+    window. Otherwise against target, each grade's target at the usual grade mix."""
     named = named_shifts(lower)
+    if len(named) < 2 and re.search(UNNAMED_SHIFT, lower):
+        raise ValueError("Name the two shifts to compare under Production-day comparison, for example 'what drove speed on shift 2 "
+                         "versus shift 1 this week'; against the previous production day ask 'what drove speed versus the previous day'")
     if len(set(months)) >= 2:
         first, second = months[0], months[1]
         if second != first - 1:
@@ -416,8 +432,11 @@ def parse_period_request(lower, current, shifts):
         plan = [("get_opportunities", {"window": window, "shift": shift})]
         intent = 'period_money'
     elif speedvar:
-        # a named month is the window ("what drove speed in September versus August": September against the one before)
-        plan = speedvar_plan(lower, current, {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"} if months else window, shift, months)
+        # a named month is the window ("what drove speed in September versus August", "this month versus August":
+        # September against the one before)
+        named_months = question_months(lower, anchor)
+        plan = speedvar_plan(lower, current, {"period": "month", "anchor": f"{year}-{named_months[0]:02d}-01"} if named_months else window,
+                             shift, named_months)
         intent = 'period_speedvar'
         return {"intent": intent, "shifts": list(dict.fromkeys(s for _, args in plan for s in (args['shift'], args.get('against_shift')) if s)),
                 "kind": None, "group_by": "reason", "want_chart": True, "ranking_metrics": [],
@@ -637,7 +656,7 @@ def chart_for(rid, result):
     if result['tool'] == 'get_speed_variance':
         # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
         start_label = {'target': 'Target speed', 'previous': 'Previous', 'shift': f"Shift {data.get('against_shift')}"}[data['against']]
-        chart.update(start=data['reference_speed_fpm'], end=data['speed_all_fpm'], start_label=start_label,
+        chart.update(start=data['reference_speed_fpm'], end=data['speed_all_fpm'], gap=data['gap_fpm'], start_label=start_label,
                      end_label=f"Shift {data['shift']}" if data['against'] == 'shift' else 'Actual speed', against=data['against'])
         chart['title'] = (f"{CHART_TITLES['get_speed_variance']}: {data['window']['label']} against {data['reference_label']}"
                           + (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)'))

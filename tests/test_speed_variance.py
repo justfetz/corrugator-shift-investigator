@@ -101,7 +101,7 @@ def test_each_loss_bucket_is_priced_as_machine_time_and_an_offset_is_not(store):
             assert row["machine_minutes"] == round(minutes, 2) and row["usd"] == round(minutes / 60 * 1200, 2)
             assert "lineal ft / 615.8 ft/min reference speed" in row["usd_basis"]
         else:
-            assert row["usd"] is None and row["usd_basis"] == cost_model.OFFSET
+            assert row["usd"] is None and row["usd_basis"] == cost_model.GAIN
     assert data["gap_usd"] == round(data["gap_lineal_ft"] / data["reference_speed_fpm"] / 60 * 1200, 2)
     assert data["contribution_status"] == "margin not set" and "provenance" in data
 
@@ -202,3 +202,39 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
     assert chart["type"] == "waterfall" and chart["rows"] == data["rows"] and chart["unit"] == "ft/min"
     assert (chart["start"], chart["end"], chart["start_label"], chart["end_label"]) == (data["reference_speed_fpm"], data["speed_all_fpm"], "Target speed", "Actual speed")
     assert [t["title"] for t in result["tables"]] == ["get_speed_variance"]
+
+
+def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(store):
+    """Review of #92: "offset" pulls against the gap. Shift 1 against shift 3 this week is a gain (above); its stops
+    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card and is priced as machine
+    time, while the gain buckets and the gap itself are not; the contribution status is the rates', not the gap's."""
+    data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3), cost_model.effective())
+    assert data["direction"] == "above" and data["gap_fpm"] < 0 and data["gap_usd"] is None
+    assert data["contribution_status"] == "margin not set"
+    for row in data["rows"]:
+        assert (row["usd"] is not None) == (row["gap_fpm"] > 0)
+        if row["gap_fpm"] < 0:
+            assert row["usd_basis"] == cost_model.GAIN
+    agent = Agent(store.day_analysis(DAY))
+    sections = agent.ask("Why did speed differ on shift 1 versus shift 3 this week?", Context(DAY, 2, scope="day"))["sections"]
+    assert sections[0].startswith("Speed gap **") and " on shift 1 above shift 3: " in sections[0]
+    stops = next(s for s in sections if s.startswith("- Stops: "))
+    assert "the other way, an offset" in stops and " · $" in stops
+    assert "Shift 1 is faster than shift 3, so the gap is a gain and is not priced; the buckets that ran worse are priced as machine time." in sections
+    assert any(s.startswith("Contribution margin not set") for s in sections) and not any(s.startswith("The whole gap is") for s in sections)
+
+
+def test_the_waterfall_draws_in_the_pdf(store):
+    from reportlab.graphics.shapes import Rect, String
+    from investigator.pdf_charts import drawing_for
+    from investigator.reports import report_pdf
+    agent = Agent(store.day_analysis(DAY))
+    result = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(DAY, 2, scope="day"))
+    [chart] = result["charts"]
+    drawing = drawing_for(chart)
+    bars = [e for e in drawing.contents if isinstance(e, Rect)]
+    texts = [e.text for e in drawing.contents if isinstance(e, String)]
+    assert len(bars) == 4 and f"{chart['start']:,.1f} ft/min" in texts and f"{chart['end']:,.1f} ft/min" in texts
+    assert {"Shift 1", "Shift 3", "Stops", "Grade mix"} <= set(texts)
+    pdf = report_pdf(result)
+    assert pdf.startswith(b"%PDF") and len(pdf) > 3000

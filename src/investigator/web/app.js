@@ -490,7 +490,7 @@ function waterfallChart(chart,wrap){
  const rows=chart.rows, start=Number(chart.start), end=Number(chart.end), rh=34, n=rows.length+2, W=CHART_W(), f=frame(W,n,rh,8,true);
  const levels=[start]; for(const r of rows)levels.push(levels[levels.length-1]-(Number(r[chart.y])||0));
  const all=[...levels,end], span=(Math.max(...all)-Math.min(...all))||1, lo=Math.max(0,Math.min(...all)-span*.2), hi=Math.max(...all)+span*.2;
- const x=v=>f.x0+(v-lo)/(hi-lo)*(f.x1-f.x0), yEnd=f.top+n*rh, total=start-end;
+ const x=v=>f.x0+(v-lo)/(hi-lo)*(f.x1-f.x0), yEnd=f.top+n*rh, total=Number(chart.gap??start-end);   // the tool's own gap, never one computed here
  const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':chart.title||'speed gap by contributor'});
  for(const t of [0,.5,1]){const v=lo+(hi-lo)*t, gx=x(v);svg.append(svgNode('line',{x1:gx,x2:gx,y1:f.top,y2:yEnd,class:'grid'}));
   svg.append(svgNode('text',{x:gx,y:yEnd+16,'text-anchor':t===0?'start':t===1?'end':'middle',class:'tick'},fmtTick(Math.round(v*10)/10,chart.unit)));}
@@ -504,13 +504,13 @@ function waterfallChart(chart,wrap){
   labelText(svg,r[chart.x],f.x0-8,y+21,f.chars);
   const rect=svgNode('rect',{x:Math.min(x(a),x(b)),y:y+9,width:Math.max(Math.abs(x(b)-x(a)),2),height:16,rx:3,class:'bar '+(loss?'loss':'offset')});
   const share=r.share_of_gap_pct===null||r.share_of_gap_pct===undefined?'':` · ${Math.round(r.share_of_gap_pct)}%`;
-  const detail=`${r[chart.x]}: ${loss?'−':'+'}${Math.abs(g).toFixed(1)} ft/min${share?`, ${r.share_of_gap_pct}% of the gap`:''}`+(r.top_item?`; largest ${r.top_item}, ${Math.abs(r.top_item_fpm).toFixed(1)} ft/min`:'')+`; ${a.toFixed(1)} → ${b.toFixed(1)} ft/min.`;
+  const detail=`${r[chart.x]}: ${loss?'−':'+'}${Math.abs(g).toFixed(1)} ft/min${share?`, ${r.share_of_gap_pct}% of the gap`:''}`+(r.top_item?`; largest ${r.top_item}, ${Math.abs(r.top_item_fpm).toFixed(1)} ft/min`:'')+'.';
   rect.append(svgNode('title',{},detail));svg.append(rect);
   value(y,`${loss?'−':'+'}${Math.abs(g).toFixed(1)}${share}`,detail);});
  svg.append(svgNode('line',{x1:x(levels[levels.length-1]),x2:x(levels[levels.length-1]),y1:f.top+(n-1)*rh-rh/2+4,y2:f.top+(n-1)*rh+8,class:'connector'}));
  level(n-1,end,chart.end_label||'Speed with stops');
  wrap.append(node('p',`${total>=0?'Losses':'Gains'} of ${Math.abs(total).toFixed(1)} ft/min from the reference to the speed with stops. The axis spans the speeds and does not start at zero: the two ends are levels, the bars between them are the buckets.`,'muted'),
-  svg,legend([['loss','lowers speed'],['offset','raises speed (an offset)'],['level','speed level']]));
+  svg,legend([['loss','lowers speed'],['offset','raises speed'],['level','speed level']]));
 }
 function showChart(chart) {
  if(chart.type==='calendar_heatmap')return showHeatmap(chart);
