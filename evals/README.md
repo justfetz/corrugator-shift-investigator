@@ -42,6 +42,12 @@ outside the clock). Failures are prefixed `URL:`; the table's note carries `URL 
 summary prints the server p50 and p95 over GET. Value cases have no question and are not sent; a
 live row checks only that its question resolves to its `expect.url`.
 
+A question that names its own shift or a relative window (issue #105: "How much donwtime on 1st shift last
+week?" on the shift 2 / Day controls) runs in the scope it names on both paths: `/q` moves it, and in-process
+the runner reads it with `agent.question_scope`, answers on that day's records, and checks the invariants
+(tools inside the scope, complete tables) against the scope each answer was given in, which its `context`
+records. A scripted analyst plan (`plan`) is checked in that scope too.
+
 ## Global invariants
 
 Every case, whatever its type, also checks:
@@ -230,11 +236,11 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`243/243 golden · 12 ms p50`) is `evals.badge` of
+- The badge on the main page (`268/268 golden · 14 ms p50`) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 237 cases make 243 runs because six offline cases also have a
+recorded variant: 262 cases make 268 runs because six offline cases also have a
 recording. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can

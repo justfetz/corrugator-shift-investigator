@@ -122,7 +122,7 @@ INTENT_QUESTIONS = [
     ('period_compare', 'Compare this week to last', 'day', 'day'),
     ('period_overview', 'Why was this shift slow?', 'shift', 'week'),
     ('period_summary', 'Summarize this shift', 'shift', 'week'),
-    ('period_speed', 'What grades ran slowest last week?', 'day', 'day'),
+    ('period_speed', 'What grades ran slowest this week?', 'day', 'day'),   # 'last week' moves the controls (issue #105)
     ('period_grade', 'Volume by grade this month', 'day', 'day'),
     ('period_pareto', 'Which downtime reason cost the most minutes this week?', 'day', 'day'),
     ('period_waste', 'Waste breakdown for the week', 'day', 'day'),

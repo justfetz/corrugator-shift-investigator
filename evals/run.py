@@ -59,7 +59,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
-from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context  # noqa: E402
+from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
 from investigator.cost_model import parse_rates  # noqa: E402
 from investigator.record_store import default_store  # noqa: E402
 
@@ -1028,7 +1028,13 @@ def _run_case(case, provider, live, record, scratch):
         started = time.perf_counter()
         try:
             for text in turns:
-                results.append(run_turn(make_agent(analysis), text, context))
+                # The question's own shift and window win over the case's controls (issue #105), as on the server:
+                # the turn runs in the scope it names, on that day's records. A turn that stays on the controls' day
+                # carries the follow-up history back; one on another day starts its own, as /q drops the priors.
+                turn = context if case['type'] == 'value' else question_scope(text, context, default_store().production_days)
+                results.append(run_turn(make_agent(dataset(turn.production_day, case.get('corrupt', False))), text, turn))
+                if turn is not context and turn.production_day == context.production_day:
+                    context.history = turn.history
         finally:
             ms = (time.perf_counter() - started) * 1000
     except ValueError as exc:
@@ -1078,7 +1084,7 @@ def score(case, expect, results, analysis, allowed, mode):
     investigation, over all of them): the same scoring for the in-process and the URL answers."""
     failures = []
     for result in results:
-        failures.extend(invariants(mode, result, analysis, allowed))
+        failures.extend(invariants(mode, result, *answered_scope(case, result, analysis, allowed)))
     if case['type'] == 'investigation':
         failures.extend(investigation_failures(expect, results))
     else:
@@ -1086,6 +1092,18 @@ def score(case, expect, results, analysis, allowed, mode):
         if case['type'] == 'value':
             failures.extend(value_failures(expect, results[-1]))
     return failures
+
+
+def answered_scope(case, result, analysis, allowed):
+    """(analysis, allowed shifts) of the scope a result was answered in: the case's controls, or the shift and day
+    the question named (issue #105), which the result's own context records."""
+    context = result.get('context') or {}
+    if context.get('scope') not in ('shift', 'day') or result.get('production_day') is None:
+        return analysis, allowed
+    shifts = [context['shift']] if context['scope'] == 'shift' else [1, 2, 3]
+    if result['production_day'] == getattr(analysis, 'day', None):
+        return analysis, shifts
+    return dataset(result['production_day'], case.get('corrupt', False)), shifts
 
 
 def url_failures(case, expect, turns, provider, analysis=None, allowed=None):

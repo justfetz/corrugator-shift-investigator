@@ -36,7 +36,7 @@ import time
 
 from urllib.parse import parse_qsl, urlsplit
 
-from .agent import Agent, Context, TOOL_SCHEMAS, parse_request
+from .agent import Agent, Context, TOOL_SCHEMAS, parse_request, question_scope, route
 from .anthropic_provider import resolve_model
 from .cost_model import effective as effective_rates, parse_rates
 from .evalboard import EvalBoard, evals_dir
@@ -280,7 +280,12 @@ class Workbench:
         context = Context(day, int(shift), period='fiscal' if period == 'accounting' else period)
         context.scope = scope
         context.rates = parse_rates(fields.get('rates'))
-        request = parse_request(question, context)   # the refusals of the offline router, verbatim
+        # The refusals of the offline router, verbatim; the scope is the question's own when it names one (issue #105)
+        request, context = route(question, context, self.store.production_days)
+        # Follow-ups share the production day: a prior view of another day (the conversation before the question
+        # moved to last week, or a view that did) is not this question's context, as a changed control starts afresh.
+        # A malformed prior is kept, so the canonical address refuses it with the grammar's reason.
+        after = [prior for prior in after if (URL_PATH.match(urlsplit(prior).path) or {'date': context.production_day})['date'] == context.production_day]
         return canonical_url(request, context, corrupt == '1', self.store.machine_id, after)
 
     def canonical_redirect(self, url):
@@ -352,12 +357,20 @@ class Workbench:
         session_reset = session_id is not None and session_id not in self.sessions
         if session_reset:
             session_id = None
+        tool_period = 'fiscal' if period == 'accounting' else period   # the period tools' name for the 4-4-5 window
+        read = {}
+        if not report:
+            # The question's own shift and window win over the controls (issue #105), for the analyst as for the router:
+            # "1st shift last week" asked on shift 2 under Day runs in shift 1's week before. A relative window with no
+            # production day in the records is refused here, before any model is asked.
+            scoped = question_scope(question, Context(day, shift, scope=scope, period=tool_period), self.store.production_days)
+            day, shift, tool_period, read = scoped.production_day, scoped.shift, scoped.period, scoped.read
+            period = 'accounting' if tool_period == 'fiscal' else tool_period
         if mode != 'offline' and not report:
             self.daily_round()  # counted before the model is asked; failed rounds still count
-        tool_period = 'fiscal' if period == 'accounting' else period   # the period tools' name for the 4-4-5 window
         job = {'mode': mode, 'report': report, 'question': question, 'day': day, 'shift': shift, 'scope': scope, 'period': period,
                'tool_period': tool_period, 'corrupt': corrupt, 'key': (day, corrupt), 'session_reset': session_reset, 'rates': rates,
-               'api_key': api_key, 'anthropic_key': anthropic_key}
+               'read': read, 'api_key': api_key, 'anthropic_key': anthropic_key}
         if session_id is None:
             session_id = secrets.token_urlsafe(24)
             if len(self.sessions) >= 32:
@@ -378,6 +391,7 @@ class Workbench:
         context.shift = job['shift']
         context.scope = job['scope']
         context.rates = job.get('rates') or {}
+        context.read = job.get('read') or {}   # what the question's words moved: the router and the analyst's prompt read it
         self.sessions.move_to_end(session_id)
         return context
 

@@ -136,6 +136,7 @@ class Context:
     scope: str = "day"
     period: str = "day"   # the Period control: day | week | month | fiscal; a ranged period routes to the period tools
     rates: dict = field(default_factory=dict)   # the visitor's rate overrides (cost_model.parse_rates); {} = the defaults
+    read: dict = field(default_factory=dict)    # what the question's own words moved off the controls (question_scope); {} = nothing
 
 
 def period_window(context):
@@ -152,6 +153,21 @@ def period_scope_text(context):
         return ""
     return (f' Selected period: the {PERIOD_WORDS[window["period"]]} containing {window["anchor"]}. Use the period tools with '
             f'window {json.dumps(window)} unless the user names another window; the daily tools are refused in this scope.')
+
+
+def read_scope_text(context):
+    """One sentence for the planner when the question's own words moved the scope off the controls (issue #105);
+    empty otherwise, so every other prompt (and the recorded live fixtures) is unchanged."""
+    read = getattr(context, 'read', None) or {}
+    if not read:
+        return ''
+    parts = []
+    if 'shift' in read:
+        parts.append(f'it names shift {read["shift"]}')
+    if 'words' in read:
+        parts.append(f'"{read["words"]}" is the {PERIOD_WORDS[read["period"]]} containing {read["day"]}')
+    return (' The question names its own scope, which the application has applied: ' + '; '.join(parts) +
+            '. That is the selected scope above: plan inside it, and do not move the window again for the words of the question.')
 
 
 class Planner(Protocol):
@@ -304,6 +320,9 @@ def parse_period_request(lower, current, shifts):
     pareto = bool(re.search(r"\bpareto\b|cost the most|costing( us)? the most|most (downtime )?minutes|most often|most stops|most frequent", lower)
                   and re.search(r"downtime|stop|reason|place|equipment|kind", lower))
     profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower))
+    # "How much downtime last week": over a named window the downtime answer is the Pareto, as the day-shaped
+    # downtime question is under a ranged Period control (period_plan), not the KPI tiles (issue #105).
+    downtime = bool((period or months) and re.search(r"\bdowntime\b", lower))
     reasons = {w for w in ("bond", "warp", "misalignment", "moisture") if re.search(rf"\b{w}\b", lower)}
     waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|moisture|bale|unexplained|twist|s-warp|delamination", lower))
     this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
@@ -375,9 +394,11 @@ def parse_period_request(lower, current, shifts):
             raise ValueError("Trends cover 1 to 26 production weeks")
         plan = [("get_trend", {"metric": metric, "weeks": weeks, "anchor": anchor, "shift": shift})]
         intent = 'period_trend'
-    elif pareto:
+    elif pareto or (downtime and not (diagnose or waste or profile or speed or volume or len(set(months)) >= 2)):
         group_by = 'place' if re.search(r"equipment|place|where|location", lower) else 'kind' if re.search(r"\bkind\b", lower) or ('maintenance' in lower and 'operator' in lower) else 'reason'
         measure = 'count' if re.search(r"\b(count|how many|number of|most often|most stops|frequent)\b", lower) else 'minutes'
+        if not pareto and months:
+            window = {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"}   # "downtime in August": that month
         plan = [("get_downtime_pareto", {"window": window, "group_by": group_by, "measure": measure, "shift": shift})]
         intent = 'period_pareto'
     elif profile:
@@ -418,6 +439,140 @@ def parse_period_request(lower, current, shifts):
             "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
 
+# ---- Typo tolerance (issue #105): "donwtime", "dowtime", "wast" and "spead" read as the measure meant.
+# A word becomes a measure word when it is within one edit of exactly one of them (two for words of eight
+# letters or more), counting a swap of two neighbours as one edit, and starts with the same letter. A word
+# that already begins with a measure word ("trims", "wasted", "speedy") is left as it is, and so are the
+# common words that sit one edit from a measure ("steps", "spend", "bold", "warm"): the router never turns
+# a real word into a measure. A nonsense word is near no measure and is still refused.
+MEASURE_VOCABULARY = ('downtime', 'waste', 'trim', 'shear', 'speed', 'setups', 'setup', 'warp', 'bond', 'stops', 'stop',
+                      'rejects', 'reject', 'quality', 'moisture', 'misalignment', 'throughput', 'volume', 'output',
+                      'maintenance', 'operator', 'equipment')
+NEAR_MISS_WORDS = frozenset((
+    'waist', 'trip', 'tram', 'trio', 'trig', 'sheer', 'smear', 'spear', 'swear', 'spend', 'spied', 'steed', 'seed',
+    'warm', 'ward', 'wart', 'warn', 'wasp', 'wrap', 'wars', 'bold', 'bend', 'band', 'bind', 'bone', 'bony', 'bong',
+    'bound', 'blond', 'body', 'steps', 'step', 'shops', 'shop', 'stoop', 'slops', 'stomp', 'quantity', 'reflects',
+    'respects', 'operate', 'operated'))
+
+
+def edit_distance(a, b, limit):
+    """Optimal string alignment distance (insert, delete, substitute, swap neighbours), or limit + 1 once above limit."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    previous, current = None, list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        before, previous, current = previous, current, [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            current[j] = min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                current[j] = min(current[j], before[j - 2] + 1)
+        if min(current) > limit:
+            return limit + 1
+    return current[-1]
+
+
+def correct_typos(lower):
+    """`lower` with each misspelt measure word replaced by the measure (MEASURE_VOCABULARY); other words unchanged."""
+    def fix(match):
+        word = match.group(0)
+        if len(word) < 4 or word in NEAR_MISS_WORDS or any(word.startswith(m) for m in MEASURE_VOCABULARY):
+            return word
+        limit = 2 if len(word) >= 8 else 1
+        near = [(edit_distance(word, m, limit), m) for m in MEASURE_VOCABULARY if m[0] == word[0]]
+        near = sorted((d, m) for d, m in near if d <= limit)
+        if not near or (len(near) > 1 and near[1][0] == near[0][0]):
+            return word   # near no measure, or as near two of them: not a typo the router can read
+        return near[0][1]
+    return re.sub(r"[a-z]+", fix, lower)
+
+
+# ---- The question's own scope (issue #105): "How much downtime on 1st shift last week?" asked with shift 2 and
+# a day selected is about shift 1 and the week before, and it is answered there rather than refused. The words
+# move the scope the controls set: one named shift under Selected shift only becomes the selected shift, and a
+# relative window moves the day to the first production day of that window and the Period control to its grain
+# (yesterday is the production day before; last week, last month and last period the week, calendar month and
+# 4-4-5 period before the selected day's). A comparison keeps the controls: "our speed vs last week" compares
+# this week with the one before (the KPI tiles carry it), "compare with first shift" still asks for the
+# production-day scope, and a question that names another window too ("this week", "August", a date) is left
+# to the router as it is.
+SHIFT_PATTERNS = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b",
+                  3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
+COMPARE_WORDS = r"\b(compare|comparison|versus|vs)\b"
+RELATIVE_WINDOWS = (("day", r"\byesterday\b"), ("week", r"\b(last|previous|prior)\s+week\b"),
+                    ("month", r"\b(last|previous|prior)\s+month\b"), ("fiscal", r"\b(last|previous|prior)\s+(accounting\s+)?period\b"))
+RELATIVE_BASE = r"\b(vs|versus|compared?|comparing|comparison|against|than|relative to)\b"
+OTHER_WINDOW = (r"\b(this|current)\s+(week|month|period)\b|\btoday\b|\btomorrow\b|\b\d{4}-\d{2}-\d{2}\b|\bp(1[0-3]|[1-9])\b|\b("
+                + "|".join(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+                            "november", "december")) + r")\b")
+READ_AS = {"day": "", "week": "this week", "month": "this month", "fiscal": "this period"}   # the relative words, read in the moved scope
+
+
+def named_shifts(lower):
+    """The shifts a question names, in shift order."""
+    return [shift for shift, pattern in SHIFT_PATTERNS.items() if re.search(pattern, lower)]
+
+
+def relative_window(lower):
+    """(the words, the grain) of the one window relative to the selected day that a question asks about, or None:
+    it names none, or names it as the base of a comparison, or names another window as well."""
+    if re.search(OTHER_WINDOW, lower) or re.search(RELATIVE_BASE, lower):
+        return None
+    found = [(match.group(0), grain) for grain, pattern in RELATIVE_WINDOWS for match in re.finditer(pattern, lower)]
+    return found[0] if len(found) == 1 else None
+
+
+def previous_window_day(grain, day, days):
+    """The first production day of the `grain` window before the one containing `day` (the production day
+    before it for "day"), from the store's production days; None when the records hold no such day."""
+    from datetime import date
+    from .record_store import parse_window, previous_window
+    _, _, start, end = parse_window({"period": grain, "anchor": day})
+    first, last = previous_window(grain, start, end)
+    if grain == "day":
+        earlier = [d for d in days if d < day]
+        return earlier[-1] if earlier else None
+    return next((d for d in days if first <= date.fromisoformat(d) <= last), None)
+
+
+def question_scope(text, current, days):
+    """The context a question asks in: `current` itself when its words name nothing the controls do not, else a
+    new Context with the shift, production day and period it names and `read` saying what moved (the analyst's
+    prompt and the router read it). Follow-up history goes with it while the day is the same. A relative window
+    with no production day in the records is refused with the calendar reason. `days` are the store's
+    production days in order."""
+    if not isinstance(text, str):
+        return current
+    lower = text.lower()
+    read = {}
+    shifts = named_shifts(lower)
+    shift = current.shift
+    if current.scope == 'shift' and len(shifts) == 1 and shifts[0] != current.shift and not re.search(COMPARE_WORDS, lower):
+        shift = read['shift'] = shifts[0]
+    day, period = current.production_day, getattr(current, 'period', 'day')
+    relative = relative_window(lower)
+    if relative:
+        words, grain = relative
+        moved = previous_window_day(grain, current.production_day, days)
+        if moved is None:
+            raise ValueError(f'"{words.capitalize()}" is before the records, which hold production days from {days[0]} to {days[-1]}: '
+                             f'choose a later day in the day control')
+        day, period = moved, grain
+        read.update({'words': words, 'day': day, 'period': grain})
+    if not read:
+        return current
+    return Context(day, shift, history=deepcopy(current.history) if day == current.production_day else [],
+                   dataset_version=current.dataset_version, scope=current.scope, period=period,
+                   rates=dict(getattr(current, 'rates', None) or {}), read=read)
+
+
+def route(text, current, days):
+    """The offline router's whole reading of a question: the scope it names (question_scope) and the request
+    parse_request makes of it there. Returns (request, context); the agent answers the request in that context."""
+    context = question_scope(text, current, days)
+    return parse_request(text, context), context
+
+
 def asked_for(text):
     """Objectives the question states that the tools may not meet: a chart (the answer turns partial
     when none can be drawn) and a financial outcome (the records hold no costs). They ride on the
@@ -441,23 +596,28 @@ def parse_request(text, current):
 def _parse_request(text, current):
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
         raise ValueError("Enter a question of 1-2000 characters")
-    lower = text.lower()
+    lower = correct_typos(text.lower())
+    read = getattr(current, 'read', None) or {}
+    if read.get('words'):
+        # question_scope moved the scope to the window these words name: in it they are the selected window
+        lower = lower.replace(read['words'], READ_AS[read['period']])
+    elif relative_window(lower):
+        # Never answer "last week" as the selected week: the words move the scope, which only route() can do
+        raise ValueError(f'"{relative_window(lower)[0].capitalize()}" names a window off the selected production day: '
+                         'ask it in the question box, which moves the controls to it, or set the day control')
     date_tokens = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", text)
     if date_tokens and any(d != current.production_day for d in date_tokens):
         raise ValueError("Select that production day in the day control first")
     if re.search(r"\b(yesterday|today|tomorrow)\b", lower):
-        raise ValueError("Offline mode anchors on the selected production day; use the day control. Period questions name a window: this week, this month, September versus August.")
-    shifts = []
-    patterns = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
-    for shift, pattern in patterns.items():
-        if re.search(pattern, lower):
-            shifts.append(shift)
+        raise ValueError("Offline mode anchors on the selected production day; use the day control, or ask about yesterday on its own "
+                         "('how much downtime yesterday'). Period questions name a window: this week, last week, this month, September versus August.")
+    shifts = named_shifts(lower)
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
         raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
     period_request = parse_period_request(lower, current, shifts)
     if period_request:
         return period_request
-    compare = bool(re.search(r"\b(compare|comparison|versus|vs)\b", lower))
+    compare = bool(re.search(COMPARE_WORDS, lower))
     if compare and len(shifts) == 1 and shifts[0] != current.shift:
         shifts.insert(0, current.shift)
     named = list(shifts)                      # shifts the question itself names, before the scope default
@@ -735,7 +895,7 @@ class Agent:
                 status = 'timeout'
                 break
             planner_context = {**request, 'question': text, 'production_day': context.production_day,
-                'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context),
+                'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context) + read_scope_text(context),
                 'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
                 'history': deepcopy(history), 'results': deepcopy(list(store.values()))}
             if len(json.dumps(planner_context)) > 200000:
@@ -828,7 +988,7 @@ class Agent:
         started = time.monotonic()
         status, failure_message, steps = 'complete', None, []
         planner_context = {**request, 'question': text, 'production_day': context.production_day,
-            'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context),
+            'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context) + read_scope_text(context),
             'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
             'max_steps': plan_step_cap(allowed_shifts), 'history': history, 'results': []}
         rejection = None
