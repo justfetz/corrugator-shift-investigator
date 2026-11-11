@@ -4398,7 +4398,7 @@
    "mode": "offline",
    "day": "2025-10-15",
    "question": "How much downtime last month?",
-   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-10-15 it is September 2025, which holds the golden year's first production day (2025-09-30); its previous month, August 2025, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 14 September 2026 for the year window (issue #35), where last month (August 2026) has July before it. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags); the scope this question moves to is unchanged, and the review keeps the previous window beside, unavailable here (the owner, review of #111).",
+   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-10-15 it is September 2025, which holds the golden year's first production day (2025-09-30); its previous month, August 2025, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 14 September 2026 for the year window (issue #35), where last month (August 2026) has July before it. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags); the scope this question moves to is unchanged, and the review keeps the previous window beside, unavailable here (the owner, review of #111). September 2025 holds one production day, so the window is partial and its reasons are listed in the tool's order, not ranked.",
    "expect": {
     "url": "/corr/1/month/2025-09-30/shift/2?measure=review",
     "status": "complete",
@@ -4423,9 +4423,10 @@
     ],
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
-     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop",
-     "^- 1\\. .+: \\*\\*[0-9.]+%\\*\\* of scheduled minutes · .+ · previous unavailable \\(query 1 · row 0\\)$"
-    ]
+     "^- .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous unavailable \\(query 1 · row 0\\)$",
+     "^September 2025 \\(2025-09-01 to 2025-09-30\\), shift 2, versus August 2025 \\(2025-08-01 to 2025-08-31\\)\\. Window coverage: partial; previous unavailable\\.$"
+    ],
+    "sections_not_match": "^- [0-9]+\\. "
    }
   },
   {
@@ -4433,33 +4434,33 @@
    "type": "routing",
    "mode": "offline",
    "question": "How much downtime in August?",
-   "note": "Issue #105 with #35: downtime in a named month is that month's Pareto. The merge of #105 into the year built the month's anchor from a variable the month-name rule had replaced, and the question raised NameError.",
+   "note": "Issue #105 with #35: downtime in a named month is that month's Pareto. The merge of #105 into the year built the month's anchor from a variable the month-name rule had replaced, and the question raised NameError. Issue #101 (merged with main after #91): downtime by reason over a window the question names is the owner's review, as the coordinator's review of #111 accepted; the month the name means is unchanged, and the review keeps the previous month beside.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=2026-08",
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=2026-08",
     "status": "complete",
     "shifts": [
      2
     ],
     "tools": [
      {
-      "tool": "get_downtime_pareto",
+      "tool": "get_downtime_review",
       "arguments": {
        "window": {
         "period": "month",
         "anchor": "2026-08-01"
        },
-       "group_by": "reason",
-       "measure": "minutes",
        "shift": 2
       }
      }
     ],
     "tools_only": [
-     "get_downtime_pareto",
+     "get_downtime_review",
      "render_chart"
     ],
     "sections_match": [
-     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes"
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous [0-9.]+% \\(query 1 · row 0\\)$",
+     "^August 2026 \\(2026-08-01 to 2026-08-31\\), shift 2, versus July 2026"
     ]
    }
   },
@@ -4468,33 +4469,33 @@
    "type": "routing",
    "mode": "offline",
    "question": "How much downtime in December?",
-   "note": "A month named without a year is the latest such month on or before the selected day (issue #35): December asked on 14 September 2026 is December 2025, inside the year, not a December after the data.",
+   "note": "A month named without a year is the latest such month on or before the selected day (issue #35): December asked on 14 September 2026 is December 2025, inside the year, not a December after the data. Issue #101 (merged with main after #91): downtime by reason over a window the question names is the owner's review, as the coordinator's review of #111 accepted; the month the name means is unchanged, and the review keeps the previous month beside.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=2025-12",
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=2025-12",
     "status": "complete",
     "shifts": [
      2
     ],
     "tools": [
      {
-      "tool": "get_downtime_pareto",
+      "tool": "get_downtime_review",
       "arguments": {
        "window": {
         "period": "month",
         "anchor": "2025-12-01"
        },
-       "group_by": "reason",
-       "measure": "minutes",
        "shift": 2
       }
      }
     ],
     "tools_only": [
-     "get_downtime_pareto",
+     "get_downtime_review",
      "render_chart"
     ],
     "sections_match": [
-     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes"
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous [0-9.]+% \\(query 1 · row 0\\)$",
+     "^December 2025 \\(2025-12-01 to 2025-12-31\\), shift 2, versus November 2025"
     ]
    }
   },
@@ -6198,21 +6199,22 @@
    "type": "routing",
    "mode": "offline",
    "scope": "day",
-   "question": "What drove speed this month?",
-   "note": "Review of #111 (fix 1): the speed variance still held each grade at its target and priced the grade mix as machine time. The owner's speed standard is each grade's sustained average over the trailing year (targets.json, speed), never its target or maximum, and the grade mix is decided by the order book, so it is schedule-driven: marked so and never priced. The controllable buckets (stops, setups, running under baseline) carry the dollars.",
+   "question": "Why did speed differ on shift 3 versus shift 1 this week?",
+   "note": "Review of #111 (fix 1): the speed variance still held each grade at its target and priced the grade mix as machine time. The owner's speed standard is each grade's sustained average over the trailing year (targets.json, speed), never its target or maximum, and the grade mix is decided by the order book, so it is schedule-driven: marked so and never priced. The controllable buckets (stops, setups, running under baseline) carry the dollars. Re-picked on the rolling year (issue #91): September 2026's mix is the fourth bucket and gets no line, so the case asks the week of 26 January 2026, where shift 3's heavier grade mix is 82% of its gap to shift 1.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=month",
+    "url": "/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=3,1",
     "status": "complete",
     "tools": [
      {
       "tool": "get_speed_variance",
       "arguments": {
        "window": {
-        "period": "month",
-        "anchor": "2026-09-14"
+        "period": "week",
+        "anchor": "2026-01-26"
        },
-       "shift": null,
-       "against": "baseline"
+       "shift": 3,
+       "against": "shift",
+       "against_shift": 1
       }
      }
     ],
@@ -6221,14 +6223,18 @@
      "render_chart"
     ],
     "sections_match": [
-     "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* below baseline: ",
+     "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 3 below shift 1: ",
      "^- Grade mix: \\*\\*[0-9.,]+ ft/min\\*\\* (of the gap|the other way, an offset) · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · schedule-driven, the order mix decides which grades run \\(query 1 · row [0-3]\\)$",
      "^- (Stops|Setups|Below baseline): \\*\\*[0-9.,]+ ft/min\\*\\* .* · controllable \\(query 1 · row [0-3]\\)$",
      "^Each grade is held at its baseline, its sustained average speed over the trailing year, never its target or its maximum\\.$",
      "^The controllable buckets are \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); the grade mix is schedule-driven and not priced"
     ],
-    "sections_not_match": "^- Grade mix: .*\\$"
-   }
+    "sections_not_match": "^- Grade mix: .*\\$",
+    "shifts": [
+     3
+    ]
+   },
+   "day": "2026-01-26"
   },
   {
    "id": "speedvar-why-speed-varied-week",
@@ -6708,7 +6714,7 @@
    "mode": "offline",
    "reviewed_by": "owner-pending",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101, the owner's downtime rules (2026-11-10): a downtime question with no scope answers the previous production day, all shifts, whatever the shift control says; shift detail only when a shift is named or a flag pulls one in. Asked with the default controls (Monday 2026-09-14, shift 2), yesterday is Friday 2026-09-11, all shifts. Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 2's maintenance downtime is over its band, led by knife / slitter jam, which was over the band on its own once in the trailing year.",
+   "note": "Issue #101, the owner's downtime rules (2026-11-10): a downtime question with no scope answers the previous production day, all shifts, whatever the shift control says; shift detail only when a shift is named or a flag pulls one in. Asked with the default controls (Monday 2026-09-14, shift 2), yesterday is Friday 2026-09-11, all shifts. Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 3's operator downtime is over its band, led by missed splices, which were over the band on their own once more in the trailing year. Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in.",
    "expect": {
     "url": "/corr/1/day/2026-09-11?measure=review",
     "status": "complete",
@@ -6743,22 +6749,22 @@
     "sections_match": [
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous ([0-9.]+%|unavailable) \\(query 1 · row 0\\)$",
      "^Flags and who to ask$",
-     "^- Shift 2, 2026-09-11: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
-     "^- Shift 2, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
+     "^- Shift 3, 2026-09-11: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 3, Missed splice led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
      "^2026-09-11 \\(Fri\\), all shifts, versus 2026-09-10 \\(Thu\\)\\. Window coverage: complete; previous complete\\.$",
-     "Show the shift notes for shift 2"
+     "Show the shift notes for shift 3"
     ],
     "sections_not_match": "^- [0-9]+\\. Planned maintenance"
    }
   },
   {
-   "id": "yesterday-review-shift-3-flags",
+   "id": "yesterday-review-from-tuesday",
    "type": "routing",
    "mode": "offline",
    "day": "2026-09-29",
    "scope": "day",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101: asked on Tuesday 2026-09-29 with the production-day scope, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). That day shift 3 has two flags, and knife / slitter jam was over its band on its own once in the year (value-review-day-0928 computes it a second way).",
+   "note": "Issue #101: asked on Tuesday 2026-09-29 with the production-day scope, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). That day two shifts are flagged for operator downtime, shift 2 the larger; missed splices led it and were over the band on their own once more in the trailing year (value-review-day-0928 computes it a second way). Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in.",
    "expect": {
     "url": "/corr/1/day/2026-09-28?measure=review",
     "status": "complete",
@@ -6793,10 +6799,10 @@
     "sections_match": [
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous ([0-9.]+%|unavailable) \\(query 1 · row 0\\)$",
      "^Flags and who to ask$",
-     "^- Shift 3, 2026-09-28: \\*\\*[0-9.]+%\\*\\* of the shift in (operator|maintenance) downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
-     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag [0-9]\\)$",
+     "^- Shift 2, 2026-09-28: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 2, Missed splice led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
      "^2026-09-28 \\(Mon\\), all shifts, versus 2026-09-25 \\(Fri\\)\\. Window coverage: complete; previous complete\\.$",
-     "Show the shift notes for shift 3"
+     "Show the shift notes for shift 2"
     ],
     "sections_not_match": "^- [0-9]+\\. Planned maintenance"
    }
@@ -6904,23 +6910,23 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner-pending",
-   "day": "2026-09-18",
+   "day": "2026-05-04",
    "question": "Show maintenance downtime by reason",
-   "note": "Issue #101, a flagged maintenance shift: the owner's example is 60 maintenance minutes on first shift (12.5% of 480, five times target). The records hold no such shift until a 60-minute stop is planted (a follow-up on top of the rolling year, #91); the most maintenance downtime any shift has is shift 2 on 2026-09-18, a power outage plus jams, over the 2.5% band. The flag names the shift and its supervisor slot, and the recurrence of the reason that led it: over the trailing year, the shifts on which that reason was over the band on its own and the weeks it was in the five reasons with the most unplanned minutes.",
+   "note": "Issue #101, a flagged maintenance shift: the owner's example is 60 maintenance minutes on first shift (12.5% of 480, five times target). The records hold no such shift until one is planted (a follow-up on top of the rolling year); the most maintenance downtime any shift has in the golden year is first shift on 2026-05-04, a 15-minute power outage plus jams and a stacker stop, over the 2.5% band. The flag names the shift and its supervisor slot, and the recurrence of the reason that led it: over the trailing year, the shifts on which that reason was over the band on its own (shift 1's own history: twice) and the weeks it was in the five reasons with the most unplanned minutes. Re-picked from 2026-09-18 shift 2 on the rolling year (issue #91), where 09-18 is no longer the largest.",
    "expect": {
-    "url": "/corr/1/day/2026-09-18/shift/2?measure=downtime&kind=maintenance",
+    "url": "/corr/1/day/2026-05-04/shift/1?measure=downtime&kind=maintenance",
     "status": "complete",
     "tools": [
      {
       "tool": "get_shift_kpis",
       "arguments": {
-       "shift": 2
+       "shift": 1
       }
      },
      {
       "tool": "get_downtime_breakdown",
       "arguments": {
-       "shift": 2,
+       "shift": 1,
        "group_by": "reason",
        "kind": "Maintenance"
       }
@@ -6946,22 +6952,23 @@
     "sections_match": [
      "^- Power outage: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over 1 stop, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$",
      "^Flags and who to ask$",
-     "^- Shift 2, 2026-09-18: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 2 · flag 0\\)$",
-     "^- Shift 2, Power outage led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, shift 2 · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 2 · flag 0\\)$"
+     "^- Shift 1, 2026-05-04: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 1 supervisor \\(Crew [ABC] on duty\\) \\(query 2 · flag 0\\)$",
+     "^- Shift 1, Power outage led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, shift 1 · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 2 · flag 0\\)$"
     ]
-   }
+   },
+   "shift": 1
   },
   {
    "id": "owner-maintenance-flag-day-review",
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner-pending",
-   "day": "2026-09-21",
+   "day": "2026-05-05",
    "scope": "day",
    "question": "Show downtime by reason",
-   "note": "Issue #101: the same flagged shift on the owner's default. Asked on Monday 2026-09-21 with no scope, the answer is the previous production day, Friday 2026-09-18, all shifts. The day's maintenance and operator downtime sit inside their bands, and the flag still pulls in shift 2 with its supervisor slot and the recurrence of its leading reason across all shifts.",
+   "note": "Issue #101: the same flagged shift on the owner's default. Asked on Tuesday 2026-05-05 with no scope, the answer is the previous production day, Monday 2026-05-04, all shifts. The flag still pulls in shift 1 with its supervisor slot, and the recurrence of its leading reason across all shifts: power outages were over the band on their own on several shifts of the year. Re-picked from 2026-09-18 (asked on 09-21) on the rolling year (issue #91).",
    "expect": {
-    "url": "/corr/1/day/2026-09-18?measure=review",
+    "url": "/corr/1/day/2026-05-04?measure=review",
     "status": "complete",
     "tools": [
      {
@@ -6969,7 +6976,7 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-18"
+        "anchor": "2026-05-04"
        },
        "shift": null
       }
@@ -6981,8 +6988,9 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^- Shift 2, 2026-09-18: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
-     "^- Shift 2, Power outage led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$"
+     "^- Shift 1, 2026-05-04: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 1 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 1, Power outage led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
+     "^2026-05-04 \\(Mon\\), all shifts, versus 2026-05-01 \\(Fri\\)\\. Window coverage: complete; previous complete\\.$"
     ]
    }
   },

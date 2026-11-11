@@ -126,6 +126,8 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
         assert (row["label"], row["unit"], row["better"]) == (label, unit, better)
         if better == "neutral":
             assert row["change"] == "neutral"
+        elif row["delta"] == 0:   # a tile that did not move reads "same" (issue #35)
+            assert row["change"] == "same"
         else:
             improved = (row["delta"] < 0) == (better == "lower")
             assert row["change"] == ("better" if improved else "worse")

@@ -171,8 +171,8 @@ def test_the_review_keeps_the_previous_window_beside(store):
     for key in ('maintenance', 'operator', 'op_maint', 'pm'):
         assert (week[f'previous_{key}_minutes'], week[f'previous_{key}_pct']) == (before[f'{key}_minutes'], before[f'{key}_pct'])
     assert week['previous_scheduled_minutes'] == before['scheduled_minutes']
-    first = store.get_downtime_review({'period': 'month', 'anchor': '2026-08-03'}, 2)
-    assert first['previous_window']['coverage'] == 'unavailable' and first['window']['coverage'] == 'complete'
+    first = store.get_downtime_review({'period': 'month', 'anchor': '2025-09-30'}, 2)   # the golden year's first month (issue #91)
+    assert first['previous_window']['coverage'] == 'unavailable' and first['window']['coverage'] == 'partial'
     assert all(r['previous_minutes'] is None and r['previous_pct_of_scheduled'] is None for r in first['rows'])
     assert first['previous_op_maint_pct'] is None and first['previous_scheduled_minutes'] is None
     answer = ask(store, 'Show downtime by reason', scope='day', period='week')
@@ -184,7 +184,7 @@ def test_the_review_keeps_the_previous_window_beside(store):
 
 def test_a_flag_fires_exactly_when_a_shift_is_over_its_band_and_names_who_to_ask(store):
     stops = store._fetch("SELECT production_date, shift, kind, sum(seconds) / 60 AS minutes FROM stops "
-                         "WHERE kind IN ('Maintenance', 'Operator') GROUP BY ALL", [])
+                         "WHERE kind IN ('Maintenance', 'Operator') GROUP BY ALL", [], limit=100000)   # a year of shifts (issue #91)
     over = {(r['production_date'].isoformat(), r['shift'], r['kind']) for r in stops if r['minutes'] / 480 * 100 > 2.5}
     seen = set()
     for day in store.production_days:
@@ -225,14 +225,16 @@ def test_the_prompt_reads_the_bands_from_targets_json(monkeypatch):
 
 
 def test_a_shift_scoped_flag_counts_that_shifts_own_year(store):
-    plant, _ = store.downtime_flags('2026-09-18', '2026-09-18')
-    own, _ = store.downtime_flags('2026-09-18', '2026-09-18', 2)
-    mine = next(f for f in plant if f['shift'] == 2 and f['kind'] == 'Maintenance')
+    # the golden year's most maintenance downtime on any shift: first shift on 2026-05-04, led by a power outage (issue #91)
+    plant, _ = store.downtime_flags('2026-05-04', '2026-05-04')
+    own, _ = store.downtime_flags('2026-05-04', '2026-05-04', 1)
+    mine = next(f for f in plant if f['shift'] == 1 and f['kind'] == 'Maintenance')
     assert own[0]['reason'] == mine['reason'] == 'Power outage'
-    assert own[0]['shifts_counted'] * 3 == mine['shifts_counted'] and own[0]['recurrence_scope'] == 'shift 2'
-    analysis = store.day_analysis('2026-09-18')
+    assert own[0]['shifts_counted'] * 3 == mine['shifts_counted'] and own[0]['recurrence_scope'] == 'shift 1'
+    assert own[0]['times_over_band'] <= mine['times_over_band']   # shift 1's own history is part of the plant's
+    analysis = store.day_analysis('2026-05-04')
     try:
-        daily = analysis.get_downtime_breakdown(2, kind='Maintenance')
+        daily = analysis.get_downtime_breakdown(1, kind='Maintenance')
     finally:
         analysis.close()
     assert daily['flags'] == own and daily['rows'][0]['category'] == 'Power outage'
@@ -378,15 +380,18 @@ def test_neighbouring_money_questions_keep_their_answers(store):
 
 
 def test_recurrence_counts_a_reason_that_crossed_its_band_on_its_own(store):
-    """Every shift of the trailing year on which the reason alone was over its band counts; here the flag's own shift is not one
-    of them (the jam alone was 1.94% of it) and 2026-08-25 shift 3 is. The value golden value-review-day-0928 pins it too."""
-    flags, _ = store.downtime_flags('2026-09-28', '2026-09-28')
-    jam = next(f for f in flags if f['reason'] == 'Knife / slitter jam')
-    assert jam['times_over_band'] >= 1 and jam['shift'] == 3
-    over = store._fetch("SELECT production_date, shift, sum(seconds) / 60 AS minutes FROM stops WHERE kind = 'Maintenance' "
-                        "AND reason = 'Knife / slitter jam' AND production_date BETWEEN ? AND ? GROUP BY ALL HAVING sum(seconds) / 60 > 12",
-                        [jam['recurrence_since'], '2026-09-28'])
-    assert jam['times_over_band'] == len(over) == 1 and over[0]['production_date'].isoformat() == '2026-08-25' and over[0]['shift'] == 3
+    """Every shift of the trailing year on which the reason alone was over its band counts (12 of a 480-minute shift's
+    minutes for operator and maintenance alike). On the golden year's 2026-09-28 missed splices led shift 2's operator
+    flag and were over the band on their own on other shifts of the year; the power outage that led 2026-09-16 shift 3's
+    maintenance flag recurs most. The value golden value-review-day-0928 pins the first a second way."""
+    for day, kind, reason in (('2026-09-28', 'Operator', 'Missed splice'), ('2026-09-16', 'Maintenance', 'Power outage')):
+        flags, _ = store.downtime_flags(day, day)
+        flag = next(f for f in flags if f['reason'] == reason and f['kind'] == kind)
+        over = store._fetch("SELECT production_date, shift, sum(seconds) / 60 AS minutes FROM stops WHERE kind = ? AND reason = ? "
+                            "AND production_date BETWEEN ? AND ? GROUP BY ALL HAVING sum(seconds) / 60 > 12",
+                            [kind, reason, flag['recurrence_since'], day])
+        assert flag['times_over_band'] == len(over) >= 1, (day, reason)
+    assert flag['times_over_band'] > 1   # the power outage recurs
 
 
 def test_a_lens_declines_a_day_whose_own_view_excludes_a_record_in_its_scope(store):

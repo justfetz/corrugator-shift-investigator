@@ -1358,15 +1358,15 @@ def build(data=None):
                                     note="A $40/MSF margin and a 3% trim target: contribution is priced beside, never added, and trim points over 3% become a lever."))
     # the owner's downtime answer (issue #101): a day of all shifts, the flagged maintenance shift, a month with many flags
     cases.append(review_case(plain, "value-review-day-0930", "day", "2026-09-30", day="2026-09-30",
-                             note="Yesterday in the golden window: shift 1's operator downtime is over its 2.5% band."))
-    cases.append(review_case(plain, "value-review-day-0918-shift-2", "day", "2026-09-18", 2, day="2026-09-18",
-                             note="The most maintenance downtime any shift has: a power outage plus jams; recurrence counts shift 2's own year."))
+                             note="The golden year's last production day, all shifts: a flagged operator shift and its recurrence over the year."))
+    cases.append(review_case(plain, "value-review-day-0504-shift-1", "day", "2026-05-04", 1, day="2026-05-04",
+                             note="The most maintenance downtime any shift has in the golden year (first shift): a power outage plus jams; recurrence counts shift 1's own year."))
     cases.append(review_case(plain, "value-review-september", "month", "2026-09-14",
                              note="A month: every one of its many flags, each with its own trailing year."))
     cases.append(review_case(plain, "value-review-day-0928", "day", "2026-09-28", day="2026-09-28",
-                             note="Two flags on shift 3; knife / slitter jam was over its band on its own once in the year, so recurrence is not zero."))
-    cases.append(review_case(plain, "value-review-august-shift-2", "month", "2026-08-03", 2,
-                             note="The first month in the records: the previous month is outside them, so every previous figure is None, never zero."))
+                             note="Two operator flags (shifts 2 and 1); each leading reason was over its band on its own once more in the year, so recurrence is not zero."))
+    cases.append(review_case(plain, "value-review-first-month-shift-2", "month", "2025-09-30", 2, day="2025-09-30",
+                             note="The golden year's first month (September 2025, one production day): the previous month is outside the records, so every previous figure is None, never zero."))
     # the owner's two lenses on the same levers (issue #101), totals recomputed here, not with the cost model
     cases.append(opportunities_case(plain, "value-dollars-supervisor-september", "month", "2026-09-14", lens="supervisor",
                                     note="The supervisor lens: the controllable losses ranked, schedule-driven trim and planned maintenance unranked."))

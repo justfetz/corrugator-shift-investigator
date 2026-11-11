@@ -86,7 +86,8 @@ def test_every_grade_is_held_at_its_baseline_not_its_target(store):
     baselines = store.grade_speed_baselines(data["window"]["end"])["grades"]
     running = [d for d in data["details"] if d["bucket"] == "below_baseline"]
     assert running and all(d["baseline_fpm"] == baselines[d["item"]]["baseline_fpm"] for d in running)
-    assert all(d["speed_to_baseline_pct"] == round(d["speed_run_fpm"] / d["baseline_fpm"] * 100, 1) for d in running if d["speed_run_fpm"])
+    # speed_run_fpm is shown to 0.1 ft/min, so its share of the baseline is within that step of the tool's
+    assert all(abs(d["speed_to_baseline_pct"] - d["speed_run_fpm"] / d["baseline_fpm"] * 100) <= 0.06 + 5 / d["baseline_fpm"] for d in running if d["speed_run_fpm"])
     # a stop reason's loss is its minutes at the stopped setup's baseline per scheduled minute
     stops = store._fetch("SELECT st.reason AS reason, s.grade AS grade, sum(st.seconds) / 60 AS minutes FROM stops st "
                          "JOIN setups s ON s.setup_id = st.setup_id WHERE s.production_date BETWEEN ? AND ? AND s.shift = 2 "
@@ -274,7 +275,7 @@ def test_an_offset_larger_than_the_third_contributor_gets_a_line(store):
     agent = Agent(store.day_analysis(DAY))
     sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(DAY, 2, scope="day"))["sections"]
     lines = [s for s in sections if s.startswith("- ")][:4]
-    assert [s.split(":")[0] for s in lines] == ["- Below target", "- Grade mix", "- Setups", "- Stops"]
+    assert [s.split(":")[0] for s in lines] == ["- Below baseline", "- Grade mix", "- Setups", "- Stops"]
     assert all("of the gap" in s for s in lines[:3]) and "the other way, an offset" in lines[3]
     assert lines[3].endswith("(query 1 · row 3)") and "largest Planned maintenance" in lines[3]   # its own row of the tool
     # an offset smaller than the third contributor stays off: shift 2 against shift 1 in the week of 4 May 2026
