@@ -5929,6 +5929,35 @@
    }
   },
   {
+   "id": "speedvar-january-versus-december",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What drove speed in January versus December?",
+   "note": "The year window (issue #35) crosses a calendar year end: December is the month just before January, so this is January 2026 against December 2025 (the latest January on or before 14 September 2026), not a refusal for months that are not consecutive.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=2026-01&against=previous",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_variance",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-01-01"
+       },
+       "shift": null,
+       "against": "previous"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_speed_variance",
+     "render_chart"
+    ]
+   }
+  },
+  {
    "id": "speedvar-previous-shift-refused",
    "type": "refusal",
    "mode": "offline",
