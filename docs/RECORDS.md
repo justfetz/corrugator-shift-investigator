@@ -136,11 +136,11 @@ These are simulation choices (`synth.py` constants), not plant standards. `tests
 
 The answer keys live in `src/investigator/stories.py` and are read only by the generator; no tool, analysis, agent, server or report module imports them (pinned by test). The records must reveal them on their own:
 
-1. A slitter/scorer rebuild in the Thursday 20 August PM window; afterwards side trim creeps about 0.1 percentage point per week and knife / slitter jam stops rise, concentrating on the slitter/scorer.
+1. A slitter/scorer rebuild in the Thursday 20 August PM window; afterwards side trim creeps about 0.1 percentage point per week through 31 October 2026, then returns to its pre-story level, and knife / slitter jam stops rise, concentrating on the slitter/scorer.
 2. A missed-splice problem on Splicer 3 in the week of 7-13 September: missed-splice minutes roughly triple, stop counts rise, shear chops follow.
 3. Warp rejects are higher on the first production day after a weekend (Monday x1.5) and in August (0.42% of gross) than in September (0.30%) or any other month.
 
-The stories keep their 2026 dates in every window. The first has no end date: in a window that runs past September 2026 the trim creep keeps adding about 0.1 point a week (about 3.9% by mid-November 2026) and the knife / slitter jam stops stay three times the baseline.
+The stories keep their 2026 dates in every window. The first's trim creep ends on 31 October 2026 (owner, PR #91): side trim of gross runs about 2.8% before the rebuild, 3.2% in September and 3.6% in October, and is back at about 2.8% from November (`trim_target_pct` in `synth.py`, pinned by `test_trim_creep_ends_on_31_october_and_trim_returns_to_its_pre_story_level`). The knife / slitter jam stops keep no end date: they stay three times the baseline in every window after the rebuild.
 
 ## Not modelled
 

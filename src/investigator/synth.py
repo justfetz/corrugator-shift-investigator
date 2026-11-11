@@ -170,11 +170,21 @@ def outage_slot(seed, year, month):
     return random.Random(f"{seed}:outage:{year:04d}-{month:02d}").choice(slots)
 
 
+def trim_target_pct(day):
+    """The side-trim target the crews aim for on `day`: the baseline, plus the slitter rebuild's creep
+    of 0.1 point a week from its PM date through `trim_creep_end` (31 October 2026); the baseline again
+    after that, so a window past October does not keep growing (owner, PR #91)."""
+    rebuild = stories.SLITTER_REBUILD
+    if day > rebuild["trim_creep_end"]:
+        return rebuild["baseline_trim_pct"]
+    after = max(0, (day - rebuild["pm_date"]).days)
+    return rebuild["baseline_trim_pct"] + rebuild["trim_creep_pp_per_week"] * after / 7
+
+
 def _context(slot, outage_slots, week_factors=None):
     day = slot.day
     rebuild = stories.SLITTER_REBUILD
-    after = max(0, (day - rebuild["pm_date"]).days)
-    trim_target = rebuild["baseline_trim_pct"] + rebuild["trim_creep_pp_per_week"] * after / 7
+    trim_target = trim_target_pct(day)
     pm = None
     if day.weekday() == PM_WEEKDAY and slot.number == PM_SHIFT:
         if day == rebuild["pm_date"] and slot.number == rebuild["pm_shift"]:
