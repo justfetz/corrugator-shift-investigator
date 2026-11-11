@@ -147,8 +147,13 @@ def describe_expect(expect):
             f'{n["field"]} of evidence {n["evidence"] + 1}' for n in expect['prose_numbers']))
     for pattern in expect.get('forbidden', []):
         lines.append(f'Never asserts a cause the evidence lacks: /{pattern}/')
-    if 'sections_match' in expect:
-        lines.append(f'An evidence line matches /{expect["sections_match"]}/')
+    for pattern in [expect['sections_match']] if isinstance(expect.get('sections_match'), str) else expect.get('sections_match', []):
+        lines.append(f'An evidence line matches /{pattern}/')
+    if 'shape' in expect:
+        low, high = expect['shape'].get('bullets', [3, 5])
+        look_low, look_high = expect['shape'].get('look', [2, 3])
+        lines.append(f'Answer shape: one headline' + (f' matching /{expect["shape"]["headline_match"]}/' if 'headline_match' in expect['shape'] else '')
+                     + f', {low}-{high} finding bullets with one bold figure each, and {look_low}-{look_high} where-to-look questions (issue #75)')
     if 'sections_not_match' in expect:
         lines.append(f'No evidence line matches /{expect["sections_not_match"]}/')
     if 'narrative_status' in expect:

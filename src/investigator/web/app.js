@@ -19,13 +19,80 @@ function syncKeyLabel(){
 }
 function liveHelp(){ const p=provider(); return `Every question is answered offline first. “Ask the analyst” on an answer sends ${p.name} your question, recent context and synthetic evidence; live calls incur charges and your key is used for that request only.`; }
 const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
-function message(label, paragraphs, cls='') {
+// ---- The answer shape (issue #75). The server's sections are plain text with two markers: `**figure**` and a
+// leading `- ` (src/investigator/shapes.py). The headline is the first section with a figure that is not a bullet:
+// its figure in display size, the rest of the line (what the figure is held against) in the secondary ink. Bullets
+// are a list, each figure bold, the evidence `(query 2 · row 0)` a small link to that query. A short line without
+// digits that introduces bullets is a label in small caps. `Where to look` and its bullets, each ending with the
+// question that opens that place in the records, go under the charts as links that ask it. A list longer than five
+// folds the rest under "more". What a reader sees is the section without its two markers, word for word.
+const LOOK_LABEL='Where to look', BULLETS_SHOWN=5;
+const SHAPE_REF=/ \(query (\d+)(?: · (?:row|detail|weekday) \d+)?\)$/, SHAPE_LOOK=/^(.*) → “([^”]+)”$/;
+function plainSection(s){ return (s.startsWith('- ')?s.slice(2):s).replace(/\*\*([^*]+)\*\*/g,'$1'); }
+function shapeLabel(s,next){ return !!next&&next.startsWith('- ')&&!s.startsWith('- ')&&!s.includes('**')&&!/\d|[.:;!?]$/.test(s)&&s.length<=48; }
+function textOf(e){ return e&&e.children&&e.children.length?[...e.children].map(textOf).join(''):((e&&e.textContent)||''); }   // the stub DOM of the unit tests does not compute textContent from children
+function refLink(text,step){ const a=node('a',text,'ref'); a.href=`#query-${step-1}`; a.title='The query and row this figure came from'; a.addEventListener('click',event=>revealQuery(a,event)); return a; }
+// One section's inline content: text spans, the bold figure, the trailing evidence link. `headline` puts what follows
+// the figure in the secondary ink.
+function shapedInline(text,headline=false){
+ const out=[], ref=SHAPE_REF.exec(text); let rest=ref?text.slice(0,ref.index):text, last=0, after=false;
+ for(const m of rest.matchAll(/\*\*([^*]+)\*\*/g)){ if(m.index>last)out.push(node('span',rest.slice(last,m.index))); out.push(node('strong',m[1],'figure')); last=m.index+m[0].length; after=true; }
+ if(last<rest.length)out.push(node('span',rest.slice(last),headline&&after?'clause':undefined));
+ if(ref){ out.push(node('span',' ')); out.push(refLink(ref[0].trim(),Number(ref[1]))); }
+ return out;
+}
+// Three to five findings per card (#75): past the fifth bullet of the card's finding lists the rest fold under one
+// "N more"; a list left with nothing shown folds with its label.
+function foldFindings(e,lists){
+ const items=lists.flatMap(l=>[...l.children]); if(items.length<=BULLETS_SHOWN)return;
+ const hidden=items.slice(BULLETS_SHOWN), kids=[...e.children], folded=[];
+ for(const li of hidden)li.hidden=true;
+ for(const l of lists){ if(![...l.children].every(li=>li.hidden))continue; folded.push(l); const at=kids.indexOf(l), label=kids[at-1]; if(label&&label.className==='label')folded.push(label); }
+ for(const f of folded)f.hidden=true;
+ const more=node('button',`${hidden.length} more`,'secondary more-bullets'); more.type='button'; more.setAttribute('aria-expanded','false');
+ more.addEventListener('click',()=>{ const show=hidden.some(li=>li.hidden); for(const x of [...hidden,...folded])x.hidden=!show; more.textContent=show?'Fewer':`${hidden.length} more`; more.setAttribute('aria-expanded',String(show)); });
+ const last=lists[lists.length-1]; if(typeof last.after==='function')last.after(more); else e.children.splice(e.children.indexOf(last)+1,0,more);
+}
+function lookItem(text,rec){
+ const m=SHAPE_LOOK.exec(text), li=node('li');
+ if(!m){ li.append(...shapedInline(text)); return li; }
+ const question=m[2], scope=rec&&rec.scope?{...rec.scope,corrupt:!!rec.corrupt}:controls(), a=node('a',`“${question}”`,'look-q');
+ a.href=questionUrl(question,scope); a.title='Ask this: a fixed query, no model';
+ a.addEventListener('click',event=>{
+  if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return;   // a modifier click opens the address as the browser would
+  if(event&&event.preventDefault)event.preventDefault();
+  ask(question,{mode:'offline',title:question,...(rec?{scope:rec.scope,corrupt:rec.corrupt,source:rec}:{})}).catch(()=>{});
+ });
+ li.append(node('span',m[1]),node('span',' → '),a);
+ return li;
+}
+// A plain line after the findings (the window and its coverage, a tool's note, a caveat) reads under the charts, in the
+// secondary ink above where to look, so the chart follows the findings directly; a data-quality warning stays with them.
+const STAYS=/data incomplete|withheld|unavailable/i;
+function message(label, paragraphs, cls='', rec=null) {
  const e=node('div',undefined,'message '+cls);if(label)e.append(node('strong',label));
- let notes=null; // consecutive shift-note lines fold into one disclosure instead of a dump
- for(const p of paragraphs){
-  if(NOTE_LINE.test(p)){ if(!notes){notes=node('details',undefined,'note-group');notes.append(node('summary'));e.append(notes);} notes.append(node('p',p)); notes.children[0].textContent=`${notes.children.length-1} reported note${notes.children.length-1===1?'':'s'} (synthetic, unverified — observations, not causes)`; continue; }
-  notes=null; e.append(node('p',p));
+ let notes=null, list=null, look=null, headline=false; // consecutive shift-note lines fold into one disclosure instead of a dump
+ const lists=[], groups=[], context=[], looks=[];
+ paragraphs.forEach((p,i)=>{
+  const next=paragraphs[i+1];
+  if(NOTE_LINE.test(p)){ list=look=null; if(!notes){notes=node('details',undefined,'note-group');notes.append(node('summary'));e.append(notes);groups.push(notes);} notes.append(node('p',p)); notes.children[0].textContent=`${notes.children.length-1} reported note${notes.children.length-1===1?'':'s'} (synthetic, unverified — observations, not causes)`; return; }
+  notes=null;
+  if(p===LOOK_LABEL&&next&&next.startsWith('- ')){ list=null; look=node('ul',undefined,'look-list'); return; }   // where to look: under the charts
+  if(look&&p.startsWith('- ')){ look.append(lookItem(p.slice(2),rec)); if(!looks.includes(look))looks.push(look); return; }
+  look=null;
+  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2)));list.append(li); return; }
+  list=null;
+  if(shapeLabel(p,next)){ e.append(node('p',p,'label')); return; }
+  if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true)); e.append(h); return; }
+  if(lists.length&&!STAYS.test(p)){ context.push(node('p',p,'context-line')); return; }
+  e.append(node('p',p));
+ });
+ foldFindings(e,lists);
+ if(context.length||looks.length){
+  const box=$('look'); box.replaceChildren(...context);
+  if(looks.length)box.append(node('h3',LOOK_LABEL,'label'),...looks);
  }
+ if(!lists.length)for(const g of groups)g.open=true;   // no findings (the notes question): the notes are the answer
  $('messages').append(e);
  return e;
 }
@@ -301,7 +368,8 @@ function barChart(chart,wrap){
 }
 // Wet-end speed: bars with the grade-target mark; long lists show the five best and five worst by % of target.
 function speedChart(chart,wrap){
- const all=chart.rows, long=all.length>10; let showAll=!long;
+ // grades read slowest first against their targets, as the answer's bullets do (#75); the rows themselves are the tool's
+ const all=chart.x==='grade'?[...chart.rows].sort((a,b)=>(a.speed_to_target_pct??0)-(b.speed_to_target_pct??0)):chart.rows, long=all.length>10; let showAll=!long;
  const box=node('div',undefined,'speed-box'); wrap.append(box);
  const rh=long?22:30, bh=long?12:16, by=(rh-bh)/2, ty=rh/2+4;   // a long list is drawn on tighter rows so the card keeps its tiles above the fold (#63)
  const draw=()=>{
@@ -434,14 +502,16 @@ function showChart(chart) {
  const link=queryLink(chart.source_result_id);if(link)wrap.append(link);
  $('charts').append(wrap);
 }
-const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'Speed w/o stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF',paper_runs:'Paper runs',msf:'MSF',previous_msf:'Prev MSF',delta_msf:'Δ MSF',share_of_feet_pct:'Share of ft %',lineal_per_run:'Lineal / run',previous_paper_runs:'Prev runs',previous_lineal_ft:'Prev lineal (ft)',delta_lineal_ft:'Δ lineal (ft)',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status'};
+const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'ft/min, no stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF vs previous',paper_runs:'Paper runs',msf:'MSF',previous_msf:'Prev MSF',delta_msf:'Δ MSF',share_of_feet_pct:'Share of ft %',lineal_per_run:'Lineal / run',previous_paper_runs:'Prev runs',previous_lineal_ft:'Prev lineal (ft)',delta_lineal_ft:'Δ lineal (ft)',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status'};
+// A table whose answer is a shape (#75) shows the columns the shape's readers compare; the rest stay in "What came back".
+const TABLE_COLUMNS={get_grade_totals:['grade','volume_msf','share_of_volume_pct','speed_run_fpm','speed_to_target_pct','setups','trim_pct','dry_end_pct','delta_volume_msf']};
 function showTable(data){
- const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'Totals by grade',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width'};
+ const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'All grade totals',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
  const omitted=new Set(['source_ids','gross_sqft','observed_lineal_ft','throughput_in','lineal_per_setup','lineal_per_wet_end','setups_above_trim_target']);
- const columns=Object.keys(data.rows[0]).filter(k=>!omitted.has(k)&&!Array.isArray(data.rows[0][k]));
+ const columns=TABLE_COLUMNS[data.title]||Object.keys(data.rows[0]).filter(k=>!omitted.has(k)&&!Array.isArray(data.rows[0][k]));
  const wrap=node('div',undefined,'table-scroll');wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',titles[data.title]||data.title);const table=node('table'),head=node('thead'),tr=node('tr');
  for(const key of columns){const th=node('th',labels[key]||key.replaceAll('_',' '));th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=node('tbody');
  for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);
@@ -551,8 +621,12 @@ function revealStep(i){ try{ $('execution').open=true; const step=document.getEl
 const hrefOf=a=>String((typeof a.getAttribute==='function'?a.getAttribute('href'):a.href)||'');
 // A query folded behind "N more queries" opens when something links to it. The box is found from the link's own href
 // when it is clicked, so a card that moved up into the thread (its ids prefixed, #86) opens its own box.
-function revealQuery(link){ try{ const q=document.getElementById(hrefOf(link).replace(/^#/,'')); if(q){q.hidden=false;q.open=true;} }catch(e){} }
-function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; a.addEventListener('click',()=>revealQuery(a)); return a; }
+// The click stays in the page: following the fragment would fire popstate, and restore() would redraw the card (#75).
+function revealQuery(link,event){ try{ const q=document.getElementById(hrefOf(link).replace(/^#/,'')); if(!q)return; if(event&&event.preventDefault)event.preventDefault(); q.hidden=false;q.open=true;const box=q.parentElement;if(box&&/\bcollapsed\b/.test(box.className||''))openQueries(box,true); if(typeof q.scrollIntoView==='function')q.scrollIntoView({block:'nearest'}); }catch(e){} }
+// The query box is one line under the answer (#75): `3 queries · 23 ms · Show SQL`. The button, or an evidence link,
+// opens it to the list of steps with the open step's SQL beside it.
+function openQueries(box,open){ box.className=open?'queries':'queries collapsed'; const b=[...box.children].find(e=>e.className==='queries-line'), toggle=b&&[...b.children].find(e=>e.tag==='button'||e.tagName==='BUTTON'); if(toggle){toggle.textContent=open?'Hide SQL':'Show SQL';toggle.setAttribute('aria-expanded',String(open));} }
+function queryLink(resultId){ const i=stepIndex.get(resultId); if(i===undefined)return null; const a=node('a',`query ${i+1} ↑`,'query-link'); a.href=`#query-${i}`; a.title='The query box that produced these rows'; a.addEventListener('click',event=>revealQuery(a,event)); return a; }
 function queryBox(entry,i){
  const d=node('details',undefined,'query '+(entry.ok?'ok':'failed')); d.id=`query-${i}`;
  const sum=node('summary',undefined,'query-sum');
@@ -575,6 +649,9 @@ function renderQueries(result){
  const steps=result.trace||[]; if(!steps.length)return;
  steps.forEach((e,i)=>{if(e.result_id)stepIndex.set(e.result_id,i);});
  const total=steps.reduce((sum,e)=>sum+(typeof e.elapsed_ms==='number'?e.elapsed_ms:0),0);
+ const line=node('div',undefined,'queries-line'), toggle=node('button','Show SQL','secondary');toggle.type='button';toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-controls','queries');
+ toggle.addEventListener('click',()=>{ const owner=line.parentElement||box; openQueries(owner,/\bcollapsed\b/.test(owner.className)); });   // the box this line is in: the open card's, or an earlier card's once it moved up
+ line.append(node('span',`${steps.length} ${steps.length===1?'query':'queries'} · ${total.toFixed(0)} ms`,'mono'),toggle);box.append(line);box.className='queries collapsed';
  // Step 1 open (all closed on a phone); one open at a time, so at desktop width its SQL sits in the pane beside the list.
  const phone=phoneWidth(), lines=phone?1:QUERY_LINES, boxes=steps.map((entry,i)=>{const d=queryBox(entry,i);d.open=!phone&&i===0;if(i>=lines)d.hidden=true;d.addEventListener('toggle',()=>{if(d.open)for(const other of boxes)if(other!==d)other.open=false;});box.append(d);return d;});
  const foot=node('div',undefined,'queries-foot');
@@ -637,7 +714,7 @@ let queue=Promise.resolve();   // questions go to the server one at a time, in t
 const latestRun=new Map();   // session id -> its latest run id: the only run /api/report can still print
 const clock=()=>typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
 const msText=ms=>ms>=10000?`${(ms/1000).toFixed(1)} s`:`${Math.max(1,Math.round(ms))} ms`;
-const IDLE_TEXT='Pick a question on the left or type one in the box below. Each answer lands as one card at the bottom of this thread: the queries that ran, the summary, the charts and the KPI tiles; earlier answers move up.';
+const IDLE_TEXT='Pick a question on the left or type one in the box below. Each answer lands as one card at the bottom of this thread: the headline and findings, the charts, where to look, the queries behind them and the KPI tiles; earlier answers move up.';
 function scopeWho(s){ return s.scope==='day'?'All shifts':`Shift ${s.shift}`; }
 function windowText(s){   // "Mon 14 Sep 2026"
  const d=utc(s.day); if(Number.isNaN(d.getTime()))return String(s.day);
@@ -676,17 +753,17 @@ function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries 
  if(rec.ms!==null)parts.push(analyst&&rec.ms>=1000?`${(rec.ms/1000).toFixed(1)} s`:msText(rec.ms));   // a model round reads in seconds: analyst · 2 model calls · 1.8 s
  return parts.join(' · ');
 }
-function clearCard(){ if(pace)finishReveal(); for(const id of ['queries','messages','charts','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('calls').textContent=''; stepIndex=new Map(); }
-function skeleton(){   // grey blocks where the query box, the summary and the two charts will land
- const q=node('div',undefined,'skel-block'); for(const w of ['w60','w45','w70','w45'])q.append(node('span',undefined,'skel '+w)); $('queries').append(q);
- const m=node('div',undefined,'skel-block'); for(const w of ['w90','w70'])m.append(node('span',undefined,'skel '+w)); $('messages').append(m);
+function clearCard(){ if(pace)finishReveal(); for(const id of ['queries','messages','charts','look','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('queries').className='queries'; $('calls').textContent=''; stepIndex=new Map(); }
+function skeleton(){   // grey blocks where the headline and findings, the two charts and the one-line query box will land
+ const m=node('div',undefined,'skel-block'); for(const w of ['w60','w90','w70','w70'])m.append(node('span',undefined,'skel '+w)); $('messages').append(m);
+ const q=node('div',undefined,'skel-block'); q.append(node('span',undefined,'skel w45')); $('queries').append(q);
  $('charts').append(node('div',undefined,'chart skel-chart'),node('div',undefined,'chart skel-chart'));
 }
 // An earlier card (#86): its title line (title, who · ms, Open) and, once it has settled, its whole card beneath.
 // The body is the open card's own nodes moved up when another card took its place (harvest), so nothing is drawn
 // twice and open folds stay open; a card that settled while another was open is drawn once into its own containers
 // (drawBody). Either way it is kept on the record and only redrawn when what it shows changes (bodyKey).
-const BODY_SLOTS=['queries','messages','charts','heatmaps','kpis','metrics','tables'];   // in the card's order; the trail and the exports stay with the open card
+const BODY_SLOTS=['messages','charts','look','queries','heatmaps','kpis','metrics','tables'];   // in the card's order (#75: the answer, its charts, where to look, then the one-line query box); the trail and the exports stay with the open card
 const settled=rec=>rec.state==='done'||rec.state==='error';
 function bodyKey(rec){ return `${rec.state}|${rec.analysed?1:0}|${analystMode()||''}`; }   // the analyst offer is the one part that changes after a card settles
 function entryOf(rec){
@@ -712,6 +789,7 @@ function harvest(rec,key){
  if(pace)finishReveal();   // a card still revealing settles first: what moves up is the finished answer
  const {body,own}=bodyShell();
  for(const id of BODY_SLOTS)own[id].append(...$(id).children);
+ own.queries.className=$('queries').className||'queries';   // the one-line query box stays one line when it moves up (#75)
  relabel(body,`card-${rec.id}-`);
  setBody(entryOf(rec),body,key);
 }
@@ -764,7 +842,7 @@ function paintAnswer(rec){
  if(rec.state==='error'){message('Could not complete',[rec.error],'error');if(PROVIDERS[rec.mode])message(null,['The analyst could not answer; no answer was fabricated. The offline answer stands.'],'muted');return null;}
  if(PROVIDERS[rec.mode]){paintAnalyst(rec);return null;}
  if(rec.note)message('Note',[rec.note]);
- const summary=message('',rec.result.sections||[]);showResult(rec.result);
+ const summary=message('',rec.result.sections||[],'',rec);showResult(rec.result);
  return summary;
 }
 let shownId=null, shownKey=null;   // the record #card shows now, and the bodyKey of what was drawn for it
@@ -870,10 +948,28 @@ function dropClass(e,c){ e.className=(e.className||'').split(' ').filter(x=>x&&x
 function firstFigureEnd(text){ const re=/\d[\d,.]*/g; let m; while((m=re.exec(text))&&/\bShift $/.test(text.slice(0,m.index))); if(!m)return 0; const end=m.index+m[0].length; const space=text.slice(end).search(/\s/); return space<0?text.length:end+space; }
 function sentenceEnd(text){ const m=/[.!?](\s|$)/.exec(text); return m?m.index+1:text.length; }
 function wordEnd(text,n){ if(n>=text.length)return text.length; if(n<=0)return 0; const space=text.slice(n).search(/\s/); return space<0?text.length:n+space; }
+// A typed line with structure (a headline's display figure, a bullet's bold figure and evidence link) types as plain
+// text and gets its own nodes back the moment its last word is down; the text is the same either way (#75).
+function settleTyped(t){ if(t.settled)return; t.settled=true; t.el.textContent=''; t.el.replaceChildren(...t.kids); if(!t.kids.length)t.el.textContent=t.text; dropClass(t.el,'typing'); }
+function typedLines(summary){
+ const out=[];
+ for(const e of summary.children?[...summary.children]:[]){
+  const tag=String(e.tag||e.tagName||'').toLowerCase();
+  if(e.hidden)continue;   // folded under "more": shown as it is when opened
+  if(tag==='p')out.push(e);
+  else if(tag==='ul')for(const li of [...e.children])if(!li.hidden)out.push(li);
+ }
+ return out;
+}
+function leadEnd(el,text){   // the lead chunk ends after the bold figure when the line has one, else after its first figure
+ const kids=el.children?[...el.children]:[]; let at=0;
+ for(const k of kids){ at+=textOf(k).length; if(/\bfigure\b/.test(k.className||''))return at; }
+ return firstFigureEnd(text);
+}
 function finishReveal(skipped=false){
  const p=pace; if(!p)return; pace=null; p.done=true;
  for(const q of p.queries)dropClass(q,'pace-wait');
- for(const t of p.typed){ t.el.textContent=t.text; dropClass(t.el,'typing'); }
+ for(const t of p.typed)settleTyped(t);
  for(const e of p.later)dropClass(e,'pace-wait');
  for(const e of p.blooms){ dropClass(e,'pace-wait'); if(skipped)dropClass(e,'bloom'); }   // skipped: the charts show drawn, no growth still to run
  if(p.card)p.card.setAttribute('data-reveal','done');
@@ -885,18 +981,18 @@ function reveal(summary,submitted){
  if(reducedMotion()||typeof requestAnimationFrame!=='function'||!summary)return;
  const queries=$('queries').children.filter?$('queries').children.filter(e=>/^query\b/.test(e.className||'')):[...$('queries').children].filter(e=>/^query\b/.test(e.className||''));
  const kids=summary.children?[...summary.children]:[];
- const typed=kids.filter(e=>e.tag==='p'||e.tagName==='P').map(el=>({el,text:el.textContent}));
- const later=[...kids.filter(e=>!typed.some(t=>t.el===e)),...[...$('messages').children].filter(e=>e!==summary&&!/\bmessage\b/.test(e.className||''))];   // the note disclosure and the analyst offer arrive with the last word
+ const typed=typedLines(summary).map(el=>({el,text:textOf(el),kids:el.children?[...el.children]:[],settled:false}));
+ const later=[...kids.filter(e=>!typed.some(t=>t.el===e)&&!/^ul$/i.test(e.tag||e.tagName||'')),...[...$('messages').children].filter(e=>e!==summary&&!/\bmessage\b/.test(e.className||'')),...$('look').children];   // the note disclosure, a list's "more", where to look and the analyst offer arrive with the last word
  const blooms=[...$('charts').children,...$('heatmaps').children];
  const total=typed.reduce((n,t)=>n+t.text.length,0), step=queries.length?Math.min(PACE.query_ms,PACE.queries_ms/queries.length):0;
  // The first figure is due 400 ms after the submit, not after the land: a slow land shortens the wait before the
  // lead chunk (by a frame's margin), and past that point it lands on the reveal's first frame.
  const now=clock(), since=typeof submitted==='number'?now-submitted:0;
  const start=Math.max(0,Math.min(PACE.type_after_ms,queries.length*step,PACE.first_by_ms-PACE.frame_ms-since));
- const p={t0:now,queries,typed,later,blooms,step,start,cps:Math.max(PACE.cps,total/(PACE.type_ms/1000)),lead:typed.length?firstFigureEnd(typed[0].text):0,first:typed.length?sentenceEnd(typed[0].text):0,bloomed:false,done:false,card:$('card')};
+ const p={t0:now,queries,typed,later,blooms,step,start,cps:Math.max(PACE.cps,total/(PACE.type_ms/1000)),lead:typed.length?leadEnd(typed[0].el,typed[0].text):0,first:typed.length?sentenceEnd(typed[0].text):0,bloomed:false,done:false,card:$('card')};
  pace=p; p.card.setAttribute('data-reveal','running');
  queries.forEach((q,i)=>{ if(i*step>0)addClass(q,'pace-wait'); });
- for(const t of typed){ t.el.textContent=''; addClass(t.el,'typing'); }
+ for(const t of typed){ t.el.replaceChildren(); t.el.textContent=''; addClass(t.el,'typing'); }
  for(const e of later)addClass(e,'pace-wait');
  for(const e of blooms)addClass(e,'pace-wait');
  const frame=()=>{ if(pace!==p)return; tickReveal(p); follow(); if(pace===p)requestAnimationFrame(frame); };   // each step of the reveal is a step of the follow rule (#86): this is a frame already, so no second one
@@ -909,8 +1005,8 @@ function tickReveal(p){
  let budget=Math.max(p.lead,Math.floor((t-p.start)*p.cps/1000)), all=true;
  p.typed.forEach((x,i)=>{
   const n=wordEnd(x.text,budget); budget-=x.text.length;
-  if(n>0||i===0){ x.el.textContent=x.text.slice(0,Math.max(0,n)); }
-  if(n>=x.text.length)dropClass(x.el,'typing'); else all=false;
+  if(n>=x.text.length)settleTyped(x);
+  else{ all=false; if(n>0||i===0)x.el.textContent=x.text.slice(0,Math.max(0,n)); }
   if(i===0&&!p.bloomed&&n>=p.first){ p.bloomed=true; for(const e of p.blooms){ dropClass(e,'pace-wait'); addClass(e,'bloom'); } }
  });
  if(all&&p.queries.every((q,i)=>t>=i*p.step))finishReveal();
@@ -934,7 +1030,7 @@ async function readEvents(response,onEvent){
 function paintLive(rec){
  const live=rec.live; clearCard();
  if(live.steps.length){
-  const box=$('queries'), head=node('div',undefined,'queries-head');
+  const box=$('queries'), head=node('div',undefined,'queries-head'); box.className='queries';
   head.append(node('span','Queries the analyst planned'),node('span',`${live.steps.length} ${live.steps.length===1?'query':'queries'} · running`,'mono')); box.append(head);
   for(const step of live.steps){ const d=node('div',undefined,'query pending'); d.append(node('code',step.tool,'tool'),node('span',`(${argText(step.arguments)})`,'args'),node('span',step.facts,'facts')); box.append(d); }
  }
@@ -956,14 +1052,24 @@ function paintAnalyst(rec){
  }
  const notes=ran?(r.sections||[]).filter(t=>/^(Investigation stopped|The model narrative|The requested)/.test(t)):(r.sections||[]);
  if(r.narrative_status!=='available'||r.status!=='complete')for(const text of notes)card.append(node('p',text,'analyst-p warning-note'));
+ // The interpretation in the answer's shape (#75): one bullet per paragraph, its figures bold (each was substituted
+ // from a query row by the validator), the evidence small under it.
+ const list=(r.narrative||[]).length?node('ul',undefined,'analyst-list'):null; if(list)card.append(list);
  for(const item of r.narrative||[]){
-  card.append(node('p',`${KIND_LABEL[item.kind]||'Note'}: ${item.text}`,'analyst-p'));
+  const li=node('li',undefined,'analyst-p'); li.append(node('span',`${KIND_LABEL[item.kind]||'Note'}: `,'kind'),...boldFigures(item.text)); list.append(li);
   const cites=(item.citations||[]).map(c=>{ for(const [rid,i] of stepIndex)c=c.replace(rid,`query ${i+1}`); return c; });
-  if(cites.length)card.append(node('p',`Evidence: ${cites.join('; ')}`+((item.charts||[]).length?` · Charts: ${item.charts.join('; ')}`:''),'analyst-cites muted'));
+  if(cites.length)li.append(node('p',`Evidence: ${cites.join('; ')}`+((item.charts||[]).length?` · Charts: ${item.charts.join('; ')}`:''),'analyst-cites muted'));
  }
  const first=r.usage&&r.usage.first_token_ms;
  card.append(node('p',`${r.mode} · ${r.status} · ${usageText(r.usage)}`+(typeof first==='number'?` · first words after ${(first/1000).toFixed(1)} s`:''),'muted analyst-state'));
  if(r.narrative_status==='available')card.append(node('p','Model interpretation: review it with the evidence; hypotheses are not proven causes. Every number above was substituted from a query row.','muted'));
+}
+// A validated paragraph's figures in bold: a number with its unit, never a shift's own number ("Shift 2").
+function boldFigures(text){
+ const out=[], re=/\d[\d,]*(?:\.\d+)?(?:%|\s?(?:ft\/min|min(?:utes)?|MSF|sq ft|stops|hours|ft)\b)?(?![\w-])/g; let last=0, m;
+ while((m=re.exec(text))){ if(/\b[Ss]hift $/.test(text.slice(0,m.index))||/[A-Za-z-]$/.test(text.slice(0,m.index)))continue; if(m.index>last)out.push(node('span',text.slice(last,m.index))); out.push(node('strong',m[0],'figure')); last=m.index+m[0].length; }
+ if(last<text.length)out.push(node('span',text.slice(last)));
+ return out;
 }
 // Under an offline answer (or a question the offline planner could not route): one analyst round for that question.
 function analystOffer(rec){

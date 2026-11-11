@@ -80,6 +80,12 @@ LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
 RULE_CONSTANTS = {'2.5', '1', '3.25', '0.4', '480', '12', '0'}
+# The answer shape (issue #75), stated here independently of the application: a bold figure, the
+# evidence a line cites, a where-to-look question, and the result field each evidence part names.
+BOLD = re.compile(r'\*\*([^*]+)\*\*')
+EVIDENCE = re.compile(r' \(query (\d+)(?: · (row|detail|weekday) (\d+))?\)')
+LOOK_LINK = re.compile(r' → “([^”]+)”$')
+EVIDENCE_PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile'}
 NUMBER = re.compile(r'\d[\d,]*(?:\.\d+)?')
 RUN_ID = re.compile(r'[0-9a-f]{32}:\d+')
 CITATION = re.compile(r'^(?:Shift (\d)|All shifts), (\w+), ([0-9a-f]{32}:\d+), row (\d+)$')
@@ -289,6 +295,8 @@ def renderings(value):
         return set()
     if isinstance(value, (int, float)) and value < 0:
         return renderings(-value)  # a signed delta prints as "-0.12"; the number token is "0.12"
+    if isinstance(value, float):
+        value = abs(value)         # -0.0 prints as "-0.00"; its number token is "0.00"
     if isinstance(value, int):
         return {str(value), f'{value:,}', f'{value:.1f}', f'{value:.2f}', f'{value:,.1f}', f'{value:,.2f}'}
     if isinstance(value, float) and math.isfinite(value):
@@ -345,6 +353,8 @@ def unfaithful_numbers(lines, trace):
     bad = []
     for line in lines:
         text = re.sub(r'\s*Evidence: .*$', '', line)
+        text = EVIDENCE.sub(' ', text)   # `(query 2 · row 0)` names a step and a row; it states no measurement
+        text = LOOK_LINK.sub(' ', text)  # a where-to-look question is the router's own text
         text = RUN_ID.sub(' ', text)
         text = re.sub(r'\b[Ss]hift [123]\b', ' ', text)
         for s in strings:
@@ -355,6 +365,90 @@ def unfaithful_numbers(lines, trace):
             if token not in numbers:
                 bad.append(f'{token!r} in {line[:70]!r}')
     return bad
+
+
+def unprovenanced(lines, trace):
+    """Numbers on a cited line that its cited evidence does not hold (issue #75). A line with a `**figure**`
+    carries exactly one, and an evidence reference `(query N · row M)` that resolves: step N of the trace, a
+    successful tool call, row M of its rows (`detail M`, `weekday M`: of its sub-reason and weekday lists).
+    Every number in the figure is a rendering of a value of that row; with no row named, of the result as a
+    whole: a count of its rows, a below-target count, or a total its envelope carries. Every other number on
+    the line is one of those too, a count of the result's rows, or a stated rule constant: a line never
+    states a figure from a row it does not cite."""
+    bad = []
+    for line in lines:
+        figures = BOLD.findall(line)
+        if not figures:
+            continue
+        refs = EVIDENCE.findall(line)
+        if len(figures) != 1 or len(refs) != 1:
+            bad.append(f'{len(figures)} figures and {len(refs)} evidence references in {line[:70]!r}')
+            continue
+        step, part, index = refs[0]
+        step = int(step)
+        source = trace[step - 1] if 0 < step <= len(trace) else None
+        if source is None or not source['ok'] or source['tool'] == 'render_chart':
+            bad.append(f'query {step} is not a successful tool call: {line[:70]!r}')
+            continue
+        data = source['data']
+        rows = data.get('rows', [])
+        if part:
+            records = data.get(EVIDENCE_PARTS[part]) or []
+            if int(index) >= len(records):
+                bad.append(f'query {step} has no {part} {index}: {line[:70]!r}')
+                continue
+            record = records[int(index)]
+            allowed = set().union(*(renderings(v) for v in record.values() if not isinstance(v, (str, list, dict))))
+            names = [v for v in record.values() if isinstance(v, str)]
+        else:
+            allowed = renderings(len(rows))
+            if rows and 'actual_fpm' in rows[0] and 'target_fpm' in rows[0]:
+                allowed |= renderings(sum(r['actual_fpm'] < r['target_fpm'] for r in rows))
+            allowed |= set().union(set(), *(renderings(v) for v in data.values() if isinstance(v, (int, float)) and not isinstance(v, bool)))
+            names = [v for v in data.values() if isinstance(v, str)]
+        for token in NUMBER.findall(figures[0]):
+            if token.rstrip(',') not in allowed:
+                bad.append(f'{token!r} is not in query {step} {part or "result"} {index}: {line[:70]!r}')
+        beside = allowed | renderings(len(rows)) | set(RULE_CONSTANTS)
+        rest = LOOK_LINK.sub(' ', EVIDENCE.sub(' ', line))
+        for name in sorted(names, key=len, reverse=True):
+            rest = rest.replace(name, ' ')
+        rest = re.sub(r'\b[Ss]hift [123]\b', ' ', rest)
+        for token in NUMBER.findall(rest):
+            if token.rstrip(',') not in beside:
+                bad.append(f'{token!r} on a line citing query {step} {part or "result"} {index} is not from it: {line[:70]!r}')
+    return bad
+
+
+def shape_failures(spec, sections):
+    """`expect.shape`: one headline (the first section with a bold figure that is not a bullet), finding
+    bullets after it with exactly one bold figure each, and a `Where to look` list of question links."""
+    failures = []
+    heads = [i for i, s in enumerate(sections) if '**' in s and not s.startswith('- ')]
+    if len(heads) != 1:
+        return [f'{len(heads)} headlines, expected one']
+    head = heads[0]
+    if 'headline_match' in spec and not re.search(spec['headline_match'], sections[head]):
+        failures.append(f'headline {sections[head][:70]!r} does not match /{spec["headline_match"]}/')
+    findings = []
+    for s in sections[head + 1:]:
+        if not s.startswith('- '):
+            break
+        findings.append(s)
+    low, high = spec.get('bullets', [3, 5])
+    if not low <= len(findings) <= high or any(len(BOLD.findall(b)) != 1 for b in findings):
+        failures.append(f'{len(findings)} finding bullets right under the headline (want {low}-{high}, one bold figure each)')
+    if 'Where to look' not in sections:
+        return failures + ['no Where to look list']
+    looks = []
+    for s in sections[sections.index('Where to look') + 1:]:
+        if not s.startswith('- '):
+            break
+        looks.append(s)
+    low, high = spec.get('look', [2, 3])
+    if not low <= len(looks) <= high or not all(LOOK_LINK.search(s) for s in looks):
+        failures.append(f'{len(looks)} where-to-look links (want {low}-{high}, each ending with a question)')
+    return failures
 
 
 def invariants(mode, result, analysis, allowed_shifts):
@@ -384,6 +478,9 @@ def invariants(mode, result, analysis, allowed_shifts):
     bad = unfaithful_numbers(result['sections'], trace)
     if bad:
         failures.append('numbers not from tool output: ' + '; '.join(bad[:3]))
+    bad = unprovenanced(result['sections'], trace)
+    if bad:
+        failures.append('figures not from their cited row: ' + '; '.join(bad[:3]))
     for paragraph in result.get('narrative', []):
         bad = unfaithful_numbers([paragraph['text']], trace)
         if bad:
@@ -479,8 +576,12 @@ def expectations(expect, result):
             failures.append(f'coverage not {expect["coverage"]} for {wrong}')
     if 'excluded_records' in expect:
         failures.extend(excluded_failures(expect['excluded_records'], [s for s in ok_steps if s['tool'] != 'render_chart']))
-    if 'sections_match' in expect and not any(re.search(expect['sections_match'], s, re.I) for s in result['sections']):
-        failures.append(f'no section matches /{expect["sections_match"]}/')
+    # sections_match: one pattern, or a list of patterns each of which some section matches
+    for pattern in ([expect['sections_match']] if isinstance(expect.get('sections_match'), str) else expect.get('sections_match', [])):
+        if not any(re.search(pattern, s, re.I) for s in result['sections']):
+            failures.append(f'no section matches /{pattern}/')
+    if 'shape' in expect:
+        failures.extend(shape_failures(expect['shape'], result['sections']))
     if 'sections_not_match' in expect:
         hits = [s[:60] for s in result['sections'] if re.search(expect['sections_not_match'], s, re.I)]
         if hits:

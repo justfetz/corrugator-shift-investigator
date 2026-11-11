@@ -14,6 +14,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from . import cost_model
+from .shapes import answer_sections   # each intent's answer shape (issue #75)
 
 TOOL_SCHEMAS = [
     {"name": name, "description": description, "parameters": {
@@ -544,6 +545,7 @@ def period_plan(intent, window, named, group_by, current):
             "ranking_metrics": [], "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
 
 
+FIRST_CHART = {'overview': 'get_wet_end_performance', 'compare': 'get_wet_end_performance'}   # intent -> the tool whose chart leads
 DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_end_performance': 'Wet-end speed vs grade target',
                       'get_quality_breakdown': 'Dry-end rejects by reason', 'get_shift_dollars': 'Where the money went ($)'}
 
@@ -887,7 +889,7 @@ class Agent:
         if not final_ids:
             final_ids = [r for r, v in store.items() if v['ok'] and v['tool'] != 'render_chart']
         evidence = [store[r] for r in final_ids]
-        sections = self._summarize(evidence)
+        sections = answer_sections(request['intent'], evidence, context, PERIOD_TOOLS)
         charts=[v['data'] for v in store.values() if v['ok'] and v['tool']=='render_chart']
         charted={c['source_result_id'] for c in charts}
         # Charts are application output: every chartable piece of evidence the answer rests on is
@@ -904,6 +906,11 @@ class Agent:
                     charts.append({'type':'bar','source_result_id':result['result_id'],
                         'shift':component['shift'],'coverage':component['coverage'],
                         'x':x,'y':y,'unit':unit,'rows':deepcopy(component['rows']),'title':f"Shift {component['shift']} · {title}"})
+        # The chart for the answer's measure first (#75): a speed-led answer (why slow, compare) shows speed against
+        # grade target, then the downtime by reason that explains it. A stable sort: the order within each kind holds.
+        first = FIRST_CHART.get(request.get('intent'))
+        if first:
+            charts.sort(key=lambda c: 0 if store.get(c['source_result_id'], {}).get('tool') == first else 1)
         if status=='complete' and 'chart' in asked and not charts:
             status='partial'
             sections.insert(0,'The requested chart was not produced. The evidence below is available; try a specific speed, downtime or waste chart.')
@@ -968,168 +975,3 @@ class Agent:
         from .record_store import parse_window, window_label
         period, _, start, end = parse_window(window)
         return {'period_label': window_label(period, start, end)}
-
-    @staticmethod
-    def _summarize(evidence):
-        lines = []
-        for result in evidence:
-            data = result['data']
-            shift = data['shift']
-            if result['tool'] in PERIOD_TOOLS:
-                lines.extend(Agent._period_lines(result['tool'], data))
-                lines.extend(Agent._dollar_lines(result['tool'], data))
-                continue
-            if data['coverage'] != 'complete':
-                lines.append(f'Shift {shift}: data incomplete; {len(data["excluded_records"])} excluded records. Do not rank its observed production totals.')
-                continue
-            if result['tool'] == 'get_shift_dollars':
-                lines.extend(Agent._dollar_lines(result['tool'], data))
-                continue
-            if result['tool'] in ('get_shift_kpis','get_shift_overview'):
-                row = data['rows'][0]
-                lines.append(f'Shift {shift}: {row["observed_shift_fpm"]:.1f} ft/min including downtime; {row["observed_lineal_ft"]:,.0f} lineal ft. Maintenance {row["maintenance_pct"]:.2f}% and Operator {row["operator_pct"]:.2f}% (each target 2.5%). Dry-end waste {row["dry_end_pct"]:.2f}% (flag above 1%). {row["valid_setups"]} dry-end setups; {row["paper_changes"]} paper changes (wet-end runs). Speed attainment {row["speed_to_target_pct"]:.1f}%.')
-            elif result['tool'] == 'get_downtime_breakdown':
-                lines.append(f'Shift {shift} recorded downtime: '+('; '.join(f'{r["category"]}: {r["down_minutes"]:g} min' for r in data['rows']) or 'no stops in this filter')+'.')
-            elif result['tool'] == 'get_wet_end_performance':
-                below = sum(r['actual_fpm'] < r['target_fpm'] for r in data['rows'])
-                lines.append(f'Shift {shift}: {below} of {len(data["rows"])} wet-end runs below their grade target. Chart uses elapsed time including stops; grade targets remain simulation settings.')
-            elif result['tool'] == 'get_setup_matrix':
-                lines.append(f'Shift {shift}: setup matrix contains {len(data["rows"])} valid setups. Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.')
-            elif result['tool'] == 'get_order_matrix':
-                lines.append(f'Shift {shift}: {len(data["rows"])} order fragments. Requested and planned quantities repeat on continuing orders; sum produced sheets only. Remaining demand carries across shifts. Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled.')
-            elif result['tool'] == 'get_shift_notes':
-                for row in data['rows']:
-                    lines.append(f'Shift {shift}, {row["record_id"]} - reported note (synthetic, unverified): {row["notes"] or "No note recorded"}')
-            elif result['tool'] == 'get_rankings':
-                lines.append(f'Shift {shift} {data["metric"]} ranking: ' + '; '.join(f'{r["rank"]}. {r["item"]}: {r["value"]:.1f} {r["unit"]}' for r in data['rows']))
-            elif result['tool'] == 'get_quality_breakdown':
-                lines.append(f'Shift {shift} dry-end rejects: '+ '; '.join(f'{r["reason"]}: {r["rejected_sqft"]:,.1f} sq ft' for r in data['rows'])+'.')
-                if data.get('details'):
-                    lines.append(f'Shift {shift} reported sub-reasons: ' + '; '.join(f'{d["detail"]}: {d["rejected_sqft"]:,.1f} sq ft' for d in data['details']) + '.')
-            lines.extend(Agent._dollar_lines(result['tool'], data))
-        return lines
-
-    @staticmethod
-    def _dollar_lines(tool, data):
-        """The money beside the quantities (issue #31): each row's formula as the tool wrote it, the
-        totals, and the rates it used. Every number is a tool value; the rates are assumptions."""
-        if tool not in (*cost_model.PRICED_TOOLS, 'get_shift_dollars', 'get_opportunities') or 'provenance' not in data:
-            return []
-        scope = f'Shift {data["shift"]}' if data['shift'] else 'All shifts'
-        rows = data['rows']
-        def money(value):
-            return 'unavailable' if value is None else f'${value:,.0f}'
-        def contribution(value, status):
-            return f'contribution {cost_model.MARGIN_NOT_SET}' if status == cost_model.MARGIN_NOT_SET else f'contribution {money(value)} (not added)'
-        name = {'get_quality_breakdown': 'reason', 'get_downtime_breakdown': 'category', 'get_downtime_pareto': 'category',
-                'get_waste_breakdown': 'label', 'get_speed_opportunity': 'label', 'get_shift_dollars': 'gap', 'get_opportunities': 'lever'}[tool]
-        lines = []
-        if tool == 'get_shift_dollars':
-            lines.append(f'{scope} in dollars: {money(data["total_usd"])} of recorded losses this shift (paper {money(data["total_paper_usd"])}, '
-                         f'machine time {money(data["total_machine_time_usd"])}), {money(data["total_usd_per_year"])} per year at the post\'s volumes; '
-                         f'{contribution(data["total_contribution_usd"], data["contribution_status"])}.')
-            lines.append('Where the money went, ranked by dollars: ' + ('; '.join(
-                f'{r["rank"]}. {r["gap"]}: {money(r["usd"])} ({money(r["usd_per_year"])}/yr): {r["usd_basis"]}' for r in rows) or 'no recorded losses') + '.')
-        elif tool == 'get_opportunities':
-            lines.append(f'Where to look, levers ranked by dollars per year ({scope.lower()}): ' + ('; '.join(
-                f'{r["rank"]}. {r["lever"]}: {money(r["usd_per_year"])}/yr ({money(r["usd"])} in the window; {r["records"]}): {r["usd_basis"]}' for r in rows) or 'no levers') +
-                f'. Levers together {money(data["total_usd_per_year"])} per year; {contribution(data["total_contribution_usd"], data["contribution_status"])}. ' + data['method_note'])
-        else:
-            lines.append(f'{scope} in dollars: ' + ('; '.join(
-                f'{r[name]}: {money(r["usd"])}' + (f' ({money(r["usd_per_year"])}/yr)' if r['usd_per_year'] is not None else '') + f': {r["usd_basis"]}'
-                for r in rows) or 'nothing to price') + '.')
-        lines.append(data['provenance'] + ' ' + data['cost_note'])
-        return lines
-
-    @staticmethod
-    def _period_lines(tool, data):
-        """Plain-text evidence for a period tool; every number is a row value."""
-        def num(value, signed=False):
-            if value is None:
-                return 'unavailable'
-            if isinstance(value, int):
-                return f'{value:+,}' if signed else f'{value:,}'
-            return f'{value:+,.2f}' if signed else f'{value:,.2f}'
-        window = data['window']
-        previous = data.get('previous_window')
-        scope = f'shift {data["shift"]}' if data['shift'] else 'all shifts'
-        head = f'{window["label"]}, {scope}' + (f', versus {previous["label"]}' if previous else '') + \
-            f'. Window coverage: {window["coverage"]}' + (f'; previous {previous["coverage"]}' if previous else '') + '.'
-        lines = [head]
-        if tool in ('get_period_kpis', 'compare_periods'):
-            rows = {r['metric']: r for r in data['rows']}
-            def cell(key, unit=''):
-                r = rows[key]
-                text = num(r['current']) + unit
-                if r['delta'] is not None:
-                    text += f' ({num(r["delta"], signed=True)} vs {num(r["previous"])}{unit}, {r["change"]})'
-                elif previous:
-                    text += f' (previous {num(r["previous"])}{unit})'
-                return text
-            if data.get('comparison') != 'complete':
-                lines.append('Deltas are withheld: a window is incomplete or unavailable. Missing days are not zero production.')
-            lines.append(f'Volume {cell("volume_msf", " MSF")} = {cell("msf_per_day", " MSF")} per production day; lineal {cell("lineal_ft", " ft")}; speed with stops {cell("speed_all_fpm", " ft/min")}; without stops {cell("speed_run_fpm", " ft/min")}.')
-            if data.get('day_basis_note'):
-                lines.append(data['day_basis_note'])
-            lines.append(f'Downtime {cell("downtime_pct", "%")} of scheduled minutes: {cell("downtime_minutes", " min")} over {cell("stops")} stops, {cell("minutes_per_stop", " min")} per stop. Maintenance + PM {cell("maintenance_pm_pct", "%")}; Operator {cell("operator_pct", "%")}.')
-            lines.append(f'Waste as % of gross: side trim {cell("trim_pct", "%")}; shear {cell("shear_pct", "%")}; dry-end {cell("dry_end_pct", "%")} (bond {cell("bond_pct", "%")}, warp {cell("warp_pct", "%")}, misalignment {cell("misalignment_pct", "%")}, moisture {cell("moisture_pct", "%")}); bale {cell("bale_pct", "%")}; unexplained {cell("unexplained_pct", "%")}.')
-            lines.append(f'Setup records {cell("setups")}; paper changes (distinct wet ends) {cell("paper_changes")}; lineal per setup {cell("lineal_per_setup", " ft")}; lineal per paper change {cell("lineal_per_paper_change", " ft")}; baled waste {cell("bale_msf", " MSF")}. Lower is better for downtime and waste, higher for volume, speed and run length; counts are context, not scores.')
-        elif tool == 'get_downtime_pareto':
-            lines.append(f'Downtime Pareto by {data["group_by"]} ({data["measure"]}): ' + ('; '.join(
-                f'{r["category"]}: {num(r["minutes"])} min over {num(r["stops"])} stops, {num(r["share_pct"])}% (cumulative {num(r["cumulative_pct"])}%), previous {num(r["previous_minutes"])} min'
-                for r in data['rows']) or 'no recorded stops') + '. Recorded reasons are symptoms, not proven causes.')
-        elif tool == 'get_waste_breakdown':
-            lines.append('Waste breakdown: ' + '; '.join(
-                f'{r["label"]} {num(r["sqft"])} sq ft = {num(r["pct_of_gross"])}% of gross' +
-                (f' (previous {num(r["previous_pct_of_gross"])}%, {num(r["delta_pct_points"], signed=True)} points)' if r['previous_pct_of_gross'] is not None else '')
-                for r in data['rows']) + '. Bale is a scale reading; unexplained is bale minus trim, shear and rejects.')
-            if data.get('details'):
-                lines.append('Dry-end by reported sub-reason: ' + '; '.join(
-                    f'{d["detail"]} ({d["reason"].lower()}) {num(d["sqft"])} sq ft = {num(d["share_of_dry_end_pct"])}% of dry-end rejects' for d in data['details']) +
-                    '. Sub-reasons are reported observations, not proven causes.')
-        elif tool == 'get_stops_profile':
-            lines.append('Stops per production day: ' + ('; '.join(
-                f'{r["production_day"]} ({r["weekday"]}): {num(r["stops"])} stops, {num(r["minutes"])} min, {num(r["minutes_per_stop"])} min per stop'
-                for r in data['rows']) or 'no production days in this window') + '.')
-            lines.append('Weekday profile: ' + '; '.join(
-                f'{r["weekday"]}: {num(r["stops_per_day"])} stops per day and {num(r["minutes_per_day"])} min per day over {num(r["days"])} day(s)'
-                for r in data['weekday_profile'] if r['days']) + '.')
-        elif tool == 'get_grade_totals':
-            if data.get('measure') == 'speed':
-                lines.append('Speed by grade, without stops, against each grade target: ' + ('; '.join(
-                    f'{r["grade"]}: {num(r["speed_run_fpm"])} ft/min = {num(r["speed_to_target_pct"])}% of the {num(r["target_fpm"])} target '
-                    f'({num(r["speed_elapsed_fpm"])} ft/min elapsed, {num(r["setups"])} setups)'
-                    for r in data['rows']) or 'no setups in this window') + '.')
-            lines.append(f'Totals by grade ({num(data["total_volume_msf"])} MSF in the window): ' + ('; '.join(
-                f'{r["grade"]}: {num(r["volume_msf"])} MSF ({num(r["share_of_volume_pct"])}%), {num(r["lineal_ft"])} ft over {num(r["setups"])} setups / {num(r["wet_ends"])} wet ends, '
-                f'{num(r["speed_run_fpm"])} ft/min without stops = {num(r["speed_to_target_pct"])}% of the {num(r["target_fpm"])} target, '
-                f'{num(r["setup_stops"])} setup stops / {num(r["setup_stop_minutes"])} min = {num(r["downtime_pct_of_elapsed"])}% of its elapsed time, '
-                f'{num(r["lineal_per_setup"])} ft per setup, {num(r["lineal_per_wet_end"])} ft per paper change, '
-                f'trim {num(r["trim_pct"])}%, dry-end {num(r["dry_end_pct"])}%' +
-                (f', previous {num(r["previous_volume_msf"])} MSF ({num(r["delta_volume_msf"], signed=True)})' if r['previous_volume_msf'] is not None else '')
-                for r in data['rows']) or 'no setups in this window') + '. ' + data['speed_note'])
-        elif tool == 'get_rollstock':
-            lines.append(f'Paper consumed ({num(data["total_lineal_ft"])} ft = {num(data["total_msf"])} MSF over {num(data["paper_runs"])} paper runs, {num(data["lineal_per_run"])} ft per run' +
-                         (f'; previous {num(data["previous_total_lineal_ft"])} ft = {num(data["previous_total_msf"])} MSF over {num(data["previous_paper_runs"])} runs, {num(data["delta_lineal_ft"], signed=True)} ft / {num(data["delta_msf"], signed=True)} MSF' if data['previous_total_lineal_ft'] is not None else '; previous window unavailable') +
-                         '), by grade and web width: ' + ('; '.join(
-                f'{r["label"]}: {num(r["lineal_ft"])} ft = {num(r["msf"])} MSF ({num(r["share_of_feet_pct"])}% of feet) over {num(r["paper_runs"])} runs, {num(r["lineal_per_run"])} ft per run' +
-                (f', previous {num(r["previous_lineal_ft"])} ft ({num(r["delta_lineal_ft"], signed=True)})' if r['previous_lineal_ft'] is not None else '')
-                for r in data['rows']) or 'no paper runs in this window') + '. ' + data['attribution_note'] + ' ' + data['msf_note'])
-        elif tool == 'get_speed_opportunity':
-            lines.append(f'Speed opportunity by grade and {data["rows"][0]["slice_by"] if data["rows"] else "width"} ({num(data["total_opportunity_hours"])} hours in total if every cell ran at its best-fifth speed; {num(data["excluded_short_setups"])} setups under {num(data["min_run_minutes"])} running minutes excluded): ' + ('; '.join(
-                f'{r["label"]}: typical {num(r["typical_fpm"])} ft/min ({num(r["typical_pct_of_target"])}% of target) vs best fifth {num(r["best_fifth_fpm"])} ({num(r["best_fifth_pct_of_target"])}%), gap {num(r["gap_fpm"])} ft/min = {num(r["opportunity_hours"])} hours over {num(r["setups"])} setups; '
-                f'dry-end {num(r["best_fifth_dry_end_pct"])}% on the fast fifth vs {num(r["rest_dry_end_pct"])}% on the rest'
-                for r in data['rows']) or 'no cell has enough setups in this window') +
-                (f'. {num(len(data["thin_cells"]))} cells with fewer than {num(data["min_setups"])} setups are listed but not ranked: ' + ', '.join(f'{c["label"]} ({num(c["setups"])})' for c in data['thin_cells']) if data.get('thin_cells') else '') +
-                '. ' + data['method_note'] + ' ' + data['temperature_note'])
-        elif tool == 'get_overrun':
-            lines.append(f'Over/under-run by knife (+-{num(data["band_pct"])}% band): ' + ('; '.join(
-                f'{r["knife"]}: {num(r["actual_cuts"])} actual vs {num(r["nominal_cuts"])} nominal cuts = {num(r["overrun_pct"], signed=True)}%, '
-                f'{num(r["over_sheets"])} sheets over and {num(r["under_sheets"])} under across {num(r["lines"])} lines, '
-                f'{num(r["lines_inside_band_pct"])}% of lines inside the band ({num(r["lines_over_pct"])}% over, {num(r["lines_under_pct"])}% under)'
-                for r in data['rows']) or 'no customer lines in this window') + '. ' + data['band_note'])
-        elif tool == 'get_trend':
-            lines.append(f'Weekly {data["metric"]} ({data["unit"]}), {len(data["rows"])} weeks available: ' + ('; '.join(
-                f'week of {r["week_start"]}: {num(r["value"])}' + (' (partial week)' if r['partial'] else '') for r in data['rows']) or 'no weeks available') +
-                ('. Weeks without records: ' + ', '.join(data['missing_weeks']) if data['missing_weeks'] else '') + '.')
-        return lines

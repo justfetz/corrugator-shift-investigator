@@ -50,7 +50,19 @@ Every case, whatever its type, also checks:
 - every executed tool is in `TOOL_SCHEMAS`, and every tool call stays inside the selected shift scope;
 - chart rows equal the rows of the result they cite;
 - tables shown to the user are complete (row count equals an independent tool call);
-- narrative numbers and citations are faithful, as above.
+- narrative numbers and citations are faithful, as above (an evidence reference `(query N · row M)` and a
+  where-to-look question `→ “…”` state no measurement and are not read as numbers);
+- every number on a cited line is a value of the row it cites (issue #75, `unprovenanced`): a section with a `**figure**`
+  carries exactly one, and one evidence reference that resolves to a successful step of the trace and a row of
+  its result (`detail M`, `weekday M`: its sub-reason and weekday lists); every number in the figure renders a
+  value of that row, or, with no row named, a count of the result's rows, a below-target count or a total of its
+  envelope; every other number on the line is one of those, a count of the result's rows or a rule constant. A figure
+  moved to the wrong row, changed by a digit, stated beside a row it does not cite, or citing a chart step fails the case.
+
+Two expectations hold the answer shape itself. `sections_match` takes one pattern or a list of patterns, each
+of which some section must match. `shape` (`why-slow-answer-shape`, `period-slowest-grades-answer-shape`)
+checks one headline, `bullets: [min, max]` finding bullets right under it with one bold figure each, an
+optional `headline_match`, and `look: [min, max]` where-to-look lines that each end with a question.
 
 ## Latency budget
 
