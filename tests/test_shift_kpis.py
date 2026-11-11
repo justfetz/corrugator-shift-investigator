@@ -69,12 +69,16 @@ def test_period_report_equals_the_rebuilt_report_for_every_period_and_shift_filt
 
 
 def test_matrix_rows_equal_the_daily_kpi_tool_for_every_shift(store):
-    """Each shift_kpis row reproduces analysis.get_shift_kpis for its day and shift, clean and corrupt."""
-    rows = store._fetch("SELECT * FROM shift_kpis ORDER BY production_date, shift, corrupt", [])
+    """Each shift_kpis row reproduces analysis.get_shift_kpis for its day and shift, clean and corrupt:
+    every day of August and September 2026 and every fifth day of the rest of the year (issue #35: a
+    year of days, rebuilt through day_analysis twice, would cost half a minute)."""
+    rows = store._fetch("SELECT * FROM shift_kpis ORDER BY production_date, shift, corrupt", [], limit=10_000)
     assert len(rows) == 2 * 3 * len(store.production_days)
     by_key = {(r["production_date"].isoformat(), r["shift"], r["corrupt"]): r for r in rows}
+    rest = [d for d in store.production_days if not d.startswith(("2026-08", "2026-09"))]
+    days = [d for d in store.production_days if d.startswith(("2026-08", "2026-09"))] + rest[::5]
     for corrupt in (False, True):
-        for day in store.production_days:
+        for day in days:
             analysis = store.day_analysis(day, corrupt)
             try:
                 for shift in (1, 2, 3):
@@ -100,8 +104,21 @@ def test_period_tools_equal_the_raw_table_sums(store):
                 new, old = store._sums(w, shift, trace), legacy_sums(store, w, shift, {"sql": [], "parameters": []})
                 assert trace["sql"][0].count("FROM shift_kpis") == 1   # the tiles are a lookup
                 label = f"{spec} {w['start']} shift {shift}"
-                assert_same(store._kpis(new), store._kpis(old), label)
                 assert_same({k: new[k] for k in old}, old, label)   # every raw sum, the source counts and the details too
+                assert_tiles_same(store._kpis(new), store._kpis(old), label)
+
+
+def assert_tiles_same(new, old, label):
+    """The tiles of two sets of sums that agree to 4 decimals (checked just before): equal to 4 decimals,
+    or one flip of the last displayed digit where a value sits on a rounding boundary and the two
+    summation orders land either side of it (July against June, shift 2: lineal per paper change
+    19165.9 and 19166.0)."""
+    assert set(new) == set(old), label
+    for key, value in old.items():
+        if isinstance(value, float) and isinstance(new[key], (int, float)):
+            assert round(new[key], 4) == round(value, 4) or abs(new[key] - value) <= max(1e-4, abs(value) * 1e-5), (label, key, new[key], value)
+        else:
+            assert new[key] == value, (label, key)
 
 
 def _best_of(report, *args):

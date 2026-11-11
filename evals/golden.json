@@ -2096,7 +2096,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "How did August go?",
-   "note": "One named month: the month tiles with the previous month alongside. July is outside the dataset, so the previous window is unavailable and every delta is withheld; the previous tile reads unavailable, never zero.",
+   "note": "One named month: the month tiles with the previous month alongside. The year window (issue #35) holds July, so the comparison is complete and every delta is shown; the unequal production days (21 vs 23) are flagged. A month with no records reads unavailable, never zero (month-before-dataset-unavailable-never-zero).",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=kpis&window=2026-08",
     "status": "complete",
@@ -2113,8 +2113,72 @@
       }
      }
     ],
-    "sections_match": "August 2026 .*, all shifts, versus July 2026 .*previous unavailable",
+    "sections_match": "August 2026 .*, all shifts, versus July 2026 .*Window coverage: complete; previous complete",
     "sections_not_match": "\\(previous 0(\\.00)? "
+   }
+  },
+  {
+   "id": "period-december-last-year",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "How did December go?",
+   "note": "A bare month name means the latest month of that name that starts on or before the selected day: from 14 September 2026 that is December 2025, inside the year window (issue #35). Resolved to the selected day's calendar year it would be December 2026, after the window, refused as outside the dataset.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=kpis&window=2025-12",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2025-12-01"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": "December 2025 .*, all shifts, versus November 2025 .*Window coverage: complete; previous complete"
+   }
+  },
+  {
+   "id": "period-january-vs-december",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-01-14",
+   "question": "Compare January with December",
+   "note": "Two bare month names across a year end: from 14 January 2026, January is this January and December the one before it (issue #35).",
+   "expect": {
+    "url": "/corr/1/day/2026-01-14?measure=kpis&window=2026-01&compare=2025-12",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "compare_periods",
+      "arguments": {
+       "current_window": {
+        "period": "month",
+        "anchor": "2026-01-01"
+       },
+       "previous_window": {
+        "period": "month",
+        "anchor": "2025-12-01"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "compare_periods",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "compare_periods"
+    ],
+    "sections_match": "January 2026 .*, all shifts, versus December 2025"
    }
   },
   {
@@ -2831,6 +2895,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Trend of trim over eight weeks",
+   "note": "Eight weeks back from 14 September start in the week of 27 July: inside the year window (issue #35) it is the series' first week, with records; a window that starts later names it under Weeks without records. Matched in the answer shape of issue #75.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=trend&metric=trim_pct",
     "status": "complete",
@@ -2846,7 +2911,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "Weekly trim_pct \\(% of gross\\), [0-9]+ weeks available: week of 2026-07-27|Weeks without records: 2026-07-27",
+    "sections_match": "^- Week of 2026-07-27: \\*\\*[0-9.]+%\\*\\* of gross, the first week of the series|^Weeks without records: 2026-07-27",
     "max_ms": 500
    }
   },
@@ -2915,6 +2980,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Weekly warp trend",
+   "note": "Eight weeks back from 14 September stay inside the year window (issue #35), so every week has records; missing weeks are covered by value-trend-stops-9w-missing-weeks at the window's start.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=trend&metric=warp_pct",
     "status": "complete",
@@ -2931,13 +2997,13 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^\\*\\*[0-9.]+%\\*\\* of gross in the week of .*, the latest of 7 weeks of warp",
-     "^Weeks without records: 2026-07-27\\.$"
+     "^\\*\\*[0-9.]+%\\*\\* of gross in the week of .*, the latest of 8 weeks of warp"
     ],
     "max_ms": 500,
     "tables": [
      "get_trend"
-    ]
+    ],
+    "sections_not_match": "Weeks without records"
    }
   },
   {
@@ -2947,6 +3013,17 @@
    "question": "Compare last week",
    "expect": {
     "raises": "Ambiguous window"
+   }
+  },
+  {
+   "id": "refusal-rates-full-width-digits",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Where did the money go this shift?",
+   "rates": "paper:５５",
+   "note": "Review of PR 109 (item 4): Python's \\d and float() took full-width digits, so the server priced paper:５５ at $55 while web/money.js refuses it; a rate is ASCII digits only on both sides, so a link reproduces the page or is refused.",
+   "expect": {
+    "raises": "at most two decimals"
    }
   },
   {
@@ -3396,10 +3473,10 @@
    "id": "speed-all-shifts-rank-follows-the-ranked-measure",
    "type": "faithfulness",
    "mode": "offline",
-   "day": "2026-08-05",
+   "day": "2026-08-12",
    "scope": "day",
    "question": "Show speed to target",
-   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-05 shift 3 is lowest in percent of target but not in ft/min (shift 2 ran 579.8 ft/min to its 595.2): the headline must not call its ft/min the lowest.",
+   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-12 shift 2 is lowest in percent of target (85.3%) but not in ft/min (shift 1 ran 567.6 ft/min to its 580.5): the headline must not call its ft/min the lowest. Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3415,10 +3492,10 @@
    "id": "summary-all-shifts-rank-follows-the-ranked-measure",
    "type": "faithfulness",
    "mode": "offline",
-   "day": "2026-08-05",
+   "day": "2026-08-12",
    "scope": "day",
    "question": "Summarize this shift",
-   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 2 made fewer feet on 2026-08-05).",
+   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 1 made fewer feet on 2026-08-12: 272,462 lineal ft against shift 2's 278,622). Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3434,10 +3511,10 @@
    "id": "speed-run-over-target-is-the-highest-not-the-closest",
    "type": "faithfulness",
    "mode": "offline",
-   "day": "2026-08-10",
-   "shift": 3,
+   "day": "2026-08-05",
+   "shift": 1,
    "question": "Show speed to target",
-   "note": "Issue #75 review: a run above its target (101.3% on 2026-08-10, shift 3) is the highest against target, not the closest to it (another run sits at 100.07%).",
+   "note": "Issue #75 review: a run above its target (101.9% on 2026-08-05, shift 1) is the highest against target, not the closest to it (another run sits at 99.85%). Re-anchored from 2026-08-10, shift 3 for the year window (issue #35), where no run reaches its target.",
    "expect": {
     "status": "complete",
     "sections_match": "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the highest of [0-9]+ runs \\(query 2 · row [0-9]+\\)$",
@@ -3450,7 +3527,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Show rankings",
-   "note": "Issue #75 review: with all shifts, the rankings headline names the lowest speed attainment across the shifts (shift 3's WE20260914039 on 2026-09-14), not shift 1's first-ranked run.",
+   "note": "Issue #75 review: with all shifts, the rankings headline names the lowest speed attainment across the shifts (shift 3's WE20260914044 on 2026-09-14), not shift 1's first-ranked run.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3839,39 +3916,39 @@
    "mode": "offline",
    "live": true,
    "scope": "day",
-   "day": "2026-09-14",
+   "day": "2026-08-17",
    "turns": [
     "Is it bond or warp this month?",
     "And on this Monday specifically, is it bond or warp?",
     "Stops per day this month: do Mondays stand out?",
     "Show me the weekly warp trend."
    ],
-   "note": "Seeded story 3 (stories.WEEKEND_WARP): warp rejects run 1.5x on the first production day after a weekend and higher in August than September; bond and misalignment stay flat. No tool breaks warp down by weekday, so the Monday evidence is a day window against the Friday before, plus the Monday stop profile. The prose may say the Monday pattern warrants a look at the first setups after the weekend; it may not assert weekend moisture, humidity or temperature as the cause, because no such measurement exists in the records.",
+   "note": "Seeded story 3 (stories.WEEKEND_WARP): warp rejects run 1.5x on the first production day after a weekend and higher in August than in any other month; bond and misalignment stay flat. Anchored on Monday 17 August 2026 (issue #35: under the per-day seeding September's Mondays no longer have the most stops per day, while August's do by four a day), so 'this month' is August against July. No tool breaks warp down by weekday, so the Monday evidence is a day window against the Friday before, plus the Monday stop profile. The prose may say the Monday pattern warrants a look at the first setups after the weekend; it may not assert weekend moisture, humidity or temperature as the cause, because no such measurement exists in the records.",
    "expect": {
     "status": "complete",
     "evidence": [
      {
       "tool": "get_waste_breakdown",
       "window_covers": [
-       "2026-09-01",
-       "2026-09-30"
+       "2026-08-01",
+       "2026-08-31"
       ],
       "row": {
        "category": "warp"
       },
-      "field": "previous_pct_of_gross",
+      "field": "pct_of_gross",
       "at_least_times": {
-       "field": "pct_of_gross",
+       "field": "previous_pct_of_gross",
        "factor": 1.2
       },
-      "why": "August warp percent of gross is at least 1.2x September"
+      "why": "August warp percent of gross is at least 1.2x July"
      },
      {
       "tool": "get_waste_breakdown",
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-14"
+        "anchor": "2026-08-17"
        }
       },
       "row": {
@@ -3882,14 +3959,14 @@
        "field": "previous_pct_of_gross",
        "factor": 1.2
       },
-      "why": "Monday 14 September warp is at least 1.2x the Friday before"
+      "why": "Monday 17 August warp is at least 1.2x the Friday before"
      },
      {
       "tool": "get_waste_breakdown",
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-14"
+        "anchor": "2026-08-17"
        }
       },
       "row": {
@@ -3903,8 +3980,8 @@
      {
       "tool": "get_stops_profile",
       "window_covers": [
-       "2026-09-01",
-       "2026-09-30"
+       "2026-08-01",
+       "2026-08-31"
       ],
       "rows": "weekday_profile",
       "row": {
@@ -3912,7 +3989,7 @@
       },
       "field": "stops_per_day",
       "max_among": true,
-      "why": "Monday has the most stops per day of the five weekdays in September"
+      "why": "Monday has the most stops per day of the five weekdays in August"
      },
      {
       "tool": "get_trend",
@@ -3920,16 +3997,16 @@
        "metric": "warp_pct"
       },
       "row": {
-       "week_start": "2026-09-14"
+       "week_start": "2026-08-17"
       },
       "field": "value",
       "change_from": {
        "row": {
-        "week_start": "2026-08-10"
+        "week_start": "2026-07-27"
        },
-       "max": -0.1
+       "min": 0.1
       },
-      "why": "weekly warp falls at least 0.1 pp from the week of 10 August to the week of 14 September"
+      "why": "weekly warp rises at least 0.1 pp from the week of 27 July to the week of 17 August"
      }
     ],
     "prose_numbers": [
@@ -3998,34 +4075,36 @@
    }
   },
   {
-   "id": "july-unavailable-never-zero",
+   "id": "month-before-dataset-unavailable-never-zero",
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "question": "How did July go?",
-   "note": "July is before the first production day. The period tool refuses the window; the answer carries no July tile and no zero, and the status is unavailable (the reason itself is checked by july-reason-surfaced).",
+   "day": "2025-10-15",
+   "question": "How did August go?",
+   "note": "Asked on 15 October 2025, August means August 2025, before the year's first production day (30 September 2025). The period tool refuses the window; the answer carries no August tile and no zero, and the status is unavailable (the reason itself is checked by month-before-dataset-reason-surfaced). Asked about July on 14 September 2026 until issue #35 took July into the year.",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
     "charts": 0,
-    "sections_not_match": "July 2026|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
+    "sections_not_match": "August 2025|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
    }
   },
   {
-   "id": "july-reason-surfaced",
+   "id": "month-before-dataset-reason-surfaced",
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "question": "How did July go?",
-   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2026-08-03 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it.",
+   "day": "2025-10-15",
+   "question": "How did August go?",
+   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2025-09-30 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it; asked about July on 14 September 2026 until the year window (issue #35) took July in.",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
     "charts": 0,
     "tables": [],
-    "sections_match": "outside the dataset range 2026-08-03 to 2026-09-30"
+    "sections_match": "outside the dataset range 2025-09-30 to 2026-09-30"
    }
   },
   {
@@ -4229,10 +4308,11 @@
    "id": "downtime-last-month",
    "type": "routing",
    "mode": "offline",
+   "day": "2025-10-15",
    "question": "How much downtime last month?",
-   "note": "Issue #105: 'last month' is the calendar month before the selected day's (August from 14 Sep), not the selected month; the controls move to it as for last week. August has no previous month in the records, so each row's previous is unavailable, never zero.",
+   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-10-15 it is September 2025, which holds the golden year's first production day (2025-09-30); its previous month, August 2025, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 14 September 2026 for the year window (issue #35), where last month (August 2026) has July before it.",
    "expect": {
-    "url": "/corr/1/month/2026-08-03/shift/2?measure=pareto",
+    "url": "/corr/1/month/2025-09-30/shift/2?measure=pareto",
     "status": "complete",
     "shifts": [
      2
@@ -4243,7 +4323,7 @@
       "arguments": {
        "window": {
         "period": "month",
-        "anchor": "2026-08-03"
+        "anchor": "2025-09-30"
        },
        "group_by": "reason",
        "measure": "minutes",
@@ -4258,6 +4338,76 @@
     "sections_match": [
      "^\\*\\*[0-9.,]+ min\\*\\* at .* · [0-9.]+% of the window's minutes",
      "^- .*: \\*\\*[0-9.,]+ min\\*\\* over [0-9,]+ stops · [0-9.]+%, cumulative [0-9.]+% · previous unavailable"
+    ]
+   }
+  },
+  {
+   "id": "downtime-in-a-named-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much downtime in August?",
+   "note": "Issue #105 with #35: downtime in a named month is that month's Pareto. The merge of #105 into the year built the month's anchor from a variable the month-name rule had replaced, and the question raised NameError.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=2026-08",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes"
+    ]
+   }
+  },
+  {
+   "id": "downtime-in-december-is-the-last-december",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much downtime in December?",
+   "note": "A month named without a year is the latest such month on or before the selected day (issue #35): December asked on 14 September 2026 is December 2025, inside the year, not a December after the data.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=2025-12",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2025-12-01"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes"
     ]
    }
   },
@@ -4288,9 +4438,9 @@
    "id": "last-week-before-the-records",
    "type": "refusal",
    "mode": "offline",
-   "day": "2026-08-05",
+   "day": "2025-10-01",
    "question": "How much downtime last week?",
-   "note": "Issue #105: from the first production week, last week has no production day in the records; the question is refused with the calendar reason rather than answered as zero or as this week.",
+   "note": "Issue #105: from the first production week, last week has no production day in the records; the question is refused with the calendar reason rather than answered as zero or as this week. Re-anchored from 2026-08-05 to 2025-10-01, the Wednesday of the golden year's first production week (issue #35).",
    "expect": {
     "raises": "before the records"
    }
@@ -4817,6 +4967,34 @@
    }
   },
   {
+   "id": "analyst-plan-day-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Where did the money go this shift?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_day_dollars",
+      "arguments": {}
+     }
+    ]
+   },
+   "note": "Re-review 2 of PR 109: get_day_dollars, the card's day total, was on the analyst's plan allowlist and the scope check did not refuse it under one shift, so a plan for shift 2 could read all three shifts. It is the offline planner's, not a model's to plan: the plan is refused whole and no query runs.",
+   "expect": {
+    "status": "plan_rejected",
+    "tool_calls": 0,
+    "charts": 0,
+    "tables": [],
+    "sections_match": "plan was rejected \\(it names \"get_day_dollars\", which is not one of the permitted tools\\); no query was run"
+   }
+  },
+  {
    "id": "analyst-plan-all-shifts-nine-steps",
    "type": "routing",
    "mode": "offline",
@@ -5330,6 +5508,47 @@
      "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes \\(query 1\\)$",
      "^- 1\\. .*: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr \\(query 1 · row 0\\)$",
      "^Contribution margin not set"
+    ]
+   }
+  },
+  {
+   "id": "money-day-dollars-two-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "shift": 2,
+   "question": "Where did the money go on shift 1 and shift 3?",
+   "note": "Reviewer pass on the #31b review fixes: get_day_dollars always summed all three shifts, so a question about two shifts got a card total with shift 2 counted. The day total covers the shifts the question named.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars&shifts=1,3",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        3
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "get_day_dollars",
+     "render_chart"
     ]
    }
   },
@@ -6040,11 +6259,12 @@
    "id": "speedvar-shift-3-against-shift-1",
    "type": "routing",
    "mode": "offline",
+   "day": "2026-01-26",
    "scope": "day",
    "question": "Why did speed differ on shift 3 versus shift 1 this week?",
-   "note": "Between two named shifts the first is explained against the second over the same window: shift 1's Thursday planned maintenance shows as a stops offset, shift 3's heavier grade mix as part of its gap.",
+   "note": "Between two named shifts the first is explained against the second over the same window: shift 1's Thursday planned maintenance shows as a stops offset, shift 3's heavier grade mix as part of its gap. Anchored on the week of 26 January 2026 for the year window (issue #35): shift 3 runs 53.7 ft/min below shift 1, below-target running and the heavier grade mix count toward it, and stops (shift 1's Planned maintenance) is the offset, the card's third line in the tool's order. The year's 14 September, where the offset comes after three contributors and gets its line by size, is speedvar-offset-larger-than-the-third-contributor-gets-a-line.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1",
+    "url": "/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=3,1",
     "status": "complete",
     "shifts": [
      3
@@ -6055,7 +6275,7 @@
       "arguments": {
        "window": {
         "period": "week",
-        "anchor": "2026-09-14"
+        "anchor": "2026-01-26"
        },
        "shift": 3,
        "against": "shift",
@@ -6195,16 +6415,17 @@
    }
   },
   {
-   "id": "speedvar-against-july-unavailable",
+   "id": "speedvar-against-month-before-dataset-unavailable",
    "type": "refusal",
    "mode": "offline",
+   "day": "2025-10-15",
    "scope": "day",
-   "question": "What drove speed in August versus July?",
-   "note": "August's previous window is July, outside the record store: the tool's own refusal is the answer, never a gap against zero.",
+   "question": "What drove speed in September versus August?",
+   "note": "Renamed from speedvar-against-july-unavailable: the year window (issue #35) holds July 2026, so August versus July is a full comparison. On 2025-10-15, September is September 2025 (the latest September on or before the day) and its previous window, August 2025, is before the year's first day (2025-09-30): the tool's own refusal is the answer, never a gap against zero.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=2026-08&against=previous",
+    "url": "/corr/1/day/2025-10-15?measure=speedvar&window=2025-09&against=previous",
     "status": "unavailable",
-    "sections_match": "^The previous window, July 2026 \\(2026-07-01 to 2026-07-31\\), is outside the record store: ask against target instead$",
+    "sections_match": "^The previous window, August 2025 \\(2025-08-01 to 2025-08-31\\), is outside the record store: ask against target instead$",
     "sections_not_match": "Speed gap \\*\\*",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
@@ -6272,6 +6493,35 @@
    }
   },
   {
+   "id": "speedvar-january-versus-december",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What drove speed in January versus December?",
+   "note": "The year window (issue #35) crosses a calendar year end: December is the month just before January, so this is January 2026 against December 2025 (the latest January on or before 14 September 2026), not a refusal for months that are not consecutive.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=2026-01&against=previous",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_variance",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-01-01"
+       },
+       "shift": null,
+       "against": "previous"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_speed_variance",
+     "render_chart"
+    ]
+   }
+  },
+  {
    "id": "speedvar-previous-shift-refused",
    "type": "refusal",
    "mode": "offline",
@@ -6310,11 +6560,12 @@
    "id": "speedvar-faster-than-reference-offsets",
    "type": "routing",
    "mode": "offline",
+   "day": "2026-01-26",
    "scope": "day",
    "question": "Why did speed differ on shift 1 versus shift 3 this week?",
-   "note": "Review of #92: when a window is faster than its reference the gap is a gain. Its buckets that ran worse pull the other way: offsets, priced as machine time (they are losses); the gain itself is not priced, and the contribution note stays.",
+   "note": "Review of #92: when a window is faster than its reference the gap is a gain. Its buckets that ran worse pull the other way: offsets, priced as machine time (they are losses); the gain itself is not priced, and the contribution note stays. Anchored on the week of 26 January 2026 for the year window (issue #35): shift 3 runs 53.7 ft/min below shift 1, below-target running and the heavier grade mix count toward it, and stops (shift 1's Planned maintenance) is the offset, the card's third line in the tool's order. The year's 14 September, where the offset comes after three contributors and gets its line by size, is speedvar-offset-larger-than-the-third-contributor-gets-a-line.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=1,3",
+    "url": "/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=1,3",
     "status": "complete",
     "shifts": [
      1
@@ -6326,6 +6577,57 @@
      "^Contribution margin not set"
     ],
     "sections_not_match": "^The whole gap is"
+   }
+  },
+  {
+   "id": "speedvar-offset-larger-than-the-third-contributor-gets-a-line",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Why did speed differ on shift 3 versus shift 1 this week?",
+   "note": "Owner, PR #91: the card lists the three buckets adding to the gap; a bucket working against it gets a line too when it is larger than the third of them. On the golden year's week of 14 September shift 3 runs 41.8 ft/min below shift 1: below-target running, grade mix and setups (1.3 ft/min) add to the gap, and stops (-85%, 35.6 ft/min, shift 1's Thursday planned maintenance) pull against it. Before, the offset had no line.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1",
+    "status": "complete",
+    "shifts": [
+     3
+    ],
+    "tools_only": [
+     "get_speed_variance",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 3 below shift 1: ",
+     "^- Setups: \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · [0-9.]+% ",
+     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance at [0-9.,]+ ft/min"
+    ]
+   }
+  },
+  {
+   "id": "speedvar-offset-smaller-than-the-third-contributor-stays-off",
+   "type": "routing",
+   "mode": "offline",
+   "day": "2026-05-04",
+   "scope": "day",
+   "question": "Why did speed differ on shift 2 versus shift 1 this week?",
+   "note": "The other side of the owner's rule: an offset gets a line only when it is larger than the third bucket adding to the gap. In the week of 4 May 2026 shift 2 runs 92.1 ft/min above shift 1 on grade mix, below-target running and stops (24.5 ft/min); setups pull the other way by 0.6 ft/min, smaller than stops, so the card keeps its three lines.",
+   "expect": {
+    "url": "/corr/1/day/2026-05-04?measure=speedvar&window=week&against=shift&shifts=2,1",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools_only": [
+     "get_speed_variance",
+     "render_chart"
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 2 above shift 1: ",
+     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · [0-9.]+% "
+    ],
+    "sections_not_match": "the other way, an offset"
    }
   }
  ]

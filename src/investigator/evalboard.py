@@ -207,7 +207,10 @@ def _exchange(exchange):
 class EvalBoard:
     """The golden set as the page shows it, plus offline / replayed runs of its cases."""
 
-    def __init__(self, folder, dataset_hash):
+    def __init__(self, folder, dataset_hash=None):
+        """`dataset_hash` defaults to the hash the value goldens were generated for: the golden set is
+        scored against the window ending run.GOLDEN_AS_OF, never against the serving store's window
+        (issue #35), so that is the dataset a recording must match to be replayed."""
         self.folder = Path(folder)
         spec = importlib.util.spec_from_file_location('investigator_golden_run', self.folder / 'run.py')
         self.runner = importlib.util.module_from_spec(spec)
@@ -216,7 +219,7 @@ class EvalBoard:
             spec.loader.exec_module(self.runner)
         finally:
             sys.dont_write_bytecode = bytecode
-        self.dataset_hash = dataset_hash
+        self.dataset_hash = dataset_hash if dataset_hash is not None else self.runner.golden_hash()
         self.cases = {case['id']: case for case in self.runner.load_cases()}
         self.plan = [(case, provider) for case, provider in self.runner.plan_rows(list(self.cases.values()), False, None)]
         self.all_lock = threading.Lock()
@@ -327,7 +330,7 @@ class EvalBoard:
             badge = f'{newest["passed"]}/{newest["total"]} golden' + (f' · {newest["p50_ms"]:.0f} ms p50' if newest['p50_ms'] is not None else '')
         return {'about': 'The golden set of the Corrugator Shift Investigator: every case, what it expects, its result in the last tracked '
                          'run, and the score history. Synthetic data. A live case is replayed from its recorded fixture; nothing here calls a model.',
-                'dataset_hash': self.dataset_hash, 'badge': badge,
+                'dataset_hash': self.dataset_hash, 'golden_as_of': self.runner.GOLDEN_AS_OF, 'badge': badge,
                 'counts': {'cases': len(cases), 'runs': len(self.plan), 'by_type': by_type,
                            'recordings': sum(1 for c in cases for r in c['runs'] if r.get('recording'))},
                 'thresholds': {'live_pass_rate': self.runner.THRESHOLDS, 'offline_latency_ms': self.runner.LATENCY_BUDGET_MS,

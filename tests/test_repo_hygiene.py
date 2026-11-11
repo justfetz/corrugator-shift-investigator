@@ -7,6 +7,7 @@ available. The docs must not link to files that were moved. Plain text checks, p
 credential-choice step's own shell run under bash for all eight combinations of the two variables
 and the secret, so no YAML dependency.
 """
+import json
 import os
 import re
 import subprocess
@@ -145,8 +146,12 @@ if base in os.environ.get('STUB_NXDOMAIN', '').split():
     sys.exit(6)
 up = base in os.environ.get('STUB_UP', '').split()
 if url.endswith('/api/health'):
-    open(args[args.index('-o') + 1], 'w').write(json.dumps({'ok': True}) if up else 'down')
-    sys.stdout.write('200' if up else '503')
+    # the image's health body: its window ends the day before the build (issue #35), or STUB_AS_OF when a test freezes it
+    as_of = os.environ['STUB_AS_OF']
+    window = {'as_of': as_of, 'first_day': '2025-11-10', 'last_day': as_of, 'production_days': 262}
+    open(args[args.index('-o') + 1], 'w').write(json.dumps({'ok': True, 'store': {'window': window}}) if up else 'down')
+    if '-w' in args:
+        sys.stdout.write('200' if up else '503')
 elif up:
     sys.stdout.write(json.dumps({'live_modes': ['anthropic'] if base in os.environ.get('STUB_LIVE', '').split() else []}))
 else:
@@ -165,8 +170,9 @@ def step_script(text, name):
     return textwrap.dedent('\n'.join(lines)) + '\n'
 
 
-def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREVIEWS), nxdomain=()):
-    """Run the main deploy's smoke test against a stub curl; returns (exit code, log, URLs requested).
+def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREVIEWS), as_of='2026-11-10', nxdomain=()):
+    """Run the main deploy's smoke test against a stub curl; returns (exit code, log, URLs requested). The build ran on
+    RUN_DAY 2026-11-11 (a Wednesday), so a fresh image's window ends 2026-11-10; `as_of` freezes it elsewhere.
     `nxdomain` URLs fail like a host that does not resolve (curl exit 6, HTTP 000, no body written)."""
     stub = tmp_path / 'bin'
     stub.mkdir(exist_ok=True)
@@ -175,7 +181,8 @@ def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREV
     log = tmp_path / 'requests.log'
     log.write_text('')
     env = {**os.environ, 'PATH': f'{stub}:{os.environ["PATH"]}', 'ORIGINS': ','.join(origins), 'LIVE_MODEL': live_model,
-           'STUB_UP': ' '.join(up), 'STUB_LIVE': ' '.join(live), 'STUB_NXDOMAIN': ' '.join(nxdomain), 'STUB_LOG': str(log)}
+           'STUB_UP': ' '.join(up), 'STUB_LIVE': ' '.join(live), 'STUB_NXDOMAIN': ' '.join(nxdomain), 'STUB_LOG': str(log),
+           'RUN_DAY': '2026-11-11', 'STUB_AS_OF': as_of}
     proc = subprocess.run(['bash', '-c', step_script(DEPLOY.read_text(encoding='utf-8'), 'Smoke test')],
                           env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)   # interleaved, as in the run log
     return proc.returncode, proc.stdout, log.read_text().split()
@@ -202,6 +209,16 @@ def test_smoke_test_skips_only_preview_tags_not_a_service_named_with_triple_hyph
                                  origins=(main_hash, main, preview))
     assert code == 0 and log.rstrip().endswith(f'Live at {main}'), log
     assert preview not in ' '.join(requested) and f'{main}/api/config' in requested
+
+
+def test_smoke_test_fails_a_frozen_window_on_mains_own_url(tmp_path):
+    """Issue #35 with #110: the window check reads main's own URL, the one the smoke test reports, and fails the deploy
+    when its window does not end the day before the build."""
+    code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN])
+    assert code == 0 and 'window 2025-11-10 to 2026-11-10 (as of 2026-11-10, 262 production days): ends yesterday' in log, log
+    assert requested.count(f'{MAIN}/api/health') == 2 and not any('---' in url for url in requested)
+    code, log, _ = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN], as_of='2026-10-01')
+    assert code != 0 and '::error::store.window ends 2026-10-01' in log and 'Live at' not in log, log
 
 
 def test_smoke_test_fails_when_only_a_preview_answers(tmp_path):
@@ -249,7 +266,7 @@ def test_smoke_test_logs_no_stale_body_when_the_custom_domain_does_not_resolve(t
     code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN], live=[MAIN], live_model='1', origins=WITH_CUSTOM,
                                  nxdomain=[CUSTOM])
     assert code == 0 and log.rstrip().endswith(f'Live at {MAIN}'), log
-    assert health_line(log, MAIN).endswith('HTTP 200 {"ok": true}'), log
+    assert health_line(log, MAIN).__contains__('HTTP 200 {"ok": true'), log
     assert health_line(log, CUSTOM).rstrip() == f'GET {CUSTOM}/api/health -> HTTP 000', 'no body carried over from MAIN'
     assert 'Could not resolve host: shift.talktomymachine.ai' in log
     assert f'{CUSTOM}/api/config' not in requested
@@ -294,3 +311,58 @@ def test_september_review_is_archived():
     assert not (ROOT / 'docs' / '_scratch').exists()
     assert (ROOT / 'docs' / 'archive' / 'REVIEW_2026-09-07.md').exists()
     assert (ROOT / 'docs' / 'archive' / 'review-2026-09-07' / 'probes.py').exists()
+
+
+def test_main_redeploys_every_weekday_night_and_by_hand():
+    """Issue #35: the dataset is the year ending yesterday, fixed per image, so main is rebuilt and
+    redeployed on a schedule (and on demand); the push trigger stays."""
+    text = DEPLOY.read_text()
+    on = text.split('\non:\n', 1)[1].split('\npermissions:', 1)[0]   # the trigger block, as plain text (CI has no YAML library)
+    assert re.search(r"^  push:\n    branches: \[main\]$", on, re.M), on
+    assert re.search(r"^  schedule:\n    - cron: '0 13 \* \* 1-5'", on, re.M), on   # 07:00 or 08:00 Chicago, after the overnight shift (owner, PR #91)
+    assert re.search(r"^  workflow_dispatch:$", on, re.M), on
+
+
+def test_the_deploy_smoke_test_fails_a_window_that_does_not_end_yesterday(tmp_path):
+    """Owner, PR #91: the smoke test asserts /api/health's window ends yesterday, so a cached image layer
+    that froze an older window cannot pass silently. as_of must be the day before the build started (or,
+    past midnight UTC, before the smoke test), last_day the last production day on or before it."""
+    text = DEPLOY.read_text()
+    deploy = text.split('- name: Deploy from source', 1)[1].split('- name:', 1)[0]
+    smoke = text.split('- name: Smoke test', 1)[1]
+    assert 'echo "RUN_DAY=$(date -u +%F)" >> "$GITHUB_ENV"' in deploy.split('gcloud run deploy', 1)[0]   # recorded before the build
+    assert 'curl -sS --max-time 30 -o /tmp/health.json "$LIVE/api/health"' in smoke
+    assert 'python3 .github/scripts/check_window.py /tmp/health.json "$RUN_DAY"' in smoke
+    assert smoke.index('check_window.py') < smoke.index('echo "Live at')
+    script = ROOT / '.github' / 'scripts' / 'check_window.py'
+
+    def run(as_of, last_day, run_day, today):
+        health = tmp_path / 'health.json'
+        health.write_text(json.dumps({'ok': True, 'store': {'source': 'prebuilt', 'window': {
+            'as_of': as_of, 'first_day': '2025-11-11', 'last_day': last_day, 'production_days': 261}}}))
+        proc = subprocess.run(['python3', str(script), str(health), run_day, today], capture_output=True, text=True)
+        return proc.returncode, proc.stdout + proc.stderr
+
+    assert run('2026-11-10', '2026-11-10', '2026-11-11', '2026-11-11')[0] == 0                # a Wednesday run: Tuesday
+    assert run('2026-11-08', '2026-11-06', '2026-11-09', '2026-11-09')[0] == 0                # a Monday run: Sunday, Friday's data
+    assert run('2026-11-07', '2026-11-06', '2026-11-08', '2026-11-08')[0] == 0                # a Sunday push: Saturday, Friday's data
+    assert run('2026-11-10', '2026-11-10', '2026-11-11', '2026-11-12')[0] == 0                # the build crossed midnight UTC
+    code, out = run('2026-11-09', '2026-11-09', '2026-11-11', '2026-11-11')                   # a day stale: a cached layer
+    assert code == 1 and '::error::store.window ends 2026-11-09' in out and 'expected yesterday, 2026-11-10' in out, out
+    code, out = run('2026-11-08', '2026-11-08', '2026-11-09', '2026-11-09')                   # Sunday reported as a production day
+    assert code == 1 and 'last_day is 2026-11-08, expected 2026-11-06' in out, out
+    health = tmp_path / 'health.json'
+    health.write_text(json.dumps({'ok': True, 'store': {'source': 'generated'}}))           # an image without the window
+    proc = subprocess.run(['python3', str(script), str(health), '2026-11-11'], capture_output=True, text=True)
+    assert proc.returncode == 1 and 'no store.window' in proc.stdout, proc.stdout
+
+
+def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
+    """The demo's window ends on the build's yesterday; the /evals page scores against the golden
+    window, whose as-of is read from golden_values.json so the two can never disagree."""
+    dockerfile = (ROOT / 'Dockerfile').read_text()
+    assert 'python -m investigator.prebuilt /app/prebuilt ' in dockerfile
+    assert ('python -m investigator.prebuilt --as-of "$(python -c \'import json; print(json.load(open("evals/golden_values.json"))["as_of"])\')" '
+            '/app/prebuilt-golden') in dockerfile
+    assert 'INVESTIGATOR_PREBUILT=/app/prebuilt ' in dockerfile and 'INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden' in dockerfile
+    assert not any('INVESTIGATOR_AS_OF' in line for line in dockerfile.splitlines() if line.startswith(('ENV', 'ARG')))   # never pinned

@@ -33,7 +33,7 @@ function renderSummary(){
  const c=board.counts, last=board.last_run, both=c.runs-c.cases;
  const parts=[board.badge||'no tracked run yet',`${c.cases} cases, ${c.runs} runs`+(both>0?` (${both} cases run both offline and against a recording)`:'')];
  if(last)parts.push(`last tracked run ${String(last.ran_at).replace('T',' ').replace('Z',' UTC')}${last.commit?' at commit '+last.commit:''}`);
- parts.push(`dataset ${String(board.dataset_hash).slice(0,12)}`);
+ parts.push(`dataset ${String(board.dataset_hash).slice(0,12)}`+(board.golden_as_of?` (the year ending ${board.golden_as_of}; the demo's own window moves nightly)`:''));
  $('summary').textContent=parts.join(' · ');
 }
 function tally(results){ // run id -> result  =>  type -> [pass, total]

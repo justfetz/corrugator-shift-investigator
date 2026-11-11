@@ -38,17 +38,13 @@ from urllib.parse import parse_qsl, urlsplit
 
 from .agent import Agent, Context, TOOL_SCHEMAS, parse_request, question_scope, route
 from .anthropic_provider import resolve_model
-from .cost_model import effective as effective_rates, parse_rates
+from .cost_model import client_config, effective as effective_rates, parse_rates
 from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
-from .record_store import DEFAULT_MONTHS, default_store
-from .synth import production_days
+from .record_store import default_store
 from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
 
 WEB = Path(__file__).with_name('web')
-# The record store's Monday-Friday production calendar (August and September 2026);
-# a pure calendar here, the records themselves are built once by default_store().
-DAYS = [d.isoformat() for d in production_days(DEFAULT_MONTHS)]
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
 LIVE_MODES = ('openai', 'anthropic')
 EVAL_RUNS_PER_MIN = 120   # POST /api/evals/run, container-wide: a case is 10-100 ms offline, the whole set about 3 s once a minute
@@ -129,7 +125,7 @@ class PublicDemo:
 
 
 class Workbench:
-    def __init__(self, public=None, guards=None):
+    def __init__(self, public=None, guards=None, store=None):
         self.public = public
         self.guards = guards or DemoGuards()
         self.anthropic_model = resolve_model(os.environ.get('ANTHROPIC_MODEL'))  # an unsupported value fails at boot
@@ -150,13 +146,14 @@ class Workbench:
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
         self.rate_lock = threading.Lock()
         self.reports = OrderedDict()
-        self.store = default_store()  # the two synthetic months, built once per process
+        # The rolling year of synthetic production, built once per process; the eval harness passes the golden window's store.
+        self.store = store if store is not None else default_store()
         from .periods import PeriodReports
         self.periods = PeriodReports(self.store)
         # The golden set behind /evals, read from the shipped evals/ folder; None when it is not there
         # (a wheel installed without the repository), and the page and the badge are then absent.
         folder = evals_dir()
-        self.evals = EvalBoard(folder, self.store.content_hash) if folder else None
+        self.evals = EvalBoard(folder) if folder else None   # scored against the golden window, not this store (issue #35)
         self.evals_json = json.dumps(self.evals.board(public=public is not None), allow_nan=False).encode() if self.evals else None
         # The docs site at /docs (issue #93): {path: html}, prebuilt in the image or rendered from the checkout;
         # None when neither is there, and /docs is then a 404 like any unknown path.
@@ -500,8 +497,8 @@ class Workbench:
         return report_pdf(result)
 
 
-def make_server(port=8765, public=None, host=None, guards=None):
-    app = Workbench(public, guards)
+def make_server(port=8765, public=None, host=None, guards=None, store=None):
+    app = Workbench(public, guards, store)
     frame_ancestors = public.frame_ancestors if public else "'none'"
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -685,7 +682,11 @@ def make_server(port=8765, public=None, host=None, guards=None):
             if self.path in ('/api/health', '/healthz'):  # /healthz is reserved by Google's front end on *.run.app; /api/health reaches the container everywhere
                 return self._send(200, {'ok': True, 'public': public is not None,
                                         'store': {'source': app.store.boot_source, 'boot_ms': round(app.store.boot_seconds * 1000),
-                                                  'dataset_hash': app.store.content_hash[:12]}})
+                                                  'dataset_hash': app.store.content_hash[:12],
+                                                  # the rolling window (issue #35): fixed per image, moved by the nightly deploy
+                                                  'window': {'as_of': app.store.as_of.isoformat(), 'first_day': app.store.first_day,
+                                                             'last_day': app.store.last_day,
+                                                             'production_days': len(app.store.production_days)}}})
             if self.path == '/api/config':
                 return self._send(200, {'days': app.store.production_days, 'first_day': app.store.first_day,
                                        'last_day': app.store.last_day, 'production_calendar': 'Mon-Fri',
@@ -694,7 +695,7 @@ def make_server(port=8765, public=None, host=None, guards=None):
                                        'public': public is not None, 'server_key_available': app.live_model_available,
                                        'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
-                                       'demo_guards': app.guards.summary,
+                                       'demo_guards': app.guards.summary, 'cost_model': client_config(),
                                        'evals': app.evals.summary if app.evals else None})
             if self.path == '/evals.json':
                 # The scoreboard as data, Datasette-style: public, read-only, and readable from another
@@ -725,6 +726,7 @@ def make_server(port=8765, public=None, host=None, guards=None):
             files = {'/': ('index.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
                      '/trail.js': ('trail.js', 'text/javascript; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
+                     '/money.js': ('money.js', 'text/javascript; charset=utf-8'),
                      '/style.css': ('style.css', 'text/css; charset=utf-8')}
             path = self.path
             if app.evals is not None and path.split('?', 1)[0] == '/evals':   # /evals?case=<id> opens that case: the URL is the state

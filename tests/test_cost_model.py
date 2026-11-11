@@ -37,7 +37,8 @@ def test_the_posts_example_reproduces():
 def test_rates_parse_format_and_layer(monkeypatch):
     assert cost_model.parse_rates('margin:40,paper:60') == {'margin_usd_msf': 40.0, 'paper_usd_msf': 60.0}
     assert cost_model.format_rates(cost_model.parse_rates('margin:40,paper:60')) == 'paper:60,margin:40'
-    for bad in ('paper', 'paper:x', 'paper:0', 'paper:-5', 'paper:inf', 'tons:3', 'paper:55,paper:56', 'trim:101'):
+    for bad in ('paper', 'paper:x', 'paper:0', 'paper:-5', 'paper:inf', 'tons:3', 'paper:55,paper:56', 'trim:101',
+                'paper:\uff15\uff15', 'hour:\u0661\u0662\u0660\u0660'):   # full-width and Arabic-Indic digits: money.js refuses them too
         with pytest.raises(ValueError):
             cost_model.parse_rates(bad)
     monkeypatch.setenv(cost_model.ENV, 'paper:50,hour:1000')
