@@ -286,3 +286,16 @@ def test_recurrence_counts_a_reason_that_crossed_its_band_on_its_own(store):
                         "AND reason = 'Knife / slitter jam' AND production_date BETWEEN ? AND ? GROUP BY ALL HAVING sum(seconds) / 60 > 12",
                         [jam['recurrence_since'], '2026-09-28'])
     assert jam['times_over_band'] == len(over) == 1 and over[0]['production_date'].isoformat() == '2026-08-25' and over[0]['shift'] == 3
+
+
+def test_a_lens_declines_a_day_whose_own_view_excludes_a_record_in_its_scope(store):
+    """The data-quality demo's bad trim record exists on the day's view only; the lenses read the store, so on that day
+    they decline for the shift that holds it (shift 2) and answer for the others (Codex on PR #111)."""
+    for shift, status in ((2, 'unavailable'), (1, 'complete')):
+        analysis = store.day_analysis(DAY, corrupt=True)
+        try:
+            result = Agent(analysis, store=store).ask('What does trim cost?', Context(DAY, shift, scope='shift'))
+        finally:
+            analysis.close()
+        assert result['status'] == status, shift
+    assert any('holds an excluded record on shift 2' in s for s in ask(store, 'What does trim cost?', shift=2)['sections']) is False

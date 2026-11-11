@@ -1001,6 +1001,13 @@ class Agent:
             if shift is not None and (type(shift) is not int or shift not in (1, 2, 3)):
                 raise ValueError('Shift must be 1, 2, 3 or null')
             if name == 'get_opportunities':
+                # The lenses price the record store, which never holds the data-quality demo's excluded record; on a day
+                # whose own view excludes one in this scope they decline rather than price records that view calls incomplete.
+                excluded = [e for e in getattr(self.analysis, 'errors', []) if shift is None or e.get('shift') == shift]
+                window = self.store._window(arguments['window'])
+                if excluded and window['start'] <= self.analysis.day <= window['end']:
+                    raise ValueError(f"The selected day holds an excluded record on shift {excluded[0]['shift']}, which the record store "
+                                     "lacks, so the levers would price incomplete records. Ask 'Where did the money go this shift?' instead.")
                 return cost_model.opportunities(self.store, rates=rates, **arguments)
             return cost_model.attach(name, getattr(self.store, name)(**arguments), rates)
         shift = arguments['shift']

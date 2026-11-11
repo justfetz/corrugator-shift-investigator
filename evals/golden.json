@@ -6694,6 +6694,21 @@
     "sections_match": "^- .+: \\*\\*[0-9.]+ min\\*\\*, the largest unplanned downtime reason \\(query 1 · row 0\\)$",
     "sections_not_match": "the largest downtime reason"
    }
+  },
+  {
+   "id": "lens-declines-a-day-with-an-excluded-record",
+   "type": "data_quality",
+   "mode": "offline",
+   "corrupt": true,
+   "question": "What does trim cost?",
+   "note": "Codex on PR #111: under Day, the ownership and supervisor lenses read the record store, which never holds the data-quality demo's bad trim record, so with the toggle on they priced the clean records while the day's own tools exclude and report it (main answered this question with get_shift_dollars). On a day with an excluded record in its scope the lens declines with what to ask, rather than price records the day's view says are incomplete.",
+   "expect": {
+    "status": "unavailable",
+    "rejected_tool_calls": 1,
+    "charts": 0,
+    "sections_match": "holds an excluded record",
+    "sections_not_match": "Side trim costs|99,999,999|99999999"
+   }
   }
  ]
 }
