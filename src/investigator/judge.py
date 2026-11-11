@@ -26,6 +26,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import time
 
 CALIBRATION_FILE = 'judge_calibration.json'
@@ -34,6 +35,7 @@ CALIBRATION_TARGET = 20        # narratives the owner grades before agreement is
 AGREEMENT_BAR_PCT = 90         # below this on a criterion, that criterion's wording is what gets fixed, not the grades
 DEFAULT_JUDGE_MODEL = 'claude-haiku-5-5'
 JUDGE_ENV = 'DEEPEVAL_JUDGE'
+JUDGE_SECRET_ENV = 'DEEPEVAL_JUDGE_SECRET'   # a Secret Manager secret holding the judge model's key, read by name
 NOTE_MAX_CHARS = 500
 
 # The rubric. `steps` are G-Eval's evaluation steps, given rather than generated, so a run makes one model
@@ -209,6 +211,23 @@ def judge_models():
 
 
 KEY_ENV = {'anthropic': 'ANTHROPIC_API_KEY', 'openai': 'OPENAI_API_KEY'}
+SECRET_NAME = re.compile(r'^[A-Za-z0-9_-]{1,255}$')
+
+
+def secret_key(name):
+    """The judge model's key, read from Google Secret Manager by name with the owner's own gcloud credentials, so it
+    never sits in a shell history or a file. Never printed, logged or stored."""
+    if not SECRET_NAME.match(name or ''):
+        raise JudgeUnavailable('A Secret Manager secret name is letters, digits, "-" and "_"')
+    try:
+        done = subprocess.run(['gcloud', 'secrets', 'versions', 'access', 'latest', f'--secret={name}'],
+                              capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        raise JudgeUnavailable('gcloud is not available to read the judge key from Secret Manager') from None
+    key = done.stdout.strip()
+    if done.returncode != 0 or not key:
+        raise JudgeUnavailable(f'Secret Manager did not return the secret {name} (gcloud exit {done.returncode})')
+    return key
 
 
 def resolve_judge_model(name=None):
@@ -227,21 +246,30 @@ MAX_SECONDS = 900          # per run
 MAX_USD = 1.00             # per run, counted as spent plus the worst case of the next call
 CALL_TIMEOUT = 30          # per call
 MAX_REQUEST_BYTES = 64000
+MAX_RESPONSE_BYTES = 512000
 MAX_TOKENS = 2048          # adaptive thinking counts toward it on the Anthropic models
 BYTES_PER_TOKEN = 3        # the Anthropic adapter's conservative estimate
 
 
 class JudgeClient:
     """The judge model through the project's adapters: Anthropic's Messages transport or OpenAI's Responses
-    transport, each to its fixed host. No retries; every bound is checked before the call is sent."""
+    transport, each to its fixed host. No retries; every bound is checked before the call is sent. The key is the
+    one given, else the provider's environment variable, else the Secret Manager secret named by `secret` (or
+    DEEPEVAL_JUDGE_SECRET). A rejected key, a busy model or an unreachable host stops the run (JudgeLimit) rather
+    than spending the remaining calls on the same failure."""
 
-    def __init__(self, model=None, key=None, send=None, max_calls=MAX_CALLS, max_seconds=MAX_SECONDS, max_usd=MAX_USD):
+    def __init__(self, model=None, key=None, send=None, max_calls=MAX_CALLS, max_seconds=MAX_SECONDS, max_usd=MAX_USD, secret=None):
         self.model = resolve_judge_model(model)
         spec = judge_models()[self.model]
         self.provider, self.rates = spec['provider'], {'input': spec['input'], 'output': spec['output']}
-        key = key if key is not None else os.environ.get(KEY_ENV[self.provider])
+        if key is None:
+            key = os.environ.get(KEY_ENV[self.provider])
+        secret = secret or os.environ.get(JUDGE_SECRET_ENV)
+        if not key and secret:
+            key = secret_key(secret)
         if not isinstance(key, str) or not key or not key.isascii() or any(c.isspace() for c in key):
-            raise JudgeUnavailable(f'{KEY_ENV[self.provider]} is not set; the judge model {self.model} needs it')
+            raise JudgeUnavailable(f'{KEY_ENV[self.provider]} is not set and no Secret Manager secret is named (--judge-secret or '
+                                   f'{JUDGE_SECRET_ENV}); the judge model {self.model} needs a key')
         self._key = key
         if send is None:
             if self.provider == 'anthropic':
@@ -256,6 +284,10 @@ class JudgeClient:
 
     def close(self):
         self._key = None
+
+    def restart_clock(self):
+        """The per-run seconds count from the first judged narrative, not from when the client was built."""
+        self._start = time.monotonic()
 
     def _payload(self, prompt):
         if self.provider == 'anthropic':
@@ -281,13 +313,23 @@ class JudgeClient:
             raise JudgeLimit(f'judge budget reached: ${self.usage["cost_usd"]:.4f} spent of ${self.max_usd:.2f} per run')
         self.usage['calls'] += 1
         timeout = min(CALL_TIMEOUT, remaining)
+        try:
+            reply = self._send(payload, self._key, timeout)
+        except ProviderError as exc:   # unreachable host, or (OpenAI) any non-200: the next call would fail the same way
+            raise JudgeLimit(f'judge model unreachable, run stopped: {exc}') from None
         if self.provider == 'anthropic':
-            status, body = self._send(payload, self._key, timeout)
+            status, body = reply
+            if status in (401, 403):
+                raise JudgeLimit(f'the judge model rejected the key (HTTP {status}); run stopped')
+            if status in (429, 529):
+                raise JudgeLimit(f'the judge model is busy (HTTP {status}); run stopped, retry later')
             if status != 200:
                 raise ProviderError(f'judge model error (HTTP {status}); no automatic retry')
+            if not isinstance(body, (bytes, bytearray)) or len(body) > MAX_RESPONSE_BYTES:
+                raise ProviderError('judge response exceeds the size limit')
             response = json.loads(body)
         else:
-            response = self._send(payload, self._key, timeout)
+            response = reply
         usage = response.get('usage') or {}
         for name in ('input_tokens', 'output_tokens'):
             value = usage.get(name)
@@ -363,6 +405,7 @@ def judge(cases, client, metrics=None):
     the error as its reason; once a bound is reached the remaining criteria are None and say so."""
     _, _, test_case, _ = _deepeval()
     metrics = metrics or geval_metrics(deepeval_model(client))
+    client.restart_clock()
     rows, stopped = [], None
     for case in cases:
         before = dict(client.usage)
@@ -428,8 +471,9 @@ def _rate(pairs):
 def agreement(judged, grades):
     """Judge against owner, per criterion and overall (the owner's good/bad against all four criteria passing),
     over the narratives both graded as the same text: a grade whose digest no longer matches the judged words,
-    or a narrative the judge did not score, is counted as unmatched and left out."""
-    by_id = {row['id']: row for row in judged or []}
+    or of a narrative the judge did not score at all, is counted as unmatched and left out."""
+    scored = [row for row in judged or [] if any(v is not None for v in (row.get('scores') or {}).values())]
+    by_id = {row['id']: row for row in scored}
     matched, unmatched = [], 0
     for grade in grades or []:
         row = by_id.get(grade.get('id'))
@@ -440,22 +484,26 @@ def agreement(judged, grades):
     criteria = {key: _rate([(g[key], r['scores'][key]) for g, r in matched if r['scores'].get(key) is not None]) for key in CRITERIA}
     overall = _rate([(g['verdict'] == 'good', all(r['scores'].get(k) == 1 for k in CRITERIA))
                      for g, r in matched if all(r['scores'].get(k) is not None for k in CRITERIA)])
-    return {'graded': len(grades or []), 'matched': len(matched), 'unmatched': unmatched, 'target': CALIBRATION_TARGET,
+    return {'graded': len(grades or []), 'judged': len(scored), 'matched': len(matched), 'unmatched': unmatched, 'target': CALIBRATION_TARGET,
             'bar_pct': AGREEMENT_BAR_PCT, 'criteria': criteria, 'overall': overall}
 
 
 def agreement_text(result):
-    """One line for the eval table: per criterion `agree/n pct% (kappa k)`, or what is still missing."""
+    """One line for the eval table: per criterion `agree/n pct% (kappa k)`, or what is still missing. `graded` counts
+    the grades saved; only those of the judged text count toward agreement."""
+    if not result['judged']:
+        return f'{result["graded"]} owner grades saved (target {result["target"]}); no judged run to compare them with, so no agreement measured yet'
     if not result['matched']:
-        return (f'owner grades {result["graded"]} of {result["target"]}'
-                + (f', {result["unmatched"]} not matching the judged text' if result['unmatched'] else '') + '; no agreement measured yet')
+        return (f'{result["graded"]} owner grades saved (target {result["target"]}), none of the text the judge scored; '
+                'no agreement measured yet')
     def one(name, r):
         if not r['n']:
             return f'{name} -'
         kappa = 'undefined' if r['kappa'] is None else f'{r["kappa"]:.2f}'
         return f'{name} {r["agree"]}/{r["n"]} {r["pct"]:.0f}% (kappa {kappa}: {"ok" if r["ok"] else "BELOW " + str(result["bar_pct"]) + "%"})'
     return '  '.join([one(k, result['criteria'][k]) for k in CRITERIA] + [one('overall', result['overall'])]) + (
-        f'  [{result["matched"]} graded narratives' + (f' of {result["target"]}' if result['matched'] < result['target'] else '') + ']')
+        f'  [{result["matched"]} graded narratives' + (f' of {result["target"]}' if result['matched'] < result['target'] else '')
+        + (f'; {result["unmatched"]} grades set aside: changed text or not judged' if result['unmatched'] else '') + ']')
 
 
 def load_json(path, default):
@@ -472,7 +520,7 @@ def load_grades(folder):
 
 
 CALIBRATION_ABOUT = ('The owner\'s grades of recorded analyst narratives, made on the local grading page (/evals/grade). One grade per '
-                     'narrative: good or bad, pass (true) or fail (false) on each rubric line, and the reason. `digest` names the exact text '
+                     'narrative: good or bad, pass (true) or fail (false) on each rubric line, and the reason (required). `digest` names the exact text '
                      'graded; a grade whose narrative has since changed is left out of the agreement. evals/run.py --judge reports the '
                      'judge\'s agreement with these grades (issue #25).')
 
@@ -496,8 +544,8 @@ def validate_grade(payload, narratives):
     if not isinstance(note, str) or len(note) > NOTE_MAX_CHARS:
         raise ValueError(f'The reason is text of at most {NOTE_MAX_CHARS} characters')
     note = ' '.join(note.split())
-    if payload['verdict'] == 'bad' and not note:
-        raise ValueError('Say why the answer is bad: the reason is what fixes the rubric')
+    if not note:   # "good/bad with a reason" (issue #25): a reason on every grade, good ones included
+        raise ValueError('Say why: the reason is what fixes the rubric when the judge disagrees')
     return {'id': payload['id'], 'digest': payload['digest'], 'verdict': payload['verdict'], **{k: payload[k] for k in CRITERIA},
             'note': note, 'graded_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}
 

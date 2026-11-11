@@ -1181,14 +1181,14 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   if(path==='/api/evals/narratives')return {ok:true,status:200,json:async()=>listing};
   if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'tok',public:false})};
   const body=JSON.parse(init.body);
-  if(body.verdict==='bad'&&!body.note.trim())return {ok:false,status:400,json:async()=>({error:'Say why the answer is bad: the reason is what fixes the rubric'})};
+  if(!body.note.trim())return {ok:false,status:400,json:async()=>({error:'Say why: the reason is what fixes the rubric when the judge disagrees'})};
   return {ok:true,status:200,json:async()=>({saved:{...body,graded_at:'2026-11-11T20:00:00Z'},graded:2,target:20})};
  };
  const doc={getElementById:id=>{assert.ok(els[id],`Unknown grade control ${id}`);return els[id];},createElement:tag=>new El(tag)};
  const ctx={document:doc,fetch:fetchStub,window:{},console};
  vm.createContext(ctx);vm.runInContext(src,ctx);await vm.runInContext('ready',ctx);
  const all=(el,out=[])=>{for(const c of el.children||[]){out.push(c);all(c,out);}return out;};
- assert.equal(els.progress.textContent,'1 of 20 graded · 3 narratives to choose from · 17 more need a new recording (python3 evals/run.py --live --provider anthropic)');
+ assert.equal(els.progress.textContent,'1 of 20 graded on the current text · 3 narratives to choose from · 17 more need a new recording (python3 evals/run.py --live --provider anthropic)');
  assert.equal(els.rubric.children.length,4);
  const [a,b,c]=els.items.children;
  assert.deepEqual([a.hidden,b.hidden,c.hidden],[false,true,false]);                  // "To grade" hides a current grade, keeps a stale one

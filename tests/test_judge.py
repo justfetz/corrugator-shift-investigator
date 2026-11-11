@@ -127,16 +127,22 @@ def test_agreement_is_per_line_over_the_same_text_only():
     judged = [{'id': f'n{i}', 'digest': f'd{i}', 'scores': {'grounded': 1, 'recorded_not_proven': 1, 'prescribes_nothing': i % 2, 'unavailable_not_zero': 1}}
               for i in range(4)]
     judged.append({'id': 'n4', 'digest': 'd4', 'scores': {'grounded': None, 'recorded_not_proven': 1, 'prescribes_nothing': 1, 'unavailable_not_zero': 1}})
+    judged.append({'id': 'n5', 'digest': 'd5', 'scores': {k: None for k in judging.CRITERIA}})       # a bound stopped the run before it
     grades = [grade('n0', 'd0', 'bad', prescribes_nothing=False), grade('n1', 'd1'), grade('n2', 'd2'),   # n2: judge 0, owner 1
-              grade('n3', 'old-text'), grade('n9', 'd9'), grade('n4', 'd4')]
+              grade('n3', 'old-text'), grade('n9', 'd9'), grade('n4', 'd4'), grade('n5', 'd5')]
     found = judging.agreement(judged, grades)
-    assert (found['graded'], found['matched'], found['unmatched']) == (6, 4, 2)
+    assert (found['graded'], found['judged'], found['matched'], found['unmatched']) == (7, 5, 4, 3)
     assert found['criteria']['prescribes_nothing'] == {'n': 4, 'agree': 3, 'pct': 75.0, 'kappa': 0.5, 'ok': False}
     assert found['criteria']['grounded']['n'] == 3                    # the judge could not score n4's first line: left out of that line only
     assert found['overall']['n'] == 3 and found['overall']['agree'] == 2
     text = judging.agreement_text(found)
-    assert 'prescribes_nothing 3/4 75% (kappa 0.50: BELOW 90%)' in text and '[4 graded narratives of 20]' in text
-    assert judging.agreement_text(judging.agreement([], [])) == 'owner grades 0 of 20; no agreement measured yet'
+    assert 'prescribes_nothing 3/4 75% (kappa 0.50: BELOW 90%)' in text
+    assert text.endswith('[4 graded narratives of 20; 3 grades set aside: changed text or not judged]')
+    # Before any judged run, a saved grade is waiting, not "not matching": the text says which.
+    assert judging.agreement_text(judging.agreement([], [grade('n1', 'd1')])) == \
+        '1 owner grades saved (target 20); no judged run to compare them with, so no agreement measured yet'
+    assert judging.agreement_text(judging.agreement(judged, [grade('n3', 'old-text')])) == \
+        '1 owner grades saved (target 20), none of the text the judge scored; no agreement measured yet'
 
 
 def test_a_grade_is_checked_against_the_text_the_page_showed_and_saved_whole(tmp_path):
@@ -144,7 +150,8 @@ def test_a_grade_is_checked_against_the_text_the_page_showed_and_saved_whole(tmp
     good = grade('n1', 'abc')
     for bad, message in ((dict(good, id='nope'), 'No such'), (dict(good, digest='zzz'), 'changed'), (dict(good, verdict='meh'), 'verdict'),
                          (dict(good, grounded='yes'), 'true'), (dict(good, verdict='bad'), 'Say why'), (dict(good, note='x' * 501), 'at most'),
-                         (dict(good, extra=1), 'optional note'), ({k: v for k, v in good.items() if k != 'grounded'}, 'optional note'), ([], 'JSON object')):
+                         (dict(good, extra=1), 'optional note'), ({k: v for k, v in good.items() if k != 'grounded'}, 'optional note'), ([], 'JSON object'),
+                         (good, 'Say why')):   # "good/bad with a reason": a good grade carries one too
         with pytest.raises(ValueError, match=message):
             judging.validate_grade(bad, shown)
     first = judging.validate_grade(dict(good, note='  fine,\n  plain  '), shown)
@@ -198,9 +205,22 @@ def test_the_judge_client_is_bounded_in_calls_bytes_and_dollars_and_priced(monke
         rich.complete('x')
     with pytest.raises(ProviderError, match='byte cap'):
         judging.JudgeClient('claude-haiku-5-5', key='k', send=send).complete('x' * 70000)
-    for reply, message in (((529, b'{}'), 'HTTP 529'), (anthropic_reply('{}', stop='max_tokens'), 'incomplete'), ((200, b'{"content": []}'), 'usage')):
-        with pytest.raises(ProviderError, match=message):
+    for reply, message in (((500, b'{}'), 'HTTP 500'), (anthropic_reply('{}', stop='max_tokens'), 'incomplete'), ((200, b'{"content": []}'), 'usage'),
+                           ((200, b' ' * (judging.MAX_RESPONSE_BYTES + 1)), 'size limit')):
+        with pytest.raises(ProviderError, match=message):   # one line's error: the run goes on
             judging.JudgeClient('claude-haiku-5-5', key='k', send=lambda *a, r=reply: r).complete('x')
+
+    def unreachable(*args):
+        raise ProviderError('Anthropic request failed or timed out; retry deliberately')
+    for send_, message in ((lambda *a: (401, b'{}'), 'rejected the key'), (lambda *a: (429, b'{}'), 'busy'), (unreachable, 'unreachable')):
+        with pytest.raises(judging.JudgeLimit, match=message):   # every next call would fail the same way: the run stops
+            judging.JudgeClient('claude-haiku-5-5', key='k', send=send_).complete('x')
+    slow = judging.JudgeClient('claude-haiku-5-5', key='k', send=send, max_seconds=1)
+    slow._start -= 5                                    # the replays before judging took longer than the judge's own budget
+    with pytest.raises(judging.JudgeLimit, match='1 s per run'):
+        slow.complete('x')
+    slow.restart_clock()                                # judge() restarts it at the first narrative
+    assert slow.complete('x')
     monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
     with pytest.raises(judging.JudgeUnavailable, match='ANTHROPIC_API_KEY is not set'):
         judging.JudgeClient('claude-haiku-5-5')
@@ -208,6 +228,33 @@ def test_the_judge_client_is_bounded_in_calls_bytes_and_dollars_and_priced(monke
         judging.JudgeClient('claude-opus-9', key='k')
     monkeypatch.setenv(judging.JUDGE_ENV, 'claude-sonnet-5-5')                          # the judge model is a config value
     assert judging.JudgeClient(key='k', send=send).model == 'claude-sonnet-5-5'
+
+
+def test_the_judge_key_can_be_read_from_secret_manager_by_name(monkeypatch):
+    import subprocess
+    calls = []
+
+    def gcloud(argv, **kwargs):
+        calls.append(argv)
+        ok = argv[-1] == '--secret=judge-anthropic-key'
+        return subprocess.CompletedProcess(argv, 0 if ok else 1, stdout='sk-ant-from-secret-manager\n' if ok else '', stderr='')
+    monkeypatch.setattr(judging.subprocess, 'run', gcloud)
+    monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
+    monkeypatch.delenv(judging.JUDGE_SECRET_ENV, raising=False)
+    sent = []
+    client = judging.JudgeClient('claude-haiku-5-5', secret='judge-anthropic-key',
+                                 send=lambda payload, key, timeout: sent.append(key) or anthropic_reply('{"score": 1, "reason": "ok"}'))
+    client.complete('x')
+    assert sent == ['sk-ant-from-secret-manager'] and calls == [['gcloud', 'secrets', 'versions', 'access', 'latest', '--secret=judge-anthropic-key']]
+    monkeypatch.setenv(judging.JUDGE_SECRET_ENV, 'judge-anthropic-key')                  # or named in the environment
+    assert judging.JudgeClient('claude-haiku-5-5', send=lambda *a: None)._key == 'sk-ant-from-secret-manager'
+    with pytest.raises(judging.JudgeUnavailable, match='did not return the secret missing'):
+        judging.JudgeClient('claude-haiku-5-5', secret='missing')
+    with pytest.raises(judging.JudgeUnavailable, match='secret name'):
+        judging.JudgeClient('claude-haiku-5-5', secret='a; rm')
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-env')                                  # an environment key wins, gcloud is not run
+    calls.clear()
+    assert judging.JudgeClient('claude-haiku-5-5', secret='judge-anthropic-key')._key == 'sk-ant-env' and calls == []
 
 
 def test_an_openai_model_can_judge_through_the_openai_adapter():
@@ -237,9 +284,11 @@ def test_judge_refuses_before_any_case_runs_without_deepeval_or_a_key(monkeypatc
     monkeypatch.setattr(judging, '_deepeval', lambda: None)
     monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
     monkeypatch.delenv(judging.JUDGE_ENV, raising=False)
+    monkeypatch.delenv(judging.JUDGE_SECRET_ENV, raising=False)
     assert golden.main(['--judge', '--only', 'why-slow']) == 2
-    assert 'ANTHROPIC_API_KEY is not set; the judge model claude-haiku-5-5 needs it' in capsys.readouterr().out
+    assert 'ANTHROPIC_API_KEY is not set and no Secret Manager secret is named' in capsys.readouterr().out
     assert golden.main(['--judge-model', 'claude-haiku-5-5', '--only', 'why-slow']) == 2
+    assert golden.main(['--judge-secret', 'judge-anthropic-key', '--only', 'why-slow']) == 2
     assert ran == []
 
 
@@ -289,6 +338,18 @@ def test_a_judged_tracked_run_records_cost_per_case_and_agreement(tmp_path, monk
     # The next run without --judge prints the stored judge and the owner agreement, and calls no model.
     assert golden.main(['--only', 'why-slow']) == 0
     assert 'judge, last tracked ' + line['ran_at'] + ' (claude-haiku-5-5, GEval): grounded 2/2' in capsys.readouterr().out
+    # A judged run that scored nothing (a refused key, a bound) is printed and never tracked as the judge's result.
+    def refused(cases, client, metrics=None):
+        rows, summary = standin_judge(cases, client)
+        for row in rows:
+            row['scores'] = {k: None for k in judging.CRITERIA}
+        return rows, judging.summary(rows, client.model, 'GEval', client.usage)
+    monkeypatch.setattr(judging, 'judge', refused)
+    before = (tmp_path / judging.LAST_RUN_FILE).read_bytes()
+    assert golden.main(['--judge', '--track']) == 0
+    assert 'no narrative was scored, so this run is not tracked as a judged run' in capsys.readouterr().out
+    assert 'judge' not in json.loads((tmp_path / 'history.jsonl').read_text().splitlines()[-1])
+    assert (tmp_path / judging.LAST_RUN_FILE).read_bytes() == before
 
 
 # ---------------------------------------------------------------- DeepEval itself (the optional `judge` extra)
@@ -326,6 +387,9 @@ def test_geval_scores_each_line_through_the_project_client():
     capped = judging.JudgeClient('claude-haiku-5-5', key='sk-ant-standin', send=send, max_calls=2)
     rows, summary = judging.judge(cases, capped)
     assert [rows[0]['scores'][k] for k in judging.CRITERIA] == [1, 1, None, None] and 'judge limit reached' in rows[0]['reasons']['prescribes_nothing']
+    refused = []
+    rows, _ = judging.judge(cases * 3, judging.JudgeClient('claude-haiku-5-5', key='k', send=lambda *a: refused.append(1) or (401, b'{}')))
+    assert len(refused) == 1 and all(v is None for r in rows for v in r['scores'].values())   # one call, not twelve
 
 
 # ---------------------------------------------------------------- the grading page: local workbench only
@@ -406,7 +470,12 @@ def test_the_board_shows_a_judged_run_only_when_it_was_tracked(tmp_path):
            'scores': {k: 1 for k in judging.CRITERIA}, 'reasons': {k: 'ok' for k in judging.CRITERIA}, 'calls': 4, 'cost_usd': 0.001}
     summary = judging.summary([row], 'claude-haiku-5-5', 'GEval', {'calls': 4, 'cost_usd': 0.001})
     (shipped / judging.LAST_RUN_FILE).write_text(json.dumps({'ran_at': newest['ran_at'], 'commit': newest['commit'], 'summary': summary, 'rows': [row]}))
-    judged = EvalBoard(shipped, golden.dataset_version()).board()['judge']
+    board = EvalBoard(shipped, golden.dataset_version())
+    judged = board.board()['judge']
     assert judged['last']['cost_per_case_usd'] == 0.001 and judged['last']['rubric_current'] and [r['id'] for r in judged['rows']] == ['n1']
+    assert judged['rows'][0]['reasons']['grounded'] == 'ok'                              # the local workbench shows the judge's reasons
+    hosted = board.board(public=True)['judge']                                           # the hosted demo shows its scores, not its prose
+    assert 'reasons' not in hosted['rows'][0] and hosted['rows'][0]['scores'] == judged['rows'][0]['scores'] and hosted['reasons'] == 'local workbench only'
+    assert board.board()['judge']['rows'][0]['reasons']                                  # and the local copy is left whole
     (shipped / judging.LAST_RUN_FILE).write_text(json.dumps({'ran_at': '1999-01-01T00:00Z', 'commit': 'nope', 'summary': summary, 'rows': [row]}))
     assert EvalBoard(shipped, golden.dataset_version()).board()['judge']['last'] is None

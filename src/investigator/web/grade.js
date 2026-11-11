@@ -19,7 +19,7 @@ function current(item){ return Boolean(item.grade)&&!item.stale; }
 function renderProgress(){
  const done=data.narratives.filter(current).length, total=data.narratives.length;
  const short=Math.max(0,data.target-total);
- $('progress').textContent=`${done} of ${data.target} graded · ${total} narrative${total===1?'':'s'} to choose from`
+ $('progress').textContent=`${done} of ${data.target} graded on the current text · ${total} narrative${total===1?'':'s'} to choose from`
   +(short?` · ${short} more need a new recording (python3 evals/run.py --live --provider anthropic)`:'')
   +(done>=data.target?' · enough to read the agreement: python3 evals/run.py --judge --track':'');
  $('file-note').textContent=data.file;
@@ -33,7 +33,7 @@ function setVerdict(form,verdict){
  form.state.verdict=verdict;
  for(const b of form.verdicts.children)b.setAttribute('aria-pressed',String(b.dataset.value===verdict));
  if(verdict==='good')for(const box of Object.values(form.checks))box.checked=true;   // a good answer passes every line; untick one if not
- form.note.placeholder=verdict==='bad'?'Why is it bad? Required: the reason is what fixes the rubric.':'Anything worth noting (optional)';
+ form.note.placeholder=verdict==='bad'?'Why is it bad? Required: the reason is what fixes the rubric.':'Why? Required, for a good answer too: what makes it good.';
 }
 async function save(item,form){
  if(!form.state.verdict){form.status.textContent='Choose good or bad first.';return;}

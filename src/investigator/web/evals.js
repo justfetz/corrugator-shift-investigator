@@ -114,7 +114,8 @@ function renderJudge(isPublic){
    +(last.cost_per_case_usd!==null&&last.cost_per_case_usd!==undefined?`, $${Number(last.cost_per_case_usd).toFixed(4)} per judged case`:'')+(last.rubric_current?'':' (an earlier wording of the rubric)')
   :'No judged run is tracked yet: the owner runs python3 evals/run.py --judge --track with the judge model’s key'];
  parts.push(a.matched?`agreement with the owner over ${a.matched} narrative${a.matched===1?'':'s'} graded as the same text (bar ${j.bar_pct}% per line)`
-  :`owner grades: ${j.graded} of ${j.target}${a.unmatched?`, ${a.unmatched} not matching the judged text`:''}; no agreement measured yet`);
+   +(a.unmatched?`; ${a.unmatched} grade${a.unmatched===1?'':'s'} set aside (changed text or not judged)`:'')
+  :`${j.graded} owner grade${j.graded===1?'':'s'} saved (target ${j.target})${last?', none of the text the judge scored':''}; no agreement measured yet`);
  $('judge-summary').textContent=parts.join(' · ');
  const head=node('thead'), hr=node('tr'); for(const label of ['Rubric line','What it asks','Judge passes','Agreement with the owner']){const th=node('th',label);th.scope='col';hr.append(th);} head.append(hr);
  const body=node('tbody');
@@ -131,8 +132,9 @@ function renderJudge(isPublic){
  const rb=node('tbody');
  for(const row of j.rows){
   const tr=node('tr'); tr.append(node('td',row.id));
-  for(const rule of j.rubric){const v=row.scores[rule.key]; const td=node('td',v===null||v===undefined?'—':String(v),'judge-score s'+v); td.title=row.reasons[rule.key]||''; tr.append(td);}
-  tr.append(node('td',j.rubric.filter(r=>row.scores[r.key]!==1).map(r=>`${r.name}: ${row.reasons[r.key]||'not scored'}`).join(' · ')));
+  for(const rule of j.rubric){const v=row.scores[rule.key]; const td=node('td',v===null||v===undefined?'—':String(v),'judge-score s'+v); if(row.reasons)td.title=row.reasons[rule.key]||''; tr.append(td);}
+  const failed=j.rubric.filter(r=>row.scores[r.key]!==1);   // the judge's reasons are model prose: the hosted board leaves them out
+  tr.append(node('td',row.reasons?failed.map(r=>`${r.name}: ${row.reasons[r.key]||'not scored'}`).join(' · '):failed.length?failed.map(r=>r.name).join(' · ')+' (reasons on the local workbench)':''));
   rb.append(tr);
  }
  $('judge-rows').replaceChildren(rh,rb);

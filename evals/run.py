@@ -1205,6 +1205,8 @@ def main(argv=None):
     parser.add_argument('--judge', action='store_true', help="live: score every narrative the run wrote (replayed, scripted or, with --live, fresh) "
                         "with the DeepEval G-Eval judge, one model call per rubric line; needs pip install -e '.[judge]' and the judge model's key")
     parser.add_argument('--judge-model', help=f'with --judge: the judge model (default: ${judging.JUDGE_ENV}, else {judging.DEFAULT_JUDGE_MODEL})')
+    parser.add_argument('--judge-secret', help=f'with --judge: read the judge key from this Google Secret Manager secret when the provider key '
+                        f'variable is not set (default: ${judging.JUDGE_SECRET_ENV}); a name, never a key')
     args = parser.parse_args(argv)
 
     if args.track and args.only:
@@ -1217,14 +1219,14 @@ def main(argv=None):
         print('--live needs exactly one of ' + ' / '.join(s['env'] for s in PROVIDERS.values()) + ' set, or --provider')
         return 2
     client = None
-    if args.judge_model and not args.judge:
-        print('--judge-model goes with --judge')
+    if (args.judge_model or args.judge_secret) and not args.judge:
+        print('--judge-model and --judge-secret go with --judge')
         return 2
     if args.judge:
         # Checked before any case runs: a judged run that cannot judge would spend the replays for nothing.
         try:
             judging._deepeval()
-            client = judging.JudgeClient(args.judge_model)
+            client = judging.JudgeClient(args.judge_model, secret=args.judge_secret)
         except judging.JudgeUnavailable as exc:
             print(f'--judge: {exc}')
             return 2
@@ -1315,6 +1317,9 @@ def main(argv=None):
         finally:
             client.close()
         print_judged(*judged)
+        if not judged[1]['judged']:   # nothing scored (a bound or a refused key): spent, printed, never shown as the judge's result
+            print('judge: no narrative was scored, so this run is not tracked as a judged run')
+            judged = None
     else:
         print(stored_judge_line())
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)

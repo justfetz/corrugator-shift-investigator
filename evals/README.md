@@ -343,12 +343,20 @@ server or from `/evals`, and its scores change no exit status until its agreemen
 with the owner passes the bar below.
 
 ```
-pip install -e '.[judge]'                                   # DeepEval 4.3.4, the optional extra; not in the image or CI
-ANTHROPIC_API_KEY=... python3 evals/run.py --judge          # replay every recording, judge every narrative; print only
-ANTHROPIC_API_KEY=... python3 evals/run.py --judge --track  # and record it: history.jsonl + judge_last_run.json
-python3 evals/run.py --live --provider anthropic --judge    # judge fresh live narratives instead of the recordings
-DEEPEVAL_JUDGE=claude-sonnet-5-5 python3 evals/run.py --judge   # another judge model (or --judge-model)
+pip install -e '.[judge]'                                          # DeepEval 4.3.4, the optional extra; not in the image or CI
+python3 evals/run.py --judge --judge-secret anthropic-api-key      # the key read from Secret Manager by name; judge every narrative, print only
+python3 evals/run.py --judge --judge-secret anthropic-api-key --track   # and record it: history.jsonl + judge_last_run.json
+python3 evals/run.py --live --provider anthropic --judge           # judge fresh live narratives (ANTHROPIC_API_KEY set)
+DEEPEVAL_JUDGE=claude-sonnet-5-5 python3 evals/run.py --judge      # another judge model (or --judge-model)
 ```
+
+The key: the provider's variable when it is set (`ANTHROPIC_API_KEY` for the
+Claude judges, `OPENAI_API_KEY` for `gpt-4.1-mini`), else the Google Secret
+Manager secret named by `--judge-secret` or `DEEPEVAL_JUDGE_SECRET`, read with
+your own `gcloud` credentials (`gcloud secrets versions access latest
+--secret=<name>`), so it never sits in a shell history or a file. The name is the
+one the deploy uses (`anthropic-api-key` in [DEPLOYMENT.md](../docs/DEPLOYMENT.md)),
+or a judge-only secret with its own spend limit.
 
 **What it judges.** Every narrative the run writes: each recorded live run
 replayed (or run fresh under `--live`), and each scripted analyst round
@@ -382,8 +390,11 @@ disagrees, the step's wording changes, not the grades.
 `claude-sonnet-5-5` or `gpt-4.1-mini-2025-04-14`; its key is the provider's
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`), never a flag. Calls go through the
 project's own adapters to their fixed hosts (`investigator.judge.JudgeClient`),
-bounded at 200 calls, 900 s and $1.00 per run, 30 s and 64 KB per call; a bound
-reached mid-run leaves the remaining lines unscored and says so. The metric is
+bounded at 200 calls, 900 s (counted from the first judged narrative) and $1.00
+per run, 30 s, 64 KB out and 512 KB back per call. A bound reached mid-run, a
+refused key, a busy model or an unreachable host stops the judge: the remaining
+lines are unscored and say why, and a run that scored nothing is printed but not
+tracked. Any other error unscores that one line and the run goes on. The metric is
 swappable too: `judge(cases, client, metrics=...)` takes any DeepEval metric per
 line. DeepEval's telemetry and its `.env` loading are switched off before it is
 imported.
@@ -392,7 +403,9 @@ imported.
 history line's `judge` block (model, metric, rubric digest, pass / fail per line,
 `cost_usd` and `cost_per_case_usd`, and the agreement at that time) and
 `evals/judge_last_run.json` (every narrative's four scores and the judge's reason
-for each), stamped with that line's time and commit; `/evals` shows both. At the
+for each), stamped with that line's time and commit; `/evals` shows both, the
+reasons on the local workbench only (they are model prose that no check here
+reads, so the hosted board carries the scores without them). At the
 request sizes above (about 9,000 input tokens across a narrative's four calls, at three bytes a token)
 Haiku 5.5's list price is roughly a tenth of a cent per narrative; the tracked
 `cost_per_case_usd` is the measured figure.
@@ -402,13 +415,14 @@ Haiku 5.5's list price is roughly a tenth of a cent per narrative; the tracked
 The judge is trusted only as far as it agrees with the owner. On the local
 workbench (`python -m investigator.server`), **`/evals/grade`** lists every
 narrative above with the tool results it was written from. The owner marks each
-good or bad, ticks the rubric lines it passes, and says why (required for a bad
-one). The page saves to `evals/judge_calibration.json` and never shows the judge's
+good or bad, ticks the rubric lines it passes, and says why (required for every
+grade, good ones too). The page saves to `evals/judge_calibration.json` and never shows the judge's
 own scores, so the grades are not anchored on them. The hosted demo has no
 grading route. Twenty grades are the target.
 
 Agreement is per line: of the narratives both graded as the same text (same
-`digest`; a grade of text that has since changed is set aside), how often the
+`digest`; a grade of text that has since changed, or that the judge did not score,
+is set aside and counted as such), how often the
 judge's 0/1 equals the owner's pass/fail, and Cohen's kappa (agreement beyond
 chance; *undefined* when both raters gave every narrative the same mark). The
 overall row compares the owner's good/bad with all four lines passing. Below 90%

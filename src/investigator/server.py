@@ -157,7 +157,7 @@ class Workbench:
         # (a wheel installed without the repository), and the page and the badge are then absent.
         folder = evals_dir()
         self.evals = EvalBoard(folder, self.store.content_hash) if folder else None
-        self.evals_json = json.dumps(self.evals.board(), allow_nan=False).encode() if self.evals else None
+        self.evals_json = json.dumps(self.evals.board(public=public is not None), allow_nan=False).encode() if self.evals else None
         # The docs site at /docs (issue #93): {path: html}, prebuilt in the image or rendered from the checkout;
         # None when neither is there, and /docs is then a 404 like any unknown path.
         self.docs = load_docs()

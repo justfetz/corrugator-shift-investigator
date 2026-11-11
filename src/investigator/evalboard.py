@@ -335,8 +335,14 @@ class EvalBoard:
                 'last_run': newest, 'history': history, 'types': list(self.runner.TYPES), 'cases': cases,
                 'judge': self._judge(history)}
 
-    def board(self):
-        return self._board
+    def board(self, public=False):
+        """The page's data. The hosted demo's copy leaves out the judge's reasons: they are model prose that no check
+        of this project reads, so they stay on the owner's local workbench; the scores and the agreement are shown."""
+        if not public:
+            return self._board
+        judge = dict(self._board['judge'], rows=[{k: v for k, v in r.items() if k != 'reasons'} for r in self._board['judge']['rows']],
+                     reasons='local workbench only')
+        return dict(self._board, judge=judge)
 
     @property
     def summary(self):
