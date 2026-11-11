@@ -33,8 +33,11 @@ def test_server_home_and_security_headers(running):
     assert "frame-ancestors 'none'" in headers['Content-Security-Policy']
     assert request(running,'GET','/../../README.md')[0]==404
     assert request(running,'GET','/',headers={'Host':'evil.example'})[0]==403
-    guide_status,_,guide=request(running,'GET','/guide')
-    assert guide_status==200 and b'How this agent is built' in guide and b'4-4-5' in guide
+    # The old guide is the docs site now (issue #93): a permanent redirect, and the docs answer with the 4-4-5 rules.
+    guide_status,guide_headers,_=request(running,'GET','/guide')
+    assert guide_status==301 and guide_headers['Location']=='/docs'
+    docs_status,_,docs=request(running,'GET','/docs')
+    assert docs_status==200 and b'Shift Investigator documentation' in docs and b'4-4-5' in docs
 
 
 def test_post_protection_and_valid_round_trip(running):

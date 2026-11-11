@@ -132,6 +132,7 @@ INTENT_QUESTIONS = [
     ('period_overrun', 'Over/under-run by knife this week', 'day', 'day'),
     ('period_speed_opportunity', 'Where is the speed opportunity this month?', 'day', 'day'),
     ('period_money', 'Where is the money this month?', 'day', 'day'),
+    ('period_speedvar', 'What were the top 3 contributors to speed variations?', 'shift', 'day'),
     ('period_review', 'What were the top downtime reasons this week?', 'day', 'day'),
 ]
 ALIASES = [('period_downtime', 'Show downtime by reason', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]

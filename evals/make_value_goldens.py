@@ -904,6 +904,90 @@ def review_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note
                 {"coverage": plain.coverage(*span), "row_count": len(minutes), "values": values}, day=day, note=note)
 
 
+def speedvar_side(plain, span, shift):
+    """One side of a speed variance by hand: scheduled minutes, the speed with stops, the grade targets at the
+    side's own mix, and per scheduled minute the feet below target lost to each stop reason, to order changes
+    (per grade) and to running below target (per grade). Stops are matched to their setup record by id here,
+    in Python, to price each stopped minute at that setup's grade target."""
+    setups = plain.between("dry_end_setups", *span, shift)
+    minutes = sum(sh.scheduled_minutes for sh in plain.between("shifts", *span, shift))
+    target_of = {s.setup_id: GRADES[s.quality_id] for s in setups}
+    grade_of = {s.setup_id: s.quality_id for s in setups}
+    stops, setup_loss = defaultdict(lambda: [0.0, 0.0, 0]), defaultdict(float)   # reason -> [feet lost, minutes, count]
+    for st in plain.between("stops", *span, shift):
+        lost = st.duration_sec / 60 * target_of[st.setup_id]
+        if st.reason == "Order change":
+            setup_loss[grade_of[st.setup_id]] += lost
+        else:
+            cell = stops[st.reason]
+            cell[0] += lost
+            cell[1] += st.duration_sec / 60
+            cell[2] += 1
+    below, clock = defaultdict(float), defaultdict(float)
+    for s in setups:
+        target = GRADES[s.quality_id]
+        below[s.quality_id] += target * (s.elapsed_seconds - s.stop_time_sec) / 60 - s.lineal_ft
+        clock[s.quality_id] += s.elapsed_seconds / 60
+    return {"minutes": minutes, "speed": sum(s.lineal_ft for s in setups) / minutes,
+            "target": sum(GRADES[g] * m for g, m in clock.items()) / minutes,
+            "share": {g: m / minutes for g, m in clock.items()},
+            "stops": {r: c[0] / minutes for r, c in stops.items()}, "stop_cells": dict(stops),
+            "setups": {g: v / minutes for g, v in setup_loss.items()}, "below": {g: v / minutes for g, v in below.items()}}
+
+
+def speedvar_case(plain, id, period, anchor, shift=None, against="target", against_shift=None, *, day="2026-09-14", note=""):
+    """get_speed_variance by hand (issue #92). The gap is the reference speed minus this window's speed with stops,
+    taken directly; each bucket is computed on its own definition (mix: the reference's grade targets at its mix minus
+    this window's; each loss: this side's feet below target per scheduled minute minus the reference's), so the tool's
+    claim that they add up is checked by the sums here, not assumed."""
+    span = window(period, anchor)
+    c = speedvar_side(plain, span, shift)
+    if against == "target":
+        clock = defaultdict(float)
+        for s in plain.data["dry_end_setups"]:
+            clock[s.quality_id] += s.elapsed_seconds / 60
+        total = sum(clock.values())
+        standard = sum(GRADES[g] * m for g, m in clock.items()) / total
+        r = {"speed": standard, "target": standard, "share": {g: m / total for g, m in clock.items()}, "stops": {}, "setups": {}, "below": {}}
+    else:
+        r = speedvar_side(plain, previous(period, *span) if against == "previous" else span, shift if against == "previous" else against_shift)
+    gap = r["speed"] - c["speed"]
+    minus = lambda key: {k: c[key].get(k, 0.0) - r[key].get(k, 0.0) for k in set(c[key]) | set(r[key])}
+    items = {"stops": minus("stops"), "setups": minus("setups"), "below_target": minus("below"),
+             "mix": {g: (r["share"].get(g, 0.0) - c["share"].get(g, 0.0)) * (GRADES[g] - r["target"]) for g in set(c["share"]) | set(r["share"])}}
+    buckets = {"stops": sum(c["stops"].values()) - sum(r["stops"].values()), "setups": sum(c["setups"].values()) - sum(r["setups"].values()),
+               "below_target": sum(c["below"].values()) - sum(r["below"].values()), "mix": r["target"] - c["target"]}
+    assert abs(sum(buckets.values()) - gap) < 1e-6, "the four buckets add up to the gap, taken directly"
+    rates = rates_of(None)
+    reference = round(r["speed"], 1)
+    values = {"$": {"against": exact(against), "speed_all_fpm": num(c["speed"], 1), "reference_speed_fpm": num(r["speed"], 1),
+                    "target_speed_fpm": num(c["target"], 1), "reference_target_speed_fpm": num(r["target"], 1),
+                    "gap_fpm": num(gap, 2), "gap_lineal_ft": num(gap * c["minutes"], 1), "scheduled_minutes": num(c["minutes"], 1),
+                    "direction": exact("below" if gap > 0 else "above")}}
+    for key, value in buckets.items():
+        way = 1 if value >= 0 else -1
+        leading = sorted(((v, k) for k, v in items[key].items() if v * way > 0), key=lambda vk: (-vk[0] * way, vk[1]))
+        feet = round(value * c["minutes"], 1)
+        row = {"gap_fpm": num(value, 2), "gap_lineal_ft": num(value * c["minutes"], 1), "share_of_gap_pct": num(value / gap * 100, 1),
+               "top_item": exact(leading[0][1] if leading else None), "top_item_fpm": num(leading[0][0], 2) if leading else exact(None),
+               "items": exact(len(items[key]))}
+        if feet > 0:   # each loss bucket priced as machine time: its lineal feet at the reference speed
+            priced = money("speed", feet / reference, None, c["minutes"], rates, 0.06 * feet / reference ** 2 + 0.06 / reference)
+            row.update({k: priced[k] for k in ("machine_time_usd", "usd", "usd_per_year", "contribution_status")})
+        else:
+            row.update({"usd": exact(None), "contribution_status": exact("not priced")})
+        values[f"bucket={key}"] = row
+        values["$"][f"{key}_share_pct"] = num(value / gap * 100, 1)
+    top_stop = max(c["stop_cells"], key=lambda k: c["stop_cells"][k][0])
+    lost, mins, count = c["stop_cells"][top_stop]
+    values[f"details:item={top_stop}"] = {"bucket": exact("stops"), "gap_fpm": num(lost / c["minutes"] - r["stops"].get(top_stop, 0.0), 2),
+                                          "minutes": num(mins, 2), "stops": exact(count)}
+    arguments = {"window": {"period": period, "anchor": anchor}, "shift": shift, "against": against}
+    if against == "shift":
+        arguments["against_shift"] = against_shift
+    return case(id, "get_speed_variance", arguments, {"coverage": plain.coverage(*span), "row_count": 4, "values": values}, day=day, note=note)
+
+
 # ---------------------------------------------------------------- the case list
 
 def build(data=None):
@@ -1013,6 +1097,14 @@ def build(data=None):
                              note="The most maintenance downtime any shift has: a power outage plus jams; recurrence counts shift 2's own year."))
     cases.append(review_case(plain, "value-review-september", "month", "2026-09-14",
                              note="A month: the five largest flags of many, each with its own trailing year."))
+    # Speed variance (issue #92): the gap split into stops, setups, below-target running and grade mix, by hand,
+    # against target (the usual grade mix), against the previous week, and one shift against another.
+    cases.append(speedvar_case(plain, "value-speedvar-september-target", "month", "2026-09-14",
+                               note="Against each grade's target at the usual grade mix (the share of the setup clock over both months): the buckets add up to the gap taken directly."))
+    cases.append(speedvar_case(plain, "value-speedvar-week-0914-shift-2-previous", "week", "2026-09-14", 2, "previous",
+                               note="Against the previous week: each loss is this week's feet below target per scheduled minute minus the week before's; an offset bucket is not priced."))
+    cases.append(speedvar_case(plain, "value-speedvar-week-0914-shift-3-vs-shift-1", "week", "2026-09-14", 3, "shift", 1,
+                               note="Shift 3 against shift 1 over the same week: shift 1's Thursday planned maintenance makes stops an offset; the heavier grade mix of shift 3 is part of its gap."))
     assert len({c["id"] for c in cases}) == len(cases)
     return {
         "about": "GENERATED by evals/make_value_goldens.py from plain Python sums over synth.generate_months(); "

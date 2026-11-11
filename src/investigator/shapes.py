@@ -220,7 +220,7 @@ def infer_daily(evidence):
 def infer_period(evidence):
     tools = {r['tool'] for r in evidence}
     kpis = tools & {'get_period_kpis', 'compare_periods'}
-    for tool, intent in (('get_downtime_review', 'period_review'), ('get_opportunities', 'period_money'),
+    for tool, intent in (('get_downtime_review', 'period_review'), ('get_opportunities', 'period_money'), ('get_speed_variance', 'period_speedvar'),
                          ('get_speed_opportunity', 'period_speed_opportunity'), ('get_overrun', 'period_overrun'),
                          ('get_rollstock', 'period_rollstock'), ('get_trend', 'period_trend')):
         if tool in tools:
@@ -815,7 +815,7 @@ class PeriodAnswer:
             'period_grade': ('get_grade_totals',), 'period_pareto': ('get_downtime_pareto',), 'period_waste': ('get_waste_breakdown',),
             'period_stops': ('get_stops_profile',), 'period_trend': ('get_trend',), 'period_rollstock': ('get_rollstock',),
             'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',),
-            'period_money': ('get_opportunities',), 'period_review': ('get_downtime_review',)}
+            'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',)}
 
     KPI_TOOLS = ('get_period_kpis', 'compare_periods')
     USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
@@ -1255,6 +1255,49 @@ class PeriodAnswer:
                               'Show the shift notes' + (f' for shift {f["shift"]}' if self.context.scope == 'day' else '')))
         looks += self.window_looks(data, ('pareto', 'stops', 'trend_downtime'))
         return head, bullets, notes, looks[:3]
+
+    # speed variance (issue #92): what each bucket is called in the headline, and where its records are
+    SPEEDVAR_WORDS = {'stops': 'stops', 'setups': 'setups', 'below_target': 'below-target running', 'mix': 'mix'}
+    SPEEDVAR_LOOKS = {'stops': 'pareto', 'setups': 'pareto', 'below_target': 'speed', 'mix': 'grade'}
+
+    def period_speedvar(self, tools, v):
+        """The speed gap and the share of each bucket (get_speed_variance), then the three largest buckets with the
+        stop reason or grade that leads each. The shares are the envelope's; every bullet is one bucket row."""
+        data, rows = v['data'], v['data']['rows']
+        reference = {'target': 'target', 'previous': 'the previous window', 'shift': f'shift {data.get("against_shift")}'}[data['against']]
+        pct = lambda x: f0(x) if abs(x) >= 9.95 else f1(x)   # "stops 45%", "mix 0.5%"
+        shares = [f'{self.SPEEDVAR_WORDS[r["bucket"]]} {pct(data[r["bucket"] + "_share_pct"])}%' for r in rows
+                  if data.get(r['bucket'] + '_share_pct') is not None]
+        head = (f'Speed gap **{f1(abs(data["gap_fpm"]))} ft/min**{self.where(data)} {data["direction"]} {reference}'
+                + (': ' + ', '.join(shares) if shares else '') + f' {ref(v)}')
+        sign = -1 if data['gap_fpm'] < 0 else 1
+        whole = self.whole(data)
+        bullets = []
+        for i, r in enumerate(rows[:3] if whole else rows):   # an incomplete window is listed in the tool's order, never ranked
+            toward = r['gap_fpm'] * sign >= 0
+            share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
+            top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'
+                   if whole and r.get('top_item') and r.get('top_item_fpm') is not None else '')
+            bullets.append(bullet(f'{r["label"]}: **{f1(abs(r["gap_fpm"]))} ft/min** {"of the gap" if toward else "the other way, an offset"}{share}'
+                                  f' · {f0(abs(r["gap_lineal_ft"]))} lineal ft{top}{priced(r)}', v, i))
+        notes = sentences(data.get('reference_note')) + sentences(data.get('method_note'))
+        # "an offset" pulls against the gap; what is priced is a loss against the reference, whichever way the gap goes
+        if data.get('gap_usd') is not None:
+            notes.append(f'The whole gap is {money(data["gap_usd"])} of machine time' +
+                         (f' ({money(data["gap_usd_per_year"])}/yr at the post\'s volumes)' if data.get('gap_usd_per_year') is not None else '') +
+                         '; a bucket that ran better than the reference is not priced.')
+        elif data['direction'] == 'above':
+            subject = f'Shift {data["shift"]}' if data['against'] == 'shift' else 'This window'
+            notes.append(f'{subject} is faster than {reference}, so the gap is a gain and is not priced; the buckets that ran worse '
+                         'are priced as machine time.')
+        if data.get('contribution_status') == MARGIN_NOT_SET:
+            notes.append(contribution(data))
+        elif data.get('gap_contribution_usd') is not None:
+            notes.append(f'Contribution {money(data["gap_contribution_usd"])} for the whole gap at the set margin, not added to the machine time.')
+        priced_rows = [r for r in rows if r.get('usd') is not None]
+        notes += money_notes(v, priced_rows[0], 'label') if priced_rows else money_notes(v)
+        kinds = list(dict.fromkeys(self.SPEEDVAR_LOOKS[r['bucket']] for r in rows if r['gap_fpm'] * sign > 0)) + ['opportunity']
+        return head, bullets, notes, self.window_looks(data, list(dict.fromkeys(kinds)))
 
     def window_looks(self, data, kinds):
         """Where-to-look lines over the same window (or the trends that end on the selected day)."""

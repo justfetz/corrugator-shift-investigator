@@ -74,6 +74,16 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER, "lens": {"type": "string", "enum": ["all", "supervisor", "ownership"]}}, ["window"]),
         ("get_downtime_review", "The owner's downtime answer for a window: maintenance and operator downtime as % of scheduled minutes against their 2.5% bands (5% together); every reason by kind ranked by % of scheduled minutes with stops and minutes per stop, planned maintenance last as scheduled time; and the flags: each shift over a band, its supervisor slot, and the leading reason's recurrence over the trailing year.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
+        ("get_speed_variance", "Why speed with stops differed from a reference: the gap in ft/min and lineal ft split into four buckets that add up to it: "
+         "stops (minutes stopped at the grade target), setups (order-change stops), running below the grade target, and grade mix (the reference's "
+         "target speed minus this window's). Each bucket names its top stop reason or grade; details split every bucket and add up to it; each "
+         "bucket is priced as machine time. against: target (each grade's target at the usual grade mix; default), previous (the previous window "
+         "of the same kind), shift (against_shift over the same window; shift is the one explained). Use for 'top contributors to speed "
+         "variation', 'why did speed vary', 'what drove speed', 'speed loss breakdown'.",
+         {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER, "against": {"type": "string", "enum": ["target", "previous", "shift"]},
+          "against_shift": {"type": ["integer", "null"], "enum": [None, 1, 2, 3],
+                            "description": "the reference shift, only with against=shift; under selected-shift scope another shift is not allowed"}},
+         ["window"]),
         ("get_trend", "Weekly series (Mon-Fri production weeks) of one allow-listed metric, ending with the week containing the anchor.",
          {"metric": {"type": "string", "enum": TREND_METRICS}, "weeks": {"type": "integer", "description": "1-26, default 8"},
           "anchor": {"type": "string", "description": "YYYY-MM-DD; use the selected production day"}, "shift": SHIFT_FILTER}, ["metric"]),
@@ -90,6 +100,7 @@ CHART_TITLES = {'get_period_kpis': 'KPI tiles', 'compare_periods': 'KPI comparis
                 'get_rollstock': 'Paper consumed by grade and width (MSF)',
                 'get_speed_opportunity': 'Speed opportunity (hours at best-fifth speed)',
                 'get_opportunities': 'Where the money is ($ per year)',
+                'get_speed_variance': 'Speed gap by contributor (ft/min)',
                 'get_downtime_review': 'Downtime by reason (% of scheduled minutes)'}
 # Chartable results: tool -> (x field, y field or a function of the result data, unit or a function, chart type).
 CHARTABLE = {
@@ -112,6 +123,8 @@ CHARTABLE = {
     'get_trend': ('week_start', 'value', lambda d: d['unit'], 'line', None),
     'get_shift_dollars': ('gap', 'usd', '$ this shift', 'bar', None),
     'get_opportunities': ('lever', 'usd_per_year', '$ per year', 'bar', None),
+    # a waterfall: from the reference speed down (or up) through each bucket to this window's speed with stops
+    'get_speed_variance': ('label', 'gap_fpm', 'ft/min', 'waterfall', None),
     'get_downtime_review': ('category', 'pct_of_scheduled', '% of scheduled minutes', 'bar', None),
 }
 
@@ -226,7 +239,8 @@ PERIOD_HELP = ("Offline mode supports period questions in these shapes: 'compare
                "'which downtime reason cost the most minutes', 'is it bond or warp', 'stops per day this week', "
                "'trend of trim over eight weeks', 'volume by grade this month', 'how much paper did we consume this month', 'over/under-run by knife this week', "
                "'compare this period to the previous period' (4-4-5 accounting periods), 'where is the speed opportunity this month', "
-               "'where is the money this month' (levers in dollars), 'where did the money go this shift'.")
+               "'where is the money this month' (levers in dollars), 'where did the money go this shift', "
+               "'what were the top three contributors to speed variation' (against target, last week or another shift).")
 
 
 # "Where is the money", "what's costing us", "opportunities", "contribution", "margin": the money questions
@@ -277,6 +291,73 @@ CHANGE_NOUNS = r"(paper changes?|changeovers?|set-?ups?)"
 CHANGE_SPEED = (rf"\bhow (fast|quick|quickly) (did|do|can|could) we (change|changed|do) (the |our |a )?(paper|{CHANGE_NOUNS})\b"
                 rf"|\bhow (fast|quick|quickly) (were|are|was|is) (the |our )?{CHANGE_NOUNS}\b"
                 rf"|\b(speed|pace) of (the |our )?{CHANGE_NOUNS}\b")
+
+
+# Speed variance (issue #92): why speed differed from target, from the previous window or between shifts, as
+# stops, setups, running below target and grade mix. "What were the top 3 contributors to speed variation",
+# "why did speed vary", "what drove speed", "speed loss breakdown", "biggest speed losses", "why was speed below
+# target". A "why ... slow" stays the overview (DIAGNOSIS_WORDS), the gap to the best fifth the opportunity, and
+# "what does the speed gap cost" the shift's dollars, whose speed-gap row prices it (issue #31).
+LINE = r"(?:the |our |line |average |avg )*"
+SPEED_VARIANCE = (rf"\bspeed (?:variations?|variances?|variability|loss(?:es)?)\b"
+                  rf"|\bvariations? in {LINE}speed\b|\bcontribut\w* (?:to|towards?|of|for) {LINE}speed\b"
+                  rf"|\b(?:drove|drives|driving|driven|drivers? of) {LINE}speed\b"
+                  rf"|\bwhy (?:did |does |has |had |do )?{LINE}speed (?:vary|varied|varies|differ|differed|change|changed|drop|dropped|fall|fell)\b"
+                  rf"|\bwhy (?:was|is|were|are) {LINE}speed (?:below|under|short of|off|behind) (?:the |our )?target\b"
+                  rf"|\bbreak ?down (?:of )?{LINE}speed\b|\bwhere (?:did|do|are) we (?:lose|losing|lost) {LINE}speed\b")
+# A speed variance against the previous window takes a comparison word: "versus last week", "compared with the
+# previous month", "than the week before", "week over week". A bare "last week" is the selected day's week, as
+# everywhere in the router ("what grades ran slowest last week").
+PREVIOUS_CUE = (r"\b(?:versus|vs\.?|compared (?:with|to)|than|against|from|over|since)\s+(?:the\s+)?(?:last|previous|prior)\s+"
+                r"(?:week|month|production day|day|period)\b|\b(?:week|month|day|period) (?:before|over (?:week|month|day|period))\b")
+# "versus the previous shift", "the other shifts": a shift the question does not name (refused with what to ask)
+UNNAMED_SHIFT = r"\b(?:previous|last|prior|next|other)\s+shifts?\b"
+EVERY_SHIFT = r"\bbetween (?:the )?shifts\b|\b(?:each|every|by|per) shift\b|\ball (?:three )?shifts\b|\bacross (?:the )?shifts\b"
+SHIFT_PATTERNS = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
+
+
+def named_shifts(lower):
+    """The shifts a question names, in the order it names them ("shift 3 versus shift 1" is [3, 1])."""
+    found = [(m.start(), shift) for shift, pattern in SHIFT_PATTERNS.items() for m in [re.search(pattern, lower)] if m]
+    return [shift for _, shift in sorted(found)]
+
+
+def question_months(lower, anchor):
+    """The months a question names, in its order; beside a named month, "this month" is the selected day's month
+    ("this month versus August" is [9, 8]). Alone, "this month" is the window of the Period word, not a named month."""
+    found = [(m.start(), MONTH_NAMES[m.group(1)]) for m in re.finditer(r"\b(" + "|".join(MONTH_NAMES) + r")\b", lower)]
+    if found:
+        found += [(m.start(), int(anchor[5:7])) for m in re.finditer(r"\b(?:this|current) month\b", lower)]
+    return [month for _, month in sorted(found)]
+
+
+def speedvar_plan(lower, current, window, shift, months):
+    """The steps of a speed-variance question (issue #92). Two named shifts: the first against the second.
+    "Between shifts", "each shift": one decomposition per shift against target (or the previous window).
+    A comparison with the last/previous window, or a month against the month before it: against the previous
+    window. Otherwise against target, each grade's target at the usual grade mix."""
+    named = named_shifts(lower)
+    if len(named) < 2 and re.search(UNNAMED_SHIFT, lower):
+        raise ValueError("Name the two shifts to compare under Production-day comparison, for example 'what drove speed on shift 2 "
+                         "versus shift 1 this week'; against the previous production day ask 'what drove speed versus the previous day'")
+    if len(set(months)) >= 2:
+        first, second = months[0], months[1]
+        if second != first - 1:
+            raise ValueError("A speed variance compares a window with the one just before it, a shift with a shift, or with target: "
+                             "ask, for example, 'what drove speed in September versus August'")
+        against = 'previous'
+    else:
+        against = 'previous' if re.search(PREVIOUS_CUE, lower) else 'target'
+    if len(named) == 2:
+        if against == 'previous':
+            raise ValueError("Compare two shifts or a window with the one before it, not both: ask 'what drove speed on shift 3 "
+                             "versus shift 1 this week' or 'what drove speed this week versus last week'")
+        return [("get_speed_variance", {"window": window, "shift": named[0], "against": "shift", "against_shift": named[1]})]
+    if len(named) == 3 or (not named and re.search(EVERY_SHIFT, lower)):
+        if current.scope == 'shift':
+            raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
+        return [("get_speed_variance", {"window": window, "shift": s, "against": against}) for s in (1, 2, 3)]
+    return [("get_speed_variance", {"window": window, "shift": shift, "against": against})]
 
 
 def speed_or_volume(lower):
@@ -336,6 +417,8 @@ def parse_period_request(lower, current, shifts, day=False):
     baseline = speed and bool(re.search(BASELINE_WORDS, lower))         # "are we running slower than normal" (#76 adds the baseline)
     speed_opp = bool(re.search(r"speed opportunit|opportunit(y|ies)\b.*\b(speed|faster|fpm)|\b(speed|fpm|faster)\b.*opportunit|run faster|best[- ]demonstrated|speed upside|headroom", lower))
     review = bool(re.search(DOWNTIME_WORDS, lower) and (re.search(TOP_WORDS, lower) or day) and not pareto)
+    # a trend of speed stays the trend; a "why ... slow" stays the overview (diagnose, below)
+    speedvar = bool(re.search(SPEED_VARIANCE, lower)) and not speed_opp and not trend
     money = bool(MONEY.search(lower)) and not speed_opp
     # The owner's two lenses on the levers (issue #101): what trim costs is the ownership lens (the total cost of waste,
     # side trim first); "where's my biggest opportunity", "what went wrong" the supervisor lens (the controllable losses).
@@ -348,17 +431,19 @@ def parse_period_request(lower, current, shifts, day=False):
     # the volume word ("what's costing us output", "what does trim cost per MSF") stays a money question.
     volume_ask = volume and not (re.search(MONEY_RATIO, lower) or re.search(LOSS_WORDS, lower) or re.search(MONEY_LOSS, lower))
     why = diagnose and bool(re.search(WHY_WORDS, lower))   # "why was this week so bad", not "what did slow running cost"
-    if money and (trend or baseline or rollstock or overrun or (grade and not why) or profile or this_shift or volume_ask
-                  or len(set(months)) >= 2 or re.search(r"\b(compare|comparison|versus|vs)\b", lower)):
+    if money and not speedvar and (trend or baseline or rollstock or overrun or (grade and not why) or profile or this_shift or volume_ask
+                                   or len(set(months)) >= 2 or re.search(r"\b(compare|comparison|versus|vs)\b", lower)):
         raise ValueError(MONEY_ONLY)   # never answer a different question: the comparison, trend or volume would be dropped
-    if money and (pareto or waste or why) and not lens:
+    if money and (speedvar or ((pareto or waste or why) and not lens)):
         # The Pareto and the waste breakdown carry their dollars on every row; the overview of a diagnosis
-        # carries them on its Pareto and waste rows (its KPI tiles have none).
+        # carries them on its Pareto and waste rows (its KPI tiles have none); the speed variance prices
+        # each bucket, against target, the previous window or another shift.
         money = False
     ranged = getattr(current, 'period', 'day') != 'day'
     if money and not (period or ranged) and not lens:
         return None   # a money question about the day: get_shift_dollars, routed by the day router
-    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock or baseline or money or review):
+    if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock or baseline or money
+            or speedvar or review):
         return None
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
@@ -372,6 +457,16 @@ def parse_period_request(lower, current, shifts, day=False):
     if money:
         plan = [("get_opportunities", {"window": window, "shift": shift, **({"lens": lens} if lens else {})})]
         intent = 'period_money'
+    elif speedvar:
+        # a named month is the window ("what drove speed in September versus August", "this month versus August":
+        # September against the one before)
+        named_months = question_months(lower, anchor)
+        plan = speedvar_plan(lower, current, {"period": "month", "anchor": f"{year}-{named_months[0]:02d}-01"} if named_months else window,
+                             shift, named_months)
+        intent = 'period_speedvar'
+        return {"intent": intent, "shifts": list(dict.fromkeys(s for _, args in plan for s in (args['shift'], args.get('against_shift')) if s)),
+                "kind": None, "group_by": "reason", "want_chart": True, "ranking_metrics": [],
+                "plan": [{"tool": tool, "arguments": arguments} for tool, arguments in plan]}
     elif speed_opp:
         slice_by = 'crew' if re.search(r"\bcrews?\b|\bteams?\b", lower) else 'width'
         plan = [("get_speed_opportunity", {"window": {"period": period or selected or 'month', "anchor": anchor}, "slice_by": slice_by, "shift": shift})]
@@ -597,7 +692,14 @@ def chart_for(rid, result):
     y, unit, y2 = (v(data) if callable(v) else v for v in (y, unit, y2))
     chart = {'type': kind, 'source_result_id': rid, 'shift': data['shift'], 'coverage': data['coverage'],
              'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
-    if result['tool'] in PERIOD_TOOLS:
+    if result['tool'] == 'get_speed_variance':
+        # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
+        start_label = {'target': 'Target speed', 'previous': 'Previous', 'shift': f"Shift {data.get('against_shift')}"}[data['against']]
+        chart.update(start=data['reference_speed_fpm'], end=data['speed_all_fpm'], gap=data['gap_fpm'], start_label=start_label,
+                     end_label=f"Shift {data['shift']}" if data['against'] == 'shift' else 'Actual speed', against=data['against'])
+        chart['title'] = (f"{CHART_TITLES['get_speed_variance']}: {data['window']['label']} against {data['reference_label']}"
+                          + (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)'))
+    elif result['tool'] in PERIOD_TOOLS:
         name = 'Speed by grade vs target (ft/min without stops)' if data.get('measure') == 'speed' else \
             CHART_TITLES.get(result['tool'], result['tool'].replace('_', ' '))
         chart['title'] = f"{name}: {data['window']['label']}" + \
@@ -627,6 +729,8 @@ def scope_violation(tool, arguments, allowed_shifts, scope, period, production_d
     """Why a tool call falls outside the selected scope, or None. Shared by the loop and the plan check."""
     if arguments.get('shift') is not None and arguments['shift'] not in allowed_shifts:
         return 'Tool shift is outside the selected scope'
+    if arguments.get('against_shift') is not None and arguments['against_shift'] not in allowed_shifts:
+        return 'Tool shift is outside the selected scope'   # a speed variance against another shift reads that shift
     if tool in PERIOD_TOOLS and scope == 'shift' and arguments.get('shift') is None:
         return 'Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts'
     if period != 'day' and tool not in PERIOD_TOOLS and tool != 'render_chart':

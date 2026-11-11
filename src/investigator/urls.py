@@ -35,7 +35,7 @@ MEASURE_INTENTS = {v: k for k, v in INTENT_MEASURES.items()}
 STORE_MEASURES = {'kpis': 'get_period_kpis', 'pareto': 'get_downtime_pareto', 'waste': 'get_waste_breakdown',
                   'stops': 'get_stops_profile', 'grade': 'get_grade_totals', 'overrun': 'get_overrun',
                   'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock',
-                  'money': 'get_opportunities', 'review': 'get_downtime_review'}
+                  'money': 'get_opportunities', 'speedvar': 'get_speed_variance', 'review': 'get_downtime_review'}
 TOOL_MEASURES = {v: k for k, v in STORE_MEASURES.items()}
 # Plans the period form of a day-shaped intent runs that are more than one store tool (agent.period_plan),
 # by their tools in order. Under a ranged grain `downtime` is the Pareto alone, `quality` the waste breakdown
@@ -45,9 +45,11 @@ PERIOD_SHAPES = {('get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown
 UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothing: `want=chart` changes their status
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
-QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'shifts', 'rank', 'lens', 'want',
+QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'lens', 'want',
                 'rates', 'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'lens', 'want', 'rates', 'corrupt', 'after')
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'against', 'shifts', 'rank', 'lens', 'want', 'rates',
+               'corrupt', 'after')
+AGAINST = ('target', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; target is the default
 LENSES = ('supervisor', 'ownership')   # get_opportunities' owner lenses (issue #101); `all` is the default and is omitted
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
 MAX_URL = 2000
@@ -101,6 +103,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
         first = plan[0]['arguments']
         window = first.get('window') or first.get('current_window')
         shifts = [step['arguments'].get('shift') for step in plan if step['tool'] == tools[0]]
+        if tools == ('get_speed_variance',) and first.get('against') == 'shift':
+            shifts = [first['shift'], first['against_shift']]   # the shift explained, then the one it is measured against
         window_param = None   # the question's own window when it is not the Period control's
         if window is not None and (window['period'], window['anchor']) != (control, day):
             if window['anchor'] == day:
@@ -143,6 +147,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                 params.append(('metric', first['metric']))
                 if first.get('weeks', 8) != 8:
                     params.append(('weeks', str(first['weeks'])))
+            elif measure == 'speedvar' and first.get('against', 'target') != 'target':
+                params.append(('against', first['against']))
         else:
             raise ValueError(f'No canonical URL for the plan {tools}')
         if window_param:
@@ -270,7 +276,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
                 raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
             raise
         request['asked'] = _wants(fields.get('want'))
-    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'rank', 'lens'):
+    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'rank', 'lens'):
         if key in fields and key not in _used(measure, fields):
             hint = ''
             if key == 'compare':
@@ -320,6 +326,8 @@ def _used(measure, fields):
         return {'metric', 'weeks'}
     if measure == 'money':
         return {'window', 'lens'}
+    if measure == 'speedvar':
+        return {'window', 'against'}
     if measure in STORE_MEASURES:
         return {'window'}
     return set()
@@ -334,6 +342,12 @@ def _aliases(measure, fields, grain):
     the alias as typed when the measure changed, else None). An alias that cannot be normalized is a ValueError
     naming its field; any other field is left for the checks that follow, which refuse what does not apply."""
     out, typed = dict(fields), [f'measure={measure}']
+    if measure == 'speedvar' and out.get('compare') == 'prev':
+        # the speed variance against the previous window of the same grain is against=previous
+        if out.get('against', 'previous') != 'previous':
+            raise ValueError(f'compare=prev is against=previous on measure=speedvar; it does not combine with against={out["against"]}')
+        del out['compare']
+        out['against'] = 'previous'
     if measure == 'waste' and 'by' in out:
         by = out.pop('by')
         if by not in WASTE_BY:
@@ -416,6 +430,8 @@ def _request(measure, fields, context, window):
                 'group_by': group_by, 'want_chart': True, 'ranking_metrics': metrics}
     if measure not in STORE_MEASURES:
         raise ValueError(f'Unknown measure {measure!r}; ' + MEASURE_HELP)
+    if measure == 'speedvar':
+        return _speed_variance(fields.get('against', 'target'), shifts, context, window)
     if scope == 'shift':
         per_shift = [shift]
     elif measure in SPLIT_MEASURES and (measure == 'kpis' or context.period != 'day'):
@@ -482,6 +498,27 @@ def _speed_by_grade(by, shifts, context, window):
         shift = shifts[0] if shifts else None
     return {'intent': 'period_speed', 'shifts': [shift] if shift else [], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': 'get_grade_totals', 'arguments': {'window': window, 'shift': shift, 'measure': 'speed'}}]}
+
+
+def _speed_variance(against, shifts, context, window):
+    """`measure=speedvar` (issue #92): the speed gap of the window split into stops, setups, running below
+    target and grade mix. `against=previous` measures it from the previous window of the same kind,
+    `against=shift` from another shift over the same window (`shifts=3,1`: shift 3 explained against shift 1);
+    the default is target. With target or previous, `shifts=` lists one decomposition per shift."""
+    if against not in AGAINST:
+        raise ValueError('against is target, previous or shift (measure=speedvar)')
+    if against == 'shift':
+        if context.scope == 'shift':
+            raise ValueError('Selected shift only: against=shift reads another shift; choose Production-day comparison or change the shift control')
+        if len(shifts) != 2:
+            raise ValueError('against=shift takes two shifts, the one explained first: shifts=3,1')
+        steps = [{'window': window, 'shift': shifts[0], 'against': 'shift', 'against_shift': shifts[1]}]
+    else:
+        per_shift = [context.shift] if context.scope == 'shift' else shifts or [None]
+        steps = [{'window': window, 'shift': s, 'against': against} for s in per_shift]
+    return {'intent': 'period_speedvar', 'shifts': list(dict.fromkeys(s for step in steps for s in (step['shift'], step.get('against_shift')) if s)),
+            'kind': None, 'group_by': 'reason', 'want_chart': True, 'ranking_metrics': [],
+            'plan': [{'tool': 'get_speed_variance', 'arguments': arguments} for arguments in steps]}
 
 
 def _compare_anchor(value, period):
