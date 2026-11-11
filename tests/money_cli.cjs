@@ -8,7 +8,7 @@
 const fs=require('node:fs');
 const Money=require('../src/investigator/web/money.js');
 const FIELDS=['msf','paper_usd','machine_minutes','machine_time_usd','usd','usd_per_year','msf_not_made','contribution_usd','contribution_usd_per_year','contribution_status','usd_basis','rank','lever','gap','quantity','records'];
-const TOTALS=['total_usd','total_paper_usd','total_machine_time_usd','total_usd_per_year','total_contribution_usd','contribution_status','provenance'];
+const TOTALS=['total_usd','total_paper_usd','total_machine_time_usd','total_usd_per_year','total_contribution_usd','contribution_status','provenance','gap_machine_minutes','gap_usd','gap_usd_per_year','gap_contribution_usd'];
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function parity(file){
  const {cfg,cases}=JSON.parse(fs.readFileSync(file,'utf8')), bad=[]; let fields=0, lines=0;

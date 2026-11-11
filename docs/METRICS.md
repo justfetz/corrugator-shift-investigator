@@ -71,6 +71,26 @@ A window is `day`, `week` (Mon–Fri), `month` (calendar) or `fiscal`: the 4-4-5
 
 `get_speed_opportunity` answers "where could we run faster" the way a superintendent would check it: per board grade and web width (or crew), over every setup of the window with at least two running minutes (shorter setups never reach steady speed; they are counted in `excluded_short_setups`, never dropped silently): typical speed without stops as a ratio of sums, the median setup speed, the **best fifth** (the fastest fifth of the cell's setups by speed without stops, `ntile(5)`, again a ratio of sums, never the peak), both as percent of the grade target, the gap, and **opportunity hours** = running minutes now minus the minutes the same lineal feet would take at the best-fifth speed. Beside it sits the dry-end reject percent of the fast fifth against the rest: a positive `reject_penalty_points` means the fast setups rejected more, so that part of the gap is a limit rather than an opportunity. A cell with fewer than ten setups reports `insufficient`. The records carry no temperatures, so the heat-transfer ceiling on heavy grades and doublewall (bond needs its temperature range) is stated as an open owner input in every envelope.
 
+### Speed variance (issue #92)
+
+`get_speed_variance(window, shift, against, against_shift)` answers "what were the top three contributors to speed variation": why the window's speed with stops differed from a reference, as four buckets that add up to the gap. Speed is the tile's speed with stops, lineal ft / scheduled minutes. For each side, per scheduled minute (T):
+
+| Quantity | Formula |
+| --- | --- |
+| target speed | Σ(grade target × setup clock minutes) / T: the speed the grade targets give at the side's own grade mix (the setup records fill every scheduled minute, so this is the time-weighted grade target) |
+| stops | Σ(stopped minutes × the stopped setup's grade target) / T, every recorded reason except Order change |
+| setups | the same for the Order change stops (the changeover the cost model also prices as setup time); the records carry one running speed per setup, so there is no separate ramp after a changeover |
+| below-target running | Σ(grade target × running minutes − lineal ft) / T, per grade (negative when a grade ran above its target) |
+| identity | target speed − stops − setups − below-target running = speed with stops, exactly, because each setup's clock is its running time plus its allocated stops |
+
+The gap is reference speed − this speed. **Grade mix** = the reference's target speed − this window's; each loss bucket = this side's loss − the reference's. In ft/min and as lineal ft over this window's scheduled minutes; `share_of_gap_pct` is each bucket over the gap (shares stay null when the gap is under 0.05 ft/min, and a bucket that ran the other way is an offset with a negative share). `details` splits stops by reason, setups and below-target running by grade, and the mix by grade as (reference time share − this time share) × (grade target − reference target speed); each bucket's details add up to it, and the row names the detail that leads it (`top_item`).
+
+- `against=target` (the default): the reference is each grade's target weighted by its share of the setup clock over the whole record store (both months, all shifts), with no losses. A window that ran more of a slow grade than usual is below it even if every grade made its target: that part of the gap is the mix.
+- `against=previous`: the window of the same kind just before, same shift filter; refused when it is outside the store (August against July).
+- `against=shift`: `against_shift` over the same window; `shift` is the one explained. Under the selected-shift scope another shift is out of reach and the call is refused.
+
+Each bucket is priced as machine time: its lineal ft / the reference speed = minutes at that speed, at the machine $/hr (annualized by time, contribution beside it when a margin is set). A bucket that ran better than the reference is a gain and is not priced, whichever way the gap goes (when the window is faster than its reference, its buckets that ran worse are the offsets on the card, and they are priced); the whole gap is priced on the envelope (`gap_usd`) when the window is slower, so the bucket dollars add to it only when every bucket is a loss. The answer leads with the gap and the four shares, then the three largest buckets (the ones that make the gap first, then the offsets), a waterfall from the reference speed through each bucket to the speed with stops, and where to look.
+
 ## The shift_kpis table
 
 The authoritative KPI inventory. `shift_kpis` holds one row per production day, shift and variant (`corrupt` false: the records as generated; true: the data-quality demo's bad-trim record injected into the day's first shift-2 setup), 258 rows for the two months. `build_shift_kpis` in `record_store.py` computes it once from the six tables: at image build into the prebuilt folder (`python -m investigator.prebuilt`, issue #19), where the store loads it with the rest, or at boot when the store generates. Validation runs once there with the per-day Analysis's rules; a setup that fails is left out of every setup column and counted in `excluded_setups`, and its shift's `coverage` is `incomplete`.
@@ -113,147 +133,9 @@ Every measure is a raw numerator or denominator, never a percentage, so any wind
 
 The daily matrix keeps the daily KPI tool's fixed 480-minute shift for `observed_shift_fpm` and 28,800 seconds for its downtime percentages; the period tiles use `scheduled_seconds`. The stop-level and setup-level tools, and the report's recurring-downtime table and notes, read the raw tables.
 
-## Cost model: data to dollars (issue #31)
+## Cost model
 
-The records hold no costs. `cost_model.py` prices the tools' quantities at assumed rates from
-`src/investigator/rates.json`; the defaults are the owner's post
-([Where the money hides in a corrugator's numbers](https://justfetz.github.io/posts/corrugator-dashboard.html)).
-Every dollar is synthetic data at an assumed rate, never a real plant's figure, and every answer that
-carries dollars names its rates in a provenance line ("paper $55/MSF (post), machine time $1,200/hr
-(post), contribution margin not set (assumption: owner to set), trim target 3.25% (process rule)").
-
-| Rate or assumption | Default | Source | `rates=` key |
-| --- | --- | --- | --- |
-| Paper cost | $55 / MSF | post | `paper` |
-| Machine time (bottleneck shadow price) | $1,200 / hr | post ("more than $1,200 an hour") | `hour` |
-| Board contribution margin | not set | not in the post; owner to set | `margin` |
-| Side-trim target | 3.25 % of gross | the process rule (setup trim flag) | `trim` |
-| Volume | 7,000,000 sq ft / day / machine; 3 shifts; 5 days a week | post | fixed |
-| Annual volume | 1.8M MSF a year per machine (the post's 3.6M across two machines), so 257 production days | post | fixed |
-| Net width | 96 in on a 110 in machine | post | fixed |
-| Scheduled time | 1,440 min / day | post | fixed |
-| Required run speed at 10 % downtime | 675 ft/min | post | fixed |
-| One minute of downtime at 675 ft/min | 675 lineal ft x 96 in / 12 = 5.4 MSF | post | derived |
-| 0.1 point of side trim | 0.001 x 3.6M MSF x $55 = $198,000 a year across two machines (the post rounds it to about $200k) | post | derived |
-
-Overrides layer: the defaults, then `INVESTIGATOR_RATES=paper:55,hour:1200,margin:40` on the server,
-then `rates=` on the request (`/api/ask` body, `/q`, or the URL; `docs/URLS.md`). Each source is named.
-A rate takes at most two decimals, so the rate a link carries is exactly the rate its answer used; an
-invalid `INVESTIGATOR_RATES` stops the server at boot.
-
-Three components per priced row, kept apart so that changing one rate changes only the dollars that use it:
-
-| Field | Formula | Applies to |
-| --- | --- | --- |
-| `paper_usd` | waste sq ft / 1,000 x paper $/MSF | side trim, shear, each dry-end reason, bale, the unexplained remainder (a negative remainder is not priced) |
-| `machine_time_usd` | minutes x machine $/hr / 60; for waste board, minutes = MSF / 5.4 | downtime, the speed gap, shear and dry-end rejects (they ran through the machine). Side trim is width, not length: it takes no extra run time |
-| `usd` | `paper_usd` + `machine_time_usd` | every priced row |
-| `contribution_usd` | MSF not made x margin $/MSF; MSF not made = minutes x 5.4 for time, the waste MSF for shear and rejects | null with `contribution_status` "margin not set" until a margin is set, never $0; shown beside `usd`, never added (it prices the same lost capacity as the shadow price, from the other side) |
-| `usd_per_year`, `contribution_usd_per_year` | paper (and the run time of waste board) by volume: x 1.8M MSF / the window's gross MSF; machine time by time: x (1,440 x 257.14 min) / the window's scheduled minutes | the window's loss rate held for a year of one machine at the post's volume |
-| `usd_basis` | the formula with its numbers, e.g. "11,218.7 sq ft = 11.219 MSF x $55/MSF paper = $617; 11.219 MSF / 5.4 MSF per min = 2.08 min x $1,200/hr machine time = $41.55; contribution: margin not set" | so a superintendent can redo it on paper; it ends with the per-year factor, e.g. "per year: x 751.41 (1,800,000 MSF a year / 2,395.483 MSF gross)" or "per year: x 771.43 (370,286 scheduled min a year / 480 min)" |
-
-The fields are flat on the row, beside the quantity, so the live narrative cites them like any other
-field and the narrative validator substitutes every dollar from the tool result. They ride on
-`get_quality_breakdown`, `get_downtime_breakdown`, `get_waste_breakdown`, `get_downtime_pareto` and
-`get_speed_opportunity` (opportunity hours x 60 minutes), and on the two money tools:
-
-- `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
-  reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus
-  downtime; the lineal feet not made / 675 = machine minutes), side trim, shear and each dry-end reason.
-  Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`, `total_usd_per_year`,
-  `total_contribution_usd` (null while the margin is not set). Asked as "where did the money go this shift".
-- `get_opportunities(window, shift)`: where to look, the levers ranked in $/yr: the speed gap to each
-  cell's best-fifth speed (`get_speed_opportunity`'s total hours), side-trim points over the trim target
-  (points / 100 x gross, priced as paper: per year this is the post's trim formula), each downtime reason
-  (Order change is labelled setup time), and all recorded shear and each dry-end reason (no benchmark for
-  those, so the whole loss). Each lever names the records behind it. It ranks levers and names records; it
-  never prescribes a machine adjustment. Asked as "where is the money this month", "what's costing us",
-  "opportunities"; under the Day control "where is the money" is the shift's own `get_shift_dollars`.
-
-A money word beside another question never replaces it. Downtime, rejects, waste, the Pareto, the
-overview and the comparison carry their dollars on the rows, so "which reason is costing us the most
-minutes" is the Pareto, priced, and "why was this week so bad in dollars" is the overview (a why, bad or
-killed question; the cost of a bare "slow", "what did slow running cost us", is the money answer, whose
-speed gap is priced). On the day grain "what did waste cost" is `get_shift_dollars` (side trim, shear and
-dry-end together); a named reject keeps the reject breakdown. A comparison, trend, speed against normal,
-volume ("how much did we make in dollars", "output per hour in dollars"; a loss of output, "what's costing
-us output", and a rate of a money word, "contribution per MSF", are money questions), rollstock, grade,
-over/under-run, stops-per-day, summary, matrix, notes or ranking asked "in dollars" is refused with what
-to ask instead, not answered as the levers alone.
-
-Known gap: with Week, Month or 4-4-5 selected and no window named in the question, a money question is
-answered by the levers (`get_opportunities`) whatever else it names, so "summarize this shift in dollars"
-or "what did waste cost" under the Week control gives the levers, while the same question naming its
-window ("what did waste cost this week") gives the priced waste breakdown.
-
-The live paths: the narrative may cite `usd`, `usd_per_year`, `paper_usd`, `machine_time_usd` and
-`contribution_usd` (the formula text and intermediate quantities stay off the packet). No live planner
-is offered the two money tools yet. The OpenAI planner loop also sees no dollar fields, so its requests
-stay byte for byte main's (its 24,000-byte cap is tight: since #74 main's own request after one waste
-breakdown is 24,040 bytes). The Anthropic tool loop and the analyst's plan catalog leave the two tools
-out because their prompts still say costs are unavailable; the analyst still sees the dollars on the
-priced rows of the tools it plans. Offering the two money tools to the live planners is a prompt change
-for the live analyst (#23), not part of the card (#31b). Money questions are answered offline: every one
-goes to the offline planner first.
-
-### On the card (issue #31b)
-
-Every answer card carries the money of its scope, priced in the browser at the rates in force:
-
-- **The dollar line** under the headline: `≈ $7,587 recorded losses this shift · $5.72M/yr at this rate ·
-  contribution: margin not set` (a window: `≈ $13,047 in levers this week · …`; a set margin: `contribution
-  $10,649 at $40/MSF, not added`), then one chip per bucket (trim, dry-end, shear, speed, stops, setups),
-  largest first. On incomplete data the line and the arithmetic say so first: the dollars are the observed
-  records only, and an all-shifts day sums its complete shifts, as its answer ranks them.
-- **The opportunities panel** under the charts: horizontal bars of the levers (or a shift's gaps) ranked
-  by $/yr at this rate, each bar's dollars, minutes, formula (`usd_basis`) and records on hover, the top
-  eight with the rest behind "All", and a Table flip with the same rows.
-- **The arithmetic** at the bottom, four lines with the card's own numbers: waste sq ft → MSF → paper $ at
-  the paper rate; machine minutes (stops, the speed gap, the run time shear and rejects took) → MSF not
-  made at 675 ft/min → $ at the machine rate; side-trim points over the target → $/yr at the post's volume
-  (points / 100 × 1.8M MSF × paper); the total, $ and $/yr, and the contribution (or "margin not set").
-  Then the rates line with each rate's source and the note that these are synthetic records at assumed
-  rates, not a plant's figures.
-- **Tiles**: every KPI tile that measures a loss shows its dollars and dollars a year, its own value priced
-  by the same call (a shift's speed: the gap to 675 ft/min over running time, as `get_shift_dollars` prices
-  it; maintenance, operator and all stops: their minutes; dry-end, shear, the four reject reasons: area plus
-  run time; trim: area; bale and the unexplained remainder: paper). A window's waste tile takes the card's own
-  priced `get_waste_breakdown` row for the same window when the card has one, so tile and finding agree to the
-  dollar; a window's speed tile is not priced (no window tool prices a gap to 675 ft/min; the levers price the
-  gap to each cell's best fifth). A count, a volume or a width (setups, MSF, throughput) has no dollars, and a
-  period report's tiles (a whole window's row) are priced in its panel, not on the tiles.
-- **Show as minutes · % · $** in the rail ($ by default): priced tiles and bars in machine minutes, in
-  percent of the window (an area of the gross, a time of the scheduled minutes), or in dollars. A priced
-  chart in another unit than its own is drawn as ranked bars of that unit; the speed, KPI, trend and
-  other unpriced charts keep their units.
-- **Your rates** in the rail: paper $/MSF, machine $/hr, board margin, trim target, each with its source
-  (post, this server, owner to set, process rule, yours). "Change rates" opens the editor: a rate the
-  server would refuse (`parse_rates`' rule) says why and changes nothing; an accepted one re-prices every
-  card on the page at once, with no request and no model, writes `rates=` into the address (replaced, not
-  pushed) and rides in every question asked after it. Back and forward keep the page's rates; a pasted
-  link brings its own.
-
-How the card prices: every priced row carries `price_terms`, the pricing call itself, rate-free and
-unrounded (`kind`, `quantity`, the window's `gross_sqft` and scheduled `minutes`; the trim lever also
-`trim_pct`, since its quantity, the points over the target, is itself a rate). `web/money.js` makes the
-same call with the same products, the same rounding (Python's round half to even) and the same text, then
-ranks the money tools' rows and redoes their totals, and rewrites the answer's prose from the re-priced
-rows: each dollar figure becomes the same field re-priced, the rates, formula and contribution lines are
-written again, a ranked money list is put in its new order, and an all-shifts money answer is written
-about the shift that lost the most at the new rates. An analyst's interpretation is not rewritten (a
-model's sentence moved to other figures could claim what no row says, or keep a comparison the new figures
-reverse): at other rates it says which rates it was written at, and the evidence under it is re-priced. So
-the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twelve answers at
-six sets of rates (`tests/money_cli.cjs parity`), and the value case
-`value-dollars-shift-0914-shift-2-client` holds the server's `get_shift_dollars` at other rates to the
-client's figures (`evals/client_money.json`, written by `evals/make_client_money.py`). `price_terms`
-never reaches a model (the narrative packet and the OpenAI compaction drop it). A card's money is its
-own `get_shift_dollars` / `get_opportunities` when it asked one, else the money answer of the window its
-answer ran over (a question can name its own: "How did September go versus August?" under Day is priced
-over September), one GET per scope shared by its cards (`measure=dollars` on the Day grain, `measure=money`
-on a window) and counted as a round by the server; a reload replays the thread within its share of the rate
-limit counting those GETs too. `/api/config` carries the rates, their sources and the constants
-(`cost_model.client_config`).
+The rates, their sources and the formula behind every dollar field moved to [the cost model](COST_MODEL.md) (issue #93).
 
 ## Configured targets
 

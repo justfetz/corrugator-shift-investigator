@@ -12,7 +12,7 @@ const Money=(()=>{
  const PAPER=new Set(['trim','waste','paper']), TIME=new Set(['downtime','speed']);
  const MONEY_TOOLS=new Set(['get_shift_dollars','get_opportunities']);
  const WINDOW_FIELDS=['usd','paper_usd','machine_time_usd','contribution_usd'], YEAR_FIELDS=['usd_per_year','contribution_usd_per_year'];
- const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd'], TOTAL_YEAR=['total_usd_per_year'];
+ const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','gap_usd','gap_contribution_usd'], TOTAL_YEAR=['total_usd_per_year','gap_usd_per_year'];
  const LABEL_KEYS=['gap','lever','category','label','reason'];
  // Python's f'{x:.{d}f}': correctly rounded on the binary value, a tie to even (toFixed breaks a tie upward).
  // A double is a tie at d places only when x * 2^(d+1) is an odd integer.
@@ -136,9 +136,21 @@ const Money=(()=>{
  // A tool result at `rates`: every priced row re-priced from its terms; the two money tools re-ranked with their
  // totals redone; the rates rows and the provenance line rewritten. `byIndex` (not enumerable) keeps the re-priced rows
  // in the result's own order, so a reference to "row 3" still finds its row after the ranking moved it.
+ // get_speed_variance (cost_model.speed_variance_dollars): a bucket's feet over the reference speed are its machine
+ // minutes; its formula starts with that division, which is rate-free and kept; the gap as a whole is on the envelope.
+ const SPEEDVAR_LEAD=/^.*? reference speed = /;
+ function speedVariance(data,byIndex,out,rates,cfg){
+  byIndex.forEach((r,i)=>{ const was=data.rows[i]; if(!was.price_terms)return; const lead=SPEEDVAR_LEAD.exec(was.usd_basis||''); if(lead)r.usd_basis=lead[0]+r.usd_basis; });
+  if(!('reference_speed_fpm' in data))return;
+  const feet=data.gap_lineal_ft, ref=data.reference_speed_fpm;
+  const gap=feet===null||feet===undefined||!ref||feet<=0?{...NOT_PRICED}:price('speed',feet/ref,rates,null,data.scheduled_minutes,cfg);
+  Object.assign(out,{gap_machine_minutes:gap.machine_minutes,gap_usd:gap.usd,gap_usd_per_year:gap.usd_per_year,gap_contribution_usd:gap.contribution_usd,
+   contribution_status:rates.values.margin_usd_msf===null||rates.values.margin_usd_msf===undefined?cfg.margin_not_set:'set'});
+ }
  function reprice(tool,data,rates,cfg){
   if(!data||!Array.isArray(data.rows)||!data.rows.some(r=>r&&r.price_terms))return data;
   const byIndex=data.rows.map(r=>repriceRow(tool,r,rates,cfg)), out={...data,rows:[...byIndex]};
+  if(tool==='get_speed_variance')speedVariance(data,byIndex,out,rates,cfg);   // a chart of it has the rows only
   if(MONEY_TOOLS.has(tool)){ rank(out.rows,tool==='get_opportunities'?'usd_per_year':'usd'); Object.assign(out,totals(out.rows,cfg)); }
   if('provenance' in data){ out.rates=rateRows(rates,cfg); out.provenance=provenance(rates,cfg); }
   Object.defineProperty(out,'byIndex',{value:byIndex,enumerable:false});
@@ -156,15 +168,16 @@ const Money=(()=>{
  const TOKEN=/\$\d{1,3}(?:,\d{3})*(?!\d|,\d|\.\d|\/(?:MSF|hr))/g, REF=/\(query (\d+)(?: · (row|detail|weekday) (\d+))?\)$/, YEARLY=/^(?:\/yr|\/year| a year| per year)/;
  function contributionLine(data,cfg){   // shapes.contribution
   if(data.contribution_status===cfg.margin_not_set)return `Contribution ${cfg.margin_not_set}: without an owner margin no lost contribution is priced, so the dollars are paper and machine time.`;
+  if(data.gap_contribution_usd!==null&&data.gap_contribution_usd!==undefined)return `Contribution ${money(data.gap_contribution_usd)} for the whole gap at the set margin, not added to the machine time.`;   // shapes.period_speedvar
   if(data.total_contribution_usd!==null&&data.total_contribution_usd!==undefined)return `Contribution ${money(data.total_contribution_usd)} at the set margin, not added to the losses above.`;
   return null;
  }
- const CONTRIBUTION=/^Contribution (?:.+ at the set margin, not added to the losses above\.|.+: without an owner margin no lost contribution is priced, so the dollars are paper and machine time\.)$/;
+ const CONTRIBUTION=/^Contribution (?:.+ at the set margin, not added to the losses above\.|.+ for the whole gap at the set margin, not added to the machine time\.|.+: without an owner margin no lost contribution is priced, so the dollars are paper and machine time\.)$/;
  // steps: index = query number - 1; each {tool, before, after} for a priced step, null otherwise.
  function repriceSections(sections,steps,rates,cfg){
   const live=steps.filter(Boolean); if(!live.length)return sections;
   const head=REF.exec(sections[0]||''), cited=head&&steps[Number(head[1])-1];
-  const money1=cited&&MONEY_TOOLS.has(cited.tool)?cited:live.find(s=>MONEY_TOOLS.has(s.tool));   // the shift the answer is about
+  const money1=cited&&'contribution_status' in cited.after?cited:live.find(s=>'contribution_status' in s.after);   // the result whose contribution the answer states
   const swapped=refocus(sections,steps,rates,cfg); if(swapped)return swapped;
   const out=[];
   for(const line of sections){
