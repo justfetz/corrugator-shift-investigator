@@ -1,8 +1,9 @@
 """Write the prebuilt store folder: `python -m investigator.prebuilt [--as-of YYYY-MM-DD] <folder>`.
 
-Run once at image build time (see Dockerfile). The folder holds the rolling window that
-ends on `--as-of`, else on INVESTIGATOR_AS_OF, else yesterday (issue #35): the window is
-fixed when the image is built, and the nightly deploy builds the next one. At boot, a
+Run once at image build time (see Dockerfile). The folder holds the rolling year that ends on
+`--as-of`, else on INVESTIGATOR_AS_OF (the golden set's window), else the served data from
+1 January 2025 to yesterday (issues #35, #100): the window is fixed when the image is built,
+and the nightly deploy builds the next one. At boot, a
 RecordStore pointed at the folder (INVESTIGATOR_PREBUILT) takes that window and loads it in
 a fraction of the time generating takes; a folder that does not match the code or the
 inputs is ignored.
@@ -17,7 +18,7 @@ from .record_store import RecordStore, build_prebuilt, dataset_window
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m investigator.prebuilt", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--as-of", help="last calendar day of the window (YYYY-MM-DD); default INVESTIGATOR_AS_OF, else yesterday")
+    parser.add_argument("--as-of", help="last calendar day of a rolling year (YYYY-MM-DD); default INVESTIGATOR_AS_OF, else 2025-01-01 to yesterday")
     parser.add_argument("folder")
     try:
         args = parser.parse_args(sys.argv[1:] if argv is None else argv)

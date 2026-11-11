@@ -648,7 +648,8 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
         "valid_setups": exact(len(setups)), "paper_changes": exact(wet_ends),
         "speed_to_target_pct": approx(feet / sum(GRADES[s.quality_id] * s.elapsed_seconds / 60 for s in setups) * 100),
         "observed_lineal_ft": approx(feet), "observed_shift_fpm": approx(feet / 480),
-        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(s.gross_sqft - s.trim_sqft - s.shear_sqft - s.reject_sqft for s in setups)),
+        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(s.gross_sqft - s.trim_sqft - s.shear_sqft - s.reject_sqft
+                                                                      - s.cutoff_waste_sqft - s.stacker_waste_sqft for s in setups)),
         "throughput_in": approx(gross / feet * 12),
         "trim_pct": approx(trim / gross * 100), "shear_pct": approx(shear / gross * 100), "dry_end_pct": approx(rejects / gross * 100),
         "maintenance_pct": approx(kinds["Maintenance"] / SCHEDULED_SECONDS * 100),

@@ -372,7 +372,20 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
 # product name and no source-system table or record-type name anywhere in the repository. The names are
 # spelled here in pieces, so this file does not hold them either; a base64 blob (a recorded model signature)
 # that happens to contain the letters does not count, so a match must stand alone.
-VENDOR_NAMES = ("B" + "HS", "Production" + "_Center", "BQMES" + "PAHT", "Modul" + "e Facer", "Modul" + " Facer", "P0" + "4[PGTS]")
+# The short names stand alone (a letter, digit, '+', '/' or '_' before them, or a letter after, is a base64 blob or
+# another word), but a digit after is still the name (a numbered table or machine). The long ones match anywhere.
+SHORT_VENDOR_NAMES = ("B" + "HS", "P0" + "4[PGTS]")
+LONG_VENDOR_NAMES = ("Production" + "_Center", "BQMES" + "PAHT", "Modul" + "e Facer", "Modul" + " Facer")
+VENDOR_PATTERN = re.compile("(?<![A-Za-z0-9+/_])(?:" + "|".join(SHORT_VENDOR_NAMES) + ")(?![A-Za-z+/_])|" + "|".join(LONG_VENDOR_NAMES),
+                            re.IGNORECASE)
+
+
+def test_the_vendor_pattern_catches_the_names_the_owner_gave_and_not_a_base64_blob():
+    for text in ("Production" + "_Center1", "the Production" + "_Center1 table", "B" + "HS-2", "B" + "HS2", "a B" + "HS line",
+                 "BQMES" + "PAHT", "P0" + "4P-shaped"):
+        assert VENDOR_PATTERN.search(text), text
+    for text in ("x9B" + "HSq", "+B" + "HS/", "aB" + "HS", "CORR-2"):
+        assert not VENDOR_PATTERN.search(text), text
 
 
 def test_no_vendor_or_source_system_name_appears_in_the_repository():
@@ -380,7 +393,7 @@ def test_no_vendor_or_source_system_name_appears_in_the_repository():
         tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, timeout=30).stdout.split()
     except (OSError, subprocess.TimeoutExpired):
         pytest.skip("git unavailable")
-    pattern = re.compile("(?<![A-Za-z0-9+/_])(?:" + "|".join(VENDOR_NAMES) + ")(?![A-Za-z0-9+/_])", re.IGNORECASE)
+    pattern = VENDOR_PATTERN
     hits = []
     for name in tracked:
         try:

@@ -1,11 +1,12 @@
-"""The app's data source: a rolling year of synthetic production in one in-memory DuckDB.
+"""The app's data source: synthetic production in one in-memory DuckDB.
 
-The dataset is a window, not a file (issue #35): every production day (Mon-Fri)
-from `as_of` minus 365 days to `as_of`. `INVESTIGATOR_AS_OF` pins `as_of` (tests
-and the golden set use 2026-09-30); unset, a store booting from a prebuilt
-folder takes the window that folder was built for (the image's window is fixed
-at image build), and otherwise `as_of` is yesterday. Every day is generated from
-its own date-keyed streams (`synth.generate_day`), so a day's records are the
+The dataset is a window, not a file (issue #35). The served window runs from
+1 January 2025 to yesterday, a fixed start and a rolling end (owner, issue #100).
+`INVESTIGATOR_AS_OF` pins a rolling year instead, every production day (Mon-Fri)
+from `as_of` minus 365 days to `as_of` (tests and the golden set use 2026-09-30);
+a store booting from a prebuilt folder takes the window that folder was built for
+(the image's window is fixed at image build). Every day is generated from its own
+date-keyed streams (`synth.generate_day`), so a day's records are the
 same in every window that contains it.
 
 `RecordStore` generates the record families once (`synth.generate_days`,
@@ -43,11 +44,11 @@ import duckdb
 from . import records as R
 from .analysis import Analysis, load_rows
 from .fixture import GRADES
-from .synth import DATASET_SPAN_DAYS, generate_days, weekdays_between, window_bounds
+from .synth import DATA_START, DATASET_SPAN_DAYS, generate_days, weekdays_between, window_bounds
 
 DEFAULT_SEED = 2026
 DEFAULT_MACHINE = "CORR-1"
-AS_OF_ENV = "INVESTIGATOR_AS_OF"         # YYYY-MM-DD: the window's last calendar day; unset = the prebuilt folder's, else yesterday
+AS_OF_ENV = "INVESTIGATOR_AS_OF"         # YYYY-MM-DD: pins the rolling year ending that day; unset = the prebuilt folder's, else 2025-01-01 to yesterday
 PREBUILT_ENV = "INVESTIGATOR_PREBUILT"   # folder written by `python -m investigator.prebuilt`; unset = generate at boot
 # 2: the folder also carries the derived shift_kpis table (issue #34). 3: the window replaces the months and
 # records.pkl holds one pickled blob per production day, unpickled on first use (issue #35: a year of record
@@ -85,7 +86,8 @@ TABLES = {
                      "sheet_width_in DOUBLE, sheet_length_in DOUBLE, nominal_cuts INTEGER, actual_cuts INTEGER, "
                      "cutoff_waste_boards INTEGER, stacker_waste_boards INTEGER, cutoff_waste_sqft DOUBLE, "
                      "stacker_waste_sqft DOUBLE, stack_height INTEGER, folds INTEGER, sheets_per_pallet INTEGER, "
-                     "pallets INTEGER, perforation_length_in DOUBLE"),
+                     "pallets INTEGER, perforation_length_in DOUBLE, width_share DOUBLE, allocated_trim_sqft DOUBLE, "
+                     "allocated_shear_sqft DOUBLE"),
     "customers": "customer_id VARCHAR, name VARCHAR, segment VARCHAR, destination VARCHAR, ship_to VARCHAR",
     "rejects": ("setup_id VARCHAR, production_date DATE, shift INTEGER, lane INTEGER, category VARCHAR, reason VARCHAR, "
                 "liner VARCHAR, side VARCHAR, counted_as VARCHAR, sheets INTEGER, sqft DOUBLE"),
@@ -371,11 +373,13 @@ def _prebuilt_window(folder):
 
 
 def dataset_window(as_of=None, prebuilt=None, today=None):
-    """The (first, last) calendar dates of the dataset: the rolling window of DATASET_SPAN_DAYS
-    ending on `as_of`. Resolved in this order: the argument; INVESTIGATOR_AS_OF; the window of the
-    prebuilt folder (the argument, else INVESTIGATOR_PREBUILT), so a container keeps the window its
-    image was built with however long it runs; else yesterday (`today` minus one day), the last
-    production day whose three shifts have all started."""
+    """The (first, last) calendar dates of the dataset. Resolved in this order: a pinned `as_of` (the
+    argument, else INVESTIGATOR_AS_OF) gives the rolling year of DATASET_SPAN_DAYS ending on it, the
+    golden set's window (2026-09-30 for the tests and the evals); the window of the prebuilt folder (the
+    argument, else INVESTIGATOR_PREBUILT), so a container keeps the window its image was built with
+    however long it runs; else the served data, from DATA_START (1 January 2025, a fixed start, so
+    year-to-date has a full previous year under it; owner, issue #100) to yesterday (`today` minus one
+    day), the last production day whose three shifts have all started."""
     if as_of is not None:
         return window_bounds(as_of if isinstance(as_of, date) else _parse_as_of(as_of, "as_of"))
     value = os.environ.get(AS_OF_ENV, "").strip()
@@ -385,7 +389,7 @@ def dataset_window(as_of=None, prebuilt=None, today=None):
     window = _prebuilt_window(folder) if folder else None
     if window is not None:
         return window
-    return window_bounds((today or date.today()) - timedelta(days=1))
+    return DATA_START, (today or date.today()) - timedelta(days=1)
 
 
 class RecordStore:
@@ -509,6 +513,7 @@ class RecordStore:
         tables = {name: [] for name in TABLES}
         for s in data["dry_end_setups"]:
             day = cls._iso(s.production_date)
+            used = s.used_width_in
             tables["setups"].append([
                 s.setup_id, day, s.shift, s.wet_end_id, s.quality_id, GRADES[s.quality_id], s.start, s.end,
                 float(s.elapsed_seconds), float(s.run_seconds), float(s.stop_seconds), s.stops, s.lineal_ft,
@@ -521,7 +526,9 @@ class RecordStore:
                     c.order_quantity, c.outs, float(c.sheet_width_in), float(c.sheet_length_in), c.nominal_cuts, c.actual_cuts,
                     c.cutoff_waste_boards, c.stacker_waste_boards, c.cutoff_waste_sqft, c.stacker_waste_sqft,
                     c.stack_height_sheets, c.folds, c.sheets_per_pallet, c.pallets,
-                    None if c.perforation_length_in is None else float(c.perforation_length_in)])
+                    None if c.perforation_length_in is None else float(c.perforation_length_in),
+                    # identity 6 (issue #100): a lane's share of the setup's shared waste is its share of the used width
+                    c.used_width_in / used, s.trim_sqft * c.used_width_in / used, s.shear_sqft * c.used_width_in / used])
             for r in s.rejects:
                 tables["rejects"].append([s.setup_id, day, s.shift, r.lane, r.category, r.reason, r.liner, r.side,
                                           R.counted_as(r.category), r.sheets, r.sqft])
@@ -587,8 +594,10 @@ class RecordStore:
             raise ValueError("Invalid record interval")
         if not 1 <= len(s.lanes) <= 3 or [c.lane for c in s.lanes] != list(range(1, len(s.lanes) + 1)):
             raise ValueError("Expected one to three order lanes")
-        # The lanes' outs x sheet width fit inside the web less the recorded trim (issue #100).
-        if sum(c.sheet_width_in * c.outs for c in s.lanes) > width * (1 - s.trim_pct / 100) + 0.01:
+        # The lanes' outs x sheet width fit inside the web, and the recorded trim percentage is the rest of it
+        # (issue #100): used + trim_pct x web = web, to trim_pct's two decimals.
+        used = sum(c.sheet_width_in * c.outs for c in s.lanes)
+        if used > width or not 0 <= s.trim_pct < 100 or abs(used + s.trim_pct * width / 100 - width) > 0.01:
             raise ValueError("Invalid centered web placement")
         if any(r.category not in R.reject_categories() or r.reason not in R.reject_reasons(r.category) for r in s.rejects):
             raise ValueError("Reject line outside the reject taxonomy")
@@ -618,7 +627,8 @@ class RecordStore:
                     continue
                 setup_rows.append([s.setup_id, s.shift, s.wet_end_id, s.quality_id, float(GRADES[s.quality_id]),
                                    float(s.elapsed_seconds), s.lineal_ft, s.gross_sqft, trim, s.shear_sqft,
-                                   s.reject_sqft, s.start, s.end, float(s.web_width_in)])
+                                   s.reject_sqft, s.start, s.end, float(s.web_width_in),
+                                   s.cutoff_waste_sqft + s.stacker_waste_sqft])
                 for c in s.lanes:
                     # The daily order matrix keeps its per-record reading: planned and produced are this
                     # record's sheets; the order's quantity lives in setup_orders.order_quantity (issue #100),

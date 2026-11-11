@@ -260,11 +260,11 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`287/302 golden · 12 ms p50` while the 15 recordings are stale) is `evals.badge` of
+- The badge on the main page (`295/310 golden · 14 ms p50` while the 15 recordings are stale) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 296 cases make 302 runs because six offline cases also have a
+recorded variant: 304 cases make 310 runs because six offline cases also have a
 recording. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can

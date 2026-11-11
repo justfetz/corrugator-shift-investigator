@@ -71,6 +71,8 @@ The setup record carries its lanes embedded, as a machine writes them. The store
 | `cutoff_waste_sqft`, `stacker_waste_sqft` | | the boards × the lane's sheet area; their own waste lines, never dry-end quality |
 | `stack_height` | | sheets per stack (`stack_height_sheets` in the record) |
 | `folds`, `sheets_per_pallet`, `pallets`, `perforation_length_in` | `FoldsN`, `SheetsPerPalletN`, `PalletsN`, `PerforationLengthN` | fanfold lanes only; null on every other lane |
+| `width_share` | (ours) | the lane's share of the setup's used width, outs × sheet width / used width; the shares of a setup add to one |
+| `allocated_trim_sqft`, `allocated_shear_sqft` | (ours) | the lane's part of the setup's side trim and shear chops: the setup's figure × `width_share` (identity 6) |
 
 ## customers: the dimension
 
@@ -109,7 +111,7 @@ One line per lane and category of a setup. The reasons are the owner-approved ta
 | Print | `print` | not stated | dry-end |
 | Planning / admin (not production waste) | `planning` | no | excluded, reported separately |
 
-The reasons inside each category are in the JSON. The demo generator emits only the four categories the dry-end tiles show (`bond`, `warp`, `misalignment`, `cracking`), so the four add up to the dry-end total; the store classifies a line of any category by its `counted_as`, so a record that carries a changeover or planning line keeps it out of dry-end waste. There is no moisture category: dry board sits under bond and warp is its own category, so moisture's old tile is now cracking / surface. Dry-end waste as a percent of the yield after trim and shear is the targets issue's change (#101); the tiles here are still a percent of gross.
+The reasons inside each category are in the JSON. The demo generator emits only the four categories the dry-end tiles show (`bond`, `warp`, `misalignment`, `cracking`), so the four add up to the dry-end total; the store classifies a line of any category by its `counted_as`, so a record that carries a changeover or planning line keeps it out of dry-end waste. The tools do not yet add changeover lines to shear or list planning lines as their own report; with none generated nothing is lost today, and a record that carried them would show their area in the unexplained remainder until they do. There is no moisture category: dry board sits under bond and warp is its own category, so moisture's old tile is now cracking / surface. Dry-end waste as a percent of the yield after trim and shear is the targets issue's change (#101); the tiles here are still a percent of gross.
 
 ## stops: the downtime log
 
@@ -175,7 +177,7 @@ The generator schedules orders into setups and does not draw setups at random (o
 3. The lanes of a setup end within **one knife rotation**: the lane that needs the least travel sets the length (its cuts are ⌈remaining sheets / outs⌉), and each other lane runs only as far as its pair, ⌊guide inches / its sheet length⌋.
 4. `scheduled_lineal_ft` is the longest lane's plan; `lineal_ft` is the actual travel (the order travel plus the shear chops).
 5. An order is complete when the sheets scheduled over its setups reach its quantity. A lane that did not finish carries its remainder into the next setup. That setup is often one knife with more outs, possibly on narrower paper: the scheduler picks the narrowest web that leaves the minimum trim.
-6. Gross = web width × lineal / 12; trim sq ft = trim inches × order travel / 12. A customer's share of a setup's waste is the setup's waste × the lane's share of the used width.
+6. Gross = web width × lineal / 12; trim sq ft = trim inches × order travel / 12. A customer's share of a setup's waste is the setup's waste × the lane's share of the used width: `setup_orders.width_share`, with the lane's part of the setup's trim and shear beside it (its rejects and waste boards are already its own). One departure, for the owner to confirm: the owner wrote trim = trim inches × lineal, and here it is over the order travel, because the shear chop runs the full web and carries no side trim of its own (the chop's area is all in `shear_sqft`).
 
 **The owner's worked example**, reproduced exactly by `tests/test_setup_math.py`. Orders: AC Box 15 × 35 in, 2,000 sheets; Jerry's Packaging 17 × 47 in, 3,000 sheets.
 

@@ -12,7 +12,7 @@ For each valid setup, let F be gross machine lineal feet, G gross square feet, T
 | Wet-end speed | sum(F) / sum(m) within a wet-end ID | Includes downtime; not running-only speed |
 | Speed / target | 100 × sum(F) / sum(v × m) | Grade-duration weighted; do not average run percentages |
 | Gross output | sum(G) | F × web width / 12, before waste deductions |
-| Estimated good output | sum(G − T − S − R) | Accounting estimate under the demo's waste convention, not accepted/sold product |
+| Estimated good output | sum(G − T − S − R − B), B the lanes' cutoff-knife and stacker waste boards (issue #100) | Accounting estimate under the demo's waste convention, not accepted/sold product |
 | Maintenance / Operator | 100 × minutes of that kind / 480 | Separate measures, each with its own target |
 | Total downtime | 100 × all stop minutes / 480 | Validated non-overlapping stops only |
 | Trim / shear / dry-end waste | 100 × sum(category area) / sum(G) | Area-weighted percentages |
@@ -116,8 +116,8 @@ Every measure is a raw numerator or denominator, never a percentage, so any wind
 | `trim_sqft` | `DOUBLE` | sum(T): `trim_pct`, `estimated_good_sqft`, `unexplained_pct` |
 | `shear_sqft` | `DOUBLE` | sum(S): `shear_pct`, `estimated_good_sqft`, `unexplained_pct` |
 | `reject_sqft` | `DOUBLE` | sum(R), the dry-end lines: `dry_end_pct`, `estimated_good_sqft`, `unexplained_pct` |
-| `cutoff_waste_sqft` | `DOUBLE` | The lanes' cutoff-knife waste boards (the waste breakdown's cutoff line): `unexplained_pct` |
-| `stacker_waste_sqft` | `DOUBLE` | The lanes' stacker waste boards (the waste breakdown's stacker line): `unexplained_pct` |
+| `cutoff_waste_sqft` | `DOUBLE` | The lanes' cutoff-knife waste boards (the waste breakdown's cutoff line): `estimated_good_sqft`, `unexplained_pct` |
+| `stacker_waste_sqft` | `DOUBLE` | The lanes' stacker waste boards (the waste breakdown's stacker line): `estimated_good_sqft`, `unexplained_pct` |
 | `bond_sqft` | `DOUBLE` | Dry-end reject lines of the bond category: `bond_pct` |
 | `warp_sqft` | `DOUBLE` | Dry-end reject lines of the warp category: `warp_pct` |
 | `misalignment_sqft` | `DOUBLE` | Dry-end reject lines of the misalignment category: `misalignment_pct` |

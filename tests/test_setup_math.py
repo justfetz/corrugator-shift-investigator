@@ -62,6 +62,11 @@ def test_the_scheduler_pairs_the_two_orders_the_same_way():
     assert trim == 4 and [(o["order_number"], outs) for o, outs in lanes] == [("SO-AC", 3), ("SO-JP", 3)]
     assert guide == 0 and cuts == [667, 496]
     assert jerrys["remaining"] - cuts[1] * 3 == 1512
-    # With the generator's own minimum (1 in a side) the narrowest paper for the remainder is wider:
-    # 6 out x 17 = 102 in on 105-in paper trims 2.9%, less than 5 out on 90-in paper.
+    # The remainder, as the generator's remainder path picks its paper (`_narrowest_paper`, with its own minimum trim
+    # of 1 in a side): 6 out x 17 = 102 in on 105-in paper would trim less (2.9%), but 6 out runs only 252 cuts x 47 in
+    # = 987 ft, under the 1,000-ft shortest setup, so it is 5 out on 90-in paper, the owner's setup 2.
+    jerrys["remaining"] = 1512
     assert TRIM_MIN_IN == 2 and narrowest_web(102, TRIM_MIN_IN) == 105 and round(trim_pct(102, 105), 1) == 2.9
+    assert planner._narrowest_paper(jerrys) == (90, 5)
+    trim, lanes, guide, cuts = planner._fit(jerrys, [], 90, 5, pairs=False)
+    assert trim == 5 and [outs for _, outs in lanes] == [5] and cuts == [303]

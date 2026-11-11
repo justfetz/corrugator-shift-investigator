@@ -24,9 +24,11 @@ analysis module reads.
 
 Calendar: production days are Monday to Friday (weekends are plant-down and
 emit nothing; there is no holiday calendar). Each production day has three
-480-minute shifts starting 07:00 and is labelled by its start date. The
-dataset is a rolling window (`window_days`): every production day from
-`as_of` minus DATASET_SPAN_DAYS to `as_of`.
+480-minute shifts starting 07:00 and is labelled by its start date. The served
+dataset runs from DATA_START (1 January 2025) to yesterday, a fixed start and a
+rolling end (owner, issue #100); a pinned `as_of` (the golden set) keeps the
+rolling year `window_days`: every production day from `as_of` minus
+DATASET_SPAN_DAYS to `as_of`.
 """
 from calendar import monthrange
 from dataclasses import dataclass, field
@@ -76,7 +78,8 @@ POWER_OUTAGE_MINUTES = (10, 15)           # one per month
 MONDAY_MAINTENANCE, AUGUST_MAINTENANCE, MONDAY_OPERATOR = 1.40, 1.08, 1.15
 RUN_MINUTES_PER_SHIFT = 460               # budget basis for the stop rates
 CREW_EPOCH = date(2026, 8, 3)             # the Monday the crew rotation counts weeks from (the original dataset's first Monday)
-DATASET_SPAN_DAYS = 365                   # the rolling window: every production day from as_of - 365 days to as_of
+DATASET_SPAN_DAYS = 365                   # a pinned window (the golden set): every production day from as_of - 365 days to as_of
+DATA_START = date(2025, 1, 1)             # the served data's first day: 1 January 2025 to yesterday (owner, issue #100)
 COMMENT_EMPTY_SHARE = 0.40                # downtime log rows whose comment is left empty
 
 # Waste boards per lane the record carries at the cutoff knife and the stacker, by change code.

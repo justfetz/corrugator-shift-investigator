@@ -15,7 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 from legacy_period_report import LegacyPeriodReports, legacy_sums  # noqa: E402
 from investigator.periods import PeriodReports, shift_matrix_row  # noqa: E402
-from investigator.record_store import KPI_CATALOG, SHIFT_KPIS, default_store  # noqa: E402
+from investigator.record_store import KPI_CATALOG, KPI_UNITS as UNITS, SHIFT_KPIS, default_store  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 # Fields that name a run or time it, not a tile: they differ between any two runs.
@@ -113,12 +113,13 @@ def assert_tiles_same(new, old, label):
     or one flip of the last displayed digit where a value sits on a rounding boundary and the two
     summation orders land either side of it (July against June, shift 2: lineal per paper change
     19165.9 and 19166.0; issue #100's regenerated records: speed with stops 604.5 and 604.6)."""
-    def unit(value):   # the last displayed place of a tile rounded to 0-4 decimals
-        return next((10.0 ** -k for k in range(5) if round(value, k) == value), 1e-4)
+    def unit(key):   # the tile's last displayed place: 4 decimals for a percentage, 2 for minutes per stop, else 1
+        tile = UNITS.get(key, "")
+        return 1e-4 if tile.startswith("%") else 1e-2 if tile == "min/stop" else 1.0 if tile == "count" else 0.1
     assert set(new) == set(old), label
     for key, value in old.items():
         if isinstance(value, float) and isinstance(new[key], (int, float)):
-            assert round(new[key], 4) == round(value, 4) or abs(new[key] - value) <= max(1e-4, abs(value) * 1e-5, unit(value) + 1e-9), \
+            assert round(new[key], 4) == round(value, 4) or abs(new[key] - value) <= max(1e-4, abs(value) * 1e-5, unit(key) + 1e-9), \
                 (label, key, new[key], value)
         else:
             assert new[key] == value, (label, key)

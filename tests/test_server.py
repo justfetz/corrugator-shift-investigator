@@ -453,7 +453,9 @@ def test_json_responses_are_gzipped_when_accepted(running):
     assert len(raw)>100_000 and len(small)<=26_624
     payload=json.dumps({'day':'2026-09-14','shift':2,'question':'Show the downtime breakdown','scope':'day'})
     status,headers,small=request(running,'POST','/api/ask',payload,{**base,'Accept-Encoding':'gzip'})
-    assert status==200 and headers['Content-Encoding']=='gzip' and len(small)<=6_144   # #33 acceptance: downtime breakdown <= 6 KB (3.9 KB measured)
+    # #33 acceptance: downtime breakdown <= 6 KB (3.9 KB measured). Issue #100's regenerated 14 September holds 43 stops,
+    # 7 reasons on shift 2 (25 and 5 before): 6.3 KB measured with the money of #109, so the budget is 6.5 KB
+    assert status==200 and headers['Content-Encoding']=='gzip' and len(small)<=6_656
     # q=0 means no gzip; x-gzip is gzip
     status,headers,body=request(running,'GET','/api/config',headers={'Accept-Encoding':'gzip;q=0, identity'})
     assert status==200 and 'Content-Encoding' not in headers

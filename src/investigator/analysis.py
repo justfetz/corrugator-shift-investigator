@@ -71,7 +71,8 @@ def load_rows(db, table, rows):
 # path (record_store.py) both load exactly these; the tool queries never fork.
 TABLES = {
     "shifts": "shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR",
-    "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE",
+    # boards: the lanes' cutoff-knife and stacker waste boards (record contract v2, issue #100; the XML fixture has none)
+    "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE, boards DOUBLE",
     "stops": "id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, notes VARCHAR",
     "orders": "record_id VARCHAR, shift INTEGER, setup_id VARCHAR, order_id VARCHAR, grade VARCHAR, knife VARCHAR, width_in DOUBLE, length_in DOUBLE, outs INTEGER, cuts INTEGER, requested_sheets INTEGER, planned_sheets INTEGER, produced_sheets INTEGER, remaining_before INTEGER, remaining_after INTEGER",
     # One line per (setup, reject reason): the fixture writes one line per setup,
@@ -237,7 +238,7 @@ class Analysis:
                     knife.attrib['order_id'],node.attrib['grade'],knife.attrib['level'],
                     *[number(knife,k) for k in ('width_in','length_in','outs','cuts','order_quantity',
                         'planned_sheets','produced_sheets','remaining_before','remaining_after')]])
-        self._setup_rows.append([node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, datetime.fromisoformat(node.attrib["start"]), datetime.fromisoformat(node.attrib["end"]), width])
+        self._setup_rows.append([node.attrib["id"], shift, node.attrib["wet_end_id"], node.attrib["grade"], target, elapsed, feet, gross, trim, shear, rejects, datetime.fromisoformat(node.attrib["start"]), datetime.fromisoformat(node.attrib["end"]), width, 0.0])
         self._reject_rows.append([node.attrib["id"], shift, node.attrib["reject_reason"], node.attrib["reject_reason"], sheets, rejects])
 
     def _query(self, shift, sql, params):
@@ -269,7 +270,7 @@ class Analysis:
         return self._query(shift, """SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
         sum(feet) AS observed_lineal_ft, sum(feet)/480 AS observed_shift_fpm,
-        sum(gross) AS gross_sqft, sum(gross-trim-shear-rejects) AS estimated_good_sqft,
+        sum(gross) AS gross_sqft, sum(gross-trim-shear-rejects-boards) AS estimated_good_sqft,
         sum(gross)/nullif(sum(feet),0)*12 AS throughput_in,
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
         sum(shear)/nullif(sum(gross),0)*100 AS shear_pct,

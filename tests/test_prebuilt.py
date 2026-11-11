@@ -158,7 +158,10 @@ def test_a_store_without_as_of_takes_the_prebuilt_window(folder, monkeypatch):
     (scale from zero) must not move it, or the folder would no longer match and it would generate."""
     monkeypatch.delenv("INVESTIGATOR_AS_OF", raising=False)
     assert dataset_window(prebuilt=folder) == MONTH
-    assert dataset_window(prebuilt="", today=date(2026, 11, 10)) == (date(2025, 11, 9), date(2026, 11, 9))   # else: yesterday
+    # else: the served data, from 1 January 2025 to yesterday (owner, issue #100: a fixed start, a rolling end)
+    assert dataset_window(prebuilt="", today=date(2026, 11, 10)) == (date(2025, 1, 1), date(2026, 11, 9))
+    assert dataset_window(prebuilt="", today=date(2027, 3, 2))[0] == date(2025, 1, 1)
+    assert dataset_window(as_of="2026-11-09", prebuilt="") == (date(2025, 11, 9), date(2026, 11, 9))   # a pinned as-of: the year
     monkeypatch.setenv("INVESTIGATOR_PREBUILT", str(folder))
     store = RecordStore()
     try:

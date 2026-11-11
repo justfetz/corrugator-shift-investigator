@@ -70,7 +70,7 @@ def shift_matrix_row(k):
             'speed_to_target_pct': ratio(feet, k['target_ft'], 100),
             'observed_lineal_ft': feet if n else None, 'observed_shift_fpm': feet/480 if n else None,
             'gross_sqft': gross if n else None,
-            'estimated_good_sqft': gross-k['trim_sqft']-k['shear_sqft']-k['reject_sqft'] if n else None,
+            'estimated_good_sqft': gross-k['trim_sqft']-k['shear_sqft']-k['reject_sqft']-k['cutoff_waste_sqft']-k['stacker_waste_sqft'] if n else None,
             'throughput_in': ratio(gross, feet, 12),
             'trim_pct': ratio(k['trim_sqft'], gross, 100), 'shear_pct': ratio(k['shear_sqft'], gross, 100),
             'dry_end_pct': ratio(k['reject_sqft'], gross, 100),
@@ -158,7 +158,7 @@ class PeriodReports:
         rid=uuid4().hex
         sections=[f'Synthetic {period_name} report: {label}. '+('Selected shift '+str(shift)+'.' if scope=='shift' else 'All three shifts.'),
             f'{len(current)} available shift records. {totals["valid_setups"]} valid dry-end setups; {totals["paper_changes"]} paper changes (wet-end runs).',
-            f'Estimated good output {round(totals["estimated_good_sqft"], 1):,.0f} sq ft after recorded trim, shear and dry-end rejects. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
+            f'Estimated good output {round(totals["estimated_good_sqft"], 1):,.0f} sq ft after recorded trim, shear, dry-end rejects and waste boards. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
         if not complete: sections.append('Current period is incomplete: missing days or excluded records. Observed totals only; rankings withheld.')
         if complete and old_complete:
             sections.append(f'Previous period {old_start} to {old_end}: speed change {totals["observed_shift_fpm"]-old["observed_shift_fpm"]:+.1f} ft/min; maintenance change {totals["maintenance_pct"]-old["maintenance_pct"]:+.2f} percentage points.')
@@ -220,4 +220,4 @@ class PeriodReports:
             'production_day':day,'period_label':label,'selected_shifts':shifts,'sections':sections,'tables':tables,'charts':charts,'trace':[trace],
             'evidence_ids':[rid],'context':{'production_day':day,'shift':shift,'scope':scope,'history':[]},
             'usage':{'tool_calls':1,'model_calls':0,'cost_usd':0},
-            'limitations':f'Synthetic records. {period_name} uses the displayed dates. Estimated good square feet subtracts recorded trim, shear and dry-end rejects from gross area; it is not a customer-acceptance claim. The demo 4-4-5 year starts {ACCOUNTING_445_START} pending plant confirmation. Notes are observations, not causal proof. Missing periods are not ranked.'}
+            'limitations':f'Synthetic records. {period_name} uses the displayed dates. Estimated good square feet subtracts recorded trim, shear, dry-end rejects and waste boards from gross area; it is not a customer-acceptance claim. The demo 4-4-5 year starts {ACCOUNTING_445_START} pending plant confirmation. Notes are observations, not causal proof. Missing periods are not ranked.'}

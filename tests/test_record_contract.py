@@ -12,6 +12,7 @@ import pytest
 
 from investigator import records as R
 from investigator.record_store import TABLES, RecordStore, default_store
+from investigator.synth import TRIM_MIN_IN
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "docs" / "RECORD_CONTRACT.md"
@@ -27,14 +28,45 @@ def count(store, sql):
 
 
 def test_setup_orders_outs_times_width_fit_the_web_less_the_trim_for_every_setup(store):
-    """Acceptance: for every setup of the year, the order lanes' outs x sheet width is at most the web width
-    minus the trim the setup carries (trim_pct of the web), and every setup has one to three lanes."""
-    over = ("SELECT count(*) AS n FROM (SELECT s.setup_id FROM setups s JOIN setup_orders o USING (setup_id) "
-            "GROUP BY s.setup_id, s.web_width_in, s.trim_pct "
-            "HAVING sum(o.outs * o.sheet_width_in) > s.web_width_in * (1 - s.trim_pct / 100) + 0.01)")
+    """Acceptance: for every setup of the year, the order lanes' outs x sheet width is at most the web width minus
+    the minimum trim (1 inch a side), and the trim the setup records is the rest of the web, both as trim_pct and
+    as trim_sqft over its order travel (lineal less the chops); every setup has one to three lanes."""
+    lanes = ("SELECT s.setup_id, s.web_width_in AS web, s.trim_pct, s.trim_sqft, "
+             "s.lineal_ft - s.shear_sqft * 12 / s.web_width_in AS travel, sum(o.outs * o.sheet_width_in) AS used "
+             "FROM setups s JOIN setup_orders o USING (setup_id) GROUP BY ALL")
+    over = f"SELECT count(*) AS n FROM ({lanes}) WHERE used > web - {TRIM_MIN_IN}"
     assert count(store, over) == 0
+    off = f"SELECT count(*) AS n FROM ({lanes}) WHERE abs(used + trim_pct * web / 100 - web) > 0.01 OR abs(trim_sqft * 12 / travel - (web - used)) > 0.05"
+    assert count(store, off) == 0
     lanes = "SELECT count(*) AS n FROM (SELECT setup_id, count(*) AS k FROM setup_orders GROUP BY setup_id) WHERE k BETWEEN 1 AND 3"
     assert count(store, lanes) == count(store, "SELECT count(*) AS n FROM setups") == store.counts["setups"]
+
+
+def test_a_setup_whose_lanes_overfill_the_web_is_refused():
+    """The validator bounds the lanes by the web itself, and the recorded trim must be the rest of it: a record whose
+    lanes add to more than the web, or whose trim_pct disagrees with its lanes, is excluded, never charted."""
+    day = default_store()._day_records(default_store().last_day)["setups"]
+    wide = copy.deepcopy(day[0])
+    wide.lanes[0].outs += 10   # e.g. 247 in of sheets on a 100 in web
+    with pytest.raises(ValueError, match="centered web placement"):
+        RecordStore._validate_setup(wide, wide.trim_sqft)
+    off = copy.deepcopy(day[0])
+    off.trim_pct += 1.0
+    with pytest.raises(ValueError, match="centered web placement"):
+        RecordStore._validate_setup(off, off.trim_sqft)
+
+
+def test_a_lanes_share_of_the_setups_waste_is_its_share_of_the_used_width(store):
+    """Identity 6 (owner, issue #100): per-customer waste allocation = the setup's waste x the lane's share of the
+    used width. setup_orders carries the share and the lane's part of the setup's side trim and shear; the shares add
+    to one and the parts to the setup's own trim and shear, for every setup of the year."""
+    sql = ("SELECT count(*) AS n FROM (SELECT s.setup_id, sum(o.width_share) AS share, sum(o.allocated_trim_sqft) AS trim, "
+           "sum(o.allocated_shear_sqft) AS shear, any_value(s.trim_sqft) AS t, any_value(s.shear_sqft) AS c "
+           "FROM setups s JOIN setup_orders o USING (setup_id) GROUP BY s.setup_id) "
+           "WHERE abs(share - 1) > 1e-9 OR abs(trim - t) > 1e-6 OR abs(shear - c) > 1e-6")
+    assert count(store, sql) == 0
+    wrong = "SELECT count(*) AS n FROM setup_orders o JOIN (SELECT setup_id, sum(outs * sheet_width_in) AS used FROM setup_orders GROUP BY setup_id) u USING (setup_id) WHERE abs(o.width_share - o.outs * o.sheet_width_in / u.used) > 1e-12"
+    assert count(store, wrong) == 0
 
 
 def test_every_setups_stop_rows_sum_to_its_stop_seconds_and_count(store):

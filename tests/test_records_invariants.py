@@ -74,14 +74,16 @@ def test_calendar_is_three_shifts_per_weekday_of_both_months(data):
 
 
 def test_lanes_fit_the_web_less_the_trim_for_every_setup(setups):
-    """Acceptance (issue #100): the lanes' outs x sheet width fit inside the web width minus the trim the
-    record carries (trim_pct x web), with the trim split evenly, 1 to 7 inches a side."""
+    """Acceptance (issue #100): the lanes' outs x sheet width fit inside the web width minus the trim, at least
+    the minimum trim of 1 inch a side and at most 7; the trim the record carries agrees, both as trim_pct of the
+    web and as trim_sqft over the order travel."""
     for setup in setups:
         assert setup.web_width_in in R.WEB_WIDTHS and setup.quality_id in GRADES
         assert 1 <= len(setup.lanes) <= 3
-        recorded_trim_in = setup.trim_pct * setup.web_width_in / 100
         used = sum(lane.outs * lane.sheet_width_in for lane in setup.lanes)
-        assert used <= setup.web_width_in - recorded_trim_in + 0.01, setup.setup_id
+        assert used <= setup.web_width_in - TRIM_MIN_IN, setup.setup_id
+        assert setup.trim_pct * setup.web_width_in / 100 == pytest.approx(setup.web_width_in - used, abs=0.01)
+        assert setup.trim_sqft * 12 / setup.order_travel_ft == pytest.approx(setup.web_width_in - used, abs=0.05)
         assert used + setup.trim_in == setup.web_width_in
         assert TRIM_MIN_IN <= setup.trim_in <= TRIM_MAX_IN and 1 <= setup.trim_in / 2 <= 7   # per side, web centered
         for number, lane in enumerate(setup.lanes, 1):
