@@ -735,7 +735,13 @@ function railRange(s){
  return null;
 }
 function answeredScope(s,result){
- const step=(result.trace||[]).find(e=>e.ok&&e.data&&e.data.window&&e.data.window.label), out={who:null,window:null}; if(!step)return out;
+ const steps=(result.trace||[]).filter(e=>e.ok&&e.data), step=steps.find(e=>e.data.window&&e.data.window.label), out={who:null,window:null};
+ if(!step){   // a day answer the question moved (#105: "third shift yesterday", "show shift 1"): the day and the one shift its daily tools read
+  const days=[...new Set(steps.map(e=>e.data.production_day).filter(d=>typeof d==='string'))], shifts=[...new Set(steps.map(e=>e.data.shift).filter(n=>typeof n==='number'))];
+  if(days.length===1&&(s.period!=='day'||days[0]!==s.day))out.window=windowText({...s,period:'day',day:days[0]});
+  if(s.scope==='shift'&&shifts.length===1&&shifts[0]!==Number(s.shift))out.who=`Shift ${shifts[0]}`;
+  return out;
+ }
  const w=step.data.window, period=w.period==='fiscal'?'accounting':w.period, range=railRange(s);
  if(period!==s.period||(range?(w.start!==range[0]||w.end!==range[1]):w.anchor!==s.day))out.window=w.label;
  const who=step.data.shift===null?'All shifts':typeof step.data.shift==='number'?`Shift ${step.data.shift}`:null;

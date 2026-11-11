@@ -620,6 +620,14 @@ const issue63=issue17.then(async()=>{
  assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s2)},answered:answeredScope(${JSON.stringify(s2)},${JSON.stringify({trace:[{ok:true,data:{window:september,shift:2,rows:[]}}]})})})`,context),'Shift 2 · September 2026 (2026-09-01 to 2026-09-30)');   // the review's case: the shift kept, only the window is the tool's
  const sm={...s1,period:'month'};
  assert.equal(vm.runInContext(`answeredScope(${JSON.stringify(sm)},${JSON.stringify(windowed(september))}).window`,context),null);   // a month on the rail is the same month the tool ran
+ // issue #105: a day answer the question moved says the day and the shift its daily tools read, not the rail's
+ const daily=(day,...shifts)=>({mode:'offline',trace:shifts.map((n,i)=>({result_id:`d:${i}`,tool:'get_shift_kpis',ok:true,elapsed_ms:1,data:{production_day:day,shift:n,coverage:'complete',rows:[]}}))});
+ const sw={...s1,period:'week'};
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(sw)},answered:answeredScope(${JSON.stringify(sw)},${JSON.stringify(daily('2026-09-11',3,3))})})`,context),'Shift 3 · Fri 11 Sep 2026');   // "third shift yesterday" from shift 1, Week, Mon 14 Sep
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s2)},answered:answeredScope(${JSON.stringify(s2)},${JSON.stringify(daily('2026-09-14',1))})})`,context),'Shift 1 · Mon 14 Sep 2026');   // "show shift 1" on shift 2
+ assert.deepEqual(JSON.parse(vm.runInContext(`JSON.stringify(answeredScope(${JSON.stringify(s2)},${JSON.stringify(daily('2026-09-14',2))}))`,context)),{who:null,window:null});   // the rail's own day and shift
+ const sd={...s1,scope:'day'};
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(sd)},answered:answeredScope(${JSON.stringify(sd)},${JSON.stringify(daily('2026-09-14',1,2,3))})})`,context),'All shifts · Mon 14 Sep 2026');   // a comparison of all three keeps the rail
 
  // 6. "Clear the thread" empties it.
  elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);
