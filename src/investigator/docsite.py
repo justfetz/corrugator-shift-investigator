@@ -8,7 +8,7 @@ runs per request, and nothing here imports beyond the standard library, so the d
 run `python -m investigator.docsite changelog` before installing anything.
 
 The Markdown is the subset these files use: ATX headings, paragraphs, `-` and `1.` lists, fenced
-code, pipe tables, block quotes, rules, and inline code, emphasis, links and autolinks. Every
+and indented code, pipe tables, block quotes, rules, and inline code, emphasis, links and autolinks. Every
 character of the source is escaped; no HTML in a document reaches the page. A relative link to a
 page of the site becomes its `/docs` address; a link to any other file goes to the file on GitHub.
 """
