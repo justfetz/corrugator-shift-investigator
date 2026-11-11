@@ -12,7 +12,7 @@ The rail's three controls are part of every question:
 | Shift | 1 (07–15), 2 (15–23), 3 (23–07), All | one 480-minute shift, or All for the whole production day and comparisons between shifts |
 | Window | Day, Week, Month, 4-4-5 | the window a question that names none is asked over: the day, its Monday-to-Friday week, its calendar month, or its 4-4-5 accounting period |
 
-The scope is authoritative. With one shift selected, "Compare that with first shift" is refused ("Selected shift only") rather than quietly querying another shift: choose **All** first. A window the question names still wins, so "this week" under Day asks about the week. A month named without a year is the latest month of that name on or before the selected day: "How did December go?" asked on 14 September 2026 is December 2025.
+A shift or window the question names wins over the controls, and the address says so: with shift 2 selected, "Why was shift 1 slow?" answers shift 1 (`/corr/1/day/2026-09-14/shift/1?measure=overview`), "this week" under Day asks about the week, and "How much downtime on 1st shift last week?" answers the week before for shift 1 (`/corr/1/week/2026-09-07/shift/1?measure=pareto`). A comparison still needs its scope: with one shift selected, "Compare that with first shift" is refused ("Selected shift only") rather than quietly querying another shift, so choose **All** first. [The URL grammar](URLS.md#the-questions-own-scope-issue-105) has the rules. A month named without a year is the latest month of that name on or before the selected day: "How did December go?" asked on 14 September 2026 is December 2025.
 
 ## Phrasings the offline planner answers
 
@@ -49,7 +49,7 @@ With All selected, "Compare all shifts" runs KPIs, downtime and speed for each s
 A refusal says what to ask instead; it never guesses.
 
 - **No measurable goal.** "How can we be better?", "Adjust the knife settings to cut trim" and "How much will we save if we fix the splicer?" are refused: the records hold no intervention outcomes, no machine state and no costs. Choose an objective the records can answer: fewer downtime minutes, less recorded waste, or better grade-target attainment in the selected scope.
-- **Relative days.** "What happened yesterday?" asks you to use the day control: answers anchor on the selected production day.
+- **Today, and a day with nothing to measure.** "Yesterday" is the production day before the selected one ("Why was yesterday slow?" on Monday 14 September answers Friday 11 September), but "How did today go?" asks you to use the day control, and "What happened yesterday?" is refused like any question that names nothing to measure.
 - **An ambiguous window.** A bare "Compare last week" asks which two windows to compare, for example "this week compared with last week".
 - **A per-shift view over a period.** The setup matrix, orders, notes and rankings are per shift and per day; under Week, Month or 4-4-5 they ask you to switch Window back to Day.
 - **A window outside the data.** A weekend, or any window before the year's first day or after its last, is unavailable with its reason, never zero. A comparison is withheld unless both windows are complete.
