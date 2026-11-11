@@ -1,32 +1,54 @@
-"""Issue #19: the two synthetic months are built once (image build) and loaded at boot.
+"""Issue #19: the synthetic window is built once (image build) and loaded at boot.
 
-The prebuilt folder is an accelerator, never a source of truth: a store loaded from
-it must be indistinguishable from a generated one, and anything stale or missing
-must fall back to generating."""
+The prebuilt folder is an accelerator, never a source of truth for the records: a
+store loaded from it must be indistinguishable from a generated one, and anything
+stale or missing must fall back to generating. Since issue #35 it also fixes the
+image's window: a store with no INVESTIGATOR_AS_OF takes the folder's window.
+
+The equivalence and fallback checks use one month (fast); the boot budget is
+measured on the full year the image ships."""
 import json
 import os
 import subprocess
 import sys
+import time
+from datetime import date
 
 import duckdb
 import pytest
 
+from investigator import record_store
 from investigator.agent import Agent, Context
-from investigator.record_store import RecordStore, TABLES, build_prebuilt, read_prebuilt, DEFAULT_SEED, DEFAULT_MONTHS, DEFAULT_MACHINE
+from investigator.record_store import (RecordStore, TABLES, build_prebuilt, dataset_window, default_store, read_prebuilt,
+                                       DEFAULT_SEED, DEFAULT_MACHINE)
+
+MONTH = (date(2026, 9, 1), date(2026, 9, 30))   # the small window of the equivalence and fallback checks
+YEAR = dataset_window()                           # the year ending INVESTIGATOR_AS_OF (tests/conftest.py)
 
 
 @pytest.fixture(scope="module")
 def folder(tmp_path_factory):
     where = tmp_path_factory.mktemp("prebuilt")
-    manifest = build_prebuilt(where)
+    manifest = build_prebuilt(where, window=MONTH)
     assert set(manifest["counts"]) == set(TABLES)
+    assert manifest["window"] == ["2026-09-01", "2026-09-30"] and (manifest["first_day"], manifest["last_day"]) == ("2026-09-01", "2026-09-30")
     assert (where / "store.duckdb").is_file() and (where / "records.pkl").is_file() and (where / "manifest.json").is_file()
     return where
 
 
 @pytest.fixture(scope="module")
+def year_folder(tmp_path_factory):
+    """The full year, as the image builds it; the build is timed (issue #35: under 2 minutes)."""
+    where = tmp_path_factory.mktemp("prebuilt-year")
+    started = time.perf_counter()
+    manifest = build_prebuilt(where, window=YEAR)
+    manifest["build_seconds"] = time.perf_counter() - started
+    return where, manifest
+
+
+@pytest.fixture(scope="module")
 def generated():
-    store = RecordStore(prebuilt="")   # an empty argument means: ignore the environment, generate
+    store = RecordStore(window=MONTH, prebuilt="")   # an empty argument means: ignore the environment, generate
     yield store
     store.close()
 
@@ -46,7 +68,7 @@ def _rows(store, table):
 
 
 def test_prebuilt_store_is_identical_to_a_generated_one(folder, generated):
-    store = RecordStore(prebuilt=folder)
+    store = RecordStore(window=MONTH, prebuilt=folder)
     try:
         assert store.boot_source == "prebuilt" and generated.boot_source == "generated"
         assert store.content_hash == generated.content_hash
@@ -87,27 +109,77 @@ def _fresh_process_boot(env):
     return json.loads(run.stdout.strip().splitlines()[-1])
 
 
-def test_prebuilt_boot_is_fast(folder):
-    """Issue #19 asks for default_store() under 200 ms with the prebuilt folder. Measured
-    here: 140-160 ms prebuilt against about 1,900 ms generated. The absolute bound is
-    300 ms so a slower CI runner does not flake; the relative bound (under a quarter of
-    the generated boot) holds the real claim on any machine."""
-    prebuilt = min((_fresh_process_boot({"INVESTIGATOR_PREBUILT": str(folder)}) for _ in range(3)), key=lambda r: r["ms"])
-    generated = _fresh_process_boot({"INVESTIGATOR_PREBUILT": ""})
-    print(f"fresh-process default_store(): prebuilt {prebuilt['ms']} ms, generated {generated['ms']} ms")
-    assert prebuilt["source"] == "prebuilt" and generated["source"] == "generated"
+def test_prebuilt_year_builds_in_budget_and_boots_fast(year_folder):
+    """Issue #19 asked for default_store() under 200 ms with the prebuilt folder over two months;
+    issue #35 keeps image boot under 300 ms over the full year and the build under 2 minutes.
+    Measured here: about 14 s to build and 200-220 ms to boot (the six tables and shift_kpis are
+    copied in; the record objects stay pickled per day until a day is read), against about 12 s
+    to generate. The relative bound (under a twentieth of the generated boot) holds the claim on
+    any machine; the absolute one is the issue's budget."""
+    where, manifest = year_folder
+    assert manifest["build_seconds"] < 120, manifest["build_seconds"]
+    assert manifest["window"] == [YEAR[0].isoformat(), YEAR[1].isoformat()] and manifest["production_days"] >= 260
+    prebuilt = min((_fresh_process_boot({"INVESTIGATOR_PREBUILT": str(where)}) for _ in range(3)), key=lambda r: r["ms"])
+    generated = default_store()   # this process's store: the same year, generated (conftest unsets INVESTIGATOR_PREBUILT)
+    print(f"year: built in {manifest['build_seconds']:.1f} s; fresh-process default_store(): prebuilt {prebuilt['ms']} ms, "
+          f"generated {generated.boot_seconds * 1000:.0f} ms")
+    assert prebuilt["source"] == "prebuilt" and generated.boot_source == "generated"
     assert prebuilt["ms"] < 300
-    assert prebuilt["ms"] < generated["ms"] / 4
+    assert prebuilt["ms"] < generated.boot_seconds * 1000 / 20
+
+
+def test_prebuilt_records_are_unpickled_one_day_at_a_time(year_folder):
+    """The record objects of a year cost about 600 ms to unpickle at once; a prebuilt store holds
+    them as one pickled blob per day and unpickles a day when it is first read, keeping at most
+    DAY_CACHE days. Answers are identical to the generated store's."""
+    where, manifest = year_folder
+    store = RecordStore(prebuilt=where)   # no window argument: INVESTIGATOR_AS_OF's, which the folder was built for
+    try:
+        assert store.boot_source == "prebuilt" and store.content_hash == manifest["content_hash"] == default_store().content_hash
+        assert store._by_day == {} and len(store._day_blobs) == manifest["production_days"]
+        a, b = store.day_analysis("2025-11-17"), default_store().day_analysis("2025-11-17")
+        try:
+            assert list(store._by_day) == ["2025-11-17"]
+            for tool, args in (("get_shift_kpis", (1,)), ("get_downtime_breakdown", (2, None, "reason"))):
+                assert json.dumps(_normalized(getattr(a, tool)(*args)), sort_keys=True, default=str) == \
+                    json.dumps(_normalized(getattr(b, tool)(*args)), sort_keys=True, default=str), tool
+        finally:
+            a.close()
+            b.close()
+        for day in store.production_days[: record_store.DAY_CACHE + 5]:
+            store.day_analysis(day).close()
+        assert len(store._by_day) == record_store.DAY_CACHE
+    finally:
+        store.close()
+
+
+def test_a_store_without_as_of_takes_the_prebuilt_window(folder, monkeypatch):
+    """The image's window is fixed when the image is built: a container that starts days later
+    (scale from zero) must not move it, or the folder would no longer match and it would generate."""
+    monkeypatch.delenv("INVESTIGATOR_AS_OF", raising=False)
+    assert dataset_window(prebuilt=folder) == MONTH
+    assert dataset_window(prebuilt="", today=date(2026, 11, 10)) == (date(2025, 11, 9), date(2026, 11, 9))   # else: yesterday
+    monkeypatch.setenv("INVESTIGATOR_PREBUILT", str(folder))
+    store = RecordStore()
+    try:
+        assert store.boot_source == "prebuilt" and store.window == MONTH and store.as_of == date(2026, 9, 30)
+    finally:
+        store.close()
+    monkeypatch.setenv("INVESTIGATOR_AS_OF", "2026-09-30")   # an explicit as-of wins over the folder
+    assert dataset_window(prebuilt=folder) == YEAR
+    monkeypatch.setenv("INVESTIGATOR_AS_OF", "30 September")
+    with pytest.raises(ValueError, match="INVESTIGATOR_AS_OF must be a YYYY-MM-DD date"):
+        dataset_window()
 
 
 def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, monkeypatch):
-    assert read_prebuilt(folder, DEFAULT_SEED, DEFAULT_MONTHS, DEFAULT_MACHINE) is not None
-    # other inputs than the folder was built for
-    assert read_prebuilt(folder, DEFAULT_SEED + 1, DEFAULT_MONTHS, DEFAULT_MACHINE) is None
-    assert read_prebuilt(folder, DEFAULT_SEED, DEFAULT_MONTHS[:1], DEFAULT_MACHINE) is None
-    assert read_prebuilt(folder, DEFAULT_SEED, DEFAULT_MONTHS, "CORR-9") is None
+    assert read_prebuilt(folder, DEFAULT_SEED, MONTH, DEFAULT_MACHINE) is not None
+    # other inputs than the folder was built for: the seed, the window (shifted by one day), the machine
+    assert read_prebuilt(folder, DEFAULT_SEED + 1, MONTH, DEFAULT_MACHINE) is None
+    assert read_prebuilt(folder, DEFAULT_SEED, (MONTH[0], date(2026, 10, 1)), DEFAULT_MACHINE) is None
+    assert read_prebuilt(folder, DEFAULT_SEED, MONTH, "CORR-9") is None
     # no folder at all
-    assert read_prebuilt(tmp_path / "nowhere", DEFAULT_SEED, DEFAULT_MONTHS, DEFAULT_MACHINE) is None
+    assert read_prebuilt(tmp_path / "nowhere", DEFAULT_SEED, MONTH, DEFAULT_MACHINE) is None
     # the generator changed since the folder was built: the fingerprint no longer matches
     stale = tmp_path / "stale"
     stale.mkdir()
@@ -116,16 +188,16 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
     manifest = json.loads((stale / "manifest.json").read_text())
     manifest["generator_fingerprint"] = "0" * 64
     (stale / "manifest.json").write_text(json.dumps(manifest))
-    assert read_prebuilt(stale, DEFAULT_SEED, DEFAULT_MONTHS, DEFAULT_MACHINE) is None
+    assert read_prebuilt(stale, DEFAULT_SEED, MONTH, DEFAULT_MACHINE) is None
     # a truncated pickle
     broken = tmp_path / "broken"
     broken.mkdir()
     for name in ("manifest.json", "store.duckdb"):
         broken.joinpath(name).write_bytes(folder.joinpath(name).read_bytes())
     (broken / "records.pkl").write_bytes(folder.joinpath("records.pkl").read_bytes()[:1000])
-    assert read_prebuilt(broken, DEFAULT_SEED, DEFAULT_MONTHS, DEFAULT_MACHINE) is None
+    assert read_prebuilt(broken, DEFAULT_SEED, MONTH, DEFAULT_MACHINE) is None
     # a RecordStore pointed at a bad folder still boots, by generating
-    store = RecordStore(prebuilt=broken)
+    store = RecordStore(window=MONTH, prebuilt=broken)
     try:
         assert store.boot_source == "generated" and store.counts["setups"] > 0
     finally:
@@ -136,7 +208,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
     for name in ("manifest.json", "records.pkl"):
         cut.joinpath(name).write_bytes(folder.joinpath(name).read_bytes())
     (cut / "store.duckdb").write_bytes(folder.joinpath("store.duckdb").read_bytes()[:4096])
-    store = RecordStore(prebuilt=cut)
+    store = RecordStore(window=MONTH, prebuilt=cut)
     try:
         assert store.boot_source == "generated" and store.counts["setups"] > 0
     finally:
@@ -155,7 +227,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
         db.execute("CHECKPOINT")
     finally:
         db.close()
-    store = RecordStore(prebuilt=drift)
+    store = RecordStore(window=MONTH, prebuilt=drift)
     try:
         assert store.boot_source == "generated"
         assert store.counts == json.loads((folder / "manifest.json").read_text())["counts"]   # nothing half-loaded was left behind
@@ -175,7 +247,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
         db.execute("CHECKPOINT")
     finally:
         db.close()
-    store = RecordStore(prebuilt=short)
+    store = RecordStore(window=MONTH, prebuilt=short)
     try:
         assert store.boot_source == "generated"
     finally:
@@ -190,7 +262,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
     manifest = json.loads((folder / "manifest.json").read_text())
     del manifest["shift_kpis_rows"]
     (unnumbered / "manifest.json").write_text(json.dumps(manifest))
-    assert read_prebuilt(unnumbered, DEFAULT_SEED, DEFAULT_MONTHS, DEFAULT_MACHINE) is None
+    assert read_prebuilt(unnumbered, DEFAULT_SEED, MONTH, DEFAULT_MACHINE) is None
     for name, damage in (("no_kpis", None), ("short_kpis", "DELETE FROM shift_kpis WHERE shift = 3 AND corrupt")):
         bad = tmp_path / name
         bad.mkdir()
@@ -206,7 +278,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
             db.execute("CHECKPOINT")
         finally:
             db.close()
-        store = RecordStore(prebuilt=bad)
+        store = RecordStore(window=MONTH, prebuilt=bad)
         try:
             assert store.boot_source == "generated", name
             assert store._db.execute("SELECT count(*) FROM shift_kpis").fetchone()[0] == 2 * 3 * len(store.production_days), name
@@ -229,7 +301,7 @@ def test_stale_or_missing_prebuilt_falls_back_to_generating(folder, tmp_path, mo
     assert len(list(package.glob("*.py"))) > 10   # the glob is doing real work
     # the environment variable is the production switch
     monkeypatch.setenv("INVESTIGATOR_PREBUILT", str(folder))
-    store = RecordStore()
+    store = RecordStore(window=MONTH)
     try:
         assert store.boot_source == "prebuilt"
     finally:

@@ -13,7 +13,7 @@ import pytest
 from investigator import records as R
 from investigator import stories
 from investigator.fixture import GRADES
-from investigator.synth import CHOP_LENGTH_IN, generate_months, production_days
+from investigator.synth import CHOP_LENGTH_IN, generate_days, generate_months, production_days, trim_target_pct, weekdays_between
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "investigator"
 
@@ -305,6 +305,29 @@ def test_output_per_production_day(data):
     full = [weeks[w] for w in sorted(weeks)][:-1]   # the last week of September is short
     moves = [abs(b - a) / a for a, b in zip(full, full[1:])]
     assert max(moves) >= 0.04   # week-to-week volume moves a few percent, not a flat line
+
+
+def test_trim_creep_ends_on_31_october_and_trim_returns_to_its_pre_story_level():
+    """Owner, PR #91: the slitter rebuild's trim creep (0.1 point a week from the 20 August rebuild)
+    ends on 31 October 2026. From 1 November the crews aim at the pre-story target again, so a window
+    past October does not keep growing (before: about 3.9% by mid-November, 7.5% by July 2027)."""
+    rebuild = stories.SLITTER_REBUILD
+    assert rebuild["trim_creep_end"] == date(2026, 10, 31)
+    baseline, creep = rebuild["baseline_trim_pct"], rebuild["trim_creep_pp_per_week"]
+    assert trim_target_pct(date(2026, 8, 19)) == trim_target_pct(rebuild["pm_date"]) == baseline
+    assert trim_target_pct(date(2026, 10, 30)) == pytest.approx(baseline + creep * 71 / 7)   # the creep's last production day
+    assert trim_target_pct(date(2026, 10, 31)) == pytest.approx(baseline + creep * 72 / 7)
+    assert all(trim_target_pct(day) == baseline for day in (date(2026, 11, 1), date(2026, 11, 2), date(2027, 3, 1), date(2027, 7, 30)))
+
+    def trim_pct(first, last):   # side trim as % of gross, from the generated records
+        setups = generate_days(weekdays_between(first, last))["dry_end_setups"]
+        return ratio(sum(s.trim_sqft for s in setups), sum(s.total_produced_sqft for s in setups))
+    before = trim_pct(date(2026, 7, 20), date(2026, 8, 14))          # four weeks before the rebuild (2.83%)
+    late_october = trim_pct(date(2026, 10, 19), date(2026, 10, 30))  # the creep's last two weeks (3.69%)
+    november = trim_pct(date(2026, 11, 2), date(2026, 11, 27))       # the four weeks after it ends (2.81%)
+    next_july = trim_pct(date(2027, 7, 5), date(2027, 7, 16))        # far past the story (2.87%)
+    assert late_october - before >= 0.6, (before, late_october)
+    assert abs(november - before) <= 0.15 and abs(next_july - before) <= 0.15, (before, november, next_july)
 
 
 def test_story_signals_are_visible_in_the_records(data):
