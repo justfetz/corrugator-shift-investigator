@@ -18,6 +18,7 @@ import re
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from .agent import Context, PERIOD_WORDS, TREND_METRICS, asked_for, period_plan
+from .cost_model import format_rates, parse_rates
 
 # URL grain <-> the Period control (web and /api/ask) <-> the period tools' name for it.
 GRAIN_TO_CONTROL = {'day': 'day', 'week': 'week', 'month': 'month', 'period': 'accounting'}
@@ -28,12 +29,13 @@ CONTROL_TO_GRAIN = {v: k for k, v in GRAIN_TO_CONTROL.items()}
 # run the daily tools; under a ranged grain they take their period form (agent.period_plan).
 INTENT_MEASURES = {'summary': 'summary', 'overview': 'overview', 'downtime': 'downtime', 'speed': 'fpm',
                    'quality': 'quality', 'compare': 'compare', 'matrix': 'setups', 'orders': 'orders',
-                   'notes': 'notes', 'ranking': 'rank'}
+                   'notes': 'notes', 'ranking': 'rank', 'dollars': 'dollars'}
 MEASURE_INTENTS = {v: k for k, v in INTENT_MEASURES.items()}
 # One record-store tool each; `kpis` becomes compare_periods when `compare=` names a window.
 STORE_MEASURES = {'kpis': 'get_period_kpis', 'pareto': 'get_downtime_pareto', 'waste': 'get_waste_breakdown',
                   'stops': 'get_stops_profile', 'grade': 'get_grade_totals', 'overrun': 'get_overrun',
-                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock'}
+                  'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock',
+                  'money': 'get_opportunities'}
 TOOL_MEASURES = {v: k for k, v in STORE_MEASURES.items()}
 # Plans the period form of a day-shaped intent runs that are more than one store tool (agent.period_plan),
 # by their tools in order. Under a ranged grain `downtime` is the Pareto alone, `quality` the waste breakdown
@@ -44,14 +46,23 @@ UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothin
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
 QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'shifts', 'rank', 'want',
-                'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'want', 'corrupt', 'after')
+                'rates', 'corrupt', 'after', 'format')
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'shifts', 'rank', 'want', 'rates', 'corrupt', 'after')
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
 MAX_URL = 2000
 PATH = re.compile(r'^/corr/(?P<machine>[A-Za-z0-9_.-]{1,32})/(?P<grain>day|week|month|period)/'
                   r'(?P<date>\d{4}-\d{2}-\d{2})(?:/shift/(?P<shift>[123]))?(?P<json>\.json)?$')
 MEASURE_HELP = ('measure is one of ' + ', '.join([*INTENT_MEASURES.values(), *STORE_MEASURES, 'report']) +
                 '; see docs/URLS.md')
+# Hand-typed spellings of a canonical state (issue #70; the "you may type · it becomes" table of docs/URLS.md).
+# `resolve_url` rewrites them before it builds the request; the server redirects them to the canonical address.
+WASTE_BY = {'grade': 'grade', 'setup': 'setups'}          # waste by grade is the grade totals, by setup the setup matrix
+PREVIOUS_BESIDE = ('pareto', 'waste', 'grade', 'rollstock')   # store answers that carry the previous window already
+PERIOD_FORMS = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis'}   # the store form each takes against a previous window
+# Store measures that run once per listed shift (`shifts=1,3`): kpis under every grain, and under a ranged grain the
+# Pareto and the waste breakdown too, since there `downtime` and `quality` split over named shifts are those (issue #90).
+SPLIT_MEASURES = tuple(PERIOD_FORMS.values())
+KPI_LED = ('overview', 'summary', 'fpm')                  # day measures whose answer leads with the KPI tiles
 
 
 def machine_slug(machine_id):
@@ -143,6 +154,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
     if wants:
         params.append(('want', ','.join(wants)))
     params.insert(0, ('measure', measure))
+    if getattr(context, 'rates', None):
+        params.append(('rates', format_rates(context.rates)))   # the assumptions the answer was priced with ride in the link
     if corrupt:
         params.append(('corrupt', '1'))
     for prior in after:
@@ -231,20 +244,33 @@ def resolve_url(url, store, max_turns=4, depth=0):
     measure = fields.get('measure')
     if measure is None:
         raise ValueError('Add measure= to ask this scope a question; ' + MEASURE_HELP)
+    measure, fields, typed = _aliases(measure, fields, grain)
     tool_period = GRAIN_TO_TOOL[grain]
     context = Context(day, shift, period=tool_period)
     context.scope = scope
+    context.rates = parse_rates(fields.get('rates'))
     window = _window(fields.get('window'), tool_period, day)
     if measure == 'report':
         if grain == 'day':
             raise ValueError('The period report needs Week, Month or 4-4-5; a day is investigated with a question')
         request = None
     else:
-        request = _request(measure, fields, context, window)
+        try:
+            request = _request(measure, fields, context, window)
+        except ValueError as exc:
+            if typed:   # the refusal names the canonical measure: say which alias became it
+                raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
+            raise
         request['asked'] = _wants(fields.get('want'))
     for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'rank'):
         if key in fields and key not in _used(measure, fields):
-            raise ValueError(f'{key}= does not apply to measure={measure}')
+            hint = ''
+            if key == 'compare':
+                hint = (': its answer carries no previous window, so compare=prev has no canonical form here; measure=kpis is '
+                        'the KPI tiles against the previous window' if fields[key] == 'prev' else
+                        ': a comparison base (none, a month or a date) is for measure=kpis; compare=prev is accepted where the '
+                        'answer carries the previous window (docs/URLS.md)')
+            raise ValueError(f'{key}= does not apply to measure={measure}' + (f' ({typed} becomes measure={measure})' if typed else '') + hint)
     history = []
     if after:
         if depth:
@@ -287,6 +313,45 @@ def _used(measure, fields):
     if measure in STORE_MEASURES:
         return {'window'}
     return set()
+
+
+def _aliases(measure, fields, grain):
+    """A hand-typed alias rewritten to its canonical measure and fields (issue #70; docs/URLS.md, "you may type ·
+    it becomes"). `measure=waste&by=grade|setup` is the totals by grade or the setup matrix. `compare=prev` (the
+    previous window of the same grain) is dropped where the answer carries that window already; under Day the
+    downtime, the rejects and the shift comparison take the store form that does (the Pareto, the waste breakdown,
+    the KPI tiles), and a measure that leads with the KPI tiles becomes the KPI compare. Returns (measure, fields,
+    the alias as typed when the measure changed, else None). An alias that cannot be normalized is a ValueError
+    naming its field; any other field is left for the checks that follow, which refuse what does not apply."""
+    out, typed = dict(fields), [f'measure={measure}']
+    if measure == 'waste' and 'by' in out:
+        by = out.pop('by')
+        if by not in WASTE_BY:
+            raise ValueError(f'by={by} does not apply to measure=waste: by=grade is the totals by grade (measure=grade) '
+                             'and by=setup the setup matrix (measure=setups)')
+        if by == 'setup' and grain != 'day':
+            raise ValueError('by=setup does not apply to measure=waste under Week, Month or 4-4-5: it is the setup matrix '
+                             '(measure=setups), which is per shift and per production day; switch Period to Day')
+        typed.append(f'by={by}')
+        measure = WASTE_BY[by]
+    if out.get('compare') == 'prev' and measure != 'kpis':   # kpis reads compare= itself; prev is its default
+        speed_by_grade = measure == 'fpm' and 'by' in out    # speed against each grade target carries no previous window
+        period_form = grain != 'day' or (measure in ('overview', 'fpm') and 'window' in out)
+        target = None
+        if measure in PREVIOUS_BESIDE or (period_form and not speed_by_grade and measure in (*PERIOD_FORMS, *KPI_LED)):
+            target = measure
+        elif grain == 'day' and 'window' not in out and not speed_by_grade and measure in (*PERIOD_FORMS, *KPI_LED):
+            target = PERIOD_FORMS.get(measure, 'kpis')
+            for key in ('by', 'kind'):
+                if key in out and not (target == 'pareto' and key == 'by'):
+                    raise ValueError(f'{key}= does not apply to measure={measure}&compare=prev under Day: against the previous '
+                                     f'production day it becomes measure={target}, which ' +
+                                     ('groups the Pareto with by=kind instead' if target == 'pareto' else f'takes no {key}='))
+        if target is not None:
+            del out['compare']
+            typed.append('compare=prev')
+            measure = target
+    return measure, out, ('&'.join(typed) if typed[0] != f'measure={measure}' else None)
 
 
 def _window(value, tool_period, day):
@@ -343,10 +408,11 @@ def _request(measure, fields, context, window):
         raise ValueError(f'Unknown measure {measure!r}; ' + MEASURE_HELP)
     if scope == 'shift':
         per_shift = [shift]
-    elif measure == 'kpis':
-        per_shift = shifts or [None]
+    elif measure in SPLIT_MEASURES and (measure == 'kpis' or context.period != 'day'):
+        per_shift = shifts or [None]   # one per listed shift: the period form of compare, downtime and quality (issue #90)
     elif len(shifts) > 1:
-        raise ValueError(f'measure={measure} runs for one shift (shifts=3) or all shifts; it is not split by shift')
+        raise ValueError(f'measure={measure} runs for one shift (shifts=3) or all shifts; it is not split by shift' +
+                         (' under Day' if measure in SPLIT_MEASURES else ''))
     else:
         per_shift = shifts or [None]
     plan = []
@@ -383,7 +449,7 @@ def _request(measure, fields, context, window):
             plan.append((STORE_MEASURES[measure], {'window': window, 'shift': s}))
     intent = {'kpis': 'period_compare', 'pareto': 'period_pareto', 'waste': 'period_waste', 'stops': 'period_stops',
               'grade': 'period_grade', 'overrun': 'period_overrun', 'opportunity': 'period_speed_opportunity',
-              'trend': 'period_trend', 'rollstock': 'period_rollstock'}[measure]
+              'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
 
@@ -423,6 +489,43 @@ def page_url(resolved, with_after=True):
         query = [('measure', 'report')] + ([('corrupt', '1')] if resolved['corrupt'] else []) + [('after', a) for a in after]
         return base + '?' + urlencode(query, safe=',/?=:-')
     return canonical_url(resolved['request'], resolved['context'], resolved['corrupt'], resolved['machine_id'], after)
+
+
+def redirect_target(url, resolved):
+    """Where the server redirects `url` (issue #70): the canonical address of its resolved state in the
+    representation `url` asked for (the `.json` suffix and `format=` kept), or None when `url` is that address
+    already. The fields compare decoded and in order, so an alias, a spelled-out default or another field order
+    redirects and a percent-encoding alone does not; the target resolves to itself, so nothing loops."""
+    path, query = split_url(url)
+    target_path, target_query = split_url(page_url(resolved))
+    suffix = '.json' if path.endswith('.json') else ''
+    pairs = parse_qsl(query, keep_blank_values=True)
+    fmt = [value for key, value in pairs if key == 'format']
+    if path == target_path + suffix and [kv for kv in pairs if kv[0] != 'format'] == parse_qsl(target_query, keep_blank_values=True):
+        return None
+    return target_path + suffix + '?' + target_query + (f'&format={fmt[0]}' if fmt else '')
+
+
+def redirect_for(url, store, max_turns=4):
+    """The address the server redirects `url` to, or None: `url` is canonical, or refused (the caller answers
+    the refusal), or its canonical spelling would not land on the same state. The last guard is for a plan
+    `canonical_url` would write in a form `resolve_url` refuses: that URL answers at its own address instead of
+    redirecting to a 400 (no plan does since issue #90, which made a ranged-grain downtime or quality split over
+    named shifts resolve as `measure=pareto&shifts=1,3`; the sweep in test_urls.py holds it at none). A target is
+    always a fixed point that runs the same plan over the same shifts; which stated objectives the address keeps
+    (`want=`) is canonical_url's own rule."""
+    try:
+        resolved = resolve_url(url, store, max_turns)
+        target = redirect_target(url, resolved)
+        if target is None:
+            return None
+        landed = resolve_url(target, store, max_turns)
+    except (ValueError, UnicodeError, TypeError, KeyError):
+        return None
+    plan = lambda request: request and (request.get('plan'), request['shifts'])
+    same = (landed['report'], landed['corrupt'], landed['history'], plan(landed['request'])) == \
+           (resolved['report'], resolved['corrupt'], resolved['history'], plan(resolved['request']))
+    return target if same and redirect_target(target, landed) is None else None
 
 
 def question_url(day, shift, scope, control_period, corrupt=False, question='', after=(), machine_id='CORR-1'):

@@ -47,6 +47,8 @@ store measures run one record-store tool over a window.
 | `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
 | `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
+| `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars | the money levers: normalizes to `money` |
+| `money` | `get_opportunities` over the window: the levers ranked in $/yr | the same |
 | `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |
 | `report` | refused: a day is investigated with a question | the deterministic period report (heatmap, daily matrix, recurring downtime, notes) |
 
@@ -59,18 +61,58 @@ Modifiers, each refused when it does not apply to the measure:
 | `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
 | `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
-| `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`) | `prev` |
-| `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's) | all three for day plans, all shifts together for store tools |
+| `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`); on other measures `prev` alone, as an alias (below) | `prev` |
+| `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's); a store measure takes one, except `kpis`, and `pareto` and `waste` under a ranged grain, which run once per shift | all three for day plans, all shifts together for store tools |
 | `rank=` | `speed`, `downtime`, `quality` | all three |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
+| `rates=` | the visitor's rates, `paper:<$/MSF>`, `hour:<$/hr>`, `margin:<$/MSF>`, `trim:<% target>`, comma-separated in that order, at most two decimals each (docs/METRICS.md, Cost model); every measure takes it, and the answer's provenance line names each rate as "yours" | the server's rates (`INVESTIGATOR_RATES`, else the post's) |
 | `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
 | `after=` | the earlier views of this conversation, each a canonical address without its own chain, at most 8; the agent keeps its `max_turns`. A period report in the chain is kept on the address but, as on the session path, enters no history | none |
 | `format=` | `json`, `pdf` | the page |
 
-One state has one spelling: the fields come in the order above, defaults are omitted, and a few
-aliases normalize (`downtime`, `quality` and `compare` under a ranged grain). `resolve_url` is tolerant
-of a hand-typed alias and strict about everything else: an unknown field, a repeated field, a modifier
-the measure does not read, or a shift outside the selected scope is a 400 with the reason.
+One state has one spelling: the fields come in the order above and defaults are omitted. `resolve_url`
+is tolerant of a hand-typed alias (below) and strict about everything else: an unknown field, a repeated
+field, a modifier the measure does not read, or a shift outside the selected scope is a 400 with the reason.
+
+## Aliases
+
+An address that reads naturally but is not the canonical spelling still answers: the server **302**s it to
+the canonical address (as `/q` does), keeping the representation (`.json`, `format=json`, `format=pdf`), so
+the address bar ends on the one spelling (issue #70). The redirect runs no tool and is not a round. The
+server redirects only to an address that resolves to itself and runs the same plan over the same shifts, so
+nothing redirects twice or to a refusal: a ranged-grain `dollars` split over named shifts (one set of
+levers per shift) has no resolvable canonical spelling yet (`measure=money&shifts=1,3` is refused, since
+the money levers are not split by shift), so it answers at its own address as before. The rest of the query (`shifts=`, `window=`,
+`by=`, `unit=`, `want=`, `corrupt=`, `after=`) carries over. `compare=prev` asks for the previous window of the
+same grain, which these answers carry already or which their store form carries.
+
+| You may type | It becomes |
+| --- | --- |
+| `measure=waste&by=grade` | `measure=grade` (volume, lineal, speed and waste by grade, the previous window's volume beside) |
+| `measure=waste&by=setup` (Day) | `measure=setups` (the setup matrix) |
+| `compare=prev` on `kpis`, `pareto`, `waste`, `grade`, `rollstock` | the same address without it: `prev` is the default, the previous window is beside |
+| `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
+| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` |
+| `measure=dollars` under a ranged grain | `measure=money` (the levers of the window in $/yr; under Day, `dollars` is the shift's own dollars; not with several `shifts=`, as above) |
+| `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |
+| `measure=quality&compare=prev` under Day | `measure=waste` |
+| `measure=compare&compare=prev` under Day | `measure=kpis` (`shifts=` kept: the tiles per shift) |
+| `measure=overview`, `summary` or `fpm` with `compare=prev` under Day | `measure=kpis`: the day's KPI tiles against the previous production day |
+| a default spelled out (`by=reason`, `unit=minutes`, `weeks=8`) or the fields in another order | the canonical spelling |
+
+Issue #20's examples: `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=reason&compare=prev` →
+`/corr/1/day/2026-09-14/shift/2?measure=pareto`; `/corr/1/period/2026-09-14/shift/3?measure=waste&by=grade` →
+`/corr/1/period/2026-09-14/shift/3?measure=grade`; `…/month/2026-09-14?measure=rollstock&compare=prev` →
+`…/month/2026-09-14?measure=rollstock` (the path takes a production day, not `2026-09`).
+
+An alias that cannot be normalized is a 400 naming the field: `compare=prev` on a measure that carries no
+previous window (`stops`, `overrun`, `opportunity`, `trend`, `fpm&by=grade`, `setups`, `orders`, `notes`,
+`rank`, `report`); `compare=none` or a comparison base on anything but `kpis`; `kind=` with `downtime` or
+`compare` and `compare=prev` under Day (the Pareto groups `by=kind` instead), or `by=`/`kind=` where the target
+is `kpis`; `by=` on `waste` other than `grade` or `setup`; `by=setup` under a ranged grain (the setup matrix is
+per production day). A refusal on the target names the alias too, as in "measure=pareto runs for one shift …
+(measure=downtime&compare=prev becomes measure=pareto)". The page itself still loads at a refused address and
+shows the refusal of its `.json`.
 
 ## Examples
 
@@ -86,6 +128,8 @@ the measure does not read, or a shift outside the selected scope is a 400 with t
 | "Why was this shift slow this week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=overview&window=week` |
 | "Trend of lineal per setup over six weeks" | `/corr/1/day/2026-09-14?measure=trend&metric=lineal_per_setup&weeks=6` |
 | "Compare that with first shift", after "Why was second shift slow?" — all shifts | `/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2` |
+| "Where did the money go this shift?" — Day, shift 2, paper at $60 | `/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:60` |
+| "Where is the money this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
 | the scope's own KPI tiles (what the page primes on load) | `/corr/1/week/2026-09-14.json?measure=kpis` |
 
@@ -97,7 +141,7 @@ resolves each question through the server and fails the case when it lands elsew
 | Request | Answer |
 | --- | --- |
 | `GET /q?day=&shift=&scope=&period=&corrupt=&q=&after=` | the `/api/ask` fields of an offline question (`period` is `day|week|month|accounting`); validated like `/api/ask`, the question parsed by the offline router, then **302** to the canonical URL. A refusal of the router is a 400 with the same text `/api/ask` would send. Every example chip is a link of this form. |
-| `GET /corr/…?measure=…` | the app page; `app.js` reads the address, sets the controls and fetches the `.json`. The bare scope address (no `measure`) is the page with the controls set. |
+| `GET /corr/…?measure=…` | the app page; `app.js` reads the address, sets the controls and fetches the `.json`. The bare scope address (no `measure`) is the page with the controls set. An alias, in any representation below, is a **302** to the canonical address in the same representation (see Aliases). |
 | `GET /corr/….json?measure=…`, `…&format=json`, or `Accept: application/json` | the JSON `/api/ask` returns for the same state, plus `url` (the page address, with the `after=` chain) and no `session_id`; the bare scope address is a 400 asking for `measure=`. `Server-Timing: app;dur=<ms>` is the server's own time. |
 | `GET /corr/…?measure=…&format=pdf` | the PDF of that answer, rendered on request from the same state. No report cache, so any instance serves any PDF; `POST /api/report` remains for live answers, which have no address. |
 
@@ -121,8 +165,13 @@ control change pushes the bare scope address; the Period report is `measure=repo
 without a request; any other address is fetched as `.json`. Opening a canonical URL in a fresh browser
 does the same on load. Follow-up context is the `after=` chain the page builds from its earlier views
 (at most `max_turns − 1`), so offline needs no `session_id`; the Download PDF button of an addressed
-answer is a link to `…&format=pdf`. Live mode keeps the session and the POST.
+answer is a link to `…&format=pdf`. Live mode keeps the session and the POST. On a reload of the tab the
+thread above the addressed card comes back the same way (issue #86): each card is kept in `sessionStorage` as
+its own address (an analyst's card as the offline address it was asked from) and fetched again as JSON;
+only same-origin `/corr/…` and `/q?…` paths are replayed. Each replay counts against the request limits like any
+URL answer, so a reload fetches only the newest few cards (a quarter of the per-visitor limit, at most 8) and
+the older ones load when opened.
 
 ## Room left in the grammar
 
-Dollars (#31) add `rates=` later; it is not a field today and is refused like any unknown field.
+`rates=` (#31) carries the assumptions an answer was priced with; an unknown rate key, a repeated one or a value outside 0 < v (at most 100,000, or 100 for the trim target) is a 400 with the reason. `/q` takes `rates=` too and keeps it on the redirect.
