@@ -4,8 +4,9 @@ The pages are the repository's own `docs/*.md` (and the golden set's `evals/READ
 of `SECTIONS`, each with a left table of contents. The image renders them once at build time
 (`python -m investigator.docsite build /app/docs-site --root /app`, the folder `INVESTIGATOR_DOCS`
 names); the loopback workbench renders the checkout's files in memory at start-up. Nothing here
-runs per request, and nothing here imports beyond the standard library, so the deploy workflow can
-run `python -m investigator.docsite changelog` before installing anything.
+runs per request, and the module imports nothing beyond the standard library, so the deploy workflow
+can run `python -m investigator.docsite changelog` before installing anything (the case study's figures
+also read `cost_model`, itself standard library only, and only when a site is built).
 
 The Markdown is the subset these files use: ATX headings, paragraphs, `-` and `1.` lists, fenced
 and indented code, pipe tables, block quotes, rules, and inline code, emphasis, links and autolinks. Every
@@ -13,8 +14,9 @@ character of the source is escaped; no HTML in a document reaches the page. A re
 page of the site becomes its `/docs` address; a link to any other file goes to the file on GitHub.
 
 A page in `FIGURE_PAGES` (the case study, issue #116) types no number: each `{{name}}` in it is filled
-at build from the files the eval runner, the deploy and the cost model keep (`figures`), and the build
-refuses the page when a digit or a number word is typed into its text (`typed_numbers`).
+at build from the eval runner's files, the changelog and the cost model (`figures`), and the build
+refuses the page when a digit or a number word is typed into its text (`typed_numbers`). The image build
+is strict; the workbench renders such a page as a short notice instead of failing to start.
 """
 import html
 import json
@@ -62,28 +64,35 @@ OPENAI_KEY = re.compile(r"openai(?:'s)?\s+(?:api\s+)?key", re.I)
 
 # ---- Figures (issue #116): pages whose every number is read at build, never typed.
 FIGURE_PAGES = ('docs/CASE_STUDY.md',)
-# What `figures` reads. They exist in the checkout and in the image (COPY src, evals and docs/*.md).
-FIGURE_SOURCES = ('evals/last_run.json', 'evals/history.jsonl', 'docs/CHANGELOG.md', 'src/investigator/rates.json')
+# The files `figures` reads from the root. They exist in the checkout and in the image (COPY evals, docs/*.md);
+# the rates come from the installed `cost_model`.
+FIGURE_SOURCES = ('evals/last_run.json', 'evals/history.jsonl', 'docs/CHANGELOG.md')
 FIGURE = re.compile(r'\{\{\s*([a-z][a-z0-9_.]*)\s*\}\}')
-# A typed number: a digit that does not continue a word or a reference (p50, utf8 and #104 are names, not
-# figures), or a number word. "one" is left alone: the pages use it as an article ("one plan per question").
+# Names that carry digits but are not figures: an issue or pull request as a link's text ([#104](...)) and a
+# percentile's name (p50, p95). Every other digit is typed, as are fraction and superscript characters.
+NAMED_DIGITS = re.compile(r'\[#\d+\]|\bp\d{2}\b')
+# A number word: counts, fractions, ordinals from third up and multiples. "one" is left alone, as an article
+# ("one issue, one session, one pull request"); "first" and "second" are left alone as order ("a second way").
 TYPED_NUMBER = re.compile(
-    r'(?<![\w#])\d|\b(?:zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen'
+    r'\d|[\u00b2\u00b3\u00b9\u00bc-\u00be\u2070-\u209f\u2150-\u218b]'
+    r'|\b(?:zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen'
     r'|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand'
-    r'|million|billion|dozens?|half|quarter|twice|thrice|tenth|hundredth)\b', re.I)
+    r'|million|billion|dozens?|half|halves|quarters?|thirds?|fourths?|fifths?|sixths?|sevenths?|eighths?|ninths?'
+    r'|tenths?|eleventh|twelfth|twentieth|hundredths?|thousandths?|twice|thrice|single|double|triple|tenfold|hundredfold)\b', re.I)
 
 
 def typed_numbers(text):
     """Every line of a figures page that types a number into its own text, as 'line N: text'.
 
-    Each line is read without its `{{figures}}`, its link addresses and an ordered-list marker; what is left
-    is what the writer typed, and none of it may be a figure."""
+    Each line is read without its `{{figures}}`, its link addresses, its `NAMED_DIGITS` and an ordered-list
+    marker; what is left is what the writer typed, and none of it may be a figure."""
     out = []
     for n, line in enumerate(text.split('\n'), 1):
         bare = FIGURE.sub(' ', line)
         bare = re.sub(r'\]\(\s*[^)\s]*(?:\s+"[^"]*")?\s*\)', '] ', bare)
         bare = re.sub(r'<https?://[^>\s]+>', ' ', bare)
         bare = re.sub(r'^\s*\d{1,9}[.)](?=\s)', ' ', bare)
+        bare = NAMED_DIGITS.sub(' ', bare)
         if TYPED_NUMBER.search(bare):
             out.append(f'line {n}: {line.strip()}')
     return out
@@ -122,7 +131,12 @@ def figures(root=ROOT):
       the replayed live rounds and their recorded cost;
     - every line of `evals/history.jsonl`: the tracked runs, and each model's newest line for the comparison;
     - `docs/CHANGELOG.md`, generated from the merged pull requests;
-    - `src/investigator/rates.json`, the cost model's rates, for the dollars a loss is priced at."""
+    - `cost_model` at its default rates (`rates.json`, the configuration the tools price with), for the dollars
+      a loss is priced at: its own `price` and `trim_points_usd_per_year`, so the page moves when they do.
+
+    A live provider's recorded cost is summed over every live row with a recording (`evals/run.py`'s
+    `history_line`), so the cost per answer divides by every live row, skipped ones included."""
+    from . import cost_model   # standard library only; imported here so the changelog path never needs it
     root = Path(root)
     last = json.loads((root / 'evals/last_run.json').read_text(encoding='utf-8'))
     history = [json.loads(line) for line in (root / 'evals/history.jsonl').read_text(encoding='utf-8').splitlines()
@@ -167,19 +181,22 @@ def figures(root=ROOT):
     for (provider, model), (line, entry) in sorted(by_model.items()):
         counts = entry.get('types') or {}
         ran = sum(c.get('pass', 0) + c.get('fail', 0) for c in counts.values())
+        recorded = sum(c.get('pass', 0) + c.get('fail', 0) + c.get('skip', 0) for c in counts.values())
         passed = sum(c.get('pass', 0) for c in counts.values())
         cost = entry.get('recorded_cost_usd')
         first = (line.get('live_ms') or {}).get('first_token_p50')
         table.append(f'| {provider} | {_code(model)} | {passed}/{ran} | '
-                     f'{_usd(cost / ran, 4) if ran and cost is not None else "–"} | {_ms(first)} | {line["ran_at"][:10]} |')
+                     f'{_usd(cost / recorded, 4) if recorded and cost is not None else "–"} | {_ms(first)} | {line["ran_at"][:10]} |')
     out['models.table'] = '\n'.join(table)
     out['models.count'] = _count(len(by_model))
     current = newest.get('live') or {}
     live_ran = sum(c.get('pass', 0) + c.get('fail', 0) for e in current.values() for c in (e.get('types') or {}).values())
+    live_recorded = sum(sum(c.get(k, 0) for k in ('pass', 'fail', 'skip')) for e in current.values()
+                        for c in (e.get('types') or {}).values())
     live_cost = sum(e.get('recorded_cost_usd') or 0 for e in current.values())
     out['live.model'] = ', '.join(_code(e.get('model') or 'unknown') for _, e in sorted(current.items())) or 'none'
     out['live.cases'] = _count(live_ran)
-    out['live.cost_per_answer'] = _usd(live_cost / live_ran, 4) if live_ran else 'not recorded yet'
+    out['live.cost_per_answer'] = _usd(live_cost / live_recorded, 4) if live_recorded else 'not recorded yet'
     out['live.first_words'] = _ms((newest.get('live_ms') or {}).get('first_token_p50'))
     out['history.runs'] = _count(len(history))
     out['history.first'] = history[0]['ran_at'][:10]
@@ -188,17 +205,16 @@ def figures(root=ROOT):
     days = re.findall(r'^## (\d{4}-\d{2}-\d{2})\s*$', log, re.M)
     out['changelog.pulls'] = _count(len(re.findall(r'^- \[#\d+\]', log, re.M)))
     out['changelog.first'], out['changelog.last'] = (min(days), max(days)) if days else ('–', '–')
-    rates = json.loads((root / 'src/investigator/rates.json').read_text(encoding='utf-8'))
-    rate = {r['id']: r['default'] for r in rates['rates']}
-    assume = {a['id']: a['value'] for a in rates['assumptions']}
-    msf_per_minute = assume['required_fpm'] * assume['net_width_in'] / 12 / 1000
+    defaults = {'values': {rid: spec['default'] for rid, spec in cost_model.RATE_SPECS.items()},
+                'sources': {rid: spec['source'] for rid, spec in cost_model.RATE_SPECS.items()}}
+    rate, minute = defaults['values'], cost_model.price('downtime', 1, defaults)
     out['rates.paper'] = f'{_usd(rate["paper_usd_msf"])}/MSF'
     out['rates.hour'] = f'{_usd(rate["machine_usd_hour"])}/hr'
-    out['rates.machine_minute'] = _usd(rate['machine_usd_hour'] / 60)
-    out['rates.msf_per_minute'] = f'{msf_per_minute:g} MSF'
+    out['rates.machine_minute'] = _usd(minute['machine_time_usd'])
+    out['rates.msf_per_minute'] = f'{minute["msf_not_made"]:g} MSF'
     out['rates.margin'] = 'not set' if rate['margin_usd_msf'] is None else f'{_usd(rate["margin_usd_msf"])}/MSF'
     out['rates.trim_target'] = f'{rate["trim_target_pct"]:g}%'
-    out['rates.trim_point_year'] = _usd(assume['annual_msf_per_machine'] / 100 * rate['paper_usd_msf'])
+    out['rates.trim_point_year'] = _usd(cost_model.trim_points_usd_per_year(1, defaults))
     return out
 
 
@@ -522,7 +538,7 @@ def _toc(all_pages, current, headings):
 
 TEMPLATE = """<!doctype html>
 <html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{title} · Shift Investigator docs</title><link rel="stylesheet" href="/style.css"></head>
-<body><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>docs</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/evals">Golden evals</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
+<body class="docs-body"><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>docs</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/evals">Golden evals</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
 <div class="wrap docs-layout">
 {toc}
 <main class="docs-page"><article>
@@ -534,8 +550,22 @@ TEMPLATE = """<!doctype html>
 """
 
 
-def build_site(root=ROOT):
-    """{url path: html bytes} for every page; raises when a listed source is missing."""
+def _figures_page(page, text, root, values):
+    """A figures page's Markdown with its figures filled, and the values for the next one; raises when the page
+    types a number, names a figure the build does not know, or its files cannot be read or disagree."""
+    typed = typed_numbers(text)
+    if typed:
+        raise ValueError(f'docs site: {page["source"]} reads every figure from a generated file, '
+                         f'but these lines type one; use a {{{{figure}}}}: {typed}')
+    values = figures(root) if values is None else values
+    return expand_figures(text, values, page['source']), values
+
+
+def build_site(root=ROOT, strict=True):
+    """{url path: html bytes} for every page; raises when a listed source is missing.
+
+    A figures page that cannot be built raises too, unless `strict` is False (the workbench, `load_site`): then
+    the page says why in one line and the rest of the site, and the server, carry on."""
     root = Path(root)
     all_pages = pages()
     by_source = {p['source']: p['url'] for p in all_pages}
@@ -546,12 +576,14 @@ def build_site(root=ROOT):
             raise FileNotFoundError(f'docs site: {page["source"]} is listed in SECTIONS but does not exist')
         text = path.read_text(encoding='utf-8')
         if page['source'] in FIGURE_PAGES:
-            typed = typed_numbers(text)
-            if typed:
-                raise ValueError(f'docs site: {page["source"]} reads every figure from a generated file, '
-                                 f'but these lines type one; use a {{{{figure}}}}: {typed}')
-            values = figures(root) if values is None else values
-            text = expand_figures(text, values, page['source'])
+            try:
+                text, values = _figures_page(page, text, root, values)
+            except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:   # JSONDecodeError is a ValueError
+                if strict:
+                    raise
+                print(f'docs site: {page["source"]} not built: {exc}', file=sys.stderr)
+                text = (f'# {page["label"]}\n\nThis page reads every figure from the eval history, the changelog and the '
+                        f'cost model when the docs are built, and could not be built here: {exc}\n')
         title, body, headings = render_page(page, text, by_source)
         if page['slug'] == '':
             body += '\n' + _contents(all_pages)
@@ -592,7 +624,7 @@ def load_site():
         return None
     stamp = tuple(path.stat().st_mtime_ns for path in sources)   # one render per process until a source changes
     if _RENDERED.get('stamp') != stamp:
-        _RENDERED.update(stamp=stamp, site=build_site(ROOT))
+        _RENDERED.update(stamp=stamp, site=build_site(ROOT, strict=False))
     return _RENDERED['site']
 
 

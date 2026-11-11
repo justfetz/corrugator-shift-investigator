@@ -1,7 +1,7 @@
 // Real-browser check of the case study page (issue #116), as layout_check.cjs is for the shell: at 1280x720 every
 // section, the title block included, fits one screen height under the sticky header; the diagram keeps its lines;
 // a phone never scrolls sideways; the print layout is the document alone, in the light palette under either theme;
-// and the app header links to the page. Against a running server:
+// and the app header links to the page, whose own print layout is unchanged. Against a running server:
 //   python -m investigator.server --port 7860 &   node tests/docs_layout_check.cjs [origin] [output-dir]
 // With an output dir it writes case-study-1280x720.png, case-study-390.png and case-study.pdf there.
 // Skips (exit 0) when Playwright is not installed; CI does not run it.
@@ -54,6 +54,8 @@ const measure=()=>{
  await app.goto(origin+'/');
  const link=await app.evaluate(()=>{const a=document.querySelector('header.app a.top-link[href="/docs/case-study"]'),r=a&&a.getBoundingClientRect();return a?{text:a.textContent,visible:r.width>0&&r.bottom<=innerHeight}:null;});
  assert.deepEqual(link,{text:'Case study',visible:true});
+ await app.emulateMedia({media:'print'});
+ assert.notEqual(await app.evaluate(()=>getComputedStyle(document.querySelector('header.app')).display),'none','the print rules are the docs pages\' own');
  assert.deepEqual(errors,[]);
  console.log(JSON.stringify({screen_1280x720:wide.screen,sections:wide.sections,diagram:wide.diagram,print,pdf_pages:pages,phone_scrolls_sideways:narrow.page_scrolls_sideways,app_link:link},null,1));
  console.log(`docs layout check passed: at 1280x720 each of the ${wide.sections.length} sections fits one screen (${wide.screen}px under the header); the diagram keeps its lines; a 390px phone never scrolls sideways; print is the document alone in the light palette (${pages} PDF pages); the app header links to the page.`);

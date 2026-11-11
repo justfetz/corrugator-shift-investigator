@@ -10,7 +10,7 @@ The owner's targets give each loss a band, a home run, a target and a flag, over
 
 - **The records hold no costs.** Every dollar is a recorded quantity at an assumed, named rate, never a plant's own figure ([cost model](COST_MODEL.md), [rates.json](../src/investigator/rates.json)).
 - **A lost minute is priced from both sides.** It is {{rates.machine_minute}} of machine time at {{rates.hour}}, or {{rates.msf_per_minute}} of board not made at a contribution margin that is {{rates.margin}}. Both price the same lost capacity, so they sit side by side and are never added ([formulas](COST_MODEL.md#formulas)).
-- **Trim is width, not time.** It costs paper and no run time: each point of side trim over the {{rates.trim_target}} target is {{rates.trim_point_year}} a year on one machine at {{rates.paper}} ([cost_model.py](../src/investigator/cost_model.py)).
+- **Trim is width, not time.** It costs paper and no run time: each point of side trim over the cost model's {{rates.trim_target}} threshold is {{rates.trim_point_year}} a year on one machine at {{rates.paper}} ([cost_model.py](../src/investigator/cost_model.py)). The owner's bands reach the tools with [#101](https://github.com/justfetz/corrugator-shift-investigator/issues/101).
 
 ## The design in one diagram
 
@@ -33,7 +33,7 @@ The owner's targets give each loss a band, a home run, a target and a flag, over
 ```
 
 - **Numbers only from tools.** The router picks a plan, the tools compute, and the answer shape places each bold figure beside the reference of its row ([agent.py](../src/investigator/agent.py), [analysis.py](../src/investigator/analysis.py), [shapes.py](../src/investigator/shapes.py)).
-- **The analyst is a bounded, checked plan.** One plan call and one streamed narrative call; application code checks every step against the allowlist, its schema and the scope before anything runs, and the round never holds the shared lock ([the analyst](ANALYST.md)).
+- **The analyst is a bounded, checked plan.** On the default Anthropic path, a plan call and a streamed narrative call; application code checks every step against the allowlist, its schema and the scope before anything runs, and never holds the shared lock across a model call ([the analyst](ANALYST.md), [off the shared lock](ANTHROPIC_DEMO.md#off-the-shared-lock)).
 - **The URL is the state.** Every offline answer has a canonical address that resolves back to the same request ([the URL grammar](URLS.md), [urls.py](../src/investigator/urls.py)).
 
 ## How we know the numbers are right
@@ -43,7 +43,7 @@ The last tracked run passed {{evals.passed}} of {{evals.runs}} golden runs over 
 {{evals.table}}
 
 - **Value goldens are computed a second way.** {{evals.value}} cases hold a tool's numbers against plain Python sums over the records, stamped with the dataset hash ([make_value_goldens.py](../evals/make_value_goldens.py)).
-- **Each question is asked again over its URL.** After the in-process run, {{evals.over_url}} questions go over GET, each with no model call and inside its time budget ([run.py](../evals/run.py), [the URL path](../evals/README.md#the-url-path)).
+- **Each question is asked again over its URL.** After the in-process run, every offline question goes over GET: {{evals.over_url}} are answered there with no model call and inside their time budgets, and a refusal must come back with the same text ([run.py](../evals/run.py), [the URL path](../evals/README.md#the-url-path)).
 - **Validators guard the prose.** A digit or number word the model typed withdraws its line; so does an ordering word its cited values contradict ([narrative.py](../src/investigator/narrative.py), [test_narrative_comparisons.py](../tests/test_narrative_comparisons.py)).
 - **Live rounds are recorded** and replayed in CI through the real agent and validators ([fixtures](../evals/fixtures/), [live cases](../evals/README.md#live-cases-and-fixtures)).
 - **Every pull request** runs the tests and the evals ([tests.yml](../.github/workflows/tests.yml)) and gets its own preview revision with no traffic ([preview.yml](../.github/workflows/preview.yml)); the review loop is under [built with](#built-with).
@@ -54,7 +54,7 @@ The last tracked run passed {{evals.passed}} of {{evals.runs}} golden runs over 
 | --- | --- | --- |
 | Offline answer, p50 / p95 | {{latency.p50}} / {{latency.p95}} | [history.jsonl](../evals/history.jsonl) |
 | Analyst, first words (p50) | {{live.first_words}} | written by the re-recording in [#71](https://github.com/justfetz/corrugator-shift-investigator/issues/71) |
-| Analyst, recorded cost per answer | {{live.cost_per_answer}} on {{live.model}} | [history.jsonl](../evals/history.jsonl), [cost per round](ANTHROPIC_DEMO.md#cost-per-round) |
+| Analyst, recorded cost per answer (earlier tool loop) | {{live.cost_per_answer}} on {{live.model}} | [history.jsonl](../evals/history.jsonl), [cost per round](ANTHROPIC_DEMO.md#cost-per-round) |
 | Golden runs | {{evals.runs}}, up from {{history.first_cases}} on {{history.first}}, over {{history.runs}} tracked runs | [history.jsonl](../evals/history.jsonl) |
 
 The live recordings predate the one-plan analyst; re-recording them writes the first-words time ([#71](https://github.com/justfetz/corrugator-shift-investigator/issues/71)). The model comparison below holds each model's newest tracked line; the bake-off adds a row per model on the full live set ([#115](https://github.com/justfetz/corrugator-shift-investigator/issues/115)).

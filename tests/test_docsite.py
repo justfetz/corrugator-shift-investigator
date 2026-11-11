@@ -16,7 +16,7 @@ from threading import Thread
 
 import pytest
 
-from investigator import docsite
+from investigator import cost_model, docsite
 from investigator.server import make_server
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -342,10 +342,12 @@ def test_every_case_study_figure_comes_from_a_generated_file(site):
     log = (ROOT / 'docs' / 'CHANGELOG.md').read_text(encoding='utf-8')
     days = re.findall(r'^## (\S+)$', log, re.M)
     assert f'{len(re.findall(r"^- \[#", log, re.M))} pull requests merged between {min(days)} and {max(days)}' in text
-    rates = json.loads((ROOT / 'src' / 'investigator' / 'rates.json').read_text(encoding='utf-8'))
-    paper = next(r['default'] for r in rates['rates'] if r['id'] == 'paper_usd_msf')
-    annual = next(a['value'] for a in rates['assumptions'] if a['id'] == 'annual_msf_per_machine')
-    assert f'${annual * paper / 100:,.0f} a year on one machine at ${paper}/MSF' in text
+    # The dollars are the cost model's own, at its default rates: a change there moves the page.
+    defaults = {'values': {k: spec['default'] for k, spec in cost_model.RATE_SPECS.items()}, 'sources': {}}
+    paper, minute = defaults['values']['paper_usd_msf'], cost_model.price('downtime', 1, defaults)
+    assert f'threshold is ${cost_model.trim_points_usd_per_year(1, defaults):,.0f} a year on one machine at ${paper}/MSF' in text
+    assert f'It is ${minute["machine_time_usd"]:,.0f} of machine time' in text and f'or {minute["msf_not_made"]:g} MSF of board' in text
+    assert f'{defaults["values"]["trim_target_pct"]:g}% threshold' in text
     # Every {{name}} in the source is a figure the build knows.
     names = set(docsite.FIGURE.findall(CASE_STUDY.read_text(encoding='utf-8')))
     assert names and names <= set(docsite.figures(ROOT)), names - set(docsite.figures(ROOT))
@@ -354,7 +356,8 @@ def test_every_case_study_figure_comes_from_a_generated_file(site):
 def test_a_number_typed_into_the_case_study_fails_the_build(tmp_path):
     assert docsite.typed_numbers(CASE_STUDY.read_text(encoding='utf-8')) == [], 'the committed page types no number'
     for typed in ('The set has 289 cases.', 'It answers in 14 ms.', 'Cost: $0.0027 an answer.', 'seven case types',
-                  'twenty-nine runs', 'a tenth of a point', 'asked twice', 'Dated 2026-11-11.', '1. an ordered item at 50 ms'):
+                  'twenty-nine runs', 'a tenth of a point', 'asked twice', 'Dated 2026-11-11.', '1. an ordered item at 50 ms',
+                  'a third of the runs', 'a fifth of the setups', '½ point', 'answers x10 faster', 'the #1 loss', 'utf8'):
         assert docsite.typed_numbers(f'Intro.\n\n- {typed}\n'), typed
     for fine in ('p50 and p95 of the offline run', 'see [#104](https://github.com/x/y/issues/104)', '{{evals.runs}} runs',
                  'one issue, one session, one pull request', '[the rubric](../evals/README.md#v2-rubric)', '1. a list item'):
@@ -400,9 +403,20 @@ def test_the_model_comparison_grows_a_row_per_model(tmp_path):
     history.write_text('\n'.join(lines[:-1] + [json.dumps(other), lines[-1]]) + '\n', encoding='utf-8')
     values = docsite.figures(root)
     table = values['models.table'].splitlines()
-    assert values['models.count'] == '2' and len(table) == 4
-    assert table[2].startswith('| anthropic | `claude-haiku-5-5` | 15/15 | $0.0027 | not recorded yet |')
-    assert table[3].startswith('| openai | `gpt-small` | 2/3 | $0.0100 | 812 ms |')
+    assert values['models.count'] == str(1 + len(newest['live'])) and len(table) == 3 + len(newest['live'])
+    anthropic = newest['live']['anthropic']   # read from the file: a re-recording (#71) changes it, not this test
+    counts = anthropic['types'].values()
+    ran, recorded = sum(c['pass'] + c['fail'] for c in counts), sum(c['pass'] + c['fail'] + c['skip'] for c in counts)
+    first = (newest.get('live_ms') or {}).get('first_token_p50')
+    assert table[2] == (f'| anthropic | `{anthropic["model"]}` | {sum(c["pass"] for c in counts)}/{ran} | '
+                        f'${anthropic["recorded_cost_usd"] / recorded:.4f} | '
+                        f'{f"{first:.0f} ms" if first is not None else "not recorded yet"} | {newest["ran_at"][:10]} |')
+    assert table[3].startswith('| openai | `gpt-small` | 2/3 | $0.0100 | 812 ms |'), \
+        'the cost is over every recorded live row, skips included, as history_line sums it'
+    skipped = {**other, 'live': {'openai': {**other['live']['openai'],
+                                            'types': {'routing': {'pass': 2, 'fail': 1, 'skip': 1}}}}}
+    history.write_text('\n'.join(lines[:-1] + [json.dumps(skipped), lines[-1]]) + '\n', encoding='utf-8')
+    assert '| openai | `gpt-small` | 2/3 | $0.0075 |' in docsite.figures(root)['models.table']
     rendered = docsite.Renderer().render(values['models.table'])
     assert rendered.count('<tr>') == 3 and '<td class="right">812 ms</td>' in rendered
 
@@ -427,6 +441,36 @@ def test_the_docs_print_as_the_document_alone():
     css = (WEB / 'style.css').read_text(encoding='utf-8')
     block = css[css.index('@media print{'):]
     block = block[:block.index('\n}\n')]
-    assert 'header.app,.docs-toc,.docs-pager{display:none!important}' in block
-    assert ':root,:root[data-theme="dark"]{color-scheme:light;--bg:#fff;' in block
+    assert '.docs-body header.app,.docs-body .docs-toc,.docs-body .docs-pager{display:none!important}' in block
+    assert '.docs-body{color-scheme:light;--bg:#fff;' in block
+    rules = re.findall(r'(?:^|\})\s*([^{}@]+)\{', block.split('{', 1)[1])
+    assert rules and all(sel.strip().startswith(('.docs-body', '.docs-page', '.docs-source')) for r in rules for sel in r.split(',')), \
+        'scoped to docs pages: printing the app or /evals is unchanged'
+    assert '<body class="docs-body">' in docsite.TEMPLATE
     assert '.docs-page pre code.language-diagram{white-space:pre;' in css, 'the diagram never wraps'
+
+
+def test_a_figures_page_that_cannot_be_built_never_stops_the_workbench(tmp_path, monkeypatch):
+    """The image build is strict; a checkout whose last_run.json and history.jsonl disagree (an interrupted
+    --track, a merge of two tracked branches) still starts the server, and the page says why it is missing."""
+    root = figure_root(tmp_path)
+    history = root / 'evals' / 'history.jsonl'
+    lines = history.read_text(encoding='utf-8').splitlines()
+    history.write_text('\n'.join(lines[:-1] + [json.dumps({**json.loads(lines[-1]), 'commit': 'deadbee'})]) + '\n',
+                       encoding='utf-8')
+    with pytest.raises(ValueError, match='different runs'):
+        docsite.build_site(root)
+    with pytest.raises(ValueError):
+        docsite.main(['build', str(tmp_path / 'out'), '--root', str(root)])
+    lenient = docsite.build_site(root, strict=False)
+    assert set(lenient) == {p['url'] for p in docsite.pages()}
+    page = text_of(lenient['/docs/case-study'].decode())
+    assert 'could not be built here' in page and 'different runs' in page
+    monkeypatch.delenv('INVESTIGATOR_DOCS', raising=False)
+    monkeypatch.setattr(docsite, 'ROOT', root)
+    server = make_server(0)
+    try:
+        assert b'could not be built here' in server.app.docs['/docs/case-study']
+    finally:
+        server.server_close()
+        server.app.close()

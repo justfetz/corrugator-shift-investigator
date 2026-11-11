@@ -416,12 +416,14 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
 .docs-source{font-size:13px;color:var(--ink-3);margin:14px 0 0}
 /* A ```diagram fence (the case study, issue #116) keeps its lines: it scrolls inside its box rather than wrap. */
 .docs-page pre code.language-diagram{white-space:pre;line-height:1.35}
-/* Print, or save as PDF: a docs page prints as the document alone, in the light palette whatever the theme. */
+/* Print, or save as PDF: a docs page (body.docs-body) prints as the document alone, in the light palette whatever
+   the theme. Other pages print as they did. */
 @media print{
- :root,:root[data-theme="dark"]{color-scheme:light;--bg:#fff;--surface:#fff;--surface-2:#fff;--surface-3:#f3f5f5;--ink:#111;--ink-2:#222;--ink-3:#444;
-  --line:#cfd5d5;--line-2:#e3e7e7;--rule:#cfd5d5;--grid:#cfd5d5;--brand:#0b6e66;--brand-ink:#084f4a;--accent:#0b6e66;--code-bg:#f3f5f5;--code-ink:#111}
- header.app,.docs-toc,.docs-pager{display:none!important}
- .docs-layout{display:block;max-width:none;padding:0}
+ .docs-body{color-scheme:light;--bg:#fff;--surface:#fff;--surface-2:#fff;--surface-3:#f3f5f5;--ink:#111;--ink-2:#222;--ink-3:#444;
+  --line:#cfd5d5;--line-2:#e3e7e7;--rule:#cfd5d5;--grid:#cfd5d5;--brand:#0b6e66;--brand-ink:#084f4a;--accent:#0b6e66;--code-bg:#f3f5f5;--code-ink:#111;
+  color:var(--ink);background:#fff}
+ .docs-body header.app,.docs-body .docs-toc,.docs-body .docs-pager{display:none!important}
+ .docs-body .docs-layout{display:block;max-width:none;padding:0}
  .docs-page{max-width:none;font-size:10.5pt;line-height:1.45}
  .docs-page h1{font-size:18pt;margin:0 0 8pt}
  .docs-page h2{font-size:13.5pt;margin:16pt 0 6pt;break-after:avoid}
