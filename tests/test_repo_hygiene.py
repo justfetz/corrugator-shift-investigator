@@ -7,6 +7,7 @@ available. The docs must not link to files that were moved. Plain text checks, p
 credential-choice step's own shell run under bash for all eight combinations of the two variables
 and the secret, so no YAML dependency.
 """
+import json
 import os
 import re
 import subprocess
@@ -154,8 +155,42 @@ def test_main_redeploys_every_weekday_night_and_by_hand():
     text = DEPLOY.read_text()
     on = text.split('\non:\n', 1)[1].split('\npermissions:', 1)[0]   # the trigger block, as plain text (CI has no YAML library)
     assert re.search(r"^  push:\n    branches: \[main\]$", on, re.M), on
-    assert re.search(r"^  schedule:\n    - cron: '0 9 \* \* 1-5'", on, re.M), on
+    assert re.search(r"^  schedule:\n    - cron: '0 13 \* \* 1-5'", on, re.M), on   # 07:00 or 08:00 Chicago, after the overnight shift (owner, PR #91)
     assert re.search(r"^  workflow_dispatch:$", on, re.M), on
+
+
+def test_the_deploy_smoke_test_fails_a_window_that_does_not_end_yesterday(tmp_path):
+    """Owner, PR #91: the smoke test asserts /api/health's window ends yesterday, so a cached image layer
+    that froze an older window cannot pass silently. as_of must be the day before the build started (or,
+    past midnight UTC, before the smoke test), last_day the last production day on or before it."""
+    text = DEPLOY.read_text()
+    deploy = text.split('- name: Deploy from source', 1)[1].split('- name:', 1)[0]
+    smoke = text.split('- name: Smoke test', 1)[1]
+    assert 'echo "RUN_DAY=$(date -u +%F)" >> "$GITHUB_ENV"' in deploy.split('gcloud run deploy', 1)[0]   # recorded before the build
+    assert 'curl -sS --max-time 30 -o /tmp/health.json "$LIVE/api/health"' in smoke
+    assert 'python3 .github/scripts/check_window.py /tmp/health.json "$RUN_DAY"' in smoke
+    assert smoke.index('check_window.py') < smoke.index('Live at')
+    script = ROOT / '.github' / 'scripts' / 'check_window.py'
+
+    def run(as_of, last_day, run_day, today):
+        health = tmp_path / 'health.json'
+        health.write_text(json.dumps({'ok': True, 'store': {'source': 'prebuilt', 'window': {
+            'as_of': as_of, 'first_day': '2025-11-11', 'last_day': last_day, 'production_days': 261}}}))
+        proc = subprocess.run(['python3', str(script), str(health), run_day, today], capture_output=True, text=True)
+        return proc.returncode, proc.stdout + proc.stderr
+
+    assert run('2026-11-10', '2026-11-10', '2026-11-11', '2026-11-11')[0] == 0                # a Wednesday run: Tuesday
+    assert run('2026-11-08', '2026-11-06', '2026-11-09', '2026-11-09')[0] == 0                # a Monday run: Sunday, Friday's data
+    assert run('2026-11-07', '2026-11-06', '2026-11-08', '2026-11-08')[0] == 0                # a Sunday push: Saturday, Friday's data
+    assert run('2026-11-10', '2026-11-10', '2026-11-11', '2026-11-12')[0] == 0                # the build crossed midnight UTC
+    code, out = run('2026-11-09', '2026-11-09', '2026-11-11', '2026-11-11')                   # a day stale: a cached layer
+    assert code == 1 and '::error::store.window ends 2026-11-09' in out and 'expected yesterday, 2026-11-10' in out, out
+    code, out = run('2026-11-08', '2026-11-08', '2026-11-09', '2026-11-09')                   # Sunday reported as a production day
+    assert code == 1 and 'last_day is 2026-11-08, expected 2026-11-06' in out, out
+    health = tmp_path / 'health.json'
+    health.write_text(json.dumps({'ok': True, 'store': {'source': 'generated'}}))           # an image without the window
+    proc = subprocess.run(['python3', str(script), str(health), '2026-11-11'], capture_output=True, text=True)
+    assert proc.returncode == 1 and 'no store.window' in proc.stdout, proc.stdout
 
 
 def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
