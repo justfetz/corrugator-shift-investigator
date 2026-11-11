@@ -144,7 +144,7 @@ window holds.
 The file carries the dataset `content_hash`. `run.py` compares it with the golden
 store before scoring and fails every value case when they differ ("stale
 goldens; run make_value_goldens.py"), so an intended generator change forces a
-deliberate regeneration and an unintended one is caught. The 82 cases cover
+deliberate regeneration and an unintended one is caught. The 85 cases cover
 every KPI tile for September and August (all shifts and per shift), one week
 and one production day per shift, the year's first week and month and 4-4-5
 period (no or a partial previous window) and the last week (partial),
@@ -155,7 +155,8 @@ months, totals by grade and rollstock for both months and the year's first week,
 the trim, warp, stops (reaching before the year) and MSF-per-day trends, the three daily tools for three production days,
 the corrupt-record day, and the money tools' dollars (issue #31a: shift dollars for two shifts, one
 with a visitor's rates; the September waste breakdown and the story week's downtime Pareto priced;
-the opportunities for September and for one week with a margin set).
+the opportunities for September and for one week with a margin set), and the speed variance (issue #92:
+September against target, a week against the previous one, shift 3 against shift 1).
 
 Row selectors: `metric=volume_msf` (the first row whose field prints as the
 value), `#0` (row by index), `weekday_profile:weekday=Mon` (another row set),
@@ -246,11 +247,11 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`247/262 golden · 14 ms p50` while the 15 recordings are stale) is `evals.badge` of
+- The badge on the main page (`268/283 golden · 15 ms p50` while the 15 recordings are stale) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 256 cases make 262 runs because six offline cases also have a
+recorded variant: 277 cases make 283 runs because six offline cases also have a
 recording. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can
