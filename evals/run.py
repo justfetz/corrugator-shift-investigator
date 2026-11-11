@@ -30,6 +30,11 @@ by pass rate (`THRESHOLDS`), an offline case passes or fails on its own.
     python3 evals/run.py --live --provider anthropic  # ANTHROPIC_API_KEY; or openai with OPENAI_API_KEY
     python3 evals/run.py --only why-slow              # one case
     python3 evals/run.py --json out.json              # machine-readable results
+    python3 evals/run.py --judge                      # also score every narrative with the DeepEval judge (issue #25):
+                                                      # a model call per rubric line, never in the CI gate
+
+The judge reports and does not gate: until its agreement with the owner's grades
+(`judge_calibration.json`) passes the bar, its scores change no exit status.
 
 Exit status is the number of failed offline cases plus the number of live
 (provider, type) pairs under their pass-rate threshold, plus, when the run
@@ -60,6 +65,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
+from investigator import judge as judging  # noqa: E402
 from investigator.cost_model import parse_rates  # noqa: E402
 from investigator.record_store import default_store  # noqa: E402
 
@@ -1196,6 +1202,9 @@ def main(argv=None):
     parser.add_argument('--only', action='append', help='run only this case id (repeatable)')
     parser.add_argument('--json', type=Path, help='write results here')
     parser.add_argument('--track', action='store_true', help='append one line per run to evals/history.jsonl (commit, dataset, model, pass rate per type, cost)')
+    parser.add_argument('--judge', action='store_true', help="live: score every narrative the run wrote (replayed, scripted or, with --live, fresh) "
+                        "with the DeepEval G-Eval judge, one model call per rubric line; needs pip install -e '.[judge]' and the judge model's key")
+    parser.add_argument('--judge-model', help=f'with --judge: the judge model (default: ${judging.JUDGE_ENV}, else {judging.DEFAULT_JUDGE_MODEL})')
     args = parser.parse_args(argv)
 
     if args.track and args.only:
@@ -1207,10 +1216,22 @@ def main(argv=None):
     if args.live and provider is None:
         print('--live needs exactly one of ' + ' / '.join(s['env'] for s in PROVIDERS.values()) + ' set, or --provider')
         return 2
+    client = None
+    if args.judge_model and not args.judge:
+        print('--judge-model goes with --judge')
+        return 2
+    if args.judge:
+        # Checked before any case runs: a judged run that cannot judge would spend the replays for nothing.
+        try:
+            judging._deepeval()
+            client = judging.JudgeClient(args.judge_model)
+        except judging.JudgeUnavailable as exc:
+            print(f'--judge: {exc}')
+            return 2
     cases = load_cases()
     if args.only:
         cases = [c for c in cases if c['id'] in args.only]
-    rows = []
+    rows, narratives = [], []
     try:
         for case, case_provider in plan_rows(cases, args.live, provider):
             if case_provider == '?':
@@ -1221,6 +1242,9 @@ def main(argv=None):
                 outcome, failures, note, ms, turn_results = run_case_detail(case, case_provider, args.live, not args.no_record)
                 label = case['id'] + (f'@{case_provider}' if case_provider else '')
                 usage = turn_results[-1]['usage'] if turn_results else {}
+                if client is not None:
+                    source = 'scripted plan' if not case_provider else f'{"live" if args.live else "recorded"} {case_provider}'
+                    narratives.extend(judging.narrative_cases(label, case.get('turns') or [case.get('question') or ''], turn_results, source))
             rows.append({'id': label, 'case': case['id'], 'type': case['type'], 'provider': case_provider,
                          'mode': 'live' if case_provider or label.endswith('@live') else 'offline',
                          'outcome': outcome, 'failures': failures, 'note': note, 'ms': round(ms, 1),
@@ -1284,6 +1308,15 @@ def main(argv=None):
     withdrawn = comparisons_withdrawn(rows)
     if withdrawn:
         print('comparisons withdrawn: ' + '  '.join(f'{label} {n} in {k} narrative{"" if k == 1 else "s"}' for label, (n, k) in withdrawn.items()))
+    judged = None
+    if client is not None:
+        try:
+            judged = judging.judge(narratives, client)
+        finally:
+            client.close()
+        print_judged(*judged)
+    else:
+        print(stored_judge_line())
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)
     skipped = sum(r['outcome'] == 'skip' for r in rows)
     xfailed = sum(r['outcome'] == 'xfail' for r in rows)
@@ -1293,15 +1326,61 @@ def main(argv=None):
     if args.json:
         args.json.write_text(json.dumps(rows, indent=1))
     if args.track:
-        line = history_line(rows, failed + breaches)
+        line = history_line(rows, failed + breaches, judged)
         HISTORY.parent.mkdir(parents=True, exist_ok=True)
         with HISTORY.open('a') as out:
             out.write(json.dumps(line, separators=(',', ':')) + '\n')
         LAST_RUN.write_text(json.dumps(last_run(rows, line), indent=1) + '\n')
+        if judged:
+            JUDGE_LAST_RUN.write_text(json.dumps({'ran_at': line['ran_at'], 'commit': line['commit'], 'dataset': line['dataset'],
+                                                  'summary': judged[1], 'rows': judged[0]}, indent=1) + '\n')
         print(f'tracked in {HISTORY.relative_to(ROOT)} (rows in {LAST_RUN.relative_to(ROOT)}): ' + ', '.join(f'{k} {v["pass"]}/{v["pass"] + v["fail"]}' for k, v in line['offline'].items())
               + (f'; latency p50 {line["latency_ms"]["p50"]:.0f} ms, p95 {line["latency_ms"]["p95"]:.0f} ms' if line['latency_ms']['p50'] is not None else '')
-              + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items()))
+              + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items())
+              + (f'; judge {line["judge"]["model"]}, ${line["judge"]["cost_per_case_usd"]:.4f} per judged case (rows in {JUDGE_LAST_RUN.relative_to(ROOT)})'
+                 if line.get('judge') and line['judge'].get('cost_per_case_usd') is not None else ''))
     return failed + breaches
+
+
+# ---------------------------------------------------------------- the narrative judge (issue #25)
+
+JUDGE_LAST_RUN = ROOT / 'evals' / judging.LAST_RUN_FILE
+EVALS = ROOT / 'evals'
+
+
+def print_judged(rows, summary):
+    """The judged run: one row per narrative with its four 0/1 scores, the reason for each failing line, the
+    pass count per criterion, the cost per judged case, and the agreement with the owner's grades."""
+    print(f'judge: {summary["metric"]} ({summary["model"]}), rubric {summary["rubric"]}: {summary["narratives"]} narratives, '
+          f'{summary["calls"]} model calls, ${summary["cost_usd"]:.4f}'
+          + (f', ${summary["cost_per_case_usd"]:.4f} per judged case' if summary['cost_per_case_usd'] is not None else ''))
+    if rows:
+        width = max(len(r['id']) for r in rows) + 2
+        short = {'grounded': 'grnd', 'recorded_not_proven': 'rec', 'prescribes_nothing': 'presc', 'unavailable_not_zero': 'unav'}
+        print(f'  {"narrative":{width}}' + ''.join(f'{short[k]:>6}' for k in judging.CRITERIA) + '  source')
+        for r in rows:
+            print(f'  {r["id"]:{width}}' + ''.join(f'{"-" if r["scores"][k] is None else r["scores"][k]:>6}' for k in judging.CRITERIA) + f'  {r["source"]}')
+            for k in judging.CRITERIA:
+                if r['scores'][k] != 1:
+                    print(f'  {"":{width}}  - {k}: {r["reasons"][k][:150]}')
+    print('judge pass: ' + '  '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' + (f' ({c["error"]} unscored)' if c['error'] else '')
+                                     for k, c in summary['criteria'].items()))
+    print('judge vs owner: ' + judging.agreement_text(judging.agreement(rows, judging.load_grades(EVALS))))
+
+
+def stored_judge_line():
+    """The judge as last tracked, read from the committed files: no model is called. The agreement is
+    the owner's grades against that run's scores."""
+    grades = judging.load_grades(EVALS)
+    stored = judging.load_json(JUDGE_LAST_RUN, None)
+    if not stored:
+        return (f'judge: no judged run tracked yet (python3 evals/run.py --judge --track); '
+                + judging.agreement_text(judging.agreement([], grades)))
+    s = stored['summary']
+    return (f'judge, last tracked {stored["ran_at"]} ({s["model"]}, {s["metric"]}): '
+            + '  '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in s['criteria'].items())
+            + (f'  ${s["cost_per_case_usd"]:.4f} per judged case' if s.get('cost_per_case_usd') is not None else '')
+            + '; vs owner: ' + judging.agreement_text(judging.agreement(stored['rows'], grades)))
 
 
 HISTORY = ROOT / 'evals' / 'history.jsonl'
@@ -1352,10 +1431,12 @@ def comparisons_withdrawn(rows):
     return out
 
 
-def history_line(rows, exit_status):
+def history_line(rows, exit_status, judged=None):
     """One record per run: enough to tell whether a change in the planner, the prompt or the
     data moved the score, and whether it moved the clock. Live rows are scored against the
-    recordings' model; `latency_ms` is the offline p50 / p95."""
+    recordings' model; `latency_ms` is the offline p50 / p95. A judged run (`--judge`) adds `judge`:
+    the judge model and rubric, the pass count per criterion, the cost and the cost per judged case,
+    and its agreement with the owner's grades at that time."""
     def tally(subset):
         out = {}
         for r in subset:
@@ -1381,7 +1462,17 @@ def history_line(rows, exit_status):
                           'types': tally(r for r in rows if r['provider'] == provider)}
     return {'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ'), 'commit': commit, 'dataset': dataset_version()[:12],
             'cases': len(rows), 'offline': tally(r for r in rows if not r['provider']), 'latency_ms': offline_latency(rows),
-            'live': live, **({'live_ms': live_latency(rows)} if live_latency(rows) else {}), 'exit': exit_status}
+            'live': live, **({'live_ms': live_latency(rows)} if live_latency(rows) else {}),
+            **({'judge': judge_record(*judged)} if judged else {}), 'exit': exit_status}
+
+
+def judge_record(rows, summary):
+    """The history line's `judge` block: the summary, and the agreement reduced to its numbers."""
+    found = judging.agreement(rows, judging.load_grades(EVALS))
+    keep = ('n', 'agree', 'pct', 'kappa')
+    return {**summary, 'agreement': {'graded': found['graded'], 'matched': found['matched'],
+                                     'criteria': {k: {f: v[f] for f in keep} for k, v in found['criteria'].items()},
+                                     'overall': {f: found['overall'][f] for f in keep}}}
 
 
 if __name__ == '__main__':

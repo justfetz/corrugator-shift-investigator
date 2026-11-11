@@ -102,6 +102,42 @@ function renderTrend(){
   trendChart('Offline latency per run (p50)',`Median time of an offline case, agent turns only; the gate is ${board.thresholds.offline_latency_ms.p50} ms. Comparable between runs on the same machine.`,runs,'p50_ms','ms'));
 }
 
+// ---- The narrative judge (issue #25): the newest judged run, scored per rubric line, beside its agreement with the
+// owner's grades. Read from the board; the page never runs the judge. The grading link shows on the local workbench only.
+const pct=v=>v===null||v===undefined?'—':`${Math.round(v)}%`;
+function agreeCell(r){ return r&&r.n?`${r.agree}/${r.n} · ${pct(r.pct)} · κ ${r.kappa===null?'undefined':r.kappa.toFixed(2)}`:'—'; }
+function renderJudge(isPublic){
+ const j=board.judge; if(!j){$('judge-summary').textContent='This build carries no narrative judge.';return;}
+ $('grade-link').hidden=Boolean(isPublic);
+ const a=j.agreement, last=j.last;
+ const parts=[last?`Last judged run ${String(last.ran_at).replace('T',' ').replace('Z',' UTC')}${last.commit?' at commit '+last.commit:''}: ${last.metric} with ${last.model}, ${last.judged} of ${last.narratives} narratives scored`
+   +(last.cost_per_case_usd!==null&&last.cost_per_case_usd!==undefined?`, $${Number(last.cost_per_case_usd).toFixed(4)} per judged case`:'')+(last.rubric_current?'':' (an earlier wording of the rubric)')
+  :'No judged run is tracked yet: the owner runs python3 evals/run.py --judge --track with the judge model’s key'];
+ parts.push(a.matched?`agreement with the owner over ${a.matched} narrative${a.matched===1?'':'s'} graded as the same text (bar ${j.bar_pct}% per line)`
+  :`owner grades: ${j.graded} of ${j.target}${a.unmatched?`, ${a.unmatched} not matching the judged text`:''}; no agreement measured yet`);
+ $('judge-summary').textContent=parts.join(' · ');
+ const head=node('thead'), hr=node('tr'); for(const label of ['Rubric line','What it asks','Judge passes','Agreement with the owner']){const th=node('th',label);th.scope='col';hr.append(th);} head.append(hr);
+ const body=node('tbody');
+ for(const rule of j.rubric){
+  const c=last&&last.criteria?last.criteria[rule.key]:null, tr=node('tr'); tr.dataset.key=rule.key;
+  tr.append(node('td',rule.name),node('td',rule.criterion),node('td',c?`${c.pass}/${c.pass+c.fail}`+(c.error?` (${c.error} unscored)`:''):'—'),node('td',agreeCell(a.criteria[rule.key])));
+  body.append(tr);
+ }
+ const total=node('tr',undefined,'total'); total.append(node('td','overall'),node('td','good or bad, against all four lines passing'),node('td','—'),node('td',agreeCell(a.overall))); body.append(total);
+ $('judge-table').replaceChildren(head,body);
+ if(!j.rows.length){$('judge-detail').hidden=true;return;}
+ $('judge-detail').hidden=false; $('judge-rows-title').textContent=`Judged narratives (${j.rows.length}): a score per rubric line, and the judge’s reason for each failed line`;
+ const rh=node('thead'), rr=node('tr'); for(const label of ['Narrative',...j.rubric.map(r=>r.name),'Why a line failed']){const th=node('th',label);th.scope='col';rr.append(th);} rh.append(rr);
+ const rb=node('tbody');
+ for(const row of j.rows){
+  const tr=node('tr'); tr.append(node('td',row.id));
+  for(const rule of j.rubric){const v=row.scores[rule.key]; const td=node('td',v===null||v===undefined?'—':String(v),'judge-score s'+v); td.title=row.reasons[rule.key]||''; tr.append(td);}
+  tr.append(node('td',j.rubric.filter(r=>row.scores[r.key]!==1).map(r=>`${r.name}: ${row.reasons[r.key]||'not scored'}`).join(' · ')));
+  rb.append(tr);
+ }
+ $('judge-rows').replaceChildren(rh,rb);
+}
+
 // ---- Cases: one disclosure per case. Opening it runs the case here and draws expected beside actual.
 function setUrl(caseId){
  try{const params=new URLSearchParams(); if(typeFilter!=='all')params.set('type',typeFilter); if(caseId)params.set('case',caseId); const q=params.toString(); window.history.replaceState(null,'','/evals'+(q?'?'+q:''));}catch(e){}
@@ -218,8 +254,8 @@ async function init(){
  try{
   const [boardResponse,configResponse]=await Promise.all([fetch('/evals.json'),fetch('/api/config')]);
   if(!boardResponse.ok)throw new Error('The golden set is not available on this server.');
-  board=await boardResponse.json(); token=configResponse.ok?(await configResponse.json()).token:null;
-  renderSummary();renderScore(null);renderTrend();renderFilter();renderCases();
+  board=await boardResponse.json(); const config=configResponse.ok?await configResponse.json():{}; token=config.token||null;
+  renderSummary();renderScore(null);renderTrend();renderJudge(config.public!==false);renderFilter();renderCases();
   $('run-all').addEventListener('click',runAll);
   await applyUrl();
  }catch(error){$('summary').textContent=error.message;}

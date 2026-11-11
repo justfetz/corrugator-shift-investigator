@@ -33,9 +33,15 @@ Two files hold the cases. `evals/golden.json` is questions with written expectat
 - **The total.** `python3 evals/run.py` prints one row per case, the passed/total per type, the latency percentiles and a final `N passed, F failed, S skipped`. Its exit status is the number of failed offline cases plus live types under their threshold plus latency breaches, so CI fails on any of them.
 - **The history.** `python3 evals/run.py --track` appends one line per whole-set run to `evals/history.jsonl` (time, commit, dataset hash, pass/fail per type, the offline p50 and p95) and rewrites `evals/last_run.json`. Two lines are comparable when the dataset hash and the model match. The badge on the main page, such as `255/255 golden · 10 ms p50`, is read from the newest line: runs passed over runs, and its offline p50.
 
+## The narrative judge
+
+The checks above read numbers, tools and patterns; none of them reads a model's prose as prose. The narrative judge (issue #25) does: a DeepEval G-Eval metric per line of the rubric, each scored 0 or 1 and reported on its own. **Grounded**: every number in the narrative appears in a tool result. **Recorded, not proven**: losses are what the data recorded, with no causal claim the tools did not make. **Prescribes nothing**: it interprets and does not instruct. **Unavailable is not zero**: a value a tool returned as unavailable is never rendered as 0 or dropped silently.
+
+It is a model call, so it is live only: `python3 evals/run.py --judge` judges every narrative the recordings replay and the scripted analyst rounds write, from the owner's machine, never in the CI gate and never from a page. The judge model is a setting (`DEEPEVAL_JUDGE`, Haiku 5.5 by default), its calls go through the project's own bounded adapters, and `--track` records the cost per judged case in `evals/history.jsonl`. It does not gate anything until it is calibrated: on the local workbench the owner grades twenty narratives at `/evals/grade`, and every run reports the judge's agreement with those grades per rubric line, as a percentage and Cohen's kappa. Below 90% on a line, the line's wording is what changes. [The judge in full](../evals/README.md#the-narrative-judge).
+
 ## The set in the app: `/evals`
 
-`/evals` lists every case of both files exactly once with its question, its type, its expectations in plain words and its result in the last tracked run, filtered by type with `/evals?type=<type>`. Opening a case (`/evals?case=<id>`) runs it on the server and draws the tool trail it actually produced beside what it expected. A live case on the page is always a replay of its committed recording: nothing on the page can reach a model, whatever keys the server holds. `/evals.json` is the same data as JSON, readable from another origin so the scoreboard can be embedded.
+`/evals` lists every case of both files exactly once with its question, its type, its expectations in plain words and its result in the last tracked run, filtered by type with `/evals?type=<type>`. Opening a case (`/evals?case=<id>`) runs it on the server and draws the tool trail it actually produced beside what it expected. A live case on the page is always a replay of its committed recording: nothing on the page can reach a model, whatever keys the server holds. `/evals.json` is the same data as JSON, readable from another origin so the scoreboard can be embedded. The page also shows the newest tracked judged run, line by line, beside its agreement with the owner.
 
 ## Run it yourself
 
@@ -43,4 +49,5 @@ Two files hold the cases. `evals/golden.json` is questions with written expectat
 python3 evals/run.py                       # every case offline, plus replays of the recordings
 python3 evals/run.py --only why-slow       # one case
 python3 evals/make_value_goldens.py        # only after an intended generator change
+pip install -e '.[judge]' && python3 evals/run.py --judge --track   # the narrative judge: a billed model call, the judge model's key
 ```

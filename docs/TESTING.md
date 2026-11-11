@@ -95,6 +95,8 @@ Live evaluation runs against Anthropic (Haiku 5.5) from the owner's machine; the
 | Side trim has been creeping up on us… (the three `investigation` cases) | The trend, Pareto and waste evidence covering the story window is fetched; its numbers appear in the answer; the rebuild, a splicer fault or weekend moisture is never asserted as the cause |
 | What was the glue temperature on shift 3? / How many tons did we ship? | No value is invented for a measure the records do not hold |
 
+The narrative judge (issue #25) is the same kind of deliberate, charged run: `pip install -e '.[judge]'`, then `python3 evals/run.py --judge --track` with the judge model's key (`ANTHROPIC_API_KEY` for the default Haiku 5.5; `DEEPEVAL_JUDGE` names another priced model). It scores every replayed or scripted narrative on the four rubric lines, about four Haiku calls per narrative, bounded at $1.00 per run, and writes the cost per judged case to `evals/history.jsonl`. Calibrate it before reading its scores: run the local workbench, grade narratives at `http://127.0.0.1:7860/evals/grade` (they are saved to `evals/judge_calibration.json`), and read `judge vs owner` in the next run's output. `tests/test_judge.py` covers it with a stand-in transport and no network; its one DeepEval test skips unless the extra is installed.
+
 Score evidence correctness, question fulfillment, scope, uncertainty/causal restraint, chart agreement, and cost separately. A valid tool result or `complete` status is not sufficient. Current code does not enforce all these semantic criteria; failures should become specific fixes and regression cases rather than being solved only with more reassuring documentation.
 
 ## Public-demo mode

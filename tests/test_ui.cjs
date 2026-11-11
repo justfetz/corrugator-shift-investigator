@@ -1161,3 +1161,77 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(JSON.parse(lim.store['csi-thread']).length,6,'the cards not reloaded are still kept');
  console.log('UI issue-86 checks passed: no page scroll, follow while filling (bottom, then title line), stop on scroll-up with the ↓ new pill, resume on click or scroll-down, never up on its own, asking always shows the new card, earlier cards whole with their own ids, Enter / Shift+Enter / slash, nothing disabled, no new fetch on the hot path, small trackpad steps up never pulled back, reload replays the thread by GET without /api/ask within a share of the rate limit.');
 })().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #25: the narrative judge. The grading page lists the recorded narratives, saves one grade with the token,
+// never fetches the judge's scores (the owner's grades stay unanchored), and /evals draws the judge's table.
+(async()=>{
+ class El extends Element{constructor(tag){super(tag);const cls=new Set();this.classList={add:c=>cls.add(c),has:c=>cls.has(c)};}insertBefore(item,ref){const i=this.children.indexOf(ref);this.children.splice(i<0?this.children.length:i,0,item);}}
+ const page=fs.readFileSync('src/investigator/web/grade.html','utf8'), src=fs.readFileSync('src/investigator/web/grade.js','utf8');
+ const els=Object.fromEntries([...page.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1])]));
+ for(const value of ['todo','all']){const b=new El('button');b.dataset.value=value;els['show-filter'].children.push(b);}
+ const rubric=['grounded','recorded_not_proven','prescribes_nothing','unavailable_not_zero'].map(key=>({key,name:key,criterion:'c '+key,steps:['s1','s2','Score 1 or Score 0']}));
+ const item=(id,grade,stale=false)=>({id,run:id.split(':')[0],turn:1,source:'recorded anthropic',question:'Why was this shift slow?',scope:'production day 2026-09-14, shift 2',
+  narrative:['Finding: Shift 2 ran at 89.04 of its speed target. (cites r1 row 0 speed_to_target_pct)','Check: Ask the crew whether the paper changes were planned.'],digest:'d-'+id,
+  evidence:['r1 get_shift_overview(shift=2) -> {"rows":[{"speed_to_target_pct":89.0443}]}'],grade,stale});
+ const done={id:'b@anthropic:1',digest:'d-b@anthropic:1',verdict:'good',grounded:true,recorded_not_proven:true,prescribes_nothing:true,unavailable_not_zero:true,note:'',graded_at:'2026-11-11T10:00:00Z'};
+ const listing={rubric,target:20,graded:1,file:'evals/judge_calibration.json',narratives:[item('a@anthropic:1',null),item('b@anthropic:1',done),item('c@anthropic:1',{...done,id:'c@anthropic:1',digest:'old'},true)]};
+ const calls=[];
+ const fetchStub=async(path,init)=>{
+  calls.push([init&&init.method||'GET',path,init&&init.body?JSON.parse(init.body):null,init&&init.headers?init.headers['X-Workbench-Token']:undefined]);
+  if(path==='/api/evals/narratives')return {ok:true,status:200,json:async()=>listing};
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'tok',public:false})};
+  const body=JSON.parse(init.body);
+  if(body.verdict==='bad'&&!body.note.trim())return {ok:false,status:400,json:async()=>({error:'Say why the answer is bad: the reason is what fixes the rubric'})};
+  return {ok:true,status:200,json:async()=>({saved:{...body,graded_at:'2026-11-11T20:00:00Z'},graded:2,target:20})};
+ };
+ const doc={getElementById:id=>{assert.ok(els[id],`Unknown grade control ${id}`);return els[id];},createElement:tag=>new El(tag)};
+ const ctx={document:doc,fetch:fetchStub,window:{},console};
+ vm.createContext(ctx);vm.runInContext(src,ctx);await vm.runInContext('ready',ctx);
+ const all=(el,out=[])=>{for(const c of el.children||[]){out.push(c);all(c,out);}return out;};
+ assert.equal(els.progress.textContent,'1 of 20 graded · 3 narratives to choose from · 17 more need a new recording (python3 evals/run.py --live --provider anthropic)');
+ assert.equal(els.rubric.children.length,4);
+ const [a,b,c]=els.items.children;
+ assert.deepEqual([a.hidden,b.hidden,c.hidden],[false,true,false]);                  // "To grade" hides a current grade, keeps a stale one
+ assert.ok(all(c).some(e=>/graded an earlier version of this text on 2026-11-11/.test(e.textContent)));
+ els['show-filter'].children[1].events.click();assert.deepEqual(els.items.children.map(x=>x.hidden),[false,false,false]);
+ assert.ok(all(a).some(e=>e.textContent==='Finding: Shift 2 ran at 89.04 of its speed target. (cites r1 row 0 speed_to_target_pct)'));
+ assert.ok(all(a).some(e=>e.tag==='pre'&&/get_shift_overview/.test(e.textContent)));      // the evidence it was written from
+ const boxes=all(a).filter(e=>e.tag==='input'), [good,bad]=all(a).find(e=>e.dataset&&e.children.length===2&&e.children[0].dataset.value==='good').children;
+ const save=all(a).find(e=>e.tag==='button'&&e.textContent==='Save grade'), note=all(a).find(e=>e.tag==='textarea');
+ assert.equal(boxes.length,4);
+ boxes.forEach(x=>{x.checked=false;}); good.events.click(); assert.ok(boxes.every(x=>x.checked));   // good ticks every line
+ bad.events.click(); boxes[2].checked=false; await save.events.click();
+ assert.match(all(a).find(e=>e.className==='muted'&&/Say why/.test(e.textContent)).textContent,/^Say why/);   // refused without a reason
+ note.value='It tells the crew what to compare.'; await save.events.click();
+ const posted=calls.filter(x=>x[0]==='POST');
+ assert.deepEqual(posted[posted.length-1],['POST','/api/evals/grade',{id:'a@anthropic:1',digest:'d-a@anthropic:1',verdict:'bad',note:'It tells the crew what to compare.',grounded:true,recorded_not_proven:true,prescribes_nothing:false,unavailable_not_zero:true},'tok']);
+ assert.match(els.progress.textContent,/^2 of 20 graded/);
+ // the page reads the narratives and saves grades; it never asks for the judge's scores
+ assert.deepEqual([...new Set(calls.map(x=>x[0]+' '+x[1]))].sort(),['GET /api/config','GET /api/evals/narratives','POST /api/evals/grade']);
+ assert.deepEqual([...new Set([...src.matchAll(/fetch\(([^,)]+)/g)].map(m=>m[1]))].sort(),["'/api/config'","'/api/evals/grade'","'/api/evals/narratives'"]);
+ assert.ok(!/evals\.json/.test(src));
+ // /evals: the judge's table, line by line, beside the agreement; the grading link only on the local workbench
+ const epage=fs.readFileSync('src/investigator/web/evals.html','utf8'), esrc=fs.readFileSync('src/investigator/web/evals.js','utf8');
+ const eels=Object.fromEntries([...epage.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1])]));
+ const scored=(s)=>Object.fromEntries(rubric.map((r,i)=>[r.key,s[i]]));
+ const judge={rubric,rubric_digest:'f2643a949682',target:20,bar_pct:90,graded:2,
+  last:{ran_at:'2026-11-12T09:00Z',commit:'abc1234',metric:'GEval',model:'claude-haiku-5-5',narratives:2,judged:2,cost_per_case_usd:0.00112,rubric_current:true,
+   criteria:{grounded:{pass:2,fail:0,error:0},recorded_not_proven:{pass:2,fail:0,error:0},prescribes_nothing:{pass:1,fail:1,error:0},unavailable_not_zero:{pass:1,fail:0,error:1}}},
+  rows:[{id:'a@anthropic:1',scores:scored([1,1,0,1]),reasons:scored(['ok','ok','It tells the crew what to compare.','ok'])},{id:'b@anthropic:1',scores:scored([1,1,1,null]),reasons:scored(['ok','ok','ok','judge error: bad JSON'])}],
+  agreement:{graded:2,matched:2,unmatched:0,target:20,bar_pct:90,criteria:{grounded:{n:2,agree:2,pct:100,kappa:null,ok:true},recorded_not_proven:{n:2,agree:2,pct:100,kappa:null,ok:true},prescribes_nothing:{n:2,agree:1,pct:50,kappa:0,ok:false},unavailable_not_zero:{n:1,agree:1,pct:100,kappa:null,ok:true}},overall:{n:1,agree:1,pct:100,kappa:null,ok:true}}};
+ const board={badge:'4/4 golden · 12 ms p50',dataset_hash:'d9143ff1d15029b5',counts:{cases:0,runs:0,by_type:{},recordings:0},thresholds:{offline_latency_ms:{p50:100,p95:250}},types:['routing'],history:[],last_run:null,cases:[],judge};
+ for(const isPublic of [false,true]){
+  const ectx={document:{getElementById:id=>{assert.ok(eels[id],`Unknown evals control ${id}`);return eels[id];},createElement:tag=>new El(tag),createElementNS:(_,tag)=>new El(tag)},
+   fetch:async path=>path==='/evals.json'?{ok:true,status:200,json:async()=>board}:{ok:true,status:200,json:async()=>({token:'tok',public:isPublic})},
+   window:{innerWidth:1200,location:{search:''},history:{replaceState(){}}},console,URLSearchParams};
+  vm.createContext(ectx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ectx);vm.runInContext(esrc,ectx);await vm.runInContext('ready',ectx);
+  assert.equal(eels['grade-link'].hidden,isPublic);
+ }
+ assert.equal(eels['judge-summary'].textContent,'Last judged run 2026-11-12 09:00 UTC at commit abc1234: GEval with claude-haiku-5-5, 2 of 2 narratives scored, $0.0011 per judged case · agreement with the owner over 2 narratives graded as the same text (bar 90% per line)');
+ const jrows=eels['judge-table'].children[1].children.map(tr=>tr.children.map(td=>td.textContent));
+ assert.deepEqual(jrows.map(r=>[r[0],r[2],r[3]]),[['grounded','2/2','2/2 · 100% · κ undefined'],['recorded_not_proven','2/2','2/2 · 100% · κ undefined'],['prescribes_nothing','1/2','1/2 · 50% · κ 0.00'],['unavailable_not_zero','1/1 (1 unscored)','1/1 · 100% · κ undefined'],['overall','—','1/1 · 100% · κ undefined']]);
+ assert.equal(eels['judge-detail'].hidden,false);
+ const nrows=eels['judge-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent));
+ assert.deepEqual(nrows,[['a@anthropic:1','1','1','0','1','prescribes_nothing: It tells the crew what to compare.'],['b@anthropic:1','1','1','1','—','unavailable_not_zero: judge error: bad JSON']]);
+ console.log('UI issue-25 checks passed: grading page lists, filters, refuses a bad grade without a reason, saves one with the token, never fetches the judge; /evals draws the judge table and agreement.');
+})().catch(error=>{console.error(error);process.exit(1);});
