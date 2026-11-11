@@ -1,5 +1,5 @@
 {
- "about": "The cost model's rates and assumptions (issue #31). Every dollar the tools return is a quantity from the records times one of these. Defaults are the owner's post; nothing here is a real plant's figure. Override a rate with INVESTIGATOR_RATES=paper:55,hour:1200,margin:40 on the server, or rates= on a request or URL (docs/METRICS.md, Cost model).",
+ "about": "The cost model's rates and assumptions (issue #31). Every dollar the tools return is a quantity from the records times one of these. Defaults are the owner's post; nothing here is a real plant's figure. Override a rate with INVESTIGATOR_RATES=paper:55,hour:1200,margin:40 on the server, or rates= on a request or URL (docs/COST_MODEL.md).",
  "post": "https://justfetz.github.io/posts/corrugator-dashboard.html",
  "rates": [
   {"id": "paper_usd_msf", "short": "paper", "label": "Paper", "unit": "$/MSF", "default": 55,

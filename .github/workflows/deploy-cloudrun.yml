@@ -45,6 +45,16 @@ jobs:
       WORKBENCH_SECRET: ${{ vars.WORKBENCH_SECRET || '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Changelog from the merged pull requests
+        # /docs/changelog (issue #93) lists every merged pull request, this one included. Nothing here can
+        # fail the deploy: the history fetch is inside this step, the step may fail (continue-on-error) or
+        # time out, and the generator replaces the committed docs/CHANGELOG.md only with a complete list
+        # (never fewer pull requests than it already holds), written atomically. Otherwise the committed file ships.
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          git fetch --quiet --unshallow origin
+          PYTHONPATH=src python3 -m investigator.docsite changelog
       - name: Choose the Google credential (keyless when the WIF variables are set; the stored key until then)
         id: gcp_auth
         # Workload Identity Federation when both repository variables are set. Otherwise the GCP_SA_KEY
