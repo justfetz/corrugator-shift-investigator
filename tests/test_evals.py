@@ -294,7 +294,7 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
     a case whose question lands elsewhere, and every offline question is also answered over its URL."""
     routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c]   # an analyst-plan case is a scripted live round: no URL
-    assert len(routing) == 128 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    assert len(routing) == 139 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)
@@ -312,3 +312,20 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     live = next(c for c in CASES if c['id'] == 'live-setup-matrix')
     assert golden.url_failures(live, live['expect'], [live['question']], 'anthropic') == []
     assert golden.url_failures(live, {**live['expect'], 'url': '/corr/1/day/2026-09-14/shift/2?measure=orders'}, [live['question']], 'anthropic')[0].startswith('URL: q= resolves to')
+
+
+def test_a_moved_scope_is_held_to_the_scope_the_case_states():
+    """Issue #105 review: the tools-inside-the-scope invariant takes the allowed shifts from what the case states (its
+    expect.url, or a scripted plan's expect.shifts), never from the answer it scores. A question that moves the shift
+    passes only while the case says so; without the stated address it is held to the controls and fails."""
+    case = copy.deepcopy(next(c for c in CASES if c['id'] == 'question-names-shift-1'))
+    outcome, failures, _, _ = golden.run_case(case)
+    assert outcome == 'pass', failures
+    del case['expect']['url']
+    outcome, failures, _, _ = golden.run_case(case)
+    assert outcome == 'fail' and any('outside scope [2]' in f for f in failures), failures
+    plan = copy.deepcopy(next(c for c in CASES if c['id'] == 'analyst-question-scope-last-week'))
+    assert golden.run_case(plan)[0] == 'pass'
+    del plan['expect']['shifts']
+    outcome, failures, _, _ = golden.run_case(plan)
+    assert outcome == 'fail' and any('outside scope [2]' in f for f in failures), failures

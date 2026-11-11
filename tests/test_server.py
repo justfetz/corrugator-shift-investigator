@@ -525,7 +525,8 @@ def test_the_url_path_refuses_like_the_post_path(running):
         ('/q?day=2026-09-14&shift=9&q=Show+speed',400,'supported shift'),
         ('/q?day=2026-09-14&shift=2&period=year&q=Show+speed',400,'accounting period'),
         ('/q?day=2026-09-14&shift=2&mode=openai&q=Show+speed',400,'Invalid request fields'),
-        ('/q?day=2026-09-14&shift=2&scope=shift&q=Show+shift+1',400,'Selected shift only'),
+        ('/q?day=2026-09-14&shift=2&scope=shift&q=Compare+shift+1+with+shift+3',400,'Selected shift only'),   # one named shift moves instead (#105)
+        ('/q?day=2026-08-04&shift=2&scope=shift&q=How+much+downtime+last+week',400,'before the records'),
         ('/q?day=2026-09-14&shift=2&period=week&q=Show+setup+matrix',400,'Switch Period to Day'),
         ('/corr/1/day/2026-09-14/shift/2.json',400,'Add measure='),
         ('/corr/1/day/2026-09-14/shift/2.json?measure=overview&bogus=1',400,'Unknown query field'),
@@ -537,6 +538,53 @@ def test_the_url_path_refuses_like_the_post_path(running):
         got,_,body=request(running,'GET',path)
         assert got==status and message in json.loads(body)['error'], (path,got,body)
     assert request(running,'GET','/q?day=2026-09-14&shift=2&q=Show+speed',headers={'Host':'evil.example'})[0]==403
+
+
+def test_the_question_names_its_own_scope_on_the_url_and_the_post_path(running):
+    """Issue #105: "How much donwtime on 1st shift last week?" asked with shift 2 and Day on Mon 14 Sep redirects to
+    shift 1's week of 7-11 Sep, and the POST answer is the same; a prior view of another day is no follow-up of it."""
+    status,headers,_=request(running,'GET','/q?day=2026-09-14&shift=2&scope=shift&period=day&q=How+much+donwtime+on+1st+shift+last+week%3F')
+    assert status==302 and headers['Location']=='/corr/1/week/2026-09-07/shift/1?measure=pareto'
+    status,_,body=request(running,'GET',headers['Location']+'&format=json')
+    week=json.loads(body)
+    assert status==200 and week['status']=='complete' and week['selected_shifts']==[1] and week['production_day']=='2026-09-07'
+    assert [(t['tool'],t['arguments']['window'],t['arguments']['shift']) for t in week['trace'] if t['tool']!='render_chart']==[
+        ('get_downtime_pareto',{'period':'week','anchor':'2026-09-07'},1)]
+    status,headers,_=request(running,'GET','/q?day=2026-09-14&shift=1&scope=shift&period=week&q=how+much+downtime+did+third+shift+have+yesterday')
+    assert status==302 and headers['Location']=='/corr/1/day/2026-09-11/shift/3?measure=downtime'
+    # the next question asked from the controls (14 Sep) carries the moved view: it is another day's, so it is left off
+    status,headers,_=request(running,'GET','/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F'
+                             '&after=/corr/1/week/2026-09-07/shift/1?measure=pareto&after=/corr/1/day/2026-09-14/shift/2?measure=downtime')
+    assert status==302 and headers['Location']=='/corr/1/day/2026-09-14/shift/2?measure=overview&after=/corr/1/day/2026-09-14/shift/2?measure=downtime'
+    status,_,body=request(running,'GET','/q?day=2026-09-14&shift=2&scope=shift&q=Show+shift+1&after=/corr/1/day/2026-09-14/shift/2?measure=overview')
+    assert status==302   # a shift move keeps the day, and the follow-up chain with it
+    token=json.loads(request(running,'GET','/api/config')[2])['token']
+    post_headers={'Content-Type':'application/json','X-Workbench-Token':token}
+    status,_,posted=request(running,'POST','/api/ask',json.dumps({'day':'2026-09-14','shift':2,'question':'How much donwtime on 1st shift last week?'}),post_headers)
+    posted=json.loads(posted)
+    assert status==200 and posted['url']=='/corr/1/week/2026-09-07/shift/1?measure=pareto' and posted['sections']==week['sections']
+    assert posted['context']['shift']==1 and posted['context']['period']=='week' and posted['production_day']=='2026-09-07'
+
+
+def test_a_moved_question_keeps_the_session_on_the_controls():
+    """Review of #105: the session follows the controls. A question that names another shift on the same day is a
+    follow-up and stays in the conversation; one on another day is not (as after= on the URL path), and the
+    conversation on the controls' day goes on as it was rather than starting afresh."""
+    app=Workbench()
+    try:
+        def ask(question,session=None):
+            with app.lock:
+                return app.ask({'day':'2026-09-14','shift':2,'question':question,'session_id':session})
+        first=ask('Why was this shift slow?');session=first['session_id']
+        moved=ask('Show shift 1',session)
+        assert moved['url']=='/corr/1/day/2026-09-14/shift/1?measure=overview' and moved['session_id']==session
+        assert [h['question'] for h in ask('Show downtime',session)['context']['history']]==['Why was this shift slow?','Show shift 1','Show downtime']
+        week=ask('How much downtime last week?',session)
+        assert week['url']=='/corr/1/week/2026-09-07/shift/2?measure=pareto' and [h['question'] for h in week['context']['history']]==['How much downtime last week?']
+        assert [h['question'] for h in ask('Show waste',session)['context']['history']]==['Why was this shift slow?','Show shift 1','Show downtime','Show waste']
+        assert app.sessions[session].shift==2 and app.sessions[session].production_day=='2026-09-14'
+    finally:
+        app.close()
 
 
 def test_follow_ups_reports_and_the_bad_record_ride_in_the_url(running):
