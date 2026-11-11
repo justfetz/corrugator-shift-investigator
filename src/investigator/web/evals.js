@@ -115,7 +115,7 @@ function renderJudge(isPublic){
   :'No judged run is tracked yet: the owner runs python3 evals/run.py --judge --track with the judge model’s key'];
  parts.push(a.matched?`agreement with the owner over ${a.matched} narrative${a.matched===1?'':'s'} graded as the same text (bar ${j.bar_pct}% per line)`
    +(a.unmatched?`; ${a.unmatched} grade${a.unmatched===1?'':'s'} set aside (changed text or not judged)`:'')
-  :`${j.graded} owner grade${j.graded===1?'':'s'} saved (target ${j.target})${last&&j.graded?', none of the text the judge scored':''}; no agreement measured yet`);
+  :`${j.graded} owner grade${j.graded===1?'':'s'} (target ${j.target_text||j.target})${last&&j.graded?', none of the text the judge scored':''}; no agreement measured yet`);
  $('judge-summary').textContent=parts.join(' · ');
  const head=node('thead'), hr=node('tr'); for(const label of ['Rubric line','What it asks','Judge passes','Agreement with the owner']){const th=node('th',label);th.scope='col';hr.append(th);} head.append(hr);
  const body=node('tbody');
@@ -124,7 +124,7 @@ function renderJudge(isPublic){
   tr.append(node('td',rule.name),node('td',rule.criterion),node('td',c?`${c.pass}/${c.pass+c.fail}`+(c.error?` (${c.error} unscored)`:''):'—'),node('td',agreeCell(a.criteria[rule.key])));
   body.append(tr);
  }
- const total=node('tr',undefined,'total'); total.append(node('td','overall'),node('td','good or bad, against all four lines passing'),node('td','—'),node('td',agreeCell(a.overall))); body.append(total);
+ const total=node('tr',undefined,'total'); total.append(node('td','overall'),node('td','good or bad, against all five lines passing'),node('td','—'),node('td',agreeCell(a.overall))); body.append(total);
  $('judge-table').replaceChildren(head,body);
  if(!j.rows.length){$('judge-detail').hidden=true;return;}
  $('judge-detail').hidden=false; $('judge-rows-title').textContent=`Judged narratives (${j.rows.length}): a score per rubric line, and the judge’s reason for each failed line`;

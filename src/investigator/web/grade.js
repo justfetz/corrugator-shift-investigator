@@ -16,12 +16,13 @@ async function post(body){
 }
 
 function current(item){ return Boolean(item.grade)&&!item.stale; }
+// `graded` is every saved grade, the same count /evals shows; `set_aside` the ones whose text has changed since or
+// cannot be replayed now, which the agreement leaves out.
 function renderProgress(){
- const done=data.narratives.filter(current).length, total=data.narratives.length;
- const short=Math.max(0,data.target-total);
- $('progress').textContent=`${done} of ${data.target} graded on the current text · ${total} narrative${total===1?'':'s'} to choose from`
-  +(short?` · ${short} more need a new recording (python3 evals/run.py --live --provider anthropic)`:'')
-  +(done>=data.target?' · enough to read the agreement: python3 evals/run.py --judge --track':'');
+ const total=data.narratives.length;
+ $('progress').textContent=`${data.graded} graded · target ${data.target_text||data.target} · ${total} narrative${total===1?'':'s'} to choose from`
+  +(data.set_aside?` · ${data.set_aside} set aside (text changed, or not replayable now)`:'')
+  +(data.graded-data.set_aside>=data.target?' · enough to read the agreement: python3 evals/run.py --judge --track':'');
  $('file-note').textContent=data.file;
 }
 function renderRubric(){
@@ -43,7 +44,7 @@ async function save(item,form){
  try{
   const response=await post(body), out=await response.json();
   if(!response.ok)throw new Error(out.error||'The grade was not saved');
-  item.grade=out.saved; item.stale=false;
+  item.grade=out.saved; item.stale=false; data.graded=out.graded; data.set_aside=out.set_aside;
   if(form.staleNote)form.staleNote.hidden=true;   // the new grade is of the current text
   // The card stays in view under "To grade" until the filter is next applied, so "Saved" does not vanish under the cursor.
   form.status.textContent=`Saved ${String(out.saved.graded_at).replace('T',' ').replace('Z',' UTC')}: ${out.saved.verdict}.`;

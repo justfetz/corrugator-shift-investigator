@@ -340,7 +340,7 @@ passing refusal case.
 ## The narrative rubric
 
 What a live narrative is judged on. The deterministic checks enforce what they
-can; the DeepEval judge below scores lines 1 to 4 on every narrative, each on its
+can; the DeepEval judge below scores all five on every narrative, each on its
 own:
 
 1. *Grounded*: every number in the narrative appears in a tool result. Enforced:
@@ -354,9 +354,12 @@ own:
 5. *Comparisons are consistent with the cited figures* (issue #79): an ordering
    word (*fastest*, *most*, *below*, *rose*) agrees with the values the line cites.
    Enforced for the orderings whose subject the rules in `narrative.py` can pin
-   down (`ordering_contradicted`). Not one of the judge's lines yet: the owner's
-   calibration grades the four lines of issue #25, and a fifth judge line needs a
-   fifth field in every grade first.
+   down (`ordering_contradicted`); the judge scores every comparison
+   (`comparisons_consistent`), and the ones the rules leave alone are its job:
+   actual against target first ("ran above target at 467.45 ft/min against a
+   target of 500.00 ft/min"), and orderings the rules do not know ("Shift 2 ran
+   closer to target, 90.87 percent against 95.81", which the scripted
+   `analyst-orderings-per-shift` round keeps on the rolling year's data).
 
 ## The narrative judge
 
@@ -369,7 +372,7 @@ with the owner passes the bar below.
 
 ```
 pip install -e '.[judge]'                                          # DeepEval 4.3.4, the optional extra; not in the image or CI
-python3 evals/run.py --judge --judge-secret anthropic-api-key      # the key read from Secret Manager by name; judge every narrative, print only
+python3 evals/run.py --judge --judge-secret anthropic-api-key --judge-project <project>   # the key from Secret Manager by name; judge, print only
 python3 evals/run.py --judge --judge-secret anthropic-api-key --track   # and record it: history.jsonl + judge_last_run.json
 python3 evals/run.py --live --provider anthropic --judge           # judge fresh live narratives (ANTHROPIC_API_KEY set)
 DEEPEVAL_JUDGE=claude-sonnet-5-5 python3 evals/run.py --judge      # another judge model (or --judge-model)
@@ -379,7 +382,9 @@ The key: the provider's variable when it is set (`ANTHROPIC_API_KEY` for the
 Claude judges, `OPENAI_API_KEY` for `gpt-4.1-mini`), else the Google Secret
 Manager secret named by `--judge-secret` or `DEEPEVAL_JUDGE_SECRET`, read with
 your own `gcloud` credentials (`gcloud secrets versions access latest
---secret=<name>`), so it never sits in a shell history or a file. The name is the
+--secret=<name> --project=<project>`, the project from `--judge-project` or
+`DEEPEVAL_JUDGE_PROJECT`, else gcloud's default), so it never sits in a shell
+history or a file. The name is the
 one the deploy uses (`anthropic-api-key` in [DEPLOYMENT.md](../docs/DEPLOYMENT.md)),
 or a judge-only secret with its own spend limit.
 
@@ -391,8 +396,12 @@ text, so a score or a grade always belongs to the words it was given. The judge
 reads `investigator.judge.narrative_cases`: the question and its scope, the
 narrative as a reader sees it (`Finding: ... (cites r1 row 0 trim_pct)`), and the
 tool results it was written from, rows first, floats to four decimals, the
-writer's twelve-row preview, at most 24,000 characters. Twenty-one narratives
-today: seventeen recorded, four scripted.
+writer's twelve-row preview, at most 24,000 characters. Four narratives can be
+judged and graded today, all four scripted: since the rolling year (#91) every
+live recording is stale and replays nothing, so the seventeen recorded narratives
+come back once the live recordings are re-recorded (#71). Until then the target
+of twenty reads "20 once the live recordings are re-recorded (#71)" wherever it is
+shown.
 
 **The rubric** (`investigator.judge.RUBRIC`, the exact evaluation steps the judge
 reads; its 12-character digest is stamped on every judged run):
@@ -403,6 +412,7 @@ reads; its 12-character digest is stamped on every judged run):
 | Recorded, not proven | `recorded_not_proven` | Losses are stated as what the data recorded; no causal claim the tools did not make. |
 | Prescribes nothing | `prescribes_nothing` | No "should", no action list: the narrative interprets, it does not instruct. |
 | Unavailable is not zero | `unavailable_not_zero` | A value a tool returned as unavailable is never rendered as 0 or dropped silently. |
+| Comparisons match the figures | `comparisons_consistent` | Every ordering word and every comparison with a target agrees with the values the narrative cites. |
 
 One boundary is a choice to calibrate, not a given: a *check* line that puts a
 question to the crew ("ask the crew whether…", "compare against a prior shift")
@@ -424,15 +434,15 @@ swappable too: `judge(cases, client, metrics=...)` takes any DeepEval metric per
 line. DeepEval's telemetry and its `.env` loading are switched off before it is
 imported.
 
-**Cost.** Four calls per narrative, one per line. `--judge --track` writes the
+**Cost.** Five calls per narrative, one per line. `--judge --track` writes the
 history line's `judge` block (model, metric, rubric digest, pass / fail per line,
 `cost_usd` and `cost_per_case_usd`, and the agreement at that time) and
-`evals/judge_last_run.json` (every narrative's four scores and the judge's reason
+`evals/judge_last_run.json` (every narrative's five scores and the judge's reason
 for each), stamped with that line's time and commit; `/evals` shows both, the
 reasons on the local workbench only (they are model prose that no check here
 reads, so the hosted board carries the scores without them). At the
-request sizes above (about 9,000 input tokens across a narrative's four calls, at three bytes a token)
-Haiku 5.5's list price is roughly a tenth of a cent per narrative; the tracked
+request sizes above (about 11,500 input tokens across a narrative's five calls, at three bytes a token)
+Haiku 5.5's list price is a little over a tenth of a cent per narrative; the tracked
 `cost_per_case_usd` is the measured figure.
 
 ### Calibration: the owner's grades
@@ -443,21 +453,24 @@ narrative above with the tool results it was written from. The owner marks each
 good or bad, ticks the rubric lines it passes, and says why (required for every
 grade, good ones too). The page saves to `evals/judge_calibration.json` and never shows the judge's
 own scores, so the grades are not anchored on them. The hosted demo has no
-grading route. Twenty grades are the target.
+grading route. Twenty grades are the target, once the live recordings are
+re-recorded (#71). A grade is counted the same way everywhere: `/evals`, the
+grading page and the eval table count every saved grade, and the grading page also
+says how many are set aside because their text has changed or no longer replays.
 
 Agreement is per line: of the narratives both graded as the same text (same
 `digest`; a grade of text that has since changed, or that the judge did not score,
 is set aside and counted as such), how often the
 judge's 0/1 equals the owner's pass/fail, and Cohen's kappa (agreement beyond
 chance; *undefined* when both raters gave every narrative the same mark). The
-overall row compares the owner's good/bad with all four lines passing. Below 90%
+overall row compares the owner's good/bad with all five lines passing. Below 90%
 on a line, that line's wording in the rubric is what gets fixed, not the owner's
 grades. Every run prints it (`judge vs owner: ...` after `--judge`, or the stored
 judged run's line otherwise), and so does `/evals`.
 
 ### Agreement with the owner
 
-No agreement is measured yet: the owner has graded 0 of 20 narratives, and no
+No agreement is measured yet: the owner has graded none of the narratives, and no
 judged run is tracked. Once both exist, this table is the measured one
 (`tests/test_judge.py` holds it to the committed files):
 
@@ -467,6 +480,7 @@ judged run is tracked. Once both exist, this table is the measured one
 | `recorded_not_proven` | - | - | - |
 | `prescribes_nothing` | - | - | - |
 | `unavailable_not_zero` | - | - | - |
+| `comparisons_consistent` | - | - | - |
 
 ## What this does not prove
 
@@ -483,4 +497,4 @@ Actual against target is the case that matters: `actual_fpm` and `target_fpm`
 are different fields of the same row, so "ran above target at 467.45 ft/min
 against a target of 500.00 ft/min" is kept even though it is false. Covering it
 means pairing a row's `*_fpm` with its `target_fpm` in `_placed_pair`; until
-then nothing catches it: comparisons are not one of the judge's four lines yet.
+then it is the judge's (`comparisons_consistent`).

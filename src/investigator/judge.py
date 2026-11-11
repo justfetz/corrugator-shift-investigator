@@ -5,7 +5,7 @@ nothing there reads is the prose a model writes, so this module scores it agains
 rubric, one criterion at a time, and measures the judge against the owner's own grades before
 anyone trusts it:
 
-- `RUBRIC`: the four lines of the narrative rubric in `evals/README.md`. Each is one G-Eval metric
+- `RUBRIC`: the five lines of the narrative rubric in `evals/README.md`. Each is one G-Eval metric
   in strict mode (a score of 0 or 1), reported on its own and never blended into one number.
 - `narrative_cases`: one judge case per narrative a run wrote: the question and its scope, the
   narrative as a reader sees it, and the tool results it was written from, bounded in characters.
@@ -32,10 +32,14 @@ import time
 CALIBRATION_FILE = 'judge_calibration.json'
 LAST_RUN_FILE = 'judge_last_run.json'
 CALIBRATION_TARGET = 20        # narratives the owner grades before agreement is read (issue #25, 2026-11-11)
+# Since the rolling year (#91) every live recording is stale and replays nothing, so only the scripted analyst rounds
+# can be graded until the recordings are re-recorded (#71); every place that shows the target says so meanwhile.
+RERECORD_NOTE = 'once the live recordings are re-recorded (#71)'
 AGREEMENT_BAR_PCT = 90         # below this on a criterion, that criterion's wording is what gets fixed, not the grades
 DEFAULT_JUDGE_MODEL = 'claude-haiku-5-5'
 JUDGE_ENV = 'DEEPEVAL_JUDGE'
 JUDGE_SECRET_ENV = 'DEEPEVAL_JUDGE_SECRET'   # a Secret Manager secret holding the judge model's key, read by name
+JUDGE_PROJECT_ENV = 'DEEPEVAL_JUDGE_PROJECT'  # the Google Cloud project that holds it (gcloud --project)
 NOTE_MAX_CHARS = 500
 
 # The rubric. `steps` are G-Eval's evaluation steps, given rather than generated, so a run makes one model
@@ -79,6 +83,19 @@ RUBRIC = (
          'It fails when Actual Output renders an unavailable value as 0, zero, none or another number, or presents an '
          'incomplete result as complete.',
          'Score 1 when Context has no unavailable value or every one is treated as unavailable. Score 0 otherwise.']},
+    # Line 5 (issue #79): the rules in narrative.py withdraw an ordering they can pin to its cited values, and miss the
+    # rest, actual against target first ("above target at 467.45 ft/min against a target of 500.00"); those are the judge's.
+    {'key': 'comparisons_consistent', 'name': 'Comparisons match the figures',
+     'criterion': 'Every ordering word and every comparison with a target agrees with the values the narrative cites.',
+     'steps': [
+         'Find every comparison in Actual Output: an ordering word (fastest, slowest, highest, lowest, most, least, best, worst, '
+         'more or less than, above, below, ahead, behind, rose, fell, grew, dropped) or a value stated against its target.',
+         'For each, find in Context the values it compares: the cited row, or the rows of the shifts, weeks or reasons it names. '
+         'Check the direction: "fastest" names the largest speed, "most" the largest count or minutes, "above target" an actual '
+         'value higher than its target, "rose" a later value higher than an earlier one, and so on.',
+         'A value against its own target counts: "ran above target at 467.45 ft/min against a target of 500.00 ft/min" contradicts '
+         'its figures. A comparison over values Context does not hold cannot agree with them.',
+         'Score 1 when every comparison agrees with the values in Context, or there is none. Score 0 when any contradicts them.']},
 )
 CRITERIA = tuple(c['key'] for c in RUBRIC)
 
@@ -214,13 +231,21 @@ KEY_ENV = {'anthropic': 'ANTHROPIC_API_KEY', 'openai': 'OPENAI_API_KEY'}
 SECRET_NAME = re.compile(r'^[A-Za-z0-9_-]{1,255}$')
 
 
-def secret_key(name):
+PROJECT_ID = re.compile(r'^[a-z][a-z0-9-]{4,61}[a-z0-9]$')
+
+
+def secret_key(name, project=None):
     """The judge model's key, read from Google Secret Manager by name with the owner's own gcloud credentials, so it
-    never sits in a shell history or a file. Never printed, logged or stored."""
+    never sits in a shell history or a file. `project` (else DEEPEVAL_JUDGE_PROJECT) is passed as gcloud's --project, so
+    the read does not depend on whichever project gcloud has active. Never printed, logged or stored."""
     if not SECRET_NAME.match(name or ''):
         raise JudgeUnavailable('A Secret Manager secret name is letters, digits, "-" and "_"')
+    project = project or os.environ.get(JUDGE_PROJECT_ENV)
+    if project and not PROJECT_ID.match(project):
+        raise JudgeUnavailable('A Google Cloud project id is 6 to 30 lowercase letters, digits and "-"')
     try:
-        done = subprocess.run(['gcloud', 'secrets', 'versions', 'access', 'latest', f'--secret={name}'],
+        done = subprocess.run(['gcloud', 'secrets', 'versions', 'access', 'latest', f'--secret={name}']
+                              + ([f'--project={project}'] if project else []),
                               capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
         raise JudgeUnavailable('gcloud is not available to read the judge key from Secret Manager') from None
@@ -258,7 +283,8 @@ class JudgeClient:
     DEEPEVAL_JUDGE_SECRET). A rejected key, a busy model or an unreachable host stops the run (JudgeLimit) rather
     than spending the remaining calls on the same failure."""
 
-    def __init__(self, model=None, key=None, send=None, max_calls=MAX_CALLS, max_seconds=MAX_SECONDS, max_usd=MAX_USD, secret=None):
+    def __init__(self, model=None, key=None, send=None, max_calls=MAX_CALLS, max_seconds=MAX_SECONDS, max_usd=MAX_USD, secret=None,
+                 project=None):
         self.model = resolve_judge_model(model)
         spec = judge_models()[self.model]
         self.provider, self.rates = spec['provider'], {'input': spec['input'], 'output': spec['output']}
@@ -266,7 +292,7 @@ class JudgeClient:
             key = os.environ.get(KEY_ENV[self.provider])
         secret = secret or os.environ.get(JUDGE_SECRET_ENV)
         if not key and secret:
-            key = secret_key(secret)
+            key = secret_key(secret, project)
         if not isinstance(key, str) or not key or not key.isascii() or any(c.isspace() for c in key):
             raise JudgeUnavailable(f'{KEY_ENV[self.provider]} is not set and no Secret Manager secret is named (--judge-secret or '
                                    f'{JUDGE_SECRET_ENV}); the judge model {self.model} needs a key')
@@ -488,16 +514,23 @@ def agreement(judged, grades):
             'bar_pct': AGREEMENT_BAR_PCT, 'criteria': criteria, 'overall': overall}
 
 
-def agreement_text(result):
-    """One line for the eval table: per criterion `agree/n pct% (kappa k)`, or what is still missing. `graded` counts
-    the grades saved; only those of the judged text count toward agreement."""
+def target_text(rerecord=False):
+    """The calibration target as every page states it: 20, or, while the live recordings are stale, 20 once they are
+    re-recorded (#71)."""
+    return f'{CALIBRATION_TARGET} {RERECORD_NOTE}' if rerecord else str(CALIBRATION_TARGET)
+
+
+def agreement_text(result, rerecord=False):
+    """One line for the eval table: per criterion `agree/n pct% (kappa k)`, or what is still missing. `graded` is
+    every saved grade, counted the same way on /evals and on the grading page; only those of the judged text count
+    toward agreement."""
+    target = target_text(rerecord)
     if not result['graded']:
-        return f'0 owner grades saved (target {result["target"]}); no agreement measured yet'
+        return f'0 owner grades (target {target}); no agreement measured yet'
     if not result['judged']:
-        return f'{result["graded"]} owner grades saved (target {result["target"]}); no judged run to compare them with, so no agreement measured yet'
+        return f'{result["graded"]} owner grades (target {target}); no judged run to compare them with, so no agreement measured yet'
     if not result['matched']:
-        return (f'{result["graded"]} owner grades saved (target {result["target"]}), none of the text the judge scored; '
-                'no agreement measured yet')
+        return f'{result["graded"]} owner grades (target {target}), none of the text the judge scored; no agreement measured yet'
     def one(name, r):
         if not r['n']:
             return f'{name} -'
@@ -522,7 +555,7 @@ def load_grades(folder):
 
 
 CALIBRATION_ABOUT = ('The owner\'s grades of recorded analyst narratives, made on the local grading page (/evals/grade). One grade per '
-                     'narrative: good or bad, pass (true) or fail (false) on each rubric line, and the reason (required). `digest` names the exact text '
+                     'narrative: good or bad, pass (true) or fail (false) on each of the five rubric lines, and the reason (required). `digest` names the exact text '
                      'graded; a grade whose narrative has since changed is left out of the agreement. evals/run.py --judge reports the '
                      'judge\'s agreement with these grades (issue #25).')
 

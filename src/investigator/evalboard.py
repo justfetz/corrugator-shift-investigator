@@ -254,10 +254,11 @@ class EvalBoard:
                         'judge_cost_per_case_usd': (line.get('judge') or {}).get('cost_per_case_usd')})
         return out
 
-    def _judge(self, history):
+    def _judge(self, history, rerecord=False):
         """The narrative judge as the page shows it (issue #25): the rubric, the newest judged run's scores when
         `judge_last_run.json` belongs to a tracked line, and its agreement with the owner's grades. The grades' own
-        reasons stay in the file; the page gets their count and the agreement."""
+        reasons stay in the file; the page gets their count (every saved grade, as the grading page counts them) and
+        the agreement. `rerecord`: a live recording is stale, so the target of 20 waits on re-recording (#71)."""
         stored = judging.load_json(self.folder / judging.LAST_RUN_FILE, None)
         tracked = {(h['ran_at'], h['commit']) for h in history}
         if stored and (stored.get('ran_at'), stored.get('commit')) not in tracked:
@@ -265,7 +266,8 @@ class EvalBoard:
         grades = judging.load_grades(self.folder)
         rows = stored['rows'] if stored else []
         return {'rubric': [{k: c[k] for k in ('key', 'name', 'criterion', 'steps')} for c in judging.RUBRIC],
-                'rubric_digest': judging.rubric_digest(), 'target': judging.CALIBRATION_TARGET, 'bar_pct': judging.AGREEMENT_BAR_PCT,
+                'rubric_digest': judging.rubric_digest(), 'target': judging.CALIBRATION_TARGET, 'target_text': judging.target_text(rerecord),
+                'bar_pct': judging.AGREEMENT_BAR_PCT,
                 'last': ({'ran_at': stored['ran_at'], 'commit': stored['commit'], **stored['summary'],
                           'rubric_current': stored['summary'].get('rubric') == judging.rubric_digest()} if stored else None),
                 'rows': [{k: r[k] for k in ('id', 'run', 'turn', 'source', 'question', 'scores', 'reasons', 'cost_usd')} for r in rows],
@@ -322,6 +324,8 @@ class EvalBoard:
         newest = history[-1] if history else None
         last = self._last_rows(newest)
         cases = [self._case(case, last) for case in self.cases.values()]
+        # A stale recording replays nothing, so the judge's calibration target waits on re-recording (#71).
+        self._rerecord = any((run.get('recording') or {}).get('stale') for case in cases for run in case['runs'])
         by_type = {}
         for case in cases:
             by_type[case['type']] = by_type.get(case['type'], 0) + 1
@@ -336,7 +340,7 @@ class EvalBoard:
                 'thresholds': {'live_pass_rate': self.runner.THRESHOLDS, 'offline_latency_ms': self.runner.LATENCY_BUDGET_MS,
                                'case_max_ms': self.runner.DEFAULT_MAX_MS},
                 'last_run': newest, 'history': history, 'types': list(self.runner.TYPES), 'cases': cases,
-                'judge': self._judge(history)}
+                'judge': self._judge(history, self._rerecord)}
 
     def board(self, public=False):
         """The page's data. The hosted demo's copy leaves out the judge's reasons: they are model prose that no check
@@ -445,10 +449,17 @@ class EvalBoard:
             grade = grades.get(n['id'])
             items.append({**{k: n[k] for k in ('id', 'run', 'turn', 'source', 'question', 'scope', 'narrative', 'digest')},
                           'evidence': n['context'], 'grade': grade, 'stale': bool(grade) and grade.get('digest') != n['digest']})
-        current = sum(1 for i in items if i['grade'] and not i['stale'])
         return {'rubric': [{k: c[k] for k in ('key', 'name', 'criterion', 'steps')} for c in judging.RUBRIC],
-                'target': judging.CALIBRATION_TARGET, 'graded': current, 'narratives': items,
-                'file': 'evals/' + judging.CALIBRATION_FILE}
+                **self._grade_counts(grades.values(), {n['id']: n['digest'] for n in self.narratives(lock)}),
+                'narratives': items, 'file': 'evals/' + judging.CALIBRATION_FILE}
+
+    def _grade_counts(self, grades, digests):
+        """`graded` is every saved grade, the number /evals shows too; `set_aside` the ones not of a narrative's current
+        text (changed, or not replayable while the recordings are stale), which agreement leaves out."""
+        grades = list(grades)
+        current = sum(1 for g in grades if digests.get(g.get('id')) == g.get('digest'))
+        return {'graded': len(grades), 'set_aside': len(grades) - current, 'target': judging.CALIBRATION_TARGET,
+                'target_text': judging.target_text(len(digests) < judging.CALIBRATION_TARGET)}
 
     def save_grade(self, payload, lock):
         """Validate one grade against the narrative the page showed and write it to judge_calibration.json."""
@@ -456,6 +467,5 @@ class EvalBoard:
         grade = judging.validate_grade(payload, digests)
         with self.all_lock:   # one writer at a time; the file is replaced whole
             grades = judging.save_grade(self.folder, grade)
-            self._board['judge'] = self._judge(self._board['history'])   # /evals counts the new grade without a restart
-        current = sum(1 for g in grades if digests.get(g.get('id')) == g.get('digest'))
-        return {'saved': grade, 'graded': current, 'target': judging.CALIBRATION_TARGET}
+            self._board['judge'] = self._judge(self._board['history'], self._rerecord)   # /evals counts the new grade at once
+        return {'saved': grade, **self._grade_counts(grades, digests)}

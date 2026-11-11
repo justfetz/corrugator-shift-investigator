@@ -1239,6 +1239,8 @@ def main(argv=None):
     parser.add_argument('--judge-model', help=f'with --judge: the judge model (default: ${judging.JUDGE_ENV}, else {judging.DEFAULT_JUDGE_MODEL})')
     parser.add_argument('--judge-secret', help=f'with --judge: read the judge key from this Google Secret Manager secret when the provider key '
                         f'variable is not set (default: ${judging.JUDGE_SECRET_ENV}); a name, never a key')
+    parser.add_argument('--judge-project', help=f'with --judge-secret: the Google Cloud project that holds it (default: ${judging.JUDGE_PROJECT_ENV}, '
+                        'else the gcloud default)')
     args = parser.parse_args(argv)
 
     if args.track and args.only:
@@ -1251,14 +1253,14 @@ def main(argv=None):
         print('--live needs exactly one of ' + ' / '.join(s['env'] for s in PROVIDERS.values()) + ' set, or --provider')
         return 2
     client = None
-    if (args.judge_model or args.judge_secret) and not args.judge:
-        print('--judge-model and --judge-secret go with --judge')
+    if (args.judge_model or args.judge_secret or args.judge_project) and not args.judge:
+        print('--judge-model, --judge-secret and --judge-project go with --judge')
         return 2
     if args.judge:
         # Checked before any case runs: a judged run that cannot judge would spend the replays for nothing.
         try:
             judging._deepeval()
-            client = judging.JudgeClient(args.judge_model, secret=args.judge_secret)
+            client = judging.JudgeClient(args.judge_model, secret=args.judge_secret, project=args.judge_project)
         except judging.JudgeUnavailable as exc:
             print(f'--judge: {exc}')
             return 2
@@ -1348,12 +1350,12 @@ def main(argv=None):
             judged = judging.judge(narratives, client)
         finally:
             client.close()
-        print_judged(*judged)
+        print_judged(*judged, rerecord=stale_recordings(rows))
         if not judged[1]['judged']:   # nothing scored (a bound or a refused key): spent, printed, never shown as the judge's result
             print('judge: no narrative was scored, so this run is not tracked as a judged run')
             judged = None
     else:
-        print(stored_judge_line())
+        print(stored_judge_line(stale_recordings(rows)))
     failed = sum(r['outcome'] == 'fail' and not r['provider'] for r in rows)
     skipped = sum(r['outcome'] == 'skip' for r in rows)
     xfailed = sum(r['outcome'] == 'xfail' for r in rows)
@@ -1385,7 +1387,12 @@ JUDGE_LAST_RUN = ROOT / 'evals' / judging.LAST_RUN_FILE
 EVALS = ROOT / 'evals'
 
 
-def print_judged(rows, summary):
+def stale_recordings(rows):
+    """True when a live recording skipped as stale this run: the calibration target then waits on re-recording (#71)."""
+    return any(r['outcome'] == 'skip' and str(r.get('note', '')).startswith('stale recording') for r in rows)
+
+
+def print_judged(rows, summary, rerecord=False):
     """The judged run: one row per narrative with its four 0/1 scores, the reason for each failing line, the
     pass count per criterion, the cost per judged case, and the agreement with the owner's grades."""
     print(f'judge: {summary["metric"]} ({summary["model"]}), rubric {summary["rubric"]}: {summary["narratives"]} narratives, '
@@ -1393,7 +1400,8 @@ def print_judged(rows, summary):
           + (f', ${summary["cost_per_case_usd"]:.4f} per judged case' if summary['cost_per_case_usd'] is not None else ''))
     if rows:
         width = max(len(r['id']) for r in rows) + 2
-        short = {'grounded': 'grnd', 'recorded_not_proven': 'rec', 'prescribes_nothing': 'presc', 'unavailable_not_zero': 'unav'}
+        short = {'grounded': 'grnd', 'recorded_not_proven': 'rec', 'prescribes_nothing': 'presc', 'unavailable_not_zero': 'unav',
+                 'comparisons_consistent': 'comp'}
         print(f'  {"narrative":{width}}' + ''.join(f'{short[k]:>6}' for k in judging.CRITERIA) + '  source')
         for r in rows:
             print(f'  {r["id"]:{width}}' + ''.join(f'{"-" if r["scores"][k] is None else r["scores"][k]:>6}' for k in judging.CRITERIA) + f'  {r["source"]}')
@@ -1402,22 +1410,22 @@ def print_judged(rows, summary):
                     print(f'  {"":{width}}  - {k}: {r["reasons"][k][:150]}')
     print('judge pass: ' + '  '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' + (f' ({c["error"]} unscored)' if c['error'] else '')
                                      for k, c in summary['criteria'].items()))
-    print('judge vs owner: ' + judging.agreement_text(judging.agreement(rows, judging.load_grades(EVALS))))
+    print('judge vs owner: ' + judging.agreement_text(judging.agreement(rows, judging.load_grades(EVALS)), rerecord))
 
 
-def stored_judge_line():
+def stored_judge_line(rerecord=False):
     """The judge as last tracked, read from the committed files: no model is called. The agreement is
     the owner's grades against that run's scores."""
     grades = judging.load_grades(EVALS)
     stored = judging.load_json(JUDGE_LAST_RUN, None)
     if not stored:
         return (f'judge: no judged run tracked yet (python3 evals/run.py --judge --track); '
-                + judging.agreement_text(judging.agreement([], grades)))
+                + judging.agreement_text(judging.agreement([], grades), rerecord))
     s = stored['summary']
     return (f'judge, last tracked {stored["ran_at"]} ({s["model"]}, {s["metric"]}): '
             + '  '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in s['criteria'].items())
             + (f'  ${s["cost_per_case_usd"]:.4f} per judged case' if s.get('cost_per_case_usd') is not None else '')
-            + '; vs owner: ' + judging.agreement_text(judging.agreement(stored['rows'], grades)))
+            + '; vs owner: ' + judging.agreement_text(judging.agreement(stored['rows'], grades), rerecord))
 
 
 HISTORY = ROOT / 'evals' / 'history.jsonl'
