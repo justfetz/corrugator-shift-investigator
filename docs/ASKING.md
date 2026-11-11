@@ -32,7 +32,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "How did this week go versus the previous one?" | the KPI tiles against the previous window | `?measure=kpis&window=week` |
 | "How did September go versus August?" | the same tiles for two named months | `?measure=kpis&window=2026-09&compare=2026-08` |
 | "Stops per day this week" | stops per production day and the weekday profile | `?measure=stops&window=week` |
-| "Trend of trim over eight weeks", "Trend of speed over eight weeks" | a weekly line for one metric | `?measure=trend&metric=trim_pct` |
+| "Trend of trim over eight weeks", "Trend of speed over eight weeks" | a weekly line for one metric | `?measure=trend&metric=trim_pct`, `?measure=trend&metric=speed_all_fpm` |
 | "Volume by grade this month" | totals by board grade with speed and allocated downtime | `?measure=grade&window=month` |
 | "How much paper did we consume this month?" | rollstock consumed per grade and web width | `?measure=rollstock&window=month` |
 | "Over/under-run by knife this week" | nominal against actual cuts per knife | `?measure=overrun&window=week` |

@@ -266,6 +266,7 @@ class Renderer:
 
     # ---- inline
     def inline(self, text):
+        text = text.replace('\x00', '\ufffd')   # NUL marks a held span below; one in the source must not forge one
         held = []
 
         def hold(markup):

@@ -8,6 +8,7 @@ mentions an OpenAI API key. The rest pins the renderer's escaping, the links bet
 import html
 import http.client
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from threading import Thread
@@ -146,6 +147,15 @@ def test_the_renderer_escapes_everything_and_renders_the_subset():
     assert r.headings[0][:2] == (1, 'title-scriptalert1script')
 
 
+def test_a_nul_in_the_source_cannot_forge_a_held_span():
+    """The inline renderer holds finished spans behind NUL-delimited markers; a NUL in a document must
+    neither splice one span's markup into another's attribute nor loop forever."""
+    out = docsite.Renderer(docsite.link_resolver('docs/X.md', {})).render(
+        '<https://x/onmouseover=alert(1)//> [a](\x000\x00) and a lone \x00 here')
+    assert out.count('<a ') == 2 and 'href="https://x/onmouseover=alert(1)//"' in out
+    assert re.findall(r'href="([^"]*)"', out)[1].startswith(docsite.REPO) and '\x00' not in out
+
+
 def test_prebuilt_folder_is_what_the_server_serves(tmp_path, monkeypatch, site):
     out = tmp_path / 'docs-site'
     assert docsite.main(['build', str(out), '--root', str(ROOT)]) == 0
@@ -199,6 +209,20 @@ def test_the_image_renders_the_docs_and_the_deploy_refreshes_the_changelog():
     step = step[:step.index('- name:', 10)]
     assert 'continue-on-error: true' in step and 'python3 -m investigator.docsite changelog' in step
     assert 'fetch-depth: 0' in deploy[:deploy.index('- name: Changelog')]
+
+
+def test_the_cloud_build_upload_keeps_the_docs():
+    """`gcloud run deploy --source .` uploads what .gcloudignore allows; the image's COPY docs/*.md needs them."""
+    ignored = [line.strip() for line in (ROOT / '.gcloudignore').read_text(encoding='utf-8').splitlines()
+               if line.strip() and not line.startswith('#')]
+    for pattern in ('docs', 'docs/', 'docs/*', '*.md', 'evals', 'evals/'):
+        assert pattern not in ignored, f'.gcloudignore drops {pattern}: the docs site cannot be built'
+    gcloud = shutil.which('gcloud')
+    if gcloud:
+        listed = subprocess.run([gcloud, 'meta', 'list-files-for-upload', str(ROOT)], capture_output=True, text=True)
+        if listed.returncode == 0:
+            uploaded = {line.strip().replace('\\', '/') for line in listed.stdout.splitlines()}
+            assert {p['source'] for p in docsite.pages()} <= uploaded
 
 
 def git(repo, *args):

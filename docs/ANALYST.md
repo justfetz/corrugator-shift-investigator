@@ -6,6 +6,7 @@ Every question is answered by the offline planner first. The analyst is the opti
 
 - **Propose one plan.** A single model call returns a JSON plan: an ordered list of tool calls from the same catalog the offline planner uses, at most two steps per shift in scope plus three (five for one shift, nine for all three), or a reason the question cannot be answered.
 - **Write the interpretation.** A second call receives the question and a compact packet of the results and writes two to six lines. Each value in a line is a placeholder such as `{{r1.0.observed_shift_fpm}}`, which the server replaces with that row's value as the text streams.
+- **See dollars on priced rows.** The two money tools (`get_shift_dollars`, `get_opportunities`) are left out of the catalog the model is shown, because its prompt still says costs are unavailable; the plan check itself would accept them, as it accepts any tool on the allowlist. The model sees dollars only on the priced rows of the tools it plans.
 - **Choose emphasis.** Which results to lead with, what to call a finding and what to call a limitation are the model's; whether they hold is checked below.
 
 ## What the model may not do
@@ -14,7 +15,7 @@ Every question is answered by the offline planner first. The analyst is the opti
 - **Run anything off the list.** Before any query runs, application code checks every step of the plan: the tool must be on the allowlist, every argument must be in its schema with a value of the declared type, and every step must stay inside the selected shift and window. One bad step refuses the whole plan; nothing runs, and the offline answer stands with a one-line note.
 - **Change the scope.** The rail is authoritative: a plan cannot reach another shift, another day or another window than the one selected.
 - **Contradict its own figures.** A line whose words assert an order its cited values contradict ("fastest", "below", "rose") is withdrawn, and the answer says a comparison was withdrawn.
-- **Reach anything else.** There is no SQL, shell, file, web search, email or machine control to call, and no model-controlled URL. The two money tools are not in the analyst's catalog yet; it sees dollars only on the priced rows of the tools it plans.
+- **Reach anything else.** There is no SQL, shell, file, web search, email or machine control to call, and no model-controlled URL.
 - **Spend without bounds.** A round is two model calls and ten seconds at most, each request at most 64 KB and each response at most 512 KB. On the hosted demo a per-visitor rate limit, a daily cap on rounds, a monthly reservation ledger and the provider console's spend limit sit behind that ([Anthropic in the hosted demo](ANTHROPIC_DEMO.md)).
 - **Take a visitor's key.** The public demo never accepts one: the server ignores key headers in public mode and the page has no key field.
 
