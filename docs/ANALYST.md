@@ -13,7 +13,7 @@ Every question is answered by the offline planner first. The analyst is the opti
 
 - **Supply a number.** A digit the model typed outside a placeholder stops that line at once and withdraws it. Numbers written as words are refused too. The reader never sees a number no query returned.
 - **Run anything off the list.** Before any query runs, application code checks every step of the plan: the tool must be on the allowlist, every argument must be in its schema with a value of the declared type, and every step must stay inside the selected shift and window. One bad step refuses the whole plan; nothing runs, and the offline answer stands with a one-line note.
-- **Change the scope.** The rail is authoritative: a plan cannot reach another shift, another day or another window than the one selected.
+- **Change the scope.** The scope is fixed before the model is asked: the rail's selection, or the shift and window the question itself names, which the application applies (issue #105). A plan cannot reach another shift, day or window than that.
 - **Contradict its own figures.** A line whose words assert an order its cited values contradict ("fastest", "below", "rose") is withdrawn, and the answer says a comparison was withdrawn.
 - **Reach anything else.** There is no SQL, shell, file, web search, email or machine control to call, and no model-controlled URL.
 - **Spend without bounds.** A round is two model calls and ten seconds at most, each request at most 64 KB and each response at most 512 KB. On the hosted demo a per-visitor rate limit, a daily cap on rounds, a monthly reservation ledger and the provider console's spend limit sit behind that ([Anthropic in the hosted demo](ANTHROPIC_DEMO.md)).

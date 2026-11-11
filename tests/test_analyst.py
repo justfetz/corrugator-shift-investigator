@@ -511,3 +511,37 @@ def test_a_third_concurrent_live_round_is_refused_busy(monkeypatch, tmp_path):
             r.join(10)
     finally:
         stop(server, thread)
+
+
+def test_the_analyst_plans_in_the_scope_the_question_names(monkeypatch, tmp_path):
+    """Issue #105, the owner's round: shift 2 and Day selected on Mon 14 Sep, "How much donwtime on 1st shift last
+    week?" asked of the analyst. It was told the controls' scope was authoritative, so a question about shift 1 had
+    no permitted tool and it answered unavailable. The question's own scope is now the analyst's: shift 1 in scope,
+    the week of 7-11 Sep selected, and a sentence saying the words were applied. Its plan for that scope runs."""
+    calls = []
+    plan = json.dumps({'steps': [{'tool': 'get_downtime_pareto', 'arguments': {'window': {'period': 'week', 'anchor': '2026-09-07'},
+                                                                                'group_by': 'reason', 'measure': 'minutes', 'shift': 1}}]})
+    narrative = 'finding: {{r1.0.category}} took {{r1.0.minutes}} minutes of shift 1 downtime that week.\n'
+
+    def make_planner(mode, key, budget, cancelled=None):
+        return AnthropicAnalyst(KEY, budget, scripted(plan, narrative, calls=calls), cancelled=cancelled)
+    server, thread = serve(monkeypatch, tmp_path, lambda *a, **k: planners.pop(0)(*a, **k))
+    planners = [make_planner, lambda mode, key, budget, cancelled=None: AnthropicAnalyst(
+        KEY, budget, scripted(PLAN, NARRATIVE, calls=calls), cancelled=cancelled)]
+    try:
+        status, _, body = post(server, {**ASK, 'mode': 'anthropic', 'question': 'How much donwtime on 1st shift last week?'})
+        result = [json.loads(line) for line in body.decode().splitlines()][-1]['result']
+        assert status == 200 and result['status'] == 'complete' and result['usage']['model_calls'] == 2
+        assert result['selected_shifts'] == [1] and result['production_day'] == '2026-09-07' and result['context']['period'] == 'week'
+        assert [(t['tool'], t['arguments']['shift']) for t in result['trace']] == [('get_downtime_pareto', 1)]
+        opening = json.loads(calls[0]['messages'][0]['content'])
+        assert opening['allowed_shifts'] == [1] and opening['selected_shift'] == 1 and opening['production_day'] == '2026-09-07'
+        assert opening['selected_window'] == {'period': 'week', 'anchor': '2026-09-07'}
+        assert 'it names shift 1; "last week" is the Mon-Fri production week containing 2026-09-07' in calls[0]['system']
+        # a question that names nothing the controls do not: the same prompt as before, with no scope sentence
+        calls.clear()
+        status, _, body = post(server, {**ASK, 'mode': 'anthropic', 'question': 'How much downtime?'})
+        assert status == 200 and [json.loads(line) for line in body.decode().splitlines()][-1]['result']['status'] == 'complete'
+        assert 'names its own scope' not in calls[0]['system'] and json.loads(calls[0]['messages'][0]['content'])['allowed_shifts'] == [2]
+    finally:
+        stop(server, thread)
