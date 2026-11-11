@@ -4262,6 +4262,29 @@
    }
   },
   {
+   "id": "last-week-beside-from",
+   "type": "routing",
+   "mode": "offline",
+   "question": "downtime from maintenance last week",
+   "note": "Review of #105 (Codex on PR #108): 'from', 'over' and 'since' make a relative window a comparison base only right before it ('since last week', #99's speed-variance cue). Elsewhere in the question they leave 'last week' the window asked about, 7-11 Sep from Mon 14 Sep; the first fix read any 'from' as a base and answered the selected week.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=pareto",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
    "id": "last-week-before-the-records",
    "type": "refusal",
    "mode": "offline",

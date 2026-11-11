@@ -594,8 +594,11 @@ SHIFT_COMPARE = r"\b(compare|compared|comparing|comparison|versus|vs|against|tha
 RELATIVE_WINDOWS = (("day", r"\byesterday\b"), ("week", r"\b((?<!the )last|previous|prior)\s+week\b"),
                     ("month", r"\b((?<!the )last|previous|prior)\s+month\b"),
                     ("fiscal", r"\b((?<!the )last|previous|prior)\s+(accounting\s+)?period\b"))
-# The comparison words include #99's speed-variance cues ("from", "over", "since last week" compare with it).
-RELATIVE_BASE = r"\b(vs|versus|compared?|comparing|comparison|against|than|relative to|from|over|since)\b"
+# A comparison word anywhere makes the relative window its base. "From", "over" and "since" do only right before
+# it, as #99's speed-variance cue reads them ("what drove speed since last week"); elsewhere they leave it the window
+# asked about ("downtime from maintenance last week" is 7-11 Sep from Mon 14 Sep).
+RELATIVE_BASE = (r"\b(vs|versus|compared?|comparing|comparison|against|than|relative to)\b"
+                 r"|\b(from|over|since)\s+(the\s+)?(last|previous|prior)\s+(week|month|(accounting\s+)?period)\b")
 OTHER_WINDOW = (r"\b(this|current)\s+(week|month|period)\b|\btoday\b|\btomorrow\b|\b\d{4}-\d{2}-\d{2}\b|\bp(1[0-3]|[1-9])\b|\b("
                 + "|".join(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
                             "november", "december")) + r")\b")

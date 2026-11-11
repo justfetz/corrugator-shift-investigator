@@ -114,6 +114,7 @@ def test_a_comparison_with_another_shift_keeps_the_selected_shift_and_is_refused
     ('downtime last week', '2026-09-07', 'week'),               # the first production day of the week before
     ('downtime previous week', '2026-09-07', 'week'),
     ('downtime prior week', '2026-09-07', 'week'),
+    ('downtime from maintenance last week', '2026-09-07', 'week'),   # "from" not before the window: no comparison (Codex, #108)
     ('downtime last month', '2026-08-03', 'month'),             # August, the month before September
     ('downtime last period', '2026-08-03', 'fiscal'),           # P1 (3-30 Aug) is the 4-4-5 period before P2 (31 Aug-27 Sep)
 ])
