@@ -746,7 +746,7 @@ function shiftTiles(entry,result,prefix){
   $('metrics').append(card);
  }
 }
-function showResult(result,raw=result) {   // raw: the answer as the server sent it, for its trail; result: at the rates in force (#31b)
+function showResult(result) {   // result: at the rates in force (#31b); its trail is what the page's own address returns at them
  latest=result;
  for(const id of ['heatmaps','kpis','tables','charts','metrics','trace'])$(id).replaceChildren();   // the open card shows one answer's evidence
  renderQueries(result);   // the query box: first below the title line, built in the first paint (#40)
@@ -756,7 +756,7 @@ function showResult(result,raw=result) {   // raw: the answer as the server sent
  for(const entry of shiftKpis)shiftTiles(entry,result,shiftKpis.length>1);
  for(const table of result.tables||[])showTable(table);
  for(const chart of result.charts)if(!(costCfg()&&/^\$ (this shift|per year)$/.test(chart.unit||'')))showChart(chart);   // a money tool's own chart is the opportunities panel (#31b): the same rows, ranked, with their formulas and a table
- if(!slots)afterPaint(()=>{if(latest!==result)return;raw.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip. An earlier card drawn into its own containers has no trail (#86)
+ if(!slots)afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip. An earlier card drawn into its own containers has no trail (#86)
  $('calls').textContent=`${result.status?result.status+' · ':''}${usageText(result.usage)}`;
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
@@ -791,7 +791,7 @@ function pricedView(result,asked){
  const steps=trace.map(e=>e.ok&&e.tool!=='render_chart'&&Money.priced(e.data)?{tool:e.tool,before:e.data,after:Money.reprice(e.tool,e.data,rates,cfg)}:null);
  if(!steps.some(Boolean))return same;
  const sections=Money.repriceSections(result.sections||[],steps,rates,cfg);
- const out={...result,sections,trace:trace.map((e,i)=>steps[i]?{...e,data:steps[i].after}:e),charts:(result.charts||[]).map(c=>Money.repriceChart(c,tools[c.source_result_id],rates,cfg)),
+ const out={...result,sections,trace:trace.map((e,i)=>steps[i]?{...e,data:steps[i].after}:e.ok&&e.tool==='render_chart'&&Money.priced(e.data)?{...e,data:Money.repriceChart(e.data,tools[e.data.source_result_id],rates,cfg)}:e),charts:(result.charts||[]).map(c=>Money.repriceChart(c,tools[c.source_result_id],rates,cfg)),
   tables:(result.tables||[]).map(t=>Money.repriceChart(t,t.title,rates,cfg))};   // a table is named by its tool (get_speed_opportunity carries dollars)
  if(typeof result.report_markdown==='string')out.report_markdown=[`# Synthetic production investigation: ${result.period_label||result.production_day}`,`${result.mode}. No email delivery.`,...sections,result.limitations].join('\n\n');   // server._markdown, at these rates
  return {result:out,sections,narrative:result.narrative,repriced:true};   // a model's interpretation is not rewritten: see paintAnalyst
@@ -1059,6 +1059,7 @@ function setUnits(value){ if(units===value||!UNITS.some(u=>u[0]===value))return;
 function sourceText(s){ return s==='yours'?'yours':s==='server'?'this server':s; }
 function renderRates(){
  const cfg=costCfg(); if(!cfg)return; const rates=ratesNow(), list=$('rates-list'); list.replaceChildren();
+ $('rates-reset').textContent=cfg.rates.some(r=>r.source==='server')?"Reset to this server's rates":"Reset to the post's rates";   // clearing your rates returns to the server's, which INVESTIGATOR_RATES may set
  for(const r of cfg.rates){ const v=rates.values[r.id], dd=node('dd',undefined,v===null||v===undefined?'unset':rates.sources[r.id]==='yours'?'yours':undefined);
   dd.append(node('span',v===null||v===undefined?'not set':r.unit==='$/MSF'?`$${Money.rateText(v)}/MSF`:r.unit==='$/hr'?`$${Money.rateText(v,true)}/hr`:`${Money.rateText(v)}%`),node('small',sourceText(rates.sources[r.id]),'src'));
   dd.title=r.note; const dt=node('dt',{paper_usd_msf:'Paper',machine_usd_hour:'Machine',margin_usd_msf:'Margin',trim_target_pct:'Trim'}[r.id]||r.label); dt.title=r.label; list.append(dt,dd); }
@@ -1254,7 +1255,7 @@ function paintAnswer(rec){
  if(PROVIDERS[rec.mode]){paintAnalyst(rec);return null;}
  if(rec.note)message('Note',[rec.note]);
  const view=viewOf(rec);   // the answer at the rates in force (#31b)
- const summary=message('',view.sections,'',rec); rec.lineEl=dollarSlot(summary); showResult(view.result,rec.result); paintMoney(rec);
+ const summary=message('',view.sections,'',rec); rec.lineEl=dollarSlot(summary); showResult(view.result); paintMoney(rec);
  return summary;
 }
 let shownId=null, shownKey=null;   // the record #card shows now, and the bodyKey of what was drawn for it
@@ -1454,7 +1455,7 @@ function paintLive(rec){
 // refused (nothing ran), the notes say so and the offline evidence it was asked from stays on the card.
 function paintAnalyst(rec){
  const view=viewOf(rec), r=view.result, ran=(r.trace||[]).some(e=>e.ok), offline=rec.source&&rec.source.result;
- if(ran)showResult(r,rec.result); else if(offline)showResult(pricedView(offline,askedRates(rec.source)).result,offline);
+ if(ran)showResult(r); else if(offline)showResult(pricedView(offline,askedRates(rec.source)).result);
  const card=message(null,[],'analyst'); rec.lineEl=dollarSlot(card); paintMoney(rec);
  if(r.status==='plan_rejected'){   // issue #78: a refused plan degrades, it does not stop; one quiet line under the offline evidence
   const over=r.plan_rejection, calls=(r.usage&&r.usage.model_calls)||0;

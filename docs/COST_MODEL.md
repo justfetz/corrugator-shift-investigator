@@ -139,7 +139,9 @@ same call with the same products, the same rounding (Python's round half to even
 ranks the money tools' rows and redoes their totals, and rewrites the answer's prose from the re-priced
 rows: each dollar figure becomes the same field re-priced, the rates, formula and contribution lines are
 written again, a ranked money list is put in its new order, and an all-shifts money answer is written
-about the shift that lost the most at the new rates. An analyst's interpretation is not rewritten (a
+about the shift that lost the most at the new rates. "What came back, per query" shows each query's result at the
+rates in force too (what the page's own address returns from the server), so a re-numbered row citation names the
+row it shows. An analyst's interpretation is not rewritten (a
 model's sentence moved to other figures could claim what no row says, or keep a comparison the new figures
 reverse): at other rates it says which rates it was written at, and the evidence under it is re-priced. So
 the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twelve answers at

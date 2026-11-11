@@ -1258,6 +1258,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(all(els.ledger),/= \$6,601$/m,'the paper dollars do not use the machine rate: unchanged');
  assert.match(all(els.ledger),/machine time \$1,500\/hr \(yours\)/);
  assert.deepEqual(els['rates-list'].children.map(textOf).slice(2,4),['Machine','$1,500/hryours']);
+ assert.ok(all(els.trace).includes('"machine_time_usd": '+moneyNow.byIndex.find(r=>r.gap==='Downtime: Order change').machine_time_usd),'the trail is the queries at the rates in force (Codex on #109)');
+ assert.equal(els['rates-reset'].textContent,"Reset to the post's rates");
  // the open card is the speed answer; its earlier card (why slow) re-priced too, prose included: the Order change bullet
  const earlierText=all(els.earlier);
  const downtimeRow=whySlow.trace[1].data.rows[0], again2=Money.price('downtime',downtimeRow.price_terms.quantity,rates,downtimeRow.price_terms.gross_sqft,downtimeRow.price_terms.minutes,cfg);
@@ -1336,6 +1338,10 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(card,/Written at the rates it was asked at \(paper \$70\/MSF \(yours\)/);
  els['rates-reset'].events.click();
 
+ // under INVESTIGATOR_RATES, clearing your rates goes back to the server's: the button says so (Codex on #109)
+ vm.runInContext("config.cost_model=JSON.parse(JSON.stringify(config.cost_model));config.cost_model.rates[0].value=61;config.cost_model.rates[0].source='server';renderRates()",ctx);
+ assert.equal(els['rates-reset'].textContent,"Reset to this server's rates");
+ vm.runInContext("config.cost_model.rates[0].value=55;config.cost_model.rates[0].source='post';renderRates()",ctx);
  // the report's address keeps the rates; a link the server refuses is asked as it is, never rewritten to the defaults
  const out=vm.runInContext("withRates('/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1')",ctx); assert.equal(out,'/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1');
  af[1].value='1500'; af[1].events.input();
