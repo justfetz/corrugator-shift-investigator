@@ -10,7 +10,7 @@ A bounded agent that investigates why a corrugator shift was bad, on synthetic d
 
 ```bash
 pip install -e . pytest                              # Python >= 3.11; deps are duckdb and reportlab
-python -m pytest -q                                  # 1363 tests, about three minutes
+python -m pytest -q                                  # 1364 tests, about three minutes
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
 python3 evals/run.py                                 # 275 golden cases offline, each also over its URL, about 10 s; the regression gate
 python3 evals/run.py --live --provider anthropic     # needs ANTHROPIC_API_KEY; records fixtures under evals/fixtures/

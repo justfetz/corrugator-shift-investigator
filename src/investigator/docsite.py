@@ -473,17 +473,36 @@ def changelog(pulls):
     return '\n'.join(lines) + '\n'
 
 
+def write_changelog(target, pulls):
+    """Replace `target` with the changelog of `pulls`, or keep it and return 1.
+
+    The deploy runs this on a fresh checkout; a shallow or partial history must not shrink the page, so a
+    list shorter than the one already committed is refused. The text is rendered once before it is written
+    (a page the docs build could not take never lands), and the write is a rename, so a step killed midway
+    leaves the committed file whole."""
+    target = Path(target)
+    held = len(re.findall(r'^- \[#\d+\]', target.read_text(encoding='utf-8'), re.M)) if target.is_file() else 0
+    if len(pulls) < held:
+        print(f'{target}: kept; the history lists {len(pulls)} merged pull requests, the file already {held}', file=sys.stderr)
+        return 1
+    text = changelog(pulls)
+    Renderer().render(text)
+    partial = target.with_name(target.name + '.partial')
+    partial.write_text(text, encoding='utf-8')
+    os.replace(partial, target)
+    print(f'{target}: {len(pulls)} merged pull requests')
+    return 0
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ['changelog']:
         # --ref origin/main on a branch: main's merges sit on a merge's second parent there, off the first-parent walk
         ref = argv.pop(argv.index('--ref') + 1) if '--ref' in argv else 'HEAD'
-        argv = [a for a in argv if a != '--ref']
-        target = Path(argv[1]) if len(argv) > 1 else ROOT / 'docs' / 'CHANGELOG.md'
-        pulls = merged_pulls(ref, root=ROOT)
-        target.write_text(changelog(pulls), encoding='utf-8')
-        print(f'{target}: {len(pulls)} merged pull requests')
-        return 0
+        root = Path(argv.pop(argv.index('--root') + 1)) if '--root' in argv else ROOT
+        argv = [a for a in argv if a not in ('--ref', '--root')]
+        target = Path(argv[1]) if len(argv) > 1 else root / 'docs' / 'CHANGELOG.md'
+        return write_changelog(target, merged_pulls(ref, root=root))
     if argv[:1] == ['build'] and len(argv) >= 2:
         root = Path(argv[argv.index('--root') + 1]) if '--root' in argv else ROOT
         site = write_site(argv[1], root)

@@ -204,11 +204,14 @@ def test_the_image_renders_the_docs_and_the_deploy_refreshes_the_changelog():
     assert 'python -m investigator.docsite build /app/docs-site --root /app' in dockerfile
     assert 'INVESTIGATOR_DOCS=/app/docs-site' in dockerfile
     assert 'COPY evals ./evals' in dockerfile, 'the golden set page renders evals/README.md'
+    # The owner's condition: a failed changelog step can never fail the deploy. So the step may fail and may
+    # time out, and the history fetch it needs is inside it, not in the deploy's own checkout.
     deploy = (ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml').read_text(encoding='utf-8')
     step = deploy[deploy.index('- name: Changelog from the merged pull requests'):]
     step = step[:step.index('- name:', 10)]
-    assert 'continue-on-error: true' in step and 'python3 -m investigator.docsite changelog' in step
-    assert 'fetch-depth: 0' in deploy[:deploy.index('- name: Changelog')]
+    assert 'continue-on-error: true' in step and re.search(r'timeout-minutes: [1-5]\n', step)
+    assert 'git fetch --quiet --unshallow origin' in step and 'python3 -m investigator.docsite changelog' in step
+    assert 'fetch-depth' not in deploy, 'the checkout stays as it was; the full history is fetched inside the step'
 
 
 def test_the_cloud_build_upload_keeps_the_docs():
@@ -250,6 +253,18 @@ def test_changelog_lists_merged_and_squashed_pull_requests(tmp_path):
     assert f'- [#7]({docsite.REPO}/pull/7) Squashed change (wip)' in text
     rendered = docsite.Renderer().render(text)
     assert f'<a href="{docsite.REPO}/pull/9">#9</a>' in rendered
+
+
+def test_the_changelog_never_shrinks_and_never_lands_half_written(tmp_path):
+    """A shallow or partial history on the deploy runner must not replace the committed list with a shorter one."""
+    target = tmp_path / 'CHANGELOG.md'
+    full = [('2026-11-10', n, f'Change {n}') for n in (3, 2, 1)]
+    assert docsite.write_changelog(target, full) == 0 and target.read_text() == docsite.changelog(full)
+    assert docsite.write_changelog(target, full[:1]) == 1, 'fewer pull requests than the file holds: refused'
+    assert target.read_text() == docsite.changelog(full), 'and the committed file is untouched'
+    longer = [('2026-11-11', 4, 'Change 4')] + full
+    assert docsite.write_changelog(target, longer) == 0 and target.read_text() == docsite.changelog(longer)
+    assert [p.name for p in tmp_path.iterdir()] == ['CHANGELOG.md'], 'written by rename: no partial file left'
 
 
 def test_the_committed_changelog_is_in_the_generated_shape():
