@@ -205,6 +205,7 @@ WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'bond': 'waste', 'warp': 'waste
 PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_breakdown',
                 'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
 GAIN = 'not priced: this bucket ran better than the reference (a gain, not a loss)'
+SCHEDULE_DRIVEN_MIX = 'not priced: the grade mix is schedule-driven, the order book decides which grades run (issue #101)'
 
 
 def window_minutes(data):
@@ -235,11 +236,12 @@ def attach(tool, data, rates, gross_sqft=None):
 
 
 def speed_variance_dollars(data, rates):
-    """Each speed-variance bucket as machine time (issue #92): its lineal feet over the reference speed
-    are the minutes the corrugator would need at that speed to make them, priced like the speed gap.
-    A bucket that ran better than the reference is a gain and is not priced, whichever way the gap goes;
-    the gap as a whole is priced on the envelope (`gap_usd`) when the window is slower than its reference,
-    so the bucket dollars add up to it only when every bucket is a loss."""
+    """Each controllable speed-variance bucket as machine time (issue #92): its lineal feet over the reference
+    speed are the minutes the corrugator would need at that speed to make them, priced like the speed gap. A
+    bucket that ran better than the reference is a gain and is not priced, whichever way the gap goes. The grade
+    mix is schedule-driven (the owner, issue #101: the order book decides which grades run), so it is never
+    priced as machine time; the envelope's controllable dollars (`controllable_usd`) are the priced loss buckets,
+    stops, setups and running under baseline, and the gap as a whole is not priced, since it holds the mix."""
     minutes, reference = data['scheduled_minutes'], data['reference_speed_fpm']
 
     def priced_for(feet):
@@ -249,11 +251,19 @@ def speed_variance_dollars(data, rates):
         out['usd_basis'] = f'{feet:,.1f} lineal ft / {reference:,.1f} ft/min reference speed = ' + out['usd_basis']
         return out
     for row in data['rows']:
-        row.update(priced_for(row['gap_lineal_ft']))
-    gap = priced_for(data['gap_lineal_ft'])
+        if row.get('control') == 'schedule-driven':
+            row.update({**price('speed', None, rates), 'usd_basis': SCHEDULE_DRIVEN_MIX})
+        else:
+            row.update(priced_for(row['gap_lineal_ft']))
+    priced = [r for r in data['rows'] if r.get('control') != 'schedule-driven' and r['usd'] is not None]
+
+    def total(key, places=2):
+        values = [r[key] for r in priced if r[key] is not None]
+        return round(sum(values), places) if values else None
     # the margin's status is the rates', not the gap's: a faster window still prices its loss buckets
-    data.update({'gap_machine_minutes': gap['machine_minutes'], 'gap_usd': gap['usd'], 'gap_usd_per_year': gap['usd_per_year'],
-                 'gap_contribution_usd': gap['contribution_usd'],
+    data.update({'controllable_machine_minutes': total('machine_minutes'), 'controllable_usd': total('usd'),
+                 'controllable_usd_per_year': total('usd_per_year', 0) if priced and all(r['usd_per_year'] is not None for r in priced) else None,
+                 'controllable_contribution_usd': total('contribution_usd'),
                  'contribution_status': MARGIN_NOT_SET if rates['values']['margin_usd_msf'] is None else 'set'})
     return data
 
@@ -357,6 +367,13 @@ def opportunities(store, window, shift, rates, lens='all'):
     v = rates['values']
     rows = []
     trim_pct = by['trim']['pct_of_gross']
+
+    def share(r):
+        """A waste lever's share as the owner reads it (targets.json): the dry-end families over the yield after trim
+        and shear, the rest over gross."""
+        if r.get('pct_of_yield') is not None:
+            return {'pct_of_yield': r['pct_of_yield']}, f'{r["label"]}: {r["pct_of_yield"]}% of the yield after trim and shear'
+        return {'pct_of_gross': r['pct_of_gross']}, f'{r["label"]}: {r["pct_of_gross"]}% of gross'
     if lens == 'ownership':
         trim = by['trim']
         rows.append(_control({'lever': TOTAL_TRIM, 'kind': 'trim', 'quantity': trim['sqft'], 'unit': 'sq ft', 'pct_of_gross': trim_pct,
@@ -367,9 +384,10 @@ def opportunities(store, window, shift, rates, lens='all'):
                              ('unexplained', 'unexplained')):
             r = by[key]
             if r['sqft'] and r['sqft'] > 0:
+                pct, records = share(r)
                 rows.append(_control({'lever': r['label'] + (' (all recorded)' if key != 'unexplained' else ''), 'kind': 'waste' if key != 'unexplained' else 'paper',
-                                      'quantity': r['sqft'], 'unit': 'sq ft', 'pct_of_gross': r['pct_of_gross'],
-                                      'records': f'{r["label"]}: {r["pct_of_gross"]}% of gross', **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, control))
+                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct,
+                                      'records': records, **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, control))
     else:
         rows.append(_control({'lever': "Speed under each grade's trailing-year speed", 'kind': 'speed', 'quantity': speed['gap_minutes'], 'unit': 'min',
                               'records': f'{speed["runs_under"]} of {len(speed["runs"])} wet-end runs under their grade baseline',
@@ -389,8 +407,9 @@ def opportunities(store, window, shift, rates, lens='all'):
         for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
             r = by[key]
             if r['sqft']:
-                rows.append(_control({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft',
-                                      'records': f'{r["label"]}: {r["pct_of_gross"]}% of gross', **price('waste', r['sqft'], rates, gross, minutes)},
+                pct, records = share(r)
+                rows.append(_control({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft', **pct,
+                                      'records': records, **price('waste', r['sqft'], rates, gross, minutes)},
                                      'shear' if key == 'shear' else 'dry_end'))
     if lens == 'ownership':   # trim first, always: every owner asks what trim costs; then the rest by dollars
         rows = rows[:1] + sorted(rows[1:], key=lambda r: (-(r['usd_per_year'] or 0), r['lever']))

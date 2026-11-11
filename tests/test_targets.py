@@ -156,6 +156,32 @@ def test_the_review_ranks_every_reason_by_its_share_of_scheduled_minutes_and_put
     assert data['op_maint_band'] == targets.band('op_maint', data['op_maint_pct'])
 
 
+def test_the_review_keeps_the_previous_window_beside(store):
+    """The owner (review of #111): downtime by reason over a named window goes to the review, and the review keeps the
+    previous-window comparison the Pareto had: each reason's previous minutes and share, the totals, "versus" in the
+    window line, and None (never zero) when that window is outside the records."""
+    week = store.get_downtime_review({'period': 'week', 'anchor': DAY}, None)
+    assert week['previous_window']['start'] == '2026-09-07' and week['coverage'] == 'complete'
+    before = store.get_downtime_review({'period': 'week', 'anchor': '2026-09-07'}, None)   # the previous week, asked itself
+    then = {(r['kind'], r['reason']): r for r in before['rows']}
+    for r in week['rows']:
+        prior = then.get((r['kind'], r['reason']))
+        assert (r['previous_minutes'], r['previous_stops'], r['previous_pct_of_scheduled']) == \
+            ((prior['minutes'], prior['stops'], prior['pct_of_scheduled']) if prior else (0.0, 0, 0.0)), r['category']
+    for key in ('maintenance', 'operator', 'op_maint', 'pm'):
+        assert (week[f'previous_{key}_minutes'], week[f'previous_{key}_pct']) == (before[f'{key}_minutes'], before[f'{key}_pct'])
+    assert week['previous_scheduled_minutes'] == before['scheduled_minutes']
+    first = store.get_downtime_review({'period': 'month', 'anchor': '2026-08-03'}, 2)
+    assert first['previous_window']['coverage'] == 'unavailable' and first['window']['coverage'] == 'complete'
+    assert all(r['previous_minutes'] is None and r['previous_pct_of_scheduled'] is None for r in first['rows'])
+    assert first['previous_op_maint_pct'] is None and first['previous_scheduled_minutes'] is None
+    answer = ask(store, 'Show downtime by reason', scope='day', period='week')
+    assert any(s.startswith('Week 2026-09-14 to 2026-09-18 (Mon-Fri), all shifts, versus Week 2026-09-07') for s in answer['sections'])
+    assert 'The previous window' in answer['sections']
+    assert canonical_url(*route('Show downtime by reason', Context(DAY, 2, scope='day', period='week'), store.production_days)) == \
+        redirect_for('/corr/1/week/2026-09-14?measure=downtime&compare=prev', store) == '/corr/1/week/2026-09-14?measure=review'
+
+
 def test_a_flag_fires_exactly_when_a_shift_is_over_its_band_and_names_who_to_ask(store):
     stops = store._fetch("SELECT production_date, shift, kind, sum(seconds) / 60 AS minutes FROM stops "
                          "WHERE kind IN ('Maintenance', 'Operator') GROUP BY ALL", [])
@@ -163,13 +189,39 @@ def test_a_flag_fires_exactly_when_a_shift_is_over_its_band_and_names_who_to_ask
     seen = set()
     for day in store.production_days:
         flags, count = store.downtime_flags(day, day)
-        assert count == len(flags) <= store.FLAG_LIMIT or count > store.FLAG_LIMIT
+        assert count == len(flags)   # every flag is returned, each with its recurrence (review of #111)
         for f in flags:
             seen.add((f['production_day'], f['shift'], f['kind']))
             assert f['band'] == 'flag' and f['pct_of_shift'] > 2.5 and f['supervisor'].startswith(f'the shift {f["shift"]} supervisor ({f["crew"]}')
             assert 0 <= f['times_over_band'] <= f['shifts_counted'] and 0 <= f['weeks_in_top_five'] <= f['weeks_counted']
             assert f['recurrence_through'] == day and f['recurrence_scope'] == 'all shifts'
     assert seen == over and ('2026-09-18', 2, 'Maintenance') in seen
+
+
+def test_every_flag_of_a_month_carries_its_recurrence_and_is_listed(store):
+    """Review of #111: recurrence for every flag, not only the first five. A month of all shifts fires many; each one
+    carries its recurrence, the same as asking for its own day, and the answer lists every one."""
+    month = store.get_downtime_review({'period': 'month', 'anchor': DAY}, None)
+    assert month['flag_count'] == len(month['flags']) > 5
+    keys = ('recurrence_since', 'shifts_counted', 'times_over_band', 'weeks_counted', 'weeks_in_top_five')
+    for f in month['flags']:
+        alone, _ = store.downtime_flags(f['production_day'], f['production_day'])
+        same = next(x for x in alone if (x['shift'], x['kind']) == (f['shift'], f['kind']))
+        assert [f[k] for k in keys] == [same[k] for k in keys]
+    sections = ask(store, 'Show downtime by reason', scope='day', period='month')['sections']
+    flagged = [s for s in sections if s.startswith('- Shift ') and ' of the shift in ' in s]
+    assert len(flagged) == month['flag_count'] and 'More flags' in sections
+    assert f'{month["flag_count"]} flags fired in this window, the largest first, each with its recurrence.' in sections
+
+
+def test_the_prompt_reads_the_bands_from_targets_json(monkeypatch):
+    """Review of #111: the analyst's process context states the owner's bands as targets.json holds them; nothing typed."""
+    from investigator import agent
+    assert targets.prompt_text() in agent.PROCESS_CONTEXT
+    assert 'trim 2.75/3/3.25% of gross' in targets.prompt_text() and 'separately 2.5% of scheduled minutes (5% together)' in targets.prompt_text()
+    monkeypatch.setitem(targets.BANDS['trim'], 'flag', 3.5)
+    monkeypatch.setitem(targets.BANDS['dry_end'], 'target', 0.9)
+    assert 'trim 2.75/3/3.5% of gross' in targets.prompt_text() and 'dry-end waste 0.75/0.9/1.25% of the yield' in targets.prompt_text()
 
 
 def test_a_shift_scoped_flag_counts_that_shifts_own_year(store):
@@ -212,6 +264,40 @@ def test_a_production_days_downtime_over_all_shifts_is_the_review(store):
     assert redirect_for('/corr/1/day/2026-09-18?measure=downtime&kind=maintenance', store) is None   # a filter keeps the per-shift plan
     for url in ('/corr/1/day/2026-09-18?measure=review', '/corr/1/week/2026-09-18/shift/2?measure=review'):
         assert page_url(resolve_url(url, store)) == url
+
+
+def test_downtime_with_no_scope_is_the_previous_production_day_all_shifts(store):
+    """The owner's default (review of #111): a downtime question that names no shift and no window answers the previous
+    production day, all shifts, whatever the shift control says; shift detail only when a shift is named (or a flag
+    pulls one in). A filter, a grouping or another Period control is asked of the controls as before. An address is
+    explicit, so the default moves questions only, never a URL."""
+    days = store.production_days
+
+    def address(question, day='2026-09-14', scope='shift', period='day'):
+        request, context = route(question, Context(day, 2, scope=scope, period=period), days)
+        return canonical_url(request, context)
+    for question in ('Show downtime by reason', 'How much downtime?', 'What were the top downtime reasons?',
+                     'What were the top downtime reasons yesterday?'):
+        for scope in ('shift', 'day'):
+            assert address(question, scope=scope) == '/corr/1/day/2026-09-11?measure=review', (question, scope)
+    assert address('Show downtime by reason', day='2026-09-21') == '/corr/1/day/2026-09-18?measure=review'
+    assert address('Show downtime by reason', day=days[0]) == f'/corr/1/day/{days[0]}?measure=review'   # no earlier day: stays
+    for question, url in (('Show downtime by reason for this shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime by reason for shift 2', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime by reason for shift 1', '/corr/1/day/2026-09-14/shift/1?measure=downtime'),
+                          ('Show maintenance downtime by reason', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=maintenance'),
+                          ('Which equipment caused the most downtime?', '/corr/1/day/2026-09-14/shift/2?measure=downtime&by=place'),
+                          ('Show downtime by reason this week', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week'),
+                          ('How much downtime last week?', '/corr/1/week/2026-09-07/shift/2?measure=review'),
+                          ('Why was this shift slow?', '/corr/1/day/2026-09-14/shift/2?measure=overview')):
+        assert address(question) == url, question
+    assert address('Show downtime by reason', period='week') == '/corr/1/week/2026-09-14/shift/2?measure=review'
+    assert redirect_for('/corr/1/day/2026-09-14/shift/2?measure=downtime', store) is None
+    # the analyst is told which day the default chose, and why
+    from investigator.agent import question_scope, read_scope_text
+    scoped = question_scope('Show downtime by reason', Context('2026-09-14', 2), days)
+    assert (scoped.production_day, scoped.scope, scoped.period) == ('2026-09-11', 'day', 'day')
+    assert "the owner's default applies: the previous production day, all shifts, 2026-09-11" in read_scope_text(scoped)
 
 
 # ------------------------------------------------------------------ the two lenses

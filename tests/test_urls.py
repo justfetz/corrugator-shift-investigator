@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from threading import Thread
 import pytest
-from investigator.agent import Agent, Context, parse_request
+from investigator.agent import Agent, Context, parse_request, route
 from investigator.record_store import default_store
 from investigator.server import make_server
 from investigator.urls import (PATH, canonical_url, machine_slug, page_url, question_url, redirect_for, redirect_target,
@@ -49,9 +49,23 @@ def test_every_golden_question_round_trips_through_its_url(case):
     after, url = [], None
     for text in turns:
         try:
-            request = parse_request(text, context)
+            # the router reads the scope the question names first (issue #105, and the owner's downtime default of
+            # #101), as the server does, and the address is of that scope
+            request, turn = route(text, context, store.production_days)
         except ValueError:
             return   # a refusal of the router has no address; the server answers /q with the same text
+        if turn is not context:
+            if after or len(turns) > 1:
+                return   # a moved follow-up leaves the controls' conversation; the eval runner answers it over /q
+            day, scope, shift, period = turn.production_day, turn.scope, turn.shift, turn.period
+            asked, _ = answer(store, day, shift, scope, period, corrupt, text, request)
+            url = canonical_url(request, turn, corrupt, store.machine_id)
+            resolved = resolve_url(url, store)
+            assert page_url(resolved) == url and redirect_target(url, resolved) is None, url
+            addressed, _ = answer(store, resolved['day'], resolved['shift'], resolved['scope'], resolved['tool_period'],
+                                  resolved['corrupt'], resolved['text'], resolved['request'])
+            assert addressed == asked and (resolved['day'], resolved['scope'], resolved['shift']) == (day, scope, shift), url
+            break
         url = canonical_url(request, context, corrupt, store.machine_id, after)
         try:
             store.check_day(day)
@@ -308,15 +322,16 @@ def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
     assert redirected > 500 and stayed == 3, (redirected, stayed)   # dollars, shifts=1,3, three ranged grains
     assert redirect_for(f'{W}?measure=downtime&shifts=1,3', store) == f'{W}?measure=review&shifts=1,3'   # issue #101: one review per shift
     assert redirect_for(f'{W}?measure=downtime&by=place&shifts=1,3', store) == f'{W}?measure=pareto&by=place&shifts=1,3'
-    assert redirect_for(f'{W}?measure=downtime&compare=prev', store) == f'{W}?measure=pareto'   # the previous window: the Pareto carries it
+    assert redirect_for(f'{W}?measure=downtime&compare=prev', store) == f'{W}?measure=review'   # the review carries the previous window (#111)
+    assert redirect_for(f'{W}?measure=downtime&by=place&compare=prev', store) == f'{W}?measure=pareto&by=place'
     assert redirect_for(f'{M}?measure=quality&shifts=2,1&compare=prev', store) == f'{M}?measure=waste&shifts=2,1'
 
 
 # Issue #90: the twelve URLs the sweep used to leave at their own address (downtime and quality split over shifts 1
 # and 3, under the three ranged grains, with and without compare=prev), each with the canonical address it becomes.
-# Issue #101: downtime by reason over a window is the owner's review, one per named shift; against the previous window
-# (compare=prev) it is still the Pareto, which carries that window.
-SPLIT = [(f'{base}?measure={measure}&shifts=1,3' + tail, f'{base}?measure={target if measure == "quality" or tail else "review"}&shifts=1,3')
+# Issue #101: downtime by reason over a window is the owner's review, one per named shift, and it carries the previous
+# window as the Pareto did (the owner, review of #111), so compare=prev lands on it too.
+SPLIT = [(f'{base}?measure={measure}&shifts=1,3' + tail, f'{base}?measure={"review" if measure == "downtime" else target}&shifts=1,3')
          for base in (W, M, P) for measure, target in (('downtime', 'pareto'), ('quality', 'waste')) for tail in ('', '&compare=prev')]
 
 
@@ -431,7 +446,7 @@ def test_the_issue_20_examples_redirect_in_every_representation(served):
     assert get(served, f'{D}/shift/2?measure=pareto')[0] == 200   # a canonical address answers at once
     # a split-shift Pareto under a ranged grain (issue #90): a 302 to its canonical address, which answers with both shifts
     for url, target in ((f'{W}?measure=downtime&shifts=1,3', f'{W}?measure=review&shifts=1,3'),
-                        (f'{W}?measure=downtime&shifts=1,3&compare=prev', f'{W}?measure=pareto&shifts=1,3')):
+                        (f'{W}?measure=downtime&shifts=1,3&compare=prev', f'{W}?measure=review&shifts=1,3')):
         status, headers, _ = get(served, url)
         assert status == 302 and headers['Location'] == target, url
         status, _, body = get(served, headers['Location'])

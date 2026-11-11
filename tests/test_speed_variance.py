@@ -1,4 +1,5 @@
-"""Speed variance (issue #92): the speed gap split into stops, setups, below-target running and grade mix.
+"""Speed variance (issue #92): the speed gap split into stops, setups, running under baseline and grade mix,
+every grade held at its trailing-year baseline (the owner's speed standard, issue #101), the mix schedule-driven.
 
 The value goldens (evals/golden_values.json, `value-speedvar-*`) pin the numbers a second way, from plain
 Python sums over the records. These tests pin the identity itself (the four buckets add up to the gap, and
@@ -21,11 +22,11 @@ def store():
     return default_store()
 
 
-def variance(store, period, shift=None, against="target", against_shift=None, anchor=DAY):
+def variance(store, period, shift=None, against="baseline", against_shift=None, anchor=DAY):
     return store.get_speed_variance({"period": period, "anchor": anchor}, shift, against, against_shift)
 
 
-CASES = [("day", 2, "target", None), ("week", None, "target", None), ("month", None, "target", None), ("fiscal", 3, "target", None),
+CASES = [("day", 2, "baseline", None), ("week", None, "baseline", None), ("month", None, "baseline", None), ("fiscal", 3, "baseline", None),
          ("week", 2, "previous", None), ("month", 1, "previous", None), ("day", 2, "previous", None),
          ("week", 3, "shift", 1), ("month", 1, "shift", 2), ("day", 2, "shift", 3)]
 
@@ -53,27 +54,53 @@ def test_the_four_buckets_add_up_to_the_gap_and_the_details_to_each_bucket(store
     assert toward == sorted(toward, reverse=True)
 
 
-def test_speed_with_stops_is_the_kpi_tile_and_the_target_reference_is_the_usual_mix(store):
+def test_speed_with_stops_is_the_kpi_tile_and_the_baseline_reference_is_the_usual_mix(store):
     for period, shift in (("month", None), ("week", 2), ("day", 3)):
         data = variance(store, period, shift)
         tiles = store.get_period_kpis({"period": period, "anchor": DAY}, False, shift)
         tile = next(r for r in tiles["rows"] if r["metric"] == "speed_all_fpm")
         assert data["speed_all_fpm"] == tile["current"]
-    # against target the reference is each grade's target at its share of the setup clock over the whole store,
-    # the same for every window and shift; the mix is that minus this window's own grade targets at its mix
-    standard = store._fetch("SELECT sum(target * seconds) / sum(seconds) AS standard FROM setups", [])[0]["standard"]
-    month, shift_day = variance(store, "month"), variance(store, "day", 2)
-    for data in (month, shift_day):
-        assert data["reference_speed_fpm"] == data["reference_target_speed_fpm"] == round(standard, 1)
+    # against the baseline the reference is each grade's trailing-year baseline at its share of the setup clock over
+    # that same year, all shifts, whatever shift is explained; the mix is that minus this window's baselines at its mix
+    for window, shift in (({"period": "month", "anchor": DAY}, None), ({"period": "day", "anchor": DAY}, 2), ({"period": "day", "anchor": DAY}, 3)):
+        data = store.get_speed_variance(window, shift)
+        baselines = store.grade_speed_baselines(data["window"]["end"])
+        clock = store._fetch("SELECT grade, sum(seconds) AS seconds FROM setups WHERE production_date BETWEEN ? AND ? GROUP BY grade",
+                             [baselines["since"], baselines["through"]])
+        standard = sum(baselines["grades"][r["grade"]]["baseline_fpm"] * r["seconds"] for r in clock) / sum(r["seconds"] for r in clock)
+        assert (data["baseline_since"], data["baseline_through"], data["baseline_fallback"]) == (baselines["since"], baselines["through"], [])
+        assert data["reference_speed_fpm"] == data["reference_baseline_speed_fpm"] == round(standard, 1)
         mix = next(r for r in data["rows"] if r["bucket"] == "mix")
-        assert abs(mix["gap_fpm"] - (standard - data["target_speed_fpm"])) <= 0.06
+        assert abs(mix["gap_fpm"] - (standard - data["baseline_speed_fpm"])) <= 0.06
         assert all(r["reference_loss_fpm"] == 0 for r in data["rows"] if r["bucket"] != "mix")
+
+
+def test_every_grade_is_held_at_its_baseline_not_its_target(store):
+    """Review of #111, fix 1: the stops, the setups and the running are each priced at the grade's trailing-year
+    sustained speed (targets.json, speed), never its target; the bucket says controllable or schedule-driven."""
+    data = variance(store, "week", 2)
+    baselines = store.grade_speed_baselines(data["window"]["end"])["grades"]
+    running = [d for d in data["details"] if d["bucket"] == "below_baseline"]
+    assert running and all(d["baseline_fpm"] == baselines[d["item"]]["baseline_fpm"] for d in running)
+    assert all(d["speed_to_baseline_pct"] == round(d["speed_run_fpm"] / d["baseline_fpm"] * 100, 1) for d in running if d["speed_run_fpm"])
+    # a stop reason's loss is its minutes at the stopped setup's baseline per scheduled minute
+    stops = store._fetch("SELECT st.reason AS reason, s.grade AS grade, sum(st.seconds) / 60 AS minutes FROM stops st "
+                         "JOIN setups s ON s.setup_id = st.setup_id WHERE s.production_date BETWEEN ? AND ? AND s.shift = 2 "
+                         "AND st.reason <> 'Order change' GROUP BY ALL", [data["window"]["start"], data["window"]["end"]])
+    lost = {}
+    for r in stops:
+        lost[r["reason"]] = lost.get(r["reason"], 0.0) + r["minutes"] * baselines[r["grade"]]["baseline_fpm"] / data["scheduled_minutes"]
+    for d in (d for d in data["details"] if d["bucket"] == "stops"):
+        assert d["current_loss_fpm"] == pytest.approx(lost[d["item"]], abs=0.006), d["item"]
+    assert {r["bucket"]: r["control"] for r in data["rows"]} == {"stops": "controllable", "setups": "controllable",
+                                                                 "below_baseline": "controllable", "mix": "schedule-driven"}
+    assert variance(store, "week", 2, against="target")["rows"] == data["rows"]   # the old name of the default is the baseline
 
 
 def test_one_shift_against_another_is_the_mirror_of_the_reverse(store):
     a, b = variance(store, "week", 3, "shift", 1), variance(store, "week", 1, "shift", 3)
     assert abs(a["gap_fpm"] + b["gap_fpm"]) <= 0.01 and a["speed_all_fpm"] == b["reference_speed_fpm"]
-    for key in ("stops", "setups", "below_target"):   # the loss buckets mirror exactly; the mix is held at each reference's own target speed
+    for key in ("stops", "setups", "below_baseline"):   # the loss buckets mirror exactly; the mix is held at each reference's own target speed
         ra, rb = (next(r for r in d["rows"] if r["bucket"] == key) for d in (a, b))
         assert abs(ra["gap_fpm"] + rb["gap_fpm"]) <= 0.01
     stops = next(r for r in a["rows"] if r["bucket"] == "stops")
@@ -81,28 +108,35 @@ def test_one_shift_against_another_is_the_mirror_of_the_reverse(store):
 
 
 @pytest.mark.parametrize("args, message", [
-    (("week", 2, "budget", None), "against is target, previous or shift"),
-    (("week", 2, "target", 1), "against_shift is only for against=shift"),
+    (("week", 2, "budget", None), "against is baseline, previous or shift"),
+    (("week", 2, "baseline", 1), "against_shift is only for against=shift"),
     (("week", None, "shift", 1), "give shift and against_shift"),
     (("week", 2, "shift", 2), "another shift"),
-    (("month", None, "previous", None, "2026-08-14"), "outside the record store: ask against target instead"),
+    (("month", None, "previous", None, "2026-08-14"), "outside the record store: ask against the baseline instead"),
 ])
 def test_refusals_say_what_to_change(store, args, message):
     with pytest.raises(ValueError, match=message):
         variance(store, *args)
 
 
-def test_each_loss_bucket_is_priced_as_machine_time_and_an_offset_is_not(store):
+def test_each_controllable_loss_bucket_is_priced_as_machine_time_and_the_mix_and_an_offset_are_not(store):
+    """Review of #111: the grade mix is schedule-driven (the order book decides it), so it is never priced as machine
+    time; the controllable dollars are the priced loss buckets, and the gap as a whole (which holds the mix) is not priced."""
     rates = cost_model.effective()
     data = cost_model.attach("get_speed_variance", variance(store, "week", 3, "shift", 1), rates)
+    mix = next(r for r in data["rows"] if r["bucket"] == "mix")
+    assert mix["gap_lineal_ft"] > 0 and mix["usd"] is None and mix["usd_basis"] == cost_model.SCHEDULE_DRIVEN_MIX
     for row in data["rows"]:
+        if row["bucket"] == "mix":
+            continue
         if row["gap_lineal_ft"] > 0:
             minutes = row["gap_lineal_ft"] / data["reference_speed_fpm"]
             assert row["machine_minutes"] == round(minutes, 2) and row["usd"] == round(minutes / 60 * 1200, 2)
             assert "lineal ft / 615.8 ft/min reference speed" in row["usd_basis"]
         else:
             assert row["usd"] is None and row["usd_basis"] == cost_model.GAIN
-    assert data["gap_usd"] == round(data["gap_lineal_ft"] / data["reference_speed_fpm"] / 60 * 1200, 2)
+    priced = [r["usd"] for r in data["rows"] if r["bucket"] != "mix" and r["usd"] is not None]
+    assert priced and data["controllable_usd"] == round(sum(priced), 2) and "gap_usd" not in data
     assert data["contribution_status"] == "margin not set" and "provenance" in data
 
 
@@ -158,7 +192,8 @@ def test_router_refusals(scope, question, message):
 
 @pytest.mark.parametrize("url, target", [
     ("/corr/1/day/2026-09-14/shift/2?measure=speedvar&compare=prev", "/corr/1/day/2026-09-14/shift/2?measure=speedvar&against=previous"),
-    ("/corr/1/day/2026-09-14/shift/2?measure=speedvar&against=target", "/corr/1/day/2026-09-14/shift/2?measure=speedvar"),
+    ("/corr/1/day/2026-09-14/shift/2?measure=speedvar&against=target", "/corr/1/day/2026-09-14/shift/2?measure=speedvar"),   # its old name
+    ("/corr/1/day/2026-09-14/shift/2?measure=speedvar&against=baseline", "/corr/1/day/2026-09-14/shift/2?measure=speedvar"),
     ("/corr/1/day/2026-09-14?against=shift&shifts=3,1&measure=speedvar&window=week", "/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1"),
 ])
 def test_aliases_redirect_to_the_canonical_address(store, url, target):
@@ -168,7 +203,7 @@ def test_aliases_redirect_to_the_canonical_address(store, url, target):
 @pytest.mark.parametrize("url, message", [
     ("/corr/1/day/2026-09-14?measure=speedvar&against=shift&shifts=3", "two shifts"),
     ("/corr/1/day/2026-09-14/shift/2?measure=speedvar&against=shift", "Selected shift only"),
-    ("/corr/1/day/2026-09-14?measure=speedvar&against=budget", "against is target, previous or shift"),
+    ("/corr/1/day/2026-09-14?measure=speedvar&against=budget", "against is baseline, previous or shift"),
     ("/corr/1/day/2026-09-14?measure=pareto&against=previous", "against= does not apply to measure=pareto"),
     ("/corr/1/day/2026-09-14?measure=speedvar&against=shift&compare=prev&shifts=3,1", "does not combine with against=shift"),
 ])
@@ -192,7 +227,7 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
     result = agent.ask("What were the top 3 contributors to speed variations?", Context(DAY, 2, scope="shift"))
     data = next(s["data"] for s in result["trace"] if s["tool"] == "get_speed_variance")
     sections = result["sections"]
-    assert sections[0].startswith(f"Speed gap **{abs(data['gap_fpm']):,.1f} ft/min** below target: ") and sections[0].endswith("(query 1)")
+    assert sections[0].startswith(f"Speed gap **{abs(data['gap_fpm']):,.1f} ft/min** below baseline: ") and sections[0].endswith("(query 1)")
     bullets = [s for s in sections[1:4]]
     assert all(b.startswith("- ") and b.endswith(f"(query 1 · row {i})") for i, b in enumerate(bullets)) and not sections[4].startswith("- ")
     assert [b[2:].split(":")[0] for b in bullets] == [r["label"] for r in data["rows"][:3]]
@@ -200,7 +235,7 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
     assert 2 <= len(looks) <= 3 and all("→ “" in x for x in looks)
     [chart] = result["charts"]
     assert chart["type"] == "waterfall" and chart["rows"] == data["rows"] and chart["unit"] == "ft/min"
-    assert (chart["start"], chart["end"], chart["start_label"], chart["end_label"]) == (data["reference_speed_fpm"], data["speed_all_fpm"], "Target speed", "Actual speed")
+    assert (chart["start"], chart["end"], chart["start_label"], chart["end_label"]) == (data["reference_speed_fpm"], data["speed_all_fpm"], "Baseline speed", "Actual speed")
     assert [t["title"] for t in result["tables"]] == ["get_speed_variance"]
 
 
@@ -209,18 +244,21 @@ def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(stor
     ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card and is priced as machine
     time, while the gain buckets and the gap itself are not; the contribution status is the rates', not the gap's."""
     data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3), cost_model.effective())
-    assert data["direction"] == "above" and data["gap_fpm"] < 0 and data["gap_usd"] is None
+    assert data["direction"] == "above" and data["gap_fpm"] < 0 and "gap_usd" not in data
     assert data["contribution_status"] == "margin not set"
     for row in data["rows"]:
-        assert (row["usd"] is not None) == (row["gap_fpm"] > 0)
-        if row["gap_fpm"] < 0:
+        assert (row["usd"] is not None) == (row["gap_fpm"] > 0 and row["bucket"] != "mix")
+        if row["bucket"] == "mix":
+            assert row["usd_basis"] == cost_model.SCHEDULE_DRIVEN_MIX
+        elif row["gap_fpm"] < 0:
             assert row["usd_basis"] == cost_model.GAIN
     agent = Agent(store.day_analysis(DAY))
     sections = agent.ask("Why did speed differ on shift 1 versus shift 3 this week?", Context(DAY, 2, scope="day"))["sections"]
     assert sections[0].startswith("Speed gap **") and " on shift 1 above shift 3: " in sections[0]
     stops = next(s for s in sections if s.startswith("- Stops: "))
     assert "the other way, an offset" in stops and " · $" in stops
-    assert "Shift 1 is faster than shift 3, so the gap is a gain and is not priced; the buckets that ran worse are priced as machine time." in sections
+    assert ("Shift 1 is faster than shift 3, so the gap is a gain and is not priced; the controllable buckets that ran worse are priced "
+            "as machine time.") in sections
     assert any(s.startswith("Contribution margin not set") for s in sections) and not any(s.startswith("The whole gap is") for s in sections)
 
 

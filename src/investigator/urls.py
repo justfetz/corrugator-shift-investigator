@@ -49,7 +49,8 @@ QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'c
                 'rates', 'corrupt', 'after', 'format')
 PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'against', 'shifts', 'rank', 'lens', 'want', 'rates',
                'corrupt', 'after')
-AGAINST = ('target', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; target is the default
+AGAINST = ('baseline', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; baseline is the default
+AGAINST_ALIASES = {'target': 'baseline'}   # before the owner's speed baseline (issue #101) the default was each grade's target
 LENSES = ('supervisor', 'ownership')   # get_opportunities' owner lenses (issue #101); `all` is the default and is omitted
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
 MAX_URL = 2000
@@ -147,7 +148,7 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                 params.append(('metric', first['metric']))
                 if first.get('weeks', 8) != 8:
                     params.append(('weeks', str(first['weeks'])))
-            elif measure == 'speedvar' and first.get('against', 'target') != 'target':
+            elif measure == 'speedvar' and first.get('against', 'baseline') != 'baseline':
                 params.append(('against', first['against']))
         else:
             raise ValueError(f'No canonical URL for the plan {tools}')
@@ -371,8 +372,6 @@ def _aliases(measure, fields, grain):
                     raise ValueError(f'{key}= does not apply to measure={measure}&compare=prev under Day: against the previous '
                                      f'production day it becomes measure={target}, which ' +
                                      ('groups the Pareto with by=kind instead' if target == 'pareto' else f'takes no {key}='))
-        if target == 'downtime' and grain != 'day':
-            target = 'pareto'   # against the previous window: the Pareto carries it; the review (downtime by reason) does not
         if target is not None:
             del out['compare']
             typed.append('compare=prev')
@@ -433,7 +432,8 @@ def _request(measure, fields, context, window):
     if measure not in STORE_MEASURES:
         raise ValueError(f'Unknown measure {measure!r}; ' + MEASURE_HELP)
     if measure == 'speedvar':
-        return _speed_variance(fields.get('against', 'target'), shifts, context, window)
+        against = fields.get('against', 'baseline')
+        return _speed_variance(AGAINST_ALIASES.get(against, against), shifts, context, window)
     if scope == 'shift':
         per_shift = [shift]
     elif measure in SPLIT_MEASURES and (measure == 'kpis' or context.period != 'day'):
@@ -503,12 +503,13 @@ def _speed_by_grade(by, shifts, context, window):
 
 
 def _speed_variance(against, shifts, context, window):
-    """`measure=speedvar` (issue #92): the speed gap of the window split into stops, setups, running below
-    target and grade mix. `against=previous` measures it from the previous window of the same kind,
-    `against=shift` from another shift over the same window (`shifts=3,1`: shift 3 explained against shift 1);
-    the default is target. With target or previous, `shifts=` lists one decomposition per shift."""
+    """`measure=speedvar` (issue #92): the speed gap of the window split into stops, setups, running under
+    each grade's baseline and grade mix. `against=previous` measures it from the previous window of the same
+    kind, `against=shift` from another shift over the same window (`shifts=3,1`: shift 3 explained against
+    shift 1); the default is the baseline (issue #101; `against=target`, its old name, redirects to it). With
+    the baseline or previous, `shifts=` lists one decomposition per shift."""
     if against not in AGAINST:
-        raise ValueError('against is target, previous or shift (measure=speedvar)')
+        raise ValueError('against is baseline, previous or shift (measure=speedvar)')
     if against == 'shift':
         if context.scope == 'shift':
             raise ValueError('Selected shift only: against=shift reads another shift; choose Production-day comparison or change the shift control')

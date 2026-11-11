@@ -50,8 +50,9 @@ Three components per priced row, kept apart so that changing one rate changes on
 The fields are flat on the row, beside the quantity, so the live narrative cites them like any other
 field and the narrative validator substitutes every dollar from the tool result. They ride on
 `get_quality_breakdown`, `get_downtime_breakdown`, `get_waste_breakdown`, `get_downtime_pareto` and
-`get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each bucket's lineal feet / the
-reference speed; a bucket that ran better is not priced; [speed variance](METRICS.md#speed-variance-issue-92)), and on the two money tools:
+`get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each controllable bucket's lineal feet / the
+reference speed; a bucket that ran better is not priced, and the grade mix is schedule-driven, never priced, so the envelope's
+`controllable_usd` is the priced buckets and the gap as a whole is not priced; [speed variance](METRICS.md#speed-variance-issue-92)), and on the two money tools:
 
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
   reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus
@@ -72,7 +73,9 @@ reference speed; a bucket that ran better is not priced; [speed variance](METRIC
   losses and lists side trim and planned maintenance after, unranked ("where's my biggest opportunity",
   "what went wrong yesterday"); `ownership` is the total cost of waste, side trim first (all of it, with
   its band), then shear, each dry-end reason and the unexplained remainder (`control` `unattributed`) by
-  dollars ("what does trim cost", "what's trim costing us"); `all`, the default, ranks every lever.
+  dollars ("what does trim cost", "what's trim costing us"); `all`, the default, ranks every lever. A
+  dry-end family's share is read against the yield after trim and shear (`pct_of_yield`), as the dry-end
+  band is; shear and trim against gross.
 
 ## Money questions
 

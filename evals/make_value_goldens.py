@@ -836,6 +836,13 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
         levers["Unexplained (bale minus accounted waste)"] = (money("paper", unexplained, gross, scheduled, rates, 0.1), "unattributed")
     order = [trim] + sorted((k for k in levers if k != trim), key=lambda k: -levers[k][0]["usd_per_year"][0])
     values = {f"rows:lever={k}": {**levers[k][0], "control": exact(levers[k][1]), "rank": exact(order.index(k) + 1)} for k in levers}
+    # a dry-end family is read against the yield after trim and shear (issue #101), shear against gross
+    net = t["gross"] - t["trim"] - t["shear"]
+    for key in ("bond", "warp", "misalignment", "moisture"):
+        if f"rows:lever=Dry-end: {key} (all recorded)" in values:
+            values[f"rows:lever=Dry-end: {key} (all recorded)"]["pct_of_yield"] = num(t[key] / net * 100, 4)
+    if "rows:lever=Shear chops (all recorded)" in values:
+        values["rows:lever=Shear chops (all recorded)"]["pct_of_gross"] = num(t["shear"] / t["gross"] * 100, 4)
     values["#0"] = {"lever": exact(trim), "pct_of_gross": num(t["trim"] / t["gross"] * 100, 4)}
     values["$"] = {"total_usd_per_year": [round(sum(e["usd_per_year"][0] for e, _ in levers.values()), 3), sum(e["usd_per_year"][1] for e, _ in levers.values())],
                    "total_usd": [round(sum(e["usd"][0] for e, _ in levers.values()), 6), sum(e["usd"][1] for e, _ in levers.values())]}
@@ -843,11 +850,11 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
                 {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note)
 
 
-def baseline_gap(plain, span, shift):
-    """The speed under each grade's baseline (issue #101), by hand: each grade's sustained speed over the trailing
-    year ending on the window's last day (feet over running minutes of its setups with at least two running minutes,
-    rounded as the tool shows it), then every wet-end run of the window short of it, in minutes at that speed."""
-    last = min(span[1], max(plain.days))
+def grade_baselines(plain, through):
+    """Each grade's sustained speed over the trailing year ending on `through` (targets.json, speed), by hand:
+    feet over running minutes of its setups with at least two running minutes, rounded as the tool shows it.
+    Returns (baselines, since, last)."""
+    last = min(through, max(plain.days))
     since = max(last - timedelta(days=364), min(plain.days))
     feet, run = defaultdict(float), defaultdict(float)
     for s in plain.between("dry_end_setups", since, last):
@@ -855,7 +862,14 @@ def baseline_gap(plain, span, shift):
         if minutes >= 2.0:
             feet[s.quality_id] += s.lineal_ft
             run[s.quality_id] += minutes
-    baseline = {g: round(feet[g] / run[g], 1) for g in feet if run[g]}
+    return {g: round(feet[g] / run[g], 1) for g in feet if run[g]}, since, last
+
+
+def baseline_gap(plain, span, shift):
+    """The speed under each grade's baseline (issue #101), by hand: each grade's sustained speed over the trailing
+    year ending on the window's last day (feet over running minutes of its setups with at least two running minutes,
+    rounded as the tool shows it), then every wet-end run of the window short of it, in minutes at that speed."""
+    baseline = grade_baselines(plain, span[1])[0]
     runs = defaultdict(lambda: [0.0, 0.0])
     grades = {}
     for s in plain.between("dry_end_setups", *span, shift):
@@ -881,27 +895,43 @@ def review_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note
     """get_downtime_review by hand (issue #101): scheduled minutes from the shift records; each kind and reason's stops,
     minutes, percent of scheduled minutes and minutes per stop, planned maintenance last and unranked; maintenance and
     operator totals; and each flagged shift (maintenance or operator over 2.5% of its scheduled minutes) with the
-    reason that led it and that reason's recurrence over the trailing year ending on the flagged day."""
+    reason that led it and that reason's recurrence over the trailing year ending on the flagged day. The previous
+    window of the same kind beside: each reason's and each total's minutes and percent of that window's scheduled
+    minutes, zero for a reason it lacks and None when the window is outside the records."""
     span = window(period, anchor)
+    prev = previous(period, *span)
+    prev_available = plain.coverage(*prev) != "unavailable"
     shifts = plain.between("shifts", *span, shift)
     scheduled = sum(sh.scheduled_minutes for sh in shifts)
+    prev_scheduled = sum(sh.scheduled_minutes for sh in plain.between("shifts", *prev, shift)) if prev_available else None
     stops = plain.between("stops", *span, shift)
     minutes, count = defaultdict(float), defaultdict(int)
     for st in stops:
         minutes[(st.kind, st.reason)] += st.duration_sec / 60
         count[(st.kind, st.reason)] += 1
+    prev_minutes, prev_count = defaultdict(float), defaultdict(int)
+    for st in (plain.between("stops", *prev, shift) if prev_available else []):
+        prev_minutes[(st.kind, st.reason)] += st.duration_sec / 60
+        prev_count[(st.kind, st.reason)] += 1
+    then = lambda value: value if prev_available else None
     label = {k: f"{k[1]} · {'scheduled' if k[0] == 'PM' else k[0].lower()}" for k in minutes}
     ranked = sorted((k for k in minutes if k[0] != "PM"), key=lambda k: (-round(minutes[k], 2), label[k]))
     values = {}
     for k, m in minutes.items():
         values[f"category={label[k]}"] = {"stops": exact(count[k]), "minutes": num(m, 2), "pct_of_scheduled": num(m / scheduled * 100, 4),
                                           "minutes_per_stop": num(m / count[k], 2), "scheduled": exact(k[0] == "PM"),
-                                          "rank": exact(ranked.index(k) + 1 if k in ranked else None)}
-    envelope = {"scheduled_minutes": exact(scheduled)}
+                                          "rank": exact(ranked.index(k) + 1 if k in ranked else None),
+                                          "previous_stops": exact(then(prev_count.get(k, 0))),
+                                          "previous_minutes": num(then(prev_minutes.get(k, 0.0)), 2),
+                                          "previous_pct_of_scheduled": num(then(prev_minutes.get(k, 0.0) / prev_scheduled * 100 if prev_available else None), 4)}
+    envelope = {"scheduled_minutes": exact(scheduled), "previous_scheduled_minutes": exact(prev_scheduled)}
     for key, kinds in (("maintenance", ("Maintenance",)), ("operator", ("Operator",)), ("op_maint", ("Maintenance", "Operator")), ("pm", ("PM",))):
         m = sum(v for k, v in minutes.items() if k[0] in kinds)
+        before = sum(v for k, v in prev_minutes.items() if k[0] in kinds)
         envelope.update({f"{key}_minutes": num(m, 2), f"{key}_stops": exact(sum(c for k, c in count.items() if k[0] in kinds)),
-                         f"{key}_pct": num(m / scheduled * 100, 4)})
+                         f"{key}_pct": num(m / scheduled * 100, 4),
+                         f"previous_{key}_minutes": num(then(before), 2),
+                         f"previous_{key}_pct": num(before / prev_scheduled * 100 if prev_available else None, 4)})
     # the flags: a shift whose maintenance or operator minutes are over 2.5% of its scheduled minutes
     first_day, last_day = min(plain.days), max(plain.days)
     flags = []
@@ -919,7 +949,7 @@ def review_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note
                               "minutes": total, "pct": total / sh.scheduled_minutes * 100, "reason": lead, "reason_minutes": by_reason[lead]})
     flags.sort(key=lambda f: (-round(f["pct"], 4), f["day"], f["shift"], f["kind"]))
     envelope["flag_count"] = exact(len(flags))
-    for i, f in enumerate(flags[:5]):
+    for i, f in enumerate(flags):   # every flag carries its recurrence (review of #111)
         since, through = max(f["day"] - timedelta(days=364), first_day), min(f["day"], last_day)
         year_shifts = plain.between("shifts", since, through, shift)
         year_stops = [st for st in plain.between("stops", since, through, shift) if st.kind in ("Maintenance", "Operator")]
@@ -937,18 +967,22 @@ def review_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note
                                  "recurrence_since": exact(since.isoformat()), "shifts_counted": exact(len(year_shifts)),
                                  "times_over_band": exact(times), "weeks_in_top_five": exact(top), "weeks_counted": exact(len(weekly))}
     values["$"] = envelope
+    coverage = plain.coverage(*span)
+    if coverage != "unavailable":
+        coverage = "complete" if coverage == "complete" and plain.coverage(*prev) == "complete" else "partial"
     return case(id, "get_downtime_review", {"window": {"period": period, "anchor": anchor}, "shift": shift},
-                {"coverage": plain.coverage(*span), "row_count": len(minutes), "values": values}, day=day, note=note)
+                {"coverage": coverage, "row_count": len(minutes), "values": values}, day=day, note=note)
 
 
-def speedvar_side(plain, span, shift):
-    """One side of a speed variance by hand: scheduled minutes, the speed with stops, the grade targets at the
-    side's own mix, and per scheduled minute the feet below target lost to each stop reason, to order changes
-    (per grade) and to running below target (per grade). Stops are matched to their setup record by id here,
-    in Python, to price each stopped minute at that setup's grade target."""
+def speedvar_side(plain, span, shift, speed):
+    """One side of a speed variance by hand: scheduled minutes, the speed with stops, the grade baselines
+    (`speed`, the owner's standard of issue #101) at the side's own mix, and per scheduled minute the feet
+    below the baseline lost to each stop reason, to order changes (per grade) and to running under the
+    baseline (per grade). Stops are matched to their setup record by id here, in Python, to price each
+    stopped minute at that setup's grade baseline."""
     setups = plain.between("dry_end_setups", *span, shift)
     minutes = sum(sh.scheduled_minutes for sh in plain.between("shifts", *span, shift))
-    target_of = {s.setup_id: GRADES[s.quality_id] for s in setups}
+    target_of = {s.setup_id: speed[s.quality_id] for s in setups}
     grade_of = {s.setup_id: s.quality_id for s in setups}
     stops, setup_loss = defaultdict(lambda: [0.0, 0.0, 0]), defaultdict(float)   # reason -> [feet lost, minutes, count]
     for st in plain.between("stops", *span, shift):
@@ -962,45 +996,51 @@ def speedvar_side(plain, span, shift):
             cell[2] += 1
     below, clock = defaultdict(float), defaultdict(float)
     for s in setups:
-        target = GRADES[s.quality_id]
-        below[s.quality_id] += target * (s.elapsed_seconds - s.stop_time_sec) / 60 - s.lineal_ft
+        base = speed[s.quality_id]
+        below[s.quality_id] += base * (s.elapsed_seconds - s.stop_time_sec) / 60 - s.lineal_ft
         clock[s.quality_id] += s.elapsed_seconds / 60
     return {"minutes": minutes, "speed": sum(s.lineal_ft for s in setups) / minutes,
-            "target": sum(GRADES[g] * m for g, m in clock.items()) / minutes,
+            "target": sum(speed[g] * m for g, m in clock.items()) / minutes,
             "share": {g: m / minutes for g, m in clock.items()},
             "stops": {r: c[0] / minutes for r, c in stops.items()}, "stop_cells": dict(stops),
             "setups": {g: v / minutes for g, v in setup_loss.items()}, "below": {g: v / minutes for g, v in below.items()}}
 
 
-def speedvar_case(plain, id, period, anchor, shift=None, against="target", against_shift=None, *, day="2026-09-14", note=""):
-    """get_speed_variance by hand (issue #92). The gap is the reference speed minus this window's speed with stops,
-    taken directly; each bucket is computed on its own definition (mix: the reference's grade targets at its mix minus
-    this window's; each loss: this side's feet below target per scheduled minute minus the reference's), so the tool's
-    claim that they add up is checked by the sums here, not assumed."""
+def speedvar_case(plain, id, period, anchor, shift=None, against="baseline", against_shift=None, *, day="2026-09-14", note=""):
+    """get_speed_variance by hand (issue #92), every grade held at its trailing-year baseline (issue #101). The gap
+    is the reference speed minus this window's speed with stops, taken directly; each bucket is computed on its own
+    definition (mix: the reference's grade baselines at its mix minus this window's; each loss: this side's feet
+    below the baseline per scheduled minute minus the reference's), so the tool's claim that they add up is checked
+    by the sums here, not assumed. The grade mix is schedule-driven and never priced; the controllable buckets that
+    are losses are priced as machine time and summed."""
     span = window(period, anchor)
-    c = speedvar_side(plain, span, shift)
-    if against == "target":
+    speed, since, last = grade_baselines(plain, span[1])
+    c = speedvar_side(plain, span, shift, speed)
+    if against == "baseline":
         clock = defaultdict(float)
-        for s in plain.data["dry_end_setups"]:
+        for s in plain.between("dry_end_setups", since, last):
             clock[s.quality_id] += s.elapsed_seconds / 60
         total = sum(clock.values())
-        standard = sum(GRADES[g] * m for g, m in clock.items()) / total
+        standard = sum(speed[g] * m for g, m in clock.items()) / total
         r = {"speed": standard, "target": standard, "share": {g: m / total for g, m in clock.items()}, "stops": {}, "setups": {}, "below": {}}
     else:
-        r = speedvar_side(plain, previous(period, *span) if against == "previous" else span, shift if against == "previous" else against_shift)
+        r = speedvar_side(plain, previous(period, *span) if against == "previous" else span,
+                          shift if against == "previous" else against_shift, speed)
     gap = r["speed"] - c["speed"]
     minus = lambda key: {k: c[key].get(k, 0.0) - r[key].get(k, 0.0) for k in set(c[key]) | set(r[key])}
-    items = {"stops": minus("stops"), "setups": minus("setups"), "below_target": minus("below"),
-             "mix": {g: (r["share"].get(g, 0.0) - c["share"].get(g, 0.0)) * (GRADES[g] - r["target"]) for g in set(c["share"]) | set(r["share"])}}
+    items = {"stops": minus("stops"), "setups": minus("setups"), "below_baseline": minus("below"),
+             "mix": {g: (r["share"].get(g, 0.0) - c["share"].get(g, 0.0)) * (speed[g] - r["target"]) for g in set(c["share"]) | set(r["share"])}}
     buckets = {"stops": sum(c["stops"].values()) - sum(r["stops"].values()), "setups": sum(c["setups"].values()) - sum(r["setups"].values()),
-               "below_target": sum(c["below"].values()) - sum(r["below"].values()), "mix": r["target"] - c["target"]}
+               "below_baseline": sum(c["below"].values()) - sum(r["below"].values()), "mix": r["target"] - c["target"]}
     assert abs(sum(buckets.values()) - gap) < 1e-6, "the four buckets add up to the gap, taken directly"
     rates = rates_of(None)
     reference = round(r["speed"], 1)
     values = {"$": {"against": exact(against), "speed_all_fpm": num(c["speed"], 1), "reference_speed_fpm": num(r["speed"], 1),
-                    "target_speed_fpm": num(c["target"], 1), "reference_target_speed_fpm": num(r["target"], 1),
+                    "baseline_speed_fpm": num(c["target"], 1), "reference_baseline_speed_fpm": num(r["target"], 1),
+                    "baseline_since": exact(since.isoformat()), "baseline_through": exact(last.isoformat()),
                     "gap_fpm": num(gap, 2), "gap_lineal_ft": num(gap * c["minutes"], 1), "scheduled_minutes": num(c["minutes"], 1),
                     "direction": exact("below" if gap > 0 else "above")}}
+    controllable = []
     for key, value in buckets.items():
         way = 1 if value >= 0 else -1
         leading = sorted(((v, k) for k, v in items[key].items() if v * way > 0), key=lambda vk: (-vk[0] * way, vk[1]))
@@ -1008,13 +1048,17 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="target", again
         row = {"gap_fpm": num(value, 2), "gap_lineal_ft": num(value * c["minutes"], 1), "share_of_gap_pct": num(value / gap * 100, 1),
                "top_item": exact(leading[0][1] if leading else None), "top_item_fpm": num(leading[0][0], 2) if leading else exact(None),
                "items": exact(len(items[key]))}
-        if feet > 0:   # each loss bucket priced as machine time: its lineal feet at the reference speed
+        row["control"] = exact("schedule-driven" if key == "mix" else "controllable")
+        if feet > 0 and key != "mix":   # each controllable loss bucket priced as machine time: its lineal feet at the reference speed
             priced = money("speed", feet / reference, None, c["minutes"], rates, 0.06 * feet / reference ** 2 + 0.06 / reference)
             row.update({k: priced[k] for k in ("machine_time_usd", "usd", "usd_per_year", "contribution_status")})
+            controllable.append(priced["usd"][0])
         else:
             row.update({"usd": exact(None), "contribution_status": exact("not priced")})
         values[f"bucket={key}"] = row
         values["$"][f"{key}_share_pct"] = num(value / gap * 100, 1)
+    # the controllable dollars: the priced loss buckets, never the grade mix (each rounded to the cent, as the tool sums them)
+    values["$"]["controllable_usd"] = [round(sum(controllable), 2), 0.02 * len(controllable) + 0.01] if controllable else exact(None)
     top_stop = max(c["stop_cells"], key=lambda k: c["stop_cells"][k][0])
     lost, mins, count = c["stop_cells"][top_stop]
     values[f"details:item={top_stop}"] = {"bucket": exact("stops"), "gap_fpm": num(lost / c["minutes"] - r["stops"].get(top_stop, 0.0), 2),
@@ -1022,7 +1066,10 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="target", again
     arguments = {"window": {"period": period, "anchor": anchor}, "shift": shift, "against": against}
     if against == "shift":
         arguments["against_shift"] = against_shift
-    return case(id, "get_speed_variance", arguments, {"coverage": plain.coverage(*span), "row_count": 4, "values": values}, day=day, note=note)
+    coverage = plain.coverage(*span)
+    if against == "previous":
+        coverage = "complete" if coverage == "complete" and plain.coverage(*previous(period, *span)) == "complete" else "partial"
+    return case(id, "get_speed_variance", arguments, {"coverage": coverage, "row_count": 4, "values": values}, day=day, note=note)
 
 
 # ---------------------------------------------------------------- the case list
@@ -1133,9 +1180,11 @@ def build(data=None):
     cases.append(review_case(plain, "value-review-day-0918-shift-2", "day", "2026-09-18", 2, day="2026-09-18",
                              note="The most maintenance downtime any shift has: a power outage plus jams; recurrence counts shift 2's own year."))
     cases.append(review_case(plain, "value-review-september", "month", "2026-09-14",
-                             note="A month: the five largest flags of many, each with its own trailing year."))
+                             note="A month: every one of its many flags, each with its own trailing year."))
     cases.append(review_case(plain, "value-review-day-0928", "day", "2026-09-28", day="2026-09-28",
                              note="Two flags on shift 3; knife / slitter jam was over its band on its own once in the year, so recurrence is not zero."))
+    cases.append(review_case(plain, "value-review-august-shift-2", "month", "2026-08-03", 2,
+                             note="The first month in the records: the previous month is outside them, so every previous figure is None, never zero."))
     # the owner's two lenses on the same levers (issue #101), totals recomputed here, not with the cost model
     cases.append(opportunities_case(plain, "value-dollars-supervisor-september", "month", "2026-09-14", lens="supervisor",
                                     note="The supervisor lens: the controllable losses ranked, schedule-driven trim and planned maintenance unranked."))
@@ -1143,10 +1192,10 @@ def build(data=None):
                                 note="The ownership lens: the total cost of waste, side trim first."))
     # Speed variance (issue #92): the gap split into stops, setups, below-target running and grade mix, by hand,
     # against target (the usual grade mix), against the previous week, and one shift against another.
-    cases.append(speedvar_case(plain, "value-speedvar-september-target", "month", "2026-09-14",
-                               note="Against each grade's target at the usual grade mix (the share of the setup clock over both months): the buckets add up to the gap taken directly."))
+    cases.append(speedvar_case(plain, "value-speedvar-september-baseline", "month", "2026-09-14",
+                               note="Against each grade's trailing-year baseline at the usual grade mix (the share of the setup clock over the same year; issue #101): the buckets add up to the gap taken directly, and the grade mix is schedule-driven, never priced."))
     cases.append(speedvar_case(plain, "value-speedvar-week-0914-shift-2-previous", "week", "2026-09-14", 2, "previous",
-                               note="Against the previous week: each loss is this week's feet below target per scheduled minute minus the week before's; an offset bucket is not priced."))
+                               note="Against the previous week: each loss is this week's feet below the grade baselines per scheduled minute minus the week before's; an offset bucket is not priced."))
     cases.append(speedvar_case(plain, "value-speedvar-week-0914-shift-3-vs-shift-1", "week", "2026-09-14", 3, "shift", 1,
                                note="Shift 3 against shift 1 over the same week: shift 1's Thursday planned maintenance makes stops an offset; the heavier grade mix of shift 3 is part of its gap."))
     assert len({c["id"] for c in cases}) == len(cases)

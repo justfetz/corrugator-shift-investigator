@@ -33302,6 +33302,18 @@
       "rank": [
        2,
        null
+      ],
+      "previous_stops": [
+       2,
+       null
+      ],
+      "previous_minutes": [
+       4.1,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.284722,
+       5.1e-05
       ]
      },
      "category=Order change \u00b7 operator": {
@@ -33328,6 +33340,18 @@
       "rank": [
        1,
        null
+      ],
+      "previous_stops": [
+       6,
+       null
+      ],
+      "previous_minutes": [
+       6.966667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.483796,
+       5.1e-05
       ]
      },
      "category=Stacker \u00b7 operator": {
@@ -33354,6 +33378,18 @@
       "rank": [
        3,
        null
+      ],
+      "previous_stops": [
+       2,
+       null
+      ],
+      "previous_minutes": [
+       3.183333,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.221065,
+       5.1e-05
       ]
      },
      "category=Raw material (roll) \u00b7 operator": {
@@ -33380,6 +33416,18 @@
       "rank": [
        4,
        null
+      ],
+      "previous_stops": [
+       4,
+       null
+      ],
+      "previous_minutes": [
+       6.6,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.458333,
+       5.1e-05
       ]
      },
      "category=Other \u00b7 operator": {
@@ -33406,6 +33454,18 @@
       "rank": [
        5,
        null
+      ],
+      "previous_stops": [
+       2,
+       null
+      ],
+      "previous_minutes": [
+       2.2,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.152778,
+       5.1e-05
       ]
      },
      "category=Other \u00b7 maintenance": {
@@ -33432,6 +33492,18 @@
       "rank": [
        6,
        null
+      ],
+      "previous_stops": [
+       1,
+       null
+      ],
+      "previous_minutes": [
+       1.333333,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.092593,
+       5.1e-05
       ]
      },
      "category=Knife / slitter jam \u00b7 maintenance": {
@@ -33458,6 +33530,18 @@
       "rank": [
        7,
        null
+      ],
+      "previous_stops": [
+       2,
+       null
+      ],
+      "previous_minutes": [
+       2.366667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.164352,
+       5.1e-05
       ]
      },
      "category=Glue / starch \u00b7 operator": {
@@ -33484,6 +33568,18 @@
       "rank": [
        9,
        null
+      ],
+      "previous_stops": [
+       0,
+       null
+      ],
+      "previous_minutes": [
+       0.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.0,
+       5.1e-05
       ]
      },
      "category=Stacker \u00b7 maintenance": {
@@ -33510,6 +33606,18 @@
       "rank": [
        8,
        null
+      ],
+      "previous_stops": [
+       0,
+       null
+      ],
+      "previous_minutes": [
+       0.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.0,
+       5.1e-05
       ]
      },
      "flags:#0": {
@@ -33575,6 +33683,10 @@
        1440,
        null
       ],
+      "previous_scheduled_minutes": [
+       1440,
+       null
+      ],
       "maintenance_minutes": [
        6.016667,
        0.0051
@@ -33585,6 +33697,14 @@
       ],
       "maintenance_pct": [
        0.417824,
+       5.1e-05
+      ],
+      "previous_maintenance_minutes": [
+       3.7,
+       0.0051
+      ],
+      "previous_maintenance_pct": [
+       0.256944,
        5.1e-05
       ],
       "operator_minutes": [
@@ -33599,6 +33719,14 @@
        2.365741,
        5.1e-05
       ],
+      "previous_operator_minutes": [
+       23.05,
+       0.0051
+      ],
+      "previous_operator_pct": [
+       1.600694,
+       5.1e-05
+      ],
       "op_maint_minutes": [
        40.083333,
        0.0051
@@ -33611,6 +33739,14 @@
        2.783565,
        5.1e-05
       ],
+      "previous_op_maint_minutes": [
+       26.75,
+       0.0051
+      ],
+      "previous_op_maint_pct": [
+       1.857639,
+       5.1e-05
+      ],
       "pm_minutes": [
        0,
        0.0051
@@ -33620,6 +33756,14 @@
        null
       ],
       "pm_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "previous_pm_minutes": [
+       0,
+       0.0051
+      ],
+      "previous_pm_pct": [
        0.0,
        5.1e-05
       ],
@@ -33673,6 +33817,18 @@
       "rank": [
        1,
        null
+      ],
+      "previous_stops": [
+       0,
+       null
+      ],
+      "previous_minutes": [
+       0.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.0,
+       5.1e-05
       ]
      },
      "category=Knife / slitter jam \u00b7 maintenance": {
@@ -33699,6 +33855,18 @@
       "rank": [
        3,
        null
+      ],
+      "previous_stops": [
+       2,
+       null
+      ],
+      "previous_minutes": [
+       3.166667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.659722,
+       5.1e-05
       ]
      },
      "category=Raw material (roll) \u00b7 operator": {
@@ -33725,6 +33893,18 @@
       "rank": [
        2,
        null
+      ],
+      "previous_stops": [
+       0,
+       null
+      ],
+      "previous_minutes": [
+       0.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.0,
+       5.1e-05
       ]
      },
      "category=Steam / moisture \u00b7 maintenance": {
@@ -33751,6 +33931,18 @@
       "rank": [
        4,
        null
+      ],
+      "previous_stops": [
+       0,
+       null
+      ],
+      "previous_minutes": [
+       0.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.0,
+       5.1e-05
       ]
      },
      "category=Order change \u00b7 operator": {
@@ -33777,6 +33969,18 @@
       "rank": [
        5,
        null
+      ],
+      "previous_stops": [
+       1,
+       null
+      ],
+      "previous_minutes": [
+       1.183333,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.246528,
+       5.1e-05
       ]
      },
      "flags:#0": {
@@ -33842,6 +34046,10 @@
        480,
        null
       ],
+      "previous_scheduled_minutes": [
+       480,
+       null
+      ],
       "maintenance_minutes": [
        19.683333,
        0.0051
@@ -33852,6 +34060,14 @@
       ],
       "maintenance_pct": [
        4.100694,
+       5.1e-05
+      ],
+      "previous_maintenance_minutes": [
+       3.166667,
+       0.0051
+      ],
+      "previous_maintenance_pct": [
+       0.659722,
        5.1e-05
       ],
       "operator_minutes": [
@@ -33866,6 +34082,14 @@
        2.020833,
        5.1e-05
       ],
+      "previous_operator_minutes": [
+       8.966667,
+       0.0051
+      ],
+      "previous_operator_pct": [
+       1.868056,
+       5.1e-05
+      ],
       "op_maint_minutes": [
        29.383333,
        0.0051
@@ -33878,6 +34102,14 @@
        6.121528,
        5.1e-05
       ],
+      "previous_op_maint_minutes": [
+       12.133333,
+       0.0051
+      ],
+      "previous_op_maint_pct": [
+       2.527778,
+       5.1e-05
+      ],
       "pm_minutes": [
        0,
        0.0051
@@ -33887,6 +34119,14 @@
        null
       ],
       "pm_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "previous_pm_minutes": [
+       0,
+       0.0051
+      ],
+      "previous_pm_pct": [
        0.0,
        5.1e-05
       ],
@@ -33911,7 +34151,7 @@
     },
     "shift": null
    },
-   "note": "A month: the five largest flags of many, each with its own trailing year.",
+   "note": "A month: every one of its many flags, each with its own trailing year.",
    "expect": {
     "coverage": "complete",
     "row_count": 13,
@@ -33940,6 +34180,18 @@
       "rank": [
        4,
        null
+      ],
+      "previous_stops": [
+       65,
+       null
+      ],
+      "previous_minutes": [
+       129.816667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.429288,
+       5.1e-05
       ]
      },
      "category=Knife / slitter jam \u00b7 maintenance": {
@@ -33966,6 +34218,18 @@
       "rank": [
        2,
        null
+      ],
+      "previous_stops": [
+       61,
+       null
+      ],
+      "previous_minutes": [
+       118.55,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.39203,
+       5.1e-05
       ]
      },
      "category=Order change \u00b7 operator": {
@@ -33992,6 +34256,18 @@
       "rank": [
        3,
        null
+      ],
+      "previous_stops": [
+       132,
+       null
+      ],
+      "previous_minutes": [
+       172.5,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.570437,
+       5.1e-05
       ]
      },
      "category=Missed splice \u00b7 operator": {
@@ -34018,6 +34294,18 @@
       "rank": [
        1,
        null
+      ],
+      "previous_stops": [
+       81,
+       null
+      ],
+      "previous_minutes": [
+       124.65,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.412202,
+       5.1e-05
       ]
      },
      "category=Other \u00b7 operator": {
@@ -34044,6 +34332,18 @@
       "rank": [
        8,
        null
+      ],
+      "previous_stops": [
+       46,
+       null
+      ],
+      "previous_minutes": [
+       64.066667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.211861,
+       5.1e-05
       ]
      },
      "category=Stacker \u00b7 operator": {
@@ -34070,6 +34370,18 @@
       "rank": [
        5,
        null
+      ],
+      "previous_stops": [
+       79,
+       null
+      ],
+      "previous_minutes": [
+       95.983333,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.317405,
+       5.1e-05
       ]
      },
      "category=Glue / starch \u00b7 operator": {
@@ -34096,6 +34408,18 @@
       "rank": [
        6,
        null
+      ],
+      "previous_stops": [
+       42,
+       null
+      ],
+      "previous_minutes": [
+       70.8,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.234127,
+       5.1e-05
       ]
      },
      "category=Other \u00b7 maintenance": {
@@ -34122,6 +34446,18 @@
       "rank": [
        7,
        null
+      ],
+      "previous_stops": [
+       20,
+       null
+      ],
+      "previous_minutes": [
+       46.283333,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.153053,
+       5.1e-05
       ]
      },
      "category=Glue / starch \u00b7 maintenance": {
@@ -34148,6 +34484,18 @@
       "rank": [
        11,
        null
+      ],
+      "previous_stops": [
+       13,
+       null
+      ],
+      "previous_minutes": [
+       25.916667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.085703,
+       5.1e-05
       ]
      },
      "category=Planned maintenance \u00b7 scheduled": {
@@ -34174,6 +34522,18 @@
       "rank": [
        null,
        null
+      ],
+      "previous_stops": [
+       4,
+       null
+      ],
+      "previous_minutes": [
+       575.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       1.901455,
+       5.1e-05
       ]
      },
      "category=Steam / moisture \u00b7 maintenance": {
@@ -34200,6 +34560,18 @@
       "rank": [
        10,
        null
+      ],
+      "previous_stops": [
+       9,
+       null
+      ],
+      "previous_minutes": [
+       25.766667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.085207,
+       5.1e-05
       ]
      },
      "category=Stacker \u00b7 maintenance": {
@@ -34226,6 +34598,18 @@
       "rank": [
        9,
        null
+      ],
+      "previous_stops": [
+       14,
+       null
+      ],
+      "previous_minutes": [
+       20.766667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.068673,
+       5.1e-05
       ]
      },
      "category=Power outage \u00b7 maintenance": {
@@ -34252,6 +34636,18 @@
       "rank": [
        12,
        null
+      ],
+      "previous_stops": [
+       1,
+       null
+      ],
+      "previous_minutes": [
+       12.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.039683,
+       5.1e-05
       ]
      },
      "flags:#0": {
@@ -34544,9 +34940,1115 @@
        null
       ]
      },
+     "flags:#5": {
+      "production_day": [
+       "2026-09-08",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       17.633333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.673611,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       7.95,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       81,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       6,
+       null
+      ],
+      "weeks_counted": [
+       6,
+       null
+      ]
+     },
+     "flags:#6": {
+      "production_day": [
+       "2026-09-02",
+       null
+      ],
+      "shift": [
+       1,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Glue / starch",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       17.35,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.614583,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       7.6,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       69,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       2,
+       null
+      ],
+      "weeks_counted": [
+       5,
+       null
+      ]
+     },
+     "flags:#7": {
+      "production_day": [
+       "2026-09-28",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Raw material (roll)",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       16.5,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.4375,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       6.166667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       123,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       9,
+       null
+      ],
+      "weeks_counted": [
+       9,
+       null
+      ]
+     },
+     "flags:#8": {
+      "production_day": [
+       "2026-09-07",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       16.266667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.388889,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       11.45,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       78,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       6,
+       null
+      ],
+      "weeks_counted": [
+       6,
+       null
+      ]
+     },
+     "flags:#9": {
+      "production_day": [
+       "2026-09-09",
+       null
+      ],
+      "shift": [
+       1,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       15.216667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.170139,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       4.9,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       84,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       6,
+       null
+      ],
+      "weeks_counted": [
+       6,
+       null
+      ]
+     },
+     "flags:#10": {
+      "production_day": [
+       "2026-09-02",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       14.85,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.09375,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       5.283333,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       69,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       5,
+       null
+      ],
+      "weeks_counted": [
+       5,
+       null
+      ]
+     },
+     "flags:#11": {
+      "production_day": [
+       "2026-09-14",
+       null
+      ],
+      "shift": [
+       1,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Order change",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       14.25,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.96875,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       3.566667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       93,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       7,
+       null
+      ],
+      "weeks_counted": [
+       7,
+       null
+      ]
+     },
+     "flags:#12": {
+      "production_day": [
+       "2026-09-07",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       14.116667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.940972,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       7.116667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       78,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       6,
+       null
+      ],
+      "weeks_counted": [
+       6,
+       null
+      ]
+     },
+     "flags:#13": {
+      "production_day": [
+       "2026-09-23",
+       null
+      ],
+      "shift": [
+       1,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       14.016667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.920139,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       7.916667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       114,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       8,
+       null
+      ],
+      "weeks_counted": [
+       8,
+       null
+      ]
+     },
+     "flags:#14": {
+      "production_day": [
+       "2026-09-22",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Order change",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       13.716667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.857639,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       6.716667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       111,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       8,
+       null
+      ],
+      "weeks_counted": [
+       8,
+       null
+      ]
+     },
+     "flags:#15": {
+      "production_day": [
+       "2026-09-09",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Glue / starch",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       13.45,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.802083,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       4.35,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       84,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       2,
+       null
+      ],
+      "weeks_counted": [
+       6,
+       null
+      ]
+     },
+     "flags:#16": {
+      "production_day": [
+       "2026-09-25",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       13.35,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.78125,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       4.416667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       120,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       8,
+       null
+      ],
+      "weeks_counted": [
+       8,
+       null
+      ]
+     },
+     "flags:#17": {
+      "production_day": [
+       "2026-09-28",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Maintenance",
+       null
+      ],
+      "reason": [
+       "Knife / slitter jam",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       13.3,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.770833,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       9.316667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       123,
+       null
+      ],
+      "times_over_band": [
+       1,
+       null
+      ],
+      "weeks_in_top_five": [
+       7,
+       null
+      ],
+      "weeks_counted": [
+       9,
+       null
+      ]
+     },
+     "flags:#18": {
+      "production_day": [
+       "2026-09-25",
+       null
+      ],
+      "shift": [
+       3,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       13.133333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.736111,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       8.766667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       120,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       8,
+       null
+      ],
+      "weeks_counted": [
+       8,
+       null
+      ]
+     },
+     "flags:#19": {
+      "production_day": [
+       "2026-09-01",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Raw material (roll)",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.633333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.631944,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       5.65,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       66,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       5,
+       null
+      ],
+      "weeks_counted": [
+       5,
+       null
+      ]
+     },
+     "flags:#20": {
+      "production_day": [
+       "2026-09-08",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.633333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.631944,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       8.466667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       81,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       6,
+       null
+      ],
+      "weeks_counted": [
+       6,
+       null
+      ]
+     },
+     "flags:#21": {
+      "production_day": [
+       "2026-09-11",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Maintenance",
+       null
+      ],
+      "reason": [
+       "Knife / slitter jam",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.55,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.614583,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       9.35,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       90,
+       null
+      ],
+      "times_over_band": [
+       1,
+       null
+      ],
+      "weeks_in_top_five": [
+       4,
+       null
+      ],
+      "weeks_counted": [
+       6,
+       null
+      ]
+     },
+     "flags:#22": {
+      "production_day": [
+       "2026-09-24",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Order change",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.35,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.572917,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       5.033333,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       117,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       8,
+       null
+      ],
+      "weeks_counted": [
+       8,
+       null
+      ]
+     },
+     "flags:#23": {
+      "production_day": [
+       "2026-09-04",
+       null
+      ],
+      "shift": [
+       1,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Stacker",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.05,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.510417,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       3.166667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       75,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       3,
+       null
+      ],
+      "weeks_counted": [
+       5,
+       null
+      ]
+     },
      "$": {
       "scheduled_minutes": [
        31680,
+       null
+      ],
+      "previous_scheduled_minutes": [
+       30240,
        null
       ],
       "maintenance_minutes": [
@@ -34561,6 +36063,14 @@
        0.90041,
        5.1e-05
       ],
+      "previous_maintenance_minutes": [
+       249.283333,
+       0.0051
+      ],
+      "previous_maintenance_pct": [
+       0.82435,
+       5.1e-05
+      ],
       "operator_minutes": [
        685.983333,
        0.0051
@@ -34571,6 +36081,14 @@
       ],
       "operator_pct": [
        2.165351,
+       5.1e-05
+      ],
+      "previous_operator_minutes": [
+       657.816667,
+       0.0051
+      ],
+      "previous_operator_pct": [
+       2.17532,
        5.1e-05
       ],
       "op_maint_minutes": [
@@ -34585,6 +36103,14 @@
        3.065762,
        5.1e-05
       ],
+      "previous_op_maint_minutes": [
+       907.1,
+       0.0051
+      ],
+      "previous_op_maint_pct": [
+       2.999669,
+       5.1e-05
+      ],
       "pm_minutes": [
        503.0,
        0.0051
@@ -34595,6 +36121,14 @@
       ],
       "pm_pct": [
        1.587753,
+       5.1e-05
+      ],
+      "previous_pm_minutes": [
+       575.0,
+       0.0051
+      ],
+      "previous_pm_pct": [
+       1.901455,
        5.1e-05
       ],
       "flag_count": [
@@ -34647,6 +36181,18 @@
       "rank": [
        7,
        null
+      ],
+      "previous_stops": [
+       1,
+       null
+      ],
+      "previous_minutes": [
+       1.783333,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.123843,
+       5.1e-05
       ]
      },
      "category=Order change \u00b7 operator": {
@@ -34673,6 +36219,18 @@
       "rank": [
        3,
        null
+      ],
+      "previous_stops": [
+       5,
+       null
+      ],
+      "previous_minutes": [
+       5.45,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.378472,
+       5.1e-05
       ]
      },
      "category=Missed splice \u00b7 operator": {
@@ -34699,6 +36257,18 @@
       "rank": [
        4,
        null
+      ],
+      "previous_stops": [
+       12,
+       null
+      ],
+      "previous_minutes": [
+       18.3,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       1.270833,
+       5.1e-05
       ]
      },
      "category=Raw material (roll) \u00b7 operator": {
@@ -34725,6 +36295,18 @@
       "rank": [
        2,
        null
+      ],
+      "previous_stops": [
+       2,
+       null
+      ],
+      "previous_minutes": [
+       3.55,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.246528,
+       5.1e-05
       ]
      },
      "category=Glue / starch \u00b7 operator": {
@@ -34751,6 +36333,18 @@
       "rank": [
        5,
        null
+      ],
+      "previous_stops": [
+       3,
+       null
+      ],
+      "previous_minutes": [
+       5.516667,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.383102,
+       5.1e-05
       ]
      },
      "category=Knife / slitter jam \u00b7 maintenance": {
@@ -34777,6 +36371,18 @@
       "rank": [
        1,
        null
+      ],
+      "previous_stops": [
+       8,
+       null
+      ],
+      "previous_minutes": [
+       12.85,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.892361,
+       5.1e-05
       ]
      },
      "category=Stacker \u00b7 operator": {
@@ -34803,6 +36409,18 @@
       "rank": [
        8,
        null
+      ],
+      "previous_stops": [
+       4,
+       null
+      ],
+      "previous_minutes": [
+       3.483333,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.241898,
+       5.1e-05
       ]
      },
      "category=Other \u00b7 maintenance": {
@@ -34829,6 +36447,18 @@
       "rank": [
        6,
        null
+      ],
+      "previous_stops": [
+       0,
+       null
+      ],
+      "previous_minutes": [
+       0.0,
+       0.0051
+      ],
+      "previous_pct_of_scheduled": [
+       0.0,
+       5.1e-05
       ]
      },
      "flags:#0": {
@@ -34952,6 +36582,10 @@
        1440,
        null
       ],
+      "previous_scheduled_minutes": [
+       1440,
+       null
+      ],
       "maintenance_minutes": [
        21.5,
        0.0051
@@ -34962,6 +36596,14 @@
       ],
       "maintenance_pct": [
        1.493056,
+       5.1e-05
+      ],
+      "previous_maintenance_minutes": [
+       18.183333,
+       0.0051
+      ],
+      "previous_maintenance_pct": [
+       1.262731,
        5.1e-05
       ],
       "operator_minutes": [
@@ -34976,6 +36618,14 @@
        2.293981,
        5.1e-05
       ],
+      "previous_operator_minutes": [
+       37.866667,
+       0.0051
+      ],
+      "previous_operator_pct": [
+       2.62963,
+       5.1e-05
+      ],
       "op_maint_minutes": [
        54.533333,
        0.0051
@@ -34986,6 +36636,14 @@
       ],
       "op_maint_pct": [
        3.787037,
+       5.1e-05
+      ],
+      "previous_op_maint_minutes": [
+       56.05,
+       0.0051
+      ],
+      "previous_op_maint_pct": [
+       3.892361,
        5.1e-05
       ],
       "pm_minutes": [
@@ -35000,8 +36658,1225 @@
        0.0,
        5.1e-05
       ],
+      "previous_pm_minutes": [
+       0,
+       0.0051
+      ],
+      "previous_pm_pct": [
+       0.0,
+       5.1e-05
+      ],
       "flag_count": [
        2,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-review-august-shift-2",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_downtime_review",
+   "arguments": {
+    "window": {
+     "period": "month",
+     "anchor": "2026-08-03"
+    },
+    "shift": 2
+   },
+   "note": "The first month in the records: the previous month is outside them, so every previous figure is None, never zero.",
+   "expect": {
+    "coverage": "partial",
+    "row_count": 12,
+    "values": {
+     "category=Order change \u00b7 operator": {
+      "stops": [
+       42,
+       null
+      ],
+      "minutes": [
+       52.183333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.517692,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.24246,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       3,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Knife / slitter jam \u00b7 maintenance": {
+      "stops": [
+       29,
+       null
+      ],
+      "minutes": [
+       58.183333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.577216,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       2.006322,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       1,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Stacker \u00b7 operator": {
+      "stops": [
+       35,
+       null
+      ],
+      "minutes": [
+       43.1,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.427579,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.231429,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       4,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Other \u00b7 maintenance": {
+      "stops": [
+       7,
+       null
+      ],
+      "minutes": [
+       16.716667,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.16584,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       2.388095,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       8,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Missed splice \u00b7 operator": {
+      "stops": [
+       35,
+       null
+      ],
+      "minutes": [
+       55.283333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.548446,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.579524,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       2,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Raw material (roll) \u00b7 operator": {
+      "stops": [
+       20,
+       null
+      ],
+      "minutes": [
+       41.35,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.410218,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       2.0675,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       5,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Glue / starch \u00b7 operator": {
+      "stops": [
+       14,
+       null
+      ],
+      "minutes": [
+       24.483333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.24289,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.74881,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       6,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Power outage \u00b7 maintenance": {
+      "stops": [
+       1,
+       null
+      ],
+      "minutes": [
+       12.0,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.119048,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       12.0,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       9,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Glue / starch \u00b7 maintenance": {
+      "stops": [
+       4,
+       null
+      ],
+      "minutes": [
+       7.6,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.075397,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.9,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       11,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Other \u00b7 operator": {
+      "stops": [
+       16,
+       null
+      ],
+      "minutes": [
+       22.883333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.227017,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.430208,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       7,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Stacker \u00b7 maintenance": {
+      "stops": [
+       6,
+       null
+      ],
+      "minutes": [
+       9.166667,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.090939,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       1.527778,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       10,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "category=Steam / moisture \u00b7 maintenance": {
+      "stops": [
+       1,
+       null
+      ],
+      "minutes": [
+       3.033333,
+       0.0051
+      ],
+      "pct_of_scheduled": [
+       0.030093,
+       5.1e-05
+      ],
+      "minutes_per_stop": [
+       3.033333,
+       0.0051
+      ],
+      "scheduled": [
+       false,
+       null
+      ],
+      "rank": [
+       12,
+       null
+      ],
+      "previous_stops": [
+       null,
+       null
+      ],
+      "previous_minutes": [
+       null,
+       null
+      ],
+      "previous_pct_of_scheduled": [
+       null,
+       null
+      ]
+     },
+     "flags:#0": {
+      "production_day": [
+       "2026-08-06",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       19.15,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.989583,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       4.75,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       4,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       0,
+       null
+      ],
+      "weeks_counted": [
+       1,
+       null
+      ]
+     },
+     "flags:#1": {
+      "production_day": [
+       "2026-08-24",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       18.25,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.802083,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       8.05,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       16,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       3,
+       null
+      ],
+      "weeks_counted": [
+       4,
+       null
+      ]
+     },
+     "flags:#2": {
+      "production_day": [
+       "2026-08-05",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Maintenance",
+       null
+      ],
+      "reason": [
+       "Power outage",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       16.966667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.534722,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       12.0,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       3,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       1,
+       null
+      ],
+      "weeks_counted": [
+       1,
+       null
+      ]
+     },
+     "flags:#3": {
+      "production_day": [
+       "2026-08-05",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Raw material (roll)",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       16.116667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.357639,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       6.533333,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       3,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       1,
+       null
+      ],
+      "weeks_counted": [
+       1,
+       null
+      ]
+     },
+     "flags:#4": {
+      "production_day": [
+       "2026-08-25",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       15.75,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.28125,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       5.883333,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       17,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       3,
+       null
+      ],
+      "weeks_counted": [
+       4,
+       null
+      ]
+     },
+     "flags:#5": {
+      "production_day": [
+       "2026-08-10",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Raw material (roll)",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       15.083333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.142361,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       6.116667,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       6,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       2,
+       null
+      ],
+      "weeks_counted": [
+       2,
+       null
+      ]
+     },
+     "flags:#6": {
+      "production_day": [
+       "2026-08-12",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       14.466667,
+       0.0051
+      ],
+      "pct_of_shift": [
+       3.013889,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       6.45,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       8,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       1,
+       null
+      ],
+      "weeks_counted": [
+       2,
+       null
+      ]
+     },
+     "flags:#7": {
+      "production_day": [
+       "2026-08-14",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew C",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Other",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       13.7,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.854167,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       4.75,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       10,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       1,
+       null
+      ],
+      "weeks_counted": [
+       2,
+       null
+      ]
+     },
+     "flags:#8": {
+      "production_day": [
+       "2026-08-19",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Raw material (roll)",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.633333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.631944,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       4.25,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       13,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       3,
+       null
+      ],
+      "weeks_counted": [
+       3,
+       null
+      ]
+     },
+     "flags:#9": {
+      "production_day": [
+       "2026-08-07",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew B",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Raw material (roll)",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.483333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.600694,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       4.483333,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       5,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       1,
+       null
+      ],
+      "weeks_counted": [
+       1,
+       null
+      ]
+     },
+     "flags:#10": {
+      "production_day": [
+       "2026-08-17",
+       null
+      ],
+      "shift": [
+       2,
+       null
+      ],
+      "crew": [
+       "Crew A",
+       null
+      ],
+      "kind": [
+       "Operator",
+       null
+      ],
+      "reason": [
+       "Missed splice",
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ],
+      "minutes": [
+       12.133333,
+       0.0051
+      ],
+      "pct_of_shift": [
+       2.527778,
+       5.1e-05
+      ],
+      "reason_minutes": [
+       8.083333,
+       0.0051
+      ],
+      "recurrence_since": [
+       "2026-08-03",
+       null
+      ],
+      "shifts_counted": [
+       11,
+       null
+      ],
+      "times_over_band": [
+       0,
+       null
+      ],
+      "weeks_in_top_five": [
+       2,
+       null
+      ],
+      "weeks_counted": [
+       3,
+       null
+      ]
+     },
+     "$": {
+      "scheduled_minutes": [
+       10080,
+       null
+      ],
+      "previous_scheduled_minutes": [
+       null,
+       null
+      ],
+      "maintenance_minutes": [
+       106.7,
+       0.0051
+      ],
+      "maintenance_stops": [
+       48,
+       null
+      ],
+      "maintenance_pct": [
+       1.058532,
+       5.1e-05
+      ],
+      "previous_maintenance_minutes": [
+       null,
+       null
+      ],
+      "previous_maintenance_pct": [
+       null,
+       null
+      ],
+      "operator_minutes": [
+       239.283333,
+       0.0051
+      ],
+      "operator_stops": [
+       162,
+       null
+      ],
+      "operator_pct": [
+       2.373843,
+       5.1e-05
+      ],
+      "previous_operator_minutes": [
+       null,
+       null
+      ],
+      "previous_operator_pct": [
+       null,
+       null
+      ],
+      "op_maint_minutes": [
+       345.983333,
+       0.0051
+      ],
+      "op_maint_stops": [
+       210,
+       null
+      ],
+      "op_maint_pct": [
+       3.432374,
+       5.1e-05
+      ],
+      "previous_op_maint_minutes": [
+       null,
+       null
+      ],
+      "previous_op_maint_pct": [
+       null,
+       null
+      ],
+      "pm_minutes": [
+       0,
+       0.0051
+      ],
+      "pm_stops": [
+       0,
+       null
+      ],
+      "pm_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "previous_pm_minutes": [
+       null,
+       null
+      ],
+      "previous_pm_pct": [
+       null,
+       null
+      ],
+      "flag_count": [
+       11,
        null
       ]
      }
@@ -35873,6 +38748,10 @@
       "rank": [
        2,
        null
+      ],
+      "pct_of_gross": [
+       0.516834,
+       5.1e-05
       ]
      },
      "rows:lever=Dry-end: bond (all recorded)": {
@@ -35915,6 +38794,10 @@
       "rank": [
        3,
        null
+      ],
+      "pct_of_yield": [
+       0.416713,
+       5.1e-05
       ]
      },
      "rows:lever=Dry-end: warp (all recorded)": {
@@ -35957,6 +38840,10 @@
       "rank": [
        4,
        null
+      ],
+      "pct_of_yield": [
+       0.339232,
+       5.1e-05
       ]
      },
      "rows:lever=Dry-end: misalignment (all recorded)": {
@@ -35999,6 +38886,10 @@
       "rank": [
        6,
        null
+      ],
+      "pct_of_yield": [
+       0.204762,
+       5.1e-05
       ]
      },
      "rows:lever=Dry-end: moisture (all recorded)": {
@@ -36041,6 +38932,10 @@
       "rank": [
        7,
        null
+      ],
+      "pct_of_yield": [
+       0.10498,
+       5.1e-05
       ]
      },
      "rows:lever=Unexplained (bale minus accounted waste)": {
@@ -36109,7 +39004,7 @@
    }
   },
   {
-   "id": "value-speedvar-september-target",
+   "id": "value-speedvar-september-baseline",
    "type": "value",
    "mode": "offline",
    "day": "2026-09-14",
@@ -36120,16 +39015,16 @@
      "anchor": "2026-09-14"
     },
     "shift": null,
-    "against": "target"
+    "against": "baseline"
    },
-   "note": "Against each grade's target at the usual grade mix (the share of the setup clock over both months): the buckets add up to the gap taken directly.",
+   "note": "Against each grade's trailing-year baseline at the usual grade mix (the share of the setup clock over the same year; issue #101): the buckets add up to the gap taken directly, and the grade mix is schedule-driven, never priced.",
    "expect": {
     "coverage": "complete",
     "row_count": 4,
     "values": {
      "$": {
       "against": [
-       "target",
+       "baseline",
        null
       ],
       "speed_all_fpm": [
@@ -36137,23 +39032,31 @@
        0.051
       ],
       "reference_speed_fpm": [
-       692.361851,
+       642.439183,
        0.051
       ],
-      "target_speed_fpm": [
-       691.099037,
+      "baseline_speed_fpm": [
+       641.267457,
        0.051
       ],
-      "reference_target_speed_fpm": [
-       692.361851,
+      "reference_baseline_speed_fpm": [
+       642.439183,
        0.051
+      ],
+      "baseline_since": [
+       "2026-08-03",
+       null
+      ],
+      "baseline_through": [
+       "2026-09-30",
+       null
       ],
       "gap_fpm": [
-       76.328556,
+       26.405888,
        0.0051
       ],
       "gap_lineal_ft": [
-       2418088.649612,
+       836538.525271,
        0.051
       ],
       "scheduled_minutes": [
@@ -36165,33 +39068,37 @@
        null
       ],
       "stops_share_pct": [
-       37.622414,
+       100.903473,
        0.051
       ],
       "setups_share_pct": [
-       4.470818,
+       11.991157,
        0.051
       ],
-      "below_target_share_pct": [
-       56.252323,
+      "below_baseline_share_pct": [
+       -17.331999,
        0.051
       ],
       "mix_share_pct": [
-       1.654445,
+       4.437368,
        0.051
+      ],
+      "controllable_usd": [
+       29402.46,
+       0.05
       ]
      },
      "bucket=stops": {
       "gap_fpm": [
-       28.716646,
+       26.644458,
        0.0051
       ],
       "gap_lineal_ft": [
-       909743.333333,
+       844096.428333,
        0.051
       ],
       "share_of_gap_pct": [
-       37.622414,
+       100.903473,
        0.051
       ],
       "top_item": [
@@ -36199,24 +39106,28 @@
        null
       ],
       "top_item_fpm": [
-       11.171086,
+       10.3641,
        0.0051
       ],
       "items": [
        9,
        null
       ],
+      "control": [
+       "controllable",
+       null
+      ],
       "machine_time_usd": [
-       26277.969382,
-       2.312642
+       26279.464508,
+       2.491927
       ],
       "usd": [
-       26277.969382,
-       2.312642
+       26279.464508,
+       2.491927
       ],
       "usd_per_year": [
-       307145.097,
-       28.041
+       307162.572,
+       30.136
       ],
       "contribution_status": [
        "margin not set",
@@ -36225,15 +39136,15 @@
      },
      "bucket=setups": {
       "gap_fpm": [
-       3.412511,
+       3.166372,
        0.0051
       ],
       "gap_lineal_ft": [
-       108108.333333,
+       100310.651667,
        0.051
       ],
       "share_of_gap_pct": [
-       4.470818,
+       11.991157,
        0.051
       ],
       "top_item": [
@@ -36241,83 +39152,83 @@
        null
       ],
       "top_item_fpm": [
-       0.762837,
+       0.706997,
        0.0051
       ],
       "items": [
        6,
        null
       ],
+      "control": [
+       "controllable",
+       null
+      ],
       "machine_time_usd": [
-       3122.712305,
-       0.286055
+       3122.998132,
+       0.307491
       ],
       "usd": [
-       3122.712305,
-       0.286055
+       3122.998132,
+       0.307491
       ],
       "usd_per_year": [
-       36499.235,
-       4.353
+       36502.576,
+       4.604
       ],
       "contribution_status": [
        "margin not set",
        null
       ]
      },
-     "bucket=below_target": {
+     "bucket=below_baseline": {
       "gap_fpm": [
-       42.936586,
+       -4.576668,
        0.0051
       ],
       "gap_lineal_ft": [
-       1360231.033333,
+       -144988.851667,
        0.051
       ],
       "share_of_gap_pct": [
-       56.252323,
+       -17.331999,
        0.051
       ],
       "top_item": [
-       "200-C",
+       "275-BC",
        null
       ],
       "top_item_fpm": [
-       7.475067,
+       -0.976918,
        0.0051
       ],
       "items": [
        6,
        null
       ],
-      "machine_time_usd": [
-       39290.323512,
-       3.451505
+      "control": [
+       "controllable",
+       null
       ],
       "usd": [
-       39290.323512,
-       3.451505
-      ],
-      "usd_per_year": [
-       459237.548,
-       41.352
+       null,
+       null
       ],
       "contribution_status": [
-       "margin not set",
+       "not priced",
        null
       ]
      },
      "bucket=mix": {
       "gap_fpm": [
-       1.262814,
+       1.171727,
        0.0051
       ],
       "gap_lineal_ft": [
-       40005.949612,
+       37120.296938,
        0.051
       ],
       "share_of_gap_pct": [
-       1.654445,
+       4.437368,
        0.051
       ],
       "top_item": [
@@ -36325,27 +39236,23 @@
        null
       ],
       "top_item_fpm": [
-       1.086456,
+       1.009657,
        0.0051
       ],
       "items": [
        6,
        null
       ],
-      "machine_time_usd": [
-       1155.571924,
-       0.113888
+      "control": [
+       "schedule-driven",
+       null
       ],
       "usd": [
-       1155.571924,
-       0.113888
-      ],
-      "usd_per_year": [
-       13506.685,
-       2.341
+       null,
+       null
       ],
       "contribution_status": [
-       "margin not set",
+       "not priced",
        null
       ]
      },
@@ -36355,7 +39262,7 @@
        null
       ],
       "gap_fpm": [
-       11.171086,
+       10.3641,
        0.0051
       ],
       "minutes": [
@@ -36384,7 +39291,7 @@
     "shift": 2,
     "against": "previous"
    },
-   "note": "Against the previous week: each loss is this week's feet below target per scheduled minute minus the week before's; an offset bucket is not priced.",
+   "note": "Against the previous week: each loss is this week's feet below the grade baselines per scheduled minute minus the week before's; an offset bucket is not priced.",
    "expect": {
     "coverage": "complete",
     "row_count": 4,
@@ -36402,13 +39309,21 @@
        672.73575,
        0.051
       ],
-      "target_speed_fpm": [
-       694.170139,
+      "baseline_speed_fpm": [
+       643.064319,
        0.051
       ],
-      "reference_target_speed_fpm": [
-       695.121875,
+      "reference_baseline_speed_fpm": [
+       643.900327,
        0.051
+      ],
+      "baseline_since": [
+       "2026-08-03",
+       null
+      ],
+      "baseline_through": [
+       "2026-09-18",
+       null
       ],
       "gap_fpm": [
        56.242,
@@ -36427,33 +39342,37 @@
        null
       ],
       "stops_share_pct": [
-       -2.653464,
+       -2.462327,
        0.051
       ],
       "setups_share_pct": [
-       0.135822,
+       0.123382,
        0.051
       ],
-      "below_target_share_pct": [
-       100.825426,
+      "below_baseline_share_pct": [
+       100.852497,
        0.051
       ],
       "mix_share_pct": [
-       1.692216,
+       1.486448,
        0.051
+      ],
+      "controllable_usd": [
+       4052.27,
+       0.05
       ]
      },
      "bucket=stops": {
       "gap_fpm": [
-       -1.492361,
+       -1.384862,
        0.0051
       ],
       "gap_lineal_ft": [
-       -3581.666667,
+       -3323.668333,
        0.051
       ],
       "share_of_gap_pct": [
-       -2.653464,
+       -2.462327,
        0.051
       ],
       "top_item": [
@@ -36461,11 +39380,15 @@
        null
       ],
       "top_item_fpm": [
-       -5.678819,
+       -5.26051,
        0.0051
       ],
       "items": [
        8,
+       null
+      ],
+      "control": [
+       "controllable",
        null
       ],
       "usd": [
@@ -36479,15 +39402,15 @@
      },
      "bucket=setups": {
       "gap_fpm": [
-       0.076389,
+       0.069392,
        0.0051
       ],
       "gap_lineal_ft": [
-       183.333333,
+       166.541667,
        0.051
       ],
       "share_of_gap_pct": [
-       0.135822,
+       0.123382,
        0.051
       ],
       "top_item": [
@@ -36495,41 +39418,45 @@
        null
       ],
       "top_item_fpm": [
-       0.715278,
+       0.661203,
        0.0051
       ],
       "items": [
        6,
        null
       ],
+      "control": [
+       "controllable",
+       null
+      ],
       "machine_time_usd": [
-       5.44968,
-       0.013293
+       4.950201,
+       0.013248
       ],
       "usd": [
-       5.44968,
-       0.013293
+       4.950201,
+       0.013248
       ],
       "usd_per_year": [
-       840.808,
-       3.061
+       763.745,
+       3.054
       ],
       "contribution_status": [
        "margin not set",
        null
       ]
      },
-     "bucket=below_target": {
+     "bucket=below_baseline": {
       "gap_fpm": [
-       56.706236,
+       56.721461,
        0.0051
       ],
       "gap_lineal_ft": [
-       136094.966667,
+       136131.506667,
        0.051
       ],
       "share_of_gap_pct": [
-       100.825426,
+       100.852497,
        0.051
       ],
       "top_item": [
@@ -36537,24 +39464,28 @@
        null
       ],
       "top_item_fpm": [
-       12.050083,
+       10.66757,
        0.0051
       ],
       "items": [
        6,
        null
       ],
+      "control": [
+       "controllable",
+       null
+      ],
       "machine_time_usd": [
-       4046.231604,
-       0.377305
+       4047.316783,
+       0.377403
       ],
       "usd": [
-       4046.231604,
-       0.377305
+       4047.316783,
+       0.377403
       ],
       "usd_per_year": [
-       624275.733,
-       59.223
+       624443.161,
+       59.238
       ],
       "contribution_status": [
        "margin not set",
@@ -36563,15 +39494,15 @@
      },
      "bucket=mix": {
       "gap_fpm": [
-       0.951736,
+       0.836008,
        0.0051
       ],
       "gap_lineal_ft": [
-       2284.166667,
+       2006.42,
        0.051
       ],
       "share_of_gap_pct": [
-       1.692216,
+       1.486448,
        0.051
       ],
       "top_item": [
@@ -36579,27 +39510,23 @@
        null
       ],
       "top_item_fpm": [
-       6.886699,
+       6.37186,
        0.0051
       ],
       "items": [
        6,
        null
       ],
-      "machine_time_usd": [
-       67.911402,
-       0.018919
+      "control": [
+       "schedule-driven",
+       null
       ],
       "usd": [
-       67.911402,
-       0.018919
-      ],
-      "usd_per_year": [
-       10477.759,
-       3.929
+       null,
+       null
       ],
       "contribution_status": [
-       "margin not set",
+       "not priced",
        null
       ]
      },
@@ -36609,7 +39536,7 @@
        null
       ],
       "gap_fpm": [
-       -0.413194,
+       -0.38127,
        0.0051
       ],
       "minutes": [
@@ -36657,13 +39584,21 @@
        615.79225,
        0.051
       ],
-      "target_speed_fpm": [
-       682.989583,
+      "baseline_speed_fpm": [
+       632.576669,
        0.051
       ],
-      "reference_target_speed_fpm": [
-       710.355556,
+      "reference_baseline_speed_fpm": [
+       658.113432,
        0.051
+      ],
+      "baseline_since": [
+       "2026-08-03",
+       null
+      ],
+      "baseline_through": [
+       "2026-09-18",
+       null
       ],
       "gap_fpm": [
        44.62225,
@@ -36682,33 +39617,37 @@
        null
       ],
       "stops_share_pct": [
-       -90.917523,
+       -84.392291,
        0.051
       ],
       "setups_share_pct": [
-       -5.211183,
+       -4.825537,
        0.051
       ],
-      "below_target_share_pct": [
-       134.80062,
+      "below_baseline_share_pct": [
+       131.989061,
        0.051
       ],
       "mix_share_pct": [
-       61.328087,
+       57.228766,
        0.051
+      ],
+      "controllable_usd": [
+       4590.83,
+       0.03
       ]
      },
      "bucket=stops": {
       "gap_fpm": [
-       -40.569444,
+       -37.657739,
        0.0051
       ],
       "gap_lineal_ft": [
-       -97366.666667,
+       -90378.573333,
        0.051
       ],
       "share_of_gap_pct": [
-       -90.917523,
+       -84.392291,
        0.051
       ],
       "top_item": [
@@ -36716,11 +39655,15 @@
        null
       ],
       "top_item_fpm": [
-       -46.875,
+       -43.505208,
        0.0051
       ],
       "items": [
        8,
+       null
+      ],
+      "control": [
+       "controllable",
        null
       ],
       "usd": [
@@ -36734,15 +39677,15 @@
      },
      "bucket=setups": {
       "gap_fpm": [
-       -2.325347,
+       -2.153263,
        0.0051
       ],
       "gap_lineal_ft": [
-       -5580.833333,
+       -5167.831667,
        0.051
       ],
       "share_of_gap_pct": [
-       -5.211183,
+       -4.825537,
        0.051
       ],
       "top_item": [
@@ -36750,11 +39693,15 @@
        null
       ],
       "top_item_fpm": [
-       -1.005556,
+       -0.932276,
        0.0051
       ],
       "items": [
        6,
+       null
+      ],
+      "control": [
+       "controllable",
        null
       ],
       "usd": [
@@ -36766,42 +39713,46 @@
        null
       ]
      },
-     "bucket=below_target": {
+     "bucket=below_baseline": {
       "gap_fpm": [
-       60.151069,
+       58.896489,
        0.0051
       ],
       "gap_lineal_ft": [
-       144362.566667,
+       141351.573333,
        0.051
       ],
       "share_of_gap_pct": [
-       134.80062,
+       131.989061,
        0.051
       ],
       "top_item": [
-       "275-BC",
+       "55-C",
        null
       ],
       "top_item_fpm": [
-       12.786153,
+       11.95425,
        0.0051
       ],
       "items": [
        6,
        null
       ],
+      "control": [
+       "controllable",
+       null
+      ],
       "machine_time_usd": [
-       4688.619682,
-       0.474369
+       4590.828191,
+       0.464745
       ],
       "usd": [
-       4688.619682,
-       0.474369
+       4590.828191,
+       0.464745
       ],
       "usd_per_year": [
-       723387.037,
-       74.198
+       708299.207,
+       72.714
       ],
       "contribution_status": [
        "margin not set",
@@ -36810,15 +39761,15 @@
      },
      "bucket=mix": {
       "gap_fpm": [
-       27.365972,
+       25.536763,
        0.0051
       ],
       "gap_lineal_ft": [
-       65678.333333,
+       61288.231667,
        0.051
       ],
       "share_of_gap_pct": [
-       61.328087,
+       57.228766,
        0.051
       ],
       "top_item": [
@@ -36826,27 +39777,23 @@
        null
       ],
       "top_item_fpm": [
-       14.220912,
+       13.244564,
        0.0051
       ],
       "items": [
        6,
        null
       ],
-      "machine_time_usd": [
-       2133.104904,
-       0.222884
+      "control": [
+       "schedule-driven",
+       null
       ],
       "usd": [
-       2133.104904,
-       0.222884
-      ],
-      "usd_per_year": [
-       329107.614,
-       35.398
+       null,
+       null
       ],
       "contribution_status": [
-       "margin not set",
+       "not priced",
        null
       ]
      },
@@ -36856,7 +39803,7 @@
        null
       ],
       "gap_fpm": [
-       3.821528,
+       3.545102,
        0.0051
       ],
       "minutes": [

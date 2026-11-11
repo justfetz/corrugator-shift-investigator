@@ -77,6 +77,22 @@ def threshold_minutes(measure, scheduled_minutes=SHIFT_MINUTES):
     return BANDS[measure]['flag'] / 100 * scheduled_minutes
 
 
+def prompt_text():
+    """The bands as the analyst's process context states them (agent.PROCESS_CONTEXT), read from targets.json so
+    the prompt never carries a threshold of its own."""
+    m, o, both = BANDS['maintenance'], BANDS['operator'], BANDS['op_maint']
+    downtime = (f'Maintenance and Operator downtime targets are separately {pct(m["target"])} of scheduled minutes'
+                if m['target'] == o['target'] else
+                f'Maintenance downtime targets {pct(m["target"])} and Operator {pct(o["target"])} of scheduled minutes')
+    of = {'% of gross': 'of gross', '% of yield': 'of the yield after trim and shear'}
+
+    def three(spec):
+        return '/'.join(f'{spec[k]:g}' for k in ('home_run', 'target', 'flag')) + f'% {of.get(spec["unit"], spec["unit"])}'
+    return (f'{downtime} ({pct(both["target"])} together); over is a flag.\n'
+            f'Owner bands (home run / target / flag): trim {three(BANDS["trim"])}; shear {three(BANDS["shear"])};\n'
+            f'dry-end waste {three(BANDS["dry_end"])}. Planned maintenance is scheduled time.')
+
+
 # The KPI tile (record_store.KPI_CATALOG) each band reads, for the period tools' one-measure rows.
 KPI_BANDS = {'trim_pct': 'trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry_end', 'operator_pct': 'operator'}
 # The daily KPI row's fields (analysis.get_shift_kpis): value field -> (band, prefix of the band fields).

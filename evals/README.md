@@ -14,6 +14,9 @@ python3 evals/run.py --only why-slow              # one case
 python3 evals/make_value_goldens.py               # regenerate golden_values.json after an intended generator change
 ```
 
+A case the owner set carries `reviewed_by`: `owner-pending` until the owner has read
+it on the preview, then `owner` (issue #101's five cases are pending).
+
 `tests/test_evals.py` runs the same offline cases and recorded fixtures in CI,
 so a change that breaks a golden case fails the build; `tests/test_goldens_values.py`
 fails the build when the committed value goldens are not what the generator produces.

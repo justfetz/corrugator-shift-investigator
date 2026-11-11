@@ -17,6 +17,7 @@ window, never an average of per-shift percentages (docs/METRICS.md). The
 generator's seeded answer keys are never imported here: the effects have to
 be found in the records.
 """
+from bisect import bisect_left, bisect_right
 from calendar import monthrange
 from collections import defaultdict
 from datetime import date, timedelta
@@ -196,9 +197,10 @@ _SPEED_SLICES = ("width", "crew")
 # Speed variance (issue #92): the gap between a reference speed and the window's speed with stops, split
 # into four buckets that add up to it. The setup bucket is the order-change stop, the changeover the
 # cost model prices as setup time too; every other recorded stop is the stops bucket.
-SPEEDVAR_AGAINST = ("target", "previous", "shift")
+SPEEDVAR_AGAINST = ("baseline", "previous", "shift")
+SPEEDVAR_ALIASES = {"target": "baseline"}   # the reference was each grade's target before the owner's baseline (issue #101)
 SPEEDVAR_SETUP_REASON = "Order change"
-SPEEDVAR_BUCKETS = (("stops", "Stops"), ("setups", "Setups"), ("below_target", "Below target"), ("mix", "Grade mix"))
+SPEEDVAR_BUCKETS = (("stops", "Stops"), ("setups", "Setups"), ("below_baseline", "Below baseline"), ("mix", "Grade mix"))
 SPEEDVAR_SHARE_MIN_FPM = 0.05   # a gap smaller than this has no meaningful shares: they are left null
 
 
@@ -1060,11 +1062,14 @@ class RecordStore:
                               temperature_note=("Records carry no temperatures: the heat-transfer limit on heavy grades and doublewall (bond needs its "
                                                 "temperature range) is an open owner input and is not modelled here."))
 
-    def _speed_profile(self, window, shift, trace):
+    def _speed_profile(self, window, shift, trace, baselines):
         """The raw sums one side of a speed variance needs: scheduled minutes, feet, and per grade
-        its target, setup clock and running time; per stop reason and grade the stopped minutes and
-        the feet the grade target would have made in them. Stops are joined to their setup record,
-        whose own clock already holds them, so a stop counts once and at its own grade's target."""
+        its baseline (each grade's sustained speed over the trailing year, `baselines`; the owner's
+        speed standard, issue #101), setup clock and running time; per stop reason and grade the
+        stopped minutes and the feet the grade's baseline would have made in them. Stops are joined
+        to their setup record, whose own clock already holds them, so a stop counts once and at its
+        own grade's baseline. A grade with no sustained run in the trailing year falls back to its
+        target and is listed (`fallback`); every grade the records hold has one."""
         clause, extra = self._shift_clause(shift)
         params = [window["start"], window["end"], *extra]
         queries = {
@@ -1072,8 +1077,7 @@ class RecordStore:
             "grades": ("SELECT grade, max(target) AS target, count(*) AS setups, sum(feet) AS feet, sum(seconds) / 60 AS elapsed_min, "
                        "sum(seconds - stop_seconds) / 60 AS run_min "
                        f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY grade ORDER BY grade"),
-            "stops": ("SELECT st.reason AS reason, s.grade AS grade, count(*) AS stops, sum(st.seconds) / 60 AS minutes, "
-                      "sum(st.seconds * s.target) / 60 AS target_ft "
+            "stops": ("SELECT st.reason AS reason, s.grade AS grade, count(*) AS stops, sum(st.seconds) / 60 AS minutes "
                       "FROM stops st JOIN setups s ON s.setup_id = st.setup_id "
                       f"WHERE s.production_date BETWEEN ? AND ?{clause.replace(' shift', ' s.shift')} "
                       "GROUP BY st.reason, s.grade ORDER BY st.reason, s.grade"),
@@ -1085,27 +1089,38 @@ class RecordStore:
             trace["parameters"].append(params)
         minutes = float(fetched["scheduled"][0]["minutes"])
         grades = {r["grade"]: r for r in fetched["grades"]}
+        for g, r in grades.items():
+            base = baselines["grades"].get(g)
+            r["speed"] = base["baseline_fpm"] if base else r["target"]
+        stops = [{**r, "base_ft": r["minutes"] * grades[r["grade"]]["speed"]} for r in fetched["stops"]]
         return {"minutes": minutes, "shifts": fetched["scheduled"][0]["shifts"], "feet": sum(r["feet"] for r in grades.values()),
-                "grades": grades, "stops": fetched["stops"], "setups": sum(r["setups"] for r in grades.values())}
+                "grades": grades, "stops": stops, "setups": sum(r["setups"] for r in grades.values()),
+                "fallback": sorted(g for g in grades if g not in baselines["grades"])}
 
-    def _standard_profile(self, trace):
-        """The target side of a speed variance: each grade's target at the usual grade mix, the share of
-        the setup clock every grade took over the whole record store (all shifts, both months). A window
-        that ran more of a slow grade than usual is below this speed even if every grade made its target:
-        that part of the gap is the mix."""
-        sql = "SELECT grade, max(target) AS target, sum(seconds) / 60 AS elapsed_min FROM setups GROUP BY grade ORDER BY grade"
-        rows = self._fetch(sql, [])
+    def _standard_profile(self, trace, baselines):
+        """The baseline side of a speed variance: each grade's baseline at the usual grade mix, the share of
+        the setup clock every grade took over the same trailing year (all shifts). A window that ran more of a
+        slow grade than usual is below this speed even if every grade ran at its baseline: that part of the gap
+        is the mix, which the order book decides (schedule-driven, issue #101)."""
+        sql = ("SELECT grade, max(target) AS target, sum(seconds) / 60 AS elapsed_min FROM setups "
+               "WHERE production_date BETWEEN ? AND ? GROUP BY grade ORDER BY grade")
+        params = [baselines["since"], baselines["through"]]
+        rows = self._fetch(sql, params)
         trace["sql"].append(sql)
-        trace["parameters"].append([])
+        trace["parameters"].append(params)
+        for r in rows:
+            base = baselines["grades"].get(r["grade"])
+            r["speed"] = base["baseline_fpm"] if base else r["target"]
         total = sum(r["elapsed_min"] for r in rows)
         return {"total": total, "grades": {r["grade"]: r for r in rows}}
 
     @staticmethod
     def _speed_side(p):
         """One side's speeds and losses per scheduled minute (ft/min): the speed with stops, the speed the
-        grade targets give at its own mix, and the feet below that target lost to each stop reason, to
-        order changes (by grade) and to running below the grade target (by grade). By construction
-        target speed - stops - setups - below-target running = speed with stops, exactly."""
+        grade baselines give at its own mix, and the feet below that baseline lost to each stop reason, to
+        order changes (by grade) and to running under the grade's baseline (by grade). By construction
+        baseline speed - stops - setups - running under baseline = speed with stops, exactly, for any
+        per-grade speed: each setup's clock is its running time plus its stops."""
         t = p["minutes"]
         grades = p["grades"]
         stops, setups = {}, {}
@@ -1116,32 +1131,37 @@ class RecordStore:
                 cell = stops.setdefault(r["reason"], {"minutes": 0.0, "stops": 0, "loss": 0.0})
             cell["minutes"] += r["minutes"]
             cell["stops"] += r["stops"]
-            cell["loss"] += r["target_ft"] / t
-        return {"speed": p["feet"] / t, "target": sum(g["target"] * g["elapsed_min"] for g in grades.values()) / t,
+            cell["loss"] += r["base_ft"] / t
+        return {"speed": p["feet"] / t, "base": sum(g["speed"] * g["elapsed_min"] for g in grades.values()) / t,
                 "share": {k: g["elapsed_min"] / t for k, g in grades.items()},
-                "targets": {k: g["target"] for k, g in grades.items()},
+                "speeds": {k: g["speed"] for k, g in grades.items()},
                 "stops": stops, "setups": setups,
-                "below": {k: {"loss": (g["target"] * g["run_min"] - g["feet"]) / t, "run_min": g["run_min"], "feet": g["feet"],
-                              "target": g["target"]} for k, g in grades.items()}}
+                "below": {k: {"loss": (g["speed"] * g["run_min"] - g["feet"]) / t, "run_min": g["run_min"], "feet": g["feet"]}
+                          for k, g in grades.items()}}
 
-    def get_speed_variance(self, window, shift=None, against="target", against_shift=None):
+    def get_speed_variance(self, window, shift=None, against="baseline", against_shift=None):
         """Why speed differed from a reference, in four buckets that add up to the gap (issue #92).
 
-        Speed is the KPI tile's speed with stops: lineal feet / scheduled minutes. For each side, per
-        scheduled minute: target speed (each grade target x its setup clock) - stops (minutes stopped x
-        the stopped setup's grade target, every reason but order change) - setups (order-change stops,
-        the same way) - running below target (grade target x running minutes - feet, per grade) = speed
-        with stops, exactly, because each setup record's clock is its running time plus its stops.
+        Every grade is held at its baseline, the owner's speed standard (issue #101, targets.json): its
+        sustained average speed over the trailing year ending on the window's last day, never its target
+        or its maximum. Speed is the KPI tile's speed with stops: lineal feet / scheduled minutes. For
+        each side, per scheduled minute: baseline speed (each grade's baseline x its setup clock) - stops
+        (minutes stopped x the stopped setup's grade baseline, every reason but order change) - setups
+        (order-change stops, the same way) - running under baseline (baseline x running minutes - feet,
+        per grade) = speed with stops, exactly, because each setup record's clock is its running time
+        plus its stops.
 
-        `against`: target = each grade's target at the usual mix (the whole store's share of the setup
-        clock per grade), with no losses; previous = the same window kind just before, same shift
-        filter; shift = `against_shift` over the same window (`shift` is then the one explained). The
-        gap = reference speed - this speed = mix (reference target speed - this target speed) + each
-        loss bucket (this loss - the reference's), in ft/min and as lineal feet over this window's
+        `against`: baseline = each grade's baseline at the usual mix (each grade's share of the setup
+        clock over the same trailing year), with no losses; previous = the same window kind just before,
+        same shift filter; shift = `against_shift` over the same window (`shift` is then the one
+        explained). Both sides are held at the same baselines. The gap = reference speed - this speed =
+        mix (reference baseline speed - this baseline speed; schedule-driven: the order book decides it)
+        + each loss bucket (this loss - the reference's), in ft/min and as lineal feet over this window's
         scheduled minutes. `details` splits every bucket by stop reason or grade and adds up to it."""
         started, trace = time.perf_counter(), {"sql": [], "parameters": []}
+        against = SPEEDVAR_ALIASES.get(against, against)
         if against not in SPEEDVAR_AGAINST:
-            raise ValueError("against is target, previous or shift")
+            raise ValueError("against is baseline, previous or shift")
         if against == "shift":
             if type(shift) is not int or type(against_shift) is not int or shift not in (1, 2, 3) or against_shift not in (1, 2, 3):
                 raise ValueError("against=shift compares one shift with another: give shift and against_shift (1, 2 or 3)")
@@ -1152,40 +1172,45 @@ class RecordStore:
         current = self._window(window)
         if current["coverage"] == "unavailable":
             raise ValueError(f"No production records in {current['label']}: there is no speed to decompose")
-        now = self._speed_profile(current, shift, trace)
+        baselines = self.grade_speed_baselines(current["end"])
+        trace["sql"].append(baselines["sql"])
+        trace["parameters"].append(baselines["parameters"])
+        now = self._speed_profile(current, shift, trace, baselines)
         if not now["minutes"] or not now["setups"]:
             raise ValueError(f"No production records in {current['label']}{f' for shift {shift}' if shift else ''}: there is no speed to decompose")
         c = self._speed_side(now)
-        previous = None
-        if against == "target":
-            standard = self._standard_profile(trace)
+        previous, fallback = None, set(now["fallback"])
+        if against == "baseline":
+            standard = self._standard_profile(trace, baselines)
             grades = standard["grades"]
-            reference_target = sum(g["target"] * g["elapsed_min"] for g in grades.values()) / standard["total"]
-            r = {"speed": reference_target, "target": reference_target, "share": {k: g["elapsed_min"] / standard["total"] for k, g in grades.items()},
-                 "targets": {k: g["target"] for k, g in grades.items()}, "stops": {}, "setups": {}, "below": {}}
+            fallback |= {g for g in grades if g not in baselines["grades"]}
+            reference_base = sum(g["speed"] * g["elapsed_min"] for g in grades.values()) / standard["total"]
+            r = {"speed": reference_base, "base": reference_base, "share": {k: g["elapsed_min"] / standard["total"] for k, g in grades.items()},
+                 "speeds": {k: g["speed"] for k, g in grades.items()}, "stops": {}, "setups": {}, "below": {}}
             reference_minutes = None
-            reference_label = "target: each grade's target at the usual grade mix"
+            reference_label = "baseline: each grade's trailing-year sustained speed at the usual grade mix"
         else:
             if against == "previous":
                 previous = self._previous(current)
                 if previous["coverage"] == "unavailable":
-                    raise ValueError(f"The previous window, {previous['label']}, is outside the record store: ask against target instead")
-                base = self._speed_profile(previous, shift, trace)
+                    raise ValueError(f"The previous window, {previous['label']}, is outside the record store: ask against the baseline instead")
+                base = self._speed_profile(previous, shift, trace, baselines)
                 reference_label = f"the previous window, {previous['label']}"
             else:
-                base = self._speed_profile(current, against_shift, trace)
+                base = self._speed_profile(current, against_shift, trace, baselines)
                 reference_label = f"shift {against_shift}"
             if not base["minutes"] or not base["setups"]:
                 raise ValueError(f"No production records for the reference, {reference_label}: there is nothing to compare with")
             r = self._speed_side(base)
+            fallback |= set(base["fallback"])
             reference_minutes = base["minutes"]
         minutes = now["minutes"]
         gap = r["speed"] - c["speed"]
-        targets = {**r["targets"], **c["targets"]}
+        speeds = {**r["speeds"], **c["speeds"]}
 
         def item(bucket, name, value, **extra):
             return {"bucket": bucket, "item": name, "gap_fpm": value, **extra}
-        details = {"stops": [], "setups": [], "below_target": [], "mix": []}
+        details = {"stops": [], "setups": [], "below_baseline": [], "mix": []}
         for reason in sorted(set(c["stops"]) | set(r["stops"])):
             cur, ref = c["stops"].get(reason, {}), r["stops"].get(reason, {})
             details["stops"].append(item("stops", reason, cur.get("loss", 0.0) - ref.get("loss", 0.0),
@@ -1199,17 +1224,17 @@ class RecordStore:
         for grade in sorted(set(c["below"]) | set(r["below"])):
             cur, ref = c["below"].get(grade), r["below"].get(grade)
             run_fpm = cur["feet"] / cur["run_min"] if cur and cur["run_min"] else None
-            details["below_target"].append(item("below_target", grade, (cur["loss"] if cur else 0.0) - (ref["loss"] if ref else 0.0),
-                                                current_loss_fpm=cur["loss"] if cur else 0.0, reference_loss_fpm=ref["loss"] if ref else 0.0,
-                                                speed_run_fpm=_round(run_fpm, 1), target_fpm=targets[grade],
-                                                speed_to_target_pct=_ratio(run_fpm, targets[grade], 100, places=1)))
+            details["below_baseline"].append(item("below_baseline", grade, (cur["loss"] if cur else 0.0) - (ref["loss"] if ref else 0.0),
+                                                  current_loss_fpm=cur["loss"] if cur else 0.0, reference_loss_fpm=ref["loss"] if ref else 0.0,
+                                                  speed_run_fpm=_round(run_fpm, 1), baseline_fpm=speeds[grade],
+                                                  speed_to_baseline_pct=_ratio(run_fpm, speeds[grade], 100, places=1)))
         for grade in sorted(set(c["share"]) | set(r["share"])):
             now_share, ref_share = c["share"].get(grade, 0.0), r["share"].get(grade, 0.0)
-            details["mix"].append(item("mix", grade, (ref_share - now_share) * (targets[grade] - r["target"]),
+            details["mix"].append(item("mix", grade, (ref_share - now_share) * (speeds[grade] - r["base"]),
                                        time_share_pct=round(now_share * 100, 2), reference_time_share_pct=round(ref_share * 100, 2),
-                                       target_fpm=targets[grade]))
+                                       baseline_fpm=speeds[grade]))
         totals = {"stops": sum(x["gap_fpm"] for x in details["stops"]), "setups": sum(x["gap_fpm"] for x in details["setups"]),
-                  "below_target": sum(x["gap_fpm"] for x in details["below_target"]), "mix": r["target"] - c["target"]}
+                  "below_baseline": sum(x["gap_fpm"] for x in details["below_baseline"]), "mix": r["base"] - c["base"]}
         sharable = abs(gap) >= SPEEDVAR_SHARE_MIN_FPM
         direction = 1 if gap >= 0 else -1
 
@@ -1230,12 +1255,16 @@ class RecordStore:
             way = 1 if totals[key] >= 0 else -1
             leading = sorted((x for x in items if x["gap_fpm"] * way > 0), key=lambda x: (-x["gap_fpm"] * way, x["item"]))
             top = leading[0] if leading else None
-            # a loss bucket carries each side's loss rate; the mix is a difference of target speeds, in the envelope
+            # a loss bucket carries each side's loss rate; the mix is a difference of baseline speeds, in the envelope
             losses = {} if key == "mix" else {"current_loss_fpm": sum(x["current_loss_fpm"] for x in items),
                                               "reference_loss_fpm": sum(x["reference_loss_fpm"] for x in items)}
+            # the grade mix is the order book's (schedule-driven, the owner's lever rule of issue #101); the losses are the crew's
+            control = ("schedule-driven", "the order mix decides which grades run") if key == "mix" else \
+                ("controllable", "stops, changeovers and running speed on the floor")
             rows.append({"bucket": key, "label": label, "gap_fpm": totals[key], **losses,
                          "items": len(items), "top_item": top["item"] if top else None,
-                         "top_item_fpm": round(top["gap_fpm"], 2) if top else None})
+                         "top_item_fpm": round(top["gap_fpm"], 2) if top else None,
+                         "control": control[0], "control_note": control[1]})
         # the buckets that make the gap first, largest first; then the offsets, largest first
         rows.sort(key=lambda x: (x["gap_fpm"] * direction < 0, -abs(x["gap_fpm"])))
         order = [x["bucket"] for x in rows]
@@ -1243,22 +1272,31 @@ class RecordStore:
         flat = [finish(x) for key in order for x in details[key]]
         shares = {f"{x['bucket']}_share_pct": x["share_of_gap_pct"] for x in rows}
         source = {"current": {"setups": now["setups"], "shifts": now["shifts"]},
-                  "reference": {"setups": base["setups"], "shifts": base["shifts"]} if against != "target" else {"store_grades": len(r["share"])}}
-        note = ("Speed is lineal feet over scheduled minutes (the KPI tile's speed with stops). Each loss is feet below the grade target "
-                "per scheduled minute: stopped minutes at the stopped setup's grade target (order changes are the setup bucket), and running "
-                "time at the grade target minus the feet made. The grade mix is the reference's target speed minus this window's: the "
-                "same targets weighted by each grade's share of the setup clock. The four buckets add up to the gap, and each bucket's "
-                "details add up to it. The records carry one running speed per setup, so there is no separate ramp after a changeover.")
-        reference_note = (f"Against target, the reference is each grade's target weighted by its share of the setup clock over all records "
-                          f"(both months, all shifts): {r['target']:,.1f} ft/min. This window ran {c['speed']:,.1f} ft/min with stops; "
-                          f"its grade targets at its own mix make {c['target']:,.1f} ft/min." if against == "target" else
-                          f"Against {reference_label}: {r['speed']:,.1f} ft/min with stops, its grade targets at its mix {r['target']:,.1f} ft/min; "
-                          f"this window {c['speed']:,.1f} and {c['target']:,.1f} ft/min. Losses are per scheduled minute of each window, so "
-                          "windows of different lengths compare like for like.")
+                  "reference": {"setups": base["setups"], "shifts": base["shifts"]} if against != "baseline" else {"store_grades": len(r["share"])}}
+        note = ("Speed is lineal feet over scheduled minutes (the KPI tile's speed with stops). Each grade is held at its baseline, "
+                "its sustained average speed over the trailing year, never its target or its maximum. Each loss is feet below the "
+                "baseline per scheduled minute: stopped minutes at the stopped setup's baseline (order changes are the setup bucket), "
+                "and running time at the baseline minus the feet made. The grade mix is the reference's baseline speed minus this "
+                "window's: the same baselines weighted by each grade's share of the setup clock. The order mix decides it, so it is "
+                "schedule-driven; the other three are controllable. The four buckets add up to the gap, and each bucket's details add "
+                "up to it. The records carry one running speed per setup, so there is no separate ramp after a changeover.")
+        reference_note = (f"Against the baseline, the reference is each grade's baseline weighted by its share of the setup clock over the "
+                          f"same trailing year, all shifts: {r['base']:,.1f} ft/min. This window "
+                          f"ran {c['speed']:,.1f} ft/min with stops; its grade baselines at its own mix make {c['base']:,.1f} ft/min."
+                          if against == "baseline" else
+                          f"Against {reference_label}: {r['speed']:,.1f} ft/min with stops, its grade baselines at its mix {r['base']:,.1f} ft/min; "
+                          f"this window {c['speed']:,.1f} and {c['base']:,.1f} ft/min. Both are held at the same baselines, those of the "
+                          "trailing year ending on this window's last day. Losses are per scheduled minute of each window, so windows of "
+                          "different lengths compare like for like.")
+        if fallback:
+            reference_note += (" No sustained run in the trailing year for " + ", ".join(sorted(fallback)) +
+                               ", so the grade target stands in for its baseline.")
         return self._envelope("get_speed_variance", current, previous, shift, rows, trace, started, source,
                               against=against, against_shift=against_shift, reference_label=reference_label,
                               speed_all_fpm=round(c["speed"], 1), reference_speed_fpm=round(r["speed"], 1),
-                              target_speed_fpm=round(c["target"], 1), reference_target_speed_fpm=round(r["target"], 1),
+                              baseline_speed_fpm=round(c["base"], 1), reference_baseline_speed_fpm=round(r["base"], 1),
+                              baseline_since=baselines["since"], baseline_through=baselines["through"],
+                              baseline_fallback=sorted(fallback),
                               gap_fpm=round(gap, 2), gap_lineal_ft=round(gap * minutes, 1),
                               direction="below" if gap > 0 else "above" if gap < 0 else "at",
                               scheduled_minutes=round(minutes, 1),
@@ -1322,7 +1360,6 @@ class RecordStore:
     # Downtime kinds the owner's bands rank (targets.json); PM is planned maintenance, scheduled time.
     RANKED_KINDS = ("Maintenance", "Operator")
     KIND_BANDS = {"Maintenance": "maintenance", "Operator": "operator"}
-    FLAG_LIMIT = 5   # flags listed on one answer, the largest first; flag_count says how many fired
 
     def downtime_flags(self, start, end, shift=None, trace=None):
         """Every shift of [start, end] (one shift, or all) whose maintenance or operator downtime is over its band
@@ -1367,13 +1404,16 @@ class RecordStore:
         for f in fired:
             f["band"], f["band_text"] = f.pop("x_band"), f.pop("x_band_text")
         fired.sort(key=lambda f: (-f["pct_of_shift"], f["production_day"], f["shift"], f["kind"]))
-        shown = fired[:self.FLAG_LIMIT]
-        if shown:
-            self._recurrence(shown, shift, trace)
-        return shown, len(fired)
+        if fired:   # every flag carries its recurrence (review of #111), however many fire
+            self._recurrence(fired, shift, trace)
+        return fired, len(fired)
 
     def _recurrence(self, flags, shift, trace):
-        """Fill each flag's recurrence fields (see downtime_flags) from one read of the trailing years they span."""
+        """Fill each flag's recurrence fields (see downtime_flags) from one read of the trailing years they span.
+        Each flag is a few lookups, not a pass over the rows, so a window with hundreds of flags (a year once the
+        rolling year of issue #91 lands) stays fast: the dates are sorted once and each flag's year is a bisect;
+        the shifts on which a reason was over its band are a sorted list per reason; and the weekly top fives of
+        whole weeks are computed once, only the two edge weeks of a flag's year computed on their own."""
         years = {f["production_day"]: self.trailing_year(f["production_day"]) for f in flags}
         first, last = min(y[0] for y in years.values()), max(y[1] for y in years.values())
         clause, extra = self._shift_clause(shift)
@@ -1386,22 +1426,56 @@ class RecordStore:
         if trace is not None:
             trace["sql"].append(sql)
             trace["parameters"].append(params)
+        days = sorted({r["production_date"] for r in rows})
+        shifts_on = defaultdict(set)
+        over = defaultdict(list)                                        # (kind, reason) -> the dates of the shifts it was over its band
+        minutes_on = defaultdict(lambda: defaultdict(float))            # date -> (kind, reason) -> unplanned minutes
+        for r in rows:
+            shifts_on[r["production_date"]].add(r["shift"])
+            if r["kind"] is None:
+                continue
+            minutes_on[r["production_date"]][(r["kind"], r["reason"])] += r["minutes"]
+            if r["minutes"] > targets.BANDS[self.KIND_BANDS[r["kind"]]]["flag"] / 100 * r["scheduled_minutes"]:
+                over[(r["kind"], r["reason"])].append(r["production_date"])
+        for dates in over.values():
+            dates.sort()
+        counted = [0]
+        for d in days:
+            counted.append(counted[-1] + len(shifts_on[d]))
+        week_days = defaultdict(list)
+        for d in days:
+            week_days[d - timedelta(days=d.weekday())].append(d)
+        whole = {}
+
+        def top_five(day_list):
+            """The five reasons with the most unplanned minutes over the days, or None when they hold no stop."""
+            sums = defaultdict(float)
+            for d in day_list:
+                for k, m in minutes_on[d].items():
+                    sums[k] += m
+            return set(sorted(sums, key=lambda k: (-sums[k], k))[:5]) if sums else None
         for f in flags:
             since, through = years[f["production_day"]]
-            mine = [r for r in rows if since <= r["production_date"] <= through]
-            band = targets.BANDS[self.KIND_BANDS[f["kind"]]]["flag"]
-            same = [r for r in mine if r["kind"] == f["kind"] and r["reason"] == f["reason"]]
-            weekly = defaultdict(lambda: defaultdict(float))
-            for r in mine:
-                if r["kind"] is not None:
-                    monday = r["production_date"] - timedelta(days=r["production_date"].weekday())
-                    weekly[monday][(r["kind"], r["reason"])] += r["minutes"]
-            top = sum(1 for reasons in weekly.values()
-                      if (f["kind"], f["reason"]) in sorted(reasons, key=lambda k: (-reasons[k], k))[:5])
+            lo, hi = bisect_left(days, since), bisect_right(days, through)
+            key = (f["kind"], f["reason"])
+            dates = over.get(key, [])
+            weeks = in_top = 0
+            for monday in sorted({d - timedelta(days=d.weekday()) for d in (days[lo], days[hi - 1])} |
+                                 {m for m in week_days if since <= m and m + timedelta(days=4) <= through}) if hi > lo else []:
+                inside = [d for d in week_days[monday] if since <= d <= through]
+                if inside == week_days[monday]:
+                    if monday not in whole:
+                        whole[monday] = top_five(inside)
+                    top = whole[monday]
+                else:
+                    top = top_five(inside)
+                if top is not None:
+                    weeks += 1
+                    in_top += key in top
             f.update({"recurrence_since": since.isoformat(), "recurrence_through": through.isoformat(),
-                      "shifts_counted": len({(r["production_date"], r["shift"]) for r in mine}),
-                      "times_over_band": sum(1 for r in same if r["minutes"] > band / 100 * r["scheduled_minutes"]),
-                      "weeks_counted": len(weekly), "weeks_in_top_five": top,
+                      "shifts_counted": counted[hi] - counted[lo],
+                      "times_over_band": bisect_right(dates, through) - bisect_left(dates, since),
+                      "weeks_counted": weeks, "weeks_in_top_five": in_top,
                       "recurrence_scope": f"shift {shift}" if shift else "all shifts"})
 
     def get_downtime_review(self, window, shift=None):
@@ -1409,28 +1483,45 @@ class RecordStore:
         and together against its band as a percent of scheduled minutes (480 a shift, 1,440 a production day);
         every recorded reason, by kind, ranked by its percent of scheduled minutes with its stop count and minutes
         per stop; planned maintenance (PM) is scheduled time, listed last and not ranked; and the flags: each shift
-        over a band, with its supervisor slot and the leading reason's recurrence over the trailing year."""
+        over a band, with its supervisor slot and the leading reason's recurrence over the trailing year. The previous
+        window of the same kind is beside, as in the Pareto: each reason's and each total's minutes and percent of
+        that window's scheduled minutes (zero for a reason it did not record; None when that window is outside the
+        records, never zero)."""
         started, trace = time.perf_counter(), {"sql": [], "parameters": []}
         current = self._window(window)
+        previous = self._previous(current)
+        available = previous["coverage"] != "unavailable"
         clause, extra = self._shift_clause(shift)
-        params = [current["start"], current["end"], *extra]
         sched_sql = f"SELECT count(*) AS shifts, coalesce(sum(scheduled_minutes), 0) AS scheduled FROM shifts WHERE production_date BETWEEN ? AND ?{clause}"
         stop_sql = (f"SELECT kind, reason, count(*) AS stops, sum(seconds) / 60 AS minutes FROM stops "
                     f"WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind, reason")
-        sched = self._fetch(sched_sql, params)[0]
-        grouped = self._fetch(stop_sql, params)
-        for sql in (sched_sql, stop_sql):
-            trace["sql"].append(sql)
-            trace["parameters"].append(params)
+        fetched = {}
+        for label, w in (("current", current), ("previous", previous if available else None)):
+            if w is None:
+                continue
+            params = [w["start"], w["end"], *extra]
+            fetched[label] = (self._fetch(sched_sql, params)[0], self._fetch(stop_sql, params))
+            for sql in (sched_sql, stop_sql):
+                trace["sql"].append(sql)
+                trace["parameters"].append(params)
+        sched, grouped = fetched["current"]
+        prior_sched, prior_grouped = fetched.get("previous", (None, []))
+        prior = {(r["kind"], r["reason"]): r for r in prior_grouped}
         scheduled = sched["scheduled"]
+        prior_scheduled = prior_sched["scheduled"] if prior_sched else None
         rows = []
         for r in grouped:
             planned = r["kind"] not in self.RANKED_KINDS
+            before = prior.get((r["kind"], r["reason"]))
+            prior_minutes = (before["minutes"] if before else 0.0) if available else None
             row = {"kind": r["kind"], "reason": r["reason"],
                    "category": f"{r['reason']} · {'scheduled' if planned else r['kind'].lower()}",
                    "stops": r["stops"], "minutes": round(r["minutes"], 2), "scheduled_minutes": scheduled,
                    "pct_of_scheduled": _ratio(r["minutes"], scheduled, 100),
-                   "minutes_per_stop": _ratio(r["minutes"], r["stops"], places=2), "scheduled": planned}
+                   "minutes_per_stop": _ratio(r["minutes"], r["stops"], places=2), "scheduled": planned,
+                   "previous_stops": (before["stops"] if before else 0) if available else None,
+                   "previous_minutes": round(prior_minutes, 2) if available else None,
+                   "previous_pct_of_scheduled": _ratio(prior_minutes, prior_scheduled, 100) if available else None}
             if planned:
                 row.update(rank=None, band=None, band_text=None)
             else:
@@ -1443,14 +1534,19 @@ class RecordStore:
         for key, kinds in (("maintenance", ("Maintenance",)), ("operator", ("Operator",)), ("op_maint", self.RANKED_KINDS), ("pm", ("PM",))):
             mine = [r for r in grouped if r["kind"] in kinds]
             minutes = sum(r["minutes"] for r in mine)
+            before = sum(r["minutes"] for r in prior_grouped if r["kind"] in kinds) if available else None
             totals.update({f"{key}_minutes": round(minutes, 2), f"{key}_stops": sum(r["stops"] for r in mine),
-                           f"{key}_pct": _ratio(minutes, scheduled, 100)})
+                           f"{key}_pct": _ratio(minutes, scheduled, 100),
+                           f"previous_{key}_minutes": round(before, 2) if available else None,
+                           f"previous_{key}_pct": _ratio(before, prior_scheduled, 100) if available else None})
             if key != "pm":
                 targets.annotate(totals, {f"{key}_pct": (key, key)})
         flags, count = self.downtime_flags(current["start"], current["end"], shift, trace)
-        source = {"shifts": sched["shifts"], "stops": sum(r["stops"] for r in grouped)}
-        return self._envelope("get_downtime_review", current, None, shift, rows, trace, started, source,
-                              scheduled_minutes=scheduled, **totals, flags=flags, flag_count=count,
+        source = {"shifts": sched["shifts"], "stops": sum(r["stops"] for r in grouped),
+                  "previous_shifts": prior_sched["shifts"] if prior_sched else None,
+                  "previous_stops": sum(r["stops"] for r in prior_grouped) if available else None}
+        return self._envelope("get_downtime_review", current, previous, shift, rows, trace, started, source,
+                              scheduled_minutes=scheduled, previous_scheduled_minutes=prior_scheduled, **totals, flags=flags, flag_count=count,
                               method_note=("Each reason is ranked by its minutes over the scheduled minutes, 480 a shift; planned "
                                            "maintenance is scheduled time and is listed last, not ranked. A flag is a shift whose "
                                            "maintenance or operator downtime is over its band. Its recurrence counts, over the trailing "

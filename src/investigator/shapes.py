@@ -21,6 +21,8 @@ Any other line is a plain sentence: a caveat, the window and its coverage, a rep
 """
 import re
 
+from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
+
 LOOK = 'Where to look'
 # `(query 2 · row 0)`, `(query 3)`: the evidence a bullet or headline cites.
 REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday|flag) (\d+))?\)')
@@ -130,12 +132,16 @@ def flag_lines(result, flags):
 
 PLANNED = ('Planned maintenance', 'PM')   # the Pareto's planned-maintenance category, by reason and by kind: scheduled time
 FIRST_REASONS = 3   # the card shows five findings (web/app.js BULLETS_SHOWN): three reasons, then a flag and its recurrence
+FIRST_FLAGS = 5     # the largest flags listed beside the top reasons; every other flag follows the other reasons
 
 
 def with_flags(reasons, flags):
-    """The top reasons, then the flags (always on the card, never folded), then the other reasons."""
-    out = reasons[:FIRST_REASONS] + ['Flags and who to ask', *flags]
-    return out + (['The other reasons', *reasons[FIRST_REASONS:]] if len(reasons) > FIRST_REASONS else [])
+    """The top reasons, then the largest flags (always on the card, never folded), then the other reasons, then every
+    other flag. `flags` is flag_lines' two lines per flag, the largest first; each flag keeps its recurrence."""
+    first = 2 * FIRST_FLAGS
+    out = reasons[:FIRST_REASONS] + ['Flags and who to ask', *flags[:first]]
+    out += ['The other reasons', *reasons[FIRST_REASONS:]] if len(reasons) > FIRST_REASONS else []
+    return out + (['More flags', *flags[first:]] if len(flags) > first else [])
 
 
 def plain(text):
@@ -454,11 +460,13 @@ class DailyAnswer:
 
     @staticmethod
     def kind_split(k, row):
-        """The larger of maintenance and operator downtime against its 2.5% target, the other beside it."""
+        """The larger of maintenance and operator downtime against its target (targets.json), the other beside it."""
         pairs = [('Operator', row['operator_pct'], 'maintenance', row['maintenance_pct']),
                  ('Maintenance', row['maintenance_pct'], 'operator', row['operator_pct'])]
         lead, value, other, other_value = max(pairs, key=lambda p: p[1])
-        return bullet(f'{lead} downtime: **{f2(value)}%** of the shift, {side(value, 2.5, "over", "under")} the 2.5% target · {other} {f2(other_value)}%', k, 0)
+        target = targets.BANDS[lead.lower()]['target']
+        return bullet(f'{lead} downtime: **{f2(value)}%** of the shift, {side(value, target, "over", "under")} the {targets.pct(target)} target · '
+                      f'{other} {f2(other_value)}%', k, 0)
 
     def ranked(self, ranking, i, prefix=''):
         r = ranking['data']['rows'][i]
@@ -595,7 +603,7 @@ class DailyAnswer:
                 r = rows[i]
                 bullets.append(bullet(f'{r["setup_id"]}: **{f1(r["rejected_sqft"])} sq ft** rejected, the most of any setup', m, i))
             notes.append('Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.')
-        bullets.append(bullet(f'Setups above the 3.25% trim flag: **{n(row["setups_above_trim_target"])}** of {n(row["valid_setups"])}', k, 0))
+        bullets.append(bullet(f'Setups above the {targets.pct(targets.TRIM_FLAG_PCT)} trim flag: **{n(row["setups_above_trim_target"])}** of {n(row["valid_setups"])}', k, 0))
         looks = [look('The downtime behind the allocated stop minutes, by reason', f'Show the downtime breakdown{self.suffix(s)}'),
                  look('The rejected area by reason', f'Show dry-end rejects by reason{self.suffix(s)}')]
         return head, bullets, notes, looks
@@ -797,6 +805,13 @@ def delta_clause(row):
         prev, rest = figure(row['previous'], unit)
         return f'previous {prev}{rest}'
     return 'previous unavailable'
+
+
+def review_previous(row):
+    """A review row's previous window: its percent of that window's scheduled minutes, or unavailable (never zero)."""
+    if row.get('previous_pct_of_scheduled') is None:
+        return 'previous unavailable'
+    return f'previous {pval(row["previous_pct_of_scheduled"])}%'
 
 
 def window_head(data):
@@ -1238,23 +1253,30 @@ class PeriodAnswer:
         head = (f'**{pval(data["op_maint_pct"])}%** of scheduled minutes in maintenance and operator downtime{where}{band(data["op_maint_band_text"])} · '
                 f'maintenance {pval(data["maintenance_pct"])}%, {data["maintenance_band_text"]} · operator {pval(data["operator_pct"])}%, '
                 f'{data["operator_band_text"]} {ref(r)}')
-        whole = self.whole(data)   # an incomplete window is listed in the tool's order, never ranked
+        # An incomplete window is listed in the tool's order, never ranked; the previous window's coverage does not
+        # touch the ranking of this one (it is the comparison beside it, as in the Pareto).
+        whole = data['window']['coverage'] == 'complete'
         bullets = []
         for i, x in [(i, x) for i, x in enumerate(rows) if not x['scheduled']][:5]:   # the top five; the chart and table hold all
             bullets.append(bullet(f'{str(x["rank"]) + ". " if whole else ""}{x["reason"]}, {x["kind"].lower()}: '
                                   f'**{pval(x["pct_of_scheduled"])}%** of scheduled minutes · {pval(x["minutes"])} min over {stops_text(x["stops"])}, '
-                                  f'{pval(x["minutes_per_stop"])} min per stop' + (band(x['band_text']) if x['band'] in ('over target', 'flag') else ''), r, i))
+                                  f'{pval(x["minutes_per_stop"])} min per stop' + (band(x['band_text']) if x['band'] in ('over target', 'flag') else '') +
+                                  f' · {review_previous(x)}', r, i))
         flags = flag_lines(r, data['flags'])
         if flags:   # a flag pulls in the shift: who to ask, and how often the same reason crossed its band
             bullets = with_flags(bullets, flags)
+        if data.get('previous_op_maint_pct') is not None:   # the previous window of the same kind, beside (the owner, #111)
+            bullets += ['The previous window'] + [bullet(
+                f'**{pval(data["previous_op_maint_pct"])}%** of its scheduled minutes in maintenance and operator downtime · '
+                f'maintenance {pval(data["previous_maintenance_pct"])}% · operator {pval(data["previous_operator_pct"])}%', r)]
         planned = [(i, x) for i, x in enumerate(rows) if x['scheduled']]
         if planned:
             bullets += ['Scheduled time, not ranked'] + [
                 bullet(f'{x["reason"]}: **{pval(x["minutes"])} min** over {stops_text(x["stops"])} · {pval(x["pct_of_scheduled"])}% of scheduled minutes', r, i)
                 for i, x in planned]
         notes = sentences(data.get('method_note'))
-        if data['flag_count'] > len(data['flags']):
-            notes.append(f'{n(data["flag_count"])} flags fired in this window; the five largest are listed.')
+        if data['flag_count'] > FIRST_FLAGS:
+            notes.append(f'{n(data["flag_count"])} flags fired in this window, the largest first, each with its recurrence.')
         elif not data['flags']:
             notes.append('No shift is over its maintenance or operator band.')
         looks = []
@@ -1266,14 +1288,14 @@ class PeriodAnswer:
         return head, bullets, notes, looks[:3]
 
     # speed variance (issue #92): what each bucket is called in the headline, and where its records are
-    SPEEDVAR_WORDS = {'stops': 'stops', 'setups': 'setups', 'below_target': 'below-target running', 'mix': 'mix'}
-    SPEEDVAR_LOOKS = {'stops': 'pareto', 'setups': 'pareto', 'below_target': 'speed', 'mix': 'grade'}
+    SPEEDVAR_WORDS = {'stops': 'stops', 'setups': 'setups', 'below_baseline': 'running under baseline', 'mix': 'mix'}
+    SPEEDVAR_LOOKS = {'stops': 'pareto', 'setups': 'pareto', 'below_baseline': 'speed', 'mix': 'grade'}
 
     def period_speedvar(self, tools, v):
         """The speed gap and the share of each bucket (get_speed_variance), then the three largest buckets with the
         stop reason or grade that leads each. The shares are the envelope's; every bullet is one bucket row."""
         data, rows = v['data'], v['data']['rows']
-        reference = {'target': 'target', 'previous': 'the previous window', 'shift': f'shift {data.get("against_shift")}'}[data['against']]
+        reference = {'baseline': 'baseline', 'previous': 'the previous window', 'shift': f'shift {data.get("against_shift")}'}[data['against']]
         pct = lambda x: f0(x) if abs(x) >= 9.95 else f1(x)   # "stops 45%", "mix 0.5%"
         shares = [f'{self.SPEEDVAR_WORDS[r["bucket"]]} {pct(data[r["bucket"] + "_share_pct"])}%' for r in rows
                   if data.get(r['bucket'] + '_share_pct') is not None]
@@ -1287,22 +1309,26 @@ class PeriodAnswer:
             share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
             top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'
                    if whole and r.get('top_item') and r.get('top_item_fpm') is not None else '')
+            # every bucket is marked controllable or schedule-driven (issue #101); the grade mix is the order book's, never priced
+            control = (f' · schedule-driven, {r["control_note"]}' if r.get('control') == 'schedule-driven' else
+                       ' · controllable' if r.get('control') else '')
             bullets.append(bullet(f'{r["label"]}: **{f1(abs(r["gap_fpm"]))} ft/min** {"of the gap" if toward else "the other way, an offset"}{share}'
-                                  f' · {f0(abs(r["gap_lineal_ft"]))} lineal ft{top}{priced(r)}', v, i))
+                                  f' · {f0(abs(r["gap_lineal_ft"]))} lineal ft{top}{priced(r)}{control}', v, i))
         notes = sentences(data.get('reference_note')) + sentences(data.get('method_note'))
-        # "an offset" pulls against the gap; what is priced is a loss against the reference, whichever way the gap goes
-        if data.get('gap_usd') is not None:
-            notes.append(f'The whole gap is {money(data["gap_usd"])} of machine time' +
-                         (f' ({money(data["gap_usd_per_year"])}/yr at the post\'s volumes)' if data.get('gap_usd_per_year') is not None else '') +
-                         '; a bucket that ran better than the reference is not priced.')
-        elif data['direction'] == 'above':
+        # "an offset" pulls against the gap; what is priced is a controllable loss against the reference, whichever way the gap goes
+        if data['direction'] == 'above' and 'controllable_usd' in data:
             subject = f'Shift {data["shift"]}' if data['against'] == 'shift' else 'This window'
-            notes.append(f'{subject} is faster than {reference}, so the gap is a gain and is not priced; the buckets that ran worse '
-                         'are priced as machine time.')
+            notes.append(f'{subject} is faster than {reference}, so the gap is a gain and is not priced; the controllable buckets that ran '
+                         'worse are priced as machine time.')
+        elif data.get('controllable_usd') is not None:
+            notes.append(f'The controllable buckets are {money(data["controllable_usd"])} of machine time' +
+                         (f' ({money(data["controllable_usd_per_year"])}/yr at the post\'s volumes)' if data.get('controllable_usd_per_year') is not None else '') +
+                         '; the grade mix is schedule-driven and not priced, nor is a bucket that ran better than the reference.')
         if data.get('contribution_status') == MARGIN_NOT_SET:
             notes.append(contribution(data))
-        elif data.get('gap_contribution_usd') is not None:
-            notes.append(f'Contribution {money(data["gap_contribution_usd"])} for the whole gap at the set margin, not added to the machine time.')
+        elif data.get('controllable_contribution_usd') is not None:
+            notes.append(f'Contribution {money(data["controllable_contribution_usd"])} for the controllable buckets at the set margin, '
+                         'not added to the machine time.')
         priced_rows = [r for r in rows if r.get('usd') is not None]
         notes += money_notes(v, priced_rows[0], 'label') if priced_rows else money_notes(v)
         kinds = list(dict.fromkeys(self.SPEEDVAR_LOOKS[r['bucket']] for r in rows if r['gap_fpm'] * sign > 0)) + ['opportunity']

@@ -66,7 +66,9 @@ def test_the_real_word_list_is_in_step_with_the_rule():
 
 def test_the_router_reads_the_reviewers_real_words_as_before():
     for question, url in (('How much downtime throughout the week?', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week'),
-                          ('Show downtime by operation', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          # downtime with no scope is the owner's default, the previous production day, all shifts (#101)
+                          ('Show downtime by operation', '/corr/1/day/2026-09-11?measure=review'),
+                          ('Show downtime by operation for this shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           ('Which stops qualify as maintenance?', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=maintenance'),
                           ('What is the downside of this shift?', '/corr/1/day/2026-09-14/shift/2?measure=overview')):
         assert address(question, rail()) == url, question
@@ -109,18 +111,20 @@ def test_a_comparison_with_another_shift_keeps_the_selected_shift_and_is_refused
 
 # ---------------------------------------------------------------- relative windows
 
-@pytest.mark.parametrize('question, day, period', [
-    ('how much downtime yesterday', '2026-09-11', 'day'),       # the production day before Monday is Friday
-    ('downtime last week', '2026-09-07', 'week'),               # the first production day of the week before
-    ('downtime previous week', '2026-09-07', 'week'),
-    ('downtime prior week', '2026-09-07', 'week'),
-    ('downtime from maintenance last week', '2026-09-07', 'week'),   # "from" not before the window: no comparison (Codex, #108)
-    ('downtime last month', '2026-08-03', 'month'),             # August, the month before September
-    ('downtime last period', '2026-08-03', 'fiscal'),           # P1 (3-30 Aug) is the 4-4-5 period before P2 (31 Aug-27 Sep)
+@pytest.mark.parametrize('question, day, period, scope', [
+    # the production day before Monday is Friday; downtime with no shift named is all shifts there (the owner, #101)
+    ('how much downtime yesterday', '2026-09-11', 'day', 'day'),
+    ('how much downtime this shift yesterday', '2026-09-11', 'day', 'shift'),
+    ('downtime last week', '2026-09-07', 'week', 'shift'),      # the first production day of the week before
+    ('downtime previous week', '2026-09-07', 'week', 'shift'),
+    ('downtime prior week', '2026-09-07', 'week', 'shift'),
+    ('downtime from maintenance last week', '2026-09-07', 'week', 'shift'),   # "from" not before the window: no comparison (Codex, #108)
+    ('downtime last month', '2026-08-03', 'month', 'shift'),    # August, the month before September
+    ('downtime last period', '2026-08-03', 'fiscal', 'shift'),  # P1 (3-30 Aug) is the 4-4-5 period before P2 (31 Aug-27 Sep)
 ])
-def test_a_relative_window_moves_the_day_and_the_period_control(question, day, period):
+def test_a_relative_window_moves_the_day_and_the_period_control(question, day, period, scope):
     scoped = question_scope(question, rail(), DAYS)
-    assert (scoped.production_day, scoped.period, scoped.shift, scoped.scope) == (day, period, 2, 'shift')
+    assert (scoped.production_day, scoped.period, scoped.shift, scoped.scope) == (day, period, 2, scope)
     assert scoped.read['day'] == day and scoped.read['period'] == period
 
 
