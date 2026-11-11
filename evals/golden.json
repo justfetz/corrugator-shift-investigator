@@ -2749,14 +2749,15 @@
    "mode": "offline",
    "scope": "day",
    "question": "Trend of moisture rejects over eight weeks",
+   "note": "Issue #100: the owner-approved reject taxonomy has no moisture category (moisture-driven defects are recorded as bond, dry board, or warp), so the v1 moisture tile became the other dry-end family and a question about moisture rejects is answered with the dry-end rejects trend, the closest record-backed series; it never names a moisture figure. Before issue #100 it was metric=moisture_pct.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=trend&metric=moisture_pct",
+    "url": "/corr/1/day/2026-09-14?measure=trend&metric=dry_end_pct",
     "status": "complete",
     "tools": [
      {
       "tool": "get_trend",
       "arguments": {
-       "metric": "moisture_pct",
+       "metric": "dry_end_pct",
        "weeks": 8,
        "anchor": "2026-09-14",
        "shift": null
@@ -2764,7 +2765,37 @@
      }
     ],
     "charts": 1,
-    "sections_match": "the latest of [0-9]+ weeks of moisture \\(query 1 · row [0-9]+\\)$",
+    "sections_match": "the latest of [0-9]+ weeks of dry-end rejects \\(query 1 · row [0-9]+\\)$",
+    "max_ms": 500,
+    "tables": [
+     "get_trend"
+    ],
+    "sections_not_match": "\\bmoisture\\b"
+   }
+  },
+  {
+   "id": "period-other-dry-end-trend",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Trend of cracking and handling damage rejects over eight weeks",
+   "note": "Issue #100: the fourth dry-end family, other, holds the taxonomy's cracking / surface, handling damage, paper / mill and print categories; its weekly series is other_pct.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=trend&metric=other_pct",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_trend",
+      "arguments": {
+       "metric": "other_pct",
+       "weeks": 8,
+       "anchor": "2026-09-14",
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": "the latest of [0-9]+ weeks of other dry-end rejects \\(query 1 · row [0-9]+\\)$",
     "max_ms": 500,
     "tables": [
      "get_trend"
@@ -4079,15 +4110,15 @@
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "day": "2025-10-15",
-   "question": "How did August go?",
-   "note": "Asked on 15 October 2025, August means August 2025, before the year's first production day (30 September 2025). The period tool refuses the window; the answer carries no August tile and no zero, and the status is unavailable (the reason itself is checked by month-before-dataset-reason-surfaced). Asked about July on 14 September 2026 until issue #35 took July into the year.",
+   "day": "2025-02-14",
+   "question": "How did December go?",
+   "note": "Asked on 14 February 2025, December means December 2024, before the data's first production day (1 January 2025, the fixed start of issue #100). The period tool refuses the window; the answer carries no December tile and no zero, and the status is unavailable (the reason itself is checked by month-before-dataset-reason-surfaced). Asked about August on 15 October 2025 until issue #100 moved the first day from 30 September 2025 to 1 January 2025, and about July on 14 September 2026 before issue #35.",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
     "charts": 0,
-    "sections_not_match": "August 2025|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
+    "sections_not_match": "December 2024|Volume 0|\\b0(\\.00)? (MSF|ft|min|stops)\\b"
    }
   },
   {
@@ -4095,16 +4126,16 @@
    "type": "refusal",
    "mode": "offline",
    "scope": "day",
-   "day": "2025-10-15",
-   "question": "How did August go?",
-   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2025-09-30 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it; asked about July on 14 September 2026 until the year window (issue #35) took July in.",
+   "day": "2025-02-14",
+   "question": "How did December go?",
+   "note": "When every tool call of an investigation is refused, the tools' own refusal reasons are the visible answer: status unavailable, the window reason ('outside the dataset range 2025-01-01 to 2026-09-30') in the sections, nothing left only in the trace. Was a known defect (planner_error, reason in the trace) until the agent surfaced it. Re-anchored on 14 February 2025 (December 2024) when issue #100 fixed the data's first day on 1 January 2025; before, August asked on 15 October 2025.",
    "expect": {
     "status": "unavailable",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
     "charts": 0,
     "tables": [],
-    "sections_match": "outside the dataset range 2025-09-30 to 2026-09-30"
+    "sections_match": "outside the dataset range 2025-01-01 to 2026-09-30"
    }
   },
   {
@@ -4308,11 +4339,11 @@
    "id": "downtime-last-month",
    "type": "routing",
    "mode": "offline",
-   "day": "2025-10-15",
+   "day": "2025-02-14",
    "question": "How much downtime last month?",
-   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-10-15 it is September 2025, which holds the golden year's first production day (2025-09-30); its previous month, August 2025, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 14 September 2026 for the year window (issue #35), where last month (August 2026) has July before it.",
+   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-02-14 it is January 2025, the data's first month (it opens on 1 January 2025, issue #100); its previous month, December 2024, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 2025-10-15 (September 2025, whose previous month was before the old rolling year's first day) when issue #100 fixed the first day.",
    "expect": {
-    "url": "/corr/1/month/2025-09-30/shift/2?measure=pareto",
+    "url": "/corr/1/month/2025-01-01/shift/2?measure=pareto",
     "status": "complete",
     "shifts": [
      2
@@ -4323,7 +4354,7 @@
       "arguments": {
        "window": {
         "period": "month",
-        "anchor": "2025-09-30"
+        "anchor": "2025-01-01"
        },
        "group_by": "reason",
        "measure": "minutes",
@@ -4438,9 +4469,9 @@
    "id": "last-week-before-the-records",
    "type": "refusal",
    "mode": "offline",
-   "day": "2025-10-01",
+   "day": "2025-01-02",
    "question": "How much downtime last week?",
-   "note": "Issue #105: from the first production week, last week has no production day in the records; the question is refused with the calendar reason rather than answered as zero or as this week. Re-anchored from 2026-08-05 to 2025-10-01, the Wednesday of the golden year's first production week (issue #35).",
+   "note": "Issue #105: from the first production week, last week has no production day in the records; the question is refused with the calendar reason rather than answered as zero or as this week. Re-anchored to 2025-01-02, the Thursday of the data's first production week (it opens on 1 January 2025, issue #100); before, 2025-10-01, and 2026-08-05 before issue #35.",
    "expect": {
     "raises": "before the records"
    }
@@ -6057,7 +6088,7 @@
    "type": "routing",
    "mode": "offline",
    "question": "What were the top 3 contributors to speed variations?",
-   "note": "Issue #92, the owner's question (2026-11-10): it used to route to the generic speed card. The speed gap of the shift against target, split into stops, setups, below-target running and grade mix that add up to it; three bullets for the three largest buckets, a waterfall chart, where to look.",
+   "note": "Issue #92, the owner's question (2026-11-10): it used to route to the generic speed card. The speed gap of the shift against target, split into stops, setups, below-target running and grade mix that add up to it; three bullets for the three largest buckets, a waterfall chart, where to look. Since issue #100's regenerated records, the shift's grade mix works against the gap by more than the third contributing bucket, so the owner's rule (PR #91) adds its offset line: three bullets for the three contributing buckets, then the offset.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=speedvar",
     "status": "complete",
@@ -6092,7 +6123,7 @@
      "headline_match": "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* below target: (stops|setups|below-target running|mix) [0-9.-]+%, .* \\(query 1\\)$",
      "bullets": [
       3,
-      3
+      4
      ],
      "look": [
       2,
@@ -6418,14 +6449,14 @@
    "id": "speedvar-against-month-before-dataset-unavailable",
    "type": "refusal",
    "mode": "offline",
-   "day": "2025-10-15",
+   "day": "2025-02-14",
    "scope": "day",
-   "question": "What drove speed in September versus August?",
-   "note": "Renamed from speedvar-against-july-unavailable: the year window (issue #35) holds July 2026, so August versus July is a full comparison. On 2025-10-15, September is September 2025 (the latest September on or before the day) and its previous window, August 2025, is before the year's first day (2025-09-30): the tool's own refusal is the answer, never a gap against zero.",
+   "question": "What drove speed in January versus December?",
+   "note": "On 2025-02-14, January is January 2025 and its previous window, December 2024, is before the data's first day (1 January 2025, issue #100): the tool's own refusal is the answer, never a gap against zero. Re-anchored from September versus August 2025, asked on 2025-10-15, when issue #100 moved the first day from 30 September 2025; renamed from speedvar-against-july-unavailable under issue #35.",
    "expect": {
-    "url": "/corr/1/day/2025-10-15?measure=speedvar&window=2025-09&against=previous",
+    "url": "/corr/1/day/2025-02-14?measure=speedvar&window=2025-01&against=previous",
     "status": "unavailable",
-    "sections_match": "^The previous window, August 2025 \\(2025-08-01 to 2025-08-31\\), is outside the record store: ask against target instead$",
+    "sections_match": "^The previous window, December 2024 \\(2024-12-01 to 2024-12-31\\), is outside the record store: ask against target instead$",
     "sections_not_match": "Speed gap \\*\\*",
     "tool_calls": 1,
     "rejected_tool_calls": 1,
@@ -6585,9 +6616,9 @@
    "mode": "offline",
    "scope": "day",
    "question": "Why did speed differ on shift 3 versus shift 1 this week?",
-   "note": "Owner, PR #91: the card lists the three buckets adding to the gap; a bucket working against it gets a line too when it is larger than the third of them. On the golden year's week of 14 September shift 3 runs 41.8 ft/min below shift 1: below-target running, grade mix and setups (1.3 ft/min) add to the gap, and stops (-85%, 35.6 ft/min, shift 1's Thursday planned maintenance) pull against it. Before, the offset had no line.",
+   "note": "Owner, PR #91: the card lists the three buckets adding to the gap; a bucket working against it gets a line too when it is larger than the third of them. In the week of 3 August 2026 shift 3 runs below shift 1: below-target running, grade mix and setups add to the gap, and stops pull against it (shift 1's Thursday planned maintenance) by far more than the setups bucket. Re-anchored from the week of 14 September when issue #100 regenerated the records (there, setups now works against the gap too). Before, the offset had no line.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1",
+    "url": "/corr/1/day/2026-08-03?measure=speedvar&window=week&against=shift&shifts=3,1",
     "status": "complete",
     "shifts": [
      3
@@ -6602,7 +6633,8 @@
      "^- Setups: \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · [0-9.]+% ",
      "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance at [0-9.,]+ ft/min"
     ]
-   }
+   },
+   "day": "2026-08-03"
   },
   {
    "id": "speedvar-offset-smaller-than-the-third-contributor-stays-off",

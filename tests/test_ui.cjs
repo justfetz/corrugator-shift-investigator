@@ -1213,31 +1213,31 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.ok(line&&msgs.children.indexOf(line)===msgs.children.findIndex(e=>/\bheadline\b/.test(e.className))+1,'the dollar line sits right under the headline');
  const total=golden.input.total_usd, year=golden.input.total_usd_per_year;
  assert.equal(textOf(line.children[0]),`≈ ${Money.money(total)} recorded losses this shift · ${Money.short(year)}/yr at this rate · contribution: margin not set`);
- assert.equal(textOf(line.children[0]),'≈ $7,762 recorded losses this shift · $5.81M/yr at this rate · contribution: margin not set');
- assert.deepEqual(line.children[1].children.map(textOf),['Trim $4,384','Dry-end $1,649','Shear $781','Speed $692','Stops $202','Setups $54']);   // a chip per bucket, largest first
+ assert.equal(textOf(line.children[0]),'≈ $7,171 recorded losses this shift · $4.83M/yr at this rate · contribution: margin not set');
+ assert.deepEqual(line.children[1].children.map(textOf),['Trim $4,521','Dry-end $1,625','Shear $645','Stops $301','Setups $78']);   // a chip per bucket, largest first; the shift ran above 675 ft/min, so no speed chip
  // the opportunities panel: bars of $/yr by gap, ranked, the formula on hover, a table flip
  const panel=els.money.children[0]; assert.match(panel.className,/money-panel/);
  const svg=walk(panel).find(e=>e.tag==='svg'), vals=walk(svg).filter(e=>/\bval\b/.test(e.class||''));
- assert.equal(vals.length,8);assert.equal(vals[0].textContent,'$3.27M/yr');assert.match(vals[0]['aria-label'],/^Side trim: \$4,384 · \$3,267,452\/yr at this rate\. 79,702\.3 sq ft = 79\.702 MSF x \$55\/MSF paper/);
+ assert.equal(vals.length,8);assert.equal(vals[0].textContent,'$3.02M/yr');assert.match(vals[0]['aria-label'],/^Side trim: \$4,521 · \$3,020,103\/yr at this rate\. 82,194\.9 sq ft = 82\.195 MSF x \$55\/MSF paper/);
  const flip=walk(panel).find(e=>e.tag==='button'&&e.textContent==='Table'); flip.events.click();
- const table=walk(panel).find(e=>e.tag==='table'); assert.equal(walk(table).filter(e=>e.tag==='tr').length,13);   // the same twelve rows, and the header
+ const table=walk(panel).find(e=>e.tag==='table'); assert.equal(walk(table).filter(e=>e.tag==='tr').length,14);   // the same thirteen rows, and the header
  walk(panel).find(e=>e.tag==='button'&&e.textContent==='Bars').events.click();
  // the arithmetic: four short lines with this card's numbers, then the rates and their sources
  const ledger=all(els.ledger);
- assert.match(ledger,/Paper 121,107 sq ft of trim, shear and rejects = 121\.1 MSF × \$55\/MSF = \$6,661/);
- assert.match(ledger,/Machine time 55\.1 min \(stops 12\.8 · speed gap 34\.6 · waste run time 7\.7\) = 297\.3 MSF not made at 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$1,101/);
- assert.match(ledger,/Side trim 3\.30% of gross − 3\.25% target = 0\.05 points over → \$49,952\/yr/);
- assert.match(ledger,/Total = \$7,762 this shift · \$5,810,233\/yr at this rate · contribution: margin not set/);
+ assert.match(ledger,/Paper 120,867 sq ft of trim, shear and rejects = 120\.9 MSF × \$55\/MSF = \$6,648/);
+ assert.match(ledger,/Machine time 26\.1 min \(stops 19\.0 · speed gap 0\.0 · waste run time 7\.2\) = 141\.2 MSF not made at 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$523/);
+ assert.match(ledger,/Side trim 3\.05% of gross, at or under the 3\.25% target: no trim lever/);
+ assert.match(ledger,/Total = \$7,171 this shift · \$4,829,620\/yr at this rate · contribution: margin not set/);
  assert.match(ledger,/Rates: paper \$55\/MSF \(post\), machine time \$1,200\/hr \(post\), contribution margin not set \(assumption: owner to set\)/);
  assert.match(ledger,/they are not a real plant's figures/);
  // tiles: every tile that measures a loss shows $/shift and $/yr; in dollars its value is the dollars
  const tiles=els.metrics.children.map(t=>[t.children[0].textContent,textOf(t.children[1]),t.children[3]?t.children[3].textContent:null]);
  assert.deepEqual(tiles.map(t=>t[0]),['Speed','Maintenance','Operator','Dry-end waste','Trim','Setups','Throughput']);
- assert.deepEqual(tiles.slice(0,5).map(t=>t[1]),['$692','$119','$137','$1,649','$4,384']);   // the trim tile is get_shift_dollars's Side trim to the cent, the speed tile its speed gap
- assert.match(tiles[4][2],/^\$3\.27M\/yr · 3\.30 %$/);assert.equal(tiles[5][2],null);assert.equal(tiles[6][2],null);   // a count and a width are not losses
+ assert.deepEqual(tiles.slice(0,5).map(t=>t[1]),['$0','$173','$207','$1,625','$4,521']);   // the trim tile is get_shift_dollars's Side trim to the cent, the speed tile its speed gap
+ assert.match(tiles[4][2],/^\$3\.02M\/yr · 3\.05 %$/);assert.equal(tiles[5][2],null);assert.equal(tiles[6][2],null);   // a count and a width are not losses
  // the priced chart is drawn in dollars, ranked by dollars; the speed chart has no dollar form and stays in ft/min
  const charts=els.charts.children; const down=charts.find(c=>/Recorded downtime/.test(textOf(c.children[0])));
- assert.match(all(down),/Dollars at your rates, ranked by dollars/);assert.equal(walk(down).find(e=>/\bval\b/.test(e.class||'')).textContent,'$94 · $72.8k/yr');
+ assert.match(all(down),/Dollars at your rates, ranked by dollars/);assert.equal(walk(down).find(e=>/\bval\b/.test(e.class||'')).textContent,'$115 · $89k/yr');
  assert.ok(charts.some(c=>/Wet-end speed/.test(textOf(c.children[0]))&&/ft\/min/.test(all(c))));
  // a second card of the same scope shares the money answer: no second fetch
  const t1=fetched.length; await vm.runInContext("ask('Show speed to target',{mode:'offline'})",ctx);await tick();
@@ -1255,7 +1255,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const open=els.messages.children.find(e=>/^message\b/.test(e.className)), line2=open.children.find(e=>e.className==='dollar-line');
  assert.equal(textOf(line2.children[0]),`≈ ${Money.money(moneyNow.total_usd)} recorded losses this shift · ${Money.short(moneyNow.total_usd_per_year)}/yr at this rate · contribution: margin not set`);
  assert.ok(all(els.ledger).includes('× $1,500/hr = '+Money.money(moneyNow.total_machine_time_usd)));
- assert.match(all(els.ledger),/= \$6,661$/m,'the paper dollars do not use the machine rate: unchanged');
+ assert.match(all(els.ledger),/= \$6,648$/m,'the paper dollars do not use the machine rate: unchanged');
  assert.match(all(els.ledger),/machine time \$1,500\/hr \(yours\)/);
  assert.deepEqual(els['rates-list'].children.map(textOf).slice(2,4),['Machine','$1,500/hryours']);
  assert.ok(all(els.trace).includes('"machine_time_usd": '+moneyNow.byIndex.find(r=>r.gap==='Downtime: Order change').machine_time_usd),'the trail is the queries at the rates in force (Codex on #109)');
@@ -1263,8 +1263,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // the open card is the speed answer; its earlier card (why slow) re-priced too, prose included: the Order change bullet
  const earlierText=all(els.earlier);
  const downtimeRow=whySlow.trace[1].data.rows[0], again2=Money.price('downtime',downtimeRow.price_terms.quantity,rates,downtimeRow.price_terms.gross_sqft,downtimeRow.price_terms.minutes,cfg);
- assert.ok(earlierText.includes(`of recorded downtime, the largest of 5 reasons · ${Money.money(again2.usd)} (${Money.money(again2.usd_per_year)}/yr)`),'the prose figure is the row re-priced');
- assert.ok(!earlierText.includes('$94 ($72,771/yr)'));
+ assert.ok(earlierText.includes(`of recorded downtime, the largest of 6 reasons · ${Money.money(again2.usd)} (${Money.money(again2.usd_per_year)}/yr)`),'the prose figure is the row re-priced');
+ assert.ok(!earlierText.includes('$115 ($88,971/yr)'));
  // what a new question asks: the rates ride in its address, and in the canned questions' links
  assert.match(els.examples.children[0].href,/&rates=hour%3A1500&/);
  const t3=fetched.length; await vm.runInContext("ask('Why was this shift slow?',{mode:'offline',title:'again'})",ctx);await tick();
@@ -1272,16 +1272,16 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // the units: minutes and % relabel every priced tile and bar; nothing is fetched
  const t4=fetched.length;
  els['units-seg'].children[0].events.click(); assert.equal(els['units-seg'].children[0]['aria-pressed'],'true');
- assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['34.6min','5.9min','6.8min','5.2min','0.0min']);   // the speed gap, the stops, the run time the dry-end rejects took; side trim takes none
+ assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['0.0min','8.7min','10.3min','5.1min','0.0min']);   // the speed gap (none: above 675 ft/min), the stops, the run time the dry-end rejects took; side trim takes none
  assert.match(all(els.money),/Ranked by machine minutes/);
  els['units-seg'].children[1].events.click();
  const valsOf=el=>walk(el).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);   // an svg value's own text, not its hover title
- assert.deepEqual(valsOf(els.money).slice(0,2),['7.21% of time','3.30% of gross']);   // the speed gap's share of the shift's minutes, side trim's of its gross
+ assert.deepEqual(valsOf(els.money).slice(0,2),['3.05% of gross','1.20% of time']);   // side trim's share of the shift's gross, the largest downtime reason's of its minutes
  assert.equal(fetched.length,t4,'the units toggle makes no request');
- assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['608.4ft/min','1.24%','1.42%','1.16%','3.30%']);   // in % the tiles read as the tools report them
+ assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['657.6ft/min','1.80%','2.15%','1.03%','3.05%']);   // in % the tiles read as the tools report them
  // reset: the post's rates, and the address without rates=
  els['units-seg'].children[2].events.click(); els['rates-reset'].events.click();
- assert.equal(location.search.includes('rates='),false);assert.match(all(els.ledger),/× \$1,200\/hr = \$1,101/);
+ assert.equal(location.search.includes('rates='),false);assert.match(all(els.ledger),/× \$1,200\/hr = \$523/);
  els['rates-form'].events.submit({preventDefault(){}}); assert.equal(els['rates-form'].hidden,true);assert.equal(els['rates-change'].hidden,false);
 
  // a margin and a trim target: the dollar line says the contribution beside the losses, never added; the arithmetic's trim line follows the target
@@ -1291,7 +1291,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const m40=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,{margin_usd_msf:40,trim_target_pct:3}),cfg);
  const lineNow=()=>textOf(els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line').children[0]);
  assert.ok(lineNow().endsWith('contribution '+Money.money(m40.total_contribution_usd)+' at $40/MSF, not added'),lineNow());
- assert.match(all(els.ledger),/Side trim 3\.30% of gross − 3% target = 0\.30 points over → \$/);
+ assert.match(all(els.ledger),/Side trim 3\.05% of gross − 3% target = 0\.05 points over → \$/);
  els['rates-reset'].events.click(); assert.match(lineNow(),/contribution: margin not set$/);
 
  // all three shifts (tests/ui_fixtures/money_day.json, the server's answer on corrupt data): the card reads the day's own
@@ -1336,11 +1336,11 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(els.charts.children.length,0,'the money tool\'s own chart is the panel');
  const wvals=walk(els.money.children[0]).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);
  assert.deepEqual(wvals.slice(0,2),[`${Money.short(levers.rows[0].usd_per_year)}/yr`,`${Money.short(levers.rows[1].usd_per_year)}/yr`]);
- assert.match(all(els.ledger),/Side trim 3\.21% of gross, at or under the 3\.25% target: no trim lever this window/);
+ assert.match(all(els.ledger),/Side trim 3\.53% of gross − 3\.25% target = 0\.28 points over → \$272,646\/yr/);   // the week ran over the target (issue #100's records)
  // the prose of the money answer re-prices with its levers re-ranked, as the server would write it at those rates
  els['rates-change'].events.click(); const wf=els['rates-fields'].children.map(f=>f.children[1]); wf[3].value='3'; wf[3].events.input();
  const lever=Money.reprice('get_opportunities',levers,Money.effective(cfg,{trim_target_pct:3}),cfg).rows.find(r=>r.kind==='trim');
- assert.ok(all(els.ledger).includes('Side trim 3.21% of gross − 3% target = 0.21 points over → '+Money.money(lever.usd_per_year)+'/yr'),'the levers trim line at the new target');
+ assert.ok(all(els.ledger).includes('Side trim 3.53% of gross − 3% target = 0.53 points over → '+Money.money(lever.usd_per_year)+'/yr'),'the levers trim line at the new target');
  assert.ok(all(els.messages).includes(`Side trim over the 3% target: ${Money.money(lever.usd_per_year)}/yr`),'the trim lever in the prose names the new target and its dollars');
  els['rates-reset'].events.click();
 

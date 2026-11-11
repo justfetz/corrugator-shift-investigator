@@ -8,7 +8,6 @@ from threading import Timer
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 import duckdb
-from .records import WEB_WIDTHS
 
 MAX_BYTES = 1_000_000
 
@@ -69,6 +68,8 @@ def load_rows(db, table, rows):
 
 # The per-day tables every tool reads. The XML fixture path and the record-store
 # path (record_store.py) both load exactly these; the tool queries never fork.
+# The one-day XML fixture's paper widths (the v1 record widths); the record store validates its own (records.WEB_WIDTHS).
+WEB_WIDTHS = (106, 103, 100, 98, 95, 92, 87)
 TABLES = {
     "shifts": "shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR",
     "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE",

@@ -16,7 +16,7 @@ COPY evals ./evals
 # The Markdown behind /docs (issue #93), rendered once below; the folder's design mockups are not copied.
 COPY docs/*.md ./docs/
 # Generate the rolling year once here, not at every container start (issues #19, #35): the server
-# loads /app/prebuilt in about 200 ms instead of generating for about 12 s. The window ends
+# loads /app/prebuilt in about 400 ms instead of generating for about 25 s. The window ends
 # yesterday (UTC) at build time and is fixed for the image, whenever a container starts; the
 # nightly deploy (deploy-cloudrun.yml, schedule) builds the next one. /app/prebuilt-golden is the
 # golden set's own window (the year ending golden_values.json's as_of), which the /evals page

@@ -1,0 +1,125 @@
+{
+ "about": "The dry-end reject taxonomy (issue #100): category -> reason, with the position on the board as attributes (liner, side), never as reasons. Owner-approved grouping, 2026-11-11. `family` is the KPI tile a category counts in; `counted_in` says which waste line holds it: dry_end (dry-end quality waste), shear (counted with shear and sequencing, not dry-end quality) or excluded (planning and admin, not production waste, reported separately). `generated` false marks a reason the plant enters downstream of the corrugator (bookkeeping), which the synthetic dry-end records never carry. Generation weights are simulation choices and live in synth.py, not here.",
+ "approved": "owner, 2026-11-11",
+ "attributes": {
+  "liner": ["top", "bottom", "medium", "DB", "SF"],
+  "side": ["drive", "operator", "middle"]
+ },
+ "families": {
+  "BOND": {"key": "bond", "label": "Dry-end: bond", "counted_in": "dry_end"},
+  "WARP": {"key": "warp", "label": "Dry-end: warp", "counted_in": "dry_end"},
+  "MISALIGNMENT": {"key": "misalignment", "label": "Dry-end: misalignment", "counted_in": "dry_end"},
+  "OTHER": {"key": "other", "label": "Dry-end: other (cracking, handling, paper, print)", "counted_in": "dry_end"},
+  "CHANGEOVER": {"key": "changeover", "label": "Changeover rejects (counted with shear)", "counted_in": "shear"},
+  "ADMIN": {"key": "admin", "label": "Planning / admin (not production waste)", "counted_in": "excluded"}
+ },
+ "categories": [
+  {"key": "bond", "label": "Bond / delamination", "family": "BOND", "driver": "temperature", "controllable": "yes",
+   "reasons": [
+    {"reason": "Delamination", "liner": ["top", "bottom", "DB", "SF"]},
+    {"reason": "Between flutes (DW)", "double_wall_only": true},
+    {"reason": "Blisters", "liner": ["top", "bottom"], "note": "tension blister"},
+    {"reason": "Blow out", "side": ["middle", "drive", "operator"]},
+    {"reason": "Glue dam"},
+    {"reason": "Zipper board"},
+    {"reason": "Fuzzy edges", "side": ["drive", "operator"]},
+    {"reason": "Loose / tight edges", "side": ["drive", "operator"]},
+    {"reason": "Dry board"},
+    {"reason": "Low caliper"}
+   ]},
+  {"key": "warp", "label": "Warp", "family": "WARP", "driver": "temperature", "controllable": "yes",
+   "reasons": [
+    {"reason": "Up warp"},
+    {"reason": "Down warp"},
+    {"reason": "Twist warp"},
+    {"reason": "S warp"},
+    {"reason": "End-to-end warp"}
+   ]},
+  {"key": "cracking", "label": "Cracking / surface", "family": "OTHER", "driver": "board surface", "controllable": "yes",
+   "reasons": [
+    {"reason": "Cracking board", "liner": ["top", "bottom"]},
+    {"reason": "Wrinkles", "liner": ["top", "bottom"]},
+    {"reason": "Brake line"}
+   ]},
+  {"key": "misalignment", "label": "Misalignment / scoring / slitting", "family": "MISALIGNMENT", "driver": "slitter, scorer and knife", "controllable": "yes",
+   "reasons": [
+    {"reason": "Misalign", "side": ["drive", "operator"]},
+    {"reason": "Web walking"},
+    {"reason": "Wrong scores"},
+    {"reason": "Light scores"},
+    {"reason": "Score cutting"},
+    {"reason": "Bad slit cut"},
+    {"reason": "Knife not cutting to spec", "note": "top or bottom knife: the lane's cutoff knife"},
+    {"reason": "Frozen slitters"},
+    {"reason": "Knife overheating"},
+    {"reason": "No change in slitters"},
+    {"reason": "Slitter off line"},
+    {"reason": "Moon outs"},
+    {"reason": "Wrong slat cuts"},
+    {"reason": "Wrong cut outs"},
+    {"reason": "Wrong dimensions / width"}
+   ]},
+  {"key": "handling", "label": "Handling damage", "family": "OTHER", "driver": "handling after the knife", "controllable": "yes",
+   "reasons": [
+    {"reason": "Bander crush"},
+    {"reason": "Bander damage"},
+    {"reason": "Forklift damage"},
+    {"reason": "Stacker jam", "note": "top or lower stacker: the lane's stacker"},
+    {"reason": "Stacker in discharge"},
+    {"reason": "Fanfold jam"},
+    {"reason": "Manual discharge"}
+   ]},
+  {"key": "paper", "label": "Paper / mill", "family": "OTHER", "driver": "paper as received", "controllable": "partly",
+   "control_note": "receiving and roll prep",
+   "reasons": [
+    {"reason": "Wrinkles in paper from mill"},
+    {"reason": "Marks in paper / dropped roll"},
+    {"reason": "Wrong paper"},
+    {"reason": "Wrong medium"},
+    {"reason": "Wrong DB/SF liner", "liner": ["DB", "SF"]},
+    {"reason": "Wrong flute size"},
+    {"reason": "Liner inside out", "liner": ["top", "bottom", "DB", "SF"]},
+    {"reason": "No coating"},
+    {"reason": "Wrong color"}
+   ]},
+  {"key": "changeover", "label": "Changeover", "family": "CHANGEOVER", "driver": "sequencing", "controllable": "yes",
+   "control_note": "counted with shear and sequencing, not dry-end quality",
+   "reasons": [
+    {"reason": "Order change"},
+    {"reason": "Automatic order change"},
+    {"reason": "Paper change"},
+    {"reason": "Early paper change"},
+    {"reason": "Waste from a paper or flute change"},
+    {"reason": "Cut off"},
+    {"reason": "Small butt"}
+   ]},
+  {"key": "print", "label": "Print", "family": "OTHER", "driver": "pre-print", "controllable": "yes",
+   "reasons": [
+    {"reason": "Print wrinkle"},
+    {"reason": "Print / no print"},
+    {"reason": "Streaks in print"}
+   ]},
+  {"key": "admin", "label": "Planning / admin (not production waste)", "family": "ADMIN", "driver": "planning and bookkeeping", "controllable": "no",
+   "control_note": "excluded from controllable dry-end waste, reported separately",
+   "reasons": [
+    {"reason": "Order fill"},
+    {"reason": "Over scheduled"},
+    {"reason": "Overshipment", "generated": false},
+    {"reason": "Max shipped", "generated": false},
+    {"reason": "Count adjustment", "generated": false},
+    {"reason": "Inventory write-off", "generated": false},
+    {"reason": "Mis-tag", "generated": false},
+    {"reason": "Tag without a unit", "generated": false},
+    {"reason": "Lost unit - shipping", "generated": false},
+    {"reason": "Used as dunnage"},
+    {"reason": "Re-arrange outs"},
+    {"reason": "Cap sheets"},
+    {"reason": "Not enough trim"},
+    {"reason": "Out of trim"},
+    {"reason": "Operator"},
+    {"reason": "Equipment entered as a reason", "note": "the plant list's machine-section and system entries, recorded generically"},
+    {"reason": "NULL (no reason entered)"},
+    {"reason": "Blank (no reason entered)"}
+   ]}
+ ]
+}

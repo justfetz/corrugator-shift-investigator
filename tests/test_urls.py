@@ -90,7 +90,7 @@ def test_the_owner_examples_resolve():
     report = resolve_url('/corr/1/month/2026-09-14/shift/2.json?measure=report&corrupt=1', store)
     assert report['report'] and report['request'] is None and report['corrupt'] and report['json'] and report['text'] == '/corr/1/month/2026-09-14/shift/2?measure=report&corrupt=1'
     assert resolve_url('/corr/1/day/2026-09-14/shift/2.json?measure=notes&want=chart', store)['request']['asked'] == ['chart']
-    assert machine_slug('CORR-1') == '1' and machine_slug('BHS-2') == 'bhs-2'
+    assert machine_slug('CORR-1') == '1' and machine_slug('LINE-2') == 'line-2'
     assert scope_url('2026-09-14', 'accounting', 'day', 2) == '/corr/1/period/2026-09-14'
     assert question_url('2026-09-14', 2, 'shift', 'day', question='Why was this shift slow?') == '/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why%20was%20this%20shift%20slow%3F'
     assert PATH.match('/corr/1/day/2026-09-14/shift/2.json') and not PATH.match('/corr/1/day/2026-09-14/shift/4')

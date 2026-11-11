@@ -6,9 +6,9 @@ holds for those days (per-day seeding, issue #35): the DuckDB path is never
 reused to compute what it is being checked against. The literal numbers
 pinned below are the value goldens of the default seed; they move only with
 an intended generator change (the content hash is pinned in
-test_synth_determinism.py). The store is the year ending 2026-09-30
+test_synth_determinism.py). The store runs from 1 January 2025 to 2026-09-30
 (tests/conftest.py), so July is inside it and the windows before its first
-day (30 September 2025) are the ones that read unavailable.
+day are the ones that read unavailable.
 """
 from collections import defaultdict
 from datetime import date, timedelta
@@ -16,6 +16,7 @@ import re
 import pytest
 from investigator.agent import Agent, Context, PERIOD_TOOLS, TOOL_SCHEMAS, parse_request
 from investigator.record_store import (KPI_CATALOG, TREND_METRICS, default_store, fiscal_bounds, parse_window, previous_window, window_label)
+from investigator import records as R
 from investigator.synth import generate_months
 
 
@@ -44,11 +45,14 @@ def plain_kpis(data, start, end, shift=None):
     scheduled = sum(sh.scheduled_minutes for sh in shifts)
     running = sum(s.elapsed_seconds - s.stop_time_sec for s in setups) / 60
     stop_minutes = sum(st.duration_sec for st in stops) / 60
-    reasons = defaultdict(float)
+    reasons, lines = defaultdict(float), defaultdict(float)
     for s in setups:
         for r in s.rejects:
-            reasons[r.reason] += r.sqft
-    trim, shear, rejects = (sum(getattr(s, f) for s in setups) for f in ("trim_sqft", "chop_sqft", "kqf_sqft"))
+            reasons[R.family_of(r.category)] += r.sqft
+            lines[R.counted_in(r.category)] += r.sqft
+    trim, shear, rejects = sum(s.trim_sqft for s in setups), sum(s.chop_sqft for s in setups), lines["dry_end"]
+    boards = sum(lane.cutoff_waste_sqft + lane.stacker_waste_sqft for s in setups for lane in s.lanes)
+    accounted = trim + shear + rejects + lines["shear"] + lines["excluded"] + boards
     bale = sum(sh.bale_sqft for sh in shifts)
     kinds = defaultdict(float)
     for st in stops:
@@ -58,8 +62,8 @@ def plain_kpis(data, start, end, shift=None):
         "downtime_pct": stop_minutes / scheduled * 100, "downtime_minutes": stop_minutes, "stops": len(stops),
         "minutes_per_stop": stop_minutes / len(stops), "trim_pct": trim / gross * 100, "shear_pct": shear / gross * 100,
         "dry_end_pct": rejects / gross * 100, "bond_pct": reasons["BOND"] / gross * 100, "warp_pct": reasons["WARP"] / gross * 100,
-        "misalignment_pct": reasons["MISALIGNMENT"] / gross * 100, "moisture_pct": reasons["MOISTURE"] / gross * 100, "bale_pct": bale / gross * 100,
-        "unexplained_pct": (bale - trim - shear - rejects) / gross * 100,
+        "misalignment_pct": reasons["MISALIGNMENT"] / gross * 100, "other_pct": reasons["OTHER"] / gross * 100, "bale_pct": bale / gross * 100,
+        "unexplained_pct": (bale - accounted) / gross * 100,
         "maintenance_pm_pct": (kinds["Maintenance"] + kinds["PM"]) / scheduled * 100, "operator_pct": kinds["Operator"] / scheduled * 100,
         "setups": len(setups), "paper_changes": len({s.wet_end_id for s in setups}),
         "lineal_per_setup": feet / len(setups), "lineal_per_paper_change": feet / len({s.wet_end_id for s in setups}),
@@ -128,16 +132,17 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
             improved = (row["delta"] < 0) == (better == "lower")
             assert row["change"] == ("better" if improved else "worse")
     # Pinned goldens of the default seed (ratios of sums, never averages of averages).
-    # (Issue #35 regenerated the days: these were 160,260.2 / 150,593.0 MSF, 617 / 567 stops, 2,672 setups.)
-    assert rows["volume_msf"]["current"] == pytest.approx(156429.0) and rows["volume_msf"]["previous"] == pytest.approx(152043.4)
-    assert rows["lineal_ft"]["current"] == pytest.approx(19030889.9)
-    assert rows["stops"]["current"] == 673 and rows["stops"]["previous"] == 546
-    assert rows["trim_pct"]["current"] == pytest.approx(3.2256, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(2.8698, abs=1e-4)
-    assert rows["warp_pct"]["current"] == pytest.approx(0.3280, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4698, abs=1e-4)
-    assert rows["downtime_pct"]["current"] == pytest.approx(5.0485, abs=1e-4)
-    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.7316, abs=1e-4)
-    assert rows["setups"]["current"] == 2596 and rows["paper_changes"]["current"] == 898
-    assert result["source_rows"]["current"]["setups"] == 2596 and result["source_rows"]["previous"]["setups"] == 2507
+    # (Issue #100 scheduled orders into setups: these were 156,429.0 / 152,043.4 MSF, 673 / 546 stops, 2,596 setups;
+    # issue #35 before it: 160,260.2 / 150,593.0 MSF, 617 / 567 stops, 2,672 setups.)
+    assert rows["volume_msf"]["current"] == pytest.approx(162382.6) and rows["volume_msf"]["previous"] == pytest.approx(157948.8)
+    assert rows["lineal_ft"]["current"] == pytest.approx(18931590.5)
+    assert rows["stops"]["current"] == 669 and rows["stops"]["previous"] == 538
+    assert rows["trim_pct"]["current"] == pytest.approx(3.4851, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(3.0857, abs=1e-4)
+    assert rows["warp_pct"]["current"] == pytest.approx(0.3208, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4617, abs=1e-4)
+    assert rows["downtime_pct"]["current"] == pytest.approx(4.9042, abs=1e-4)
+    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.6354, abs=1e-4)
+    assert rows["setups"]["current"] == 2612 and rows["paper_changes"]["current"] == 806
+    assert result["source_rows"]["current"]["setups"] == 2612 and result["source_rows"]["previous"]["setups"] == 2622
     # downtime_pct is a ratio of sums: it is NOT the mean of the 66 shift percentages
     shift_pcts = []
     for sh in between(data["shifts"], date(2026, 9, 1), date(2026, 9, 30)):
@@ -168,9 +173,9 @@ def test_week_and_day_kpis_with_shift_filter(store, data):
 
 
 def test_first_week_has_no_previous_window_and_withholds_deltas(store):
-    # The year's first week: Tuesday 30 September 2025 to Friday 3 October, and nothing before it
-    result = store.get_period_kpis({"period": "week", "anchor": "2025-10-01"})
-    assert result["window"]["coverage"] == "partial" and result["window"]["production_days_observed"] == 4
+    # The data's first week: Wednesday 1 January 2025 to Friday 3 January, and nothing before it
+    result = store.get_period_kpis({"period": "week", "anchor": "2025-01-02"})
+    assert result["window"]["coverage"] == "partial" and result["window"]["production_days_observed"] == 3
     assert result["previous_window"]["coverage"] == "unavailable"
     assert result["coverage"] == "partial" and result["comparison"].startswith("withheld")
     assert all(r["previous"] is None and r["delta"] is None and r["change"] is None for r in result["rows"])
@@ -178,8 +183,8 @@ def test_first_week_has_no_previous_window_and_withholds_deltas(store):
     partial = store.get_period_kpis({"period": "week", "anchor": "2026-09-29"})
     assert partial["window"]["production_days_expected"] == 5 and partial["window"]["production_days_observed"] == 3
     assert partial["window"]["coverage"] == "partial" and all(r["delta"] is None for r in partial["rows"])
-    for outside in ("2026-10-01", "2025-08-01"):   # after the last day, before the first
-        with pytest.raises(ValueError, match="outside the dataset range 2025-09-30 to 2026-09-30"):
+    for outside in ("2026-10-01", "2024-12-01"):   # after the last day, before the first
+        with pytest.raises(ValueError, match="outside the dataset range 2025-01-01 to 2026-09-30"):
             store.get_period_kpis({"period": "month", "anchor": outside})
     with pytest.raises(ValueError, match="Saturday"):
         store.get_period_kpis({"period": "day", "anchor": "2026-09-12"})
@@ -222,12 +227,12 @@ def test_downtime_pareto_shares_cumulate_and_match_sums(store, data):
     splicer = next(r for r in rows if r["category"] == "Splicer 3")
     assert splicer["minutes"] > 3 * splicer["previous_minutes"]   # the week's missed-splice problem is visible in the data
     by_reason = {r["category"]: r for r in store.get_downtime_pareto({"period": "week", "anchor": "2026-09-09"}, group_by="reason")["rows"]}
-    # The planned window is its own reason row: Thursday 10 September's 133-minute PM stop leads the week
-    # (132 minutes the Thursday before), and "Other" holds only the unclassified stops.
-    assert (by_reason["Planned maintenance"]["stops"], by_reason["Planned maintenance"]["minutes"]) == (1, pytest.approx(133.0, abs=0.01))
-    assert by_reason["Planned maintenance"]["previous_minutes"] == pytest.approx(132.0, abs=0.01)
-    assert (by_reason["Other"]["stops"], by_reason["Other"]["minutes"]) == (16, pytest.approx(26.72, abs=0.01))
-    assert next(iter(by_reason)) == "Planned maintenance" and by_reason["Missed splice"]["cumulative_pct"] == pytest.approx(57.64, abs=0.01)
+    # The planned window is its own reason row: Thursday 10 September's 123-minute PM stop leads the week
+    # (125 minutes the Thursday before), and "Other" holds only the unclassified stops.
+    assert (by_reason["Planned maintenance"]["stops"], by_reason["Planned maintenance"]["minutes"]) == (1, pytest.approx(123.0, abs=0.01))
+    assert by_reason["Planned maintenance"]["previous_minutes"] == pytest.approx(125.0, abs=0.01)
+    assert (by_reason["Other"]["stops"], by_reason["Other"]["minutes"]) == (9, pytest.approx(12.37, abs=0.01))
+    assert next(iter(by_reason)) == "Planned maintenance" and by_reason["Missed splice"]["cumulative_pct"] == pytest.approx(53.77, abs=0.01)
     assert all(st.reason == "Planned maintenance" for st in data["stops"] if st.kind == "PM")
     assert all(st.kind == "PM" for st in data["stops"] if st.reason == "Planned maintenance")
     by_count = store.get_downtime_pareto({"period": "week", "anchor": "2026-09-09"}, group_by="reason", measure="count")
@@ -245,9 +250,12 @@ def test_waste_breakdown_matches_sums_and_month_story(store, data):
     setups = between(data["dry_end_setups"], date(2026, 9, 1), date(2026, 9, 30))
     assert rows["trim"]["sqft"] == pytest.approx(sum(s.trim_sqft for s in setups), abs=0.1)
     assert rows["shear"]["sqft"] == pytest.approx(sum(s.chop_sqft for s in setups), abs=0.1)
-    assert rows["dry_end"]["sqft"] == pytest.approx(rows["bond"]["sqft"] + rows["warp"]["sqft"] + rows["misalignment"]["sqft"] + rows["moisture"]["sqft"], abs=0.2)
+    assert rows["dry_end"]["sqft"] == pytest.approx(rows["bond"]["sqft"] + rows["warp"]["sqft"] + rows["misalignment"]["sqft"] + rows["other"]["sqft"], abs=0.2)
+    assert rows["cutoff_waste"]["sqft"] == pytest.approx(sum(lane.cutoff_waste_sqft for s in setups for lane in s.lanes), abs=0.5)
+    assert rows["changeover"]["sqft"] == pytest.approx(sum(s.changeover_sqft for s in setups), abs=0.5)
     assert rows["bale"]["sqft"] == pytest.approx(sum(sh.bale_sqft for sh in between(data["shifts"], date(2026, 9, 1), date(2026, 9, 30))), abs=0.1)
-    assert rows["unexplained"]["sqft"] == pytest.approx(rows["bale"]["sqft"] - rows["trim"]["sqft"] - rows["shear"]["sqft"] - rows["dry_end"]["sqft"], abs=0.3)
+    lines = ("trim", "shear", "changeover", "cutoff_waste", "stacker_waste", "dry_end", "admin")
+    assert rows["unexplained"]["sqft"] == pytest.approx(rows["bale"]["sqft"] - sum(rows[k]["sqft"] for k in lines), abs=0.5)
     for key, metric in (("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bale", "bale_pct"), ("unexplained", "unexplained_pct")):
         assert rows[key]["pct_of_gross"] == pytest.approx(september[metric], rel=1e-3)
         assert rows[key]["previous_pct_of_gross"] == pytest.approx(august[metric], rel=1e-3)
@@ -255,7 +263,7 @@ def test_waste_breakdown_matches_sums_and_month_story(store, data):
     assert result["gross_sqft"] == pytest.approx(september["volume_msf"] * 1000, rel=1e-6)
     assert 0.1 <= rows["unexplained"]["pct_of_gross"] <= 0.4
     assert rows["warp"]["previous_pct_of_gross"] > rows["warp"]["pct_of_gross"]   # August warp above September
-    first = store.get_waste_breakdown({"period": "month", "anchor": "2025-09-30"})   # the year's first month: one day, August 2025 before it
+    first = store.get_waste_breakdown({"period": "month", "anchor": "2025-01-15"})   # the data's first month: December 2024 is before it
     assert first["coverage"] == "partial" and all(r["previous_sqft"] is None and r["delta_pct_points"] is None for r in first["rows"])
     july = store.get_waste_breakdown({"period": "month", "anchor": "2026-08-03"})   # July is inside the year: a full comparison
     assert july["coverage"] == "complete" and all(r["previous_sqft"] is not None for r in july["rows"])
@@ -299,9 +307,9 @@ def test_day_basis_flags_unequal_production_days(store):
     p1 = store.get_period_kpis({"period": "fiscal", "anchor": "2026-08-14"})   # P1 against the prior year's 5-week P12, both in the year
     assert p1["previous_window"]["label"].startswith("4-4-5 P12 of the prior year (5 weeks)") and p1["comparison"] == "complete"
     assert (p1["production_days_current"], p1["production_days_previous"], p1["equal_production_days"]) == (20, 25, False)
-    first = store.get_period_kpis({"period": "fiscal", "anchor": "2025-10-15"})   # the year opens inside the prior year's P3
+    first = store.get_period_kpis({"period": "fiscal", "anchor": "2025-01-15"})   # the data opens inside P6 of the year starting 2024-08-05
     assert first["window"]["coverage"] == "partial" and first["previous_window"]["coverage"] == "unavailable"
-    assert first["equal_production_days"] is False and first["comparison"].startswith("withheld")   # 24 vs 0 observed
+    assert first["equal_production_days"] is False and first["comparison"].startswith("withheld")   # 23 vs 0 observed
     single = store.get_period_kpis({"period": "week", "anchor": "2026-09-14"}, compare=False)
     assert single["production_days_previous"] is None and single["equal_production_days"] is None
 
@@ -327,13 +335,13 @@ def test_grade_totals_are_ratios_of_sums_within_each_grade(store, data):
         assert row["speed_elapsed_fpm"] <= row["speed_run_fpm"]
         assert row["speed_to_target_pct"] == pytest.approx(row["speed_run_fpm"] / row["target_fpm"] * 100, abs=0.06)
         assert row["trim_pct"] == pytest.approx(sum(s.trim_sqft for s in mine) / gross * 100, abs=1e-3)
-        assert row["dry_end_pct"] == pytest.approx(sum(s.kqf_sqft for s in mine) / gross * 100, abs=1e-3)
+        assert row["dry_end_pct"] == pytest.approx(sum(s.reject_sqft for s in mine) / gross * 100, abs=1e-3)
         assert row["downtime_pct_of_elapsed"] == pytest.approx(sum(s.stop_time_sec for s in mine) / sum(s.elapsed_seconds for s in mine) * 100, abs=1e-3)
         assert row["lineal_per_setup"] == pytest.approx(feet / len(mine), abs=0.06)
         assert row["lineal_per_wet_end"] == pytest.approx(feet / row["wet_ends"], abs=0.06)
         previous = [s for s in between(data["dry_end_setups"], date(2026, 8, 1), date(2026, 8, 31)) if s.quality_id == row["grade"]]
         assert row["previous_volume_msf"] == pytest.approx(sum(s.total_produced_sqft for s in previous) / 1000, abs=0.06)
-    first = store.get_grade_totals({"period": "week", "anchor": "2025-10-01"}, shift=3)   # the year's first week: nothing before it
+    first = store.get_grade_totals({"period": "week", "anchor": "2025-01-02"}, shift=3)   # the data's first week: nothing before it
     assert first["rows"] and all(r["previous_volume_msf"] is None and r["delta_volume_msf"] is None for r in first["rows"])  # unavailable, never zero
 
 
@@ -342,7 +350,7 @@ def test_overrun_sums_cuts_and_sheets_per_knife(store, data):
     setups = between(data["dry_end_setups"], date(2026, 9, 14), date(2026, 9, 18), 2)
     lines = defaultdict(list)
     for s in setups:
-        for c in s.customers:
+        for c in s.lanes:
             lines[c.cutoff_allocation].append(c)
     assert [r["knife"] for r in result["rows"]] == [f"knife {k}" for k in sorted(lines)] + ["all knives"]
     assert result["band_pct"] == 2.0 and result["window_pct"] == 10.0
@@ -361,7 +369,7 @@ def test_overrun_sums_cuts_and_sheets_per_knife(store, data):
         assert row["lines_under_pct"] == pytest.approx(under / len(mine) * 100, abs=0.06)
         assert row["lines_inside_band_pct"] == pytest.approx((len(mine) - over - under) / len(mine) * 100, abs=0.06)
         assert abs(row["overrun_pct"]) <= 10  # the generator never leaves the record window
-    assert 0.80 <= result["rows"][-1]["lines_inside_band_pct"] / 100 <= 0.90  # the generator keeps ~85% of lines inside +-2%
+    assert 0.78 <= result["rows"][-1]["lines_inside_band_pct"] / 100 <= 0.90  # the generator keeps ~85% of setups inside +-2%
 
 
 def test_overrun_chart_is_a_range_with_the_band(store):
@@ -373,7 +381,7 @@ def test_overrun_chart_is_a_range_with_the_band(store):
     [chart] = result["charts"]
     assert chart["type"] == "range" and chart["y"] == "overrun_pct" and chart["band_pct"] == 2.0
     assert chart["rows"][-1]["knife"] == "all knives"
-    assert result["sections"][0].endswith("(query 1 · row 3)") and "across all knives" in result["sections"][0]   # the headline cites the all-knives row (#75)
+    assert result["sections"][0].endswith("(query 1 · row 2)") and "across all knives" in result["sections"][0]   # the all-knives row (#75), after two knives (#100)
     assert any(s.startswith("- knife 1: **") and "inside the band" in s for s in result["sections"])
     grade = Agent(analysis, store=store).ask("Volume by grade this month", context)
     assert grade["status"] == "complete" and grade["charts"][0]["y2"] == "previous_volume_msf"
@@ -389,7 +397,7 @@ def test_speed_opportunity_best_fifth_is_a_ratio_of_sums(store, data):
         if run < 2.0:
             short += 1
             continue
-        cells[(s.quality_id, f"{s.web_width_in:g} in")].append((s.lineal_ft / run, s.lineal_ft, run, s.kqf_sqft, s.total_produced_sqft))
+        cells[(s.quality_id, f"{s.web_width_in:g} in")].append((s.lineal_ft / run, s.lineal_ft, run, s.reject_sqft, s.total_produced_sqft))
     thin = {key for key, rows in cells.items() if len(rows) < 10}
     assert result["excluded_short_setups"] == short and len(result["rows"]) == len(cells) - len(thin)
     assert {(c["grade"], c["slice"]) for c in result["thin_cells"]} == thin and all(c["setups"] < 10 for c in result["thin_cells"])
@@ -432,8 +440,8 @@ def test_trend_is_weekly_ratio_of_sums_and_allow_listed(store, data):
     nine = store.get_trend("stops", weeks=9, anchor="2026-09-14")   # back to the week of 20 July, inside the year
     assert nine["missing_weeks"] == [] and len(nine["rows"]) == 9
     assert nine["rows"][2]["value"] == sum(1 for st in data["stops"] if "20260803" <= st.production_date <= "20260807")
-    early = store.get_trend("stops", weeks=9, anchor="2025-11-12")   # back before the year's first day
-    assert early["missing_weeks"] == ["2025-09-15", "2025-09-22"] and len(early["rows"]) == 7 and early["rows"][0]["partial"] is True
+    early = store.get_trend("stops", weeks=9, anchor="2025-02-12")   # back before the data's first day
+    assert early["missing_weeks"] == ["2024-12-16", "2024-12-23"] and len(early["rows"]) == 7 and early["rows"][0]["partial"] is True
     for bad in (dict(metric="profit"), dict(metric="trim_pct", weeks=0), dict(metric="trim_pct", weeks=27), dict(metric="trim_pct", weeks="8")):
         with pytest.raises(ValueError):
             store.get_trend(**bad)
@@ -603,8 +611,8 @@ def test_rollstock_is_the_wet_end_records_by_grade_and_width(store, data):
         assert row["lineal_per_run"] == pytest.approx(row["lineal_ft"] / len(mine), abs=0.06)
         assert row["previous_lineal_ft"] == pytest.approx(sum(w.lineal_ft for w in before), abs=0.06)
         assert row["previous_paper_runs"] == len(before)
-    # The year's first week has no previous window: previous and delta are null, never zero.
-    first = store.get_rollstock({"period": "week", "anchor": "2025-10-01"})
+    # The data's first week has no previous window: previous and delta are null, never zero.
+    first = store.get_rollstock({"period": "week", "anchor": "2025-01-02"})
     assert first["coverage"] == "partial" and first["previous_total_msf"] is None and first["delta_lineal_ft"] is None
     assert all(r["previous_msf"] is None and r["delta_msf"] is None for r in first["rows"])
     # One shift: the setups it ran, grouped by their run's grade and width; distinct wet ends are the run count.

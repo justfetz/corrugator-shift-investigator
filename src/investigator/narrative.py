@@ -215,7 +215,7 @@ _NOUN_FIELDS = {'speed': ('fpm', 'speed'), 'pace': ('fpm', 'speed'), 'downtime':
                 'stops': ('stop',), 'stoppages': ('stop',), 'waste': ('sqft', 'pct', 'reject', 'waste', 'trim', 'shear', 'dry_end'),
                 'rejects': ('reject', 'sqft', 'dry_end', 'pct'), 'trim': ('trim', 'sqft', 'pct'), 'setups': ('setup',),
                 'volume': ('msf', 'volume', 'lineal', 'sqft'), 'output': ('msf', 'volume', 'lineal', 'sqft')}
-_LOWER_IS_BETTER = ('down', 'stop', 'trim', 'shear', 'dry_end', 'warp', 'bond', 'misalign', 'moisture', 'reject', 'waste', 'bale',
+_LOWER_IS_BETTER = ('down', 'stop', 'trim', 'shear', 'dry_end', 'warp', 'bond', 'misalign', 'other_pct', 'changeover', 'admin', 'reject', 'waste', 'bale',
                     'unexplained', 'maintenance', 'operator', 'overrun', 'over_', 'under')
 _HIGHER_IS_BETTER = ('fpm', 'speed', 'msf', 'lineal', 'good', 'volume', 'throughput', 'of_target', 'inside_band')
 _LABEL_SKIP = frozenset(('unit', 'better', 'change', 'notes', 'start', 'end', 'production_day', 'week_start', 'week_end', 'record_type'))

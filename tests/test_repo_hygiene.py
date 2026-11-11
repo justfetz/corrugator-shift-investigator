@@ -148,7 +148,7 @@ up = base in os.environ.get('STUB_UP', '').split()
 if url.endswith('/api/health'):
     # the image's health body: its window ends the day before the build (issue #35), or STUB_AS_OF when a test freezes it
     as_of = os.environ['STUB_AS_OF']
-    window = {'as_of': as_of, 'first_day': '2025-11-10', 'last_day': as_of, 'production_days': 262}
+    window = {'as_of': as_of, 'first_day': '2025-01-01', 'last_day': as_of, 'production_days': 485}
     open(args[args.index('-o') + 1], 'w').write(json.dumps({'ok': True, 'store': {'window': window}}) if up else 'down')
     if '-w' in args:
         sys.stdout.write('200' if up else '503')
@@ -215,7 +215,7 @@ def test_smoke_test_fails_a_frozen_window_on_mains_own_url(tmp_path):
     """Issue #35 with #110: the window check reads main's own URL, the one the smoke test reports, and fails the deploy
     when its window does not end the day before the build."""
     code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN])
-    assert code == 0 and 'window 2025-11-10 to 2026-11-10 (as of 2026-11-10, 262 production days): ends yesterday' in log, log
+    assert code == 0 and 'window 2025-01-01 to 2026-11-10 (as of 2026-11-10, 485 production days): ends yesterday' in log, log
     assert requested.count(f'{MAIN}/api/health') == 2 and not any('---' in url for url in requested)
     code, log, _ = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN], as_of='2026-10-01')
     assert code != 0 and '::error::store.window ends 2026-10-01' in log and 'Live at' not in log, log
@@ -336,10 +336,10 @@ def test_the_deploy_smoke_test_fails_a_window_that_does_not_end_yesterday(tmp_pa
     assert smoke.index('check_window.py') < smoke.index('echo "Live at')
     script = ROOT / '.github' / 'scripts' / 'check_window.py'
 
-    def run(as_of, last_day, run_day, today):
+    def run(as_of, last_day, run_day, today, first_day='2025-01-01'):
         health = tmp_path / 'health.json'
         health.write_text(json.dumps({'ok': True, 'store': {'source': 'prebuilt', 'window': {
-            'as_of': as_of, 'first_day': '2025-11-11', 'last_day': last_day, 'production_days': 261}}}))
+            'as_of': as_of, 'first_day': first_day, 'last_day': last_day, 'production_days': 485}}}))
         proc = subprocess.run(['python3', str(script), str(health), run_day, today], capture_output=True, text=True)
         return proc.returncode, proc.stdout + proc.stderr
 
@@ -351,6 +351,10 @@ def test_the_deploy_smoke_test_fails_a_window_that_does_not_end_yesterday(tmp_pa
     assert code == 1 and '::error::store.window ends 2026-11-09' in out and 'expected yesterday, 2026-11-10' in out, out
     code, out = run('2026-11-08', '2026-11-08', '2026-11-09', '2026-11-09')                   # Sunday reported as a production day
     assert code == 1 and 'last_day is 2026-11-08, expected 2026-11-06' in out, out
+    code, out = run('2026-11-10', '2026-11-10', '2026-11-11', '2026-11-11', '2025-11-11')     # the old rolling year's start (issue #100)
+    assert code == 1 and 'first_day is 2025-11-11, expected 2025-01-01' in out, out
+    from investigator.synth import DATASET_FIRST_DAY
+    assert DATASET_FIRST_DAY.isoformat() == '2025-01-01' in script.read_text()
     health = tmp_path / 'health.json'
     health.write_text(json.dumps({'ok': True, 'store': {'source': 'generated'}}))           # an image without the window
     proc = subprocess.run(['python3', str(script), str(health), '2026-11-11'], capture_output=True, text=True)
@@ -366,3 +370,38 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
             '/app/prebuilt-golden') in dockerfile
     assert 'INVESTIGATOR_PREBUILT=/app/prebuilt ' in dockerfile and 'INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden' in dockerfile
     assert not any('INVESTIGATOR_AS_OF' in line for line in dockerfile.splitlines() if line.startswith(('ENV', 'ARG')))   # never pinned
+
+
+# The names the record contract must never carry (issue #100, owner 2026-11-11): the vendor whose dry-end
+# record the contract was modelled on, its product names and its source-system table and record names. The
+# contract describes a generic corrugator dry-end setup record. Built from fragments so this file does not
+# name them either.
+VENDOR_PATTERNS = tuple(re.compile(p) for p in (
+    r"\b" + "B" + "HS" + r"\b",
+    "Production" + "_Center",
+    "BQ" + "MES" + "PAHT",
+    r"\bP0" + "4[PGTS]" + r"\b",
+    "Module" + r" ?[Ff]acer",
+))
+
+
+def test_no_tracked_file_names_the_vendor_or_its_source_tables():
+    """A test greps the repo for the vendor name and fails if it appears (owner, 2026-11-11): code, docs, column
+    names, comments and goldens, every tracked text file."""
+    try:
+        tracked = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, capture_output=True, timeout=30, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip('git unavailable')
+    hits = []
+    for name in tracked.decode('utf-8').split('\0'):
+        path = ROOT / name
+        if not name or not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding='utf-8')
+        except (UnicodeDecodeError, OSError):
+            continue          # binary files (fonts, images) carry no prose
+        for pattern in VENDOR_PATTERNS:
+            for match in pattern.finditer(text):
+                hits.append(f'{name}:{text.count(chr(10), 0, match.start()) + 1}: {match.group(0)}')
+    assert hits == []

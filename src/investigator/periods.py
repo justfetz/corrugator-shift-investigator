@@ -53,7 +53,7 @@ SHIFT_SECONDS = 28800   # the daily KPI tool's fixed eight-hour denominator (ana
 KPI_SQL = ("SELECT * FROM shift_kpis WHERE corrupt = ? AND production_date BETWEEN ? AND ? "
            "AND list_contains(?, shift) ORDER BY production_date, shift")
 # The stop records of both windows, in the order the per-day notes tool lists them.
-STOP_SQL = ("SELECT production_date, shift, stop_id, kind, place, reason, seconds, note, "
+STOP_SQL = ("SELECT production_date, shift, stop_id, kind, place, reason, seconds, comment AS note, "
             "strftime(started, '%Y-%m-%d %H:%M:%S') AS start, strftime(ended, '%Y-%m-%d %H:%M:%S') AS \"end\" "
             "FROM stops WHERE production_date BETWEEN ? AND ? AND list_contains(?, shift) "
             "ORDER BY production_date, shift, start, stop_id")

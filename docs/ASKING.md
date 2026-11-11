@@ -8,7 +8,7 @@ The rail's three controls are part of every question:
 
 | Control | Values | What it means |
 | --- | --- | --- |
-| Production day | Monday to Friday, the rolling year the page footer names (about 262 days, ending the day before the site was last deployed) | the anchor; a day runs 07:00 to 07:00 and is labeled by its starting date |
+| Production day | Monday to Friday, the window the page footer names (from 1 January 2025 to the day before the site was last deployed) | the anchor; a day runs 07:00 to 07:00 and is labeled by its starting date |
 | Shift | 1 (07–15), 2 (15–23), 3 (23–07), All | one 480-minute shift, or All for the whole production day and comparisons between shifts |
 | Window | Day, Week, Month, 4-4-5 | the window a question that names none is asked over: the day, its Monday-to-Friday week, its calendar month, or its 4-4-5 accounting period |
 

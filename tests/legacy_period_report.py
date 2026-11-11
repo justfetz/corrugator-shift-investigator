@@ -167,13 +167,17 @@ def legacy_sums(self, window, shift, trace):
                   "coalesce(sum(feet),0) AS lineal_ft, coalesce(sum(gross),0) AS gross_sqft, "
                   "coalesce(sum(trim),0) AS trim_sqft, coalesce(sum(shear),0) AS shear_sqft, "
                   "coalesce(sum(rejects),0) AS reject_sqft, coalesce(sum(seconds),0) AS elapsed_seconds, "
-                  "coalesce(sum(stop_seconds),0) AS setup_stop_seconds, count(DISTINCT production_date) AS production_days "
+                  "coalesce(sum(stop_seconds),0) AS setup_stop_seconds, count(DISTINCT production_date) AS production_days, "
+                  "coalesce(sum(changeover_sqft),0) AS changeover_sqft, coalesce(sum(admin_sqft),0) AS admin_sqft, "
+                  "coalesce(sum(cutoff_waste_sqft),0) AS cutoff_waste_sqft, coalesce(sum(stacker_waste_sqft),0) AS stacker_waste_sqft "
                   f"FROM setups WHERE production_date BETWEEN ? AND ?{clause}",
         "shifts": "SELECT count(*) AS shift_records, coalesce(sum(scheduled_minutes),0)*60 AS scheduled_seconds, "
                   f"coalesce(sum(bale),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
         "stops": f"SELECT kind, count(*) AS stops, sum(seconds) AS seconds FROM stops WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind",
-        "rejects": f"SELECT reason, sum(sqft) AS sqft FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason",
-        "details": f"SELECT reason, detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason, detail ORDER BY sum(sqft) DESC, reason, detail",
+        # record contract v2 (issue #100): the dry-end families of the reject lines, by family and reported reason
+        "rejects": f"SELECT family AS reason, sum(sqft) AS sqft FROM rejects WHERE counted_in = 'dry_end' AND production_date BETWEEN ? AND ?{clause} GROUP BY family",
+        "details": ("SELECT family AS reason, reason AS detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects "
+                    f"WHERE counted_in = 'dry_end' AND production_date BETWEEN ? AND ?{clause} GROUP BY family, reason ORDER BY 3 DESC, 1, 2"),
     }
     sums = {}
     for name, sql in queries.items():
@@ -190,7 +194,7 @@ def legacy_sums(self, window, shift, trace):
              "maintenance_pm_seconds": sum(r["seconds"] for k, r in by_kind.items() if k in ("Maintenance", "PM")),
              "operator_seconds": by_kind.get("Operator", {}).get("seconds", 0) or 0,
              "bond_sqft": by_reason.get("BOND", 0.0), "warp_sqft": by_reason.get("WARP", 0.0),
-             "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0), "moisture_sqft": by_reason.get("MOISTURE", 0.0),
+             "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0), "other_sqft": by_reason.get("OTHER", 0.0),
              "details": sums["details"],
              "source_rows": {"setups": setup["setup_records"], "shifts": shifts["shift_records"],
                              "stops": sum(r["stops"] for r in sums["stops"]), "rejects": len(sums["rejects"])}}

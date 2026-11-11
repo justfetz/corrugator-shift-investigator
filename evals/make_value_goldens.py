@@ -35,12 +35,23 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.fixture import GRADES  # noqa: E402  grade targets: a configured table, not a computation
-from investigator.synth import DATASET_SPAN_DAYS, generate_window  # noqa: E402
+from investigator.synth import DATASET_FIRST_DAY, generate_window  # noqa: E402  the dataset's configured first day
 
 OUT = ROOT / 'evals' / 'golden_values.json'
-# The golden window: every production day from AS_OF minus DATASET_SPAN_DAYS to AS_OF (evals/run.py GOLDEN_AS_OF).
+# The golden window: every production day from the dataset's first day (1 January 2025, a fixed start, issue #100)
+# to AS_OF (evals/run.py GOLDEN_AS_OF).
 SEED, AS_OF, MACHINE = 2026, "2026-09-30", "CORR-1"
-FIRST_DAY = (date.fromisoformat(AS_OF) - timedelta(days=DATASET_SPAN_DAYS)).isoformat()   # 2025-09-30, a Tuesday
+FIRST_DAY = DATASET_FIRST_DAY.isoformat()   # 2025-01-01, a Wednesday
+# The reject taxonomy is configured data, like the grade table: which family and which waste line each category
+# counts in. Read from the file itself, not through the application's helpers.
+TAXONOMY = json.loads((ROOT / "src" / "investigator" / "reject_reasons.json").read_text(encoding="utf-8"))
+FAMILY = {c["key"]: c["family"] for c in TAXONOMY["categories"]}
+LINE = {c["key"]: TAXONOMY["families"][c["family"]]["counted_in"] for c in TAXONOMY["categories"]}
+
+
+def dry_end(setup):
+    """A setup's dry-end quality rejects: the lines whose category counts in the dry-end line."""
+    return sum(r.sqft for r in setup.rejects if LINE[r.category] == "dry_end")
 CORRUPT_TRIM_SQFT = 99999999.0   # the fixture's bad-trim value the corrupt toggle injects
 HEAVY_MAX_MS = 500               # the eight- and nine-week trends run near 100 ms uncontended and crossed the runner's 250 ms
                                  # default under 2x CPU contention; evals/README.md (Latency budget) has the numbers
@@ -55,13 +66,14 @@ TILES = {
     "speed_all_fpm": ("higher", 1), "downtime_pct": ("lower", 4), "downtime_minutes": ("lower", 1),
     "stops": ("lower", 0), "minutes_per_stop": ("lower", 2), "trim_pct": ("lower", 4),
     "shear_pct": ("lower", 4), "dry_end_pct": ("lower", 4), "bond_pct": ("lower", 4),
-    "warp_pct": ("lower", 4), "misalignment_pct": ("lower", 4), "moisture_pct": ("lower", 4), "bale_pct": ("lower", 4),
+    "warp_pct": ("lower", 4), "misalignment_pct": ("lower", 4), "other_pct": ("lower", 4), "bale_pct": ("lower", 4),
     "unexplained_pct": ("lower", 4), "maintenance_pm_pct": ("lower", 4), "operator_pct": ("lower", 4),
     "setups": ("neutral", 0), "paper_changes": ("neutral", 0),
     "lineal_per_setup": ("higher", 1), "lineal_per_paper_change": ("higher", 1), "bale_msf": ("lower", 1),
 }
 TREND_PLACES = {k: p for k, (_, p) in TILES.items()}
-WASTE = ("trim", "shear", "bond", "warp", "misalignment", "moisture", "dry_end", "bale", "unexplained")
+WASTE = ("trim", "shear", "changeover", "cutoff_waste", "stacker_waste", "bond", "warp", "misalignment", "other", "dry_end",
+         "admin", "bale", "unexplained")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri")
 
 
@@ -147,25 +159,33 @@ class Plain:
         setups = self.between("dry_end_setups", start, end, shift)
         shifts = self.between("shifts", start, end, shift)
         stops = self.between("stops", start, end, shift)
-        reasons, kinds = defaultdict(float), defaultdict(float)
+        reasons, lines, kinds = defaultdict(float), defaultdict(float), defaultdict(float)
         for s in setups:
             for r in s.rejects:
-                reasons[r.reason] += r.sqft
+                reasons[FAMILY[r.category]] += r.sqft
+                lines[LINE[r.category]] += r.sqft
         for st in stops:
             kinds[st.kind] += st.duration_sec
         return {
             "setups": len(setups), "paper_changes": len({s.wet_end_id for s in setups}),
             "feet": sum(s.lineal_ft for s in setups), "gross": sum(s.total_produced_sqft for s in setups),
             "trim": sum(s.trim_sqft for s in setups), "shear": sum(s.chop_sqft for s in setups),
-            "rejects": sum(s.kqf_sqft for s in setups),
+            "rejects": lines["dry_end"], "changeover": lines["shear"], "admin": lines["excluded"],
+            "cutoff_waste": sum(lane.cutoff_waste_sqft for s in setups for lane in s.lanes),
+            "stacker_waste": sum(lane.stacker_waste_sqft for s in setups for lane in s.lanes),
             "running_minutes": sum(s.elapsed_seconds - s.stop_time_sec for s in setups) / 60,
             "production_days": len({s.production_date for s in setups}),
             "shift_records": len(shifts), "scheduled_seconds": sum(sh.scheduled_minutes for sh in shifts) * 60,
             "bale": sum(sh.bale_sqft for sh in shifts),
             "stop_count": len(stops), "stop_seconds": sum(st.duration_sec for st in stops),
             "maintenance_pm_seconds": kinds["Maintenance"] + kinds["PM"], "operator_seconds": kinds["Operator"],
-            "bond": reasons["BOND"], "warp": reasons["WARP"], "misalignment": reasons["MISALIGNMENT"], "moisture": reasons["MOISTURE"],
+            "bond": reasons["BOND"], "warp": reasons["WARP"], "misalignment": reasons["MISALIGNMENT"], "other": reasons["OTHER"],
         }
+
+    @staticmethod
+    def accounted(t):
+        """Every recorded waste line: trim, shear, changeover, dry-end, admin, cutoff and stacker waste boards."""
+        return t["trim"] + t["shear"] + t["changeover"] + t["rejects"] + t["admin"] + t["cutoff_waste"] + t["stacker_waste"]
 
     @staticmethod
     def tiles(t):
@@ -186,9 +206,9 @@ class Plain:
             "trim_pct": ratio(t["trim"], gross, 100), "shear_pct": ratio(t["shear"], gross, 100),
             "dry_end_pct": ratio(t["rejects"], gross, 100), "bond_pct": ratio(t["bond"], gross, 100),
             "warp_pct": ratio(t["warp"], gross, 100), "misalignment_pct": ratio(t["misalignment"], gross, 100),
-            "moisture_pct": ratio(t["moisture"], gross, 100),
+            "other_pct": ratio(t["other"], gross, 100),
             "bale_pct": ratio(t["bale"], gross, 100),
-            "unexplained_pct": ratio(t["bale"] - t["trim"] - t["shear"] - t["rejects"], gross, 100),
+            "unexplained_pct": ratio(t["bale"] - Plain.accounted(t), gross, 100),
             "maintenance_pm_pct": ratio(t["maintenance_pm_seconds"], scheduled, 100),
             "operator_pct": ratio(t["operator_seconds"], scheduled, 100),
             "setups": None if not t["shift_records"] else t["setups"],
@@ -284,7 +304,7 @@ def tile_parts_sum(parts, rates):
 
 WINDOW_TILE_SUMS = {"trim_pct": ("trim", "trim"), "shear_pct": ("shear", "waste"), "dry_end_pct": ("rejects", "waste"),
                     "bond_pct": ("bond", "waste"), "warp_pct": ("warp", "waste"), "misalignment_pct": ("misalignment", "waste"),
-                    "moisture_pct": ("moisture", "waste"), "bale_pct": ("bale", "paper")}
+                    "other_pct": ("other", "waste"), "bale_pct": ("bale", "paper")}
 
 
 def window_tile_values(plain, span, shift, rates_text=None):
@@ -300,8 +320,8 @@ def window_tile_values(plain, span, shift, rates_text=None):
     values = {f"tile_money:metric={m}": one(kind, round(t[key], 1)) for m, (key, kind) in WINDOW_TILE_SUMS.items()}
     # the dry-end tile is its reject reasons' rows, as the waste breakdown and the levers price them (and the chip sums)
     values["tile_money:metric=dry_end_pct"] = tile_parts_sum([("waste", round(t[r], 1), gross, minutes, 0)
-                                                              for r in ("bond", "warp", "misalignment", "moisture")], rates)
-    values["tile_money:metric=unexplained_pct"] = one("paper", round(t["bale"] - t["trim"] - t["shear"] - t["rejects"], 1))
+                                                              for r in ("bond", "warp", "misalignment", "other")], rates)
+    values["tile_money:metric=unexplained_pct"] = one("paper", round(t["bale"] - Plain.accounted(t), 1))
     reasons = defaultdict(float)
     for st in plain.between("stops", *span, shift):
         reasons[st.reason] += st.duration_sec / 60
@@ -362,15 +382,22 @@ def pareto_case(plain, id, period, anchor, group_by, measure, shift=None, *, day
                 {"coverage": coverage, "row_count": len(order), "values": values}, day=day, note=note)
 
 
+def waste_areas(t):
+    """Each waste line's area (WASTE order): the dry-end families add to dry_end; the unexplained remainder is
+    the bale minus every recorded line."""
+    return {"trim": t["trim"], "shear": t["shear"], "changeover": t["changeover"], "cutoff_waste": t["cutoff_waste"],
+            "stacker_waste": t["stacker_waste"], "bond": t["bond"], "warp": t["warp"], "misalignment": t["misalignment"],
+            "other": t["other"], "dry_end": t["rejects"], "admin": t["admin"], "bale": t["bale"],
+            "unexplained": t["bale"] - Plain.accounted(t)}
+
+
 def waste_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
     cur = window(period, anchor)
     prev = previous(period, *cur)
     now, before = plain.sums(*cur, shift), plain.sums(*prev, shift)
     prev_available = plain.coverage(*prev) != "unavailable"
     def areas(t):
-        return {"trim": t["trim"], "shear": t["shear"], "bond": t["bond"], "warp": t["warp"],
-                "misalignment": t["misalignment"], "moisture": t["moisture"], "dry_end": t["rejects"], "bale": t["bale"],
-                "unexplained": t["bale"] - t["trim"] - t["shear"] - t["rejects"]}
+        return waste_areas(t)
     a, b = areas(now), areas(before)
     values = {}
     for key in WASTE:
@@ -444,7 +471,7 @@ def grade_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=
             "setup_stops": exact(sum(s.number_of_stops for s in mine)), "setup_stop_minutes": num(sum(s.stop_time_sec for s in mine) / 60, 1),
             "downtime_pct_of_elapsed": num(sum(s.stop_time_sec for s in mine) / sum(s.elapsed_seconds for s in mine) * 100, 4),
             "lineal_per_setup": num(feet / len(mine), 1), "lineal_per_wet_end": num(feet / len({s.wet_end_id for s in mine}), 1),
-            "trim_pct": num(sum(s.trim_sqft for s in mine) / gross * 100, 4), "dry_end_pct": num(sum(s.kqf_sqft for s in mine) / gross * 100, 4),
+            "trim_pct": num(sum(s.trim_sqft for s in mine) / gross * 100, 4), "dry_end_pct": num(sum(dry_end(s) for s in mine) / gross * 100, 4),
             "previous_volume_msf": num(before[grade] / 1000, 1) if available else exact(None),
             "delta_volume_msf": [round(gross / 1000 - round(before[grade] / 1000, 1), 6), 0.11] if available else exact(None)}
     coverage = "complete" if plain.coverage(*cur) == "complete" and plain.coverage(*prev) == "complete" else "partial"
@@ -511,7 +538,7 @@ def overrun_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", not
     cur = window(period, anchor)
     lines = defaultdict(list)
     for s in plain.between("dry_end_setups", *cur, shift):
-        for c in s.customers:
+        for c in s.lanes:
             lines[c.cutoff_allocation].append(c)
     lines["all knives"] = [c for k in sorted(k for k in lines if k != "all knives") for c in lines[k]]
     values = {"$": {"band_pct": exact(2.0), "window_pct": exact(10.0)}}
@@ -556,7 +583,7 @@ def speed_case(plain, id, period, anchor, slice_by="width", shift=None, *, day="
             short += 1
             continue
         key = (s.quality_id, f"{s.web_width_in:g} in" if slice_by == "width" else crews[(s.production_date, s.shift_number)])
-        cells[key].append((s.lineal_ft / run_min, s.lineal_ft, run_min, s.kqf_sqft, s.total_produced_sqft))
+        cells[key].append((s.lineal_ft / run_min, s.lineal_ft, run_min, dry_end(s), s.total_produced_sqft))
     values, total, thin = {}, 0.0, 0
     for (grade, slc), rows in cells.items():
         rows.sort(key=lambda r: -r[0])
@@ -630,7 +657,7 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
     stops = plain.between("stops", date.fromisoformat(day), date.fromisoformat(day), shift)
     feet = sum(s.lineal_ft for s in setups)
     gross = sum(s.total_produced_sqft for s in setups)
-    trim, shear, rejects = (sum(getattr(s, f) for s in setups) for f in ("trim_sqft", "chop_sqft", "kqf_sqft"))
+    trim, shear, rejects = (sum(s.trim_sqft for s in setups), sum(s.chop_sqft for s in setups), sum(dry_end(s) for s in setups))
     kinds = defaultdict(float)
     for st in stops:
         kinds[st.kind] += st.duration_sec
@@ -639,7 +666,7 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
         "valid_setups": exact(len(setups)), "paper_changes": exact(wet_ends),
         "speed_to_target_pct": approx(feet / sum(GRADES[s.quality_id] * s.elapsed_seconds / 60 for s in setups) * 100),
         "observed_lineal_ft": approx(feet), "observed_shift_fpm": approx(feet / 480),
-        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(s.total_produced_sqft - s.trim_sqft - s.chop_sqft - s.kqf_sqft for s in setups)),
+        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(s.total_produced_sqft - s.trim_sqft - s.chop_sqft - dry_end(s) for s in setups)),
         "throughput_in": approx(gross / feet * 12),
         "trim_pct": approx(trim / gross * 100), "shear_pct": approx(shear / gross * 100), "dry_end_pct": approx(rejects / gross * 100),
         "maintenance_pct": approx(kinds["Maintenance"] / SCHEDULED_SECONDS * 100),
@@ -674,7 +701,8 @@ def day_quality_case(plain, id, day, shift, note=""):
     area = defaultdict(float)
     for s in setups:
         for r in s.rejects:
-            area[r.reason] += r.sqft
+            if LINE[r.category] == "dry_end":
+                area[FAMILY[r.category]] += r.sqft
     order = sorted(area, key=lambda c: (-area[c], c))
     values = {f"reason={r}": {"rejected_sqft": approx(area[r])} for r in order}
     values["#0"] = {"reason": exact(order[0])}
@@ -752,7 +780,8 @@ def shift_gaps(plain, day, shift):
         reasons[st.reason] += st.duration_sec / 60
     for s in setups:
         for r in s.rejects:
-            rejects[r.reason] += r.sqft
+            if LINE[r.category] == "dry_end":
+                rejects[FAMILY[r.category]] += r.sqft
     gaps = {f"Downtime: {r}": ("downtime", m) for r, m in reasons.items()}
     running = 480 - sum(st.duration_sec for st in stops) / 60
     gaps["Speed gap to 675 ft/min"] = ("speed", max(0.0, 675 * running - feet) / 675)
@@ -875,8 +904,7 @@ def waste_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, *
     rates = rates_of(rates_text)
     span = window(period, anchor)
     t = plain.sums(*span, shift)
-    areas = {"trim": t["trim"], "shear": t["shear"], "bond": t["bond"], "warp": t["warp"], "misalignment": t["misalignment"],
-             "moisture": t["moisture"], "dry_end": t["rejects"], "bale": t["bale"], "unexplained": t["bale"] - t["trim"] - t["shear"] - t["rejects"]}
+    areas = waste_areas(t)
     minutes = window_minutes(plain, span, shift)
     values = {f"category={k}": money(WASTE_PRICING.get(k, "waste"), round(a, 1), t["gross"], minutes, rates, 0.1) for k, a in areas.items()}
     return case(id, "get_waste_breakdown", {"window": {"period": period, "anchor": anchor}, "shift": shift},
@@ -921,7 +949,9 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
     for r, m in minutes.items():
         levers[f"Downtime: {r}" + (" (setup time)" if r == "Order change" else "")] = money("downtime", round(m, 2), gross, scheduled, rates, 0.01)
         terms[f"Downtime: {r}" + (" (setup time)" if r == "Order change" else "")] = ("downtime", round(m, 2))
-    labels = {"shear": "Shear chops", "bond": "Dry-end: bond", "warp": "Dry-end: warp", "misalignment": "Dry-end: misalignment", "moisture": "Dry-end: moisture"}
+    labels = {"shear": "Shear chops", "changeover": "Changeover rejects (counted with shear)", "bond": "Dry-end: bond",
+              "warp": "Dry-end: warp", "misalignment": "Dry-end: misalignment",
+              "other": "Dry-end: other (cracking, handling, paper, print)"}
     for key, label in labels.items():
         if round(t[key], 1):
             levers[f"{label} (all recorded)"] = money("waste", round(t[key], 1), gross, scheduled, rates, 0.1)
@@ -1068,12 +1098,12 @@ def build(data=None):
                           note="Two complete 4-week periods: equal production days, raw totals comparable."))
     cases.append(kpi_case(plain, "value-kpi-fiscal-p1-vs-prior-p12", "fiscal", "2026-08-14",
                           note="P1 (4 weeks) against the prior year's 5-week P12 (29 Jun - 2 Aug): both complete, unequal production days (20 vs 25)."))
-    cases.append(kpi_case(plain, "value-kpi-fiscal-first-period-partial", "fiscal", "2025-10-15", day="2025-10-15",
-                          note="The window opens on Tuesday 30 Sep 2025, inside the prior year's P3 (29 Sep - 2 Nov 2025): current partial, previous P2 unavailable, deltas withheld."))
-    cases.append(kpi_case(plain, "value-kpi-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
-                          note="The window's first week (29 Sep - 3 Oct 2025) holds four production days and its previous week is before the dataset: coverage partial, previous null, deltas withheld."))
-    cases.append(kpi_case(plain, "value-kpi-first-month-previous-partial", "month", "2025-10-15", day="2025-10-15",
-                          note="October 2025 is complete; September 2025 holds one production day of the window (the 30th): previous partial, deltas withheld."))
+    cases.append(kpi_case(plain, "value-kpi-fiscal-first-period-partial", "fiscal", "2025-01-15", day="2025-01-15",
+                          note="The data opens on Wednesday 1 Jan 2025 (issue #100), inside P6 of the fiscal year starting 2024-08-05 (30 Dec 2024 - 2 Feb 2025): current partial, previous P5 unavailable, deltas withheld."))
+    cases.append(kpi_case(plain, "value-kpi-first-week-no-previous", "week", "2025-01-02", day="2025-01-02",
+                          note="The data's first week (30 Dec 2024 - 3 Jan 2025) holds three production days and its previous week is before the dataset: coverage partial, previous null, deltas withheld."))
+    cases.append(kpi_case(plain, "value-kpi-first-month-previous-unavailable", "month", "2025-01-15", day="2025-01-15",
+                          note="Renamed from value-kpi-first-month-previous-partial (issue #100): the data now opens on the first of a month, so no month is partial at the start. January 2025 is complete; December 2024 is before the dataset: previous unavailable, deltas withheld."))
     cases.append(kpi_case(plain, "value-kpi-last-week-partial", "week", "2026-09-29",
                           note="The week of 28 September has three production days: coverage partial, deltas withheld."))
     cases.append(compare_case(plain, "value-compare-september-vs-august", ("month", "2026-09-01"), ("month", "2026-08-01")))
@@ -1090,7 +1120,7 @@ def build(data=None):
     cases.append(waste_case(plain, "value-waste-september", "month", "2026-09-14"))
     cases.append(waste_case(plain, "value-waste-august", "month", "2026-08-14",
                             note="August against July: both complete, previous columns and deltas present."))
-    cases.append(waste_case(plain, "value-waste-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
+    cases.append(waste_case(plain, "value-waste-first-week-no-previous", "week", "2025-01-02", day="2025-01-02",
                             note="The window's first week: its previous week is before the dataset, so previous columns and deltas are null."))
     cases.append(waste_case(plain, "value-waste-week-0907", "week", "2026-09-09"))
     # Stops profile: the month with the Monday effect and one week for one shift.
@@ -1101,7 +1131,7 @@ def build(data=None):
     cases.append(grade_case(plain, "value-grade-totals-september", "month", "2026-09-14"))
     cases.append(grade_case(plain, "value-grade-totals-august", "month", "2026-08-14",
                             note="August against July: previous and delta volume present."))
-    cases.append(grade_case(plain, "value-grade-totals-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
+    cases.append(grade_case(plain, "value-grade-totals-first-week-no-previous", "week", "2025-01-02", day="2025-01-02",
                             note="The previous week is before the dataset: previous and delta volume are null, never zero."))
     cases.append(grade_case(plain, "value-grade-totals-week-0914-shift-2", "week", "2026-09-14", 2))
     # Rollstock (paper consumed) from the wet-end records: both months, the window's first week (previous
@@ -1110,7 +1140,7 @@ def build(data=None):
                                 note="Whole paper runs by the production day they started on; MSF is feet x width, no basis weight."))
     cases.append(rollstock_case(plain, "value-rollstock-august", "month", "2026-08-14",
                                 note="August against July: previous feet, MSF, runs and deltas present."))
-    cases.append(rollstock_case(plain, "value-rollstock-first-week-no-previous", "week", "2025-10-01", day="2025-10-01",
+    cases.append(rollstock_case(plain, "value-rollstock-first-week-no-previous", "week", "2025-01-02", day="2025-01-02",
                                 note="The previous week is before the dataset: previous feet, MSF, runs and deltas are null, never zero."))
     cases.append(rollstock_case(plain, "value-rollstock-week-0914-shift-2", "week", "2026-09-14", 2,
                                 note="One shift: the setups it ran on each run; a run spanning two shifts counts in both."))
@@ -1125,8 +1155,8 @@ def build(data=None):
     # series carry the heavy-case budget; the four-week one runs well inside the default.
     cases.append(trend_case(plain, "value-trend-trim-8w", "trim_pct", 8, "2026-09-30", day="2026-09-30", max_ms=HEAVY_MAX_MS))
     cases.append(trend_case(plain, "value-trend-warp-8w", "warp_pct", 8, "2026-09-14", max_ms=HEAVY_MAX_MS))
-    cases.append(trend_case(plain, "value-trend-stops-9w-missing-weeks", "stops", 9, "2025-11-12", day="2025-11-12", max_ms=HEAVY_MAX_MS,
-                            note="Nine weeks back from 12 Nov 2025 reaches before the window: the weeks of 15 and 22 Sep are listed as missing, never as zero, and the week of 29 Sep is partial."))
+    cases.append(trend_case(plain, "value-trend-stops-9w-missing-weeks", "stops", 9, "2025-02-12", day="2025-02-12", max_ms=HEAVY_MAX_MS,
+                            note="Nine weeks back from 12 Feb 2025 reaches before the data: the weeks of 16 and 23 Dec 2024 are listed as missing, never as zero, and the week of 30 Dec is partial."))
     cases.append(trend_case(plain, "value-trend-msf-per-day-4w-shift-3", "msf_per_day", 4, "2026-09-14", 3))
     # The daily tools for three production days: the first day, a mid-September Monday, the last day.
     for day in ("2026-08-03", "2026-09-14", "2026-09-30"):

@@ -32,7 +32,7 @@ ALIASES = {'period_downtime': 'period_pareto', 'period_quality': 'period_waste',
 MARGIN_NOT_SET = 'margin not set'   # cost_model.MARGIN_NOT_SET: no owner margin, so no contribution is priced
 WORDS = {2: 'two', 3: 'three'}
 TREND_NAMES = {'trim_pct': 'side trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry-end rejects', 'warp_pct': 'warp', 'bond_pct': 'bond',
-               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'speed_run_fpm': 'speed without stops',
+               'misalignment_pct': 'misalignment', 'other_pct': 'other dry-end rejects', 'speed_run_fpm': 'speed without stops',
                'speed_all_fpm': 'speed with stops', 'downtime_pct': 'downtime', 'stops': 'stops', 'minutes_per_stop': 'minutes per stop',
                'msf_per_day': 'MSF per production day', 'lineal_per_setup': 'lineal per setup', 'lineal_per_paper_change': 'lineal per paper change'}
 RANK_LABELS = {'speed': 'Lowest speed attainment', 'downtime': 'Most downtime', 'quality': 'Most rejected area'}

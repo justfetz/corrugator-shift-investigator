@@ -162,7 +162,7 @@ def test_only_tool_call_refused_ends_unavailable_with_the_tool_reason(tmp_path, 
         assert result['status'] == 'unavailable' and result['usage']['model_calls'] == 2
         [step] = result['trace']
         assert step['tool'] == 'get_period_kpis' and not step['ok']
-        assert step['error']['message'] in result['sections'] and 'outside the dataset range 2025-09-30 to 2026-09-30' in step['error']['message']
+        assert step['error']['message'] in result['sections'] and 'outside the dataset range 2025-01-01 to 2026-09-30' in step['error']['message']
         assert result['charts'] == [] and result['tables'] == [] and result['evidence_ids'] == [] and result['narrative_status'] == 'unavailable'
     finally:
         planner.close()

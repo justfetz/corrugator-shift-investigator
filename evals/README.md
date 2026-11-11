@@ -109,10 +109,10 @@ tool calls), half the set under 13 ms. That is wider than the 13–60 ms the iss
 quotes for single questions, because the set also holds the refusals and the
 multi-turn stories.
 
-Eleven cases carry an explicit `max_ms: 500`: the two multi-turn stories
+Twelve cases carry an explicit `max_ms: 500`: the two multi-turn stories
 (`story-monday-warp`, `story-trim-creep`), the eight- and nine-week trends
 (`period-trend-minutes-per-stop`, `period-trim-trend`, `period-trend-warp-weekly`,
-`period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
+`period-moisture-trend`, `period-other-dry-end-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
 `value-trend-warp-8w`, `value-trend-stops-9w-missing-weeks`) and the three-shift
 compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
 other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
@@ -132,40 +132,41 @@ those figures to `client_money.json` after an intended change to the cost model 
 `make_value_goldens.py` turns them into the case, exact to the cent.
 
 `make_value_goldens.py` generates every number in `golden_values.json` from plain
-Python sums over `synth.generate_window()` for the golden window, the year ending
-`as_of` (2026-09-30; every weekday from 30 September 2025): it has its own day /
+Python sums over `synth.generate_window()` for the golden window, from the data's
+first day to `as_of` (2026-09-30; every weekday from 1 January 2025, issue #100): it has its own day /
 week / month / 4-4-5 calendar arithmetic, its own ratio-of-sums tile formulas, its own Pareto
 ordering, and never imports the DuckDB path the tools use for a number (it
 imports the application's tile catalog only to check that the two lists have not
-drifted apart). Each expectation is `[expected, tolerance]`; the tolerance covers
+drifted apart; the reject taxonomy's families it reads from `reject_reasons.json`, a configured
+table like the grade targets). Each expectation is `[expected, tolerance]`; the tolerance covers
 the tool's display rounding (one decimal for feet and MSF, four for percentages,
 two for minutes) plus floating-point noise between a DuckDB sum and a Python
-sum. Integers, strings, lists and `null` are exact: the year's first week's
+sum. Integers, strings, lists and `null` are exact: the data's first week's
 previous window is before the dataset, so its tiles must come back `null`, not `0`.
 
-**The golden window** (issue #35). The app's dataset is a rolling year that the
-nightly deploy moves; the golden set is not. `run.py` scores every case against
-the store of the year ending `GOLDEN_AS_OF` (2026-09-30): the process's own store
+**The golden window** (issues #35, #100). The app's dataset runs from 1 January 2025 to a
+last day the nightly deploy moves; the golden set's does not move. `run.py` scores every case against
+the store of the window ending `GOLDEN_AS_OF` (2026-09-30): the process's own store
 when it already holds that window (pytest, whose `tests/conftest.py` pins
 `INVESTIGATOR_AS_OF=2026-09-30`, or a command line that sets it), otherwise a
 second store built once: from the prebuilt folder `INVESTIGATOR_GOLDEN_PREBUILT`
 names when the image carries it (the deployed `/evals` page), else generated
-(about 12 s of a plain `python3 evals/run.py`). Every production day is generated from its own
+(about 25 s of a plain `python3 evals/run.py`). Every production day is generated from its own
 date-keyed draws, so the golden window's days are the same days any later
 window holds.
 
 The file carries the dataset `content_hash`. `run.py` compares it with the golden
 store before scoring and fails every value case when they differ ("stale
 goldens; run make_value_goldens.py"), so an intended generator change forces a
-deliberate regeneration and an unintended one is caught. The 85 cases cover
+deliberate regeneration and an unintended one is caught. The 90 cases cover
 every KPI tile for September and August (all shifts and per shift), one week
-and one production day per shift, the year's first week and month and 4-4-5
+and one production day per shift, the data's first week and month and 4-4-5
 period (no or a partial previous window) and the last week (partial),
 `compare_periods` both ways, the downtime Pareto of the
 missed-splice week by reason, place and kind, the waste breakdown for both
-months, the story week and the year's first week, the stops profile for both
-months, totals by grade and rollstock for both months and the year's first week,
-the trim, warp, stops (reaching before the year) and MSF-per-day trends, the three daily tools for three production days,
+months, the story week and the data's first week (every waste line of record contract v2), the stops profile for both
+months, totals by grade and rollstock for both months and the data's first week,
+the trim, warp, stops (reaching before the data) and MSF-per-day trends, the three daily tools for three production days,
 the corrupt-record day, and the money tools' dollars (issue #31a: shift dollars for two shifts, one
 with a visitor's rates; the September waste breakdown and the story week's downtime Pareto priced;
 the opportunities for September and for one week with a margin set), and the speed variance (issue #92:

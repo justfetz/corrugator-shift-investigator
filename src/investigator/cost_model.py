@@ -223,8 +223,9 @@ def _envelope(data, rates):
 
 
 # Waste breakdown categories and how each is priced; bale is the scale's total, priced as paper.
-WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste',
-               'moisture': 'waste', 'dry_end': 'waste', 'bale': 'paper', 'unexplained': 'paper'}
+WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'changeover': 'waste', 'cutoff_waste': 'waste', 'stacker_waste': 'waste',
+               'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste', 'other': 'waste', 'dry_end': 'waste', 'admin': 'waste',
+               'bale': 'paper', 'unexplained': 'paper'}
 PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_breakdown',
                 'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
 GAIN = 'not priced: this bucket ran better than the reference (a gain, not a loss)'
@@ -403,7 +404,7 @@ def shift_tiles(analysis, shift, k, rates):
 # The window tiles priced like get_waste_breakdown's rows (sq ft to 0.1, the gross to 0.1) and the Pareto's (minutes to
 # 0.01 per reason), so a tile agrees with those rows on the same page to the cent.
 WASTE_TILES = {'trim_pct': 'trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry_end', 'bond_pct': 'bond', 'warp_pct': 'warp',
-               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'bale_pct': 'bale', 'unexplained_pct': 'unexplained'}
+               'misalignment_pct': 'misalignment', 'other_pct': 'other', 'bale_pct': 'bale', 'unexplained_pct': 'unexplained'}
 
 
 def period_tiles(data, reasons, rates):
@@ -413,7 +414,7 @@ def period_tiles(data, reasons, rates):
     if not sums.get('gross_sqft'):
         return []
     gross, minutes = round(sums['gross_sqft'], 1), window_minutes(data)
-    reasons_of = {'dry_end': ('bond', 'warp', 'misalignment', 'moisture')}   # the dry-end tile is its reasons' rows, as the chip is
+    reasons_of = {'dry_end': ('bond', 'warp', 'misalignment', 'other')}   # the dry-end tile is its families' rows, as the chip is
     out = [tile(metric, [_part(WASTE_KINDS[k], round(sums[k], 1), gross, minutes) for k in reasons_of.get(key, (key,))], rates,
                 key.replace('_', '-') if key != 'dry_end' else 'dry-end rejects')
            for metric, key in WASTE_TILES.items()]
@@ -541,7 +542,7 @@ def opportunities(store, window, shift, rates):
         rows.append({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if r['category'] == 'Order change' else ''),
                      'kind': 'setup' if r['category'] == 'Order change' else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
                      'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)})
-    for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
+    for key in ('shear', 'changeover', 'bond', 'warp', 'misalignment', 'other'):
         r = by[key]
         if r['sqft']:
             rows.append({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft',

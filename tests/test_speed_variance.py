@@ -89,8 +89,8 @@ def test_one_shift_against_another_is_the_mirror_of_the_reverse(store):
     (("week", 2, "target", 1), "against_shift is only for against=shift"),
     (("week", None, "shift", 1), "give shift and against_shift"),
     (("week", 2, "shift", 2), "another shift"),
-    # September 2025 holds the year's first day; its previous window, August 2025, is before it (issue #35: July 2026 is inside)
-    (("month", None, "previous", None, "2025-09-30"), "outside the record store: ask against target instead"),
+    # January 2025 holds the data's first day; its previous window, December 2024, is before it (issue #100)
+    (("month", None, "previous", None, "2025-01-15"), "outside the record store: ask against target instead"),
 ])
 def test_refusals_say_what_to_change(store, args, message):
     with pytest.raises(ValueError, match=message):
@@ -104,7 +104,7 @@ def test_each_loss_bucket_is_priced_as_machine_time_and_an_offset_is_not(store):
         if row["gap_lineal_ft"] > 0:
             minutes = row["gap_lineal_ft"] / data["reference_speed_fpm"]
             assert row["machine_minutes"] == round(minutes, 2) and row["usd"] == round(minutes / 60 * 1200, 2)
-            assert "lineal ft / 595.9 ft/min reference speed" in row["usd_basis"]   # shift 1's speed with stops that week, in the golden year
+            assert "lineal ft / 595.2 ft/min reference speed" in row["usd_basis"]   # shift 1's speed with stops that week, in the golden window
         else:
             assert row["usd"] is None and row["usd_basis"] == cost_model.GAIN
     assert data["gap_usd"] == round(data["gap_lineal_ft"] / data["reference_speed_fpm"] / 60 * 1200, 2)
@@ -199,8 +199,11 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
     sections = result["sections"]
     assert sections[0].startswith(f"Speed gap **{abs(data['gap_fpm']):,.1f} ft/min** below target: ") and sections[0].endswith("(query 1)")
     bullets = [s for s in sections[1:4]]
-    assert all(b.startswith("- ") and b.endswith(f"(query 1 · row {i})") for i, b in enumerate(bullets)) and not sections[4].startswith("- ")
+    assert all(b.startswith("- ") and b.endswith(f"(query 1 · row {i})") for i, b in enumerate(bullets))
     assert [b[2:].split(":")[0] for b in bullets] == [r["label"] for r in data["rows"][:3]]
+    # since issue #100's records the shift's grade mix works against the gap by more than the third bucket, so the owner's
+    # rule (PR #91) gives it a fourth line, the offset; nothing else follows the three findings
+    assert sections[4].startswith("- Grade mix: ") and "the other way, an offset" in sections[4] and not sections[5].startswith("- ")
     looks = sections[sections.index("Where to look") + 1:]
     assert 2 <= len(looks) <= 3 and all("→ “" in x for x in looks)
     [chart] = result["charts"]
@@ -231,10 +234,12 @@ def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(stor
 
 def test_an_offset_larger_than_the_third_contributor_gets_a_line(store):
     """Owner, PR #91: the card lists the three buckets adding to the gap, and a bucket pulling against it gets a line
-    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 14 September: below-target
-    running, grade mix and setups (1.3 ft/min) add to the gap; stops (35.6 ft/min, -85%) pull against it."""
-    agent = Agent(store.day_analysis(DAY))
-    sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(DAY, 2, scope="day"))["sections"]
+    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 3 August 2026 (re-anchored from
+    14 September by issue #100's records): below-target running, grade mix and setups (1.2 ft/min) add to the gap; stops
+    (45.4 ft/min, -210%, shift 1's Thursday planned maintenance) pull against it."""
+    week = "2026-08-03"
+    agent = Agent(store.day_analysis(week))
+    sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(week, 2, scope="day"))["sections"]
     lines = [s for s in sections if s.startswith("- ")][:4]
     assert [s.split(":")[0] for s in lines] == ["- Below target", "- Grade mix", "- Setups", "- Stops"]
     assert all("of the gap" in s for s in lines[:3]) and "the other way, an offset" in lines[3]
