@@ -38,7 +38,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from .agent import Agent, Context, TOOL_SCHEMAS, parse_request, question_scope, route
 from .anthropic_provider import resolve_model
-from .cost_model import effective as effective_rates, parse_rates
+from .cost_model import client_config, effective as effective_rates, parse_rates
 from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
 from .record_store import default_store
@@ -695,7 +695,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                                        'public': public is not None, 'server_key_available': app.live_model_available,
                                        'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
-                                       'demo_guards': app.guards.summary,
+                                       'demo_guards': app.guards.summary, 'cost_model': client_config(),
                                        'evals': app.evals.summary if app.evals else None})
             if self.path == '/evals.json':
                 # The scoreboard as data, Datasette-style: public, read-only, and readable from another
@@ -715,6 +715,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             files = {'/': ('index.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
                      '/trail.js': ('trail.js', 'text/javascript; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
+                     '/money.js': ('money.js', 'text/javascript; charset=utf-8'),
                      '/style.css': ('style.css', 'text/css; charset=utf-8')}
             path = self.path
             if app.evals is not None and path.split('?', 1)[0] == '/evals':   # /evals?case=<id> opens that case: the URL is the state

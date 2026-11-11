@@ -3046,6 +3046,17 @@
    }
   },
   {
+   "id": "refusal-rates-full-width-digits",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Where did the money go this shift?",
+   "rates": "paper:５５",
+   "note": "Review of PR 109 (item 4): Python's \\d and float() took full-width digits, so the server priced paper:５５ at $55 while web/money.js refuses it; a rate is ASCII digits only on both sides, so a link reproduces the page or is refused.",
+   "expect": {
+    "raises": "at most two decimals"
+   }
+  },
+  {
    "id": "period-control-week-why-slow",
    "type": "routing",
    "mode": "offline",
@@ -4987,6 +4998,34 @@
    }
   },
   {
+   "id": "analyst-plan-day-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Where did the money go this shift?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_day_dollars",
+      "arguments": {}
+     }
+    ]
+   },
+   "note": "Re-review 2 of PR 109: get_day_dollars, the card's day total, was on the analyst's plan allowlist and the scope check did not refuse it under one shift, so a plan for shift 2 could read all three shifts. It is the offline planner's, not a model's to plan: the plan is refused whole and no query runs.",
+   "expect": {
+    "status": "plan_rejected",
+    "tool_calls": 0,
+    "charts": 0,
+    "tables": [],
+    "sections_match": "plan was rejected \\(it names \"get_day_dollars\", which is not one of the permitted tools\\); no query was run"
+   }
+  },
+  {
    "id": "analyst-plan-all-shifts-nine-steps",
    "type": "routing",
    "mode": "offline",
@@ -5500,6 +5539,47 @@
      "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes \\(query 1\\)$",
      "^- 1\\. .*: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr \\(query 1 · row 0\\)$",
      "^Contribution margin not set"
+    ]
+   }
+  },
+  {
+   "id": "money-day-dollars-two-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "shift": 2,
+   "question": "Where did the money go on shift 1 and shift 3?",
+   "note": "Reviewer pass on the #31b review fixes: get_day_dollars always summed all three shifts, so a question about two shifts got a card total with shift 2 counted. The day total covers the shifts the question named.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars&shifts=1,3",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        3
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "get_day_dollars",
+     "render_chart"
     ]
    }
   },

@@ -593,6 +593,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       276905.7225,
+       0.011
+      ],
+      "usd_per_year": [
+       3173067.593,
+       1.139
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       53308.222815,
+       0.011
+      ],
+      "usd_per_year": [
+       610859.872,
+       1.139
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       94697.439351,
+       0.044
+      ],
+      "usd_per_year": [
+       1085139.64,
+       4.556
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       37035.051296,
+       0.011
+      ],
+      "usd_per_year": [
+       424385.311,
+       1.139
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       30129.311963,
+       0.011
+      ],
+      "usd_per_year": [
+       345252.321,
+       1.139
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       18333.002296,
+       0.011
+      ],
+      "usd_per_year": [
+       210078.199,
+       1.139
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       9200.073796,
+       0.011
+      ],
+      "usd_per_year": [
+       105423.809,
+       1.139
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       453916.2595,
+       0.011
+      ],
+      "usd_per_year": [
+       5201434.48,
+       1.139
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       22210.947,
+       0.011
+      ],
+      "usd_per_year": [
+       254515.636,
+       1.139
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       30934.6,
+       0.10999999999999999
+      ],
+      "usd_per_year": [
+       361573.246,
+       11.39
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       16152.0,
+       0.011
+      ],
+      "usd_per_year": [
+       188789.61,
+       1.139
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       14782.6,
+       0.011
+      ],
+      "usd_per_year": [
+       172783.636,
+       1.139
+      ]
      }
     }
    }
@@ -1183,6 +1311,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       233696.7545,
+       0.011
+      ],
+      "usd_per_year": [
+       2795961.648,
+       1.145
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       49959.370241,
+       0.011
+      ],
+      "usd_per_year": [
+       597716.829,
+       1.145
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       103053.67676,
+       0.044
+      ],
+      "usd_per_year": [
+       1232940.219,
+       4.58
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       35243.690167,
+       0.011
+      ],
+      "usd_per_year": [
+       421657.572,
+       1.145
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       41395.691556,
+       0.011
+      ],
+      "usd_per_year": [
+       495260.476,
+       1.145
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       17576.094352,
+       0.011
+      ],
+      "usd_per_year": [
+       210281.421,
+       1.145
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       8838.200685,
+       0.011
+      ],
+      "usd_per_year": [
+       105740.75,
+       1.145
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       412798.9965,
+       0.011
+      ],
+      "usd_per_year": [
+       4938751.353,
+       1.145
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       20263.0065,
+       0.011
+      ],
+      "usd_per_year": [
+       242427.796,
+       1.145
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       28041.2,
+       0.10999999999999999
+      ],
+      "usd_per_year": [
+       343361.633,
+       11.45
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       16473.6,
+       0.011
+      ],
+      "usd_per_year": [
+       201717.551,
+       1.145
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       11567.6,
+       0.011
+      ],
+      "usd_per_year": [
+       141644.082,
+       1.145
+      ]
      }
     }
    }
@@ -1771,6 +2027,134 @@
       "equal_production_days": [
        false,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       90210.5545,
+       0.011
+      ],
+      "usd_per_year": [
+       3129970.929,
+       1.396
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       18028.347685,
+       0.011
+      ],
+      "usd_per_year": [
+       625516.653,
+       1.396
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       31352.720629,
+       0.044
+      ],
+      "usd_per_year": [
+       1087822.868,
+       5.584
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       12279.605519,
+       0.011
+      ],
+      "usd_per_year": [
+       426056.668,
+       1.396
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       9912.613481,
+       0.011
+      ],
+      "usd_per_year": [
+       343930.843,
+       1.396
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       6097.02537,
+       0.011
+      ],
+      "usd_per_year": [
+       211544.118,
+       1.396
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       3063.476259,
+       0.011
+      ],
+      "usd_per_year": [
+       106291.239,
+       1.396
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       149427.8555,
+       0.011
+      ],
+      "usd_per_year": [
+       5184591.163,
+       1.396
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       7776.516,
+       0.011
+      ],
+      "usd_per_year": [
+       269816.2,
+       1.396
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       16274.0,
+       0.09899999999999999
+      ],
+      "usd_per_year": [
+       570646.754,
+       12.564
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       11496.0,
+       0.011
+      ],
+      "usd_per_year": [
+       403106.494,
+       1.396
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       4778.0,
+       0.011
+      ],
+      "usd_per_year": [
+       167540.26,
+       1.396
       ]
      }
     }
@@ -2361,6 +2745,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       76964.3655,
+       0.011
+      ],
+      "usd_per_year": [
+       2721960.771,
+       1.414
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       17076.009241,
+       0.011
+      ],
+      "usd_per_year": [
+       603918.8,
+       1.414
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       34989.3505,
+       0.044
+      ],
+      "usd_per_year": [
+       1237451.109,
+       5.656
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       11867.881222,
+       0.011
+      ],
+      "usd_per_year": [
+       419725.504,
+       1.414
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       14168.091926,
+       0.011
+      ],
+      "usd_per_year": [
+       501075.922,
+       1.414
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       5946.538426,
+       0.011
+      ],
+      "usd_per_year": [
+       210308.293,
+       1.414
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       3006.838926,
+       0.011
+      ],
+      "usd_per_year": [
+       106341.39,
+       1.414
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       137033.182,
+       0.011
+      ],
+      "usd_per_year": [
+       4846384.989,
+       1.414
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       6175.6365,
+       0.011
+      ],
+      "usd_per_year": [
+       218410.691,
+       1.414
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       16264.4,
+       0.09899999999999999
+      ],
+      "usd_per_year": [
+       597467.755,
+       12.725999999999999
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       12520.0,
+       0.011
+      ],
+      "usd_per_year": [
+       459918.367,
+       1.414
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       3744.4,
+       0.011
+      ],
+      "usd_per_year": [
+       137549.388,
+       1.414
+      ]
      }
     }
    }
@@ -2949,6 +3461,134 @@
       "equal_production_days": [
        false,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       94492.926,
+       0.011
+      ],
+      "usd_per_year": [
+       3203104.605,
+       1.396
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       18122.455593,
+       0.011
+      ],
+      "usd_per_year": [
+       614311.816,
+       1.396
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       31946.244426,
+       0.044
+      ],
+      "usd_per_year": [
+       1082908.181,
+       5.584
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       12592.766296,
+       0.011
+      ],
+      "usd_per_year": [
+       426867.38,
+       1.396
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       10118.446278,
+       0.011
+      ],
+      "usd_per_year": [
+       342993.314,
+       1.396
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       6133.580167,
+       0.011
+      ],
+      "usd_per_year": [
+       207915.023,
+       1.396
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       3101.451685,
+       0.011
+      ],
+      "usd_per_year": [
+       105132.464,
+       1.396
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       154176.7095,
+       0.011
+      ],
+      "usd_per_year": [
+       5226255.013,
+       1.396
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       7339.5025,
+       0.011
+      ],
+      "usd_per_year": [
+       248793.166,
+       1.396
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       7522.8,
+       0.088
+      ],
+      "usd_per_year": [
+       263786.494,
+       11.168
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       2308.0,
+       0.011
+      ],
+      "usd_per_year": [
+       80929.87,
+       1.396
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       5215.0,
+       0.011
+      ],
+      "usd_per_year": [
+       182863.636,
+       1.396
       ]
      }
     }
@@ -3539,6 +4179,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       77801.9495,
+       0.011
+      ],
+      "usd_per_year": [
+       2791553.272,
+       1.414
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       16426.564296,
+       0.011
+      ],
+      "usd_per_year": [
+       589389.207,
+       1.414
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       34351.869371,
+       0.044
+      ],
+      "usd_per_year": [
+       1232553.605,
+       5.656
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       11855.336241,
+       0.011
+      ],
+      "usd_per_year": [
+       425372.409,
+       1.414
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       13658.90187,
+       0.011
+      ],
+      "usd_per_year": [
+       490084.792,
+       1.414
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       5915.038019,
+       0.011
+      ],
+      "usd_per_year": [
+       212233.033,
+       1.414
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       2922.593241,
+       0.011
+      ],
+      "usd_per_year": [
+       104863.371,
+       1.414
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       137433.5655,
+       0.011
+      ],
+      "usd_per_year": [
+       4931150.466,
+       1.414
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       7049.152,
+       0.011
+      ],
+      "usd_per_year": [
+       252925.325,
+       1.414
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       6158.2,
+       0.09899999999999999
+      ],
+      "usd_per_year": [
+       226219.591,
+       12.725999999999999
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       2148.0,
+       0.011
+      ],
+      "usd_per_year": [
+       78906.122,
+       1.414
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       4010.4,
+       0.011
+      ],
+      "usd_per_year": [
+       147320.816,
+       1.414
+      ]
      }
     }
    }
@@ -4127,6 +4895,134 @@
       "equal_production_days": [
        false,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       92202.242,
+       0.011
+      ],
+      "usd_per_year": [
+       3185366.796,
+       1.396
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       17157.419537,
+       0.011
+      ],
+      "usd_per_year": [
+       592747.783,
+       1.396
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       31398.474296,
+       0.044
+      ],
+      "usd_per_year": [
+       1084742.141,
+       5.584
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       12162.679481,
+       0.011
+      ],
+      "usd_per_year": [
+       420191.467,
+       1.396
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       10098.252204,
+       0.011
+      ],
+      "usd_per_year": [
+       348870.446,
+       1.396
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       6102.396759,
+       0.011
+      ],
+      "usd_per_year": [
+       210823.203,
+       1.396
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       3035.145852,
+       0.011
+      ],
+      "usd_per_year": [
+       104857.025,
+       1.396
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       150311.6945,
+       0.011
+      ],
+      "usd_per_year": [
+       5192909.308,
+       1.396
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       7094.9285,
+       0.011
+      ],
+      "usd_per_year": [
+       245112.8,
+       1.396
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       7137.6,
+       0.09899999999999999
+      ],
+      "usd_per_year": [
+       250279.481,
+       12.564
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       2348.0,
+       0.011
+      ],
+      "usd_per_year": [
+       82332.468,
+       1.396
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       4789.6,
+       0.011
+      ],
+      "usd_per_year": [
+       167947.013,
+       1.396
       ]
      }
     }
@@ -4717,6 +5613,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       78930.4395,
+       0.011
+      ],
+      "usd_per_year": [
+       2876699.152,
+       1.414
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       16456.796704,
+       0.011
+      ],
+      "usd_per_year": [
+       599784.486,
+       1.414
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       33712.456889,
+       0.044
+      ],
+      "usd_per_year": [
+       1228684.354,
+       5.656
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       11520.472704,
+       0.011
+      ],
+      "usd_per_year": [
+       419875.2,
+       1.414
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       13568.697759,
+       0.011
+      ],
+      "usd_per_year": [
+       494524.819,
+       1.414
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       5714.517907,
+       0.011
+      ],
+      "usd_per_year": [
+       208271.345,
+       1.414
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       2908.768519,
+       0.011
+      ],
+      "usd_per_year": [
+       106012.99,
+       1.414
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       138332.249,
+       0.011
+      ],
+      "usd_per_year": [
+       5041657.767,
+       1.414
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       7038.218,
+       0.011
+      ],
+      "usd_per_year": [
+       256514.925,
+       1.414
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       5618.6,
+       0.088
+      ],
+      "usd_per_year": [
+       206397.551,
+       11.312
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       1805.6,
+       0.011
+      ],
+      "usd_per_year": [
+       66328.163,
+       1.414
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       3813.0,
+       0.011
+      ],
+      "usd_per_year": [
+       140069.388,
+       1.414
+      ]
      }
     }
    }
@@ -5306,6 +6330,134 @@
        true,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       60358.7325,
+       0.011
+      ],
+      "usd_per_year": [
+       3155276.796,
+       1.585
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       11751.600926,
+       0.011
+      ],
+      "usd_per_year": [
+       614319.622,
+       1.585
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       20633.794168,
+       0.044
+      ],
+      "usd_per_year": [
+       1078639.813,
+       6.34
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       8014.898852,
+       0.011
+      ],
+      "usd_per_year": [
+       418982.032,
+       1.585
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       6657.833593,
+       0.011
+      ],
+      "usd_per_year": [
+       348040.904,
+       1.585
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       3976.44213,
+       0.011
+      ],
+      "usd_per_year": [
+       207870.097,
+       1.585
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       1984.619593,
+       0.011
+      ],
+      "usd_per_year": [
+       103746.78,
+       1.585
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       99176.8855,
+       0.011
+      ],
+      "usd_per_year": [
+       5184511.215,
+       1.585
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       4818.44,
+       0.011
+      ],
+      "usd_per_year": [
+       251885.871,
+       1.585
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       7576.4,
+       0.10999999999999999
+      ],
+      "usd_per_year": [
+       389643.429,
+       15.85
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       4113.6,
+       0.011
+      ],
+      "usd_per_year": [
+       211556.571,
+       1.585
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       3462.6,
+       0.011
+      ],
+      "usd_per_year": [
+       178076.571,
+       1.585
+      ]
      }
     }
    }
@@ -5894,6 +7046,134 @@
       "equal_production_days": [
        true,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       20630.291,
+       0.011
+      ],
+      "usd_per_year": [
+       3269232.126,
+       2.753
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       3756.890278,
+       0.011
+      ],
+      "usd_per_year": [
+       595345.281,
+       2.753
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       6837.918945,
+       0.044
+      ],
+      "usd_per_year": [
+       1083588.414,
+       11.012
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       2670.548889,
+       0.011
+      ],
+      "usd_per_year": [
+       423195.399,
+       2.753
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       2201.130593,
+       0.011
+      ],
+      "usd_per_year": [
+       348807.821,
+       2.753
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       1304.331722,
+       0.011
+      ],
+      "usd_per_year": [
+       206694.281,
+       2.753
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       661.907741,
+       0.011
+      ],
+      "usd_per_year": [
+       104890.913,
+       2.753
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       33246.4165,
+       0.011
+      ],
+      "usd_per_year": [
+       5268478.904,
+       2.753
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       1510.6465,
+       0.011
+      ],
+      "usd_per_year": [
+       239388.483,
+       2.753
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       4078.6,
+       0.088
+      ],
+      "usd_per_year": [
+       629269.713,
+       22.024
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       2955.6,
+       0.011
+      ],
+      "usd_per_year": [
+       456006.857,
+       2.753
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       1123.0,
+       0.011
+      ],
+      "usd_per_year": [
+       173262.857,
+       2.753
       ]
      }
     }
@@ -6485,6 +7765,134 @@
        true,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       4935.8045,
+       0.011
+      ],
+      "usd_per_year": [
+       3495976.623,
+       9.496
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       995.69113,
+       0.011
+      ],
+      "usd_per_year": [
+       705237.193,
+       9.496
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       1656.184111,
+       0.044
+      ],
+      "usd_per_year": [
+       1173057.186,
+       37.984
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       553.100426,
+       0.011
+      ],
+      "usd_per_year": [
+       391755.014,
+       9.496
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       655.514907,
+       0.011
+      ],
+      "usd_per_year": [
+       464294.077,
+       9.496
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       302.112741,
+       0.011
+      ],
+      "usd_per_year": [
+       213983.167,
+       9.496
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       145.456037,
+       0.011
+      ],
+      "usd_per_year": [
+       103024.928,
+       9.496
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       8074.957,
+       0.011
+      ],
+      "usd_per_year": [
+       5719404.182,
+       9.496
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       340.9835,
+       0.011
+      ],
+      "usd_per_year": [
+       241514.903,
+       9.496
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       526.2,
+       0.066
+      ],
+      "usd_per_year": [
+       405925.714,
+       56.976
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       122.4,
+       0.011
+      ],
+      "usd_per_year": [
+       94422.857,
+       9.496
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       403.6,
+       0.011
+      ],
+      "usd_per_year": [
+       311348.571,
+       9.496
+      ]
      }
     }
    }
@@ -7073,6 +8481,134 @@
       "equal_production_days": [
        true,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       21232.2,
+       0.011
+      ],
+      "usd_per_year": [
+       3103357.252,
+       2.707
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       4649.439,
+       0.011
+      ],
+      "usd_per_year": [
+       679574.902,
+       2.707
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       7364.860999,
+       0.044
+      ],
+      "usd_per_year": [
+       1076468.515,
+       10.828
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       2885.97387,
+       0.011
+      ],
+      "usd_per_year": [
+       421821.947,
+       2.707
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       2330.636833,
+       0.011
+      ],
+      "usd_per_year": [
+       340652.345,
+       2.707
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       1435.54037,
+       0.011
+      ],
+      "usd_per_year": [
+       209822.563,
+       2.707
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       712.709926,
+       0.011
+      ],
+      "usd_per_year": [
+       104171.66,
+       2.707
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       35554.992,
+       0.011
+      ],
+      "usd_per_year": [
+       5196816.263,
+       2.707
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       1736.79,
+       0.011
+      ],
+      "usd_per_year": [
+       253854.044,
+       2.707
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       1852.2,
+       0.077
+      ],
+      "usd_per_year": [
+       285768.0,
+       18.948999999999998
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       583.0,
+       0.011
+      ],
+      "usd_per_year": [
+       89948.571,
+       2.707
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       1269.4,
+       0.011
+      ],
+      "usd_per_year": [
+       195850.286,
+       2.707
       ]
      }
     }
@@ -7664,6 +9200,134 @@
        true,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       4021.2205,
+       0.011
+      ],
+      "usd_per_year": [
+       3233119.437,
+       9.854
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       801.358389,
+       0.011
+      ],
+      "usd_per_year": [
+       644303.734,
+       9.854
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       1517.831222,
+       0.044
+      ],
+      "usd_per_year": [
+       1220358.254,
+       39.416
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       517.572944,
+       0.011
+      ],
+      "usd_per_year": [
+       416136.133,
+       9.854
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       587.794315,
+       0.011
+      ],
+      "usd_per_year": [
+       472595.13,
+       9.854
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       281.801259,
+       0.011
+      ],
+      "usd_per_year": [
+       226572.288,
+       9.854
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       130.662704,
+       0.011
+      ],
+      "usd_per_year": [
+       105054.703,
+       9.854
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       6767.222,
+       0.011
+      ],
+      "usd_per_year": [
+       5440944.356,
+       9.854
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       343.057,
+       0.011
+      ],
+      "usd_per_year": [
+       275822.789,
+       9.854
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       684.2,
+       0.077
+      ],
+      "usd_per_year": [
+       527811.428,
+       68.978
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       196.0,
+       0.011
+      ],
+      "usd_per_year": [
+       151200.0,
+       9.854
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       488.0,
+       0.011
+      ],
+      "usd_per_year": [
+       376457.143,
+       9.854
+      ]
      }
     }
    }
@@ -8252,6 +9916,134 @@
       "equal_production_days": [
        true,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       18496.2415,
+       0.011
+      ],
+      "usd_per_year": [
+       3094398.298,
+       2.85
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       3345.271648,
+       0.011
+      ],
+      "usd_per_year": [
+       559659.804,
+       2.85
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       6431.014223,
+       0.044
+      ],
+      "usd_per_year": [
+       1075900.716,
+       11.4
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       2458.376093,
+       0.011
+      ],
+      "usd_per_year": [
+       411283.276,
+       2.85
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       2126.066167,
+       0.011
+      ],
+      "usd_per_year": [
+       355688.237,
+       2.85
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       1236.570037,
+       0.011
+      ],
+      "usd_per_year": [
+       206876.636,
+       2.85
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       610.001926,
+       0.011
+      ],
+      "usd_per_year": [
+       102052.567,
+       2.85
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       30375.477,
+       0.011
+      ],
+      "usd_per_year": [
+       5081779.687,
+       2.85
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       1571.0035,
+       0.011
+      ],
+      "usd_per_year": [
+       262826.94,
+       2.85
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       1645.4,
+       0.09899999999999999
+      ],
+      "usd_per_year": [
+       253861.715,
+       25.650000000000002
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       575.0,
+       0.011
+      ],
+      "usd_per_year": [
+       88714.286,
+       2.85
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       1070.4,
+       0.011
+      ],
+      "usd_per_year": [
+       165147.429,
+       2.85
       ]
      }
     }
@@ -8843,6 +10635,134 @@
        true,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       4493.6375,
+       0.011
+      ],
+      "usd_per_year": [
+       3351970.917,
+       9.496
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       836.222519,
+       0.011
+      ],
+      "usd_per_year": [
+       623769.399,
+       9.496
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       1616.975907,
+       0.044
+      ],
+      "usd_per_year": [
+       1206162.316,
+       37.984
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       565.05837,
+       0.011
+      ],
+      "usd_per_year": [
+       421498.001,
+       9.496
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       627.166889,
+       0.011
+      ],
+      "usd_per_year": [
+       467827.049,
+       9.496
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       286.896741,
+       0.011
+      ],
+      "usd_per_year": [
+       214006.922,
+       9.496
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       137.853907,
+       0.011
+      ],
+      "usd_per_year": [
+       102830.344,
+       9.496
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       7472.1625,
+       0.011
+      ],
+      "usd_per_year": [
+       5573763.212,
+       9.496
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       411.3725,
+       0.011
+      ],
+      "usd_per_year": [
+       306858.009,
+       9.496
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       160.6,
+       0.033
+      ],
+      "usd_per_year": [
+       123891.428,
+       28.488
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       38.4,
+       0.011
+      ],
+      "usd_per_year": [
+       29622.857,
+       9.496
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       122.4,
+       0.011
+      ],
+      "usd_per_year": [
+       94422.857,
+       9.496
+      ]
      }
     }
    }
@@ -9432,6 +11352,134 @@
       "equal_production_days": [
        true,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       247762.0695,
+       0.011
+      ],
+      "usd_per_year": [
+       3119955.053,
+       1.151
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       48560.625352,
+       0.011
+      ],
+      "usd_per_year": [
+       611501.869,
+       1.151
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       87241.194297,
+       0.044
+      ],
+      "usd_per_year": [
+       1098588.681,
+       4.604
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       33634.281167,
+       0.011
+      ],
+      "usd_per_year": [
+       423541.205,
+       1.151
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       28483.982167,
+       0.011
+      ],
+      "usd_per_year": [
+       358685.832,
+       1.151
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       16735.357519,
+       0.011
+      ],
+      "usd_per_year": [
+       210740.746,
+       1.151
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       8387.573444,
+       0.011
+      ],
+      "usd_per_year": [
+       105620.898,
+       1.151
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       410238.202,
+       0.011
+      ],
+      "usd_per_year": [
+       5165943.092,
+       1.151
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       20308.849,
+       0.011
+      ],
+      "usd_per_year": [
+       255740.099,
+       1.151
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       29375.0,
+       0.10999999999999999
+      ],
+      "usd_per_year": [
+       377678.569,
+       11.51
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       15814.0,
+       0.011
+      ],
+      "usd_per_year": [
+       203322.857,
+       1.151
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       13561.0,
+       0.011
+      ],
+      "usd_per_year": [
+       174355.714,
+       1.151
       ]
      }
     }
@@ -10023,6 +12071,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       222641.023,
+       0.011
+      ],
+      "usd_per_year": [
+       2795522.036,
+       1.151
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       47503.87063,
+       0.011
+      ],
+      "usd_per_year": [
+       596467.423,
+       1.151
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       97456.313833,
+       0.044
+      ],
+      "usd_per_year": [
+       1223679.577,
+       4.604
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       33600.638074,
+       0.011
+      ],
+      "usd_per_year": [
+       421895.852,
+       1.151
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       38741.697111,
+       0.011
+      ],
+      "usd_per_year": [
+       486447.944,
+       1.151
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       16713.144037,
+       0.011
+      ],
+      "usd_per_year": [
+       209853.341,
+       1.151
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       8400.834611,
+       0.011
+      ],
+      "usd_per_year": [
+       105482.44,
+       1.151
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       392138.7745,
+       0.011
+      ],
+      "usd_per_year": [
+       4923767.285,
+       1.151
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       18986.264,
+       0.011
+      ],
+      "usd_per_year": [
+       238395.057,
+       1.151
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       26929.2,
+       0.10999999999999999
+      ],
+      "usd_per_year": [
+       346232.57,
+       11.51
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       15978.4,
+       0.011
+      ],
+      "usd_per_year": [
+       205436.571,
+       1.151
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       10951.0,
+       0.011
+      ],
+      "usd_per_year": [
+       140798.571,
+       1.151
+      ]
      }
     }
    }
@@ -10612,6 +12788,134 @@
       "equal_production_days": [
        false,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       259363.841,
+       0.011
+      ],
+      "usd_per_year": [
+       2740426.15,
+       1.128
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       57794.036981,
+       0.011
+      ],
+      "usd_per_year": [
+       610649.078,
+       1.128
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       102479.10839,
+       0.044
+      ],
+      "usd_per_year": [
+       1082789.441,
+       4.512
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       40254.984667,
+       0.011
+      ],
+      "usd_per_year": [
+       425332.275,
+       1.128
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       32263.984093,
+       0.011
+      ],
+      "usd_per_year": [
+       340899.739,
+       1.128
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       19899.945037,
+       0.011
+      ],
+      "usd_per_year": [
+       210261.884,
+       1.128
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       10060.194593,
+       0.011
+      ],
+      "usd_per_year": [
+       106295.543,
+       1.128
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       449703.232,
+       0.011
+      ],
+      "usd_per_year": [
+       4751543.207,
+       1.128
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       22752.939,
+       0.011
+      ],
+      "usd_per_year": [
+       240406.484,
+       1.128
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       30486.6,
+       0.10999999999999999
+      ],
+      "usd_per_year": [
+       326642.143,
+       11.28
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       16784.4,
+       0.011
+      ],
+      "usd_per_year": [
+       179832.857,
+       1.128
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       13702.0,
+       0.011
+      ],
+      "usd_per_year": [
+       146807.143,
+       1.128
       ]
      }
     }
@@ -11203,6 +13507,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       42483.8205,
+       0.011
+      ],
+      "usd_per_year": [
+       2707790.239,
+       1.717
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       9457.37213,
+       0.011
+      ],
+      "usd_per_year": [
+       602784.299,
+       1.717
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       16465.455499,
+       0.044
+      ],
+      "usd_per_year": [
+       1049458.338,
+       6.868
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       6673.360722,
+       0.011
+      ],
+      "usd_per_year": [
+       425339.831,
+       1.717
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       4908.017074,
+       0.011
+      ],
+      "usd_per_year": [
+       312822.165,
+       1.717
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       3238.859444,
+       0.011
+      ],
+      "usd_per_year": [
+       206435.106,
+       1.717
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       1645.218259,
+       0.011
+      ],
+      "usd_per_year": [
+       104861.236,
+       1.717
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       73465.172,
+       0.011
+      ],
+      "usd_per_year": [
+       4682447.89,
+       1.717
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       3914.4875,
+       0.011
+      ],
+      "usd_per_year": [
+       249497.595,
+       1.717
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       5549.2,
+       0.088
+      ],
+      "usd_per_year": [
+       356734.287,
+       13.736
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       3152.6,
+       0.011
+      ],
+      "usd_per_year": [
+       202667.143,
+       1.717
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       2396.6,
+       0.011
+      ],
+      "usd_per_year": [
+       154067.143,
+       1.717
+      ]
      }
     }
    }
@@ -11793,6 +14225,134 @@
        false,
        null
       ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       248260.1825,
+       0.011
+      ],
+      "usd_per_year": [
+       2739309.762,
+       1.133
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       55282.674926,
+       0.011
+      ],
+      "usd_per_year": [
+       609990.574,
+       1.133
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       98285.356889,
+       0.044
+      ],
+      "usd_per_year": [
+       1084483.362,
+       4.532
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       38530.539889,
+       0.011
+      ],
+      "usd_per_year": [
+       425147.049,
+       1.133
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       31029.051889,
+       0.011
+      ],
+      "usd_per_year": [
+       342375.422,
+       1.133
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       19084.262944,
+       0.011
+      ],
+      "usd_per_year": [
+       210576.288,
+       1.133
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       9641.502167,
+       0.011
+      ],
+      "usd_per_year": [
+       106384.603,
+       1.133
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       430431.2045,
+       0.011
+      ],
+      "usd_per_year": [
+       4749389.889,
+       1.133
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       21610.4295,
+       0.011
+      ],
+      "usd_per_year": [
+       238450.08,
+       1.133
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       29655.2,
+       0.10999999999999999
+      ],
+      "usd_per_year": [
+       331548.82,
+       11.33
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       16507.4,
+       0.011
+      ],
+      "usd_per_year": [
+       184554.783,
+       1.133
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       13148.0,
+       0.011
+      ],
+      "usd_per_year": [
+       146996.273,
+       1.133
+      ]
      }
     }
    }
@@ -12382,6 +14942,134 @@
       "equal_production_days": [
        false,
        null
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       40199.3845,
+       0.011
+      ],
+      "usd_per_year": [
+       3407562.866,
+       1.953
+      ]
+     },
+     "tile_money:metric=shear_pct": {
+      "usd": [
+       7203.097074,
+       0.011
+      ],
+      "usd_per_year": [
+       610581.64,
+       1.953
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       13053.607982,
+       0.044
+      ],
+      "usd_per_year": [
+       1106509.225,
+       7.812
+      ]
+     },
+     "tile_money:metric=bond_pct": {
+      "usd": [
+       5043.822222,
+       0.011
+      ],
+      "usd_per_year": [
+       427547.375,
+       1.953
+      ]
+     },
+     "tile_money:metric=warp_pct": {
+      "usd": [
+       4299.324241,
+       0.011
+      ],
+      "usd_per_year": [
+       364438.854,
+       1.953
+      ]
+     },
+     "tile_money:metric=misalignment_pct": {
+      "usd": [
+       2460.595093,
+       0.011
+      ],
+      "usd_per_year": [
+       208576.14,
+       1.953
+      ]
+     },
+     "tile_money:metric=cracking_pct": {
+      "usd": [
+       1249.866426,
+       0.011
+      ],
+      "usd_per_year": [
+       105946.856,
+       1.953
+      ]
+     },
+     "tile_money:metric=bale_pct": {
+      "usd": [
+       64338.2795,
+       0.011
+      ],
+      "usd_per_year": [
+       5453733.554,
+       1.953
+      ]
+     },
+     "tile_money:metric=unexplained_pct": {
+      "usd": [
+       3178.8405,
+       0.011
+      ],
+      "usd_per_year": [
+       269459.321,
+       1.953
+      ]
+     },
+     "tile_money:metric=downtime_pct": {
+      "usd": [
+       2671.8,
+       0.088
+      ],
+      "usd_per_year": [
+       229011.428,
+       15.624
+      ],
+      "metrics": [
+       [
+        "downtime_pct",
+        "downtime_minutes",
+        "stops"
+       ],
+       null
+      ]
+     },
+     "tile_money:metric=maintenance_pm_pct": {
+      "usd": [
+       833.4,
+       0.011
+      ],
+      "usd_per_year": [
+       71434.286,
+       1.953
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       1838.4,
+       0.011
+      ],
+      "usd_per_year": [
+       157577.143,
+       1.953
       ]
      }
     }
@@ -31302,6 +33990,122 @@
        null
       ]
      },
+     "buckets:bucket=Setups": {
+      "usd": [
+       97.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       75085.714,
+       1.01
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       586.666666,
+       0.066
+      ],
+      "usd_per_year": [
+       452571.429,
+       6.0600000000000005
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       747.801481,
+       0.011
+      ],
+      "usd_per_year": [
+       576875.429,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       4021.2205,
+       0.011
+      ],
+      "usd_per_year": [
+       3233119.437,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       801.358389,
+       0.011
+      ],
+      "usd_per_year": [
+       644303.734,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       1517.831222,
+       0.044
+      ],
+      "usd_per_year": [
+       1220358.254,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Trim",
+       null
+      ]
+     },
+     "tile_money:metric=observed_shift_fpm": {
+      "usd": [
+       747.801481,
+       0.011
+      ],
+      "usd_per_year": [
+       576875.429,
+       9.854
+      ]
+     },
+     "tile_money:metric=maintenance_pct": {
+      "usd": [
+       196.0,
+       0.011
+      ],
+      "usd_per_year": [
+       151200.0,
+       9.854
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       488.0,
+       0.011
+      ],
+      "usd_per_year": [
+       376457.143,
+       9.854
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       4021.2205,
+       0.011
+      ],
+      "usd_per_year": [
+       3233119.437,
+       9.854
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       1517.831222,
+       0.044
+      ],
+      "usd_per_year": [
+       1220358.254,
+       39.416
+      ]
+     },
      "$": {
       "total_usd": [
        7772.211591,
@@ -31318,6 +34122,54 @@
       "contribution_status": [
        "margin not set",
        null
+      ],
+      "area_sqft": [
+       112619.8,
+       0.051
+      ],
+      "area_msf": [
+       112.6198,
+       0.00051
+      ],
+      "stop_minutes": [
+       34.2,
+       0.042
+      ],
+      "speed_minutes": [
+       37.390074,
+       0.006
+      ],
+      "waste_run_minutes": [
+       7.316056,
+       0.03
+      ],
+      "machine_minutes": [
+       78.90613,
+       0.084
+      ],
+      "msf_not_made": [
+       426.0931,
+       0.0154
+      ],
+      "trim_pct_of_gross": [
+       3.265777,
+       5.1e-05
+      ],
+      "trim_target_pct": [
+       3.25,
+       null
+      ],
+      "trim_points_over": [
+       0.015777,
+       0.0001
+      ],
+      "trim_over_usd": [
+       19.426811,
+       0.011
+      ],
+      "trim_over_usd_per_year": [
+       15619.437,
+       1.01
       ]
      }
     }
@@ -31750,6 +34602,122 @@
        null
       ]
      },
+     "buckets:bucket=Stops": {
+      "usd": [
+       188.999999,
+       0.044
+      ],
+      "usd_per_year": [
+       145800.0,
+       4.04
+      ]
+     },
+     "buckets:bucket=Setups": {
+      "usd": [
+       60.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       46542.857,
+       1.01
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       0.0,
+       0.011
+      ],
+      "usd_per_year": [
+       0.0,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       5364.117,
+       0.011
+      ],
+      "usd_per_year": [
+       3457208.543,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       911.498278,
+       0.011
+      ],
+      "usd_per_year": [
+       587466.611,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       1618.091278,
+       0.044
+      ],
+      "usd_per_year": [
+       1042870.427,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Trim",
+       null
+      ]
+     },
+     "tile_money:metric=observed_shift_fpm": {
+      "usd": [
+       0.0,
+       0.011
+      ],
+      "usd_per_year": [
+       0.0,
+       9.496
+      ]
+     },
+     "tile_money:metric=maintenance_pct": {
+      "usd": [
+       89.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       68914.286,
+       9.496
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       160.0,
+       0.011
+      ],
+      "usd_per_year": [
+       123428.571,
+       9.496
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       5364.117,
+       0.011
+      ],
+      "usd_per_year": [
+       3457208.543,
+       9.496
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       1618.091278,
+       0.044
+      ],
+      "usd_per_year": [
+       1042870.427,
+       37.984
+      ]
+     },
      "$": {
       "total_usd": [
        8143.039888,
@@ -31766,6 +34734,54 @@
       "contribution_status": [
        "margin not set",
        null
+      ],
+      "area_sqft": [
+       140620.2,
+       0.051
+      ],
+      "area_msf": [
+       140.6202,
+       0.00051
+      ],
+      "stop_minutes": [
+       12.466667,
+       0.03
+      ],
+      "speed_minutes": [
+       0.0,
+       0.006
+      ],
+      "waste_run_minutes": [
+       7.979778,
+       0.03
+      ],
+      "machine_minutes": [
+       20.446444,
+       0.07200000000000001
+      ],
+      "msf_not_made": [
+       110.4108,
+       0.0132
+      ],
+      "trim_pct_of_gross": [
+       3.49213,
+       5.1e-05
+      ],
+      "trim_target_pct": [
+       3.25,
+       null
+      ],
+      "trim_points_over": [
+       0.24213,
+       0.0001
+      ],
+      "trim_over_usd": [
+       371.925689,
+       0.011
+      ],
+      "trim_over_usd_per_year": [
+       239708.543,
+       1.01
       ]
      }
     }
@@ -32268,6 +35284,122 @@
        null
       ]
      },
+     "buckets:bucket=Setups": {
+      "usd": [
+       121.666667,
+       0.011
+      ],
+      "usd_per_year": [
+       93857.143,
+       1.01
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       733.333334,
+       0.066
+      ],
+      "usd_per_year": [
+       565714.286,
+       6.0600000000000005
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       934.751852,
+       0.011
+      ],
+      "usd_per_year": [
+       721094.286,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       4825.4646,
+       0.011
+      ],
+      "usd_per_year": [
+       3879743.325,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       964.158011,
+       0.011
+      ],
+      "usd_per_year": [
+       775196.985,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       1826.185579,
+       0.044
+      ],
+      "usd_per_year": [
+       1468279.615,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Trim",
+       null
+      ]
+     },
+     "tile_money:metric=observed_shift_fpm": {
+      "usd": [
+       934.751852,
+       0.011
+      ],
+      "usd_per_year": [
+       721094.286,
+       9.854
+      ]
+     },
+     "tile_money:metric=maintenance_pct": {
+      "usd": [
+       245.0,
+       0.011
+      ],
+      "usd_per_year": [
+       189000.0,
+       9.854
+      ]
+     },
+     "tile_money:metric=operator_pct": {
+      "usd": [
+       610.0,
+       0.011
+      ],
+      "usd_per_year": [
+       470571.429,
+       9.854
+      ]
+     },
+     "tile_money:metric=trim_pct": {
+      "usd": [
+       4825.4646,
+       0.011
+      ],
+      "usd_per_year": [
+       3879743.325,
+       9.854
+      ]
+     },
+     "tile_money:metric=dry_end_pct": {
+      "usd": [
+       1826.185579,
+       0.044
+      ],
+      "usd_per_year": [
+       1468279.615,
+       39.416
+      ]
+     },
      "$": {
       "total_usd": [
        9405.560043,
@@ -32284,9 +35416,2657 @@
       "contribution_status": [
        "set",
        null
+      ],
+      "area_sqft": [
+       112619.8,
+       0.051
+      ],
+      "area_msf": [
+       112.6198,
+       0.00051
+      ],
+      "stop_minutes": [
+       34.2,
+       0.042
+      ],
+      "speed_minutes": [
+       37.390074,
+       0.006
+      ],
+      "waste_run_minutes": [
+       7.316056,
+       0.03
+      ],
+      "machine_minutes": [
+       78.90613,
+       0.084
+      ],
+      "msf_not_made": [
+       426.0931,
+       0.0154
+      ],
+      "trim_pct_of_gross": [
+       3.265777,
+       5.1e-05
+      ],
+      "trim_target_pct": [
+       3.25,
+       null
+      ],
+      "trim_points_over": [
+       0.015777,
+       0.0001
+      ],
+      "trim_over_usd": [
+       23.312174,
+       0.011
+      ],
+      "trim_over_usd_per_year": [
+       18743.325,
+       1.01
       ]
      }
     }
+   }
+  },
+  {
+   "id": "value-dollars-day-0914",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_day_dollars",
+   "arguments": {
+    "shifts": [
+     1,
+     2,
+     3
+    ]
+   },
+   "note": "The card's all-shifts total for the day: each gap summed over the three shifts and priced once on the day, with each shift's own total beside it (issue #31b review: the server's figure, not the browser's).",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 14,
+    "values": {
+     "rows:gap=Downtime: Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       208.0,
+       0.011
+      ],
+      "usd": [
+       208.0,
+       0.011
+      ],
+      "usd_per_year": [
+       53485.714,
+       3.839
+      ],
+      "msf_not_made": [
+       56.16,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Stacker": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       219.4,
+       0.011
+      ],
+      "usd": [
+       219.4,
+       0.011
+      ],
+      "usd_per_year": [
+       56417.143,
+       3.839
+      ],
+      "msf_not_made": [
+       59.238,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Knife / slitter jam": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       279.0,
+       0.011
+      ],
+      "usd": [
+       279.0,
+       0.011
+      ],
+      "usd_per_year": [
+       71742.857,
+       3.839
+      ],
+      "msf_not_made": [
+       75.33,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Order change": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       240.0,
+       0.011
+      ],
+      "usd": [
+       240.0,
+       0.011
+      ],
+      "usd_per_year": [
+       61714.286,
+       3.839
+      ],
+      "msf_not_made": [
+       64.8,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       179.6,
+       0.011
+      ],
+      "usd": [
+       179.6,
+       0.011
+      ],
+      "usd_per_year": [
+       46182.857,
+       3.839
+      ],
+      "msf_not_made": [
+       48.492,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Other": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       120.4,
+       0.011
+      ],
+      "usd": [
+       120.4,
+       0.011
+      ],
+      "usd_per_year": [
+       30960.0,
+       3.839
+      ],
+      "msf_not_made": [
+       32.508,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Speed gap to 675 ft/min": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       1523.8,
+       0.011
+      ],
+      "usd": [
+       1523.8,
+       0.011
+      ],
+      "usd_per_year": [
+       391834.286,
+       3.839
+      ],
+      "msf_not_made": [
+       411.426,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Side trim": {
+      "paper_usd": [
+       13450.6625,
+       0.011
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.011
+      ],
+      "usd": [
+       13450.6625,
+       0.011
+      ],
+      "usd_per_year": [
+       3365857.159,
+       3.839
+      ],
+      "msf_not_made": [
+       0.0,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Shear chops": {
+      "paper_usd": [
+       2467.135,
+       0.011
+      ],
+      "machine_time_usd": [
+       166.137037,
+       0.011
+      ],
+      "usd": [
+       2633.272037,
+       0.011
+      ],
+      "usd_per_year": [
+       658942.824,
+       3.839
+      ],
+      "msf_not_made": [
+       44.857,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: bond": {
+      "paper_usd": [
+       1532.531,
+       0.011
+      ],
+      "machine_time_usd": [
+       103.200741,
+       0.011
+      ],
+      "usd": [
+       1635.731741,
+       0.011
+      ],
+      "usd_per_year": [
+       409321.057,
+       3.839
+      ],
+      "msf_not_made": [
+       27.8642,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: warp": {
+      "paper_usd": [
+       1752.465,
+       0.011
+      ],
+      "machine_time_usd": [
+       118.011111,
+       0.011
+      ],
+      "usd": [
+       1870.476111,
+       0.011
+      ],
+      "usd_per_year": [
+       468062.849,
+       3.839
+      ],
+      "msf_not_made": [
+       31.863,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: misalignment": {
+      "paper_usd": [
+       815.87,
+       0.011
+      ],
+      "machine_time_usd": [
+       54.940741,
+       0.011
+      ],
+      "usd": [
+       870.810741,
+       0.011
+      ],
+      "usd_per_year": [
+       217909.309,
+       3.839
+      ],
+      "msf_not_made": [
+       14.834,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: cracking": {
+      "paper_usd": [
+       387.8545,
+       0.011
+      ],
+      "machine_time_usd": [
+       26.118148,
+       0.011
+      ],
+      "usd": [
+       413.972648,
+       0.011
+      ],
+      "usd_per_year": [
+       103591.388,
+       3.839
+      ],
+      "msf_not_made": [
+       7.0519,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Glue / starch": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       124.4,
+       0.011
+      ],
+      "usd": [
+       124.4,
+       0.011
+      ],
+      "usd_per_year": [
+       31988.571,
+       3.839
+      ],
+      "msf_not_made": [
+       33.588,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "#0": {
+      "gap": [
+       "Side trim",
+       null
+      ]
+     },
+     "shifts:shift=1": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "shifts:shift=2": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "shifts:shift=3": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       1130.8,
+       0.066
+      ],
+      "usd_per_year": [
+       290777.142,
+       6.0600000000000005
+      ]
+     },
+     "buckets:bucket=Setups": {
+      "usd": [
+       240.0,
+       0.011
+      ],
+      "usd_per_year": [
+       61714.286,
+       1.01
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       1523.8,
+       0.011
+      ],
+      "usd_per_year": [
+       391834.286,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       13450.6625,
+       0.011
+      ],
+      "usd_per_year": [
+       3365857.159,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       2633.272037,
+       0.011
+      ],
+      "usd_per_year": [
+       658942.824,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       4790.991241,
+       0.044
+      ],
+      "usd_per_year": [
+       1198884.603,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Trim",
+       null
+      ]
+     },
+     "$": {
+      "shift": [
+       null,
+       null
+      ],
+      "excluded_shifts": [
+       [],
+       null
+      ],
+      "scheduled_minutes": [
+       1440,
+       null
+      ],
+      "gross_sqft": [
+       7193172.9,
+       0.051
+      ],
+      "total_usd": [
+       23769.525778,
+       0.154
+      ],
+      "total_usd_per_year": [
+       5968010.3,
+       14.14
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "area_sqft": [
+       371027.6,
+       0.051
+      ],
+      "area_msf": [
+       371.0276,
+       0.00051
+      ],
+      "stop_minutes": [
+       68.54,
+       0.042
+      ],
+      "speed_minutes": [
+       76.19,
+       0.006
+      ],
+      "waste_run_minutes": [
+       23.420389,
+       0.03
+      ],
+      "machine_minutes": [
+       168.150389,
+       0.084
+      ],
+      "msf_not_made": [
+       908.0121,
+       0.0154
+      ],
+      "trim_pct_of_gross": [
+       3.399856,
+       5.1e-05
+      ],
+      "trim_target_pct": [
+       3.25,
+       null
+      ],
+      "trim_points_over": [
+       0.149856,
+       0.0001
+      ],
+      "trim_over_usd": [
+       592.865941,
+       0.011
+      ],
+      "trim_over_usd_per_year": [
+       148357.159,
+       1.01
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-dollars-day-0914-rates",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_day_dollars",
+   "arguments": {
+    "shifts": [
+     1,
+     2,
+     3
+    ]
+   },
+   "rates": "paper:60,hour:1350.5,margin:35,trim:3.1",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 14,
+    "values": {
+     "rows:gap=Downtime: Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       234.086667,
+       0.011
+      ],
+      "usd": [
+       234.086667,
+       0.011
+      ],
+      "usd_per_year": [
+       60193.714,
+       3.839
+      ],
+      "msf_not_made": [
+       56.16,
+       0.0011
+      ],
+      "contribution_usd": [
+       1965.6,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       505440.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Stacker": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       246.916417,
+       0.011
+      ],
+      "usd": [
+       246.916417,
+       0.011
+      ],
+      "usd_per_year": [
+       63492.793,
+       3.839
+      ],
+      "msf_not_made": [
+       59.238,
+       0.0011
+      ],
+      "contribution_usd": [
+       2073.33,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       533142.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Knife / slitter jam": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       313.99125,
+       0.011
+      ],
+      "usd": [
+       313.99125,
+       0.011
+      ],
+      "usd_per_year": [
+       80740.607,
+       3.839
+      ],
+      "msf_not_made": [
+       75.33,
+       0.0011
+      ],
+      "contribution_usd": [
+       2636.55,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       677970.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Order change": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       270.1,
+       0.011
+      ],
+      "usd": [
+       270.1,
+       0.011
+      ],
+      "usd_per_year": [
+       69454.286,
+       3.839
+      ],
+      "msf_not_made": [
+       64.8,
+       0.0011
+      ],
+      "contribution_usd": [
+       2268.0,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       583200.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       202.124833,
+       0.011
+      ],
+      "usd": [
+       202.124833,
+       0.011
+      ],
+      "usd_per_year": [
+       51974.957,
+       3.839
+      ],
+      "msf_not_made": [
+       48.492,
+       0.0011
+      ],
+      "contribution_usd": [
+       1697.22,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       436428.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Other": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       135.500167,
+       0.011
+      ],
+      "usd": [
+       135.500167,
+       0.011
+      ],
+      "usd_per_year": [
+       34842.9,
+       3.839
+      ],
+      "msf_not_made": [
+       32.508,
+       0.0011
+      ],
+      "contribution_usd": [
+       1137.78,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       292572.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Speed gap to 675 ft/min": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       1714.909917,
+       0.011
+      ],
+      "usd": [
+       1714.909917,
+       0.011
+      ],
+      "usd_per_year": [
+       440976.836,
+       3.839
+      ],
+      "msf_not_made": [
+       411.426,
+       0.0011
+      ],
+      "contribution_usd": [
+       14399.91,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       3702834.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Side trim": {
+      "paper_usd": [
+       14673.45,
+       0.011
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.011
+      ],
+      "usd": [
+       14673.45,
+       0.011
+      ],
+      "usd_per_year": [
+       3671844.173,
+       3.839
+      ],
+      "msf_not_made": [
+       0.0,
+       0.0011
+      ],
+      "contribution_usd": [
+       0.0,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       0.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Shear chops": {
+      "paper_usd": [
+       2691.42,
+       0.011
+      ],
+      "machine_time_usd": [
+       186.97339,
+       0.011
+      ],
+      "usd": [
+       2878.39339,
+       0.011
+      ],
+      "usd_per_year": [
+       720281.324,
+       3.839
+      ],
+      "msf_not_made": [
+       44.857,
+       0.0011
+      ],
+      "contribution_usd": [
+       1569.995,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       392871.274,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: bond": {
+      "paper_usd": [
+       1671.852,
+       0.011
+      ],
+      "machine_time_usd": [
+       116.143834,
+       0.011
+      ],
+      "usd": [
+       1787.995834,
+       0.011
+      ],
+      "usd_per_year": [
+       447423.209,
+       3.839
+      ],
+      "msf_not_made": [
+       27.8642,
+       0.0011
+      ],
+      "contribution_usd": [
+       975.247,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       244043.154,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: warp": {
+      "paper_usd": [
+       1911.78,
+       0.011
+      ],
+      "machine_time_usd": [
+       132.811671,
+       0.011
+      ],
+      "usd": [
+       2044.591671,
+       0.011
+      ],
+      "usd_per_year": [
+       511633.053,
+       3.839
+      ],
+      "msf_not_made": [
+       31.863,
+       0.0011
+      ],
+      "contribution_usd": [
+       1115.205,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       279065.863,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: misalignment": {
+      "paper_usd": [
+       890.04,
+       0.011
+      ],
+      "machine_time_usd": [
+       61.831225,
+       0.011
+      ],
+      "usd": [
+       951.871225,
+       0.011
+      ],
+      "usd_per_year": [
+       238193.664,
+       3.839
+      ],
+      "msf_not_made": [
+       14.834,
+       0.0011
+      ],
+      "contribution_usd": [
+       519.19,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       129920.692,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: cracking": {
+      "paper_usd": [
+       423.114,
+       0.011
+      ],
+      "machine_time_usd": [
+       29.393799,
+       0.011
+      ],
+      "usd": [
+       452.507799,
+       0.011
+      ],
+      "usd_per_year": [
+       113234.32,
+       3.839
+      ],
+      "msf_not_made": [
+       7.0519,
+       0.0011
+      ],
+      "contribution_usd": [
+       246.8165,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       61762.689,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Glue / starch": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       140.001833,
+       0.011
+      ],
+      "usd": [
+       140.001833,
+       0.011
+      ],
+      "usd_per_year": [
+       36000.471,
+       3.839
+      ],
+      "msf_not_made": [
+       33.588,
+       0.0011
+      ],
+      "contribution_usd": [
+       1175.58,
+       0.011
+      ],
+      "contribution_usd_per_year": [
+       302292.0,
+       3.839
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ]
+     },
+     "#0": {
+      "gap": [
+       "Side trim",
+       null
+      ]
+     },
+     "shifts:shift=1": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "shifts:shift=2": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "shifts:shift=3": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       1272.621167,
+       0.066
+      ],
+      "usd_per_year": [
+       327245.442,
+       6.0600000000000005
+      ]
+     },
+     "buckets:bucket=Setups": {
+      "usd": [
+       270.1,
+       0.011
+      ],
+      "usd_per_year": [
+       69454.286,
+       1.01
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       1714.909917,
+       0.011
+      ],
+      "usd_per_year": [
+       440976.836,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       14673.45,
+       0.011
+      ],
+      "usd_per_year": [
+       3671844.173,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       2878.39339,
+       0.011
+      ],
+      "usd_per_year": [
+       720281.324,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       5236.966529,
+       0.044
+      ],
+      "usd_per_year": [
+       1310484.246,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Trim",
+       null
+      ]
+     },
+     "$": {
+      "shift": [
+       null,
+       null
+      ],
+      "excluded_shifts": [
+       [],
+       null
+      ],
+      "scheduled_minutes": [
+       1440,
+       null
+      ],
+      "gross_sqft": [
+       7193172.9,
+       0.051
+      ],
+      "total_usd": [
+       26046.441003,
+       0.154
+      ],
+      "total_usd_per_year": [
+       6540286.307,
+       14.14
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "area_sqft": [
+       371027.6,
+       0.051
+      ],
+      "area_msf": [
+       371.0276,
+       0.00051
+      ],
+      "stop_minutes": [
+       68.54,
+       0.042
+      ],
+      "speed_minutes": [
+       76.19,
+       0.006
+      ],
+      "waste_run_minutes": [
+       23.420389,
+       0.03
+      ],
+      "machine_minutes": [
+       168.150389,
+       0.084
+      ],
+      "msf_not_made": [
+       908.0121,
+       0.0154
+      ],
+      "trim_pct_of_gross": [
+       3.399856,
+       5.1e-05
+      ],
+      "trim_target_pct": [
+       3.1,
+       null
+      ],
+      "trim_points_over": [
+       0.299856,
+       0.0001
+      ],
+      "trim_over_usd": [
+       1294.148406,
+       0.011
+      ],
+      "trim_over_usd_per_year": [
+       323844.173,
+       1.01
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-dollars-day-0914-shifts-1-3",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_day_dollars",
+   "arguments": {
+    "shifts": [
+     1,
+     3
+    ]
+   },
+   "note": "A question about shifts 1 and 3: the day total covers those two shifts and their 960 minutes, never shift 2.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 13,
+    "values": {
+     "rows:gap=Downtime: Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       150.0,
+       0.011
+      ],
+      "usd": [
+       150.0,
+       0.011
+      ],
+      "usd_per_year": [
+       57857.143,
+       5.253
+      ],
+      "msf_not_made": [
+       40.5,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Stacker": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       100.0,
+       0.011
+      ],
+      "usd": [
+       100.0,
+       0.011
+      ],
+      "usd_per_year": [
+       38571.429,
+       5.253
+      ],
+      "msf_not_made": [
+       27.0,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Knife / slitter jam": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       160.6,
+       0.011
+      ],
+      "usd": [
+       160.6,
+       0.011
+      ],
+      "usd_per_year": [
+       61945.714,
+       5.253
+      ],
+      "msf_not_made": [
+       43.362,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Order change": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       142.6,
+       0.011
+      ],
+      "usd": [
+       142.6,
+       0.011
+      ],
+      "usd_per_year": [
+       55002.857,
+       5.253
+      ],
+      "msf_not_made": [
+       38.502,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       102.0,
+       0.011
+      ],
+      "usd": [
+       102.0,
+       0.011
+      ],
+      "usd_per_year": [
+       39342.857,
+       5.253
+      ],
+      "msf_not_made": [
+       27.54,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Other": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       31.4,
+       0.011
+      ],
+      "usd": [
+       31.4,
+       0.011
+      ],
+      "usd_per_year": [
+       12111.429,
+       5.253
+      ],
+      "msf_not_made": [
+       8.478,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Speed gap to 675 ft/min": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       776.0,
+       0.011
+      ],
+      "usd": [
+       776.0,
+       0.011
+      ],
+      "usd_per_year": [
+       299314.286,
+       5.253
+      ],
+      "msf_not_made": [
+       209.52,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Side trim": {
+      "paper_usd": [
+       9429.442,
+       0.011
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.011
+      ],
+      "usd": [
+       9429.442,
+       0.011
+      ],
+      "usd_per_year": [
+       3425837.828,
+       5.253
+      ],
+      "msf_not_made": [
+       0.0,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Shear chops": {
+      "paper_usd": [
+       1716.3355,
+       0.011
+      ],
+      "machine_time_usd": [
+       115.578148,
+       0.011
+      ],
+      "usd": [
+       1831.913648,
+       0.011
+      ],
+      "usd_per_year": [
+       665557.842,
+       5.253
+      ],
+      "msf_not_made": [
+       31.2061,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: bond": {
+      "paper_usd": [
+       1047.6125,
+       0.011
+      ],
+      "machine_time_usd": [
+       70.546296,
+       0.011
+      ],
+      "usd": [
+       1118.158796,
+       0.011
+      ],
+      "usd_per_year": [
+       406241.504,
+       5.253
+      ],
+      "msf_not_made": [
+       19.0475,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: warp": {
+      "paper_usd": [
+       1201.7555,
+       0.011
+      ],
+      "machine_time_usd": [
+       80.926296,
+       0.011
+      ],
+      "usd": [
+       1282.681796,
+       0.011
+      ],
+      "usd_per_year": [
+       466014.831,
+       5.253
+      ],
+      "msf_not_made": [
+       21.8501,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: misalignment": {
+      "paper_usd": [
+       551.848,
+       0.011
+      ],
+      "machine_time_usd": [
+       37.161481,
+       0.011
+      ],
+      "usd": [
+       589.009481,
+       0.011
+      ],
+      "usd_per_year": [
+       213994.737,
+       5.253
+      ],
+      "msf_not_made": [
+       10.0336,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: cracking": {
+      "paper_usd": [
+       265.4355,
+       0.011
+      ],
+      "machine_time_usd": [
+       17.874444,
+       0.011
+      ],
+      "usd": [
+       283.309944,
+       0.011
+      ],
+      "usd_per_year": [
+       102930.155,
+       5.253
+      ],
+      "msf_not_made": [
+       4.8261,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "#0": {
+      "gap": [
+       "Side trim",
+       null
+      ]
+     },
+     "shifts:shift=1": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "shifts:shift=3": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       544.0,
+       0.05499999999999999
+      ],
+      "usd_per_year": [
+       209828.572,
+       5.05
+      ]
+     },
+     "buckets:bucket=Setups": {
+      "usd": [
+       142.6,
+       0.011
+      ],
+      "usd_per_year": [
+       55002.857,
+       1.01
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       776.0,
+       0.011
+      ],
+      "usd_per_year": [
+       299314.286,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       9429.442,
+       0.011
+      ],
+      "usd_per_year": [
+       3425837.828,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       1831.913648,
+       0.011
+      ],
+      "usd_per_year": [
+       665557.842,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       3273.160017,
+       0.044
+      ],
+      "usd_per_year": [
+       1189181.227,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Trim",
+       null
+      ]
+     },
+     "$": {
+      "shift": [
+       null,
+       null
+      ],
+      "excluded_shifts": [
+       [],
+       null
+      ],
+      "scheduled_minutes": [
+       960,
+       null
+      ],
+      "gross_sqft": [
+       4954407.2,
+       0.051
+      ],
+      "total_usd": [
+       15997.115665,
+       0.143
+      ],
+      "total_usd_per_year": [
+       5844722.612,
+       13.13
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "area_sqft": [
+       258407.8,
+       0.051
+      ],
+      "area_msf": [
+       258.4078,
+       0.00051
+      ],
+      "stop_minutes": [
+       34.33,
+       0.036000000000000004
+      ],
+      "speed_minutes": [
+       38.8,
+       0.006
+      ],
+      "waste_run_minutes": [
+       16.104333,
+       0.03
+      ],
+      "machine_minutes": [
+       89.234333,
+       0.078
+      ],
+      "msf_not_made": [
+       481.8654,
+       0.0143
+      ],
+      "trim_pct_of_gross": [
+       3.460442,
+       5.1e-05
+      ],
+      "trim_target_pct": [
+       3.25,
+       null
+      ],
+      "trim_points_over": [
+       0.210442,
+       0.0001
+      ],
+      "trim_over_usd": [
+       573.43913,
+       0.011
+      ],
+      "trim_over_usd_per_year": [
+       208337.828,
+       1.01
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-dollars-day-0914-corrupt",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_day_dollars",
+   "arguments": {
+    "shifts": [
+     1,
+     2,
+     3
+    ]
+   },
+   "corrupt": true,
+   "note": "Shift 2 holds the refused trim record: it is named in excluded_shifts and left out, and the day is priced over shifts 1 and 3 alone (their gross and 960 minutes), with the excluded record reported.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 13,
+    "values": {
+     "rows:gap=Downtime: Raw material (roll)": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       150.0,
+       0.011
+      ],
+      "usd": [
+       150.0,
+       0.011
+      ],
+      "usd_per_year": [
+       57857.143,
+       5.253
+      ],
+      "msf_not_made": [
+       40.5,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Stacker": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       100.0,
+       0.011
+      ],
+      "usd": [
+       100.0,
+       0.011
+      ],
+      "usd_per_year": [
+       38571.429,
+       5.253
+      ],
+      "msf_not_made": [
+       27.0,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Knife / slitter jam": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       160.6,
+       0.011
+      ],
+      "usd": [
+       160.6,
+       0.011
+      ],
+      "usd_per_year": [
+       61945.714,
+       5.253
+      ],
+      "msf_not_made": [
+       43.362,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Order change": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       142.6,
+       0.011
+      ],
+      "usd": [
+       142.6,
+       0.011
+      ],
+      "usd_per_year": [
+       55002.857,
+       5.253
+      ],
+      "msf_not_made": [
+       38.502,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Missed splice": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       102.0,
+       0.011
+      ],
+      "usd": [
+       102.0,
+       0.011
+      ],
+      "usd_per_year": [
+       39342.857,
+       5.253
+      ],
+      "msf_not_made": [
+       27.54,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Downtime: Other": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       31.4,
+       0.011
+      ],
+      "usd": [
+       31.4,
+       0.011
+      ],
+      "usd_per_year": [
+       12111.429,
+       5.253
+      ],
+      "msf_not_made": [
+       8.478,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Speed gap to 675 ft/min": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       776.0,
+       0.011
+      ],
+      "usd": [
+       776.0,
+       0.011
+      ],
+      "usd_per_year": [
+       299314.286,
+       5.253
+      ],
+      "msf_not_made": [
+       209.52,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Side trim": {
+      "paper_usd": [
+       9429.442,
+       0.011
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.011
+      ],
+      "usd": [
+       9429.442,
+       0.011
+      ],
+      "usd_per_year": [
+       3425837.828,
+       5.253
+      ],
+      "msf_not_made": [
+       0.0,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Shear chops": {
+      "paper_usd": [
+       1716.3355,
+       0.011
+      ],
+      "machine_time_usd": [
+       115.578148,
+       0.011
+      ],
+      "usd": [
+       1831.913648,
+       0.011
+      ],
+      "usd_per_year": [
+       665557.842,
+       5.253
+      ],
+      "msf_not_made": [
+       31.2061,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: bond": {
+      "paper_usd": [
+       1047.6125,
+       0.011
+      ],
+      "machine_time_usd": [
+       70.546296,
+       0.011
+      ],
+      "usd": [
+       1118.158796,
+       0.011
+      ],
+      "usd_per_year": [
+       406241.504,
+       5.253
+      ],
+      "msf_not_made": [
+       19.0475,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: warp": {
+      "paper_usd": [
+       1201.7555,
+       0.011
+      ],
+      "machine_time_usd": [
+       80.926296,
+       0.011
+      ],
+      "usd": [
+       1282.681796,
+       0.011
+      ],
+      "usd_per_year": [
+       466014.831,
+       5.253
+      ],
+      "msf_not_made": [
+       21.8501,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: misalignment": {
+      "paper_usd": [
+       551.848,
+       0.011
+      ],
+      "machine_time_usd": [
+       37.161481,
+       0.011
+      ],
+      "usd": [
+       589.009481,
+       0.011
+      ],
+      "usd_per_year": [
+       213994.737,
+       5.253
+      ],
+      "msf_not_made": [
+       10.0336,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "rows:gap=Dry-end: cracking": {
+      "paper_usd": [
+       265.4355,
+       0.011
+      ],
+      "machine_time_usd": [
+       17.874444,
+       0.011
+      ],
+      "usd": [
+       283.309944,
+       0.011
+      ],
+      "usd_per_year": [
+       102930.155,
+       5.253
+      ],
+      "msf_not_made": [
+       4.8261,
+       0.0011
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "#0": {
+      "gap": [
+       "Side trim",
+       null
+      ]
+     },
+     "shifts:shift=1": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "shifts:shift=2": {
+      "coverage": [
+       "incomplete",
+       null
+      ]
+     },
+     "shifts:shift=3": {
+      "coverage": [
+       "complete",
+       null
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       544.0,
+       0.05499999999999999
+      ],
+      "usd_per_year": [
+       209828.572,
+       5.05
+      ]
+     },
+     "buckets:bucket=Setups": {
+      "usd": [
+       142.6,
+       0.011
+      ],
+      "usd_per_year": [
+       55002.857,
+       1.01
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       776.0,
+       0.011
+      ],
+      "usd_per_year": [
+       299314.286,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       9429.442,
+       0.011
+      ],
+      "usd_per_year": [
+       3425837.828,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       1831.913648,
+       0.011
+      ],
+      "usd_per_year": [
+       665557.842,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       3273.160017,
+       0.044
+      ],
+      "usd_per_year": [
+       1189181.227,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Trim",
+       null
+      ]
+     },
+     "$": {
+      "shift": [
+       null,
+       null
+      ],
+      "excluded_shifts": [
+       [
+        2
+       ],
+       null
+      ],
+      "scheduled_minutes": [
+       960,
+       null
+      ],
+      "gross_sqft": [
+       4954407.2,
+       0.051
+      ],
+      "total_usd": [
+       15997.115665,
+       0.143
+      ],
+      "total_usd_per_year": [
+       5844722.612,
+       13.13
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "area_sqft": [
+       258407.8,
+       0.051
+      ],
+      "area_msf": [
+       258.4078,
+       0.00051
+      ],
+      "stop_minutes": [
+       34.33,
+       0.036000000000000004
+      ],
+      "speed_minutes": [
+       38.8,
+       0.006
+      ],
+      "waste_run_minutes": [
+       16.104333,
+       0.03
+      ],
+      "machine_minutes": [
+       89.234333,
+       0.078
+      ],
+      "msf_not_made": [
+       481.8654,
+       0.0143
+      ],
+      "trim_pct_of_gross": [
+       3.460442,
+       5.1e-05
+      ],
+      "trim_target_pct": [
+       3.25,
+       null
+      ],
+      "trim_points_over": [
+       0.210442,
+       0.0001
+      ],
+      "trim_over_usd": [
+       573.43913,
+       0.011
+      ],
+      "trim_over_usd_per_year": [
+       208337.828,
+       1.01
+      ]
+     }
+    },
+    "excluded_records": [
+     {
+      "record_id": "CORR2026091415000001",
+      "shift": 2,
+      "error_match": "Waste/gross",
+      "raw": {
+       "trim_sqft": 99999999.0,
+       "lineal_ft": 5514.3,
+       "gross_sqft": 48250.1
+      }
+     }
+    ]
    }
   },
   {
@@ -33572,6 +39352,72 @@
        null
       ]
      },
+     "buckets:bucket=Speed": {
+      "usd": [
+       39576.0,
+       0.011
+      ],
+      "usd_per_year": [
+       462576.623,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       0.0,
+       0.011
+      ],
+      "usd_per_year": [
+       0.0,
+       1.01
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       28474.6,
+       0.09899999999999999
+      ],
+      "usd_per_year": [
+       332819.999,
+       9.09
+      ]
+     },
+     "buckets:bucket=Setups": {
+      "usd": [
+       2460.0,
+       0.011
+      ],
+      "usd_per_year": [
+       28753.247,
+       1.01
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       53308.222815,
+       0.011
+      ],
+      "usd_per_year": [
+       610859.872,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       94697.439351,
+       0.044
+      ],
+      "usd_per_year": [
+       1085139.64,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Dry-end",
+       null
+      ]
+     },
      "#0": {
       "lever": [
        "Shear chops (all recorded)",
@@ -33586,6 +39432,34 @@
       "contribution_status": [
        "margin not set",
        null
+      ],
+      "area_sqft": [
+       2521232.1,
+       0.051
+      ],
+      "area_msf": [
+       2521.2321,
+       0.00051
+      ],
+      "stop_minutes": [
+       1546.73,
+       0.06
+      ],
+      "speed_minutes": [
+       1978.8,
+       1.21
+      ],
+      "waste_run_minutes": [
+       466.894833,
+       0.03
+      ],
+      "machine_minutes": [
+       3992.424833,
+       1.302
+      ],
+      "msf_not_made": [
+       21559.0941,
+       6.4987
       ]
      }
     }
@@ -34086,6 +39960,72 @@
        null
       ]
      },
+     "buckets:bucket=Speed": {
+      "usd": [
+       1128.0,
+       0.011
+      ],
+      "usd_per_year": [
+       174034.286,
+       1.01
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       912.359531,
+       0.011
+      ],
+      "usd_per_year": [
+       133353.0,
+       1.01
+      ]
+     },
+     "buckets:bucket=Setups": {
+      "usd": [
+       177.6,
+       0.011
+      ],
+      "usd_per_year": [
+       27401.143,
+       1.01
+      ]
+     },
+     "buckets:bucket=Stops": {
+      "usd": [
+       1674.6,
+       0.066
+      ],
+      "usd_per_year": [
+       258366.857,
+       6.0600000000000005
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       4649.439,
+       0.011
+      ],
+      "usd_per_year": [
+       679574.902,
+       1.01
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       7364.860999,
+       0.044
+      ],
+      "usd_per_year": [
+       1076468.515,
+       4.04
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Dry-end",
+       null
+      ]
+     },
      "#0": {
       "lever": [
        "Shear chops (all recorded)",
@@ -34100,6 +40040,34 @@
       "contribution_status": [
        "set",
        null
+      ],
+      "area_sqft": [
+       221248.355108,
+       0.051
+      ],
+      "area_msf": [
+       221.248355,
+       0.00051
+      ],
+      "stop_minutes": [
+       92.61,
+       0.042
+      ],
+      "speed_minutes": [
+       56.4,
+       1.21
+      ],
+      "waste_run_minutes": [
+       37.9,
+       0.03
+      ],
+      "machine_minutes": [
+       186.91,
+       1.284
+      ],
+      "msf_not_made": [
+       1009.314,
+       6.4954
       ]
      }
     }
@@ -34838,6 +40806,785 @@
       ],
       "stops": [
        9,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-dollars-shift-0914-shift-2-client",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_shift_dollars",
+   "arguments": {
+    "shift": 2
+   },
+   "rates": "paper:60,hour:1350.5,margin:35,trim:3.1",
+   "note": "The card re-prices this shift in the browser at paper $60, machine time $1,350.50, a $35 margin and a 3.1% trim target; the server's own answer at those rates must give the same figures, field for field.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 14,
+    "values": {
+     "rows:gap=Side trim": {
+      "rank": [
+       1,
+       null
+      ],
+      "paper_usd": [
+       4386.79,
+       null
+      ],
+      "machine_time_usd": [
+       0,
+       null
+      ],
+      "usd": [
+       4386.79,
+       null
+      ],
+      "usd_per_year": [
+       3527039,
+       null
+      ],
+      "msf_not_made": [
+       0,
+       null
+      ],
+      "contribution_usd": [
+       0,
+       null
+      ],
+      "contribution_usd_per_year": [
+       0,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "73,113.1 sq ft = 73.113 MSF x $60/MSF paper = $4,387; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added); per year: x 804.01 (1,800,000 MSF a year / 2,238.766 MSF gross)",
+       null
+      ],
+      "share_of_window_pct": [
+       3.2658,
+       null
+      ]
+     },
+     "rows:gap=Shear chops": {
+      "rank": [
+       2,
+       null
+      ],
+      "paper_usd": [
+       819.05,
+       null
+      ],
+      "machine_time_usd": [
+       56.9,
+       null
+      ],
+      "usd": [
+       875.95,
+       null
+      ],
+      "usd_per_year": [
+       704280,
+       null
+      ],
+      "msf_not_made": [
+       13.651,
+       null
+      ],
+      "contribution_usd": [
+       477.78,
+       null
+      ],
+      "contribution_usd_per_year": [
+       384143,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "13,650.9 sq ft = 13.651 MSF x $60/MSF paper = $819; 13.651 MSF / 5.4 MSF per min = 2.53 min x $1,350.5/hr machine time = $56.90; contribution 13.651 MSF not made x $35/MSF = $478 (not added); per year: x 804.01 (1,800,000 MSF a year / 2,238.766 MSF gross)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.6098,
+       null
+      ]
+     },
+     "rows:gap=Speed gap to 675 ft/min": {
+      "rank": [
+       3,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       841.59,
+       null
+      ],
+      "usd": [
+       841.59,
+       null
+      ],
+      "usd_per_year": [
+       649225,
+       null
+      ],
+      "msf_not_made": [
+       201.906,
+       null
+      ],
+      "contribution_usd": [
+       7066.72,
+       null
+      ],
+      "contribution_usd_per_year": [
+       5451473,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "37.39 min x $1,350.5/hr machine time = $842; contribution 201.906 MSF not made x $35/MSF = $7,067 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       7.7896,
+       null
+      ]
+     },
+     "rows:gap=Dry-end: warp": {
+      "rank": [
+       4,
+       null
+      ],
+      "paper_usd": [
+       600.77,
+       null
+      ],
+      "machine_time_usd": [
+       41.74,
+       null
+      ],
+      "usd": [
+       642.51,
+       null
+      ],
+      "usd_per_year": [
+       516587,
+       null
+      ],
+      "msf_not_made": [
+       10.013,
+       null
+      ],
+      "contribution_usd": [
+       350.45,
+       null
+      ],
+      "contribution_usd_per_year": [
+       281768,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "10,012.9 sq ft = 10.013 MSF x $60/MSF paper = $601; 10.013 MSF / 5.4 MSF per min = 1.85 min x $1,350.5/hr machine time = $41.74; contribution 10.013 MSF not made x $35/MSF = $350 (not added); per year: x 804.01 (1,800,000 MSF a year / 2,238.766 MSF gross)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.4473,
+       null
+      ]
+     },
+     "rows:gap=Dry-end: bond": {
+      "rank": [
+       5,
+       null
+      ],
+      "paper_usd": [
+       529,
+       null
+      ],
+      "machine_time_usd": [
+       36.75,
+       null
+      ],
+      "usd": [
+       565.75,
+       null
+      ],
+      "usd_per_year": [
+       454873,
+       null
+      ],
+      "msf_not_made": [
+       8.817,
+       null
+      ],
+      "contribution_usd": [
+       308.58,
+       null
+      ],
+      "contribution_usd_per_year": [
+       248106,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "8,816.7 sq ft = 8.817 MSF x $60/MSF paper = $529; 8.817 MSF / 5.4 MSF per min = 1.63 min x $1,350.5/hr machine time = $36.75; contribution 8.817 MSF not made x $35/MSF = $309 (not added); per year: x 804.01 (1,800,000 MSF a year / 2,238.766 MSF gross)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.3938,
+       null
+      ]
+     },
+     "rows:gap=Dry-end: misalignment": {
+      "rank": [
+       6,
+       null
+      ],
+      "paper_usd": [
+       288.02,
+       null
+      ],
+      "machine_time_usd": [
+       20.01,
+       null
+      ],
+      "usd": [
+       308.03,
+       null
+      ],
+      "usd_per_year": [
+       247663,
+       null
+      ],
+      "msf_not_made": [
+       4.8,
+       null
+      ],
+      "contribution_usd": [
+       168.01,
+       null
+      ],
+      "contribution_usd_per_year": [
+       135086,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "4,800.4 sq ft = 4.800 MSF x $60/MSF paper = $288; 4.800 MSF / 5.4 MSF per min = 0.89 min x $1,350.5/hr machine time = $20.01; contribution 4.800 MSF not made x $35/MSF = $168 (not added); per year: x 804.01 (1,800,000 MSF a year / 2,238.766 MSF gross)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.2144,
+       null
+      ]
+     },
+     "rows:gap=Dry-end: cracking": {
+      "rank": [
+       7,
+       null
+      ],
+      "paper_usd": [
+       133.55,
+       null
+      ],
+      "machine_time_usd": [
+       9.28,
+       null
+      ],
+      "usd": [
+       142.83,
+       null
+      ],
+      "usd_per_year": [
+       114834,
+       null
+      ],
+      "msf_not_made": [
+       2.226,
+       null
+      ],
+      "contribution_usd": [
+       77.9,
+       null
+      ],
+      "contribution_usd_per_year": [
+       62635,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "2,225.8 sq ft = 2.226 MSF x $60/MSF paper = $134; 2.226 MSF / 5.4 MSF per min = 0.41 min x $1,350.5/hr machine time = $9.28; contribution 2.226 MSF not made x $35/MSF = $77.90 (not added); per year: x 804.01 (1,800,000 MSF a year / 2,238.766 MSF gross)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.0994,
+       null
+      ]
+     },
+     "rows:gap=Downtime: Glue / starch": {
+      "rank": [
+       8,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       139.93,
+       null
+      ],
+      "usd": [
+       139.93,
+       null
+      ],
+      "usd_per_year": [
+       107944,
+       null
+      ],
+      "msf_not_made": [
+       33.57,
+       null
+      ],
+      "contribution_usd": [
+       1174.95,
+       null
+      ],
+      "contribution_usd_per_year": [
+       906390,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "6.22 min x $1,350.5/hr machine time = $140; contribution 33.570 MSF not made x $35/MSF = $1,175 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       1.2951,
+       null
+      ]
+     },
+     "rows:gap=Downtime: Stacker": {
+      "rank": [
+       9,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       134.3,
+       null
+      ],
+      "usd": [
+       134.3,
+       null
+      ],
+      "usd_per_year": [
+       103603,
+       null
+      ],
+      "msf_not_made": [
+       32.22,
+       null
+      ],
+      "contribution_usd": [
+       1127.7,
+       null
+      ],
+      "contribution_usd_per_year": [
+       869940,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "5.97 min x $1,350.5/hr machine time = $134; contribution 32.220 MSF not made x $35/MSF = $1,128 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       1.2431,
+       null
+      ]
+     },
+     "rows:gap=Downtime: Knife / slitter jam": {
+      "rank": [
+       10,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       133.17,
+       null
+      ],
+      "usd": [
+       133.17,
+       null
+      ],
+      "usd_per_year": [
+       102734,
+       null
+      ],
+      "msf_not_made": [
+       31.95,
+       null
+      ],
+      "contribution_usd": [
+       1118.25,
+       null
+      ],
+      "contribution_usd_per_year": [
+       862650,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "5.92 min x $1,350.5/hr machine time = $133; contribution 31.950 MSF not made x $35/MSF = $1,118 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       1.2326,
+       null
+      ]
+     },
+     "rows:gap=Downtime: Order change": {
+      "rank": [
+       11,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       109.54,
+       null
+      ],
+      "usd": [
+       109.54,
+       null
+      ],
+      "usd_per_year": [
+       84503,
+       null
+      ],
+      "msf_not_made": [
+       26.28,
+       null
+      ],
+      "contribution_usd": [
+       919.8,
+       null
+      ],
+      "contribution_usd_per_year": [
+       709560,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "4.87 min x $1,350.5/hr machine time = $110; contribution 26.280 MSF not made x $35/MSF = $920 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       1.0139,
+       null
+      ]
+     },
+     "rows:gap=Downtime: Other": {
+      "rank": [
+       12,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       100.16,
+       null
+      ],
+      "usd": [
+       100.16,
+       null
+      ],
+      "usd_per_year": [
+       77268,
+       null
+      ],
+      "msf_not_made": [
+       24.03,
+       null
+      ],
+      "contribution_usd": [
+       841.05,
+       null
+      ],
+      "contribution_usd_per_year": [
+       648810,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "4.45 min x $1,350.5/hr machine time = $100; contribution 24.030 MSF not made x $35/MSF = $841 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.9271,
+       null
+      ]
+     },
+     "rows:gap=Downtime: Missed splice": {
+      "rank": [
+       13,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       87.41,
+       null
+      ],
+      "usd": [
+       87.41,
+       null
+      ],
+      "usd_per_year": [
+       67429,
+       null
+      ],
+      "msf_not_made": [
+       20.97,
+       null
+      ],
+      "contribution_usd": [
+       733.95,
+       null
+      ],
+      "contribution_usd_per_year": [
+       566190,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "3.88 min x $1,350.5/hr machine time = $87.41; contribution 20.970 MSF not made x $35/MSF = $734 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.809,
+       null
+      ]
+     },
+     "rows:gap=Downtime: Raw material (roll)": {
+      "rank": [
+       14,
+       null
+      ],
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       65.27,
+       null
+      ],
+      "usd": [
+       65.27,
+       null
+      ],
+      "usd_per_year": [
+       50354,
+       null
+      ],
+      "msf_not_made": [
+       15.66,
+       null
+      ],
+      "contribution_usd": [
+       548.1,
+       null
+      ],
+      "contribution_usd_per_year": [
+       422820,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "usd_basis": [
+       "2.90 min x $1,350.5/hr machine time = $65.27; contribution 15.660 MSF not made x $35/MSF = $548 (not added); per year: x 771.43 (370,286 scheduled min a year / 480 min)",
+       null
+      ],
+      "share_of_window_pct": [
+       0.6042,
+       null
+      ]
+     },
+     "$": {
+      "total_usd": [
+       8533.23,
+       null
+      ],
+      "total_paper_usd": [
+       6757.18,
+       null
+      ],
+      "total_machine_time_usd": [
+       1776.05,
+       null
+      ],
+      "total_usd_per_year": [
+       6808336,
+       null
+      ],
+      "total_contribution_usd": [
+       14913.24,
+       null
+      ],
+      "contribution_status": [
+       "set",
+       null
+      ],
+      "provenance": [
+       "Rates: paper $60/MSF (yours), machine time $1,350.5/hr (yours), margin $35/MSF (yours), trim target 3.1% (yours).",
+       null
+      ],
+      "buckets": [
+       [
+        {
+         "bucket": "Trim",
+         "usd": 4386.79,
+         "usd_per_year": 3527039
+        },
+        {
+         "bucket": "Dry-end",
+         "usd": 1659.12,
+         "usd_per_year": 1333957
+        },
+        {
+         "bucket": "Shear",
+         "usd": 875.95,
+         "usd_per_year": 704280
+        },
+        {
+         "bucket": "Speed",
+         "usd": 841.59,
+         "usd_per_year": 649225
+        },
+        {
+         "bucket": "Stops",
+         "usd": 660.24,
+         "usd_per_year": 509332
+        },
+        {
+         "bucket": "Setups",
+         "usd": 109.54,
+         "usd_per_year": 84503
+        }
+       ],
+       null
+      ],
+      "area_sqft": [
+       112619.8,
+       null
+      ],
+      "area_msf": [
+       112.62,
+       null
+      ],
+      "stop_minutes": [
+       34.21,
+       null
+      ],
+      "speed_minutes": [
+       37.39,
+       null
+      ],
+      "waste_run_minutes": [
+       7.31,
+       null
+      ],
+      "machine_minutes": [
+       78.91,
+       null
+      ],
+      "msf_not_made": [
+       426.093,
+       null
+      ],
+      "trim_pct_of_gross": [
+       3.2658,
+       null
+      ],
+      "trim_target_pct": [
+       3.1,
+       null
+      ],
+      "trim_points_over": [
+       0.1658,
+       null
+      ],
+      "trim_over_usd": [
+       222.68,
+       null
+      ],
+      "trim_over_usd_per_year": [
+       179039,
+       null
+      ],
+      "trim_over_basis": [
+       "3,711.4 sq ft = 3.711 MSF x $60/MSF paper = $223; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added); per year: x 804.01 (1,800,000 MSF a year / 2,238.766 MSF gross)",
        null
       ]
      }

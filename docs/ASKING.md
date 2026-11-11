@@ -60,6 +60,10 @@ Read an answer as **recorded finding → question to investigate → something a
 
 Every figure names the query and row it came from: the `(query N · row M)` link beside a finding opens the query box at that step, with its SQL and bound values, and "What came back, per query" at the foot of the card holds each step's full result. "Complete" means the investigation finished, not that it proved a cause. If an answer misses your intent, narrow the question and read the queries it ran.
 
+## The money on every card
+
+Every card shows its window's money, priced at the rates in force: a dollar line under the headline (`≈ $7,762 recorded losses this shift · $5.81M/yr at this rate`, a chip per bucket), the levers ranked by dollars a year under the charts (hover a bar for its formula; Table shows the same rows), dollars on each tile that measures a loss, and the arithmetic at the bottom of the card. The rates are assumptions, the owner's post by default and never a plant's: **Your rates** in the rail shows each with its source, **Change rates** edits them and re-prices the whole page in the browser with no request, and the address then carries them as `rates=`, so the link reproduces the same figures. **Show as** switches tiles and bars between minutes, percent and dollars. A contribution margin is not set until you set one: until then no lost contribution is priced, never as $0. [The cost model](COST_MODEL.md#on-the-card-issue-31b) has every formula.
+
 ## Every answer is an address
 
 An offline answer's address goes into the address bar as it lands: the path is the scope (`/corr/<machine>/<grain>/<day>[/shift/<n>]`) and the query is the question (`measure=` and its modifiers). Back and forward reopen earlier cards, a bookmark or a pasted link reproduces the answer in any browser, and adding `.json` to the path or `format=pdf` to the query gives the same answer as data or as a PDF. A typed question is a shortcut: `GET /q?day=…&shift=…&q=…` redirects to the one canonical address for it. [The URL grammar](URLS.md) has every measure, modifier and alias.

@@ -287,6 +287,18 @@ def fiscal_bounds(moment):
     return start, end, f"4-4-5 P{number} of the year starting {(FISCAL_START + timedelta(weeks=52 * year)).isoformat()} ({weeks} weeks)"
 
 
+def _tile_sums(t):
+    """The raw numerators a window's KPI tiles are priced from (issue #31b, cost_model.period_tiles): the areas and
+    the stop seconds behind each ratio, unrounded. Kept off every model's packet (narrative.PACKET_DROP is per row;
+    openai_provider.compact_result drops this key)."""
+    accounted = t["trim_sqft"] + t["shear_sqft"] + t["reject_sqft"] + t["cutoff_waste_sqft"] + t["stacker_waste_sqft"]
+    return {"gross_sqft": t["gross_sqft"], "trim": t["trim_sqft"], "shear": t["shear_sqft"], "dry_end": t["reject_sqft"],
+            "cutoff": t["cutoff_waste_sqft"], "stacker": t["stacker_waste_sqft"],
+            "bond": t["bond_sqft"], "warp": t["warp_sqft"], "misalignment": t["misalignment_sqft"], "cracking": t["cracking_sqft"],
+            "bale": t["bale_sqft"], "unexplained": t["bale_sqft"] - accounted, "maintenance_pm_seconds": t["maintenance_pm_seconds"],
+            "operator_seconds": t["operator_seconds"]}
+
+
 def parse_window(spec, first_day=None, last_day=None):
     """Validate {"period": day|week|month, "anchor": "YYYY-MM-DD"} and return
     (period, anchor, start, end). A day window needs a weekday; when bounds
@@ -807,7 +819,7 @@ class RecordStore:
         source = {"current": now["source_rows"], "previous": before["source_rows"] if before else None}
         return self._envelope("get_period_kpis", current, previous, shift, rows, trace, started, source,
                               comparison="complete" if comparable else "withheld: a window is incomplete or unavailable",
-                              **self._day_basis(current, previous))
+                              current_sums=_tile_sums(now), **self._day_basis(current, previous))
 
     def compare_periods(self, current_window, previous_window, shift=None):
         """The same KPI table for two arbitrary windows (month vs month, week vs
@@ -820,7 +832,7 @@ class RecordStore:
         source = {"current": now["source_rows"], "previous": before["source_rows"]}
         return self._envelope("compare_periods", current, previous, shift, rows, trace, started, source,
                               comparison="complete" if comparable else "withheld: a window is incomplete or unavailable",
-                              **self._day_basis(current, previous))
+                              current_sums=_tile_sums(now), **self._day_basis(current, previous))
 
     def get_downtime_pareto(self, window, group_by="reason", measure="minutes", shift=None):
         """Stops of the window grouped by reason, place or kind, ordered by the

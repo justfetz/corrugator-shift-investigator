@@ -132,7 +132,7 @@ def answer_sections(intent, evidence, context, period_tools):
     """The sections of an offline answer: headline, bullets, caveats and where to look."""
     intent = ALIASES.get(intent, intent)
     period = [r for r in evidence if r['tool'] in period_tools]
-    daily = [r for r in evidence if r['tool'] not in period_tools]
+    daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] != 'get_day_dollars']   # the day's total is the card's (#31b)
     lines = []
     if period:
         own = intent.startswith('period_')

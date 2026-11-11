@@ -266,9 +266,10 @@ def test_transport_headers_and_fixed_destination(monkeypatch):
 def test_the_money_tools_are_not_offered_to_the_anthropic_planner_or_the_analyst_plan():
     """Review of #31a: the planner and plan prompts still say costs are unavailable, so neither the tool
     loop's catalog nor the analyst's plan catalog lists get_shift_dollars or get_opportunities until #23 /
-    #31b retune them (as the OpenAI loop already leaves them out); every other investigation tool stays."""
+    #31b retune them (as the OpenAI loop already leaves them out); every other investigation tool stays. The #31b
+    review's get_day_dollars (the card's all-shifts total) is left out the same way."""
     from investigator.anthropic_provider import ANTHROPIC_OMITTED_TOOLS, plan_catalog
-    assert ANTHROPIC_OMITTED_TOOLS == {'get_shift_dollars', 'get_opportunities'}
+    assert ANTHROPIC_OMITTED_TOOLS == {'get_shift_dollars', 'get_opportunities', 'get_day_dollars'}
     assert ANTHROPIC_OMITTED_TOOLS <= {s['name'] for s in TOOL_SCHEMAS}
     loop = {t['name'] for t in anthropic_tools(TOOL_SCHEMAS)}
     for all_shifts in (False, True):
