@@ -195,13 +195,19 @@ jobs:
           gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format=json \
             | python3 -c 'import json,sys; t=json.load(sys.stdin)["status"]["traffic"]; print(t); assert any(x.get("revisionName")==sys.argv[1] and x.get("percent")==100 for x in t), sys.argv[1]+" does not carry 100% of the traffic"' "$REVISION"
       - name: Smoke test
+        # Only the service's own URLs count. A tagged preview revision (pr-<n>---..., preview.yml) answers on
+        # this service and is in ORIGINS for the allow-list, but it runs a pull request's image: it must not
+        # pass this test, answer the live-mode check, or be reported as where main is live.
         run: |
           set -euo pipefail
           LIVE=""
           for URL in $(echo "$ORIGINS" | tr ',' ' '); do
+            case "$URL" in *---*) echo "skip $URL (a tagged revision, not main)"; continue ;; esac
             CODE=$(curl -sS -o /tmp/healthz.txt -w '%{http_code}' --max-time 30 "$URL/api/health" || true)
             echo "GET $URL/api/health -> HTTP $CODE $(head -c 200 /tmp/healthz.txt 2>/dev/null)"
-            [ "$CODE" = "200" ] && LIVE="$URL"
+            [ "$CODE" = "200" ] || continue
+            # the deterministic <service>-<project number>.<region>.run.app URL wins when it answers: the README publishes it
+            case "$URL" in *.a.run.app) [ -n "$LIVE" ] || LIVE="$URL" ;; *) LIVE="$URL" ;; esac
           done
           test -n "$LIVE"
           CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
