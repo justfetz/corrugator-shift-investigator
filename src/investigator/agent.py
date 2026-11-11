@@ -336,7 +336,7 @@ def speedvar_plan(lower, current, window, shift, months):
                          "versus shift 1 this week'; against the previous production day ask 'what drove speed versus the previous day'")
     if len(set(months)) >= 2:
         first, second = months[0], months[1]
-        if second != first - 1:
+        if second != (first - 2) % 12 + 1:   # the month just before, across a year end too: January versus December (issue #35)
             raise ValueError("A speed variance compares a window with the one just before it, a shift with a shift, or with target: "
                              "ask, for example, 'what drove speed in September versus August'")
         against = 'previous'
