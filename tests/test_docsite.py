@@ -6,6 +6,7 @@ mentions an OpenAI API key. The rest pins the renderer's escaping, the links bet
 /guide address, the image build and the changelog.
 """
 import html
+import json
 import http.client
 import re
 import shutil
@@ -42,9 +43,10 @@ def test_every_docs_file_listed_in_the_toc_exists():
     assert not missing, f'listed in docsite.SECTIONS but not in the repository: {missing}'
     assert len(listed) == len(set(listed)), 'a file is listed twice'
     slugs = [p['slug'] for p in docsite.pages()]
-    assert len(slugs) == len(set(slugs)) and slugs[0] == '', 'unique slugs; the first page is /docs itself'
-    assert [s for s, _ in docsite.SECTIONS] == ['Overview', 'Asking questions', 'The analyst', 'Numbers and evals',
-                                                'Cost model', 'Data', 'Deployment', 'Changelog'], 'the sections of issue #93'
+    assert len(slugs) == len(set(slugs)) and slugs[:2] == ['case-study', ''], \
+        'unique slugs; the case study comes first (issue #116), then the overview at /docs itself'
+    assert [s for s, _ in docsite.SECTIONS] == ['Case study', 'Overview', 'Asking questions', 'The analyst', 'Numbers and evals',
+                                                'Cost model', 'Data', 'Deployment', 'Changelog'], 'the sections of issues #93 and #116'
     # The other direction: a new docs/*.md is either on the site or named, with a reason, as left out.
     on_disk = {f'docs/{p.name}' for p in (ROOT / 'docs').glob('*.md')}
     unaccounted = on_disk - set(listed) - set(docsite.UNLISTED)
@@ -86,6 +88,7 @@ def test_the_app_links_to_docs_not_the_old_guide():
     evals = (WEB / 'evals.html').read_text(encoding='utf-8')
     assert 'href="/guide' not in index + evals
     assert '<a class="top-link" href="/docs">Docs</a>' in index
+    assert '<a class="top-link" href="/docs/case-study">Case study</a>' in index, 'issue #116: linked from the app header'
     assert 'href="/docs/asking-questions"' in index and '<a class="nav-btn" href="/docs">Docs</a>' in evals
 
 
@@ -289,3 +292,141 @@ def test_the_committed_changelog_is_in_the_generated_shape():
     assert text.startswith(docsite.CHANGELOG_HEAD)
     entries = re.findall(r'^- \[#(\d+)\]\(' + re.escape(docsite.REPO) + r'/pull/\1\) \S', text, re.M)
     assert entries and len(entries) == len(set(entries)) == text.count('\n- ')
+
+
+# ---- The case study (issue #116): first in the table of contents, every figure read from a generated file.
+CASE_STUDY = ROOT / 'docs' / 'CASE_STUDY.md'
+
+
+def figure_root(tmp_path):
+    """A copy of what the docs build reads, to break one file at a time."""
+    for source in [p['source'] for p in docsite.pages()] + list(docsite.FIGURE_SOURCES):
+        (tmp_path / source).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / source, tmp_path / source)
+    return tmp_path
+
+
+def test_the_case_study_is_first_and_renders_its_diagram(site):
+    page = site['/docs/case-study'].decode()
+    toc = re.findall(r'<a class="docs-section-link" href="([^"]+)"', page)
+    assert toc[0] == '/docs/case-study', 'first in the /docs table of contents'
+    assert '<li id="case-study"><a href="/docs/case-study">Case study</a></li>' in site['/docs'].decode(), \
+        'and first in the overview contents'
+    diagram = re.search(r'<pre><code class="language-diagram">(.*?)</code></pre>', page, re.S)
+    assert diagram, 'the design in one diagram'
+    for box in ('offline router', 'DuckDB tools', 'answer shape', 'card and URL', 'Ask the analyst', 'app checks every step', 'validators'):
+        assert box in diagram.group(1), box
+    headings = re.findall(r'<h2 id="[^"]+">([^<]+)</h2>', page)
+    assert headings == ['The problem', 'The design in one diagram', 'How we know the numbers are right', 'Results',
+                        "Trade-offs and what I'd do next", 'Built with'], headings
+    assert '{{' not in page and '}}' not in page, 'every figure is filled at build'
+
+
+def test_every_case_study_figure_comes_from_a_generated_file(site):
+    """The figures on the page are the files' own values, computed here a second way."""
+    text = text_of(site['/docs/case-study'].decode())
+    last = json.loads((ROOT / 'evals' / 'last_run.json').read_text(encoding='utf-8'))
+    history = [json.loads(line) for line in (ROOT / 'evals' / 'history.jsonl').read_text(encoding='utf-8').splitlines() if line.strip()]
+    rows, newest = last['rows'], history[-1]
+    passed = sum(r['outcome'] == 'pass' for r in rows)
+    assert f'passed {passed:,} of {len(rows):,} golden runs over {len({r["type"] for r in rows})} case types' in text
+    assert f'Last tracked run: {last["ran_at"][:10]}, commit {last["commit"]}' in text and last['dataset'] in text
+    offline = [r for r in rows if not r['provider']]
+    assert 'Offline' in text and f'{sum(r["outcome"] == "pass" for r in offline)}/{len(offline)}' in text
+    assert f'{sum(r["type"] == "value" for r in rows)} cases hold a tool\'s numbers' in text
+    assert f'{newest["latency_ms"]["p50"]:.0f} ms / {newest["latency_ms"]["p95"]:.0f} ms' in text
+    live = newest['live']['anthropic']
+    ran = sum(c['pass'] + c['fail'] for c in live['types'].values())
+    assert f'${live["recorded_cost_usd"] / ran:.4f} on {live["model"]}' in text
+    assert f'{len(rows):,}, up from {history[0]["cases"]} on {history[0]["ran_at"][:10]}, over {len(history)} tracked runs' in text
+    log = (ROOT / 'docs' / 'CHANGELOG.md').read_text(encoding='utf-8')
+    days = re.findall(r'^## (\S+)$', log, re.M)
+    assert f'{len(re.findall(r"^- \[#", log, re.M))} pull requests merged between {min(days)} and {max(days)}' in text
+    rates = json.loads((ROOT / 'src' / 'investigator' / 'rates.json').read_text(encoding='utf-8'))
+    paper = next(r['default'] for r in rates['rates'] if r['id'] == 'paper_usd_msf')
+    annual = next(a['value'] for a in rates['assumptions'] if a['id'] == 'annual_msf_per_machine')
+    assert f'${annual * paper / 100:,.0f} a year on one machine at ${paper}/MSF' in text
+    # Every {{name}} in the source is a figure the build knows.
+    names = set(docsite.FIGURE.findall(CASE_STUDY.read_text(encoding='utf-8')))
+    assert names and names <= set(docsite.figures(ROOT)), names - set(docsite.figures(ROOT))
+
+
+def test_a_number_typed_into_the_case_study_fails_the_build(tmp_path):
+    assert docsite.typed_numbers(CASE_STUDY.read_text(encoding='utf-8')) == [], 'the committed page types no number'
+    for typed in ('The set has 289 cases.', 'It answers in 14 ms.', 'Cost: $0.0027 an answer.', 'seven case types',
+                  'twenty-nine runs', 'a tenth of a point', 'asked twice', 'Dated 2026-11-11.', '1. an ordered item at 50 ms'):
+        assert docsite.typed_numbers(f'Intro.\n\n- {typed}\n'), typed
+    for fine in ('p50 and p95 of the offline run', 'see [#104](https://github.com/x/y/issues/104)', '{{evals.runs}} runs',
+                 'one issue, one session, one pull request', '[the rubric](../evals/README.md#v2-rubric)', '1. a list item'):
+        assert docsite.typed_numbers(fine) == [], fine
+    root = figure_root(tmp_path)
+    page = root / 'docs' / 'CASE_STUDY.md'
+    page.write_text(page.read_text(encoding='utf-8') + '\nThe golden set holds 289 cases.\n', encoding='utf-8')
+    with pytest.raises(ValueError, match=r"docs/CASE_STUDY.md reads every figure .*'line \d+: The golden set holds 289 cases\.'"):
+        docsite.build_site(root)
+
+
+def test_an_unknown_figure_fails_the_build(tmp_path):
+    with pytest.raises(KeyError, match='evals.nope'):
+        docsite.expand_figures('{{ evals.nope }}', docsite.figures(ROOT), 'docs/CASE_STUDY.md')
+    root = figure_root(tmp_path)
+    page = root / 'docs' / 'CASE_STUDY.md'
+    page.write_text(page.read_text(encoding='utf-8') + '\n{{latency.p99}}\n', encoding='utf-8')
+    with pytest.raises(KeyError, match='latency.p99'):
+        docsite.build_site(root)
+
+
+def test_the_figures_refuse_last_run_and_history_from_different_runs(tmp_path):
+    """`evals/run.py --track` writes the two files together; a pair that disagrees is a stale figure."""
+    root = figure_root(tmp_path)
+    history = root / 'evals' / 'history.jsonl'
+    lines = history.read_text(encoding='utf-8').splitlines()
+    newest = json.loads(lines[-1])
+    history.write_text('\n'.join(lines[:-1] + [json.dumps({**newest, 'commit': 'deadbee'})]) + '\n', encoding='utf-8')
+    with pytest.raises(ValueError, match='different runs'):
+        docsite.figures(root)
+
+
+def test_the_model_comparison_grows_a_row_per_model(tmp_path):
+    """The bake-off (#115) writes a history line per model; each model's newest line becomes a row, with its
+    first-words time once a live run records one (#71)."""
+    root = figure_root(tmp_path)
+    history = root / 'evals' / 'history.jsonl'
+    lines = history.read_text(encoding='utf-8').splitlines()
+    newest = json.loads(lines[-1])
+    other = {**newest, 'live': {'openai': {'model': 'gpt-small', 'recorded_cost_usd': 0.03,
+                                           'types': {'routing': {'pass': 2, 'fail': 1, 'skip': 0}}}},
+             'live_ms': {'p50': 2400.0, 'p95': 4100.0, 'first_token_p50': 812.4, 'model_calls_max': 2}}
+    history.write_text('\n'.join(lines[:-1] + [json.dumps(other), lines[-1]]) + '\n', encoding='utf-8')
+    values = docsite.figures(root)
+    table = values['models.table'].splitlines()
+    assert values['models.count'] == '2' and len(table) == 4
+    assert table[2].startswith('| anthropic | `claude-haiku-5-5` | 15/15 | $0.0027 | not recorded yet |')
+    assert table[3].startswith('| openai | `gpt-small` | 2/3 | $0.0100 | 812 ms |')
+    rendered = docsite.Renderer().render(values['models.table'])
+    assert rendered.count('<tr>') == 3 and '<td class="right">812 ms</td>' in rendered
+
+
+def test_the_case_study_links_every_claim_and_names_no_plant_vendor():
+    text = CASE_STUDY.read_text(encoding='utf-8')
+    claims = [line for line in text.splitlines() if line.startswith('- ')]
+    assert len(claims) >= 15 and all('](' in line for line in claims), [line for line in claims if '](' not in line]
+    results = text[text.index('## Results'):text.index('## Trade-offs')]
+    rows = [line for line in results.splitlines() if line.startswith('| ') and not line.startswith(('| Measure', '| ---'))]
+    assert rows and all('](' in line.rsplit('|', 2)[-2] for line in rows), 'every result names its source'
+    paragraphs = [block for block in re.split(r'\n\s*\n', text) if block and block[0].isalpha()]
+    assert all('](' in block for block in paragraphs if '{{' in block or 'never' in block), 'a paragraph with a claim links it'
+    vendors = re.compile(r'\b(BHS|Fosber|Marquip|Agnati|Mitsubishi|Isowa|Kiwiplan|Amtech|Valmet|Peters|TCY|Kolbus|Simon|'
+                         r'Langston|EFI|Vanguard|P04[A-Z])\b')
+    assert not vendors.search(text), vendors.findall(text)
+
+
+def test_the_docs_print_as_the_document_alone():
+    """A print or PDF version: the stylesheet's print rules drop the header, the table of contents and the
+    pager, and force the light palette (tests/docs_layout_check.cjs prints the page in Chromium)."""
+    css = (WEB / 'style.css').read_text(encoding='utf-8')
+    block = css[css.index('@media print{'):]
+    block = block[:block.index('\n}\n')]
+    assert 'header.app,.docs-toc,.docs-pager{display:none!important}' in block
+    assert ':root,:root[data-theme="dark"]{color-scheme:light;--bg:#fff;' in block
+    assert '.docs-page pre code.language-diagram{white-space:pre;' in css, 'the diagram never wraps'

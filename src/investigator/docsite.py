@@ -11,8 +11,13 @@ The Markdown is the subset these files use: ATX headings, paragraphs, `-` and `1
 and indented code, pipe tables, block quotes, rules, and inline code, emphasis, links and autolinks. Every
 character of the source is escaped; no HTML in a document reaches the page. A relative link to a
 page of the site becomes its `/docs` address; a link to any other file goes to the file on GitHub.
+
+A page in `FIGURE_PAGES` (the case study, issue #116) types no number: each `{{name}}` in it is filled
+at build from the files the eval runner, the deploy and the cost model keep (`figures`), and the build
+refuses the page when a digit or a number word is typed into its text (`typed_numbers`).
 """
 import html
+import json
 import os
 import posixpath
 import re
@@ -26,6 +31,7 @@ REPO = 'https://github.com/justfetz/corrugator-shift-investigator'
 # The table of contents: (section, ((slug, source, label), ...)). The first page of a section is the
 # one its heading links to; slug '' is /docs itself. Every source must exist (tests/test_docsite.py).
 SECTIONS = (
+    ('Case study', (('case-study', 'docs/CASE_STUDY.md', 'Case study'),)),
     ('Overview', (('', 'docs/OVERVIEW.md', 'Overview'),
                   ('how-this-is-built', 'docs/HOW_THIS_IS_BUILT.md', 'How this is built'))),
     ('Asking questions', (('asking-questions', 'docs/ASKING.md', 'Asking questions'),
@@ -53,6 +59,147 @@ UNLISTED = {'docs/FIRST_SLICE.md': 'a historical design snapshot of the first sl
 # the hosted demo runs on the server's Anthropic key, and OpenAI is an optional provider (issue #93).
 PROVIDER_DOCS = ('docs/ANTHROPIC_DEMO.md', 'docs/OPENAI_BYOK.md')
 OPENAI_KEY = re.compile(r"openai(?:'s)?\s+(?:api\s+)?key", re.I)
+
+# ---- Figures (issue #116): pages whose every number is read at build, never typed.
+FIGURE_PAGES = ('docs/CASE_STUDY.md',)
+# What `figures` reads. They exist in the checkout and in the image (COPY src, evals and docs/*.md).
+FIGURE_SOURCES = ('evals/last_run.json', 'evals/history.jsonl', 'docs/CHANGELOG.md', 'src/investigator/rates.json')
+FIGURE = re.compile(r'\{\{\s*([a-z][a-z0-9_.]*)\s*\}\}')
+# A typed number: a digit that does not continue a word or a reference (p50, utf8 and #104 are names, not
+# figures), or a number word. "one" is left alone: the pages use it as an article ("one plan per question").
+TYPED_NUMBER = re.compile(
+    r'(?<![\w#])\d|\b(?:zero|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen'
+    r'|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand'
+    r'|million|billion|dozens?|half|quarter|twice|thrice|tenth|hundredth)\b', re.I)
+
+
+def typed_numbers(text):
+    """Every line of a figures page that types a number into its own text, as 'line N: text'.
+
+    Each line is read without its `{{figures}}`, its link addresses and an ordered-list marker; what is left
+    is what the writer typed, and none of it may be a figure."""
+    out = []
+    for n, line in enumerate(text.split('\n'), 1):
+        bare = FIGURE.sub(' ', line)
+        bare = re.sub(r'\]\(\s*[^)\s]*(?:\s+"[^"]*")?\s*\)', '] ', bare)
+        bare = re.sub(r'<https?://[^>\s]+>', ' ', bare)
+        bare = re.sub(r'^\s*\d{1,9}[.)](?=\s)', ' ', bare)
+        if TYPED_NUMBER.search(bare):
+            out.append(f'line {n}: {line.strip()}')
+    return out
+
+
+def expand_figures(text, values, source):
+    """`text` with each `{{name}}` replaced by values[name]; an unknown name fails the build."""
+    def fill(m):
+        if m.group(1) not in values:
+            raise KeyError(f'{source}: no figure named {m.group(1)!r}; figures() has {sorted(values)}')
+        return values[m.group(1)]
+    return FIGURE.sub(fill, text)
+
+
+def _count(n):
+    return f'{n:,}'
+
+
+def _ms(value):
+    return f'{value:.0f} ms' if isinstance(value, (int, float)) else 'not recorded yet'
+
+
+def _usd(value, places=0):
+    return f'${value:,.{places}f}'
+
+
+def _code(text):
+    return '`' + str(text).replace('`', '') + '`'
+
+
+def figures(root=ROOT):
+    """{name: Markdown} for a figures page, read from generated files at build:
+
+    - `evals/last_run.json` and the newest line of `evals/history.jsonl`, which `evals/run.py --track` writes
+      together (a pair from different runs fails the build): the golden runs by type, the offline latency,
+      the replayed live rounds and their recorded cost;
+    - every line of `evals/history.jsonl`: the tracked runs, and each model's newest line for the comparison;
+    - `docs/CHANGELOG.md`, generated from the merged pull requests;
+    - `src/investigator/rates.json`, the cost model's rates, for the dollars a loss is priced at."""
+    root = Path(root)
+    last = json.loads((root / 'evals/last_run.json').read_text(encoding='utf-8'))
+    history = [json.loads(line) for line in (root / 'evals/history.jsonl').read_text(encoding='utf-8').splitlines()
+               if line.strip()]
+    newest = history[-1]
+    if (newest.get('ran_at'), newest.get('commit')) != (last.get('ran_at'), last.get('commit')):
+        raise ValueError('evals/last_run.json and the newest line of evals/history.jsonl are from different runs; '
+                         '`python3 evals/run.py --track` writes both')
+    rows = last['rows']
+    out = {
+        'evals.ran': last['ran_at'][:10],
+        'evals.commit': f'[{_code(last["commit"])}]({REPO}/commit/{last["commit"]})',
+        'evals.dataset': _code(last['dataset']),
+        'evals.runs': _count(len(rows)),
+        'evals.passed': _count(sum(r['outcome'] == 'pass' for r in rows)),
+        'evals.failed': _count(sum(r['outcome'] == 'fail' for r in rows)),
+        'evals.types': _count(len({r['type'] for r in rows})),
+        'evals.value': _count(sum(r['type'] == 'value' for r in rows)),
+        'evals.over_url': _count(sum(bool(re.search(r'\bURL \d+(?:\.\d+)? ms', r.get('note') or '')) for r in rows)),
+    }
+    # The golden runs by type, most cases first: offline and replayed live, passed over run.
+    types = sorted({r['type'] for r in rows}, key=lambda t: (-sum(r['type'] == t for r in rows), t))
+
+    def score(subset):
+        ran = [r for r in subset if r['outcome'] != 'skip']
+        return f'{sum(r["outcome"] == "pass" for r in ran)}/{len(ran)}' if ran else '–'
+    offline, live = [r for r in rows if not r['provider']], [r for r in rows if r['provider']]
+    out['evals.table'] = '\n'.join([
+        '| Run | ' + ' | '.join(types) + ' | All |',
+        '| --- |' + ' ---: |' * (len(types) + 1),
+        '| Offline | ' + ' | '.join(score([r for r in offline if r['type'] == t]) for t in types) + f' | **{score(offline)}** |',
+        '| Replayed live | ' + ' | '.join(score([r for r in live if r['type'] == t]) for t in types) + f' | **{score(live)}** |'])
+    latency = newest.get('latency_ms') or {}
+    out['latency.p50'], out['latency.p95'] = _ms(latency.get('p50')), _ms(latency.get('p95'))
+    # Each model's newest tracked line: its live cases passed, the recorded cost per answer, the first words.
+    by_model = {}
+    for line in history:
+        for provider, entry in (line.get('live') or {}).items():
+            by_model[(provider, entry.get('model') or 'unknown')] = (line, entry)
+    table = ['| Provider | Model | Live cases passed | Recorded cost per answer | First words, p50 | Tracked |',
+             '| --- | --- | ---: | ---: | ---: | --- |']
+    for (provider, model), (line, entry) in sorted(by_model.items()):
+        counts = entry.get('types') or {}
+        ran = sum(c.get('pass', 0) + c.get('fail', 0) for c in counts.values())
+        passed = sum(c.get('pass', 0) for c in counts.values())
+        cost = entry.get('recorded_cost_usd')
+        first = (line.get('live_ms') or {}).get('first_token_p50')
+        table.append(f'| {provider} | {_code(model)} | {passed}/{ran} | '
+                     f'{_usd(cost / ran, 4) if ran and cost is not None else "–"} | {_ms(first)} | {line["ran_at"][:10]} |')
+    out['models.table'] = '\n'.join(table)
+    out['models.count'] = _count(len(by_model))
+    current = newest.get('live') or {}
+    live_ran = sum(c.get('pass', 0) + c.get('fail', 0) for e in current.values() for c in (e.get('types') or {}).values())
+    live_cost = sum(e.get('recorded_cost_usd') or 0 for e in current.values())
+    out['live.model'] = ', '.join(_code(e.get('model') or 'unknown') for _, e in sorted(current.items())) or 'none'
+    out['live.cases'] = _count(live_ran)
+    out['live.cost_per_answer'] = _usd(live_cost / live_ran, 4) if live_ran else 'not recorded yet'
+    out['live.first_words'] = _ms((newest.get('live_ms') or {}).get('first_token_p50'))
+    out['history.runs'] = _count(len(history))
+    out['history.first'] = history[0]['ran_at'][:10]
+    out['history.first_cases'] = _count(history[0]['cases'])
+    log = (root / 'docs/CHANGELOG.md').read_text(encoding='utf-8')
+    days = re.findall(r'^## (\d{4}-\d{2}-\d{2})\s*$', log, re.M)
+    out['changelog.pulls'] = _count(len(re.findall(r'^- \[#\d+\]', log, re.M)))
+    out['changelog.first'], out['changelog.last'] = (min(days), max(days)) if days else ('–', '–')
+    rates = json.loads((root / 'src/investigator/rates.json').read_text(encoding='utf-8'))
+    rate = {r['id']: r['default'] for r in rates['rates']}
+    assume = {a['id']: a['value'] for a in rates['assumptions']}
+    msf_per_minute = assume['required_fpm'] * assume['net_width_in'] / 12 / 1000
+    out['rates.paper'] = f'{_usd(rate["paper_usd_msf"])}/MSF'
+    out['rates.hour'] = f'{_usd(rate["machine_usd_hour"])}/hr'
+    out['rates.machine_minute'] = _usd(rate['machine_usd_hour'] / 60)
+    out['rates.msf_per_minute'] = f'{msf_per_minute:g} MSF'
+    out['rates.margin'] = 'not set' if rate['margin_usd_msf'] is None else f'{_usd(rate["margin_usd_msf"])}/MSF'
+    out['rates.trim_target'] = f'{rate["trim_target_pct"]:g}%'
+    out['rates.trim_point_year'] = _usd(assume['annual_msf_per_machine'] / 100 * rate['paper_usd_msf'])
+    return out
 
 
 def pages():
@@ -392,12 +539,20 @@ def build_site(root=ROOT):
     root = Path(root)
     all_pages = pages()
     by_source = {p['source']: p['url'] for p in all_pages}
-    site = {}
+    site, values = {}, None
     for n, page in enumerate(all_pages):
         path = root / page['source']
         if not path.is_file():
             raise FileNotFoundError(f'docs site: {page["source"]} is listed in SECTIONS but does not exist')
-        title, body, headings = render_page(page, path.read_text(encoding='utf-8'), by_source)
+        text = path.read_text(encoding='utf-8')
+        if page['source'] in FIGURE_PAGES:
+            typed = typed_numbers(text)
+            if typed:
+                raise ValueError(f'docs site: {page["source"]} reads every figure from a generated file, '
+                                 f'but these lines type one; use a {{{{figure}}}}: {typed}')
+            values = figures(root) if values is None else values
+            text = expand_figures(text, values, page['source'])
+        title, body, headings = render_page(page, text, by_source)
         if page['slug'] == '':
             body += '\n' + _contents(all_pages)
         prev = all_pages[n - 1] if n else None
@@ -432,7 +587,7 @@ def load_site():
         folder = Path(named)
         return {p['url']: (folder / _filename(p['url'])).read_bytes() for p in pages()
                 if (folder / _filename(p['url'])).is_file()} or None
-    sources = [ROOT / p['source'] for p in pages()]
+    sources = [ROOT / p['source'] for p in pages()] + [ROOT / s for s in FIGURE_SOURCES]
     if not all(path.is_file() for path in sources):
         return None
     stamp = tuple(path.stat().st_mtime_ns for path in sources)   # one render per process until a source changes

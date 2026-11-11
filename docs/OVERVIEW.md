@@ -2,7 +2,7 @@
 
 The Shift Investigator answers a superintendent's question about a corrugator, such as "why was second shift slow?" or "which downtime reason cost the most minutes this month?", from synthetic production records. Fixed, parameterized queries compute every number. A language model, when you ask for one, may choose which of those queries to run and write a short interpretation around their results; it never supplies a number.
 
-The project is a worked example of building an agent: start from a manufacturing expert's process rules, generate records that obey them, give the agent a small set of read-only calculation tools, and keep a golden set of cases that says whether the answers are right.
+The project is a worked example of building an agent: start from a manufacturing expert's process rules, generate records that obey them, give the agent a small set of read-only calculation tools, and keep a golden set of cases that says whether the answers are right. [The case study](CASE_STUDY.md) tells the whole story on one page: the problem, the design, how the numbers are checked, the results and the trade-offs.
 
 ## Try it
 
