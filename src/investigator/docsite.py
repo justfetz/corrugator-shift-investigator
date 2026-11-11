@@ -126,6 +126,17 @@ class Renderer:
                 cls = f' class="language-{html.escape(lang)}"' if lang else ''
                 out.append(f'<pre><code{cls}>{html.escape(chr(10).join(body))}</code></pre>')
                 continue
+            if line.startswith('    '):
+                # An indented code block (METRICS.md's formulas): four spaces after a blank line or a block, kept
+                # line for line. It cannot interrupt a paragraph; the paragraph loop below swallows those lines.
+                body = []
+                while i < len(lines) and (lines[i].startswith('    ') or not lines[i].strip()):
+                    body.append(lines[i][4:])
+                    i += 1
+                while body and not body[-1].strip():
+                    body.pop()
+                out.append(f'<pre><code>{html.escape(chr(10).join(body))}</code></pre>')
+                continue
             heading = self.HEADING.match(line)
             if heading:
                 level, text = len(heading.group(1)), heading.group(2)
