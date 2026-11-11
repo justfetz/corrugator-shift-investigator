@@ -157,9 +157,9 @@ shows the refusal of its `.json`.
 | "Why was this shift slow? Chart downtime by reason." — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=overview` |
 | "Which equipment caused the most downtime?" | `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=place` |
 | "Which downtime reason cost the most minutes this week?" — Day | `/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week` |
+| the same question — Week | `/corr/1/week/2026-09-14/shift/2?measure=pareto` |
 | "How much donwtime on 1st shift last week?" — Day, shift 2 (the question's own shift and window, issue #105) | `/corr/1/week/2026-09-07/shift/1?measure=pareto` |
 | "How much downtime did third shift have yesterday?" — Week, shift 1 | `/corr/1/day/2026-09-11/shift/3?measure=downtime` |
-| the same question — Week | `/corr/1/week/2026-09-14/shift/2?measure=pareto` |
 | "How did September go versus August?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=kpis&window=2026-09&compare=2026-08` |
 | "fpm by grade" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade` |
 | "Average speed this week" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week` |
