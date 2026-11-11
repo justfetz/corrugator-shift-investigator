@@ -146,3 +146,13 @@ def test_the_client_formula_gives_the_servers_answer_at_any_rates(bench, tmp_pat
     summary = json.loads(run.stdout or '{}')
     assert run.returncode == 0 and summary['count'] == 0, summary.get('mismatches') or run.stderr
     assert summary['cases'] == len(PARITY_URLS) * len(PARITY_RATES) and summary['fields'] > 10_000
+
+
+def test_a_report_address_keeps_the_rates_its_card_is_priced_at(bench):
+    """The report has no dollars of its own, but its card carries its window's money (#31b): the link keeps rates=."""
+    target = bench.canonical_redirect('/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500&corrupt=1')
+    assert target is None, target   # canonical as written: rates= kept, before corrupt=
+    result, _ = bench.answer_url('/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500')
+    assert result['url'] == '/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500'
+    assert bench.canonical_redirect('/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1&rates=hour:1500.00') == \
+        '/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500&corrupt=1'

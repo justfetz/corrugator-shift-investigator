@@ -200,9 +200,11 @@ goes to the offline planner first.
 
 Every answer card carries the money of its scope, priced in the browser at the rates in force:
 
-- **The dollar line** under the headline: `≈ $7,587 recorded losses this shift · $5.72M/yr at this rate`
-  (a window: `≈ $13,047 in levers this week · $1.95M/yr at this rate`), then one chip per bucket (trim,
-  dry-end, shear, speed, stops, setups), largest first.
+- **The dollar line** under the headline: `≈ $7,587 recorded losses this shift · $5.72M/yr at this rate ·
+  contribution: margin not set` (a window: `≈ $13,047 in levers this week · …`; a set margin: `contribution
+  $10,649 at $40/MSF, not added`), then one chip per bucket (trim, dry-end, shear, speed, stops, setups),
+  largest first. On incomplete data the line and the arithmetic say so first: the dollars are the observed
+  records only, and an all-shifts day sums its complete shifts, as its answer ranks them.
 - **The opportunities panel** under the charts: horizontal bars of the levers (or a shift's gaps) ranked
   by $/yr at this rate, each bar's dollars, minutes, formula (`usd_basis`) and records on hover, the top
   eight with the rest behind "All", and a Table flip with the same rows.
@@ -212,10 +214,14 @@ Every answer card carries the money of its scope, priced in the browser at the r
   (points / 100 × 1.8M MSF × paper); the total, $ and $/yr, and the contribution (or "margin not set").
   Then the rates line with each rate's source and the note that these are synthetic records at assumed
   rates, not a plant's figures.
-- **Tiles**: every KPI tile that measures a loss shows its dollars and dollars a year (speed: the gap to
-  675 ft/min over running time, as `get_shift_dollars` prices it; maintenance, operator and all stops:
-  their minutes; dry-end, shear, the four reject reasons: area plus run time; trim: area; bale and the
-  unexplained remainder: paper). A count, a volume or a width (setups, MSF, throughput) has no dollars.
+- **Tiles**: every KPI tile that measures a loss shows its dollars and dollars a year, its own value priced
+  by the same call (a shift's speed: the gap to 675 ft/min over running time, as `get_shift_dollars` prices
+  it; maintenance, operator and all stops: their minutes; dry-end, shear, the four reject reasons: area plus
+  run time; trim: area; bale and the unexplained remainder: paper). A window's waste tile takes the card's own
+  priced `get_waste_breakdown` row for the same window when the card has one, so tile and finding agree to the
+  dollar; a window's speed tile is not priced (no window tool prices a gap to 675 ft/min; the levers price the
+  gap to each cell's best fifth). A count, a volume or a width (setups, MSF, throughput) has no dollars, and a
+  period report's tiles (a whole window's row) are priced in its panel, not on the tiles.
 - **Show as minutes · % · $** in the rail ($ by default): priced tiles and bars in machine minutes, in
   percent of the window (an area of the gross, a time of the scheduled minutes), or in dollars. A priced
   chart in another unit than its own is drawn as ranked bars of that unit; the speed, KPI, trend and
@@ -234,15 +240,20 @@ same call with the same products, the same rounding (Python's round half to even
 ranks the money tools' rows and redoes their totals, and rewrites the answer's prose from the re-priced
 rows: each dollar figure becomes the same field re-priced, the rates, formula and contribution lines are
 written again, a ranked money list is put in its new order, and an all-shifts money answer is written
-about the shift that lost the most at the new rates. So the page after an edit and the permalink it
-writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twelve answers at
+about the shift that lost the most at the new rates. An analyst's interpretation is not rewritten (a
+model's sentence moved to other figures could claim what no row says, or keep a comparison the new figures
+reverse): at other rates it says which rates it was written at, and the evidence under it is re-priced. So
+the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twelve answers at
 six sets of rates (`tests/money_cli.cjs parity`), and the value case
 `value-dollars-shift-0914-shift-2-client` holds the server's `get_shift_dollars` at other rates to the
 client's figures (`evals/client_money.json`, written by `evals/make_client_money.py`). `price_terms`
 never reaches a model (the narrative packet and the OpenAI compaction drop it). A card's money is its
-own `get_shift_dollars` / `get_opportunities` when it asked one, else its scope's money answer, one GET
-per scope shared by its cards (`measure=dollars` on the Day grain, `measure=money` on a window), and
-`/api/config` carries the rates, their sources and the constants (`cost_model.client_config`).
+own `get_shift_dollars` / `get_opportunities` when it asked one, else the money answer of the window its
+answer ran over (a question can name its own: "How did September go versus August?" under Day is priced
+over September), one GET per scope shared by its cards (`measure=dollars` on the Day grain, `measure=money`
+on a window) and counted as a round by the server; a reload replays the thread within its share of the rate
+limit counting those GETs too. `/api/config` carries the rates, their sources and the constants
+(`cost_model.client_config`).
 
 ## Configured targets
 

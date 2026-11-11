@@ -250,22 +250,7 @@ const Money=(()=>{
   }
   return out;
  }
- // The analyst's narrative: each figure it cites was substituted as f'{value:,.2f}' (narrative.py); a cited dollar
- // field becomes the same field re-priced. `byResult`: result_id -> {before, after}.
- function repriceNarrative(items,byResult){
-  return (items||[]).map(item=>{
-   let text=item.text, from=0;
-   for(const c of item.citations||[]){
-    const m=/, (\w+), (\S+), row (\d+)$/.exec(c), s=m&&byResult[m[2]]; if(!s||![...WINDOW_FIELDS,...YEAR_FIELDS].includes(m[1]))continue;
-    const before=s.before.rows[Number(m[3])], now=s.after.byIndex[Number(m[3])]; if(!before||!now||before[m[1]]===null||before[m[1]]===undefined)continue;
-    const old=fmt(before[m[1]],2), at=text.indexOf(old,from); if(at<0)continue;
-    const fresh=now[m[1]]===null||now[m[1]]===undefined?'unavailable':fmt(now[m[1]],2);
-    text=text.slice(0,at)+fresh+text.slice(at+old.length); from=at+fresh.length;
-   }
-   return text===item.text?item:{...item,text};
-  });
- }
  return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,totals,
-  repriceSections,repriceNarrative,contributionLine,PAPER,TIME,MONEY_TOOLS};
+  repriceSections,contributionLine,PAPER,TIME,MONEY_TOOLS};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Money;

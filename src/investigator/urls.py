@@ -486,7 +486,9 @@ def page_url(resolved, with_after=True):
     after = resolved['after'] if with_after else ()
     if resolved['report']:
         base = scope_url(resolved['day'], resolved['control_period'], resolved['scope'], resolved['shift'], resolved['machine_id'])
-        query = [('measure', 'report')] + ([('corrupt', '1')] if resolved['corrupt'] else []) + [('after', a) for a in after]
+        rates = getattr(resolved.get('context'), 'rates', None)
+        query = ([('measure', 'report')] + ([('rates', format_rates(rates))] if rates else [])   # the card's money is priced at them (#31b)
+                 + ([('corrupt', '1')] if resolved['corrupt'] else []) + [('after', a) for a in after])
         return base + '?' + urlencode(query, safe=',/?=:-')
     return canonical_url(resolved['request'], resolved['context'], resolved['corrupt'], resolved['machine_id'], after)
 

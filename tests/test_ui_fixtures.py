@@ -21,3 +21,20 @@ def test_why_slow_ui_fixture_is_the_offline_answer_of_its_url():
         assert saved[key] == fresh[key], f'{key} drifted; refresh with: {REFRESH}'
     assert [e['tool'] for e in saved['trace']] == [e['tool'] for e in fresh['trace']], REFRESH
     assert [c.get('title') for c in saved['charts']] == [c.get('title') for c in fresh['charts']], REFRESH
+
+
+MONEY = Path(__file__).parent / 'ui_fixtures' / 'money_week.json'
+
+
+def test_money_week_ui_fixture_is_the_offline_answer_of_its_url():
+    """Issue #31b's window card: the levers of the week of 14 September for shift 2, as the server answers them."""
+    saved = json.loads(MONEY.read_text())
+    result, _ = Workbench().answer_url(saved['url'])
+    result.pop('report_markdown', None)
+    fresh = json.loads(json.dumps(result))
+    refresh = REFRESH.replace('why_slow', 'money_week').replace('/corr/1/day/2026-09-14/shift/2?measure=overview', saved['url'])
+    for key in ('sections', 'url'):
+        assert saved[key] == fresh[key], f'{key} drifted; refresh with: {refresh}'
+    no_id = lambda charts: [{k: v for k, v in c.items() if k != 'source_result_id'} for c in charts]   # a run's own result id
+    assert no_id(saved['charts']) == no_id(fresh['charts']), f'charts drifted; refresh with: {refresh}'
+    assert [e['data'] for e in saved['trace'] if e['tool'] == 'get_opportunities'] == [{**e['data'], 'trace': saved['trace'][0]['data']['trace']} for e in fresh['trace'] if e['tool'] == 'get_opportunities'], refresh

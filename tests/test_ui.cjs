@@ -531,7 +531,7 @@ const issue63=issue17.then(async()=>{
  const card=elements.card, earlier=elements.earlier, canned=elements.examples.children.filter(b=>b.textContent!=='Where is the money?');   // the thread's own sequence: #31b's money question sits second in the list
  assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);assert.equal(earlier.children.length,0);
  assert.equal(elements.analyst.hidden,true);                                   // no server key: Ask the analyst is not offered
- const disabled=()=>[...Object.entries(elements).filter(([,e])=>e.disabled).map(([id])=>id),...canned.filter(b=>b.disabled).map(text)];
+ const disabled=()=>[...Object.entries(elements).filter(([,e])=>e.disabled).map(([id])=>id),...elements.examples.children.filter(b=>b.disabled).map(text)];
 
  // 1. A canned question: the skeleton is in the DOM in the same task as the click, before any answer exists.
  canned[0].events.click();
@@ -1148,10 +1148,6 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.deepEqual([Money.short(5717620),Money.short(98229),Money.short(56407),Money.short(33)],['$5.72M','$98.2k','$56.4k','$33.00']);
  assert.throws(()=>Money.parse('paper:5.555',cfg),/two decimals/);assert.throws(()=>Money.parse('wage:3',cfg),/rates takes/);assert.throws(()=>Money.parse('trim:101',cfg),/at most 100/);
  assert.equal(Money.format({margin_usd_msf:40,paper_usd_msf:60},cfg),'paper:60,margin:40');   // the canonical order, as cost_model.format_rates
- // the analyst's narrative: a cited dollar field (substituted as f'{value:,.2f}', narrative.py) becomes the same field re-priced
- const step={before:golden.input,after:again}, cited=golden.input.rows[0], now0=again.byIndex[0];
- const told=Money.repriceNarrative([{kind:'finding',text:'Side trim cost $'+Money.fmt(cited.usd,2)+' this shift, $'+Money.fmt(cited.usd_per_year,2)+' a year; 79,686.40 sq ft.',citations:['Shift 2, usd, m:1, row 0','Shift 2, usd_per_year, m:1, row 0','Shift 2, quantity, m:1, row 0']}],{'m:1':step});
- assert.equal(told[0].text,'Side trim cost $'+Money.fmt(now0.usd,2)+' this shift, $'+Money.fmt(now0.usd_per_year,2)+' a year; 79,686.40 sq ft.');
 
  const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
  Object.assign(els.day,{value:'2026-09-14'});els.period.value='day';els.shift.value='2';els.scope.value='shift';els.mode.value='offline';els.corrupt.checked=false;
@@ -1185,8 +1181,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const msgs=els.messages.children.find(e=>/^message\b/.test(e.className)), line=msgs.children.find(e=>e.className==='dollar-line');
  assert.ok(line&&msgs.children.indexOf(line)===msgs.children.findIndex(e=>/\bheadline\b/.test(e.className))+1,'the dollar line sits right under the headline');
  const total=golden.input.total_usd, year=golden.input.total_usd_per_year;
- assert.equal(textOf(line.children[0]),`≈ ${Money.money(total)} recorded losses this shift · ${Money.short(year)}/yr at this rate`);
- assert.equal(textOf(line.children[0]),'≈ $7,587 recorded losses this shift · $5.72M/yr at this rate');
+ assert.equal(textOf(line.children[0]),`≈ ${Money.money(total)} recorded losses this shift · ${Money.short(year)}/yr at this rate · contribution: margin not set`);
+ assert.equal(textOf(line.children[0]),'≈ $7,587 recorded losses this shift · $5.72M/yr at this rate · contribution: margin not set');
  assert.deepEqual(line.children[1].children.map(textOf),['Trim $4,383','Dry-end $1,616','Shear $752','Speed $538','Stops $172','Setups $127']);   // a chip per bucket, largest first
  // the opportunities panel: bars of $/yr by gap, ranked, the formula on hover, a table flip
  const panel=els.money.children[0]; assert.match(panel.className,/money-panel/);
@@ -1226,7 +1222,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(location.search,'?measure=overview&rates=hour:1500');assert.equal(history.slice(history2).every(h=>h[0]==='replace'),true);
  const rates=Money.effective(cfg,{machine_usd_hour:1500}), moneyNow=Money.reprice('get_shift_dollars',golden.input,rates,cfg);
  const open=els.messages.children.find(e=>/^message\b/.test(e.className)), line2=open.children.find(e=>e.className==='dollar-line');
- assert.equal(textOf(line2.children[0]),`≈ ${Money.money(moneyNow.total_usd)} recorded losses this shift · ${Money.short(moneyNow.total_usd_per_year)}/yr at this rate`);
+ assert.equal(textOf(line2.children[0]),`≈ ${Money.money(moneyNow.total_usd)} recorded losses this shift · ${Money.short(moneyNow.total_usd_per_year)}/yr at this rate · contribution: margin not set`);
  assert.ok(all(els.ledger).includes('× $1,500/hr = '+Money.money(moneyNow.total_machine_time_usd)));
  assert.match(all(els.ledger),/= \$6,601$/m,'the paper dollars do not use the machine rate: unchanged');
  assert.match(all(els.ledger),/machine time \$1,500\/hr \(yours\)/);
@@ -1254,5 +1250,66 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  els['units-seg'].children[2].events.click(); els['rates-reset'].events.click();
  assert.equal(location.search.includes('rates='),false);assert.match(all(els.ledger),/× \$1,200\/hr = \$986/);
  els['rates-form'].events.submit({preventDefault(){}}); assert.equal(els['rates-form'].hidden,true);assert.equal(els['rates-change'].hidden,false);
- console.log('UI issue-31b checks passed: money.js gives the golden client figures with Python rounding, the dollar line under the headline with a chip per bucket, the opportunities bars and table, the arithmetic and its rates, $/shift and $/yr on the loss tiles, priced charts in dollars, one money fetch per scope, a rate edit re-prices every card (prose included) with no request and rides in the address and the next questions, minutes and % relabel, reset.');
+
+ // a margin and a trim target: the dollar line says the contribution beside the losses, never added; the arithmetic's trim line follows the target
+ els['rates-change'].events.click(); const fields=els['rates-fields'].children.map(f=>f.children[1]);
+ fields[2].value='40'; fields[2].events.input(); fields[3].value='3'; fields[3].events.input();
+ assert.equal(location.search,'?measure=overview&rates=margin:40,trim:3');
+ const m40=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,{margin_usd_msf:40,trim_target_pct:3}),cfg);
+ const lineNow=()=>textOf(els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line').children[0]);
+ assert.ok(lineNow().endsWith('contribution '+Money.money(m40.total_contribution_usd)+' at $40/MSF, not added'),lineNow());
+ assert.match(all(els.ledger),/Side trim 3\.33% of gross − 3% target = 0\.33 points over → \$/);
+ els['rates-reset'].events.click(); assert.match(lineNow(),/contribution: margin not set$/);
+
+ // all three shifts: the panel says so, and an incomplete shift is not added in; the line and the arithmetic say why
+ const asShift=(n,extra={})=>({...golden.input,shift:n,...extra});
+ const threeAnswer={...money,url:'/corr/1/day/2026-09-14?measure=dollars&corrupt=1',trace:[1,2,3].map(n=>({tool:'get_shift_dollars',ok:true,result_id:'d:'+n,arguments:{shift:n},elapsed_ms:9,data:n===2?asShift(2,{coverage:'partial',excluded_records:[{record_id:'X',error:'bad trim'}]}):asShift(n)}))};
+ vm.runInContext(`thread.push({id:++seq,question:'q3',title:'All shifts',scope:{day:'2026-09-14',period:'day',shift:2,scope:'day'},answered:null,mode:'offline',report:false,corrupt:true,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(threeAnswer)},url:'/corr/1/day/2026-09-14?measure=dollars&corrupt=1',revealed:true});openId=seq;renderCard();`,ctx);
+ const three=els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
+ assert.match(textOf(three.children[0]),/^Shift 2: data incomplete, not counted in these dollars/);
+ assert.equal(textOf(three.children[1]).split(' · ')[0],`≈ ${Money.money(Money.round(golden.input.total_usd*2,2))} recorded losses this day`);
+ assert.match(textOf(els.money.children[0].children[0]),/^Where the money went · Shifts 1 and 3 · /);
+ assert.match(all(els.ledger),/Shift 2: data incomplete, not counted/);
+ // one shift on incomplete data: the dollars are shown as the observed records only
+ const partial={...money,trace:[{...money.trace[0],data:asShift(2,{coverage:'partial',excluded_records:[{record_id:'X',error:'bad trim'}]})}]};
+ vm.runInContext(`thread.push({id:++seq,question:'qp',title:'Partial',scope:{day:'2026-09-14',period:'day',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:true,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(partial)},url:'/corr/1/day/2026-09-14/shift/2?measure=dollars&corrupt=1',revealed:true});openId=seq;renderCard();`,ctx);
+ assert.match(textOf(els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line').children[0]),/^Incomplete data: 1 excluded record\. These dollars are the observed records only/);
+
+ // a window: the levers of the week, its dollar line, the panel ranked by $/yr and the trim line of the levers
+ const week=JSON.parse(fs.readFileSync('tests/ui_fixtures/money_week.json','utf8')), levers=week.trace[0].data;
+ vm.runInContext(`thread.push({id:++seq,question:'Where is the money?',title:'Where is the money?',scope:{day:'2026-09-14',period:'week',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(week)},url:${JSON.stringify(week.url)},revealed:true});openId=seq;renderCard();`,ctx);
+ const wline=els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
+ assert.equal(textOf(wline.children[0]),`≈ ${Money.money(levers.total_usd)} in levers this week · ${Money.short(levers.total_usd_per_year)}/yr at this rate · contribution: margin not set`);
+ assert.equal(els.charts.children.length,0,'the money tool\'s own chart is the panel');
+ const wvals=walk(els.money.children[0]).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);
+ assert.deepEqual(wvals.slice(0,2),[`${Money.short(levers.rows[0].usd_per_year)}/yr`,`${Money.short(levers.rows[1].usd_per_year)}/yr`]);
+ assert.match(all(els.ledger),/Side trim 3\.23% of gross, at or under the 3\.25% target: no trim lever this window/);
+ // the prose of the money answer re-prices with its levers re-ranked, as the server would write it at those rates
+ els['rates-change'].events.click(); const wf=els['rates-fields'].children.map(f=>f.children[1]); wf[3].value='3'; wf[3].events.input();
+ const lever=Money.reprice('get_opportunities',levers,Money.effective(cfg,{trim_target_pct:3}),cfg).rows.find(r=>r.kind==='trim');
+ assert.ok(all(els.ledger).includes('Side trim 3.23% of gross − 3% target = 0.23 points over → '+Money.money(lever.usd_per_year)+'/yr'),'the levers trim line at the new target');
+ assert.ok(all(els.messages).includes(`Side trim over the 3% target: ${Money.money(lever.usd_per_year)}/yr`),'the trim lever in the prose names the new target and its dollars');
+ els['rates-reset'].events.click();
+
+ // the analyst prices at the card's rates, and its interpretation is never rewritten: at other rates it says which it was written at
+ vm.runInContext("config.live_modes=['anthropic'];",ctx);
+ const posts=[]; const narr={kind:'finding',text:'Order change cost 127.33 this shift.',citations:['Shift 2, usd, r:2, row 0']};
+ ctx.fetch=async(path,init)=>{ if(path==='/api/ask'){ posts.push(JSON.parse(init.body)); const result={...JSON.parse(JSON.stringify(whySlow)),mode:'anthropic analyst',narrative:[narr],narrative_status:'available',usage:{tool_calls:6,model_calls:2,cost_usd:0.001},session_id:'s',run_id:'r'};
+   return {ok:true,status:200,text:async()=>JSON.stringify({type:'start'})+'\n'+JSON.stringify({type:'done',result})+'\n'}; } return fetch31(path,init); };
+ els['rates-change'].events.click(); const af=els['rates-fields'].children.map(f=>f.children[1]); af[0].value='70'; af[0].events.input();
+ await vm.runInContext("ask('Why was this shift slow?',{mode:'anthropic',title:'analyst'})",ctx); await tick(); await tick();
+ assert.equal(posts.length,1); assert.equal(posts[0].rates,'paper:70');
+ af[0].value='80'; af[0].events.input();
+ const card=all(els.messages);
+ assert.ok(card.includes('Order change cost 127.33 this shift.'),'the model\'s words are as written');
+ assert.match(card,/Written at the rates it was asked at \(paper \$70\/MSF \(yours\)/);
+ els['rates-reset'].events.click();
+
+ // the report's address keeps the rates; a link the server refuses is asked as it is, never rewritten to the defaults
+ const out=vm.runInContext("withRates('/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1')",ctx); assert.equal(out,'/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1');
+ af[1].value='1500'; af[1].events.input();
+ assert.equal(vm.runInContext("withRates('/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1&after=/corr/1/week/2026-09-14/shift/2?measure=kpis')",ctx),'/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500&corrupt=1&after=/corr/1/week/2026-09-14/shift/2?measure=kpis');
+ assert.equal(vm.runInContext("ratesOk('/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:5.555')",ctx),false);
+ els['rates-reset'].events.click();
+ console.log('UI issue-31b checks passed: money.js gives the golden client figures with Python rounding, the dollar line under the headline with a chip per bucket, the opportunities bars and table, the arithmetic and its rates, $/shift and $/yr on the loss tiles, priced charts in dollars, one money fetch per scope, a rate edit re-prices every card (prose included) with no request and rides in the address and the next questions, minutes and % relabel, reset, a margin and a trim target, all three shifts with an incomplete one, the levers of a window re-priced and re-ranked in the prose, the analyst priced at the rates of its card and never rewritten, the report address keeping the rates.');
 })().catch(error=>{console.error(error);process.exit(1);});

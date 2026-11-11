@@ -205,6 +205,7 @@ function setParam(url,key,value){
 }
 function paramOf(url,key){ const i=url.indexOf('?'); if(i<0)return null; const hit=url.slice(i+1).split('&').find(x=>x.startsWith(key+'=')); return hit?decodeURIComponent(hit.slice(key.length+1)):null; }
 function withRates(url){ return setParam(url,'rates',ratesKey()); }   // the address carries the rates in force, so the link reproduces the page's figures
+function ratesOk(url){ const cfg=costCfg(); if(!cfg)return true; try{ Money.parse(paramOf(url,'rates')||'',cfg); return true; }catch(e){ return false; } }
 function sameView(a,b){ return typeof a==='string'&&typeof b==='string'&&setParam(a,'rates','')===setParam(b,'rates',''); }
 function priorsOf(url){ return queryOf(url).getAll('after'); }
 const MAX_AFTER=8;   // the grammar carries at most eight prior views (urls.MAX_AFTER); the agent keeps its own max_turns
@@ -227,8 +228,10 @@ function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?
 // is the stored card for this address (#86): its title and question, rather than the address as the title.
 async function restore(url,hint=null){
  if(!applyUrl(url))return false;
- if(nav&&currentAddress()===url&&withRates(url)!==url)nav.history.replaceState({url:withRates(url)},'',withRates(url));   // the rates are the page's own (#31b): an address restored without them, or with others, shows the rates in force
- url=withRates(url);
+ if(ratesOk(url)){   // the rates are the page's own (#31b): an address restored without them, or with others, shows the rates in force
+  if(nav&&currentAddress()===url&&withRates(url)!==url)nav.history.replaceState({url:withRates(url)},'',withRates(url));
+  url=withRates(url);
+ }   // a link whose rates the server refuses is asked as it is, and the card shows the server's reason
  renderQuestionChips(); sessionEpoch++; sessionId=null; $('api-key').value='';   // the scope may have changed under the open card: a fresh server conversation
  const held=thread.find(r=>r.state==='done'&&sameView(r.url,url));
  if(held){ held.epoch=sessionEpoch; openId=held.id; followView(url,!held.report); renderCard(); scheduleFollow(true); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
@@ -569,7 +572,7 @@ function kpiTile(row,withheld,priced=null){
  return tile;
 }
 function orderedTiles(rows){ const rank=k=>{const i=TILE_PRIORITY.indexOf(k);return i<0?TILE_PRIORITY.length:i;}; return rows.map((r,i)=>[rank(r.metric),i,r]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]).map(x=>x[2]); }
-function renderKpiTiles(data,caption){
+function renderKpiTiles(data,caption,trace=[]){
  const box=$('kpis');box.replaceChildren();
  const withheld=data.comparison!=='complete';
  const head=node('div',undefined,'kpis-head');
@@ -577,7 +580,7 @@ function renderKpiTiles(data,caption){
  if(data.equal_production_days===false)head.append(node('span',`${data.production_days_current} vs ${data.production_days_previous} production days: compare MSF/day and the ratio tiles, not raw totals`,'warning-note'));
  if(caption)head.append(node('span',caption,'muted mono'));box.append(head);
  if(withheld)box.append(node('p',`Deltas withheld: ${String(data.comparison||'').replace(/^withheld:\s*/,'')||'a window is incomplete or unavailable'}. Missing days are not zero production.`,'warning-note'));
- const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows), price=periodTileMoney(data);
+ const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows), price=periodTileMoney(data,trace);
  rows.forEach((row,i)=>{const tile=kpiTile(row,withheld,data.coverage==='complete'||data.window&&data.window.coverage==='complete'?price(row):null);if(i>=VISIBLE_TILES)tile.className+=' extra';grid.append(tile);});
  box.append(grid);
  if(rows.length>VISIBLE_TILES){const more=node('button',`Show ${rows.length-VISIBLE_TILES} more`,'secondary more');more.type='button';more.setAttribute('aria-expanded','false');
@@ -716,7 +719,7 @@ function showResult(result,raw=result) {   // raw: the answer as the server sent
  for(const id of ['heatmaps','kpis','tables','charts','metrics','trace'])$(id).replaceChildren();   // the open card shows one answer's evidence
  renderQueries(result);   // the query box: first below the title line, built in the first paint (#40)
  const kpiEntry=result.trace.find(e=>e.ok&&(e.tool==='get_period_kpis'||e.tool==='compare_periods'));
- if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`);
+ if(kpiEntry)renderKpiTiles(kpiEntry.data,`${kpiEntry.tool} · this question`,result.trace);
  const shiftKpis=result.trace.filter(e=>e.ok&&(e.tool==='get_shift_kpis'||e.tool==='get_shift_overview'||e.tool==='get_period_report'));
  for(const entry of shiftKpis)shiftTiles(entry,result,shiftKpis.length>1);
  for(const table of result.tables||[])showTable(table);
@@ -755,16 +758,25 @@ function pricedView(result,asked){
  const rates=ratesNow(), trace=result.trace||[], tools=Object.fromEntries(trace.filter(e=>e.result_id).map(e=>[e.result_id,e.tool]));
  const steps=trace.map(e=>e.ok&&e.tool!=='render_chart'&&Money.priced(e.data)?{tool:e.tool,before:e.data,after:Money.reprice(e.tool,e.data,rates,cfg)}:null);
  if(!steps.some(Boolean))return same;
- const byResult={}; trace.forEach((e,i)=>{ if(steps[i]&&e.result_id)byResult[e.result_id]=steps[i]; });
  const sections=Money.repriceSections(result.sections||[],steps,rates,cfg);
  const out={...result,sections,trace:trace.map((e,i)=>steps[i]?{...e,data:steps[i].after}:e),charts:(result.charts||[]).map(c=>Money.repriceChart(c,tools[c.source_result_id],rates,cfg)),
   tables:(result.tables||[]).map(t=>Money.repriceChart(t,t.title,rates,cfg))};   // a table is named by its tool (get_speed_opportunity carries dollars)
  if(typeof result.report_markdown==='string')out.report_markdown=[`# Synthetic production investigation: ${result.period_label||result.production_day}`,`${result.mode}. No email delivery.`,...sections,result.limitations].join('\n\n');   // server._markdown, at these rates
- return {result:out,sections,narrative:Money.repriceNarrative(result.narrative,byResult),repriced:true};
+ return {result:out,sections,narrative:result.narrative,repriced:true};   // a model's interpretation is not rewritten: see paintAnalyst
 }
 function viewOf(rec){ const key=ratesKey(); if(!rec.view||rec.view.key!==key||rec.view.of!==rec.result)rec.view={key,of:rec.result,...pricedView(rec.result,askedRates(rec))}; return rec.view; }
 // ---- the card's money: its own money queries, or its scope's money answer
-function companionUrl(rec){ const s=rec.scope; return `/corr/${machine()}/${GRAIN[s.period]||'day'}/${s.day}`+(s.scope==='shift'?`/shift/${s.shift}`:'')+`.json?measure=${s.period==='day'?'dollars':'money'}`+(rec.corrupt?'&corrupt=1':''); }
+// The money answer of the window the card's answer ran over: a question can name its own ("How did September go
+// versus August?" under Day is about September), so the first windowed query decides, else the rail's scope.
+function companionUrl(rec){
+ const s=rec.scope, step=((rec.result&&rec.result.trace)||[]).find(e=>e.ok&&e.data&&e.data.window&&e.data.window.period&&e.data.window.start);
+ let grain=GRAIN[s.period]||'day', day=s.day, shift=s.scope==='shift'?s.shift:null;
+ if(step){
+  const w=step.data.window, days=storeDays()||[], first=days.find(d=>d>=w.start&&d<=w.end);
+  if(first){ grain={day:'day',week:'week',month:'month',fiscal:'period'}[w.period]||grain; day=days.includes(w.anchor)?w.anchor:first; shift=typeof step.data.shift==='number'?step.data.shift:null; }
+ }
+ return `/corr/${machine()}/${grain}/${day}`+(shift?`/shift/${shift}`:'')+`.json?measure=${grain==='day'?'dollars':'money'}`+(rec.corrupt?'&corrupt=1':'');
+}
 function moneyOf(rec){
  if(!costCfg()||!rec||rec.state!=='done'||!rec.result)return null;
  const m=rec.money;
@@ -788,8 +800,14 @@ const WHEN={day:'this day',week:'this week',month:'this month',fiscal:'this 4-4-
 // across the shifts of an all-shifts day), totals, and what the window is.
 function moneyFacts(m){
  const cfg=costCfg(), rates=ratesNow(), key=ratesKey();
- const steps=(m.result.trace||[]).map((e,i)=>e.ok&&Money.MONEY_TOOLS.has(e.tool)?{tool:e.tool,q:i+1,data:m.asked===key?e.data:Money.reprice(e.tool,e.data,rates,cfg)}:null).filter(Boolean);
+ let steps=(m.result.trace||[]).map((e,i)=>e.ok&&Money.MONEY_TOOLS.has(e.tool)?{tool:e.tool,q:i+1,data:m.asked===key?e.data:Money.reprice(e.tool,e.data,rates,cfg)}:null).filter(Boolean);
  if(!steps.length)return null;
+ const incomplete=steps.filter(x=>x.data.coverage!=='complete'), excluded=incomplete.reduce((n,x)=>n+((x.data.excluded_records||[]).length),0);
+ let warning=null;
+ if(steps.length>1&&incomplete.length&&incomplete.length<steps.length){
+  steps=steps.filter(x=>x.data.coverage==='complete');
+  warning=`Shift ${incomplete.map(x=>x.data.shift).join(' and ')}: data incomplete, not counted in these dollars; they are the complete shifts'.`;
+ }else if(incomplete.length)warning=`Incomplete data: ${excluded||'some'} excluded record${excluded===1?'':'s'}. These dollars are the observed records only, not the whole ${steps[0].tool==='get_opportunities'?'window':'shift'}; do not rank them.`;
  const levers=steps[0].tool==='get_opportunities', d0=steps[0].data, sum=k=>steps.reduce((s,x)=>s+(x.data[k]||0),0);
  const all=steps.flatMap(x=>x.data.rows.map(r=>({...r,shift:x.data.shift})));
  const byName=new Map();
@@ -801,13 +819,13 @@ function moneyFacts(m){
  const rows=[...byName.values()].map(e=>({...e,share:e.base?e.qty/e.base*100:null}));
  const buckets=new Map(); for(const r of rows)buckets.set(r.bucket,(buckets.get(r.bucket)||0)+r.usd);
  const one=steps.length===1, window=d0.window&&d0.window.period;
- return {levers,steps,all,rows,one,cfg,rates,
+ return {levers,steps,all,rows,one,cfg,rates,warning,
   total:steps.length>1?Money.round(sum('total_usd'),2):d0.total_usd, year:one?d0.total_usd_per_year:null,
   paper:Money.round(sum('total_paper_usd'),2), machine:Money.round(sum('total_machine_time_usd'),2),
   contribution:steps.every(x=>x.data.total_contribution_usd!==null&&x.data.total_contribution_usd!==undefined)?Money.round(sum('total_contribution_usd'),2):null,
   buckets:[...buckets.entries()].sort((a,b)=>b[1]-a[1]),
   when:levers?WHEN[window]||'this window':one?'this shift':'this day',
-  who:d0.shift?`Shift ${d0.shift}`:levers?'All shifts':'All three shifts',
+  who:one?(d0.shift?`Shift ${d0.shift}`:'All shifts'):steps.length===3?'All three shifts':`Shifts ${steps.map(x=>x.data.shift).join(' and ')}`,
   label:levers?(d0.window&&d0.window.label)||'':(d0.production_day||''),
   perShift:one?null:steps.map(x=>`shift ${x.data.shift} ${Money.short(x.data.total_usd_per_year)}/yr`).join(' · ')};
 }
@@ -831,10 +849,13 @@ function paintMoney(rec){
  ledger.append(...arithmetic(f));
 }
 function fillDollarLine(line,f){
+ if(f.warning)line.append(node('p',f.warning,'warning-note'));
  const lead=node('p',undefined,'dollar-lead');
  lead.append(node('span','≈ '),node('strong',Money.money(f.total),'figure'),node('span',` ${f.levers?'in levers':'recorded losses'} ${f.when}`));
  if(f.year!==null&&f.year!==undefined)lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',' at this rate'));
  else if(f.perShift)lead.append(node('span',` · ${f.perShift} at each shift's rate`));
+ const margin=f.rates.values.margin_usd_msf;   // the line says plainly whether contribution is priced
+ lead.append(node('span',margin===null||margin===undefined?` · contribution: ${f.cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(margin)}/MSF, not added`,'contrib'));
  const chips=node('p',undefined,'chips');
  for(const [bucket,usd] of f.buckets.filter(([,usd])=>Money.money(usd)!=='$0')){ const c=node('span',undefined,'chip'); c.append(node('span',bucket+' '),node('strong',Money.money(usd))); c.title=`${bucket}: ${Money.money(usd)} ${f.when}, priced at your rates`; chips.append(c); }
  line.append(lead,chips);
@@ -908,6 +929,7 @@ function arithmetic(f){
  const minOf=rows=>rows.reduce((s,r)=>s+(r.machine_minutes||0),0), notMade=f.all.reduce((s,r)=>s+(r.msf_not_made||0),0);
  const stops=minOf(time.filter(r=>r.price_terms.kind==='downtime')), speed=minOf(time.filter(r=>r.price_terms.kind==='speed')), run=minOf(waste);
  const out=[node('h3','The arithmetic, at your rates','label')];
+ if(f.warning)out.push(node('p',f.warning,'warning-note'));
  out.push(line('Paper ',[`${Money.fmt(sqft,0)} sq ft of ${f.levers?'trim over target, shear and rejects':'trim, shear and rejects'} = `,b(`${Money.fmt(sqft/1000,1)} MSF`),` × $${paper}/MSF = `,b(Money.money(f.paper))]));
  out.push(line('Machine time ',[`${Money.fmt(stops+speed+run,1)} min (stops ${Money.fmt(stops,1)} · speed gap ${Money.fmt(speed,1)} · waste run time ${Money.fmt(run,1)}) = `,b(`${Money.fmt(notMade,1)} MSF not made`),` at ${Money.gText(C.required_fpm)} ft/min (${Money.gText(C.msf_per_minute)} MSF a minute) × $${hour}/hr = `,b(Money.money(f.machine))]));
  out.push(trimLine(f,line,b));
@@ -932,7 +954,7 @@ function trimLine(f,line,b){
  const sq=trims.reduce((s,x)=>s+x.price_terms.quantity,0), gross=trims.reduce((s,x)=>s+(x.price_terms.gross_sqft||0),0), pct=gross?sq/gross*100:0, over=Math.max(0,pct-v.trim_target_pct);
  if(!over)return line('Side trim ',[`${Money.fixed(pct,2)}% of gross, at or under the ${target}% target: `,b('no trim lever')]);
  const priced=Money.price('trim',over/100*gross,f.rates,gross,trims.reduce((s,x)=>s+(x.price_terms.minutes||0),0),cfg);   // the post's trim formula, through the same pricing call
- return line('Side trim ',[`${Money.fixed(pct,2)}% of gross − ${target}% target = `,b(`${Money.fixed(over,2)} points over`),' → ',b(`${Money.money(priced.usd_per_year)}/yr`),` at the post's volume (points / 100 × ${Money.group(String(C.annual_msf_per_machine))} MSF a year × $${Money.rateText(v.paper_usd_msf)}/MSF)`]);
+ return line('Side trim ',[`${Money.fixed(pct,2)}% of gross − ${target}% target = `,b(`${Money.fixed(over,2)} points over`),' → ',b(`${Money.money(priced.usd_per_year)}/yr`),` at the post's volume (points / 100 × ${Money.group(String(C.annual_msf_per_machine))} MSF a year × $${Money.rateText(v.paper_usd_msf)}/MSF, worked here from the Side trim row)`]);
 }
 // ---- dollars on the tiles: each tile's own quantity priced as the tools price it
 function tileMoney(kind,quantity,gross,minutes,what){ const cfg=costCfg(); if(!cfg||quantity===null||quantity===undefined||!Number.isFinite(quantity))return null; return {what,...Money.price(kind,quantity,ratesNow(),gross,minutes,cfg)}; }
@@ -946,8 +968,13 @@ function shiftTileMoney(label,r){
  if(label==='Trim')return tileMoney('trim',r.trim_pct*g/100,g,m,'side trim');
  return null;
 }
-function periodTileMoney(data){
+const WASTE_METRIC={trim:'trim_pct',shear:'shear_pct',bond:'bond_pct',warp:'warp_pct',misalignment:'misalignment_pct',moisture:'moisture_pct',dry_end:'dry_end_pct',bale:'bale_pct',unexplained:'unexplained_pct'};
+// A window's tiles: each priced from the tile's own value, except that a waste tile takes the card's priced
+// get_waste_breakdown row of the same window and shift when it has one, so the tile and the finding agree to the dollar.
+function periodTileMoney(data,trace=[]){
  const cfg=costCfg(); if(!cfg||!data||!Array.isArray(data.rows))return ()=>null;
+ const w=data.window||{}, waste=trace.find(e=>e.ok&&e.tool==='get_waste_breakdown'&&e.data.window&&e.data.window.start===w.start&&e.data.window.end===w.end&&e.data.shift===data.shift);
+ const exact=waste?Object.fromEntries(waste.data.rows.filter(r=>WASTE_METRIC[r.category]&&r.usd!==null&&r.usd!==undefined).map(r=>[WASTE_METRIC[r.category],{what:String(r.label||r.category).toLowerCase(),...r}])):{};
  const rows=Object.fromEntries(data.rows.map(r=>[r.metric,r])), cur=k=>rows[k]?rows[k].current:null;
  const days=data.production_days_current??(data.window&&data.window.production_days_observed), vol=cur('volume_msf');
  if(!vol||!days)return ()=>null;
@@ -955,6 +982,7 @@ function periodTileMoney(data){
  const P=(kind,q,what)=>tileMoney(kind,q,g,m,what);
  return row=>{
   const v=row.current; if(v===null||v===undefined)return null;
+  if(exact[row.metric])return exact[row.metric];
   switch(row.metric){
    case 'downtime_pct': return P('downtime',v*m/100,'all stops');
    case 'downtime_minutes': return P('downtime',v,'all stops');
@@ -964,7 +992,6 @@ function periodTileMoney(data){
    case 'trim_pct': return P('trim',v*g/100,'side trim');
    case 'shear_pct': case 'dry_end_pct': case 'bond_pct': case 'warp_pct': case 'misalignment_pct': case 'moisture_pct': return P('waste',v*g/100,String(row.label||row.metric).toLowerCase());
    case 'bale_pct': case 'unexplained_pct': return P('paper',v*g/100,String(row.label||row.metric).toLowerCase());
-   case 'speed_run_fpm': { const lineal=cur('lineal_ft'), down=cur('downtime_minutes'); return lineal===null||down===null?null:P('speed',Math.max(0,C.required_fpm*(m-down)-lineal)/C.required_fpm,`the speed gap to ${Money.gText(C.required_fpm)} ft/min`); }
   }
   return null;
  };
@@ -1406,6 +1433,10 @@ function paintAnalyst(rec){
  const first=r.usage&&r.usage.first_token_ms;
  card.append(node('p',`${r.mode} · ${r.status} · ${usageText(r.usage)}`+(typeof first==='number'?` · first words after ${(first/1000).toFixed(1)} s`:''),'muted analyst-state'));
  if(r.narrative_status==='available')card.append(node('p','Model interpretation: review it with the evidence; hypotheses are not proven causes. Every number above was substituted from a query row.','muted'));
+ // #31b: the evidence re-prices at the visitor's rates; a model's words are not rewritten (a figure moved into another
+ // sentence, or a comparison the new figures reverse, would say what no row says), so at other rates the
+ // interpretation says which rates it was written at.
+ if(view.repriced&&narrative.length){ const cfg=costCfg(), asked=Money.effective(cfg,Money.parse(askedRates(rec),cfg)); card.append(node('p',`Written at the rates it was asked at (${Money.provenance(asked,cfg).replace(/^Rates: /,'').replace(/\.$/,'')}); the evidence above is at your rates. Ask the analyst again for an interpretation at these.`,'warning-note analyst-rates')); }
 }
 // A validated paragraph's figures in bold: a number with its unit, never a shift's own number ("Shift 2").
 function boldFigures(text){
@@ -1549,7 +1580,15 @@ function storedThread(){
 }
 function sameScope(rec){ const s=currentScope(); return rec.scope.day===s.day&&rec.scope.period===s.period&&rec.scope.scope===s.scope&&Number(rec.scope.shift)===s.shift&&!!rec.corrupt===$('corrupt').checked; }
 function replayThread(cards){
- const from=Math.max(0,cards.length-replayBudget());
+ // Newest first, a card costs one round and, with the cost model on, its scope's money answer one more the first time
+ // that scope comes up (#31b), unless the card is itself a money answer: the replay stays inside its share of the limit.
+ let budget=replayBudget(), from=cards.length; const scopes=new Set();
+ for(let i=cards.length-1;i>=0;i--){
+  const c=cards[i], own=/[?&]measure=(dollars|money)(&|$)/.test(c.url), key=`${c.scope.period}|${c.scope.day}|${c.scope.scope}|${c.scope.shift}|${!!c.corrupt}`;
+  const cost=1+(costCfg()&&!c.report&&!own&&!scopes.has(key)?1:0);
+  if(cost>budget)break;
+  budget-=cost; from=i; if(cost>1)scopes.add(key);
+ }
  cards.forEach((c,i)=>{
   const rec={id:++seq,question:typeof c.question==='string'?c.question:c.url,title:typeof c.title==='string'?c.title:c.url,scope:{day:c.scope.day,period:c.scope.period,shift:Number(c.scope.shift),scope:c.scope.scope},answered:null,mode:'offline',report:!!c.report,corrupt:!!c.corrupt,epoch:-1,source:null,state:'stored',t0:clock(),ms:null,keepMs:typeof c.ms==='number'?c.ms:null,result:null,error:null,note:null,url:null,live:null,revealed:true,analysed:!!c.analysed,askUrl:c.url};
   thread.push(rec);
