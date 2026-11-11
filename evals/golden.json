@@ -3272,6 +3272,88 @@
    "note": "Issue #101: a downtime question that names the shift is asked of it: the shift's downtime by reason, maintenance and operator downtime leading against their bands, each reason with its stops, minutes per stop and dollars."
   },
   {
+   "id": "downtime-cost-keeps-the-shifts-dollars",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What did downtime cost?",
+   "note": "Review of #111 (the reviewer subagent): the owner's downtime default sent money questions to the review, which prices nothing, so 'what did downtime cost' lost its dollars. A money question is the shift's priced downtime, as before; the default is for the downtime answer itself.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=downtime",
+    "status": "complete",
+    "sections_match": [
+     "^- .*: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$"
+    ]
+   }
+  },
+  {
+   "id": "downtime-cost-all-shifts-keeps-its-dollars",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What did downtime cost?",
+   "note": "Review of #111: under the production-day scope too, a money question about downtime is each shift's priced downtime, not the review (which prices nothing).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=downtime",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "sections_match": [
+     "\\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query [0-9]+ · row 0\\)$"
+    ]
+   }
+  },
+  {
+   "id": "downtime-default-keeps-the-day-the-question-names",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Show downtime by reason on Monday",
+   "note": "Review of #111: a question that names the selected day ('on Monday', 'for this day', 'for the selected day') is asked of it; the owner's default (the previous production day, all shifts) is for a question that names no day.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=downtime",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "downtime-default-keeps-a-shift-named-in-words",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Show downtime for shift two",
+   "note": "Review of #111: a shift named in words ('shift two', 'the previous shift', 'night shift') is a shift the question asks about, so the all-shift default does not apply; the answer is the shift's, as it was.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=downtime",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "yesterday-under-week-is-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "period": "week",
+   "question": "What were the top downtime reasons yesterday?",
+   "note": "Review of #111: 'yesterday' moves the Period control to Day, so the owner's default (all shifts) applies to it as under Day; it read the controls' Week and answered shift 2 alone.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=review",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "downtime-look-names-the-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which equipment caused the most downtime?",
+   "note": "Review of #111: a where-to-look question is asked in the card's scope; a bare 'Show downtime by reason' under one shift now meets the owner's default and answers the previous day, all shifts. A downtime look under one shift names it ('for this shift'), so it opens the same shift's records.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=downtime&by=place",
+    "status": "complete",
+    "sections_match": [
+     "^- The same stops by recorded reason → “Show downtime by reason for this shift”$"
+    ]
+   }
+  },
+  {
    "id": "ranking-values",
    "type": "faithfulness",
    "mode": "offline",

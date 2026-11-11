@@ -183,10 +183,9 @@ def test_every_measure_has_a_meaning_under_every_grain():
                 # one spelling per state: the address of the resolved state is the address. Under a ranged grain
                 # the day-shaped downtime, quality and compare are the Pareto, the waste breakdown and the KPI tiles,
                 # so they normalize to pareto, waste and kpis once and stay there; dollars is the money levers (get_opportunities).
-                # under Day and all shifts, the day's downtime is the owner's downtime review (issue #101)
-                # downtime by reason is the owner's downtime review (issue #101): under a ranged grain, and under Day with all shifts
-                alias = {'downtime': 'review', 'quality': 'waste', 'compare': 'kpis', 'dollars': 'money'} if grain != 'day' else \
-                    {'downtime': 'review'} if tail == '' else {}
+                # downtime by reason under a ranged grain is the owner's downtime review (issue #101); under Day the address
+                # measure=downtime keeps its meaning, each shift's priced downtime, and the review is measure=review (#111)
+                alias = {'downtime': 'review', 'quality': 'waste', 'compare': 'kpis', 'dollars': 'money'} if grain != 'day' else {}
                 normalized = page_url(resolved)
                 assert normalized == url.replace('measure=' + measure, 'measure=' + alias.get(measure, measure)), url
                 assert page_url(resolve_url(normalized, store)) == normalized

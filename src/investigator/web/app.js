@@ -53,15 +53,24 @@ function foldFindings(e,lists){
  more.addEventListener('click',()=>{ const show=hidden.some(li=>li.hidden); for(const x of [...hidden,...folded])x.hidden=!show; more.textContent=show?'Fewer':`${hidden.length} more`; more.setAttribute('aria-expanded',String(show)); });
  const last=lists[lists.length-1]; if(typeof last.after==='function')last.after(more); else e.children.splice(e.children.indexOf(last)+1,0,more);
 }
+// A where-to-look question is asked in the scope the card answered: a question that moved the controls (#105's
+// "yesterday", #101's downtime default: the previous production day, all shifts) points its looks at that day and
+// scope, not at the controls it was asked from (review of #111).
+function lookScope(rec){
+ if(!rec||!rec.scope)return null;
+ const c=rec.result&&rec.result.context;
+ if(!c||typeof c.production_day!=='string')return rec.scope;
+ return {...rec.scope,day:c.production_day,shift:Number(c.shift),scope:c.scope==='day'?'day':'shift',period:c.period?(c.period==='fiscal'?'accounting':c.period):'day'};
+}
 function lookItem(text,rec){
  const m=SHAPE_LOOK.exec(text), li=node('li');
  if(!m){ li.append(...shapedInline(text)); return li; }
- const question=m[2], scope=rec&&rec.scope?{...rec.scope,corrupt:!!rec.corrupt}:controls(), a=node('a',`“${question}”`,'look-q');
+ const asked=lookScope(rec), question=m[2], scope=asked?{...asked,corrupt:!!rec.corrupt}:controls(), a=node('a',`“${question}”`,'look-q');
  a.href=questionUrl(question,scope); a.title='Ask this: a fixed query, no model';
  a.addEventListener('click',event=>{
   if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return;   // a modifier click opens the address as the browser would
   if(event&&event.preventDefault)event.preventDefault();
-  ask(question,{mode:'offline',title:question,...(rec?{scope:rec.scope,corrupt:rec.corrupt,source:rec}:{})}).catch(()=>{});
+  ask(question,{mode:'offline',title:question,...(rec?{scope:asked||rec.scope,corrupt:rec.corrupt,source:rec}:{})}).catch(()=>{});
  });
  li.append(node('span',m[1]),node('span',' → '),a);
  return li;
@@ -538,7 +547,7 @@ const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade'
 const TABLE_COLUMNS={get_grade_totals:['grade','volume_msf','share_of_volume_pct','speed_run_fpm','speed_to_target_pct','setups','trim_pct','dry_end_pct','delta_volume_msf'],
  get_speed_variance:['label','gap_fpm','share_of_gap_pct','gap_lineal_ft','current_loss_fpm','reference_loss_fpm','top_item','top_item_fpm','usd','usd_per_year']};
 function showTable(data){
- const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'All grade totals',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width',get_speed_variance:'Speed gap by contributor: stops, setups, running below target, grade mix'};
+ const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'All grade totals',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width',get_speed_variance:'Speed gap by contributor: stops, setups, running under baseline, grade mix (schedule-driven)'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)

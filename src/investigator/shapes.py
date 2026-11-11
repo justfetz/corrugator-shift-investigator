@@ -291,6 +291,11 @@ class DailyAnswer:
         """The words that point a where-to-look question at the focus shift when the scope is all shifts."""
         return f' for shift {shift}' if self.context.scope == 'day' and shift else ''
 
+    def dsuffix(self, shift):
+        """`suffix` for a downtime look, which also names the shift under one selected shift: a downtime question with no
+        shift is the owner's default, the previous production day across all shifts (review of #111)."""
+        return self.suffix(shift) or (' for this shift' if self.context.scope == 'shift' else '')
+
     @staticmethod
     def kpis(tools):
         result = tools.get('get_shift_kpis') or tools.get('get_shift_overview')
@@ -509,7 +514,7 @@ class DailyAnswer:
     def regroup(self, dt, s):
         if dt['arguments'].get('group_by', 'reason') == 'reason':
             return look('The same stops by equipment, where on the line each minute was recorded', f'Show downtime by equipment{self.suffix(s)}')
-        return look('The same stops by recorded reason', f'Show downtime by reason{self.suffix(s)}')
+        return look('The same stops by recorded reason', f'Show downtime by reason{self.dsuffix(s)}')
 
     def shape_speed(self, s):
         tools = self.shifts[s]
@@ -526,7 +531,7 @@ class DailyAnswer:
         bullets.append(bullet(f'Lineal feet: **{f0(row["observed_lineal_ft"])}** over {n(row["valid_setups"])} setups and {n(row["paper_changes"])} paper changes', k, 0))
         if slow:
             looks.append(look(f'The setups on {slow["wet_end_id"]}, the slowest run', f'Show the setup matrix{self.suffix(s)}'))
-        looks.append(look('The downtime inside the elapsed time, by reason', f'Show the downtime breakdown{self.suffix(s)}'))
+        looks.append(look('The downtime inside the elapsed time, by reason', f'Show the downtime breakdown{self.dsuffix(s)}'))
         return head, [b for b in bullets if b], [], looks
 
     def shape_downtime(self, s):
@@ -604,7 +609,7 @@ class DailyAnswer:
                 bullets.append(bullet(f'{r["setup_id"]}: **{f1(r["rejected_sqft"])} sq ft** rejected, the most of any setup', m, i))
             notes.append('Stop minutes are allocated by interval overlap; a stop spanning two setups appears in both stop counts.')
         bullets.append(bullet(f'Setups above the {targets.pct(targets.TRIM_FLAG_PCT)} trim flag: **{n(row["setups_above_trim_target"])}** of {n(row["valid_setups"])}', k, 0))
-        looks = [look('The downtime behind the allocated stop minutes, by reason', f'Show the downtime breakdown{self.suffix(s)}'),
+        looks = [look('The downtime behind the allocated stop minutes, by reason', f'Show the downtime breakdown{self.dsuffix(s)}'),
                  look('The rejected area by reason', f'Show dry-end rejects by reason{self.suffix(s)}')]
         return head, bullets, notes, looks
 
@@ -614,7 +619,7 @@ class DailyAnswer:
         if not notes:
             return self.shape_generic(s)
         head = f'**{len(notes["data"]["rows"])}** reported notes{self.clause(s, low=False).split(",")[0]} · synthetic and unverified: observations, not causes {ref(notes)}'
-        looks = [look('The downtime those stops add up to, by reason', f'Show the downtime breakdown{self.suffix(s)}'),
+        looks = [look('The downtime those stops add up to, by reason', f'Show the downtime breakdown{self.dsuffix(s)}'),
                  look('Each setup with its stops and rejects', f'Show the setup matrix{self.suffix(s)}')]
         return head, [], [], looks
 
@@ -627,7 +632,7 @@ class DailyAnswer:
         notes = ['Requested and planned quantities repeat on continuing orders; sum produced sheets only. Remaining demand carries across shifts.',
                  'Produced sheets include rejects; accepted delivery and replacement scheduling are not modeled.']
         looks = [look('The setups those orders ran on', f'Show the setup matrix{self.suffix(s)}'),
-                 look('The downtime between those orders, by reason', f'Show the downtime breakdown{self.suffix(s)}')]
+                 look('The downtime between those orders, by reason', f'Show the downtime breakdown{self.dsuffix(s)}')]
         return head, [], notes, looks
 
     def shape_ranking(self, s):
@@ -715,7 +720,7 @@ class DailyAnswer:
         bullets = [bullet(f'{r["rank"]}. {r["gap"]}: **{money(r["usd"])}**' + (f' · {money(r["usd_per_year"])}/yr' if r.get('usd_per_year') is not None else ''), d, i)
                    for i, r in enumerate(rows)]
         notes = [x for x in [contribution(data)] if x] + (money_notes(d, rows[0], 'gap') if rows else money_notes(d))
-        looks = [look('The downtime behind the machine-time dollars, by reason', f'Show the downtime breakdown{self.suffix(s)}'),
+        looks = [look('The downtime behind the machine-time dollars, by reason', f'Show the downtime breakdown{self.dsuffix(s)}'),
                  look('The rejected area behind the dry-end dollars, by reason', f'Show dry-end rejects by reason{self.suffix(s)}')]
         return head, bullets, notes, looks
 

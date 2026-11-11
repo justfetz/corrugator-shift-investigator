@@ -318,6 +318,11 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  const link=lookList.children[0].children[2];assert.equal(link.className,'look-q');assert.equal(link.textContent,'“Show the setup matrix”');
  assert.ok(link.href.startsWith('/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Show+the+setup+matrix'),link.href);   // an address: a modifier click opens it in a new tab
  link.events.click({preventDefault(){}});assert.deepEqual(asked.map(a=>[a[0],a[1].mode,a[1].scope]),[['Show the setup matrix','offline',rec.scope]]);   // a plain click asks it offline, in the card's scope
+ // a card whose question moved the controls (the owner's downtime default, review of #111: asked on Monday, shift 2; answered
+ // Friday, all shifts) asks its looks in the scope it answered, so "Show the shift notes for shift 2" opens Friday's notes
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext(`lookScope({scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},result:{context:{production_day:'2026-09-11',shift:2,scope:'day'}}})`,context))),{day:'2026-09-11',shift:2,scope:'day',period:'day'});
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext(`lookScope({scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},result:{context:{production_day:'2026-08-31',shift:2,scope:'shift',period:'fiscal'}}})`,context))),{day:'2026-08-31',shift:2,scope:'shift',period:'accounting'});
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext(`lookScope({scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'}})`,context))),{day:'2026-09-14',shift:2,scope:'shift',period:'day'});   // no answer yet: the asked scope
  // what a reader sees is the sections without their two markers, word for word and in order
  assert.deepEqual([textOf(head),...list.children.map(textOf),textOf(label),...subs.children.map(textOf),textOf(caveat),textOf(lookLabel),...lookList.children.map(textOf)],sections.map(strip));
  vm.runInContext('ask=__ask',context);

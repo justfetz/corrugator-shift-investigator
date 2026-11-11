@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from investigator.agent import Agent, Context, parse_request
+from investigator.agent import Agent, Context, parse_request, question_scope, route
 from investigator.record_store import default_store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -256,10 +256,18 @@ def golden_answers():
 @pytest.mark.parametrize('case', list(golden_answers()), ids=lambda c: c['id'])
 def test_no_section_runs_on_and_every_where_to_look_question_routes(case):
     """No section over about forty words, no more than three clauses joined with semicolons (a longer list is
-    bullets or a table), and each where-to-look link is a question the offline router answers in the same scope."""
+    bullets or a table), and each where-to-look link is a question the offline router answers in the same scope: the
+    scope the card answered, as the client asks it, which the look must not move (review of #111: a bare downtime look
+    under one shift met the owner's default and answered the previous day, all shifts)."""
     store = default_store()
     context = Context(case.get('day', DAY), case.get('shift', 2), period=case.get('period', 'day'))
     context.scope = case.get('scope', 'shift')
+    turns = case.get('turns') or [case['question']]
+    if len(turns) == 1:
+        try:
+            context = question_scope(turns[0], context, store.production_days)   # the scope the server answers it in
+        except ValueError:
+            return
     try:
         analysis = store.day_analysis(context.production_day, case.get('corrupt', False))
     except ValueError:
@@ -284,4 +292,5 @@ def test_no_section_runs_on_and_every_where_to_look_question_routes(case):
         assert len(text.split(';')) <= MAX_CLAUSES, f'{len(text.split(";"))} semicolon clauses: {section!r}'
         m = LOOK.search(section)
         if m:
-            parse_request(m[1], context)
+            _, asked = route(m[1], context, store.production_days)
+            assert asked is context, f"the look {m[1]!r} moves the card's scope: {asked.read}"

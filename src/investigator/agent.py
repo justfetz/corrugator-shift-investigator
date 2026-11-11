@@ -693,14 +693,18 @@ def question_scope(text, current, days):
         day, period = moved, grain
         read.update({'words': words, 'day': day, 'period': grain})
     scope = current.scope
-    if downtime_default(text, lower, current, shifts, relative, day, read):
+    if downtime_default(text, lower, current, shifts, relative, day, period, read):
         # The owner's default for downtime (issue #101): a downtime question that names no shift and no window is the
         # previous production day, all shifts, whatever the shift control says; shift detail only when asked (a named
-        # shift) or when a flag pulls a shift in.
-        if not relative:
-            day = previous_window_day('day', current.production_day, days) or current.production_day
+        # shift) or when a flag pulls a shift in. On the first day of the records there is no day before it: the
+        # selected day, all shifts, and the analyst is told so.
+        before = None if relative else previous_window_day('day', current.production_day, days)
+        if relative or before:
+            day = before or day
+            read['default'] = 'the previous production day, all shifts'
+        else:
+            read['default'] = 'all shifts on the selected day, the first in the records (no production day before it)'
         scope, period = 'day', 'day'
-        read['default'] = 'the previous production day, all shifts'
         read.setdefault('day', day)
         read.setdefault('period', 'day')
     if not read:
@@ -710,16 +714,26 @@ def question_scope(text, current, days):
                    rates=dict(getattr(current, 'rates', None) or {}), read=read)
 
 
-# A downtime question that says which shift or which day it means is asked of that scope, not the default.
-OWN_SHIFT = r"\b(this|the|our|my|that)\s+shift\b|\bshift\s*[123]\b"
+# A downtime question that says which shift or which day it means is asked of that scope, not the default (review of
+# #111): any shift it mentions ("this shift", "shift two", "night shift", "the previous shift") but all of them, and
+# the selected day named ("on Monday", "for this day", "the selected day"; an ISO date or "today" is OTHER_WINDOW).
+OWN_SHIFT = r"\bshifts?\b"
+ALL_SHIFTS = r"\b(all|every|each|both|across)\s+(the\s+|three\s+)*shifts?\b|\bshifts?\s+(together|combined)\b"
+NAMED_DAY = (r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b|"
+             r"\b(this|that|the|selected|chosen)\s+(selected\s+|chosen\s+|same\s+)?(production\s+)?day\b")
+# A grouping other than by reason is asked of the controls, as the downtime answer always was.
+OTHER_GROUPING = r"\bby\s+(kind|type|category|equipment|place|machine|location|section|shift)\b"
 
 
-def downtime_default(text, lower, current, shifts, relative, day, read):
-    """True when the owner's downtime default applies (issue #101): the Period control is on Day, the question names no
-    shift, no window other than yesterday, and the router would answer it with the downtime review over one day once
-    the scope is all shifts (downtime by reason; by equipment or kind, a kind filter, a count or a Pareto phrasing is
-    asked of the controls as before)."""
-    if getattr(current, 'period', 'day') != 'day' or shifts or re.search(OWN_SHIFT, lower) or re.search(OTHER_WINDOW, lower):
+def downtime_default(text, lower, current, shifts, relative, day, period, read):
+    """True when the owner's downtime default applies (issue #101): the Period control is on Day (or the question's
+    "yesterday" moved it there), the question names no shift and no day or window other than yesterday, it asks no
+    dollars, and the router would answer it with the downtime review over one day once the scope is all shifts
+    (downtime by reason; by equipment or kind, a kind filter, a count or a Pareto phrasing is asked of the controls as
+    before)."""
+    if period != 'day' or shifts or re.search(OTHER_WINDOW, lower) or re.search(NAMED_DAY, lower) or re.search(OTHER_GROUPING, lower):
+        return False
+    if re.search(OWN_SHIFT, lower) and not re.search(ALL_SHIFTS, lower):
         return False
     if relative and relative[1] != 'day':
         return False
@@ -832,7 +846,8 @@ def _parse_request(text, current):
         kind = 'Operator'
     group_by = group_by_words(lower)
     window = period_window(current)
-    if intent == 'downtime' and window is None and current.scope == 'day' and not named and group_by == 'reason' and kind is None:
+    if (intent == 'downtime' and window is None and current.scope == 'day' and not named and group_by == 'reason' and kind is None
+            and not MONEY.search(lower)):   # a money question is each shift's priced downtime: the review prices nothing (#111)
         # The owner's default (issue #101): a production day's downtime is all shifts together, maintenance and
         # operator first, reasons ranked by % of scheduled minutes, a flagged shift pulled in with its supervisor slot.
         return {"intent": "period_review", "shifts": [], "kind": None, "group_by": "reason", "want_chart": True, "ranking_metrics": [],

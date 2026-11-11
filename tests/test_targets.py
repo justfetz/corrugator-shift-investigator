@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from investigator import cost_model, targets
-from investigator.agent import Agent, Context, parse_request, route
+from investigator.agent import Agent, Context, parse_request, question_scope, read_scope_text, route
 from investigator.record_store import SPEED_MIN_RUN_MINUTES, default_store
 from investigator.urls import canonical_url, page_url, redirect_for, resolve_url
 
@@ -260,7 +260,10 @@ def test_a_production_days_downtime_over_all_shifts_is_the_review(store):
     assert canonical_url(parse_request('Show downtime by reason', day), day) == '/corr/1/day/2026-09-18?measure=review'
     shift = Context('2026-09-18', 2, scope='shift')
     assert canonical_url(parse_request('Show downtime by reason', shift), shift) == '/corr/1/day/2026-09-18/shift/2?measure=downtime'
-    assert redirect_for('/corr/1/day/2026-09-18?measure=downtime', store) == '/corr/1/day/2026-09-18?measure=review'
+    # the address keeps main's meaning, each shift's priced downtime (a money question's answer, review of #111); the
+    # review is measure=review
+    assert redirect_for('/corr/1/day/2026-09-18?measure=downtime', store) is None
+    assert [s['tool'] for s in resolve_url('/corr/1/day/2026-09-18?measure=downtime', store)['request'].get('plan') or []] != ['get_downtime_review']
     assert redirect_for('/corr/1/day/2026-09-18?measure=downtime&kind=maintenance', store) is None   # a filter keeps the per-shift plan
     for url in ('/corr/1/day/2026-09-18?measure=review', '/corr/1/week/2026-09-18/shift/2?measure=review'):
         assert page_url(resolve_url(url, store)) == url
@@ -282,7 +285,18 @@ def test_downtime_with_no_scope_is_the_previous_production_day_all_shifts(store)
             assert address(question, scope=scope) == '/corr/1/day/2026-09-11?measure=review', (question, scope)
     assert address('Show downtime by reason', day='2026-09-21') == '/corr/1/day/2026-09-18?measure=review'
     assert address('Show downtime by reason', day=days[0]) == f'/corr/1/day/{days[0]}?measure=review'   # no earlier day: stays
+    first = question_scope('Show downtime by reason', Context(days[0], 2), days)   # and the analyst is told the truth about it
+    assert "the previous production day" not in read_scope_text(first) and 'the first in the records' in read_scope_text(first)
     for question, url in (('Show downtime by reason for this shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          # review of #111: a shift named in words, the selected day named, a money question, another grouping
+                          ('Show downtime for shift two', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime by reason for the previous shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime by reason on Monday', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime by reason for this day', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime by reason for the selected day', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('What did downtime cost?', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime in dollars', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          ('Show downtime by kind', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           ('Show downtime by reason for shift 2', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           ('Show downtime by reason for shift 1', '/corr/1/day/2026-09-14/shift/1?measure=downtime'),
                           ('Show maintenance downtime by reason', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=maintenance'),
@@ -292,9 +306,10 @@ def test_downtime_with_no_scope_is_the_previous_production_day_all_shifts(store)
                           ('Why was this shift slow?', '/corr/1/day/2026-09-14/shift/2?measure=overview')):
         assert address(question) == url, question
     assert address('Show downtime by reason', period='week') == '/corr/1/week/2026-09-14/shift/2?measure=review'
+    assert address('What were the top downtime reasons yesterday?', period='week') == '/corr/1/day/2026-09-11?measure=review'   # yesterday is Day
+    assert address('What were the top downtime reasons for all shifts?') == '/corr/1/day/2026-09-11?measure=review'   # "all shifts" names no one shift
     assert redirect_for('/corr/1/day/2026-09-14/shift/2?measure=downtime', store) is None
     # the analyst is told which day the default chose, and why
-    from investigator.agent import question_scope, read_scope_text
     scoped = question_scope('Show downtime by reason', Context('2026-09-14', 2), days)
     assert (scoped.production_day, scoped.scope, scoped.period) == ('2026-09-11', 'day', 'day')
     assert "the owner's default applies: the previous production day, all shifts, 2026-09-11" in read_scope_text(scoped)

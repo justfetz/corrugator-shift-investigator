@@ -255,11 +255,6 @@ def resolve_url(url, store, max_turns=4, depth=0):
     if measure is None:
         raise ValueError('Add measure= to ask this scope a question; ' + MEASURE_HELP)
     measure, fields, typed = _aliases(measure, fields, grain)
-    if (measure == 'downtime' and grain == 'day' and scope == 'day' and fields.get('by', 'reason') == 'reason'
-            and not {'kind', 'shifts', 'compare', 'window'} & set(fields)):
-        # A production day's downtime over all shifts is the owner's downtime review (issue #101), as the question is.
-        fields.pop('by', None)
-        measure, typed = 'review', typed or 'measure=downtime'
     tool_period = GRAIN_TO_TOOL[grain]
     context = Context(day, shift, period=tool_period)
     context.scope = scope

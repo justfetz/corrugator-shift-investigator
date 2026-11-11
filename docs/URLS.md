@@ -131,7 +131,6 @@ same grain, which these answers carry already or which their store form carries.
 | `measure=speedvar&compare=prev` | `measure=speedvar&against=previous` (the speed variance against the previous window of the same grain); `against=baseline` (or its old name `against=target`) spelled out is dropped as the default |
 | `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
 | `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=review` (by reason, issue #101; it carries the previous window, so `compare=prev` lands there too; `by=place` or `kind`, `measure=pareto`), `waste`, `kpis` |
-| `measure=downtime` under Day and all shifts, without `by=`, `kind=` or `shifts=` | `measure=review` (issue #101: a production day's downtime over all shifts is the owner's downtime review) |
 | `measure=dollars` under a ranged grain | `measure=money` (the levers of the window in $/yr; under Day, `dollars` is the shift's own dollars; not with several `shifts=`, as above) |
 | `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |
 | `measure=quality&compare=prev` under Day | `measure=waste` |
