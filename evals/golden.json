@@ -4967,6 +4967,34 @@
    }
   },
   {
+   "id": "analyst-plan-day-dollars-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Where did the money go this shift?",
+   "plan": {
+    "steps": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     },
+     {
+      "tool": "get_day_dollars",
+      "arguments": {}
+     }
+    ]
+   },
+   "note": "Re-review 2 of PR 109: get_day_dollars, the card's day total, was on the analyst's plan allowlist and the scope check did not refuse it under one shift, so a plan for shift 2 could read all three shifts. It is the offline planner's, not a model's to plan: the plan is refused whole and no query runs.",
+   "expect": {
+    "status": "plan_rejected",
+    "tool_calls": 0,
+    "charts": 0,
+    "tables": [],
+    "sections_match": "plan was rejected \\(it names \"get_day_dollars\", which is not one of the permitted tools\\); no query was run"
+   }
+  },
+  {
    "id": "analyst-plan-all-shifts-nine-steps",
    "type": "routing",
    "mode": "offline",

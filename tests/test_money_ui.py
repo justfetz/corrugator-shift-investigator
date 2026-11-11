@@ -160,3 +160,13 @@ def test_a_report_address_keeps_the_rates_its_card_is_priced_at(bench):
     assert result['url'] == '/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500'
     assert bench.canonical_redirect('/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1&rates=hour:1500.00') == \
         '/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500&corrupt=1'
+
+
+def test_the_day_total_is_the_offline_planners_and_stays_in_scope():
+    """Re-review 2 of PR 109: get_day_dollars reads every shift it lists, so it is off the analyst's plan allowlist and
+    the scope check (shared by the tool loop and the plan check) refuses it for a shift outside the selected scope."""
+    from investigator.agent import PLAN_TOOLS, scope_violation
+    assert 'get_day_dollars' not in PLAN_TOOLS and 'get_shift_dollars' in PLAN_TOOLS
+    assert scope_violation('get_day_dollars', {}, [2], 'shift', 'day', DAY) == 'Tool shift is outside the selected scope'
+    assert scope_violation('get_day_dollars', {'shifts': [1, 3]}, [2], 'shift', 'day', DAY) == 'Tool shift is outside the selected scope'
+    assert scope_violation('get_day_dollars', {'shifts': [1, 3]}, [1, 2, 3], 'day', 'day', DAY) is None

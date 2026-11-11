@@ -852,7 +852,9 @@ def plan_step_cap(allowed_shifts):
 
 
 OVER_CAP = 'it proposes more queries than the limit allows'
-PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] != 'render_chart'}
+# get_day_dollars is the card's day total, which the offline planner adds (#31b): not a model's to plan, and it reads
+# every listed shift, so it stays off the analyst's allowlist (Re-review 2 of PR 109).
+PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] not in ('render_chart', 'get_day_dollars')}
 PLAN_REJECTED = "The analyst's plan was rejected ({reason}); no query was run for it. The offline answer stands on its own."
 
 
@@ -862,6 +864,8 @@ def scope_violation(tool, arguments, allowed_shifts, scope, period, production_d
         return 'Tool shift is outside the selected scope'
     if arguments.get('against_shift') is not None and arguments['against_shift'] not in allowed_shifts:
         return 'Tool shift is outside the selected scope'   # a speed variance against another shift reads that shift
+    if tool == 'get_day_dollars' and any(s not in allowed_shifts for s in (arguments.get('shifts') or [1, 2, 3])):
+        return 'Tool shift is outside the selected scope'   # the day total reads every shift it lists (all three when none)
     if tool in PERIOD_TOOLS and scope == 'shift' and arguments.get('shift') is None:
         return 'Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts'
     if period != 'day' and tool not in PERIOD_TOOLS and tool != 'render_chart':
