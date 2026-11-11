@@ -6,6 +6,10 @@ before it builds, so the deployed page includes the pull request that triggered 
 commits pushed to `main` without a pull request are not listed; `git log` has them.
 
 
+## 2026-11-11
+
+- [#99](https://github.com/justfetz/corrugator-shift-investigator/pull/99) Speed variance: top contributors to a speed gap — stops, setups, below-target running, grade mix ([#92](https://github.com/justfetz/corrugator-shift-investigator/issues/92))
+
 ## 2026-11-10
 
 - [#97](https://github.com/justfetz/corrugator-shift-investigator/pull/97) Answer shape per intent: headline, findings with cited figures, where to look ([#75](https://github.com/justfetz/corrugator-shift-investigator/issues/75))

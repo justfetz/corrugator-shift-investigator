@@ -37,8 +37,9 @@ Profit, costs, staffing decisions, live machine state and plant-wide optimal imp
 # The two money tools are not offered to this loop: the planner request after one waste breakdown was
 # already within a few hundred bytes of the 24,000-byte cap below, and either schema pushes it over. This
 # loop's requests stay what they were; the money questions are answered offline or by the Anthropic
-# analyst (issue #31).
-OPENAI_OMITTED_TOOLS=frozenset({'get_shift_dollars','get_opportunities'})
+# analyst (issue #31). The speed variance (issue #92) stays out for the same cap: its schema alone is about
+# 1.3 KB, and "what drove speed" is answered offline first and by the Anthropic analyst, which plans it.
+OPENAI_OMITTED_TOOLS=frozenset({'get_shift_dollars','get_opportunities','get_speed_variance'})
 DOLLAR_FIELDS=('msf','paper_usd','machine_minutes','machine_time_usd','usd','usd_per_year','msf_not_made',
                'contribution_usd','contribution_usd_per_year','contribution_status','usd_basis')
 

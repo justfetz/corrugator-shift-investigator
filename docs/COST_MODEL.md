@@ -50,7 +50,8 @@ Three components per priced row, kept apart so that changing one rate changes on
 The fields are flat on the row, beside the quantity, so the live narrative cites them like any other
 field and the narrative validator substitutes every dollar from the tool result. They ride on
 `get_quality_breakdown`, `get_downtime_breakdown`, `get_waste_breakdown`, `get_downtime_pareto` and
-`get_speed_opportunity` (opportunity hours x 60 minutes), and on the two money tools:
+`get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each bucket's lineal feet / the
+reference speed; a bucket that ran better is not priced; [speed variance](METRICS.md#speed-variance-issue-92)), and on the two money tools:
 
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
   reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus

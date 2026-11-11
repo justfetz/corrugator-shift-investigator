@@ -59,6 +59,7 @@ These plain phrasings run the period tools over the whole two months (offline, n
 - "Over/under-run by knife this week", "Are we inside the cut range?" — nominal versus actual cuts per knife, drawn as a bullet chart against the ±2 % band.
 - "Where is the speed opportunity this month?", "Which crews run faster, and does it cost rejects?" — typical versus best-fifth speed by grade and width or crew, in hours, with the dry-end rate of the fast setups beside it.
 - "Which warp are we seeing this month, up warp or twist warp?" — the waste breakdown with the reported sub-reasons.
+- "What were the top 3 contributors to speed variation?", "What drove speed this week versus last week?", "Why did speed differ on shift 3 versus shift 1?" — the speed gap against target (or the previous window, or another shift) split into stops, setups, below-target running and grade mix, which add up to it, each priced as machine time, drawn as a waterfall.
 
 The window is anchored on the selected day: a week is its Monday–Friday production week, a month its calendar month. Windows before 3 August 2026 are unavailable, never zero, and deltas are withheld unless both windows are complete. "Yesterday" and "today" still ask you to use the day control, and a bare "Compare last week" is refused as ambiguous. Every percentage is a ratio of sums over the window (METRICS.md).
 

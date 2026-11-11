@@ -476,8 +476,11 @@ def changelog(pulls):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ['changelog']:
+        # --ref origin/main on a branch: main's merges sit on a merge's second parent there, off the first-parent walk
+        ref = argv.pop(argv.index('--ref') + 1) if '--ref' in argv else 'HEAD'
+        argv = [a for a in argv if a != '--ref']
         target = Path(argv[1]) if len(argv) > 1 else ROOT / 'docs' / 'CHANGELOG.md'
-        pulls = merged_pulls(root=ROOT)
+        pulls = merged_pulls(ref, root=ROOT)
         target.write_text(changelog(pulls), encoding='utf-8')
         print(f'{target}: {len(pulls)} merged pull requests')
         return 0
@@ -486,7 +489,7 @@ def main(argv=None):
         site = write_site(argv[1], root)
         print(f'{argv[1]}: {len(site)} pages')
         return 0
-    print('usage: python -m investigator.docsite build <out> [--root <repo>] | changelog [<file>]', file=sys.stderr)
+    print('usage: python -m investigator.docsite build <out> [--root <repo>] | changelog [<file>] [--ref <git ref>]', file=sys.stderr)
     return 2
 
 

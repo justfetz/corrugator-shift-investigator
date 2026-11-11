@@ -36,6 +36,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "Volume by grade this month" | totals by board grade with speed and allocated downtime | `?measure=grade&window=month` |
 | "How much paper did we consume this month?" | rollstock consumed per grade and web width | `?measure=rollstock&window=month` |
 | "Over/under-run by knife this week" | nominal against actual cuts per knife | `?measure=overrun&window=week` |
+| "What were the top 3 contributors to speed variations?", "What drove speed this week?" | the speed gap against target split into stops, setups, below-target running and grade mix | `?measure=speedvar`, `?measure=speedvar&window=week` |
 | "Where is the speed opportunity this month?" | typical against best-fifth speed by grade and width | `?measure=opportunity&window=month` |
 | "Where did the money go this shift?" | the shift's losses priced and ranked by dollars | `?measure=dollars` |
 | "Where is the money this month?" | the levers ranked in dollars a year | `?measure=money&window=month` |
