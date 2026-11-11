@@ -189,7 +189,8 @@ assert.equal(marks.filter(e=>e.class==='level').length,2);assert.equal(marks.fil
 assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='615.8 ft/min'));assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='571.2 ft/min'));
 assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='−60.1 · 135%'));assert.ok(marks.some(e=>e.tag==='text'&&e.textContent==='+40.6 · -91%'));
 assert.ok(marks.some(e=>e['aria-label']==='Shift 1: 615.8 ft/min'));assert.ok(marks.some(e=>e['aria-label']==='Stops: +40.6 ft/min, -90.9% of the gap; largest Planned maintenance, 33.5 ft/min.'));
-assert.ok(marks.some(e=>/^Losses of 44\.6 ft\/min from the reference.*does not start at zero/.test(e.textContent||'')));   // the caption's gap is the tool's gap_fpmassert.ok(marks.some(e=>e.className==='lg'));
+assert.ok(marks.some(e=>/^Losses of 44\.6 ft\/min from the reference.*does not start at zero/.test(e.textContent||'')));   // the caption's gap is the tool's gap_fpm
+assert.ok(marks.some(e=>e.className==='lg'));
 
 // ---- Messages: consecutive reported-note lines fold into one disclosure.
 elements.messages.replaceChildren();
