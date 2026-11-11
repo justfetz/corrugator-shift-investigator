@@ -80,7 +80,7 @@ store measures run one record-store tool over a window.
 | `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
 | `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
-| `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars | the money levers: normalizes to `money` |
+| `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars; over more than one shift (all shifts, or `shifts=`) also `get_day_dollars` for those shifts, the total the card states (#31b) | the money levers: normalizes to `money` |
 | `money` | `get_opportunities` over the window: the levers ranked in $/yr | the same |
 | `speedvar` | `get_speed_variance` over the window: the speed gap against target split into stops, setups, below-target running and grade mix ("top 3 contributors to speed variation", "what drove speed", "speed loss breakdown"); `against=` changes the reference; `shifts=` lists one decomposition per shift, or with `against=shift` the shift explained and the one it is measured against | the same |
 | `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |

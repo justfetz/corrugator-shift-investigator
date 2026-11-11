@@ -37,8 +37,9 @@ TOOL_SCHEMAS = [
     ]
 ] + [
     # The day's losses across its complete shifts (issue #31b): the all-shifts money of a Day card, from the server.
-    {"name": "get_day_dollars", "description": "The production day's losses across its complete shifts, priced at the assumed rates, ranked by dollars.",
-     "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
+    {"name": "get_day_dollars", "description": "The production day's losses across the listed shifts that are complete, priced once on the day at the assumed rates, ranked by dollars.",
+     "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
+                    "required": [], "additionalProperties": False}},
 ]
 # Period tools read the whole record store (two production months) instead of one day.
 # A window is {period, anchor}: day = that Monday-Friday production day, week = the
@@ -225,7 +226,7 @@ class OfflinePlanner:
                 plan.append(("get_quality_breakdown", {"shift": shift}))
 
         if intent == 'dollars' and not context.get("plan") and len(context["shifts"]) > 1:
-            plan.append(("get_day_dollars", {}))   # #31b: the day's total across its complete shifts, for the card
+            plan.append(("get_day_dollars", {"shifts": sorted(context["shifts"])}))   # #31b: the day's total over the shifts asked, for the card
         completed = [(r["tool"], r["arguments"]) for r in results]
         for tool, args in plan:
             if (tool, args) not in completed:
@@ -968,7 +969,10 @@ class Agent:
                 data['tile_money'] = cost_model.period_tiles(data, reasons, rates)   # #31b: the tiles' dollars, as the Pareto and waste rows price them
             return data
         if name == 'get_day_dollars':
-            return cost_model.day_dollars(self.analysis, rates)
+            shifts = arguments.get('shifts') or [1, 2, 3]
+            if not isinstance(shifts, list) or any(type(s) is not int or s not in (1, 2, 3) for s in shifts) or len(set(shifts)) != len(shifts):
+                raise ValueError('shifts lists distinct shifts from 1, 2 and 3')
+            return cost_model.day_dollars(self.analysis, rates, shifts)
         shift = arguments['shift']
         if type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Shift must be 1, 2 or 3')

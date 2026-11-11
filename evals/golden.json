@@ -5345,6 +5345,47 @@
    }
   },
   {
+   "id": "money-day-dollars-two-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "shift": 2,
+   "question": "Where did the money go on shift 1 and shift 3?",
+   "note": "Reviewer pass on the #31b review fixes: get_day_dollars always summed all three shifts, so a question about two shifts got a card total with shift 2 counted. The day total covers the shifts the question named.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars&shifts=1,3",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 1
+      }
+     },
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 3
+      }
+     },
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        3
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "get_shift_dollars",
+     "get_day_dollars",
+     "render_chart"
+    ]
+   }
+  },
+  {
    "id": "money-opportunities-month",
    "type": "routing",
    "mode": "offline",

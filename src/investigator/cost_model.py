@@ -312,6 +312,7 @@ def _totals(rows):
 
 
 PAPER_KINDS = ('trim', 'waste', 'paper')
+TIME_KINDS = ('downtime', 'speed')
 
 
 def bucket_of(row):
@@ -412,7 +413,9 @@ def period_tiles(data, reasons, rates):
     if not sums.get('gross_sqft'):
         return []
     gross, minutes = round(sums['gross_sqft'], 1), window_minutes(data)
-    out = [tile(metric, [_part(WASTE_KINDS[key], round(sums[key], 1), gross, minutes)], rates, key.replace('_', '-') if key != 'dry_end' else 'dry-end rejects')
+    reasons_of = {'dry_end': ('bond', 'warp', 'misalignment', 'moisture')}   # the dry-end tile is its reasons' rows, as the chip is
+    out = [tile(metric, [_part(WASTE_KINDS[k], round(sums[k], 1), gross, minutes) for k in reasons_of.get(key, (key,))], rates,
+                key.replace('_', '-') if key != 'dry_end' else 'dry-end rejects')
            for metric, key in WASTE_TILES.items()]
     stops = [_part('downtime', r['minutes'], gross, minutes) for r in reasons]
     out.append(tile('downtime_pct', stops, rates, 'all stops', ('downtime_pct', 'downtime_minutes', 'stops')))   # one entry, three tiles
@@ -466,16 +469,20 @@ def shift_dollars(analysis, shift, rates):
     return _envelope(data, rates)
 
 
-def day_dollars(analysis, rates):
-    """`get_day_dollars`: where the money went across a production day (issue #31b review), the card's all-shifts
-    total from the server. Each gap is the same gap of get_shift_dollars summed over the day's complete shifts (an
-    incomplete shift is named in `excluded_shifts`, not added) and priced once on the day: the day's gross area and
-    480 minutes a complete shift, so its per-year figure is the day's own, not a sum of three shifts' years."""
-    parts = [{k: v for k, v in shift_dollars(analysis, shift, rates).items() if k != 'tile_money'} for shift in (1, 2, 3)]
+def day_dollars(analysis, rates, shifts=(1, 2, 3)):
+    """`get_day_dollars`: where the money went across a production day (issue #31b review), the card's total for the
+    day's shifts (all three, or the ones a question named). Each gap is the same gap of get_shift_dollars summed over
+    those shifts that are complete (an incomplete one is named in `excluded_shifts`, not added) and priced once on the
+    day: the shifts' gross area and 480 minutes a complete shift, so its per-year figure is the day's own, not a sum of
+    the shifts' years. Each summed quantity and the gross are rounded as the window tools round theirs (0.1 sq ft,
+    0.01 min), so a Day window's KPI tile and this total's chip price the same quantities. Each shift's own total is
+    its get_shift_dollars step, beside this one in the answer (`shifts` names them and their coverage)."""
+    asked = sorted(set(shifts or (1, 2, 3)))
+    parts = [{k: v for k, v in shift_dollars(analysis, shift, rates).items() if k != 'tile_money'} for shift in asked]
     complete = [d for d in parts if d['coverage'] == 'complete']
     used = complete or parts
     gross_of = lambda d: next((r['price_terms']['gross_sqft'] for r in d['rows'] if r.get('price_terms') and r['price_terms']['gross_sqft']), 0.0)
-    gross, minutes = _add(gross_of(d) for d in used), SHIFT_MINUTES * len(used)
+    gross, minutes = round(_add(gross_of(d) for d in used), 1), SHIFT_MINUTES * len(used)
     gaps = {}
     for d in used:
         for r in d['rows']:
@@ -488,15 +495,15 @@ def day_dollars(analysis, rates):
     rows = []
     for g in gaps.values():
         places = 2 if g['unit'] == 'min' else 1
-        quantity = _add(g['terms']) if g['terms'] else None
+        quantity = round(_add(g['terms']), 2 if g['pricing'] in TIME_KINDS else 1) if g['terms'] else None
         rows.append({'gap': g['gap'], 'kind': g['kind'], 'quantity': round(_add(g['shown']), places), 'unit': g['unit'], 'shifts': g['shifts'],
                      **price(g['pricing'] or 'downtime', quantity, rates, gross, minutes)})
-    trim = _add(r['price_terms']['quantity'] for d in used for r in d['rows'] if r['kind'] == 'trim' and r.get('price_terms'))
+    trim = round(_add(r['price_terms']['quantity'] for d in used for r in d['rows'] if r['kind'] == 'trim' and r.get('price_terms')), 1)
     data = {'production_day': parts[0]['production_day'], 'shift': None, 'dataset_version': parts[0]['dataset_version'],
             'rows': _rank(rows, 'usd'), 'coverage': 'complete' if complete else 'partial',
             'excluded_records': [x for d in parts if d['coverage'] != 'complete' for x in d['excluded_records']],
             'excluded_shifts': [d['shift'] for d in parts if d['coverage'] != 'complete'] if complete else [],
-            'shifts': [{'shift': d['shift'], 'coverage': d['coverage'], 'total_usd': d['total_usd'], 'total_usd_per_year': d['total_usd_per_year']} for d in parts],
+            'shifts': [{'shift': d['shift'], 'coverage': d['coverage']} for d in parts],
             'trace': {'sql': ';\n'.join(d['trace']['sql'] for d in parts), 'parameters': [d['trace']['parameters'] for d in parts],
                       'elapsed_ms': sum(d['trace']['elapsed_ms'] for d in parts)},
             'gross_sqft': round(gross, 1), 'scheduled_minutes': minutes, **_totals(rows), **summary(rows)}

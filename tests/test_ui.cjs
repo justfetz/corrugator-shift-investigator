@@ -1312,6 +1312,16 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.ok(ledger3.includes(`${Money.fmt(dayTotal.area_sqft,0)} sq ft of trim, shear and rejects = ${Money.fmt(dayTotal.area_msf,1)} MSF`),ledger3);
  assert.ok(ledger3.includes(`${Money.fmt(dayTotal.machine_minutes,1)} min (stops ${Money.fmt(dayTotal.stop_minutes,1)} · speed gap ${Money.fmt(dayTotal.speed_minutes,1)} · waste run time ${Money.fmt(dayTotal.waste_run_minutes,1)}) = ${Money.fmt(dayTotal.msf_not_made,1)} MSF not made`),ledger3);
  assert.ok(ledger3.includes(`${Money.fixed(dayTotal.trim_pct_of_gross,2)}% of gross − 3.25% target = `),ledger3);
+ // each counted shift's own $/yr is its get_shift_dollars step, re-priced with the day at a rate edit (never a stale field)
+ const shiftStep=n=>threeAnswer.trace.find(e=>e.tool==='get_shift_dollars'&&e.data.shift===n).data;
+ assert.ok(ledger3.includes(`(each shift at its own rate: shift 1 ${Money.short(shiftStep(1).total_usd_per_year)}/yr · shift 3 ${Money.short(shiftStep(3).total_usd_per_year)}/yr)`),ledger3);
+ els['rates-change'].events.click(); { const pf=els['rates-fields'].children.map(f=>f.children[1]); pf[0].value='60'; pf[0].events.input(); }
+ const at60=Money.effective(cfg,{paper_usd_msf:60}), yr60=n=>Money.short(Money.reprice('get_shift_dollars',shiftStep(n),at60,cfg).total_usd_per_year);
+ const ledger60=all(els.ledger), day60=Money.reprice('get_day_dollars',dayTotal,at60,cfg);
+ assert.ok(ledger60.includes(`(each shift at its own rate: shift 1 ${yr60(1)}/yr · shift 3 ${yr60(3)}/yr)`),ledger60);
+ assert.notEqual(yr60(1),Money.short(shiftStep(1).total_usd_per_year));
+ assert.ok(ledger60.includes(`= ${Money.money(day60.total_usd)} this day · ${Money.money(day60.total_usd_per_year)}/yr at this day's rate`),ledger60);
+ els['rates-reset'].events.click();
  // one shift on incomplete data: the dollars are shown as the observed records only
  const partial={...money,trace:[{...money.trace[0],data:asShift(2,{coverage:'partial',excluded_records:[{record_id:'X',error:'bad trim'}]})}]};
  vm.runInContext(`thread.push({id:++seq,question:'qp',title:'Partial',scope:{day:'2026-09-14',period:'day',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:true,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(partial)},url:'/corr/1/day/2026-09-14/shift/2?measure=dollars&corrupt=1',revealed:true});openId=seq;renderCard();`,ctx);
@@ -1366,6 +1376,10 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   const three=JSON.parse(JSON.stringify(other)); three.trace=[1,2,3].map(n=>({...JSON.parse(JSON.stringify(other.trace[0])),result_id:'k:'+n,data:{...other.trace[0].data,shift:n}})); three.run_id='r3';
   vm.runInContext(`thread.push({id:++seq,question:'qa3',title:'analyst three',scope:{day:'2026-09-14',period:'day',shift:2,scope:'shift'},answered:null,mode:'anthropic',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(three)},revealed:true});`,ctx);
   assert.equal(vm.runInContext("companionUrl(thread[thread.length-1])",ctx),'/corr/1/day/2026-09-30.json?measure=dollars');
+  // and over two of the three: those two shifts' money (shifts=), never the whole day's
+  const two=JSON.parse(JSON.stringify(three)); two.trace=two.trace.filter(e=>e.data.shift!==2); two.run_id='r4';
+  vm.runInContext(`thread.push({id:++seq,question:'qa2',title:'analyst two',scope:{day:'2026-09-14',period:'day',shift:2,scope:'shift'},answered:null,mode:'anthropic',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(two)},revealed:true});`,ctx);
+  assert.equal(vm.runInContext("companionUrl(thread[thread.length-1])",ctx),'/corr/1/day/2026-09-30.json?measure=dollars&shifts=1,3');
   ctx.fetch=fetch31;
  }
 
