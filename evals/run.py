@@ -1062,7 +1062,9 @@ def _run_case(case, provider, live, record, scratch):
                 # The question's own shift and window win over the case's controls (issue #105), as on the server:
                 # the turn runs in the scope it names, on that day's records. A turn that stays on the controls' day
                 # carries the follow-up history back; one on another day starts its own, as /q drops the priors.
-                turn = context if case['type'] == 'value' else question_scope(text, context, default_store().production_days)
+                # against the golden year's own days (issue #35): the process's default store is the window ending
+                # yesterday, a different calendar, and building it inside the timed turn cost the first case 10 s
+                turn = context if case['type'] == 'value' else question_scope(text, context, golden_store().production_days)
                 results.append(run_turn(make_agent(dataset(turn.production_day, case.get('corrupt', False))), text, turn))
                 if turn is not context and turn.production_day == context.production_day:
                     context.history = turn.history

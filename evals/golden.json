@@ -4297,10 +4297,11 @@
    "id": "downtime-last-month",
    "type": "routing",
    "mode": "offline",
+   "day": "2025-10-15",
    "question": "How much downtime last month?",
-   "note": "Issue #105: 'last month' is the calendar month before the selected day's (August from 14 Sep), not the selected month; the controls move to it as for last week. August has no previous month in the records, so each row's previous is unavailable, never zero.",
+   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-10-15 it is September 2025, which holds the golden year's first production day (2025-09-30); its previous month, August 2025, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 14 September 2026 for the year window (issue #35), where last month (August 2026) has July before it.",
    "expect": {
-    "url": "/corr/1/month/2026-08-03/shift/2?measure=pareto",
+    "url": "/corr/1/month/2025-09-30/shift/2?measure=pareto",
     "status": "complete",
     "shifts": [
      2
@@ -4311,7 +4312,7 @@
       "arguments": {
        "window": {
         "period": "month",
-        "anchor": "2026-08-03"
+        "anchor": "2025-09-30"
        },
        "group_by": "reason",
        "measure": "minutes",
@@ -4356,9 +4357,9 @@
    "id": "last-week-before-the-records",
    "type": "refusal",
    "mode": "offline",
-   "day": "2026-08-05",
+   "day": "2025-10-01",
    "question": "How much downtime last week?",
-   "note": "Issue #105: from the first production week, last week has no production day in the records; the question is refused with the calendar reason rather than answered as zero or as this week.",
+   "note": "Issue #105: from the first production week, last week has no production day in the records; the question is refused with the calendar reason rather than answered as zero or as this week. Re-anchored from 2026-08-05 to 2025-10-01, the Wednesday of the golden year's first production week (issue #35).",
    "expect": {
     "raises": "before the records"
    }
