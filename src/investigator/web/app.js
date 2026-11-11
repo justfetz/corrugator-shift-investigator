@@ -221,6 +221,7 @@ function applyUrl(url){
  return true;
 }
 function pushAddress(url,replace=false){ url=withRates(url); if(!nav||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
+function sameDay(url,s){ const m=CANONICAL.exec(pathOf(url)); return !m||m[2]===s.day; }   // a question can name another day (#105); follow-ups share one
 function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?[bareUrl(url)]:[])].slice(-maxPriors()); }   // follow=false: the period report is a view, not a question in the conversation
 // Back, forward or a pasted address: the controls follow the URL, and the view becomes the open card of the
 // thread. A view this page has shown opens its card again without a request; any other is fetched as JSON from
@@ -802,6 +803,8 @@ function viewOf(rec){ const key=ratesKey(); if(!rec.view||rec.view.key!==key||re
 function companionUrl(rec){
  const s=rec.scope, step=((rec.result&&rec.result.trace)||[]).find(e=>e.ok&&e.data&&e.data.window&&e.data.window.period&&e.data.window.start);
  let grain=GRAIN[s.period]||'day', day=s.day, shift=s.scope==='shift'?s.shift:null;
+ const own=rec.url&&CANONICAL.exec(pathOf(rec.url));   // the answer's own address: a question can name another day and shift (#105)
+ if(own){ grain=own[1]; day=own[2]; shift=own[3]?Number(own[3]):null; }
  if(step){
   const w=step.data.window, days=storeDays()||[], first=days.find(d=>d>=w.start&&d<=w.end);
   if(first){ grain={day:'day',week:'week',month:'month',fiscal:'period'}[w.period]||grain; day=days.includes(w.anchor)?w.anchor:first; shift=typeof step.data.shift==='number'?step.data.shift:null; }
@@ -815,7 +818,9 @@ function moneyOf(rec){
  if((rec.result.trace||[]).some(e=>e.ok&&Money.MONEY_TOOLS.has(e.tool)))return rec.money={state:'ready',own:true,result:rec.result,asked:askedRates(rec),url:rec.url};
  const url=companionUrl(rec), fresh=rec.money={state:'pending',own:false,result:null,asked:'',url:url.replace('.json','')};
  let p=companions.get(url);
- if(!p){ p=fetch(url,{headers:{Accept:'application/json'}}).then(async r=>{ const j=await r.json(); if(!r.ok)throw new Error(j.error||'The money answer is unavailable'); return j; }); companions.set(url,p); p.catch(()=>{ if(companions.get(url)===p)companions.delete(url); }); }
+ // The money request goes out after the card's first paint (afterPaint: two frames), so it never competes with the
+ // offline answer it follows; the promise is shared at once, so the cards of one scope ask once.
+ if(!p){ p=new Promise(go=>afterPaint(()=>go(fetch(url,{headers:{Accept:'application/json'}})))).then(async r=>{ const j=await r.json(); if(!r.ok)throw new Error(j.error||'The money answer is unavailable'); return j; }); companions.set(url,p); p.catch(()=>{ if(companions.get(url)===p)companions.delete(url); }); }
  p.then(result=>{ fresh.state='ready'; fresh.result=result; moneyLanded(rec); },error=>{ fresh.state='error'; fresh.error=error.message; fresh.at=clock(); moneyLanded(rec); });
  return fresh;
 }
@@ -1135,7 +1140,13 @@ function railRange(s){
  return null;
 }
 function answeredScope(s,result){
- const step=(result.trace||[]).find(e=>e.ok&&e.data&&e.data.window&&e.data.window.label), out={who:null,window:null}; if(!step)return out;
+ const steps=(result.trace||[]).filter(e=>e.ok&&e.data), step=steps.find(e=>e.data.window&&e.data.window.label), out={who:null,window:null};
+ if(!step){   // a day answer the question moved (#105: "third shift yesterday", "show shift 1"): the day and the one shift its daily tools read
+  const days=[...new Set(steps.map(e=>e.data.production_day).filter(d=>typeof d==='string'))], shifts=[...new Set(steps.map(e=>e.data.shift).filter(n=>typeof n==='number'))];
+  if(days.length===1&&(s.period!=='day'||days[0]!==s.day))out.window=windowText({...s,period:'day',day:days[0]});
+  if(s.scope==='shift'&&shifts.length===1&&shifts[0]!==Number(s.shift))out.who=`Shift ${shifts[0]}`;
+  return out;
+ }
  const w=step.data.window, period=w.period==='fiscal'?'accounting':w.period, range=railRange(s);
  if(period!==s.period||(range?(w.start!==range[0]||w.end!==range[1]):w.anchor!==s.day))out.window=w.label;
  const who=step.data.shift===null?'All shifts':typeof step.data.shift==='number'?`Shift ${step.data.shift}`:null;
@@ -1558,7 +1569,7 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
     if(result.session_reset&&sessionId)rec.note='The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.';
     sessionId=result.session_id;
    }
-   if(!p&&result.url){ rec.url=result.url; if(current){ followView(result.url,!report); if(openId===rec.id)pushAddress(result.url); } }
+   if(!p&&result.url){ rec.url=result.url; if(current){ if(sameDay(result.url,scope))followView(result.url,!report); if(openId===rec.id)pushAddress(result.url); } }   // an answer on another day (#105: "last week") is no follow-up of this conversation, whose views share the day
    land(rec,result);
    $('status').textContent=readyText();
    return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts,url:result.url};

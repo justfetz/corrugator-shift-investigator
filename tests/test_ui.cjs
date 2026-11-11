@@ -633,6 +633,14 @@ const issue63=issue17.then(async()=>{
  assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s2)},answered:answeredScope(${JSON.stringify(s2)},${JSON.stringify({trace:[{ok:true,data:{window:september,shift:2,rows:[]}}]})})})`,context),'Shift 2 · September 2026 (2026-09-01 to 2026-09-30)');   // the review's case: the shift kept, only the window is the tool's
  const sm={...s1,period:'month'};
  assert.equal(vm.runInContext(`answeredScope(${JSON.stringify(sm)},${JSON.stringify(windowed(september))}).window`,context),null);   // a month on the rail is the same month the tool ran
+ // issue #105: a day answer the question moved says the day and the shift its daily tools read, not the rail's
+ const daily=(day,...shifts)=>({mode:'offline',trace:shifts.map((n,i)=>({result_id:`d:${i}`,tool:'get_shift_kpis',ok:true,elapsed_ms:1,data:{production_day:day,shift:n,coverage:'complete',rows:[]}}))});
+ const sw={...s1,period:'week'};
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(sw)},answered:answeredScope(${JSON.stringify(sw)},${JSON.stringify(daily('2026-09-11',3,3))})})`,context),'Shift 3 · Fri 11 Sep 2026');   // "third shift yesterday" from shift 1, Week, Mon 14 Sep
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(s2)},answered:answeredScope(${JSON.stringify(s2)},${JSON.stringify(daily('2026-09-14',1))})})`,context),'Shift 1 · Mon 14 Sep 2026');   // "show shift 1" on shift 2
+ assert.deepEqual(JSON.parse(vm.runInContext(`JSON.stringify(answeredScope(${JSON.stringify(s2)},${JSON.stringify(daily('2026-09-14',2))}))`,context)),{who:null,window:null});   // the rail's own day and shift
+ const sd={...s1,scope:'day'};
+ assert.equal(vm.runInContext(`entryLabel({scope:${JSON.stringify(sd)},answered:answeredScope(${JSON.stringify(sd)},${JSON.stringify(daily('2026-09-14',1,2,3))})})`,context),'All shifts · Mon 14 Sep 2026');   // a comparison of all three keeps the rail
 
  // 6. "Clear the thread" empties it.
  elements.reset.events.click();assert.equal(earlier.children.length,0);assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);
@@ -758,6 +766,16 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // the retained priors never exceed the grammar's eight, whatever DEMO_MAX_TURNS says
  vm.runInContext("config.demo_guards.max_turns=50",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),8);
  vm.runInContext("config.demo_guards.max_turns=4",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),3);
+ // issue #105: an answer the question moved to another day ("last week") goes in the address bar, but it is no follow-up of
+ // this conversation, whose views share one day: the next question still carries the conversation's own priors
+ const before=vm.runInContext('JSON.stringify(conversation)',ctx3), viaFetch=ctx3.fetch; history.length=0;
+ assert.notEqual(before,'[]');
+ ctx3.fetch=async(path,init)=>{fetched.push([path]);if(path.startsWith('/q?'))return {ok:true,status:200,json:async()=>answer('/corr/1/week/2026-09-07/shift/1?measure=pareto')};return viaFetch(path,init);};
+ const moved=await vm.runInContext("ask('How much downtime on first shift last week?')",ctx3);
+ assert.equal(moved.url,'/corr/1/week/2026-09-07/shift/1?measure=pareto');assert.deepEqual(history.slice(-1),[['push',moved.url]]);
+ assert.equal(vm.runInContext('JSON.stringify(conversation)',ctx3),before);
+ assert.equal(vm.runInContext("sameDay('/corr/1/day/2026-09-15/shift/1?measure=overview',{day:'2026-09-15'})",ctx3),true);   // a shift move keeps the day: it follows
+ ctx3.fetch=viaFetch;
  // a pasted alias is replaced in the address bar by the canonical url the server returns
  fetched.length=0;history.length=0;
  const alias={pathname:'/corr/1/week/2026-09-14',search:'?measure=downtime'};
@@ -1324,5 +1342,25 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(vm.runInContext("withRates('/corr/1/week/2026-09-14/shift/2?measure=report&corrupt=1&after=/corr/1/week/2026-09-14/shift/2?measure=kpis')",ctx),'/corr/1/week/2026-09-14/shift/2?measure=report&rates=hour:1500&corrupt=1&after=/corr/1/week/2026-09-14/shift/2?measure=kpis');
  assert.equal(vm.runInContext("ratesOk('/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:5.555')",ctx),false);
  els['rates-reset'].events.click();
- console.log('UI issue-31b checks passed: money.js gives the golden client figures with Python rounding, the dollar line under the headline with a chip per bucket, the opportunities bars and table, the arithmetic and its rates, $/shift and $/yr on the loss tiles, priced charts in dollars, one money fetch per scope, a rate edit re-prices every card (prose included) with no request and rides in the address and the next questions, minutes and % relabel, reset, a margin and a trim target, all three shifts with an incomplete one, the levers of a window re-priced and re-ranked in the prose, the analyst priced at the rates of its card and never rewritten, the report address keeping the rates.');
+ // the money request goes out after the first paint: with a frame scheduler, the answer's card is drawn (dollar line
+ // pending) before any money request, which waits for the next two frames
+ {
+  const els2=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+  Object.assign(els2.day,{value:'2026-09-14'});els2.period.value='day';els2.shift.value='2';els2.scope.value='shift';els2.mode.value='offline';els2.corrupt.checked=false;
+  const frames=[], seen=[], loc={pathname:'/corr/1/day/2026-09-14/shift/2',search:''};
+  const doc2={getElementById:id=>{assert.ok(els2[id],`Unknown control ${id}`);return els2[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[],addEventListener(){}};
+  const ctx2={document:doc2,fetch:async(path,init)=>{seen.push(path);return fetch31(path,init);},window:{history:{pushState(){},replaceState(){}},location:loc,addEventListener(){}},location:loc,console,setTimeout,URL,URLSearchParams,Blob,AbortController,
+   requestAnimationFrame:f=>frames.push(f),matchMedia:q=>({matches:q==='(prefers-reduced-motion: reduce)'})};
+  vm.createContext(ctx2);for(const f of ['trail.js','money.js','app.js'])vm.runInContext(fs.readFileSync('src/investigator/web/'+f,'utf8'),ctx2);
+  for(let i=0;i<20&&!seen.includes('/api/config');i++)await tick(); await tick();await tick();
+  const runFrames=async()=>{ for(let n=0;n<4;n++){ const due=frames.splice(0); for(const f of due)f(); await tick(); } };
+  await runFrames();
+  const before=seen.length; await vm.runInContext("ask('Why was this shift slow?',{mode:'offline'})",ctx2); await tick();
+  assert.deepEqual(seen.slice(before),['/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F'],'only the answer before the paint');
+  const pending=els2.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
+  assert.equal(textOf(pending),'Pricing this card at your rates…');
+  await runFrames(); await tick();
+  assert.deepEqual(seen.slice(before),['/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F','/corr/1/day/2026-09-14/shift/2.json?measure=dollars'],'the money answer after the frames');
+ }
+ console.log('UI issue-31b checks passed: money.js gives the golden client figures with Python rounding, the dollar line under the headline with a chip per bucket, the opportunities bars and table, the arithmetic and its rates, $/shift and $/yr on the loss tiles, priced charts in dollars, one money fetch per scope, a rate edit re-prices every card (prose included) with no request and rides in the address and the next questions, minutes and % relabel, reset, a margin and a trim target, all three shifts with an incomplete one, the levers of a window re-priced and re-ranked in the prose, the analyst priced at the rates of its card and never rewritten, the report address keeping the rates, the money request only after the first paint.');
 })().catch(error=>{console.error(error);process.exit(1);});

@@ -149,7 +149,8 @@ client's figures (`evals/client_money.json`, written by `evals/make_client_money
 never reaches a model (the narrative packet and the OpenAI compaction drop it). A card's money is its
 own `get_shift_dollars` / `get_opportunities` when it asked one, else the money answer of the window its
 answer ran over (a question can name its own: "How did September go versus August?" under Day is priced
-over September), one GET per scope shared by its cards (`measure=dollars` on the Day grain, `measure=money`
-on a window) and counted as a round by the server; a reload replays the thread within its share of the rate
+over September, and a day the question named is that day's), one GET per scope shared by its cards
+(`measure=dollars` on the Day grain, `measure=money` on a window), sent after the card's first paint so it
+never slows the offline answer, and counted as a round by the server; a reload replays the thread within its share of the rate
 limit counting those GETs too. `/api/config` carries the rates, their sources and the constants
 (`cost_model.client_config`).

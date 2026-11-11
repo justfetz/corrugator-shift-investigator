@@ -28,6 +28,39 @@ The path is exactly the controls, so a URL reproduces the page a visitor saw, in
 control they had set. A question's *own* window, when it names one ("this week" under Day, "August"),
 goes in the query as `window=`.
 
+### The question's own scope (issue #105)
+
+A typed question that names a scope the controls do not set is answered in the scope it names, never refused
+for disagreeing with them, and its address names that scope. `agent.question_scope` reads it before the router
+parses the question (`agent.route`), on `/q`, on `POST /api/ask` and for the analyst alike:
+
+- **One named shift** under Selected shift only ("first shift", "1st shift", "shift 1") becomes the selected
+  shift: "Show shift 1" with shift 2 selected is `/corr/1/day/2026-09-14/shift/1?measure=overview`. A
+  comparison (any of compare, versus, compared, against, than, relative to: "how did we do compared with first
+  shift", "compare shift 1 with shift 3") or several named shifts keep the refusal that asks for the
+  production-day scope. Under all shifts a named shift narrows with `shifts=` as before.
+- **A relative window** moves the path to it: `yesterday` is the production day before the selected one (Friday
+  from a Monday), `last week`, `last month` and `last period` (also `previous`, `prior`) the week, calendar month
+  and 4-4-5 period before the selected day's. The path takes that window's grain and its first production day,
+  since the selected day is not in it: "How much donwtime on 1st shift last week?" with shift 2 and Day on Mon 14
+  Sep is `/corr/1/week/2026-09-07/shift/1?measure=pareto`. A window that contains the selected day keeps the
+  `window=` form above.
+- A relative window that is the **base of a comparison** ("our speed vs last week", "compared with last week",
+  "over / since / from last week", "compare with yesterday") is not the window asked about: the KPI tiles or the
+  speed variance carry the previous window, or the router's refusal stands. Neither is one in a question that
+  names another window too ("this week", a month, a date), nor "the last week", the trailing week. A relative
+  window with no production day in the records is refused with the calendar reason.
+- Follow-ups share the production day (`after=`, below): on `/q`, a prior view of another day than the
+  question's is left off the chain, as a changed control starts a new conversation. The browser keeps its
+  conversation when an answer lands on another day, and the session of `POST /api/ask` stays on the controls: a
+  same-day move is a follow-up, another day's answer is not one.
+
+Measure words are read through small typos: a word one edit from exactly one measure word (insert, delete,
+substitute, or swap two neighbours; same first letter) reads as it, so "donwtime", "dowtime", "wast" and "spead"
+route. Everyday English one edit from a measure ("throughout", "qualify", "steps", "spend") is left alone
+(`real_words.py`, generated from word frequencies by `evals/make_real_words.py`), and so are words near no
+measure: a nonsense measure is still refused.
+
 ## The question
 
 `measure=` names the plan the offline router would run. The day-shaped measures run the nine daily
@@ -125,6 +158,8 @@ shows the refusal of its `.json`.
 | "Which equipment caused the most downtime?" | `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=place` |
 | "Which downtime reason cost the most minutes this week?" — Day | `/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week` |
 | the same question — Week | `/corr/1/week/2026-09-14/shift/2?measure=pareto` |
+| "How much donwtime on 1st shift last week?" — Day, shift 2 (the question's own shift and window, issue #105) | `/corr/1/week/2026-09-07/shift/1?measure=pareto` |
+| "How much downtime did third shift have yesterday?" — Week, shift 1 | `/corr/1/day/2026-09-11/shift/3?measure=downtime` |
 | "How did September go versus August?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=kpis&window=2026-09&compare=2026-08` |
 | "fpm by grade" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade` |
 | "Average speed this week" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week` |
