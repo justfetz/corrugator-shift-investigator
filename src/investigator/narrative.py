@@ -23,7 +23,7 @@ NARRATIVE_SCHEMA = {'type':'object','properties':{'paragraphs':{'type':'array','
     'required':['paragraphs'],'additionalProperties':False}
 
 
-PACKET_DROP=frozenset({'source_ids','usd_basis','msf','machine_minutes','msf_not_made','contribution_usd_per_year'})
+PACKET_DROP=frozenset({'source_ids','usd_basis','msf','machine_minutes','msf_not_made','contribution_usd_per_year','price_terms'})
 
 
 def evidence_packet(evidence):

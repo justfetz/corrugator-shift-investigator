@@ -109,8 +109,8 @@ assert.equal(chipList().filter(b=>b.disabled).length,0);
 assert.equal(elements.report.hidden,false);
 elements['period-seg'].children.find(b=>b.dataset.value==='accounting').events.click();assert.ok(chipList().some(b=>b.dataset.question==='Stops per day this period'));
 elements['period-seg'].children.find(b=>b.dataset.value==='day').events.click();assert.equal(elements.period.value,'day');assert.equal(chipList().filter(b=>b.hidden).length,0);assert.ok(chipList().some(b=>b.textContent==='Costliest reason this week'));
-assert.deepEqual(elements.examples.children.map(b=>b.textContent),['Why was this shift slow?','Speed to target','Dry-end waste','Bond or warp?','Costliest reason this week','This week vs last','Summary + charts']);   // the short list; the other nine sit under "More questions"
-assert.equal(elements['examples-more'].children.length,9);
+assert.deepEqual(elements.examples.children.map(b=>b.textContent),['Why was this shift slow?','Where is the money?','Speed to target','Dry-end waste','Costliest reason this week','This week vs last','Summary + charts']);   // the short list (#31b: the money question second, "Bond or warp?" into the fold so the rail still fits 1280x720); the other ten sit under "More questions"
+assert.equal(elements['examples-more'].children.length,10);
 const chips=chipList();
 for(const q of ['How did September go versus August?','Which downtime reason cost the most minutes this week?','Is it bond or warp?','Stops per day this week','Trend of trim over eight weeks','Compare all shifts','Show orders and quantities'])assert.ok(chips.some(b=>b.dataset.question===q),q);
 assert.equal(chips.find(b=>b.dataset.question==='Compare all shifts').dataset.scope,'day');
@@ -443,12 +443,12 @@ const analystChecks=(async()=>{
  assert.equal(analystNotes.length,1);assert.equal(analystNotes[0].textContent,'The analyst proposed 12 queries; the limit is 9, so none ran.');
  assert.ok(!/warning-note/.test(analystNotes[0].className));assert.ok(!/Investigation stopped/.test(flat(elements.messages)));
  assert.match(flat(elements.messages),/analyst · plan rejected · 1 model call/);
- assert.deepEqual(Object.entries(elements).filter(([id,e])=>e.disabled&&!['rates-change','mode','day-prev','day-next'].includes(id)).map(([id])=>id),[]);
+ assert.deepEqual(Object.entries(elements).filter(([id,e])=>e.disabled&&!['mode','day-prev','day-next'].includes(id)).map(([id])=>id),[]);
  // a mid-stream error from the ask bar's analyst: the card fails, says nothing was fabricated, and no control is left disabled
  events=[ev({type:'start',mode:'anthropic',session_id:'s3'}),ev({type:'plan',steps:[{tool:'get_shift_notes',arguments:{shift:2}},{tool:'get_shift_kpis',arguments:{shift:2}}]}),ev({type:'error',error:'Investigation failed; no answer was fabricated'})];
  await assert.rejects(vm.runInContext("ask('Why slow, really?',{mode:'anthropic'})",context),/no answer was fabricated/);
  assert.equal(elements.card.className,'card answer failed');assert.match(flat(elements.messages),/no answer was fabricated.*offline answer stands/);
- assert.deepEqual(Object.entries(elements).filter(([id,e])=>e.disabled&&!['rates-change','mode','day-prev','day-next'].includes(id)).map(([id])=>id),[]);
+ assert.deepEqual(Object.entries(elements).filter(([id,e])=>e.disabled&&!['mode','day-prev','day-next'].includes(id)).map(([id])=>id),[]);
  // loopback: the provider beside the key field is the analyst, and the key travels with that one request only
  vm.runInContext("config={days:['2026-09-01','2026-09-30'],token:'test'}",context);
  elements.mode.value='offline';assert.equal(vm.runInContext('analystMode()',context),null);
@@ -498,8 +498,8 @@ const issue63=issue17.then(async()=>{
  const order=['rail','day','shift-seg','period-seg','examples','rates-change','advanced','mode','reset','ask','question','submit','analyst','card','card-title','card-meta','messages','charts','look','queries','kpis','metrics','card-foot','earlier'];
  assert.deepEqual([...order].sort((a,b)=>at(a)-at(b)),order,'rail, then the ask bar, then the card (title line, the answer, charts, where to look, the one-line query box, tiles, footer), then the earlier answers');
  assert.ok(order.every(id=>at(id)>0));
- for(const phrase of ['Looking at','Ask in one click','Every canned question is a fixed query. No model, no wait.','Your rates','$55 / MSF','$1,200 / hr','not set'])assert.ok(html.includes(phrase),phrase);
- assert.match(html,/<button id="rates-change"[^>]*disabled[^>]*>Change rates<\/button>/);          // the rates panel is a placeholder until #31
+ for(const phrase of ['Looking at','Ask in one click','Every canned question is a fixed query. No model, no wait.','Your rates','$55/MSF','$1,200/hr','not set','Show as'])assert.ok(html.includes(phrase),phrase);
+ assert.match(html,/<button id="rates-change"[^>]*>Change rates<\/button>/);assert.doesNotMatch(html,/<button id="rates-change"[^>]*disabled/);          // #31b: the rates panel is live, no longer a placeholder
  assert.ok(html.indexOf('</details>',at('advanced'))>at('reset'),'agent choice and Advanced sit inside the disclosure');
  assert.match(html,/<select id="mode"><option value="offline">/);                                 // offline is the first option, so the default
  assert.ok(!/id="(examples-fold|scope-bar)"|class="grid"/.test(html),'the old form / help / examples block is gone');
@@ -528,7 +528,7 @@ const issue63=issue17.then(async()=>{
  vm.runInContext(`config={days:${JSON.stringify(storeDays)},first_day:'2026-09-11',token:'t',live_modes:[],demo_guards:{rate_limit_per_min:30}};acceptedDay='2026-09-14'`,context);   // a rate limit: no priming call
  elements.day.value='2026-09-14';elements.period.value='day';elements.scope.value='shift';elements.shift.value='2';elements.mode.value='offline';elements.corrupt.checked=false;
  vm.runInContext('renderQuestionChips();reset()',context);
- const card=elements.card, earlier=elements.earlier, canned=elements.examples.children;
+ const card=elements.card, earlier=elements.earlier, canned=elements.examples.children.filter(b=>b.textContent!=='Where is the money?');   // the thread's own sequence: #31b's money question sits second in the list
  assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);assert.equal(earlier.children.length,0);
  assert.equal(elements.analyst.hidden,true);                                   // no server key: Ask the analyst is not offered
  const disabled=()=>[...Object.entries(elements).filter(([,e])=>e.disabled).map(([id])=>id),...canned.filter(b=>b.disabled).map(text)];
@@ -1021,7 +1021,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // 1. The first question: its skeleton is followed into view on the next frame, then the tall answer keeps its title line at the top.
  const t=await setup({store:{}}), {els}=t, target=()=>els.transcript.scrollTop;
  const ask=q=>{ els.question.value=q; els.ask.events.submit({preventDefault(){}}); };
- const disabled=()=>Object.entries(els).filter(([,e])=>e.disabled).map(([id])=>id).filter(id=>id!=='rates-change');
+ const disabled=()=>Object.entries(els).filter(([,e])=>e.disabled).map(([id])=>id);
  t.hold(true);
  ask('Why was this shift slow?');assert.equal(els.card.className,'card answer skeleton');
  t.layout(0,220);await t.frame(10);assert.equal(target(),0);assert.equal(els['new-pill'].hidden,true);
@@ -1129,4 +1129,130 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(lim.requests.filter(q=>q[1]!=='/api/config').length,4);assert.ok(lim.requests.every(q=>q[1]!=='/api/ask'));
  assert.equal(JSON.parse(lim.store['csi-thread']).length,6,'the cards not reloaded are still kept');
  console.log('UI issue-86 checks passed: no page scroll, follow while filling (bottom, then title line), stop on scroll-up with the ↓ new pill, resume on click or scroll-down, never up on its own, asking always shows the new card, earlier cards whole with their own ids, Enter / Shift+Enter / slash, nothing disabled, no new fetch on the hot path, small trackpad steps up never pulled back, reload replays the thread by GET without /api/ask within a share of the rate limit.');
+})().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #31b: the money on the card. The why-slow answer (tests/ui_fixtures/why_slow.json) lands with the cost
+// model in /api/config; its money is its scope's money answer, fetched once (evals/client_money.json's get_shift_dollars,
+// the shift's own losses at the post's rates). The card shows a dollar line under the headline, the opportunities panel,
+// the arithmetic, dollars on the tiles and the priced chart; a rate edit re-prices all of it with no request and rides in
+// the address; the units toggle relabels; money.js gives the stored client figures of the golden case.
+(async()=>{
+ const whySlow=JSON.parse(fs.readFileSync('tests/ui_fixtures/why_slow.json','utf8')), golden=JSON.parse(fs.readFileSync('evals/client_money.json','utf8'));
+ const cfg=golden.cfg, Money=require('../src/investigator/web/money.js');
+ // the client formula, from the stored quantities, gives the stored figures (evals/make_client_money.py wrote both)
+ const again=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,Money.parse(golden.rates,cfg)),cfg);
+ assert.deepEqual(again.rows.map(r=>Object.fromEntries(Object.keys(golden.output.rows[0]).map(k=>[k,r[k]]))),golden.output.rows,'money.js drifted from evals/client_money.json: rerun evals/make_client_money.py');
+ for(const k of Object.keys(golden.output).filter(k=>k!=='rows'))assert.deepEqual(again[k],golden.output[k],k);
+ // Python's rounding: a tie goes to the even digit, never upward as toFixed would
+ assert.deepEqual([Money.fixed(4382.5,0),Money.fixed(4383.5,0),Money.fixed(0.125,2),Money.fixed(2.25,1),Money.fixed(1234567.891,2),Money.money(4382.5)],['4382','4384','0.12','2.2','1234567.89','$4,382']);
+ assert.deepEqual([Money.short(5717620),Money.short(98229),Money.short(56407),Money.short(33)],['$5.72M','$98.2k','$56.4k','$33.00']);
+ assert.throws(()=>Money.parse('paper:5.555',cfg),/two decimals/);assert.throws(()=>Money.parse('wage:3',cfg),/rates takes/);assert.throws(()=>Money.parse('trim:101',cfg),/at most 100/);
+ assert.equal(Money.format({margin_usd_msf:40,paper_usd_msf:60},cfg),'paper:60,margin:40');   // the canonical order, as cost_model.format_rates
+ // the analyst's narrative: a cited dollar field (substituted as f'{value:,.2f}', narrative.py) becomes the same field re-priced
+ const step={before:golden.input,after:again}, cited=golden.input.rows[0], now0=again.byIndex[0];
+ const told=Money.repriceNarrative([{kind:'finding',text:'Side trim cost $'+Money.fmt(cited.usd,2)+' this shift, $'+Money.fmt(cited.usd_per_year,2)+' a year; 79,686.40 sq ft.',citations:['Shift 2, usd, m:1, row 0','Shift 2, usd_per_year, m:1, row 0','Shift 2, quantity, m:1, row 0']}],{'m:1':step});
+ assert.equal(told[0].text,'Side trim cost $'+Money.fmt(now0.usd,2)+' this shift, $'+Money.fmt(now0.usd_per_year,2)+' a year; 79,686.40 sq ft.');
+
+ const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+ Object.assign(els.day,{value:'2026-09-14'});els.period.value='day';els.shift.value='2';els.scope.value='shift';els.mode.value='offline';els.corrupt.checked=false;
+ const history=[], fetched=[], location={pathname:'/corr/1/day/2026-09-14/shift/2',search:''};
+ const win={history:{pushState(s,_,url){history.push(['push',url]);const [p,q='']=url.split('?');location.pathname=p;location.search=q?'?'+q:'';},replaceState(s,_,url){history.push(['replace',url]);const [p,q='']=url.split('?');location.pathname=p;location.search=q?'?'+q:'';}},location,addEventListener(){}};
+ const money={run_id:'m',mode:'offline',status:'complete',production_day:'2026-09-14',selected_shifts:[2],url:'/corr/1/day/2026-09-14/shift/2?measure=dollars',sections:[],charts:[],tables:[],usage:{tool_calls:1,model_calls:0},context:{},
+  trace:[{tool:'get_shift_dollars',ok:true,result_id:'m:1',arguments:{shift:2},elapsed_ms:9,data:golden.input}]};
+ const fetch31=async(path,init)=>{ fetched.push(path);
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-11','2026-09-14'],first_day:'2026-08-03',last_day:'2026-09-30',live_modes:[],demo_guards:{max_turns:4,rate_limit_per_min:30},cost_model:cfg})};
+  if(path.includes('measure=dollars'))return {ok:true,status:200,json:async()=>JSON.parse(JSON.stringify(money))};
+  if(path.startsWith('/q?')){ const q=new URLSearchParams(path.slice(3)); const url='/corr/1/day/2026-09-14/shift/2?measure=overview'+(q.get('rates')?'&rates='+q.get('rates'):''); return {ok:true,status:200,json:async()=>({...JSON.parse(JSON.stringify(whySlow)),url})}; }
+  return {ok:false,status:404,json:async()=>({error:'no'})};
+ };
+ const doc={getElementById:id=>{assert.ok(els[id],`Unknown control ${id}`);return els[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[],addEventListener(){}};
+ const ctx={document:doc,fetch:fetch31,window:win,location,console,setTimeout,URL,URLSearchParams,Blob,AbortController,sessionStorage:{store:{},getItem(k){return this.store[k]??null;},setItem(k,v){this.store[k]=String(v);},removeItem(k){delete this.store[k];}}};
+ vm.createContext(ctx);for(const f of ['trail.js','money.js','app.js'])vm.runInContext(fs.readFileSync('src/investigator/web/'+f,'utf8'),ctx);   // as index.html loads them
+ const tick=()=>new Promise(r=>setTimeout(r,0));
+ await tick();await tick();
+ const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
+ const walk=(el,out=[])=>{for(const c of el.children||[]){out.push(c);walk(c,out);}return out;};
+ const all=el=>walk(el).map(textOf).join('\n');
+ // the rail: Show as minutes · % · $ ($ by default), each rate with its source, Change rates live
+ assert.deepEqual(els['units-seg'].children.map(b=>[b.textContent,b['aria-pressed']]),[['minutes','false'],['%','false'],['$','true']]);
+ assert.deepEqual(els['rates-list'].children.map(textOf),['Paper','$55/MSFpost','Machine','$1,200/hrpost','Margin','not setowner to set','Trim','3.25%process rule']);
+ assert.equal(els['rates-change'].disabled,false);assert.equal(els['rates-panel'].hidden,false);
+
+ const t0=fetched.length;
+ await vm.runInContext("ask('Why was this shift slow?',{mode:'offline',title:'Why was this shift slow?'})",ctx);await tick();await tick();
+ const after=fetched.slice(t0);
+ assert.deepEqual(after,['/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why+was+this+shift+slow%3F','/corr/1/day/2026-09-14/shift/2.json?measure=dollars'],'the answer, then its scope\'s money answer once');
+ const msgs=els.messages.children.find(e=>/^message\b/.test(e.className)), line=msgs.children.find(e=>e.className==='dollar-line');
+ assert.ok(line&&msgs.children.indexOf(line)===msgs.children.findIndex(e=>/\bheadline\b/.test(e.className))+1,'the dollar line sits right under the headline');
+ const total=golden.input.total_usd, year=golden.input.total_usd_per_year;
+ assert.equal(textOf(line.children[0]),`≈ ${Money.money(total)} recorded losses this shift · ${Money.short(year)}/yr at this rate`);
+ assert.equal(textOf(line.children[0]),'≈ $7,587 recorded losses this shift · $5.72M/yr at this rate');
+ assert.deepEqual(line.children[1].children.map(textOf),['Trim $4,383','Dry-end $1,616','Shear $752','Speed $538','Stops $172','Setups $127']);   // a chip per bucket, largest first
+ // the opportunities panel: bars of $/yr by gap, ranked, the formula on hover, a table flip
+ const panel=els.money.children[0]; assert.match(panel.className,/money-panel/);
+ const svg=walk(panel).find(e=>e.tag==='svg'), vals=walk(svg).filter(e=>/\bval\b/.test(e.class||''));
+ assert.equal(vals.length,8);assert.equal(vals[0].textContent,'$3.29M/yr');assert.match(vals[0]['aria-label'],/^Side trim: \$4,383 · \$3,293,263\/yr at this rate\. 79,686\.4 sq ft = 79\.686 MSF x \$55\/MSF paper/);
+ const flip=walk(panel).find(e=>e.tag==='button'&&e.textContent==='Table'); flip.events.click();
+ const table=walk(panel).find(e=>e.tag==='table'); assert.equal(walk(table).filter(e=>e.tag==='tr').length,12);   // the same eleven rows, and the header
+ walk(panel).find(e=>e.tag==='button'&&e.textContent==='Bars').events.click();
+ // the arithmetic: four short lines with this card's numbers, then the rates and their sources
+ const ledger=all(els.ledger);
+ assert.match(ledger,/Paper 120,016 sq ft of trim, shear and rejects = 120\.0 MSF × \$55\/MSF = \$6,601/);
+ assert.match(ledger,/Machine time 49\.3 min \(stops 14\.9 · speed gap 26\.9 · waste run time 7\.5\) = 266\.2 MSF not made at 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$986/);
+ assert.match(ledger,/Side trim 3\.33% of gross − 3\.25% target = 0\.08 points over → \$75,763\/yr/);
+ assert.match(ledger,/Total = \$7,587 this shift · \$5,717,620\/yr at this rate · contribution: margin not set/);
+ assert.match(ledger,/Rates: paper \$55\/MSF \(post\), machine time \$1,200\/hr \(post\), contribution margin not set \(assumption: owner to set\)/);
+ assert.match(ledger,/they are not a real plant's figures/);
+ // tiles: every tile that measures a loss shows $/shift and $/yr; in dollars its value is the dollars
+ const tiles=els.metrics.children.map(t=>[t.children[0].textContent,textOf(t.children[1]),t.children[3]?t.children[3].textContent:null]);
+ assert.deepEqual(tiles.map(t=>t[0]),['Speed','Maintenance','Operator','Dry-end waste','Trim','Setups','Throughput']);
+ assert.deepEqual(tiles.slice(0,5).map(t=>t[1]),['$538','$93','$206','$1,616','$4,383']);   // the trim tile is get_shift_dollars's Side trim to the cent, the speed tile its speed gap
+ assert.match(tiles[4][2],/^\$3\.29M\/yr · 3\.33 %$/);assert.equal(tiles[5][2],null);assert.equal(tiles[6][2],null);   // a count and a width are not losses
+ // the priced chart is drawn in dollars, ranked by dollars; the speed chart has no dollar form and stays in ft/min
+ const charts=els.charts.children; const down=charts.find(c=>/Recorded downtime/.test(textOf(c.children[0])));
+ assert.match(all(down),/Dollars at your rates, ranked by dollars/);assert.equal(walk(down).find(e=>/\bval\b/.test(e.class||'')).textContent,'$127 · $98.2k/yr');
+ assert.ok(charts.some(c=>/Wet-end speed/.test(textOf(c.children[0]))&&/ft\/min/.test(all(c))));
+ // a second card of the same scope shares the money answer: no second fetch
+ const t1=fetched.length; await vm.runInContext("ask('Show speed to target',{mode:'offline'})",ctx);await tick();
+ assert.deepEqual(fetched.slice(t1).filter(p=>p.includes('measure=dollars')),[]);
+
+ // a rate edit: applied as it is typed, every dependent dollar re-priced in this browser, no request, the address carries it
+ els['rates-change'].events.click(); assert.equal(els['rates-form'].hidden,false);
+ const inputs=els['rates-fields'].children.map(f=>f.children[1]); assert.deepEqual(inputs.map(i=>i.dataset.rate),['paper_usd_msf','machine_usd_hour','margin_usd_msf','trim_target_pct']);
+ inputs[0].value='abc'; inputs[0].events.input(); assert.match(els['rates-fields'].children[0].children[2].textContent,/at most two decimals/); assert.equal(location.search,'?measure=overview');   // refused: nothing changes
+ const t2=fetched.length, history2=history.length;
+ inputs[1].value='1500'; inputs[1].events.input();
+ assert.equal(fetched.length,t2,'a rate edit makes no request');
+ assert.equal(location.search,'?measure=overview&rates=hour:1500');assert.equal(history.slice(history2).every(h=>h[0]==='replace'),true);
+ const rates=Money.effective(cfg,{machine_usd_hour:1500}), moneyNow=Money.reprice('get_shift_dollars',golden.input,rates,cfg);
+ const open=els.messages.children.find(e=>/^message\b/.test(e.className)), line2=open.children.find(e=>e.className==='dollar-line');
+ assert.equal(textOf(line2.children[0]),`≈ ${Money.money(moneyNow.total_usd)} recorded losses this shift · ${Money.short(moneyNow.total_usd_per_year)}/yr at this rate`);
+ assert.ok(all(els.ledger).includes('× $1,500/hr = '+Money.money(moneyNow.total_machine_time_usd)));
+ assert.match(all(els.ledger),/= \$6,601$/m,'the paper dollars do not use the machine rate: unchanged');
+ assert.match(all(els.ledger),/machine time \$1,500\/hr \(yours\)/);
+ assert.deepEqual(els['rates-list'].children.map(textOf).slice(2,4),['Machine','$1,500/hryours']);
+ // the open card is the speed answer; its earlier card (why slow) re-priced too, prose included: the Order change bullet
+ const earlierText=all(els.earlier);
+ const downtimeRow=whySlow.trace[1].data.rows[0], again2=Money.price('downtime',downtimeRow.price_terms.quantity,rates,downtimeRow.price_terms.gross_sqft,downtimeRow.price_terms.minutes,cfg);
+ assert.ok(earlierText.includes(`of recorded downtime, the largest of 4 reasons · ${Money.money(again2.usd)} (${Money.money(again2.usd_per_year)}/yr)`),'the prose figure is the row re-priced');
+ assert.ok(!earlierText.includes('$127 ($98,229/yr)'));
+ // what a new question asks: the rates ride in its address, and in the canned questions' links
+ assert.match(els.examples.children[0].href,/&rates=hour%3A1500&/);
+ const t3=fetched.length; await vm.runInContext("ask('Why was this shift slow?',{mode:'offline',title:'again'})",ctx);await tick();
+ assert.match(fetched[t3],/^\/q\?.*&rates=hour%3A1500&q=/);
+ // the units: minutes and % relabel every priced tile and bar; nothing is fetched
+ const t4=fetched.length;
+ els['units-seg'].children[0].events.click(); assert.equal(els['units-seg'].children[0]['aria-pressed'],'true');
+ assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['26.9min','4.7min','10.3min','5.1min','0.0min']);   // the speed gap, the stops, the run time the dry-end rejects took; side trim takes none
+ assert.match(all(els.money),/Ranked by machine minutes/);
+ els['units-seg'].children[1].events.click();
+ const valsOf=el=>walk(el).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);   // an svg value's own text, not its hover title
+ assert.deepEqual(valsOf(els.money).slice(0,2),['5.60% of time','3.33% of gross']);   // the speed gap's share of the shift's minutes, side trim's of its gross
+ assert.equal(fetched.length,t4,'the units toggle makes no request');
+ assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['616.2ft/min','0.97%','2.15%','1.15%','3.33%']);   // in % the tiles read as the tools report them
+ // reset: the post's rates, and the address without rates=
+ els['units-seg'].children[2].events.click(); els['rates-reset'].events.click();
+ assert.equal(location.search.includes('rates='),false);assert.match(all(els.ledger),/× \$1,200\/hr = \$986/);
+ els['rates-form'].events.submit({preventDefault(){}}); assert.equal(els['rates-form'].hidden,true);assert.equal(els['rates-change'].hidden,false);
+ console.log('UI issue-31b checks passed: money.js gives the golden client figures with Python rounding, the dollar line under the headline with a chip per bucket, the opportunities bars and table, the arithmetic and its rates, $/shift and $/yr on the loss tiles, priced charts in dollars, one money fetch per scope, a rate edit re-prices every card (prose included) with no request and rides in the address and the next questions, minutes and % relabel, reset.');
 })().catch(error=>{console.error(error);process.exit(1);});

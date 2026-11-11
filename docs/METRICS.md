@@ -192,11 +192,57 @@ is offered the two money tools yet. The OpenAI planner loop also sees no dollar 
 stay byte for byte main's (its 24,000-byte cap is tight: since #74 main's own request after one waste
 breakdown is 24,040 bytes). The Anthropic tool loop and the analyst's plan catalog leave the two tools
 out because their prompts still say costs are unavailable; the analyst still sees the dollars on the
-priced rows of the tools it plans. #23 / #31b retune the prompts and offer them. Money questions are
-answered offline: every one goes to the offline planner first.
+priced rows of the tools it plans. Offering the two money tools to the live planners is a prompt change
+for the live analyst (#23), not part of the card (#31b). Money questions are answered offline: every one
+goes to the offline planner first.
 
-Not yet on the card: the dollar line, dollars on tiles and bars, the units toggle and the editable rates
-panel are #31b (`web/`). The tools here give that card the same numbers the goldens check.
+### On the card (issue #31b)
+
+Every answer card carries the money of its scope, priced in the browser at the rates in force:
+
+- **The dollar line** under the headline: `≈ $7,587 recorded losses this shift · $5.72M/yr at this rate`
+  (a window: `≈ $13,047 in levers this week · $1.95M/yr at this rate`), then one chip per bucket (trim,
+  dry-end, shear, speed, stops, setups), largest first.
+- **The opportunities panel** under the charts: horizontal bars of the levers (or a shift's gaps) ranked
+  by $/yr at this rate, each bar's dollars, minutes, formula (`usd_basis`) and records on hover, the top
+  eight with the rest behind "All", and a Table flip with the same rows.
+- **The arithmetic** at the bottom, four lines with the card's own numbers: waste sq ft → MSF → paper $ at
+  the paper rate; machine minutes (stops, the speed gap, the run time shear and rejects took) → MSF not
+  made at 675 ft/min → $ at the machine rate; side-trim points over the target → $/yr at the post's volume
+  (points / 100 × 1.8M MSF × paper); the total, $ and $/yr, and the contribution (or "margin not set").
+  Then the rates line with each rate's source and the note that these are synthetic records at assumed
+  rates, not a plant's figures.
+- **Tiles**: every KPI tile that measures a loss shows its dollars and dollars a year (speed: the gap to
+  675 ft/min over running time, as `get_shift_dollars` prices it; maintenance, operator and all stops:
+  their minutes; dry-end, shear, the four reject reasons: area plus run time; trim: area; bale and the
+  unexplained remainder: paper). A count, a volume or a width (setups, MSF, throughput) has no dollars.
+- **Show as minutes · % · $** in the rail ($ by default): priced tiles and bars in machine minutes, in
+  percent of the window (an area of the gross, a time of the scheduled minutes), or in dollars. A priced
+  chart in another unit than its own is drawn as ranked bars of that unit; the speed, KPI, trend and
+  other unpriced charts keep their units.
+- **Your rates** in the rail: paper $/MSF, machine $/hr, board margin, trim target, each with its source
+  (post, this server, owner to set, process rule, yours). "Change rates" opens the editor: a rate the
+  server would refuse (`parse_rates`' rule) says why and changes nothing; an accepted one re-prices every
+  card on the page at once, with no request and no model, writes `rates=` into the address (replaced, not
+  pushed) and rides in every question asked after it. Back and forward keep the page's rates; a pasted
+  link brings its own.
+
+How the card prices: every priced row carries `price_terms`, the pricing call itself, rate-free and
+unrounded (`kind`, `quantity`, the window's `gross_sqft` and scheduled `minutes`; the trim lever also
+`trim_pct`, since its quantity, the points over the target, is itself a rate). `web/money.js` makes the
+same call with the same products, the same rounding (Python's round half to even) and the same text, then
+ranks the money tools' rows and redoes their totals, and rewrites the answer's prose from the re-priced
+rows: each dollar figure becomes the same field re-priced, the rates, formula and contribution lines are
+written again, a ranked money list is put in its new order, and an all-shifts money answer is written
+about the shift that lost the most at the new rates. So the page after an edit and the permalink it
+writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twelve answers at
+six sets of rates (`tests/money_cli.cjs parity`), and the value case
+`value-dollars-shift-0914-shift-2-client` holds the server's `get_shift_dollars` at other rates to the
+client's figures (`evals/client_money.json`, written by `evals/make_client_money.py`). `price_terms`
+never reaches a model (the narrative packet and the OpenAI compaction drop it). A card's money is its
+own `get_shift_dollars` / `get_opportunities` when it asked one, else its scope's money answer, one GET
+per scope shared by its cards (`measure=dollars` on the Day grain, `measure=money` on a window), and
+`/api/config` carries the rates, their sources and the constants (`cost_model.client_config`).
 
 ## Configured targets
 

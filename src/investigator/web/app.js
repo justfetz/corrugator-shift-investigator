@@ -185,7 +185,8 @@ function scopeUrl(s=controls()){ return `/corr/${machine()}/${GRAIN[s.period]||'
 function afterParams(p,priors=conversation){ for(const a of priors)p.append('after',a); }
 function questionUrl(question,s=controls(),priors=conversation){
  const p=new URLSearchParams([['day',s.day],['shift',String(s.shift)],['scope',s.scope],['period',s.period]]);
- if(s.corrupt)p.append('corrupt','1'); p.append('q',question); afterParams(p,priors); return '/q?'+p.toString();
+ if(s.corrupt)p.append('corrupt','1'); const rates=ratesKey(); if(rates)p.append('rates',rates);   // the visitor's rates price the answer (#31b)
+ p.append('q',question); afterParams(p,priors); return '/q?'+p.toString();
 }
 function reportUrl(s=controls(),priors=conversation){ const p=new URLSearchParams([['measure','report']]); if(s.corrupt)p.append('corrupt','1'); afterParams(p,priors); return scopeUrl(s)+'?'+p.toString(); }
 function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
@@ -193,7 +194,18 @@ function withQuery(url,extra){ return url+(url.includes('?')?'&':'?')+extra; }
 // (…?measure=fpm&after=/corr/1/day/2026-09-14/shift/2?measure=overview), so splitting on every '?' loses the priors.
 function pathOf(url){ const i=url.indexOf('?'); return i<0?url:url.slice(0,i); }
 function queryOf(url){ const i=url.indexOf('?'); return new URLSearchParams(i<0?'':url.slice(i+1)); }
-function bareUrl(url){ const path=pathOf(url), p=queryOf(url); p.delete('after'); const q=p.toString(); return path+(q?'?'+q:''); }
+function bareUrl(url){ const path=pathOf(url), p=queryOf(url); p.delete('after'); p.delete('rates'); const q=p.toString(); return path+(q?'?'+q:''); }   // a prior view is a question, not its prices
+// One parameter of an address put in its canonical place, or removed (docs/URLS.md: rates= after the plan's own
+// parameters, before corrupt=, after= and format=). The query is split on its raw '&' only, so an after= value keeps
+// its own '?' and its %26 as the server wrote them.
+function setParam(url,key,value){
+ const i=url.indexOf('?'), path=i<0?url:url.slice(0,i), parts=i<0?[]:url.slice(i+1).split('&').filter(x=>x&&!x.startsWith(key+'='));
+ if(value){ const at=parts.findIndex(x=>/^(corrupt|after|format)=/.test(x)); parts.splice(at<0?parts.length:at,0,`${key}=${value}`); }
+ return path+(parts.length?'?'+parts.join('&'):'');
+}
+function paramOf(url,key){ const i=url.indexOf('?'); if(i<0)return null; const hit=url.slice(i+1).split('&').find(x=>x.startsWith(key+'=')); return hit?decodeURIComponent(hit.slice(key.length+1)):null; }
+function withRates(url){ return setParam(url,'rates',ratesKey()); }   // the address carries the rates in force, so the link reproduces the page's figures
+function sameView(a,b){ return typeof a==='string'&&typeof b==='string'&&setParam(a,'rates','')===setParam(b,'rates',''); }
 function priorsOf(url){ return queryOf(url).getAll('after'); }
 const MAX_AFTER=8;   // the grammar carries at most eight prior views (urls.MAX_AFTER); the agent keeps its own max_turns
 function maxPriors(){ const turns=config&&config.demo_guards&&config.demo_guards.max_turns; return Math.min(MAX_AFTER,Math.max(0,(turns||4)-1)); }
@@ -207,7 +219,7 @@ function applyUrl(url){
  $('corrupt').checked=query.get('corrupt')==='1';
  return true;
 }
-function pushAddress(url,replace=false){ if(!nav||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
+function pushAddress(url,replace=false){ url=withRates(url); if(!nav||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
 function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?[bareUrl(url)]:[])].slice(-maxPriors()); }   // follow=false: the period report is a view, not a question in the conversation
 // Back, forward or a pasted address: the controls follow the URL, and the view becomes the open card of the
 // thread. A view this page has shown opens its card again without a request; any other is fetched as JSON from
@@ -215,8 +227,10 @@ function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?
 // is the stored card for this address (#86): its title and question, rather than the address as the title.
 async function restore(url,hint=null){
  if(!applyUrl(url))return false;
+ if(nav&&currentAddress()===url&&withRates(url)!==url)nav.history.replaceState({url:withRates(url)},'',withRates(url));   // the rates are the page's own (#31b): an address restored without them, or with others, shows the rates in force
+ url=withRates(url);
  renderQuestionChips(); sessionEpoch++; sessionId=null; $('api-key').value='';   // the scope may have changed under the open card: a fresh server conversation
- const held=thread.find(r=>r.state==='done'&&r.url===url);
+ const held=thread.find(r=>r.state==='done'&&sameView(r.url,url));
  if(held){ held.epoch=sessionEpoch; openId=held.id; followView(url,!held.report); renderCard(); scheduleFollow(true); updateScope(); $('status').textContent=`${readyText()} · restored`; return true; }
  if(!queryOf(url).has('measure')){ openId=null; conversation=[]; renderCard(); scheduleFollow(true); updateScope(); $('status').textContent=readyText(); primeKpis(); return true; }
  // Nothing is disabled while this loads, so the conversation is this address's own priors from now on: a question
@@ -231,7 +245,7 @@ async function restore(url,hint=null){
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
   rec.url=result.url||url; if(!named)rec.question=rec.title=bareUrl(rec.url);
   // Only while nothing has moved on since: a scope change or another answer owns the conversation and the address bar.
-  if(epoch===sessionEpoch&&openId===rec.id&&currentAddress()===url){ followView(rec.url,!rec.report); if(nav&&result.url&&result.url!==url)nav.history.replaceState({url:result.url},'',result.url); }   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
+  if(epoch===sessionEpoch&&openId===rec.id&&currentAddress()===url){ followView(rec.url,!rec.report); const canonical=result.url&&withRates(result.url); if(nav&&canonical&&canonical!==url)nav.history.replaceState({url:canonical},'',canonical); }   // a hand-typed alias (measure=downtime under Week) becomes its one canonical spelling
   land(rec,result); $('status').textContent=readyText();
  }catch(error){ rec.error=error.message; rec.state='error'; settleCard(rec); $('status').textContent='Ready to retry'; }
  finally{ updateScope(); }
@@ -278,9 +292,10 @@ function chipHref(b){ b.href=questionUrl(b.dataset.question,{...controls(),...(b
 // the rest sit behind "More questions" so the rail fits a 1040-px screen.
 const QUESTIONS=[
  ['Why was this shift slow?','Why was this shift slow? Chart downtime by reason.',null,null,true],
+ ['Where is the money?','Where is the money?',null,null,true],   // #31b: the shift's losses in dollars under Day, the levers in $/yr under a window
  ['Speed to target','Show speed to target',null,null,true],
  ['Dry-end waste','Show dry-end quality waste',null,null,true],
- ['Bond or warp?','Is it bond or warp?',null,null,true],
+ ['Bond or warp?','Is it bond or warp?'],   // under a window the same waste breakdown as "Dry-end waste": in the fold, so the money question fits the rail (#31b)
  ['Costliest reason this {period}','Which downtime reason cost the most minutes this {period}?',null,null,true],
  ['This {period} vs last','How did this {period} go versus the previous one?',null,null,true],
  ['Summary + charts','Summarize performance, downtime and waste. Show supporting charts.',null,null,true],
@@ -349,8 +364,8 @@ function barPath(x,y,w,h,cls,r=4){ // square at the baseline, 4px rounded data e
 function chartCard(title,notes=[]){ const wrap=node('div',undefined,'chart');wrap.append(node('h3',title));for(const n of notes)if(n)wrap.append(node('p',n.text||n,n.cls||'muted'));return wrap; }
 function legend(items){ const box=node('div',undefined,'lg');for(const [cls,label] of items){const item=node('span');item.append(node('i',undefined,'sw '+cls),node('span',label));box.append(item);}return box; }
 // Horizontal axis along the bottom: hairline gridlines at 0, ½ and the nice maximum, labels beneath.
-function xAxis(svg,x0,x1,yTop,yBottom,max,unit){
- for(const t of [0,.5,1]){const x=x0+(x1-x0)*t;svg.append(svgNode('line',{x1:x,x2:x,y1:yTop,y2:yBottom,class:'grid'+(t===0?' base':'')}));svg.append(svgNode('text',{x,y:yBottom+16,'text-anchor':t===0?'start':t===1?'end':'middle',class:'tick'},fmtTick(max*t,unit)));}
+function xAxis(svg,x0,x1,yTop,yBottom,max,unit,tick=fmtTick){
+ for(const t of [0,.5,1]){const x=x0+(x1-x0)*t;svg.append(svgNode('line',{x1:x,x2:x,y1:yTop,y2:yBottom,class:'grid'+(t===0?' base':'')}));svg.append(svgNode('text',{x,y:yBottom+16,'text-anchor':t===0?'start':t===1?'end':'middle',class:'tick'},tick(max*t,unit)));}
 }
 function frame(W,rows,rowH,top=8,wideValues=false){ const H=top+rows*rowH+28, narrow=W<450; const labelW=narrow?110:138, valueW=wideValues?(narrow?130:150):(narrow?96:104); return {W,H,labelW,valueW,x0:labelW+8,x1:W-valueW-8,top,chars:narrow?14:19}; }   // 420 on a phone, 470 in the card's two-up
 function labelText(svg,text,x,y,maxChars){ const t=String(text); svg.append(svgNode('text',{x,y,'text-anchor':'end',class:'lbl'},t.length>maxChars?t.slice(0,maxChars-1)+'…':t)); }
@@ -485,6 +500,8 @@ function rangeChart(chart,wrap){
 }
 function showChart(chart) {
  if(chart.type==='calendar_heatmap')return showHeatmap(chart);
+ const mode=chartUnits(chart);
+ if(mode){ const wrap=chartCard(chart.title||'Priced rows',chart.coverage!=='complete'?[{text:'Incomplete data: observed values only.',cls:'warning-note'}]:[]); pricedChart(chart,mode,wrap); const link=queryLink(chart.source_result_id);if(link)wrap.append(link); $('charts').append(wrap); return; }   // #31b: in another unit than its own, a priced chart is ranked bars of that unit
  const rows=chart.rows||[], isSpeed=chart.unit==='ft/min'&&rows.some(r=>r.target_fpm), isPareto=rows.length&&rows[0].cumulative_pct!==undefined, isWaste=rows.length&&rows[0].pct_of_gross!==undefined&&rows[0].category!==undefined;
  const title=chart.title||`Shift ${chart.shift} · ${chart.unit==='minutes'?'Recorded downtime':isSpeed?'Wet-end speed (bars) / grade target (marks)':'Dry-end rejects'}`;
  const notes=[];
@@ -510,7 +527,7 @@ function showTable(data){
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
- const omitted=new Set(['source_ids','gross_sqft','observed_lineal_ft','throughput_in','lineal_per_setup','lineal_per_wet_end','setups_above_trim_target']);
+ const omitted=new Set(['source_ids','gross_sqft','observed_lineal_ft','throughput_in','lineal_per_setup','lineal_per_wet_end','setups_above_trim_target','price_terms','usd_basis']);
  const columns=TABLE_COLUMNS[data.title]||Object.keys(data.rows[0]).filter(k=>!omitted.has(k)&&!Array.isArray(data.rows[0][k]));
  const wrap=node('div',undefined,'table-scroll');wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',titles[data.title]||data.title);const table=node('table'),head=node('thead'),tr=node('tr');
  for(const key of columns){const th=node('th',labels[key]||key.replaceAll('_',' '));th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=node('tbody');
@@ -541,10 +558,11 @@ function deltaChip(row,withheld){
  chip.title=change==='neutral'?'A count: context, not a score.':`${change} — ${row.better} is better for ${row.label.toLowerCase()}`;
  return chip;
 }
-function kpiTile(row,withheld){
+function kpiTile(row,withheld,priced=null){
  const tile=node('div',undefined,'tile'+(row.change&&!withheld?' '+row.change:''));
  tile.append(node('div',row.label,'l'));
  const v=node('div',undefined,'v');v.append(node('span',fmtNumber(row.current,row.unit)));const unit=unitShort(row.unit);if(unit&&row.current!==null)v.append(node('small',unit));tile.append(v);
+ moneyOnTile(tile,v,`${fmtNumber(row.current,row.unit)}${unit?' '+unit:''}`,priced,'this window');   // #31b: the tile's loss in dollars, $/window and $/yr
  const foot=node('div',undefined,'f');foot.append(deltaChip(row,withheld));
  foot.append(node('span',row.previous===null||row.previous===undefined?'prev unavailable':`prev ${fmtNumber(row.previous,row.unit)}${unit?' '+unit:''}`,'prev'));tile.append(foot);
  tile.title=`${row.label}: ${row.unit}. ${row.better==='neutral'?'A count, not a score.':row.better+' is better.'}`;
@@ -559,8 +577,8 @@ function renderKpiTiles(data,caption){
  if(data.equal_production_days===false)head.append(node('span',`${data.production_days_current} vs ${data.production_days_previous} production days: compare MSF/day and the ratio tiles, not raw totals`,'warning-note'));
  if(caption)head.append(node('span',caption,'muted mono'));box.append(head);
  if(withheld)box.append(node('p',`Deltas withheld: ${String(data.comparison||'').replace(/^withheld:\s*/,'')||'a window is incomplete or unavailable'}. Missing days are not zero production.`,'warning-note'));
- const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows);
- rows.forEach((row,i)=>{const tile=kpiTile(row,withheld);if(i>=VISIBLE_TILES)tile.className+=' extra';grid.append(tile);});
+ const grid=node('div',undefined,'kpi-grid');const rows=orderedTiles(data.rows), price=periodTileMoney(data);
+ rows.forEach((row,i)=>{const tile=kpiTile(row,withheld,data.coverage==='complete'||data.window&&data.window.coverage==='complete'?price(row):null);if(i>=VISIBLE_TILES)tile.className+=' extra';grid.append(tile);});
  box.append(grid);
  if(rows.length>VISIBLE_TILES){const more=node('button',`Show ${rows.length-VISIBLE_TILES} more`,'secondary more');more.type='button';more.setAttribute('aria-expanded','false');
   more.addEventListener('click',()=>{const open=grid.className.includes('expanded');grid.className=open?'kpi-grid':'kpi-grid expanded';more.setAttribute('aria-expanded',String(!open));more.textContent=open?`Show ${rows.length-VISIBLE_TILES} more`:'Show fewer';});box.append(more);}
@@ -586,8 +604,15 @@ async function post(path,body,extraHeaders={}){
  return response;
 }
 
+// The idle card's tiles, drawn again when a rate or the unit changes.
+function paintPrimed(){
+ if(!primed||openId!==null)return;
+ const {entry,question,result}=primed; $('kpis').replaceChildren();
+ renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
+ const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”, the address ${result.url||''}. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
+}
 async function primeKpis(){
- const token=++primeToken, question=primeQuestion();
+ const token=++primeToken, question=primeQuestion(); primed=null;
  if(!config||!question||openId!==null||(config.demo_guards&&config.demo_guards.rate_limit_per_min>0))return;   // the tiles are the idle card's content; an asked question owns the card
  try{
   // The scope's tiles are the KPI measure of the scope's own address; the address bar is not moved for them.
@@ -596,8 +621,7 @@ async function primeKpis(){
   if(token!==primeToken||openId!==null||!response.ok||!Array.isArray(result.trace))return;
   const entry=result.trace.find(e=>e.ok&&e.tool==='get_period_kpis');
   if(!entry)return;
-  renderKpiTiles(entry.data,`scope tiles · get_period_kpis · ${result.usage.tool_calls} tool call${result.usage.tool_calls===1?'':'s'} · $0 · offline planner`);
-  const trail=node('details',undefined,'prime-trail');trail.append(node('summary','How these tiles were produced'));trail.append(node('p',`Offline question: “${question}”, the address ${result.url||''}. The same evidence a typed question gets; ask one for charts and the full trail.`,'muted'));trail.append(traceRow(entry));$('kpis').append(trail);
+  primed={entry,question,result}; paintPrimed();
   scheduleFollow();
  }catch(error){ /* the tiles are a convenience; the question flow reports its own errors */ }
 }
@@ -682,10 +706,12 @@ function shiftTiles(entry,result,prefix){
   ['Throughput',r.throughput_in,'in',1,`${n(r.lineal_per_setup,0)} ft / setup`,false]]){
   const card=node('div',undefined,'metric'+(bad||incomplete?' warning':''));card.append(node('div',who+label,'label'));if(title)card.title=title;
   const v=node('div',undefined,'value');v.append(node('span',incomplete?'Incomplete':n(value,places)));if(unit&&!incomplete)v.append(node('small',unit));card.append(v);
-  card.append(node('div',incomplete?`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`:sub,'sub'+(bad||incomplete?' flag':'')));$('metrics').append(card);
+  card.append(node('div',incomplete?`${entry.data.excluded_records?.length||'Missing/invalid'} excluded record(s)`:sub,'sub'+(bad||incomplete?' flag':'')));
+  if(!incomplete&&entry.tool!=='get_period_report')moneyOnTile(card,v,`${n(value,places)}${unit?' '+unit:''}`,shiftTileMoney(label,r),'this shift');   // #31b: the loss the tile measures, $/shift and $/yr (one shift's row; a report's row is a whole window, priced in its panel)
+  $('metrics').append(card);
  }
 }
-function showResult(result) {
+function showResult(result,raw=result) {   // raw: the answer as the server sent it, for its trail; result: at the rates in force (#31b)
  latest=result;
  for(const id of ['heatmaps','kpis','tables','charts','metrics','trace'])$(id).replaceChildren();   // the open card shows one answer's evidence
  renderQueries(result);   // the query box: first below the title line, built in the first paint (#40)
@@ -694,11 +720,327 @@ function showResult(result) {
  const shiftKpis=result.trace.filter(e=>e.ok&&(e.tool==='get_shift_kpis'||e.tool==='get_shift_overview'||e.tool==='get_period_report'));
  for(const entry of shiftKpis)shiftTiles(entry,result,shiftKpis.length>1);
  for(const table of result.tables||[])showTable(table);
- for(const chart of result.charts)showChart(chart);
- if(!slots)afterPaint(()=>{if(latest!==result)return;result.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip. An earlier card drawn into its own containers has no trail (#86)
+ for(const chart of result.charts)if(!(costCfg()&&/^\$ (this shift|per year)$/.test(chart.unit||'')))showChart(chart);   // a money tool's own chart is the opportunities panel (#31b): the same rows, ranked, with their formulas and a table
+ if(!slots)afterPaint(()=>{if(latest!==result)return;raw.trace.forEach((entry,i)=>{const row=traceRow(entry);row.id=`step-${i}`;$('trace').append(row);});});   // a newer answer already replaced the evidence: skip. An earlier card drawn into its own containers has no trail (#86)
  $('calls').textContent=`${result.status?result.status+' · ':''}${usageText(result.usage)}`;
  const ctx=node('details',undefined,'trace-context');ctx.append(node('summary','Context carried to the next question'));ctx.append(node('pre',JSON.stringify(result.context,null,2)));$('context').replaceChildren(ctx);
  updateScope();
+}
+
+// ---- Money on the card (issue #31b). The cost model prices the records (src/investigator/cost_model.py); this layer
+// puts the dollars on every card and re-prices them in this browser when a visitor changes a rate:
+//  - a dollar line under the headline: ≈ $7,587 recorded losses this shift · $5.72M/yr at this rate, a chip per bucket;
+//  - the opportunities panel: bars of $/yr by lever, ranked, each bar's formula on hover, and a table flip;
+//  - the arithmetic at the bottom: waste sq ft → MSF → paper $; machine minutes → MSF not made → $; trim points → $/yr; the total;
+//  - a dollar line on every KPI tile that measures a loss, dollars on every priced bar, and the units toggle minutes · % · $;
+//  - the rates panel: each rate with its source; an edit re-prices every card at once, with no request, and rides in the
+//    address as rates=, so the link reproduces the page.
+// A card's money is its own get_shift_dollars / get_opportunities when it asked one, else the money answer of its scope
+// (one GET per scope, shared by the cards of that scope): measure=dollars on the Day grain, measure=money on a window.
+// Every dollar is a tool row's quantity times a rate through money.js, the server's formula line for line.
+let rateOverrides={}, units='usd', primed=null;
+const UNITS=[['min','minutes'],['pct','%'],['usd','$']], UNIT_WORDS={min:'machine minutes',pct:'% of the window',usd:'dollars'};
+const companions=new Map();   // a scope's money address -> the promise of its answer
+const MONEY_KEY='csi-money';
+function costCfg(){ return config&&config.cost_model&&typeof Money!=='undefined'?config.cost_model:null; }
+function ratesNow(){ const cfg=costCfg(); return cfg?Money.effective(cfg,rateOverrides):null; }
+function ratesKey(){ const cfg=costCfg(); return cfg?Money.format(rateOverrides,cfg):''; }
+function unitMode(){ return costCfg()?units:null; }
+function askedRates(rec){ const cfg=costCfg(), url=(rec&&(rec.url||rec.askUrl))||''; if(!cfg)return ''; try{ return Money.format(Money.parse(paramOf(url,'rates')||'',cfg),cfg); }catch(e){ return ''; } }
+// An answer at the rates in force: verbatim when they are the rates it was priced at; else every priced query re-priced,
+// the prose written again from those rows (Money.repriceSections), and the charts drawn from them.
+function pricedView(result,asked){
+ const cfg=costCfg(), key=ratesKey(), same={result,sections:result?result.sections||[]:[],narrative:result&&result.narrative,repriced:false};
+ if(!cfg||!result||asked===key)return same;
+ const rates=ratesNow(), trace=result.trace||[], tools=Object.fromEntries(trace.filter(e=>e.result_id).map(e=>[e.result_id,e.tool]));
+ const steps=trace.map(e=>e.ok&&e.tool!=='render_chart'&&Money.priced(e.data)?{tool:e.tool,before:e.data,after:Money.reprice(e.tool,e.data,rates,cfg)}:null);
+ if(!steps.some(Boolean))return same;
+ const byResult={}; trace.forEach((e,i)=>{ if(steps[i]&&e.result_id)byResult[e.result_id]=steps[i]; });
+ const sections=Money.repriceSections(result.sections||[],steps,rates,cfg);
+ const out={...result,sections,trace:trace.map((e,i)=>steps[i]?{...e,data:steps[i].after}:e),charts:(result.charts||[]).map(c=>Money.repriceChart(c,tools[c.source_result_id],rates,cfg)),
+  tables:(result.tables||[]).map(t=>Money.repriceChart(t,t.title,rates,cfg))};   // a table is named by its tool (get_speed_opportunity carries dollars)
+ if(typeof result.report_markdown==='string')out.report_markdown=[`# Synthetic production investigation: ${result.period_label||result.production_day}`,`${result.mode}. No email delivery.`,...sections,result.limitations].join('\n\n');   // server._markdown, at these rates
+ return {result:out,sections,narrative:Money.repriceNarrative(result.narrative,byResult),repriced:true};
+}
+function viewOf(rec){ const key=ratesKey(); if(!rec.view||rec.view.key!==key||rec.view.of!==rec.result)rec.view={key,of:rec.result,...pricedView(rec.result,askedRates(rec))}; return rec.view; }
+// ---- the card's money: its own money queries, or its scope's money answer
+function companionUrl(rec){ const s=rec.scope; return `/corr/${machine()}/${GRAIN[s.period]||'day'}/${s.day}`+(s.scope==='shift'?`/shift/${s.shift}`:'')+`.json?measure=${s.period==='day'?'dollars':'money'}`+(rec.corrupt?'&corrupt=1':''); }
+function moneyOf(rec){
+ if(!costCfg()||!rec||rec.state!=='done'||!rec.result)return null;
+ const m=rec.money;
+ if(m&&!(m.state==='error'&&clock()-m.at>15000))return m;   // a failed money answer is asked again on a later paint, not in a loop
+ if((rec.result.trace||[]).some(e=>e.ok&&Money.MONEY_TOOLS.has(e.tool)))return rec.money={state:'ready',own:true,result:rec.result,asked:askedRates(rec),url:rec.url};
+ const url=companionUrl(rec), fresh=rec.money={state:'pending',own:false,result:null,asked:'',url:url.replace('.json','')};
+ let p=companions.get(url);
+ if(!p){ p=fetch(url,{headers:{Accept:'application/json'}}).then(async r=>{ const j=await r.json(); if(!r.ok)throw new Error(j.error||'The money answer is unavailable'); return j; }); companions.set(url,p); p.catch(()=>{ if(companions.get(url)===p)companions.delete(url); }); }
+ p.then(result=>{ fresh.state='ready'; fresh.result=result; moneyLanded(rec); },error=>{ fresh.state='error'; fresh.error=error.message; fresh.at=clock(); moneyLanded(rec); });
+ return fresh;
+}
+function moneyLanded(rec){ if(!thread.includes(rec))return; if(openId===rec.id&&shownId===rec.id)paintMoney(rec); else renderEarlier(); }
+function bucketOf(row){
+ const kind=(row.price_terms&&row.price_terms.kind)||row.kind, name=String(row.gap||row.lever||row.category||row.label||row.reason||'');
+ if(row.kind==='setup')return 'Setups';
+ if(kind==='downtime')return 'Stops'; if(kind==='speed')return 'Speed'; if(kind==='trim')return 'Trim';
+ if(/^shear/i.test(name))return 'Shear'; if(/^dry-end/i.test(name))return 'Dry-end'; return 'Other waste';
+}
+const WHEN={day:'this day',week:'this week',month:'this month',fiscal:'this 4-4-5 period'};
+// The money of a card in one shape for its line, panel and arithmetic: rows (one per lever or gap; summed by name
+// across the shifts of an all-shifts day), totals, and what the window is.
+function moneyFacts(m){
+ const cfg=costCfg(), rates=ratesNow(), key=ratesKey();
+ const steps=(m.result.trace||[]).map((e,i)=>e.ok&&Money.MONEY_TOOLS.has(e.tool)?{tool:e.tool,q:i+1,data:m.asked===key?e.data:Money.reprice(e.tool,e.data,rates,cfg)}:null).filter(Boolean);
+ if(!steps.length)return null;
+ const levers=steps[0].tool==='get_opportunities', d0=steps[0].data, sum=k=>steps.reduce((s,x)=>s+(x.data[k]||0),0);
+ const all=steps.flatMap(x=>x.data.rows.map(r=>({...r,shift:x.data.shift})));
+ const byName=new Map();
+ for(const r of all){
+  const name=r.gap||r.lever, t=r.price_terms||{}, area=Money.PAPER.has(t.kind);
+  const e=byName.get(name)||{name,bucket:bucketOf(r),usd:0,year:steps.length>1?null:r.usd_per_year,minutes:0,qty:0,base:0,area,rows:[]};
+  e.usd+=r.usd||0; e.minutes+=r.machine_minutes||0; e.qty+=t.quantity||0; e.base+=(area?t.gross_sqft:t.minutes)||0; e.rows.push(r); byName.set(name,e);
+ }
+ const rows=[...byName.values()].map(e=>({...e,share:e.base?e.qty/e.base*100:null}));
+ const buckets=new Map(); for(const r of rows)buckets.set(r.bucket,(buckets.get(r.bucket)||0)+r.usd);
+ const one=steps.length===1, window=d0.window&&d0.window.period;
+ return {levers,steps,all,rows,one,cfg,rates,
+  total:steps.length>1?Money.round(sum('total_usd'),2):d0.total_usd, year:one?d0.total_usd_per_year:null,
+  paper:Money.round(sum('total_paper_usd'),2), machine:Money.round(sum('total_machine_time_usd'),2),
+  contribution:steps.every(x=>x.data.total_contribution_usd!==null&&x.data.total_contribution_usd!==undefined)?Money.round(sum('total_contribution_usd'),2):null,
+  buckets:[...buckets.entries()].sort((a,b)=>b[1]-a[1]),
+  when:levers?WHEN[window]||'this window':one?'this shift':'this day',
+  who:d0.shift?`Shift ${d0.shift}`:levers?'All shifts':'All three shifts',
+  label:levers?(d0.window&&d0.window.label)||'':(d0.production_day||''),
+  perShift:one?null:steps.map(x=>`shift ${x.data.shift} ${Money.short(x.data.total_usd_per_year)}/yr`).join(' · ')};
+}
+// The slot under the headline the dollar line fills (an analyst's card: the top of its interpretation).
+function dollarSlot(summary){
+ if(!costCfg()||!summary)return null;
+ const slot=node('div',undefined,'dollar-line'), kids=summary.children?[...summary.children]:[], head=kids.find(k=>/\bheadline\b/.test(k.className||''));
+ if(head&&typeof head.after==='function')head.after(slot);
+ else if(head)summary.children.splice(summary.children.indexOf(head)+1,0,slot);
+ else if(typeof summary.prepend==='function')summary.prepend(slot); else summary.children.unshift(slot);
+ return slot;
+}
+function paintMoney(rec){
+ const m=moneyOf(rec), line=rec.lineEl, panel=$('money'), ledger=$('ledger');
+ panel.replaceChildren(); ledger.replaceChildren(); if(line)line.replaceChildren();
+ if(!m)return;
+ if(m.state!=='ready'){ if(line)line.append(node('p',m.state==='pending'?'Pricing this card at your rates…':`No dollars for this card: ${m.error}`,'muted dollar-wait')); return; }
+ const f=moneyFacts(m); if(!f)return;
+ if(line)fillDollarLine(line,f);
+ panel.append(opportunityPanel(f,m,rec));
+ ledger.append(...arithmetic(f));
+}
+function fillDollarLine(line,f){
+ const lead=node('p',undefined,'dollar-lead');
+ lead.append(node('span','≈ '),node('strong',Money.money(f.total),'figure'),node('span',` ${f.levers?'in levers':'recorded losses'} ${f.when}`));
+ if(f.year!==null&&f.year!==undefined)lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',' at this rate'));
+ else if(f.perShift)lead.append(node('span',` · ${f.perShift} at each shift's rate`));
+ const chips=node('p',undefined,'chips');
+ for(const [bucket,usd] of f.buckets.filter(([,usd])=>Money.money(usd)!=='$0')){ const c=node('span',undefined,'chip'); c.append(node('span',bucket+' '),node('strong',Money.money(usd))); c.title=`${bucket}: ${Money.money(usd)} ${f.when}, priced at your rates`; chips.append(c); }
+ line.append(lead,chips);
+}
+function unitValue(r,mode,yearly){ return mode==='min'?r.minutes:mode==='pct'?r.share:yearly&&r.year!==null&&r.year!==undefined?r.year:r.usd; }
+function unitLabel(r,mode,yearly){
+ const v=unitValue(r,mode,yearly);
+ if(v===null||v===undefined)return 'unavailable';
+ if(mode==='min')return `${Money.fmt(v,1)} min`;
+ if(mode==='pct')return `${Money.fixed(v,2)}% of ${r.area?'gross':'time'}`;
+ const year=r.year!==null&&r.year!==undefined;
+ return yearly&&year?`${Money.short(r.year)}/yr`:Money.money(r.usd)+(year?` · ${Money.short(r.year)}/yr`:'');
+}
+function rowFormula(r){ return r.rows.length===1?r.rows[0].usd_basis:r.rows.map(x=>`shift ${x.shift}: ${x.usd_basis}`).join(' | '); }
+function rowRecords(r){ const x=r.rows[0]; return r.rows.length>1?`${r.rows.length} shifts`:x.records||(Array.isArray(x.source_ids)?`${x.source_ids.length} records`:''); }
+const PANEL_ROWS=8;
+// The opportunities panel: the card's levers (or gaps) ranked by the unit shown, $/yr in dollars, with the rate and
+// formula of each bar on hover and the same rows as a table behind a flip.
+function opportunityPanel(f,m,rec){
+ const mode=unitMode()||'usd', yearly=f.one, wrap=node('div',undefined,'chart money-panel');
+ wrap.append(node('h3',`${f.levers?'Where the money is':'Where the money went'} · ${f.who} · ${f.label}`));
+ wrap.append(node('p',(f.levers?'Each lever is a gap priced at your rates: the speed gap to each cell\'s best fifth, side trim over the target, each recorded stop, all shear and dry-end waste. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?(yearly?'Ranked by dollars a year at this rate':'Ranked by dollars '+f.when):'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
+ const box=node('div',undefined,'money-box'); wrap.append(box);
+ let table=false, all=false;
+ const draw=()=>{
+  box.replaceChildren();
+  const ranked=[...f.rows].sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1)||(a.name<b.name?-1:a.name>b.name?1:0));
+  const shown=all?ranked:ranked.slice(0,PANEL_ROWS);
+  if(table)box.append(moneyTable(ranked,f));
+  else box.append(moneyBars(shown,mode,yearly,true));
+  const actions=node('div',undefined,'money-actions');
+  const flip=node('button',table?'Bars':'Table','secondary'); flip.type='button'; flip.setAttribute('aria-pressed',String(table)); flip.title='The same rows as a table'; flip.addEventListener('click',()=>{table=!table;draw();}); actions.append(flip);
+  if(!table&&ranked.length>PANEL_ROWS){ const more=node('button',all?`Top ${PANEL_ROWS}`:`All ${ranked.length}`,'secondary'); more.type='button'; more.addEventListener('click',()=>{all=!all;draw();}); actions.append(more); }
+  box.append(actions);
+ };
+ draw();
+ const src=node('p',undefined,'muted money-src');
+ if(m.own){ const step=(rec.result.trace||[]).findIndex(e=>e.ok&&Money.MONEY_TOOLS.has(e.tool)); const link=step>=0?queryLink(rec.result.trace[step].result_id):null; src.append(`From ${f.levers?'get_opportunities':'get_shift_dollars'}, this answer's own query`); if(link){src.append(' · ');src.append(link);} }
+ else{ const a=node('a',f.levers?'Where is the money?':'Where did the money go?','look-q'); a.href=withRates(m.url); a.title='The money answer of this scope: its queries and its prose'; a.addEventListener('click',event=>{ if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return; if(event&&event.preventDefault)event.preventDefault(); ask('Where is the money?',{mode:'offline',title:'Where is the money?',scope:rec.scope,corrupt:rec.corrupt,source:rec}).catch(()=>{}); }); src.append(`From ${f.levers?'get_opportunities':'get_shift_dollars'} over this card's scope · `,a); }
+ wrap.append(src);
+ return wrap;
+}
+function moneyBars(rows,mode,yearly,wide=false){
+ // The panel spans the card, so its bars get a label column wide enough for "Downtime: Knife / slitter jam"; a priced
+ // chart in the two-up grid keeps the grid's frame.
+ const W=wide?(CHART_W()<450?420:600):CHART_W(), f=wide?{...frame(W,rows.length,28,8,true),...(W>=600?{labelW:214,x0:222,chars:30}:{})}:frame(W,rows.length,28,8,true), max=niceCeil(Math.max(0,...rows.map(r=>Number(unitValue(r,mode,yearly))||0)));
+ const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':`levers ranked by ${UNIT_WORDS[mode]}`});
+ xAxis(svg,f.x0,f.x1,f.top,f.top+rows.length*28,max,mode,mode==='usd'?v=>Money.short(v):undefined);
+ rows.forEach((r,i)=>{ const y=f.top+i*28, v=Number(unitValue(r,mode,yearly))||0;
+  labelText(svg,r.name,f.x0-8,y+18,f.chars);
+  svg.append(barPath(f.x0,y+6,(v/max)*(f.x1-f.x0),15,'bar priced'));
+  const detail=[`${r.name}: ${Money.money(r.usd)}${r.year!==null&&r.year!==undefined?` · ${Money.money(r.year)}/yr at this rate`:''}${r.minutes?` · ${Money.fmt(r.minutes,1)} machine min`:''}`,rowFormula(r),rowRecords(r)].filter(Boolean).join('. ')+'.';
+  const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,'aria-label':detail,class:'val'},unitLabel(r,mode,yearly)); t.append(svgNode('title',{},detail)); svg.append(t); });
+ return svg;
+}
+function moneyTable(rows,f){
+ const wrap=node('div',undefined,'table-scroll'); wrap.tabIndex=0; wrap.setAttribute('role','region'); wrap.setAttribute('aria-label','Levers as a table');
+ const table=node('table',undefined,'money-table'), head=node('thead'), tr=node('tr');
+ for(const h of [f.levers?'Lever':'Gap','$ '+f.when,...(f.one?['$/yr']:[]),'Machine min','Share','How it is priced']){ const th=node('th',h); th.scope='col'; tr.append(th); }
+ head.append(tr); table.append(head); const body=node('tbody');
+ for(const r of rows){ const row=node('tr'); for(const cell of [r.name,Money.money(r.usd),...(f.one?[r.year===null||r.year===undefined?'unavailable':Money.money(r.year)]:[]),Money.fmt(r.minutes,2),r.share===null?'unavailable':`${Money.fixed(r.share,2)}% of ${r.area?'gross':'time'}`,`${rowFormula(r)} · ${rowRecords(r)}`])row.append(node('td',cell)); body.append(row); }
+ table.append(body); wrap.append(table); return wrap;
+}
+// The arithmetic, as the post closes: four short lines with this card's own numbers, each result in bold.
+function arithmetic(f){
+ const cfg=f.cfg, C=cfg.constants, v=f.rates.values, paper=Money.rateText(v.paper_usd_msf), hour=Money.rateText(v.machine_usd_hour,true);
+ const line=(lead,parts)=>{ const p=node('p'); p.append(node('span',lead,'ledger-k')); for(const x of parts)p.append(typeof x==='string'?node('span',x):x); return p; };
+ const b=text=>node('strong',text,'figure');
+ const area=f.all.filter(r=>r.price_terms&&Money.PAPER.has(r.price_terms.kind)), sqft=area.reduce((s,r)=>s+r.price_terms.quantity,0);
+ const time=f.all.filter(r=>r.price_terms&&Money.TIME.has(r.price_terms.kind)), waste=f.all.filter(r=>r.price_terms&&r.price_terms.kind==='waste');
+ const minOf=rows=>rows.reduce((s,r)=>s+(r.machine_minutes||0),0), notMade=f.all.reduce((s,r)=>s+(r.msf_not_made||0),0);
+ const stops=minOf(time.filter(r=>r.price_terms.kind==='downtime')), speed=minOf(time.filter(r=>r.price_terms.kind==='speed')), run=minOf(waste);
+ const out=[node('h3','The arithmetic, at your rates','label')];
+ out.push(line('Paper ',[`${Money.fmt(sqft,0)} sq ft of ${f.levers?'trim over target, shear and rejects':'trim, shear and rejects'} = `,b(`${Money.fmt(sqft/1000,1)} MSF`),` × $${paper}/MSF = `,b(Money.money(f.paper))]));
+ out.push(line('Machine time ',[`${Money.fmt(stops+speed+run,1)} min (stops ${Money.fmt(stops,1)} · speed gap ${Money.fmt(speed,1)} · waste run time ${Money.fmt(run,1)}) = `,b(`${Money.fmt(notMade,1)} MSF not made`),` at ${Money.gText(C.required_fpm)} ft/min (${Money.gText(C.msf_per_minute)} MSF a minute) × $${hour}/hr = `,b(Money.money(f.machine))]));
+ out.push(trimLine(f,line,b));
+ const total=[`= `,b(Money.money(f.total)),` ${f.when}`];
+ if(f.year!==null&&f.year!==undefined)total.push(' · ',b(`${Money.money(f.year)}/yr`),' at this rate');
+ else if(f.perShift)total.push(` · per year at each shift's rate: ${f.perShift.replace(/ at each shift's rate$/,'')}`);
+ total.push(v.margin_usd_msf===null||v.margin_usd_msf===undefined?` · contribution: ${cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(v.margin_usd_msf)}/MSF, beside the losses, not added`);
+ out.push(line('Total ',total));
+ const prov=node('p',`${Money.provenance(f.rates,cfg)} ${cfg.note}`,'muted provenance'); out.push(prov);
+ const change=node('button','Change rates','secondary rates-open'); change.type='button'; change.addEventListener('click',()=>openRates(true)); out.push(change);
+ return out;
+}
+function trimLine(f,line,b){
+ const v=f.rates.values, target=Money.rateText(v.trim_target_pct), cfg=f.cfg, C=cfg.constants;
+ if(f.levers){
+  const r=f.all.find(x=>x.kind==='trim'); if(!r)return line('Side trim ',['no trim lever in this window']);
+  const pct=r.price_terms.trim_pct;
+  if(!r.quantity)return line('Side trim ',[`${Money.fixed(pct,2)}% of gross, at or under the ${target}% target: `,b('no trim lever'),' this window']);
+  return line('Side trim ',[`${Money.fixed(pct,2)}% of gross − ${target}% target = `,b(`${Money.fixed(r.quantity,2)} points over`),' → ',b(`${Money.money(r.usd_per_year)}/yr`),` at the post's volume (points / 100 × ${Money.group(String(C.annual_msf_per_machine))} MSF a year × $${Money.rateText(v.paper_usd_msf)}/MSF)`]);
+ }
+ const trims=f.all.filter(x=>x.price_terms&&x.price_terms.kind==='trim'); if(!trims.length)return line('Side trim ',['no side trim recorded']);
+ const sq=trims.reduce((s,x)=>s+x.price_terms.quantity,0), gross=trims.reduce((s,x)=>s+(x.price_terms.gross_sqft||0),0), pct=gross?sq/gross*100:0, over=Math.max(0,pct-v.trim_target_pct);
+ if(!over)return line('Side trim ',[`${Money.fixed(pct,2)}% of gross, at or under the ${target}% target: `,b('no trim lever')]);
+ const priced=Money.price('trim',over/100*gross,f.rates,gross,trims.reduce((s,x)=>s+(x.price_terms.minutes||0),0),cfg);   // the post's trim formula, through the same pricing call
+ return line('Side trim ',[`${Money.fixed(pct,2)}% of gross − ${target}% target = `,b(`${Money.fixed(over,2)} points over`),' → ',b(`${Money.money(priced.usd_per_year)}/yr`),` at the post's volume (points / 100 × ${Money.group(String(C.annual_msf_per_machine))} MSF a year × $${Money.rateText(v.paper_usd_msf)}/MSF)`]);
+}
+// ---- dollars on the tiles: each tile's own quantity priced as the tools price it
+function tileMoney(kind,quantity,gross,minutes,what){ const cfg=costCfg(); if(!cfg||quantity===null||quantity===undefined||!Number.isFinite(quantity))return null; return {what,...Money.price(kind,quantity,ratesNow(),gross,minutes,cfg)}; }
+function shiftTileMoney(label,r){
+ const cfg=costCfg(); if(!cfg||!r||!r.gross_sqft)return null;
+ const C=cfg.constants, g=r.gross_sqft, m=C.shift_minutes;
+ if(label==='Speed'){ const running=m-(r.downtime_pct||0)*m/100; return tileMoney('speed',Math.max(0,C.required_fpm*running-r.observed_lineal_ft)/C.required_fpm,g,m,`the speed gap to ${Money.gText(C.required_fpm)} ft/min`); }   // cost_model.shift_dollars's speed gap
+ if(label==='Maintenance')return tileMoney('downtime',r.maintenance_pct*m/100,g,m,'maintenance stops');
+ if(label==='Operator')return tileMoney('downtime',r.operator_pct*m/100,g,m,'operator stops');
+ if(label==='Dry-end waste')return tileMoney('waste',r.dry_end_pct*g/100,g,m,'dry-end rejects');
+ if(label==='Trim')return tileMoney('trim',r.trim_pct*g/100,g,m,'side trim');
+ return null;
+}
+function periodTileMoney(data){
+ const cfg=costCfg(); if(!cfg||!data||!Array.isArray(data.rows))return ()=>null;
+ const rows=Object.fromEntries(data.rows.map(r=>[r.metric,r])), cur=k=>rows[k]?rows[k].current:null;
+ const days=data.production_days_current??(data.window&&data.window.production_days_observed), vol=cur('volume_msf');
+ if(!vol||!days)return ()=>null;
+ const C=cfg.constants, g=vol*1000, m=days*C.shift_minutes*(data.shift?1:3);
+ const P=(kind,q,what)=>tileMoney(kind,q,g,m,what);
+ return row=>{
+  const v=row.current; if(v===null||v===undefined)return null;
+  switch(row.metric){
+   case 'downtime_pct': return P('downtime',v*m/100,'all stops');
+   case 'downtime_minutes': return P('downtime',v,'all stops');
+   case 'stops': return cur('downtime_minutes')===null?null:P('downtime',cur('downtime_minutes'),'all stops');
+   case 'maintenance_pm_pct': return P('downtime',v*m/100,'maintenance and PM stops');
+   case 'operator_pct': return P('downtime',v*m/100,'operator stops');
+   case 'trim_pct': return P('trim',v*g/100,'side trim');
+   case 'shear_pct': case 'dry_end_pct': case 'bond_pct': case 'warp_pct': case 'misalignment_pct': case 'moisture_pct': return P('waste',v*g/100,String(row.label||row.metric).toLowerCase());
+   case 'bale_pct': case 'unexplained_pct': return P('paper',v*g/100,String(row.label||row.metric).toLowerCase());
+   case 'speed_run_fpm': { const lineal=cur('lineal_ft'), down=cur('downtime_minutes'); return lineal===null||down===null?null:P('speed',Math.max(0,C.required_fpm*(m-down)-lineal)/C.required_fpm,`the speed gap to ${Money.gText(C.required_fpm)} ft/min`); }
+  }
+  return null;
+ };
+}
+// A tile's money line, and in minutes or dollars its value shown in that unit (the tile's own reading moves to the line).
+function moneyOnTile(tile,valueEl,native,priced,when){
+ if(!priced||priced.usd===null)return;
+ const mode=unitMode(), year=priced.usd_per_year===null?null:`${Money.short(priced.usd_per_year)}/yr`;
+ let text=[`${Money.money(priced.usd)} ${when}`,year].filter(Boolean).join(' · ');
+ if(mode==='usd'){ valueEl.replaceChildren(node('span',Money.money(priced.usd))); text=[year,native].filter(Boolean).join(' · '); }
+ else if(mode==='min'){ valueEl.replaceChildren(node('span',Money.fmt(priced.machine_minutes,1)),node('small','min')); text=[Money.money(priced.usd),year,native].filter(Boolean).join(' · '); }
+ const line=node('div',text,'usd'); line.title=`${priced.what}: ${priced.usd_basis}`; tile.append(line);
+}
+// ---- the charts in the unit shown: a priced chart in another unit than its own is drawn as ranked bars of that unit
+function chartUnits(chart){ const mode=unitMode(); if(!mode||!Money.priced(chart))return null; const u=String(chart.unit||''); if(mode==='min'&&u==='minutes'||mode==='pct'&&u==='% of gross')return null; return mode; }
+function pricedChart(chart,mode,wrap){
+ const yearly=chart.y==='usd_per_year', label=r=>r.weekday?`${r.weekday} ${shortDay(r[chart.x])}`:String(r[chart.x]??'');
+ const rows=chart.rows.filter(r=>r.price_terms).map(r=>({name:label(r),usd:r.usd,year:r.usd_per_year,minutes:r.machine_minutes,share:Money.share(r),area:Money.PAPER.has(r.price_terms.kind),bucket:bucketOf(r),rows:[r]}));
+ rows.sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1));
+ wrap.append(node('p',`${mode==='usd'?'Dollars at your rates':UNIT_WORDS[mode][0].toUpperCase()+UNIT_WORDS[mode].slice(1)}, ranked${mode==='usd'?' by dollars':''}: each bar is the row's own priced quantity${chart.y2?'; the previous window is not priced':''}. Show as % for the chart in its own unit.`,'muted'));
+ wrap.append(moneyBars(rows,mode,yearly));
+}
+// ---- the rail: Show as, the rates and the editor
+function renderUnits(){
+ const box=$('units-seg'); if(!box)return; box.replaceChildren(); const cfg=costCfg(); $('rates-panel').hidden=!cfg; if(!cfg)return;
+ for(const [value,label] of UNITS){ const b=node('button',label,'seg-btn'); b.type='button'; b.dataset.value=value; b.setAttribute('aria-pressed',String(units===value)); b.title=`Show every priced tile and bar in ${UNIT_WORDS[value]}`; b.addEventListener('click',()=>setUnits(value)); box.append(b); }
+}
+function setUnits(value){ if(units===value||!UNITS.some(u=>u[0]===value))return; units=value; saveMoney(); renderUnits(); repaintMoney(); }
+function sourceText(s){ return s==='yours'?'yours':s==='server'?'this server':s; }
+function renderRates(){
+ const cfg=costCfg(); if(!cfg)return; const rates=ratesNow(), list=$('rates-list'); list.replaceChildren();
+ for(const r of cfg.rates){ const v=rates.values[r.id], dd=node('dd',undefined,v===null||v===undefined?'unset':rates.sources[r.id]==='yours'?'yours':undefined);
+  dd.append(node('span',v===null||v===undefined?'not set':r.unit==='$/MSF'?`$${Money.rateText(v)}/MSF`:r.unit==='$/hr'?`$${Money.rateText(v,true)}/hr`:`${Money.rateText(v)}%`),node('small',sourceText(rates.sources[r.id]),'src'));
+  dd.title=r.note; const dt=node('dt',{paper_usd_msf:'Paper',machine_usd_hour:'Machine',margin_usd_msf:'Margin',trim_target_pct:'Trim'}[r.id]||r.label); dt.title=r.label; list.append(dt,dd); }
+ $('rates-note').textContent=ratesKey()?'Assumed; yours ride in the link.':'Assumed, not a plant\'s.';
+}
+function renderRateFields(){
+ const cfg=costCfg(), box=$('rates-fields'); if(!cfg||!box)return; box.replaceChildren(); const rates=ratesNow();
+ for(const r of cfg.rates){
+  const field=node('label',undefined,'field rate-field'), head=node('span',undefined,'field-label'); head.append(node('span',`${r.label} (${r.unit})`),node('small',r.default===null?'default: not set':`default ${Money.rateText(r.default,r.unit==='$/hr')} · ${r.default_source}`,'src'));
+  const input=node('input'); input.type='text'; input.inputMode='decimal'; input.autocomplete='off'; input.dataset.rate=r.id; input.value=rates.values[r.id]===null||rates.values[r.id]===undefined?'':String(rates.values[r.id]); input.placeholder=r.default===null?'not set':String(r.default);
+  const why=node('span','','rate-error'); why.setAttribute('role','alert');
+  input.addEventListener('input',()=>{ const msg=editRate(r,input.value); why.textContent=msg||''; input.setAttribute('aria-invalid',String(!!msg)); });
+  field.append(head,input,why); field.title=r.note; box.append(field);
+ }
+}
+// One rate typed: applied at once when it is a rate the server takes (the same rule), else the reason, and nothing changes.
+function editRate(spec,text){
+ const cfg=costCfg(), base=Money.base(cfg), value=String(text).trim();
+ if(value===''){ delete rateOverrides[spec.id]; applyRates(); return null; }   // empty: back to the server's own rate (a margin back to not set)
+ const why=Money.check(spec,value); if(why)return why;
+ const n=Number(value); if(base.values[spec.id]===n)delete rateOverrides[spec.id]; else rateOverrides[spec.id]=n;
+ applyRates(); return null;
+}
+function openRates(open){
+ const form=$('rates-form'); form.hidden=!open; $('rates-change').setAttribute('aria-expanded',String(open)); $('rates-change').hidden=open;
+ if(!open)return;
+ renderRateFields();
+ if(phoneWidth()&&!railOpen()){ $('rail').className='rail open'; $('rail-toggle').setAttribute('aria-expanded','true'); }   // on a phone the rates live in the rail sheet
+ const input=($('rates-fields').children[0]||{children:[]}).children[1]; try{ if(input&&input.focus)input.focus(); }catch(e){}
+}
+function applyRates(){
+ saveMoney(); renderRates();
+ const here=currentAddress(); if(nav&&here&&CANONICAL.test(pathOf(here))){ const next=withRates(here); if(next!==here)nav.history.replaceState({url:next},'',next); }
+ for(const b of chipButtons)chipHref(b);
+ repaintMoney();
+}
+// Every card again at the rates and unit in force, from what it already holds: no request, no model.
+function repaintMoney(){ renderCard(); paintPrimed(); }
+function saveMoney(){ const store=tabStore(); if(!store)return; try{ store.setItem(MONEY_KEY,JSON.stringify({units})); }catch(e){} }
+function loadMoney(address){
+ const cfg=costCfg(); if(!cfg)return;
+ const store=tabStore(); try{ const saved=JSON.parse((store&&store.getItem(MONEY_KEY))||'{}'); if(UNITS.some(u=>u[0]===saved.units))units=saved.units; }catch(e){}
+ try{ rateOverrides=Money.parse((address&&CANONICAL.test(pathOf(address))&&paramOf(address,'rates'))||'',cfg); }catch(e){ rateOverrides={}; }   // a link's rates are the page's rates (#31b)
+ const base=Money.base(cfg); for(const [id,v] of Object.entries(rateOverrides))if(base.values[id]===v)delete rateOverrides[id];
+ renderUnits(); renderRates();
 }
 
 // ---- The thread of answer cards (issues #63, #86). One card is open: its title line, query box, summary, charts,
@@ -753,7 +1095,7 @@ function cardMeta(rec){   // Shift 2 · Mon 14 Sep 2026 · offline · 6 queries 
  if(rec.ms!==null)parts.push(analyst&&rec.ms>=1000?`${(rec.ms/1000).toFixed(1)} s`:msText(rec.ms));   // a model round reads in seconds: analyst · 2 model calls · 1.8 s
  return parts.join(' · ');
 }
-function clearCard(){ if(pace)finishReveal(); for(const id of ['queries','messages','charts','look','heatmaps','kpis','metrics','tables','trace','context'])$(id).replaceChildren(); $('queries').className='queries'; $('calls').textContent=''; stepIndex=new Map(); }
+function clearCard(){ if(pace)finishReveal(); for(const id of ['queries','messages','charts','money','look','heatmaps','kpis','metrics','ledger','tables','trace','context'])$(id).replaceChildren(); $('queries').className='queries'; $('calls').textContent=''; stepIndex=new Map(); }
 function skeleton(){   // grey blocks where the headline and findings, the two charts and the one-line query box will land
  const m=node('div',undefined,'skel-block'); for(const w of ['w60','w90','w70','w70'])m.append(node('span',undefined,'skel '+w)); $('messages').append(m);
  const q=node('div',undefined,'skel-block'); q.append(node('span',undefined,'skel w45')); $('queries').append(q);
@@ -763,9 +1105,9 @@ function skeleton(){   // grey blocks where the headline and findings, the two c
 // The body is the open card's own nodes moved up when another card took its place (harvest), so nothing is drawn
 // twice and open folds stay open; a card that settled while another was open is drawn once into its own containers
 // (drawBody). Either way it is kept on the record and only redrawn when what it shows changes (bodyKey).
-const BODY_SLOTS=['messages','charts','look','queries','heatmaps','kpis','metrics','tables'];   // in the card's order (#75: the answer, its charts, where to look, then the one-line query box); the trail and the exports stay with the open card
+const BODY_SLOTS=['messages','charts','money','look','queries','heatmaps','kpis','metrics','ledger','tables'];   // in the card's order (#75: the answer, its charts, where to look, then the one-line query box; #31b: the money panel under the charts, the arithmetic under the tiles); the trail and the exports stay with the open card
 const settled=rec=>rec.state==='done'||rec.state==='error';
-function bodyKey(rec){ return `${rec.state}|${rec.analysed?1:0}|${analystMode()||''}`; }   // the analyst offer is the one part that changes after a card settles
+function bodyKey(rec){ const m=moneyOf(rec); return `${rec.state}|${rec.analysed?1:0}|${analystMode()||''}|${m?m.state:''}|${ratesKey()}|${unitMode()||''}`; }   // what changes after a card settles: the analyst offer, its money landing (#31b), the rates and the unit
 function entryOf(rec){
  if(rec.entry)return rec.entry;
  const line=node('article',undefined,'card earlier'), text=node('div',undefined,'earlier-text'), title=node('strong'), meta=node('span'), open=node('button','Open','secondary');
@@ -842,7 +1184,8 @@ function paintAnswer(rec){
  if(rec.state==='error'){message('Could not complete',[rec.error],'error');if(PROVIDERS[rec.mode])message(null,['The analyst could not answer; no answer was fabricated. The offline answer stands.'],'muted');return null;}
  if(PROVIDERS[rec.mode]){paintAnalyst(rec);return null;}
  if(rec.note)message('Note',[rec.note]);
- const summary=message('',rec.result.sections||[],'',rec);showResult(rec.result);
+ const view=viewOf(rec);   // the answer at the rates in force (#31b)
+ const summary=message('',view.sections,'',rec); rec.lineEl=dollarSlot(summary); showResult(view.result,rec.result); paintMoney(rec);
  return summary;
 }
 let shownId=null, shownKey=null;   // the record #card shows now, and the bodyKey of what was drawn for it
@@ -982,7 +1325,7 @@ function reveal(summary,submitted){
  const queries=$('queries').children.filter?$('queries').children.filter(e=>/^query\b/.test(e.className||'')):[...$('queries').children].filter(e=>/^query\b/.test(e.className||''));
  const kids=summary.children?[...summary.children]:[];
  const typed=typedLines(summary).map(el=>({el,text:textOf(el),kids:el.children?[...el.children]:[],settled:false}));
- const later=[...kids.filter(e=>!typed.some(t=>t.el===e)&&!/^ul$/i.test(e.tag||e.tagName||'')),...[...$('messages').children].filter(e=>e!==summary&&!/\bmessage\b/.test(e.className||'')),...$('look').children];   // the note disclosure, a list's "more", where to look and the analyst offer arrive with the last word
+ const later=[...kids.filter(e=>!typed.some(t=>t.el===e)&&!/^ul$/i.test(e.tag||e.tagName||'')&&!/\bdollar-line\b/.test(e.className||'')),...[...$('messages').children].filter(e=>e!==summary&&!/\bmessage\b/.test(e.className||'')),...$('look').children];   // the note disclosure, a list's "more", where to look and the analyst offer arrive with the last word
  const blooms=[...$('charts').children,...$('heatmaps').children];
  const total=typed.reduce((n,t)=>n+t.text.length,0), step=queries.length?Math.min(PACE.query_ms,PACE.queries_ms/queries.length):0;
  // The first figure is due 400 ms after the submit, not after the land: a slow land shortens the wait before the
@@ -1041,9 +1384,9 @@ function paintLive(rec){
 // The finished analyst card. When the analyst's own queries ran, their evidence is the card's; when the plan was
 // refused (nothing ran), the notes say so and the offline evidence it was asked from stays on the card.
 function paintAnalyst(rec){
- const r=rec.result, ran=(r.trace||[]).some(e=>e.ok), offline=rec.source&&rec.source.result;
- if(ran)showResult(r); else if(offline)showResult(offline);
- const card=message(null,[],'analyst');
+ const view=viewOf(rec), r=view.result, ran=(r.trace||[]).some(e=>e.ok), offline=rec.source&&rec.source.result;
+ if(ran)showResult(r,rec.result); else if(offline)showResult(pricedView(offline,askedRates(rec.source)).result,offline);
+ const card=message(null,[],'analyst'); rec.lineEl=dollarSlot(card); paintMoney(rec);
  if(r.status==='plan_rejected'){   // issue #78: a refused plan degrades, it does not stop; one quiet line under the offline evidence
   const over=r.plan_rejection, calls=(r.usage&&r.usage.model_calls)||0;
   card.append(node('p',over?`The analyst proposed ${over.proposed} queries; the limit is ${over.limit}, so none ran.`:(r.sections||[]).filter(t=>!/^Investigation stopped/.test(t)).join(' '),'analyst-p muted'));
@@ -1054,8 +1397,8 @@ function paintAnalyst(rec){
  if(r.narrative_status!=='available'||r.status!=='complete')for(const text of notes)card.append(node('p',text,'analyst-p warning-note'));
  // The interpretation in the answer's shape (#75): one bullet per paragraph, its figures bold (each was substituted
  // from a query row by the validator), the evidence small under it.
- const list=(r.narrative||[]).length?node('ul',undefined,'analyst-list'):null; if(list)card.append(list);
- for(const item of r.narrative||[]){
+ const narrative=view.narrative||[], list=narrative.length?node('ul',undefined,'analyst-list'):null; if(list)card.append(list);
+ for(const item of narrative){
   const li=node('li',undefined,'analyst-p'); li.append(node('span',`${KIND_LABEL[item.kind]||'Note'}: `,'kind'),...boldFigures(item.text)); list.append(li);
   const cites=(item.citations||[]).map(c=>{ for(const [rid,i] of stepIndex)c=c.replace(rid,`query ${i+1}`); return c; });
   if(cites.length)li.append(node('p',`Evidence: ${cites.join('; ')}`+((item.charts||[]).length?` · Charts: ${item.charts.join('; ')}`:''),'analyst-cites muted'));
@@ -1117,6 +1460,7 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
    let response;
    if(p){
     const body={question,day:scope.day,shift:scope.shift,corrupt,session_id:current?sessionId:null,mode:rec.mode,scope:scope.scope,period:scope.period};
+    const rates=paramOf(rec.askUrl||'','rates'); if(rates)body.rates=rates;   // the analyst prices at the rates the card was asked at (#31b)
     const pending=post('/api/ask',body,headers);
     for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
     response=await pending;
@@ -1173,6 +1517,11 @@ $('rail-toggle').addEventListener('click',()=>{ const open=!railOpen(); $('rail'
 $('rail-close').addEventListener('click',()=>{closeRail();$('rail-toggle').focus?.();});
 $('rail').addEventListener('keydown',event=>{ if(event.key==='Escape'&&railOpen()){closeRail();$('rail-toggle').focus?.();} });
 $('came-back').addEventListener('click',()=>{ $('execution').open=true; });
+// The rates panel (#31b): "Change rates" opens the editor in the rail; every edit applies as it is typed.
+$('rates-change').addEventListener('click',()=>openRates(true));
+$('rates-form').addEventListener('submit',event=>{ if(event&&event.preventDefault)event.preventDefault(); openRates(false); $('rates-change').focus?.(); });
+$('rates-form').addEventListener('keydown',event=>{ if(event.key==='Escape'){ openRates(false); $('rates-change').focus?.(); } });
+$('rates-reset').addEventListener('click',()=>{ rateOverrides={}; applyRates(); renderRateFields(); });
 // A scope change starts a new server conversation (the follow-up context belongs to the old scope) but keeps the
 // thread: every card carries its own scope in its title line. Only "Clear the thread" empties it.
 function rescope(){ sessionEpoch++;sessionId=null;conversation=[];$('api-key').value='';pushAddress(scopeUrl());$('status').textContent=readyText();if(!thread.length)renderCard();updateScope();primeKpis(); }
@@ -1226,7 +1575,7 @@ $('reset').addEventListener('click',reset);$('day').addEventListener('change',da
 $('download').addEventListener('click',()=>{if(!latest)return;const url=URL.createObjectURL(new Blob([latest.report_markdown],{type:'text/markdown'}));const a=node('a');a.href=url;a.download=`synthetic-shift-report-${latest.production_day}.md`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 let printing=false;
 $('pdf').addEventListener('click',async()=>{if(!latest||printing)return;
- if(latest.url){const a=node('a');a.href=withQuery(latest.url,'format=pdf');a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();return;}   // an addressed answer: the PDF is the same address with format=pdf
+ if(latest.url){const a=node('a');a.href=withQuery(withRates(latest.url),'format=pdf');a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();return;}   // an addressed answer: the PDF is the same address with format=pdf
  printing=true;try{const response=await post('/api/report',{session_id:latest.session_id,run_id:latest.run_id});if(!response.ok){const error=await response.json();throw new Error(error.error||'Report unavailable');}const url=URL.createObjectURL(await response.blob());const a=node('a');a.href=url;a.download=`synthetic-report-${latest.production_day}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(error){$('status').textContent=error.message;}finally{printing=false;}});
 function applyPublicMode(){
  // Hosted synthetic demo: no visitor keys, ever. A live option stays only when the server's own key for that provider and the cap are enabled.
@@ -1248,14 +1597,14 @@ function applyPublicMode(){
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model available':'Synthetic data / Public demo';
 }
 async function init(){
- renderSegments();renderQuestionChips();renderCard();
+ renderSegments();renderQuestionChips();renderCard();renderUnits();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
- applyPublicMode();updateScope();
+ applyPublicMode();loadMoney(currentAddress());updateScope();
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
  if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
  const address=currentAddress(), addressable=!!(address&&CANONICAL.test(pathOf(address))), cards=storedThread();
- let addressed=-1; if(addressable)for(let i=cards.length-1;i>=0;i--)if(cards[i].url===address){addressed=i;break;}
+ let addressed=-1; if(addressable)for(let i=cards.length-1;i>=0;i--)if(sameView(cards[i].url,address)){addressed=i;break;}
  replayThread(cards.filter((c,i)=>i!==addressed));   // the thread above the addressed card comes back first, in its order (#86)
  if(!(addressable&&await restore(address,addressed>=0?cards[addressed]:null))){pushAddress(scopeUrl(),true);primeKpis();}
  const context=document.modelContext;

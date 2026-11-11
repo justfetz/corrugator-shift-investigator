@@ -99,6 +99,21 @@ def effective(overrides=None):
     return {'values': values, 'sources': sources}
 
 
+def client_config():
+    """What the card needs to price in the browser (issue #31b, `/api/config`): each rate with its default, the
+    server's value and source (INVESTIGATOR_RATES applied), its `rates=` key and limit; the fixed assumptions and the
+    constants they derive; the cost note. No rate is written into web/money.js: it reads them from here."""
+    rates = effective()
+    return {'rates': [{'id': rid, 'short': spec['short'], 'label': spec['label'], 'unit': spec['unit'], 'default': spec['default'],
+                       'value': rates['values'][rid], 'source': rates['sources'][rid], 'default_source': spec['source'],
+                       'note': spec['note'], 'max': 100 if rid == 'trim_target_pct' else MAX_RATE} for rid, spec in RATE_SPECS.items()],
+            'assumptions': DEFINITION['assumptions'], 'post': DEFINITION['post'],
+            'constants': {'msf_per_minute': MSF_PER_MINUTE, 'annual_minutes': ANNUAL_MINUTES, 'shift_minutes': SHIFT_MINUTES,
+                          'annual_msf_per_machine': ASSUMPTIONS['annual_msf_per_machine'], 'required_fpm': ASSUMPTIONS['required_fpm'],
+                          'net_width_in': ASSUMPTIONS['net_width_in'], 'scheduled_min_day': ASSUMPTIONS['scheduled_min_day']},
+            'margin_not_set': MARGIN_NOT_SET, 'note': NOTE}
+
+
 def rate_rows(rates):
     """The rates as rows: what a card's provenance line and the narrative may name."""
     return [{'rate_id': rid, 'label': spec['label'], 'unit': spec['unit'], 'value': rates['values'][rid],
@@ -134,7 +149,8 @@ def price(kind, quantity, rates, gross_sqft=None, minutes=None):
     if quantity is None or quantity < 0:
         return {'msf': None, 'paper_usd': None, 'machine_minutes': None, 'machine_time_usd': None, 'usd': None,
                 'usd_per_year': None, 'msf_not_made': None, 'contribution_usd': None, 'contribution_usd_per_year': None,
-                'contribution_status': 'not priced', 'usd_basis': 'not priced: the quantity is unavailable or a negative remainder'}
+                'contribution_status': 'not priced', 'usd_basis': 'not priced: the quantity is unavailable or a negative remainder',
+                'price_terms': None}
     parts = []
     if kind in ('trim', 'waste', 'paper'):
         msf = quantity / 1000
@@ -176,13 +192,17 @@ def price(kind, quantity, rates, gross_sqft=None, minutes=None):
         parts.append(f'per year: {volume_text}')
     else:
         parts.append(f'per year: {time_text}')
+    # `price_terms` (issue #31b) is the call itself, rate-free and unrounded: kind, quantity, and the window's gross
+    # area and scheduled minutes. The card re-prices a row at a visitor's rates in the browser by making this same
+    # call (web/money.js price), so a figure there and the server's figure at the same rates never disagree.
     r2 = lambda x: None if x is None else round(x, 2)
     return {'msf': None if msf is None else round(msf, 3), 'paper_usd': r2(paper_usd),
             'machine_minutes': round(machine_minutes, 2), 'machine_time_usd': r2(machine_usd), 'usd': r2(usd),
             'usd_per_year': None if usd_year is None else round(usd_year, 0),
             'msf_not_made': round(not_made, 3), 'contribution_usd': r2(contribution),
             'contribution_usd_per_year': None if contribution_year is None else round(contribution_year, 0),
-            'contribution_status': status, 'usd_basis': '; '.join(parts)}
+            'contribution_status': status, 'usd_basis': '; '.join(parts),
+            'price_terms': {'kind': kind, 'quantity': quantity, 'gross_sqft': gross_sqft or None, 'minutes': minutes or None}}
 
 
 def trim_points_usd_per_year(points, rates=None, machines=1):
@@ -316,6 +336,8 @@ def opportunities(store, window, shift, rates):
     rows.append({'lever': f'Side trim over the {v["trim_target_pct"]:g}% target', 'kind': 'trim', 'quantity': round(over, 4), 'unit': 'points',
                  'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross' + ('' if over else ', at or under target'),
                  **price('trim', over_sqft, rates, gross, minutes)})
+    if rows[-1]['price_terms']:
+        rows[-1]['price_terms']['trim_pct'] = trim_pct or 0   # the points over a changed target are re-derived from it (web/money.js)
     for r in pareto['rows']:
         rows.append({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if r['category'] == 'Order change' else ''),
                      'kind': 'setup' if r['category'] == 'Order change' else 'downtime', 'quantity': r['minutes'], 'unit': 'min',

@@ -40,7 +40,7 @@ Profit, costs, staffing decisions, live machine state and plant-wide optimal imp
 # analyst (issue #31).
 OPENAI_OMITTED_TOOLS=frozenset({'get_shift_dollars','get_opportunities'})
 DOLLAR_FIELDS=('msf','paper_usd','machine_minutes','machine_time_usd','usd','usd_per_year','msf_not_made',
-               'contribution_usd','contribution_usd_per_year','contribution_status','usd_basis')
+               'contribution_usd','contribution_usd_per_year','contribution_status','usd_basis','price_terms')
 
 
 def compact_result(result):

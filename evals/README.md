@@ -118,6 +118,12 @@ a slow change pass.
 
 ## How the value goldens are made
 
+One value case is not by hand: `value-dollars-shift-0914-shift-2-client` (issue #31b) holds the
+server's `get_shift_dollars` at other rates to what the card's client formula (`web/money.js`) makes of
+the same shift's quantities at the post's rates. `python3 evals/make_client_money.py` (needs node) writes
+those figures to `client_money.json` after an intended change to the cost model or the client formula;
+`make_value_goldens.py` turns them into the case, exact to the cent.
+
 `make_value_goldens.py` generates every number in `golden_values.json` from plain
 Python sums over `synth.generate_months()`: it has its own day / week / month
 calendar arithmetic, its own ratio-of-sums tile formulas, its own Pareto
