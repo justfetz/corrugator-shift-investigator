@@ -281,7 +281,9 @@ MONEY_ONLY = ("Dollars come with where the money went this shift, the levers in 
               "volume, rollstock, grade, over/under-run, stops-per-day, summary, matrix, notes or ranking in dollars is not "
               "available yet: ask for it without dollars, or ask where the money is.")
 # Words that keep a money question about waste on the dry-end reject breakdown (the rejects, priced).
-MONEY_REJECT_WORDS = r"\b(rejects?|warp|bond|misalignment|cracking|quality)\b|\bdry[- ]end\b"
+# The cracking / surface category in the words people use for it: crack, cracks, cracked, cracking (issue #100).
+CRACK_WORDS = r"crack(?:s|ed|ing)?"
+MONEY_REJECT_WORDS = rf"\b(rejects?|warp|bond|misalignment|{CRACK_WORDS}|quality)\b|\bdry[- ]end\b"
 
 
 # Measure words decide the intent; grouping words (by grade, by width, by crew) only choose the breakdown.
@@ -411,8 +413,9 @@ def parse_period_request(lower, current, shifts):
     # "How much downtime last week": over a named window the downtime answer is the Pareto, as the day-shaped
     # downtime question is under a ranged Period control (period_plan), not the KPI tiles (issue #105).
     downtime = bool((period or months) and re.search(r"\bdowntime\b", lower))
-    reasons = {w for w in ("bond", "warp", "misalignment", "cracking") if re.search(rf"\b{w}\b", lower)}
-    waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|cracking|bale|unexplained|twist|s-warp|s warp|delamination", lower))
+    reasons = {w for w, pattern in (("bond", "bond"), ("warp", "warp"), ("misalignment", "misalignment"), ("cracking", CRACK_WORDS))
+               if re.search(rf"\b{pattern}\b", lower)}
+    waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(rf"waste|trim|shear|reject|bond|warp|misalignment|{CRACK_WORDS}|bale|unexplained|twist|s-warp|s warp|delamination", lower))
     this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
     grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
     rollstock = bool(re.search(r"roll[- ]?stock|\bpaper (consum|usage|used\b)|\bconsum\w*\b.*\bpaper\b|\bpaper\b.*\bconsum|how much paper\b|\brolls? (of paper )?(consumed|used)", lower))

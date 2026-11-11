@@ -2802,6 +2802,54 @@
    "note": "Issue #100: cracking / surface (cracking board, wrinkles, brake line) is a dry-end category of the owner's taxonomy and the fourth dry-end tile, in moisture's place; its weekly trend routes to cracking_pct."
   },
   {
+   "id": "period-cracks-cost-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What did cracks cost this month?",
+   "note": "Codex review of #122: the cracking / surface category in a plain word (cracks) routes as warp or bond do, to the month's waste breakdown with its dollars, not to the all-levers opportunities.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "period-cracked-board-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Show cracked board this month",
+   "note": "Codex review of #122: cracked board names the cracking / surface category; over a month it is the waste breakdown, as 'Show warp this month' is, not the generic KPI tiles.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ]
+   }
+  },
+  {
    "id": "period-fiscal-vs-previous",
    "type": "routing",
    "mode": "offline",
