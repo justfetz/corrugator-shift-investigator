@@ -563,6 +563,27 @@ def test_the_question_names_its_own_scope_on_the_url_and_the_post_path(running):
     assert posted['context']['shift']==1 and posted['context']['period']=='week' and posted['production_day']=='2026-09-07'
 
 
+def test_a_moved_question_keeps_the_session_on_the_controls():
+    """Review of #105: the session follows the controls. A question that names another shift on the same day is a
+    follow-up and stays in the conversation; one on another day is not (as after= on the URL path), and the
+    conversation on the controls' day goes on as it was rather than starting afresh."""
+    app=Workbench()
+    try:
+        def ask(question,session=None):
+            with app.lock:
+                return app.ask({'day':'2026-09-14','shift':2,'question':question,'session_id':session})
+        first=ask('Why was this shift slow?');session=first['session_id']
+        moved=ask('Show shift 1',session)
+        assert moved['url']=='/corr/1/day/2026-09-14/shift/1?measure=overview' and moved['session_id']==session
+        assert [h['question'] for h in ask('Show downtime',session)['context']['history']]==['Why was this shift slow?','Show shift 1','Show downtime']
+        week=ask('How much downtime last week?',session)
+        assert week['url']=='/corr/1/week/2026-09-07/shift/2?measure=pareto' and [h['question'] for h in week['context']['history']]==['How much downtime last week?']
+        assert [h['question'] for h in ask('Show waste',session)['context']['history']]==['Why was this shift slow?','Show shift 1','Show downtime','Show waste']
+        assert app.sessions[session].shift==2 and app.sessions[session].production_day=='2026-09-14'
+    finally:
+        app.close()
+
+
 def test_follow_ups_reports_and_the_bad_record_ride_in_the_url(running):
     """after= carries the conversation (no session), measure=report is the deterministic period report, and
     corrupt=1 is the Advanced toggle; the redirect keeps all three on the canonical address."""

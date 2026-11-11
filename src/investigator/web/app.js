@@ -208,6 +208,7 @@ function applyUrl(url){
  return true;
 }
 function pushAddress(url,replace=false){ if(!nav||currentAddress()===url)return; nav.history[replace?'replaceState':'pushState']({url},'',url); }
+function sameDay(url,s){ const m=CANONICAL.exec(pathOf(url)); return !m||m[2]===s.day; }   // a question can name another day (#105); follow-ups share one
 function followView(url,follow=true){ conversation=[...priorsOf(url),...(follow?[bareUrl(url)]:[])].slice(-maxPriors()); }   // follow=false: the period report is a view, not a question in the conversation
 // Back, forward or a pasted address: the controls follow the URL, and the view becomes the open card of the
 // thread. A view this page has shown opens its card again without a request; any other is fetched as JSON from
@@ -1189,7 +1190,7 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
     if(result.session_reset&&sessionId)rec.note='The server restarted since your last question, so this answer started a fresh conversation; earlier follow-up context was not available.';
     sessionId=result.session_id;
    }
-   if(!p&&result.url){ rec.url=result.url; if(current){ followView(result.url,!report); if(openId===rec.id)pushAddress(result.url); } }
+   if(!p&&result.url){ rec.url=result.url; if(current){ if(sameDay(result.url,scope))followView(result.url,!report); if(openId===rec.id)pushAddress(result.url); } }   // an answer on another day (#105: "last week") is no follow-up of this conversation, whose views share the day
    land(rec,result);
    $('status').textContent=readyText();
    return {status:result.status,sections:result.sections,production_day:result.production_day,shifts:result.selected_shifts,url:result.url};

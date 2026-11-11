@@ -1086,8 +1086,8 @@ def score(case, expect, results, analysis, allowed, mode):
     """The invariants over every turn and the case's own expectations over the last (or, for an
     investigation, over all of them): the same scoring for the in-process and the URL answers."""
     failures = []
-    for result in results:
-        failures.extend(invariants(mode, result, *answered_scope(case, result, analysis, allowed)))
+    for index, result in enumerate(results):
+        failures.extend(invariants(mode, result, *answered_scope(case, expect, result, analysis, allowed, index == len(results) - 1)))
     if case['type'] == 'investigation':
         failures.extend(investigation_failures(expect, results))
     else:
@@ -1097,16 +1097,23 @@ def score(case, expect, results, analysis, allowed, mode):
     return failures
 
 
-def answered_scope(case, result, analysis, allowed):
-    """(analysis, allowed shifts) of the scope a result was answered in: the case's controls, or the shift and day
-    the question named (issue #105), which the result's own context records."""
-    context = result.get('context') or {}
-    if context.get('scope') not in ('shift', 'day') or result.get('production_day') is None:
-        return analysis, allowed
-    shifts = [context['shift']] if context['scope'] == 'shift' else [1, 2, 3]
-    if result['production_day'] == getattr(analysis, 'day', None):
-        return analysis, shifts
-    return dataset(result['production_day'], case.get('corrupt', False)), shifts
+def answered_scope(case, expect, result, analysis, allowed, last):
+    """(analysis, allowed shifts) for the invariants of one answer. The allowed shifts are the scope the case states,
+    never the answer's own: the case's controls, or, for the last turn of a case whose question names its own shift
+    (issue #105), the shift of its `expect.url` (a scripted analyst plan, which has no URL, states `expect.shifts`).
+    A turn that moves the shift without the case stating it is held to the controls and fails. The analysis that
+    recounts a daily table is the one for the day the answer read, which `expect.url` pins as well."""
+    stated = allowed
+    if last and expect.get('url'):
+        match = re.match(r'^/corr/[^/]+/(?:day|week|month|period)/\d{4}-\d{2}-\d{2}(?:/shift/([123]))?', expect['url'])
+        if match:
+            stated = [int(match[1])] if match[1] else [1, 2, 3]
+    elif last and case.get('plan') is not None and expect.get('shifts'):
+        stated = list(expect['shifts'])
+    day = result.get('production_day')
+    if day is None or day == getattr(analysis, 'day', None):
+        return analysis, stated
+    return dataset(day, case.get('corrupt', False)), stated
 
 
 def url_failures(case, expect, turns, provider, analysis=None, allowed=None):

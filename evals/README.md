@@ -44,9 +44,10 @@ live row checks only that its question resolves to its `expect.url`.
 
 A question that names its own shift or a relative window (issue #105: "How much donwtime on 1st shift last
 week?" on the shift 2 / Day controls) runs in the scope it names on both paths: `/q` moves it, and in-process
-the runner reads it with `agent.question_scope`, answers on that day's records, and checks the invariants
-(tools inside the scope, complete tables) against the scope each answer was given in, which its `context`
-records. A scripted analyst plan (`plan`) is checked in that scope too.
+the runner reads it with `agent.question_scope` and answers on that day's records. The tools-inside-the-scope
+invariant takes its scope from what the case states, never from the answer: the shift of its `expect.url` for the
+last turn (a scripted analyst plan, which has no URL, states `expect.shifts`), else the case's controls, so a
+question moved to the wrong shift fails even where nothing else pins it.
 
 ## Global invariants
 

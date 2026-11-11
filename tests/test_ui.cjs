@@ -766,6 +766,16 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // the retained priors never exceed the grammar's eight, whatever DEMO_MAX_TURNS says
  vm.runInContext("config.demo_guards.max_turns=50",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),8);
  vm.runInContext("config.demo_guards.max_turns=4",ctx3);assert.equal(vm.runInContext('maxPriors()',ctx3),3);
+ // issue #105: an answer the question moved to another day ("last week") goes in the address bar, but it is no follow-up of
+ // this conversation, whose views share one day: the next question still carries the conversation's own priors
+ const before=vm.runInContext('JSON.stringify(conversation)',ctx3), viaFetch=ctx3.fetch; history.length=0;
+ assert.notEqual(before,'[]');
+ ctx3.fetch=async(path,init)=>{fetched.push([path]);if(path.startsWith('/q?'))return {ok:true,status:200,json:async()=>answer('/corr/1/week/2026-09-07/shift/1?measure=pareto')};return viaFetch(path,init);};
+ const moved=await vm.runInContext("ask('How much downtime on first shift last week?')",ctx3);
+ assert.equal(moved.url,'/corr/1/week/2026-09-07/shift/1?measure=pareto');assert.deepEqual(history.slice(-1),[['push',moved.url]]);
+ assert.equal(vm.runInContext('JSON.stringify(conversation)',ctx3),before);
+ assert.equal(vm.runInContext("sameDay('/corr/1/day/2026-09-15/shift/1?measure=overview',{day:'2026-09-15'})",ctx3),true);   // a shift move keeps the day: it follows
+ ctx3.fetch=viaFetch;
  // a pasted alias is replaced in the address bar by the canonical url the server returns
  fetched.length=0;history.length=0;
  const alias={pathname:'/corr/1/week/2026-09-14',search:'?measure=downtime'};

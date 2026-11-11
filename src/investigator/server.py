@@ -358,19 +358,16 @@ class Workbench:
         if session_reset:
             session_id = None
         tool_period = 'fiscal' if period == 'accounting' else period   # the period tools' name for the 4-4-5 window
-        read = {}
         if not report:
-            # The question's own shift and window win over the controls (issue #105), for the analyst as for the router:
-            # "1st shift last week" asked on shift 2 under Day runs in shift 1's week before. A relative window with no
-            # production day in the records is refused here, before any model is asked.
-            scoped = question_scope(question, Context(day, shift, scope=scope, period=tool_period), self.store.production_days)
-            day, shift, tool_period, read = scoped.production_day, scoped.shift, scoped.period, scoped.read
-            period = 'accounting' if tool_period == 'fiscal' else tool_period
+            # The question's own shift and window win over the controls (issue #105), for the analyst as for the router;
+            # the run takes that scope (_scoped). A relative window with no production day in the records is refused
+            # here, before any model is asked.
+            question_scope(question, Context(day, shift, scope=scope, period=tool_period), self.store.production_days)
         if mode != 'offline' and not report:
             self.daily_round()  # counted before the model is asked; failed rounds still count
         job = {'mode': mode, 'report': report, 'question': question, 'day': day, 'shift': shift, 'scope': scope, 'period': period,
-               'tool_period': tool_period, 'corrupt': corrupt, 'key': (day, corrupt), 'session_reset': session_reset, 'rates': rates,
-               'read': read, 'api_key': api_key, 'anthropic_key': anthropic_key}
+               'tool_period': tool_period, 'corrupt': corrupt, 'session_reset': session_reset, 'rates': rates,
+               'api_key': api_key, 'anthropic_key': anthropic_key}
         if session_id is None:
             session_id = secrets.token_urlsafe(24)
             if len(self.sessions) >= 32:
@@ -391,9 +388,21 @@ class Workbench:
         context.shift = job['shift']
         context.scope = job['scope']
         context.rates = job.get('rates') or {}
-        context.read = job.get('read') or {}   # what the question's words moved: the router and the analyst's prompt read it
         self.sessions.move_to_end(session_id)
         return context
+
+    def _scoped(self, job, context):
+        """The context the job's question runs in (issue #105): the session's, which follows the controls, or a copy in the
+        shift and window the question names. The session keeps the controls' conversation; `_settle` hands back the
+        history of a same-day question. Lock held."""
+        return context if job['report'] else question_scope(job['question'], context, self.store.production_days)
+
+    @staticmethod
+    def _settle(context, run):
+        """After a question asked in another scope: on the same production day it is a follow-up of the conversation;
+        on another day it is not (as the URL path's after= chain), and the controls' conversation is left as it was."""
+        if run is not context and run.production_day == context.production_day:
+            context.history = run.history
 
     def _dataset(self, key):
         """The day's analysis, building it on first use; at most three unpinned days stay open. Lock held."""
@@ -413,9 +422,11 @@ class Workbench:
                              + '?measure=report' + ('&corrupt=1' if job['corrupt'] else ''))
             return self._retain(result, job['session_id'], job['session_reset'])
         context = self._context(job)
-        request = parse_request(job['question'], context)
-        result = Agent(self._dataset(job['key']), max_turns=self.guards.max_turns).ask(job['question'], context, request=request)
-        result['url'] = canonical_url(request, context, job['corrupt'], self.store.machine_id)   # the question's own address
+        run = self._scoped(job, context)
+        request = parse_request(job['question'], run)
+        result = Agent(self._dataset((run.production_day, job['corrupt'])), max_turns=self.guards.max_turns).ask(job['question'], run, request=request)
+        self._settle(context, run)
+        result['url'] = canonical_url(request, run, job['corrupt'], self.store.machine_id)   # the question's own address
         return self._retain(result, job['session_id'], job['session_reset'])
 
     def make_planner(self, mode, key, budget, cancelled=None):
@@ -434,20 +445,23 @@ class Workbench:
         planner = self.make_planner(mode, job['api_key'] if mode == 'openai' else job['anthropic_key'], Budget(Path(self.guards.ledger)), cancelled)
         with self.lock:
             context = self._context(job)
-            analysis = self._dataset(job['key'])
-            self.pins[job['key']] += 1
+            run = self._scoped(job, context)
+            key = (run.production_day, job['corrupt'])
+            analysis = self._dataset(key)
+            self.pins[key] += 1
         try:
             if getattr(planner, 'planned', False):   # one planning call, tools, one streamed narrative
                 agent = Agent(analysis, planner=planner, max_calls=2, max_seconds=10, max_turns=self.guards.max_turns, guard=self.lock)
-                result = agent.ask_planned(job['question'], context, emit)
+                result = agent.ask_planned(job['question'], run, emit)
             else:                                    # the tool loop (OpenAI): same stream, steps as they finish
                 agent = Agent(analysis, planner=planner, max_calls=10, max_seconds=60, max_turns=self.guards.max_turns, guard=self.lock)
-                result = agent.ask(job['question'], context, emit=emit)
+                result = agent.ask(job['question'], run, emit=emit)
         finally:
             planner.close()
             with self.lock:
-                self.pins[job['key']] -= 1
+                self.pins[key] -= 1
         with self.lock:
+            self._settle(context, run)
             return self._retain(result, job['session_id'], job['session_reset'])
 
     def ask(self, payload, api_key=None, anthropic_key=None):
