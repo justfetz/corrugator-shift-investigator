@@ -1206,6 +1206,11 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const posted=calls.filter(x=>x[0]==='POST');
  assert.deepEqual(posted[posted.length-1],['POST','/api/evals/grade',{id:'a@anthropic:1',digest:'d-a@anthropic:1',verdict:'bad',note:'It tells the crew what to compare.',grounded:true,recorded_not_proven:true,prescribes_nothing:false,unavailable_not_zero:true},'tok']);
  assert.match(els.progress.textContent,/^2 of 20 graded/);
+ // regrading a stale one clears its "earlier version" warning; the card stays in view until the filter is applied again
+ const staleNote=all(c).find(e=>/graded an earlier version/.test(e.textContent)); assert.equal(Boolean(staleNote.hidden),false);
+ all(c).find(e=>e.tag==='textarea').value='Re-read after the re-record: still fine.'; await all(c).find(e=>e.tag==='button'&&e.textContent==='Save grade').events.click();
+ assert.equal(staleNote.hidden,true); assert.ok(c.classList.has('graded'));
+ els['show-filter'].children[0].events.click(); assert.deepEqual(els.items.children.map(x=>x.hidden),[true,true,true]);
  // the page reads the narratives and saves grades; it never asks for the judge's scores
  assert.deepEqual([...new Set(calls.map(x=>x[0]+' '+x[1]))].sort(),['GET /api/config','GET /api/evals/narratives','POST /api/evals/grade']);
  assert.deepEqual([...new Set([...src.matchAll(/fetch\(([^,)]+)/g)].map(m=>m[1]))].sort(),["'/api/config'","'/api/evals/grade'","'/api/evals/narratives'"]);

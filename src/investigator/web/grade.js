@@ -44,6 +44,8 @@ async function save(item,form){
   const response=await post(body), out=await response.json();
   if(!response.ok)throw new Error(out.error||'The grade was not saved');
   item.grade=out.saved; item.stale=false;
+  if(form.staleNote)form.staleNote.hidden=true;   // the new grade is of the current text
+  // The card stays in view under "To grade" until the filter is next applied, so "Saved" does not vanish under the cursor.
   form.status.textContent=`Saved ${String(out.saved.graded_at).replace('T',' ').replace('Z',' UTC')}: ${out.saved.verdict}.`;
   form.box.classList.add('graded');
   renderProgress();
@@ -73,7 +75,7 @@ function buildItem(item){
  if(item.grade){
   note.value=item.grade.note||''; setVerdict(form,item.grade.verdict);
   for(const [key,b] of Object.entries(form.checks))b.checked=item.grade[key]!==false;   // after the verdict, which ticks every line for "good"
-  if(item.stale)box.insertBefore(el('p',`You graded an earlier version of this text on ${String(item.grade.graded_at).slice(0,10)}; it has changed since, so grade it again.`,'warning-note'),lines);
+  if(item.stale){form.staleNote=el('p',`You graded an earlier version of this text on ${String(item.grade.graded_at).slice(0,10)}; it has changed since, so grade it again.`,'warning-note'); box.insertBefore(form.staleNote,lines);}
   else box.classList.add('graded');
  }else setVerdict(form,null);
  forms[item.id]=form;
