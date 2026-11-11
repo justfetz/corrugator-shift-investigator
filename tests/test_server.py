@@ -530,7 +530,7 @@ def test_the_url_path_refuses_like_the_post_path(running):
         ('/q?day=2026-09-14&shift=2&period=year&q=Show+speed',400,'accounting period'),
         ('/q?day=2026-09-14&shift=2&mode=openai&q=Show+speed',400,'Invalid request fields'),
         ('/q?day=2026-09-14&shift=2&scope=shift&q=Compare+shift+1+with+shift+3',400,'Selected shift only'),   # one named shift moves instead (#105)
-        ('/q?day=2026-08-04&shift=2&scope=shift&q=How+much+downtime+last+week',400,'before the records'),
+        ('/q?day=2025-09-30&shift=2&scope=shift&q=How+much+downtime+last+week',400,'before the records'),
         ('/q?day=2026-09-14&shift=2&period=week&q=Show+setup+matrix',400,'Switch Period to Day'),
         ('/corr/1/day/2026-09-14/shift/2.json',400,'Add measure='),
         ('/corr/1/day/2026-09-14/shift/2.json?measure=overview&bogus=1',400,'Unknown query field'),

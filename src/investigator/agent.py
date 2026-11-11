@@ -497,7 +497,7 @@ def parse_period_request(lower, current, shifts):
         group_by = 'place' if re.search(r"equipment|place|where|location", lower) else 'kind' if re.search(r"\bkind\b", lower) or ('maintenance' in lower and 'operator' in lower) else 'reason'
         measure = 'count' if re.search(r"\b(count|how many|number of|most often|most stops|frequent)\b", lower) else 'minutes'
         if not pareto and months:
-            window = {"period": "month", "anchor": f"{year}-{months[0]:02d}-01"}   # "downtime in August": that month
+            window = {"period": "month", "anchor": month_start(months[0])}   # "downtime in August": that month, the latest such on or before the day
         plan = [("get_downtime_pareto", {"window": window, "group_by": group_by, "measure": measure, "shift": shift})]
         intent = 'period_pareto'
     elif profile:
