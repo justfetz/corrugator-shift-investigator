@@ -4331,6 +4331,76 @@
    }
   },
   {
+   "id": "downtime-in-a-named-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much downtime in August?",
+   "note": "Issue #105 with #35: downtime in a named month is that month's Pareto. The merge of #105 into the year built the month's anchor from a variable the month-name rule had replaced, and the question raised NameError.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=2026-08",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-01"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes"
+    ]
+   }
+  },
+  {
+   "id": "downtime-in-december-is-the-last-december",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much downtime in December?",
+   "note": "A month named without a year is the latest such month on or before the selected day (issue #35): December asked on 14 September 2026 is December 2025, inside the year, not a December after the data.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=2025-12",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2025-12-01"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes"
+    ]
+   }
+  },
+  {
    "id": "last-week-beside-from",
    "type": "routing",
    "mode": "offline",
