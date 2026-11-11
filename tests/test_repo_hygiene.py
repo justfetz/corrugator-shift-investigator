@@ -132,12 +132,18 @@ MAIN_HASH = 'https://corrugator-shift-investigator-4s5ogdb7lq-uc.a.run.app'
 MAIN = 'https://corrugator-shift-investigator-65612311806.us-central1.run.app'
 PREVIEWS = ['https://pr-107---corrugator-shift-investigator-4s5ogdb7lq-uc.a.run.app',
             'https://pr-91---corrugator-shift-investigator-4s5ogdb7lq-uc.a.run.app']
+CUSTOM = 'https://shift.talktomymachine.ai'   # CUSTOM_ORIGINS' default (PR #112); sorts after every *.run.app URL
 CURL_STUB = """#!/usr/bin/env python3
 import json, os, sys
 args = sys.argv[1:]
 url = args[-1]
 base = url.rsplit('/api/', 1)[0]
 open(os.environ['STUB_LOG'], 'a').write(url + '\\n')
+if base in os.environ.get('STUB_NXDOMAIN', '').split():
+    # what curl does when DNS fails: -w still prints 000, the error goes to stderr, exit 6, and the -o file is untouched
+    sys.stdout.write('000' if '-w' in args else '')
+    sys.stderr.write('curl: (6) Could not resolve host: ' + base.split('://', 1)[1] + '\\n')
+    sys.exit(6)
 up = base in os.environ.get('STUB_UP', '').split()
 if url.endswith('/api/health'):
     # the image's health body: its window ends the day before the build (issue #35), or STUB_AS_OF when a test freezes it
@@ -164,9 +170,10 @@ def step_script(text, name):
     return textwrap.dedent('\n'.join(lines)) + '\n'
 
 
-def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREVIEWS), as_of='2026-11-10'):
+def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREVIEWS), as_of='2026-11-10', nxdomain=()):
     """Run the main deploy's smoke test against a stub curl; returns (exit code, log, URLs requested). The build ran on
-    RUN_DAY 2026-11-11 (a Wednesday), so a fresh image's window ends 2026-11-10; `as_of` freezes it elsewhere."""
+    RUN_DAY 2026-11-11 (a Wednesday), so a fresh image's window ends 2026-11-10; `as_of` freezes it elsewhere.
+    `nxdomain` URLs fail like a host that does not resolve (curl exit 6, HTTP 000, no body written)."""
     stub = tmp_path / 'bin'
     stub.mkdir(exist_ok=True)
     (stub / 'curl').write_text(CURL_STUB)
@@ -174,11 +181,11 @@ def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREV
     log = tmp_path / 'requests.log'
     log.write_text('')
     env = {**os.environ, 'PATH': f'{stub}:{os.environ["PATH"]}', 'ORIGINS': ','.join(origins), 'LIVE_MODEL': live_model,
-           'STUB_UP': ' '.join(up), 'STUB_LIVE': ' '.join(live), 'STUB_LOG': str(log),
+           'STUB_UP': ' '.join(up), 'STUB_LIVE': ' '.join(live), 'STUB_NXDOMAIN': ' '.join(nxdomain), 'STUB_LOG': str(log),
            'RUN_DAY': '2026-11-11', 'STUB_AS_OF': as_of}
     proc = subprocess.run(['bash', '-c', step_script(DEPLOY.read_text(encoding='utf-8'), 'Smoke test')],
-                          env=env, capture_output=True, text=True)
-    return proc.returncode, proc.stdout + proc.stderr, log.read_text().split()
+                          env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)   # interleaved, as in the run log
+    return proc.returncode, proc.stdout, log.read_text().split()
 
 
 def test_smoke_test_reports_main_and_never_a_preview(tmp_path):
@@ -219,6 +226,70 @@ def test_smoke_test_fails_when_only_a_preview_answers(tmp_path):
     assert code != 0 and 'Live at' not in log, 'main is down: a healthy preview must not pass the deploy'
     code, log, _ = smoke(tmp_path, up=[MAIN, *PREVIEWS], live=PREVIEWS, live_model='1')
     assert code != 0, "PUBLIC_DEMO_LIVE_MODEL=1 checks main's own live modes, not a preview's"
+
+
+# ORIGINS as the "Add any URL" step leaves it: sorted, so the custom domain comes last.
+WITH_CUSTOM = tuple(sorted((MAIN_HASH, MAIN, *PREVIEWS, CUSTOM)))
+
+
+def health_line(log, url):
+    """The smoke test's `GET <url>/api/health -> HTTP <code> <body>` line for one URL."""
+    return next(line for line in log.splitlines() if line.startswith(f'GET {url}/api/health'))
+
+
+def test_smoke_test_prefers_the_deterministic_url_over_the_custom_domain(tmp_path):
+    """Run 77: with CUSTOM_ORIGINS appended (PR #112), whichever non-*.a.run.app URL answered last became LIVE, so the
+    custom domain would have beaten the deterministic URL the README publishes. The priority is explicit, not ORIGINS order."""
+    assert WITH_CUSTOM[-1] == CUSTOM
+    for origins in (WITH_CUSTOM, tuple(reversed(WITH_CUSTOM))):
+        code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN, CUSTOM], live=[MAIN], live_model='1', origins=origins)
+        assert code == 0 and log.rstrip().endswith(f'Live at {MAIN}'), log
+        assert f'{MAIN}/api/config' in requested and f'{CUSTOM}/api/config' not in requested
+        assert f'{CUSTOM}/api/health' in requested, 'the custom domain is still probed'
+    # the live-mode check reads the reported URL: live modes only on the custom domain do not pass a deploy reported at MAIN
+    code, log, _ = smoke(tmp_path, up=[MAIN_HASH, MAIN, CUSTOM], live=[CUSTOM], live_model='1', origins=WITH_CUSTOM)
+    assert code != 0 and 'Live at' not in log, log
+
+
+def test_smoke_test_falls_back_to_the_custom_domain_before_the_legacy_url(tmp_path):
+    """Deterministic first, then the custom domain, then the legacy *.a.run.app hash URL."""
+    code, log, requested = smoke(tmp_path, up=[MAIN_HASH, CUSTOM], live=[CUSTOM], live_model='1', origins=WITH_CUSTOM)
+    assert code == 0 and log.rstrip().endswith(f'Live at {CUSTOM}'), log
+    assert f'{CUSTOM}/api/config' in requested and f'{MAIN_HASH}/api/config' not in requested
+    code, log, _ = smoke(tmp_path, up=[MAIN_HASH], live=[MAIN_HASH], live_model='1', origins=WITH_CUSTOM)
+    assert code == 0 and log.rstrip().endswith(f'Live at {MAIN_HASH}'), log
+
+
+def test_smoke_test_logs_no_stale_body_when_the_custom_domain_does_not_resolve(tmp_path):
+    """Run 77: `curl: (6) Could not resolve host` left the previous URL's body in the -o file, so the log read
+    `GET https://shift.talktomymachine.ai/api/health -> HTTP 000 {"ok": true, ...}`, a healthy-looking line."""
+    code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN], live=[MAIN], live_model='1', origins=WITH_CUSTOM,
+                                 nxdomain=[CUSTOM])
+    assert code == 0 and log.rstrip().endswith(f'Live at {MAIN}'), log
+    assert health_line(log, MAIN).__contains__('HTTP 200 {"ok": true'), log
+    assert health_line(log, CUSTOM).rstrip() == f'GET {CUSTOM}/api/health -> HTTP 000', 'no body carried over from MAIN'
+    assert 'Could not resolve host: shift.talktomymachine.ai' in log
+    assert f'{CUSTOM}/api/config' not in requested
+    # the deterministic URL down as well: the legacy URL is reported, and the failing domain still shows no body
+    code, log, _ = smoke(tmp_path, up=[MAIN_HASH], live=[MAIN_HASH], live_model='1', origins=WITH_CUSTOM, nxdomain=[CUSTOM])
+    assert code == 0 and log.rstrip().endswith(f'Live at {MAIN_HASH}'), log
+    assert health_line(log, MAIN).endswith('HTTP 503 down')
+    assert health_line(log, CUSTOM).rstrip() == f'GET {CUSTOM}/api/health -> HTTP 000', log
+    # nothing answers, the custom domain unresolvable: the run fails as before
+    code, log, _ = smoke(tmp_path, up=[], origins=WITH_CUSTOM, nxdomain=[CUSTOM])
+    assert code != 0 and 'Live at' not in log, log
+
+
+def test_docs_and_workflow_agree_that_no_secret_name_has_a_default():
+    """docs/ANTHROPIC_DEMO.md said OPENAI_SECRET_NAME defaulted to `openai-api-key` (and a workflow comment said OpenAI
+    kept its historical default) while the workflow's default is empty, as docs/DEPLOYMENT.md says."""
+    deploy = DEPLOY.read_text(encoding='utf-8')
+    assert "OPENAI_SECRET: ${{ vars.OPENAI_SECRET_NAME || '' }}" in deploy
+    assert "ANTHROPIC_SECRET: ${{ vars.ANTHROPIC_SECRET_NAME || '' }}" in deploy
+    assert 'keeps its historical default' not in deploy
+    for page in ('ANTHROPIC_DEMO.md', 'DEPLOYMENT.md'):
+        text = (ROOT / 'docs' / page).read_text(encoding='utf-8')
+        assert not re.search(r'\(default `(openai|anthropic)-api-key`\)', text), page
 
 
 def test_relative_markdown_links_resolve():
@@ -262,7 +333,7 @@ def test_the_deploy_smoke_test_fails_a_window_that_does_not_end_yesterday(tmp_pa
     assert 'echo "RUN_DAY=$(date -u +%F)" >> "$GITHUB_ENV"' in deploy.split('gcloud run deploy', 1)[0]   # recorded before the build
     assert 'curl -sS --max-time 30 -o /tmp/health.json "$LIVE/api/health"' in smoke
     assert 'python3 .github/scripts/check_window.py /tmp/health.json "$RUN_DAY"' in smoke
-    assert smoke.index('check_window.py') < smoke.index('Live at')
+    assert smoke.index('check_window.py') < smoke.index('echo "Live at')
     script = ROOT / '.github' / 'scripts' / 'check_window.py'
 
     def run(as_of, last_day, run_day, today):
