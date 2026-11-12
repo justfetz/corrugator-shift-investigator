@@ -27,7 +27,7 @@ const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 // question that opens that place in the records, go under the charts as links that ask it. A list longer than five
 // folds the rest under "more". What a reader sees is the section without its two markers, word for word.
 const LOOK_LABEL='Where to look', BULLETS_SHOWN=5;
-const SHAPE_REF=/ \(query (\d+)(?: · (?:row|detail|weekday) \d+)?\)$/, SHAPE_LOOK=/^(.*) → “([^”]+)”$/;
+const SHAPE_REF=/ \(query (\d+)(?: · (?:row|detail|weekday|flag) \d+)?\)$/, SHAPE_LOOK=/^(.*) → “([^”]+)”$/;
 function plainSection(s){ return (s.startsWith('- ')?s.slice(2):s).replace(/\*\*([^*]+)\*\*/g,'$1'); }
 function shapeLabel(s,next){ return !!next&&next.startsWith('- ')&&!s.startsWith('- ')&&!s.includes('**')&&!/\d|[.:;!?]$/.test(s)&&s.length<=48; }
 function textOf(e){ return e&&e.children&&e.children.length?[...e.children].map(textOf).join(''):((e&&e.textContent)||''); }   // the stub DOM of the unit tests does not compute textContent from children
@@ -53,15 +53,24 @@ function foldFindings(e,lists){
  more.addEventListener('click',()=>{ const show=hidden.some(li=>li.hidden); for(const x of [...hidden,...folded])x.hidden=!show; more.textContent=show?'Fewer':`${hidden.length} more`; more.setAttribute('aria-expanded',String(show)); });
  const last=lists[lists.length-1]; if(typeof last.after==='function')last.after(more); else e.children.splice(e.children.indexOf(last)+1,0,more);
 }
+// A where-to-look question is asked in the scope the card answered: a question that moved the controls (#105's
+// "yesterday", #101's downtime default: the previous production day, all shifts) points its looks at that day and
+// scope, not at the controls it was asked from (review of #111).
+function lookScope(rec){
+ if(!rec||!rec.scope)return null;
+ const c=rec.result&&rec.result.context;
+ if(!c||typeof c.production_day!=='string')return rec.scope;
+ return {...rec.scope,day:c.production_day,shift:Number(c.shift),scope:c.scope==='day'?'day':'shift',period:c.period?(c.period==='fiscal'?'accounting':c.period):'day'};
+}
 function lookItem(text,rec){
  const m=SHAPE_LOOK.exec(text), li=node('li');
  if(!m){ li.append(...shapedInline(text)); return li; }
- const question=m[2], scope=rec&&rec.scope?{...rec.scope,corrupt:!!rec.corrupt}:controls(), a=node('a',`“${question}”`,'look-q');
+ const asked=lookScope(rec), question=m[2], scope=asked?{...asked,corrupt:!!rec.corrupt}:controls(), a=node('a',`“${question}”`,'look-q');
  a.href=questionUrl(question,scope); a.title='Ask this: a fixed query, no model';
  a.addEventListener('click',event=>{
   if(event&&(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||(event.button&&event.button!==0)))return;   // a modifier click opens the address as the browser would
   if(event&&event.preventDefault)event.preventDefault();
-  ask(question,{mode:'offline',title:question,...(rec?{scope:rec.scope,corrupt:rec.corrupt,source:rec}:{})}).catch(()=>{});
+  ask(question,{mode:'offline',title:question,...(rec?{scope:asked||rec.scope,corrupt:rec.corrupt,source:rec}:{})}).catch(()=>{});
  });
  li.append(node('span',m[1]),node('span',' → '),a);
  return li;
@@ -553,12 +562,12 @@ function showChart(chart) {
  const link=queryLink(chart.source_result_id);if(link)wrap.append(link);
  $('charts').append(wrap);
 }
-const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'ft/min, no stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF vs previous',paper_runs:'Paper runs',msf:'MSF',previous_msf:'Prev MSF',delta_msf:'Δ MSF',share_of_feet_pct:'Share of ft %',lineal_per_run:'Lineal / run',previous_paper_runs:'Prev runs',previous_lineal_ft:'Prev lineal (ft)',delta_lineal_ft:'Δ lineal (ft)',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status',bucket:'Bucket',gap_lineal_ft:'Lineal ft',share_of_gap_pct:'Share of gap %',current_loss_fpm:'Loss ft/min (this)',reference_loss_fpm:'Loss ft/min (reference)',top_item:'Largest reason / grade',top_item_fpm:'Largest ft/min',usd:'$ machine time',usd_per_year:'$ / yr'};
+const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade',start:'Start',end:'End',width_in:'Width (in)',lineal_ft:'Lineal (ft)',actual_fpm:'Speed (ft/min)',target_fpm:'Target (ft/min)',speed_to_target_pct:'% of target',stop_count:'Stops',down_minutes:'Down (min)',rejected_sqft:'Rejects (sq ft)',notes:'Reported note',record_id:'Record',record_type:'Type',rank:'Rank',item:'Item',value:'Value',unit:'Units / order',day:'Production day',shift:'Shift',current_count:'Stops now',previous_count:'Stops before',current_minutes:'Minutes now',previous_minutes:'Minutes before',minutes_change:'Change (min)',speed_rank:'Speed rank',maintenance_rank:'Maint. rank',waste_rank:'Waste rank',valid_setups:'Dry-end setups',paper_changes:'Paper changes',observed_shift_fpm:'Speed (ft/min)',maintenance_pct:'Maintenance %',operator_pct:'Operator %',dry_end_pct:'Dry-end %',target_fpm:'Target (ft/min)',wet_ends:'Wet ends',volume_msf:'Volume (MSF)',share_of_volume_pct:'Share %',speed_run_fpm:'ft/min, no stops',speed_elapsed_fpm:'Elapsed speed',setup_stops:'Setup stops',setup_stop_minutes:'Setup stop min',trim_pct:'Trim %',previous_volume_msf:'Prev MSF',delta_volume_msf:'Δ MSF vs previous',paper_runs:'Paper runs',msf:'MSF',previous_msf:'Prev MSF',delta_msf:'Δ MSF',share_of_feet_pct:'Share of ft %',lineal_per_run:'Lineal / run',previous_paper_runs:'Prev runs',previous_lineal_ft:'Prev lineal (ft)',delta_lineal_ft:'Δ lineal (ft)',knife:'Knife',lines:'Lines',nominal_cuts:'Nominal cuts',actual_cuts:'Actual cuts',delta_cuts:'Δ cuts',overrun_pct:'Over/under %',nominal_sheets:'Nominal sheets',actual_sheets:'Actual sheets',over_sheets:'Sheets over',under_sheets:'Sheets under',lines_inside_band_pct:'In band %',lines_over_pct:'Over %',lines_under_pct:'Under %',downtime_pct_of_elapsed:'Down % of elapsed',lineal_per_setup:'Lineal / setup',lineal_per_wet_end:'Lineal / paper change',slice_by:'Slice',slice:'Width / crew',label:'Cell',run_minutes:'Run min',typical_fpm:'Typical ft/min',median_setup_fpm:'Median setup ft/min',best_fifth_fpm:'Best fifth ft/min',gap_fpm:'Gap ft/min',typical_pct_of_target:'Typical % target',best_fifth_pct_of_target:'Best fifth % target',opportunity_hours:'Opportunity h',best_fifth_dry_end_pct:'Dry-end % (fast fifth)',rest_dry_end_pct:'Dry-end % (rest)',reject_penalty_points:'Reject penalty pts',status:'Status',bucket:'Bucket',gap_lineal_ft:'Lineal ft',share_of_gap_pct:'Share of gap %',current_loss_fpm:'Loss ft/min (this)',reference_loss_fpm:'Loss ft/min (reference)',top_item:'Largest reason / grade',top_item_fpm:'Largest ft/min',usd:'$ machine time',usd_per_year:'$ / yr',pct_of_scheduled:'% of scheduled min',minutes_per_stop:'Min / stop',scheduled_minutes:'Scheduled min',band:'Band',band_text:'Against the standard',control:'Lens',control_note:'Why',pct_of_yield:'% of yield',running_fpm:'Running ft/min',baseline_fpm:'Grade baseline ft/min',under_baseline:'Under baseline',speed_to_baseline_pct:'% of baseline',previous_stops:'Prev stops',previous_pct_of_scheduled:'Prev % of scheduled'};
 // A table whose answer is a shape (#75) shows the columns the shape's readers compare; the rest stay in "What came back".
 const TABLE_COLUMNS={get_grade_totals:['grade','volume_msf','share_of_volume_pct','speed_run_fpm','speed_to_target_pct','setups','trim_pct','dry_end_pct','delta_volume_msf'],
  get_speed_variance:['label','gap_fpm','share_of_gap_pct','gap_lineal_ft','current_loss_fpm','reference_loss_fpm','top_item','top_item_fpm','usd','usd_per_year']};
 function showTable(data){
- const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'All grade totals',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width',get_speed_variance:'Speed gap by contributor: stops, setups, running below target, grade mix'};
+ const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'All grade totals',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width',get_speed_variance:'Speed gap by contributor: stops, setups, running under baseline, grade mix and planned maintenance (schedule-driven), external stops'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
@@ -731,15 +740,28 @@ function afterPaint(f){if(typeof requestAnimationFrame==='function')requestAnima
 // The shift KPI tiles: the numbers of one get_shift_kpis row on seven tiles, one row of the card (#63). A tile that
 // measures a loss gets a money slot, filled from the card's money answer when it lands (paintTiles, #31b).
 let tileSlots=[];
+// A row without its band (a period report's) is read against the owner's numbers (targets.json via /api/config), never a
+// threshold typed here, in targets.band and targets.band_text's own words: the tile then reads as a banded row would.
+const BAND_WORDS=['home run','on target','over target','flag'];
+function bandOf(id,value){
+ const b=config&&config.targets&&config.targets[id]; if(!b||value===null||value===undefined||b.target===null||b.target===undefined)return null;
+ const word=b.home_run!==null&&b.home_run!==undefined&&value<=b.home_run?'home run':value<=b.target?'on target':b.flag!==null&&b.flag!==undefined&&value>b.flag?'flag':'over target';
+ const g=v=>`${Number(v)}%`, text=word==='home run'?`home run (${g(b.home_run)} or under)`:word==='on target'?`on target (${g(b.target)} or under)`:
+  word==='over target'?`over the ${g(b.target)} target`+(b.flag!==null&&b.flag!==undefined?`, under the ${g(b.flag)} flag`:''):`flag: over ${g(b.flag)}`+(b.target!==b.flag?`, the target is ${g(b.target)}`:'');
+ return {word,text};
+}
+const standard=(id,value)=>(bandOf(id,value)||{}).text||'';
+const over=(id,value,...words)=>words.includes((bandOf(id,value)||{}).word);
 function shiftTiles(entry,result,prefix){
  const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete', who=prefix?`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · `:'';
  const n=(v,places)=>Number(v).toLocaleString(undefined,{minimumFractionDigits:places,maximumFractionDigits:places});
  for(const [label,value,unit,places,sub,bad,title,metric] of [
   ['Speed',r.observed_shift_fpm,'ft/min',1,`${n(r.speed_to_target_pct,1)}% of target`,r.speed_to_target_pct<100,'Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.','observed_shift_fpm'],
-  ['Maintenance',r.maintenance_pct,'%',2,'target 2.5%',r.maintenance_pct>2.5,undefined,'maintenance_pct'],
-  ['Operator',r.operator_pct,'%',2,'target 2.5%',r.operator_pct>2.5,undefined,'operator_pct'],
-  ['Dry-end waste',r.dry_end_pct,'%',2,r.dry_end_pct>1?'above 1%':'flag above 1%',r.dry_end_pct>1,undefined,'dry_end_pct'],
-  ['Trim',r.trim_pct,'%',2,`shear ${n(r.shear_pct,2)}%`,false,undefined,'trim_pct'],
+  ['Maintenance',r.maintenance_pct,'%',2,r.maintenance_band_text||standard('maintenance',r.maintenance_pct),r.maintenance_band?r.maintenance_band==='flag':over('maintenance',r.maintenance_pct,'flag'),undefined,'maintenance_pct'],
+  ['Operator',r.operator_pct,'%',2,r.operator_band_text||standard('operator',r.operator_pct),r.operator_band?r.operator_band==='flag':over('operator',r.operator_pct,'flag'),undefined,'operator_pct'],
+  // the owner's bands ride on the row (issue #101): dry-end waste is a percent of the yield after trim and shear
+  ['Dry-end waste',r.dry_end_pct,'%',2,'of yield'+((r.dry_end_band_text||standard('dry_end',r.dry_end_pct))?` · ${r.dry_end_band_text||standard('dry_end',r.dry_end_pct)}`:''),r.dry_end_band?['over target','flag'].includes(r.dry_end_band):over('dry_end',r.dry_end_pct,'over target','flag'),undefined,'dry_end_pct'],
+  ['Trim',r.trim_pct,'%',2,`shear ${n(r.shear_pct,2)}%`+(r.trim_band_text?` · ${r.trim_band_text}`:''),r.trim_band==='flag',undefined,'trim_pct'],
   ['Setups',r.valid_setups,'',0,`${n(r.paper_changes,0)} paper changes`,false,'Dry-end setups; paper changes are the count of distinct wet-end runs, as defined by the plant expert.'],
   ['Throughput',r.throughput_in,'in',1,`${n(r.lineal_per_setup,0)} ft / setup`,false]]){
   const card=node('div',undefined,'metric'+(bad||incomplete?' warning':''));card.append(node('div',who+label,'label'));if(title)card.title=title;
@@ -865,13 +887,14 @@ function moneyFacts(m){
  if(dropped.length)warning=`Shift ${dropped.join(' and ')}: data incomplete, not counted in these dollars; they are the complete shifts'.`;
  else if(d.coverage!=='complete')warning=`Incomplete data: ${excluded||'some'} excluded record${excluded===1?'':'s'}. These dollars are the observed records only, not the whole ${levers?'window':day?'day':'shift'}; do not rank them.`;
  const rows=d.rows.map(r=>({name:r.gap||r.lever,bucket:bucketOf(r),usd:r.usd||0,year:r.usd_per_year,minutes:r.machine_minutes||0,share:Money.share(r),
-  area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),rows:[r]}));
+  area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),control:r.control||r.apart||null,apart:!!r.apart,trim:r.kind==='trim',rows:[r]}));
  const counted=day?(d.shifts||[]).filter(x=>!dropped.includes(x.shift)).map(x=>x.shift):[];
  // each counted shift's own total a year: its get_shift_dollars step beside the day total, re-priced with it
  const own=day?counted.map(n=>(m.result.trace||[]).find(x=>x.ok&&x.tool==='get_shift_dollars'&&x.data&&x.data.shift===n&&x.data.production_day===d.production_day)):[];
  const perShift=day&&own.length&&own.every(Boolean)?own.map(x=>`shift ${x.data.shift} ${Money.short(atRates(m,x).total_usd_per_year)}/yr`).join(' · '):null;
- return {levers,day,data:d,rows,cfg,rates,warning,
+ return {levers,day,data:d,rows,cfg,rates,warning,lens:levers?d.lens||'all':null,
   total:d.total_usd, year:d.total_usd_per_year, paper:d.total_paper_usd, machine:d.total_machine_time_usd, contribution:d.total_contribution_usd,
+  apart:d.apart_gaps||0, allIn:d.all_in_usd, allInYear:d.all_in_usd_per_year,   // the all-in total with the gaps apart (the owner, PR #111)
   buckets:(d.buckets||[]).map(b=>[b.bucket,b.usd]),
   when:levers?WHEN[d.window&&d.window.period]||'this window':day?((d.shifts||[]).length===3?'this day':'these shifts'):'this shift',
   who:levers?(d.shift?`Shift ${d.shift}`:'All shifts'):day?(counted.length===3?'All shifts':`Shift${counted.length===1?'':'s'} ${counted.join(' and ')}`):`Shift ${d.shift}`,
@@ -903,6 +926,8 @@ function fillDollarLine(line,f){
  const lead=node('p',undefined,'dollar-lead');
  lead.append(node('span','≈ '),node('strong',Money.money(f.total),'figure'),node('span',` ${f.levers?'in levers':'recorded losses'} ${f.when}`));
  if(f.year!==null&&f.year!==undefined)lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',f.when==='this day'?' at this day\'s rate':' at this rate'));
+ // the card states both totals (the owner, PR #111): the recorded losses, and all in with planned maintenance and an outage
+ if(f.apart)lead.append(node('span',` · ${Money.money(f.allIn)}${f.allInYear!==null&&f.allInYear!==undefined?` (${Money.short(f.allInYear)}/yr)`:''} all in, with the schedule-driven and external downtime`,'all-in'));
  const margin=f.rates.values.margin_usd_msf;   // the line says plainly whether contribution is priced
  lead.append(node('span',margin===null||margin===undefined?` · contribution: ${f.cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(margin)}/MSF, not added`,'contrib'));
  const chips=node('p',undefined,'chips');
@@ -921,17 +946,29 @@ function unitLabel(r,mode,yearly){
 function rowFormula(r){ return r.rows[0].usd_basis; }
 function rowRecords(r){ const x=r.rows[0]; return x.records||(Array.isArray(x.shifts)?`shift${x.shifts.length===1?'':'s'} ${x.shifts.join(', ')}`:Array.isArray(x.source_ids)?`${x.source_ids.length} records`:''); }
 const PANEL_ROWS=8;
+// The lens orders the levers before the unit does (issue #101), as the server ranks them: under the supervisor lens the
+// controllable levers come first, the schedule-driven ones (side trim, planned maintenance) after them, unranked; under
+// the ownership lens side trim, all of it, is first. Within those, the unit shown ranks them.
+const APART={'schedule-driven':0,external:1};   // cost_model.APART: what the supervisor lens lists apart, in this order
+function lensOrder(rows,lens){
+ const apart=r=>r.control in APART?APART[r.control]:2;
+ if(lens==='supervisor')return [...rows.filter(r=>r.control==='controllable'),...rows.filter(r=>r.control!=='controllable').sort((a,b)=>apart(a)-apart(b))];
+ if(lens==='ownership'){ const i=rows.findIndex(r=>r.trim); return i<0?rows:[rows[i],...rows.filter((_,j)=>j!==i)]; }
+ return rows;
+}
 // The opportunities panel: the card's levers (or gaps) ranked by the unit shown, $/yr in dollars, with the rate and
 // formula of each bar on hover and the same rows as a table behind a flip.
 function opportunityPanel(f,m,rec){
  const mode=unitMode()||'usd', yearly=true, wrap=node('div',undefined,'chart money-panel');   // every money query has its rows' own $/yr
  wrap.append(node('h3',`${f.levers?'Where the money is':'Where the money went'} · ${f.who} · ${f.label}`));
- wrap.append(node('p',(f.levers?'Each lever is a gap priced at your rates: the speed gap to each cell\'s best fifth, side trim over the target, each recorded stop, all shear and dry-end waste. ':f.day?'Each gap of the day, its shifts\' records summed and priced once on the day, at your rates. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?'Ranked by dollars a year at this rate':'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
+ wrap.append(node('p',(f.levers?(f.lens==='ownership'?'The total cost of the waste recorded at your rates, side trim first. ':
+  f.lens==='supervisor'?'The controllable losses at your rates, ranked; the schedule-driven ones (side trim, planned maintenance), then the external ones (a power outage), after them, unranked. ':
+  'Each lever is a gap priced at your rates: the speed of each run under its grade\'s trailing-year speed, side trim over the target, each recorded stop, all shear and dry-end waste. '):f.day?'Each gap of the day, its shifts\' records summed and priced once on the day, at your rates. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?'Ranked by dollars a year at this rate':'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
  const box=node('div',undefined,'money-box'); wrap.append(box);
  let table=false, all=false;
  const draw=()=>{
   box.replaceChildren();
-  const ranked=[...f.rows].sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1)||(a.name<b.name?-1:a.name>b.name?1:0));
+  const ranked=lensOrder([...f.rows].sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1)||(a.name<b.name?-1:a.name>b.name?1:0)),f.lens).sort((a,b)=>a.apart-b.apart);   // a money card's gaps apart go last (PR #111); a stable sort
   const shown=all?ranked:ranked.slice(0,PANEL_ROWS);
   if(table)box.append(moneyTable(ranked,f));
   else box.append(moneyBars(shown,mode,yearly,true));
@@ -957,7 +994,7 @@ function moneyBars(rows,mode,yearly,wide=false){
  rows.forEach((r,i)=>{ const y=f.top+i*28, v=Number(unitValue(r,mode,yearly))||0;
   labelText(svg,r.name,f.x0-8,y+18,f.chars);
   svg.append(barPath(f.x0,y+6,(v/max)*(f.x1-f.x0),15,'bar priced'));
-  const detail=[`${r.name}: ${Money.money(r.usd)}${r.year!==null&&r.year!==undefined?` · ${Money.money(r.year)}/yr at this rate`:''}${r.minutes?` · ${Money.fmt(r.minutes,1)} machine min`:''}`,rowFormula(r),rowRecords(r)].filter(Boolean).join('. ')+'.';
+  const detail=[`${r.name}: ${Money.money(r.usd)}${r.year!==null&&r.year!==undefined?` · ${Money.money(r.year)}/yr at this rate`:''}${r.minutes?` · ${Money.fmt(r.minutes,1)} machine min`:''}${r.control?` · ${r.control}`:''}`,rowFormula(r),rowRecords(r)].filter(Boolean).join('. ')+'.';
   const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,'aria-label':detail,class:'val'},unitLabel(r,mode,yearly)); t.append(svgNode('title',{},detail)); svg.append(t); });
  return svg;
 }

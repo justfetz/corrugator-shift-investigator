@@ -248,7 +248,8 @@ def _labels(entry, row):
     if shift in (1, 2, 3):
         out.add(f'shift {shift}')
     for key, value in row.items():
-        if key in _LABEL_SKIP or not isinstance(value, str):
+        # a band ("on target", "flag") or a lever's control mark (issue #101) grades a value; it does not name the row
+        if key in _LABEL_SKIP or key.endswith(('band', 'band_text', 'control', 'control_note')) or not isinstance(value, str):
             continue
         value = ' '.join(value.split()).lower()
         if 2 <= len(value) <= 60 and re.search('[a-z]', value) and not re.search(r'\d', value):   # prose cannot hold a digit

@@ -47,6 +47,7 @@ from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
 from .questionlog import QuestionLog, check_comment, ids as log_ids, scope_of, valid_id
 from .record_store import default_store
+from . import targets
 from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
 
 WEB = Path(__file__).with_name('web')
@@ -825,6 +826,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                                        'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
                                        'demo_guards': app.guards.summary, 'cost_model': client_config(),
+                                       'targets': targets.client_config(),   # the owner's bands (issue #101) for a tile without one
                                        'evals': app.evals.summary if app.evals else None,
                                        'question_log': app.qlog.enabled})   # issue #125: the page sends line ids and offers feedback
             if self.path == '/evals.json':

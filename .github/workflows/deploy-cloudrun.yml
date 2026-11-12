@@ -239,4 +239,13 @@ jobs:
           CFG=$(curl -sS --max-time 30 "$LIVE/api/config")
           echo "live modes: $(echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); print(c.get("live_modes") or c.get("live_model_available"))')"
           if [ "$LIVE_MODEL" = "1" ]; then echo "$CFG" | python3 -c 'import json,sys; c=json.load(sys.stdin); sys.exit(0 if (c.get("live_modes") or c.get("live_model_available")) else 1)'; fi
+          echo "LIVE=$LIVE" >> "${GITHUB_ENV:-/dev/null}"   # for the changelog check below
           echo "Live at $LIVE"
+      - name: Changelog lists the merged pull request
+        # The owner's rule (2026-11-12): every merge is on /docs/changelog. The Changelog step before the build may
+        # not fail the deploy, so this runs once the revision is live: visitors keep it either way, and a page that
+        # misses this merge's pull request turns the run red instead of shipping a stale changelog silently.
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 30 -o /tmp/changelog.html "$LIVE/docs/changelog"
+          python3 .github/scripts/check_changelog.py /tmp/changelog.html "$(git log -1 --format=%s)"
