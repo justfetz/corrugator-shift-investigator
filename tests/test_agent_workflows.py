@@ -74,7 +74,8 @@ def comment_event(body, login=OWNER, pr=False):
 
 def test_only_the_owners_at_claude_comment_starts_the_agent():
     on_issue = agent.event_plan('issue_comment', comment_event('@claude please start'), OWNER)
-    assert (on_issue['mode'], on_issue['issue'], on_issue['needs_label']) == ('build', '9', 'false')
+    assert (on_issue['mode'], on_issue['issue'], on_issue['needs_label'], on_issue['add_label']) == ('build', '9', 'true', 'true'), \
+        'the same as the label: the gate puts agent-ready on the issue'
     on_pr = agent.event_plan('issue_comment', comment_event('@claude rename the helper', pr=True), OWNER)
     assert (on_pr['mode'], on_pr['pr'], on_pr['request']) == ('fix', '9', '@claude rename the helper')
     for event in (comment_event('@claude start', login='someone-else'), comment_event('no mention at all'),
@@ -115,18 +116,16 @@ def test_a_branch_left_without_a_pull_request_is_resumed_and_a_closed_ones_is_no
     assert two['action'] == 'refuse' and '2 branches' in two['reason'], 'issue-1260- is another issue'
 
 
-def run(run_id, status='in_progress', jobs=(('build', 'in_progress'),)):
-    return {'id': run_id, 'status': status, 'jobs': [{'name': n, 'status': s} for n, s in jobs]}
+def run(run_id, status='in_progress'):
+    return {'id': run_id, 'status': status}
 
 
 def test_at_most_three_agents_run_at_once_first_come_first_served():
     me = 100
-    three = [run(10), run(20, jobs=(('gate', 'completed'), ('queue', 'in_progress'))), run(30, jobs=(('gate', 'in_progress'),))]
+    three = [run(10), run(20, status='queued'), run(30, status='waiting')]
     assert agent.queue_ahead(three, me) == [10, 20, 30] and len(agent.queue_ahead(three, me)) >= agent.MAX_AGENTS
     assert agent.queue_ahead(three[:2], me) == [10, 20]   # two ahead: this one starts
-    ignored = [run(5, status='completed'), run(6, jobs=(('gate', 'completed'), ('queue', 'completed'), ('build', 'completed'))),
-               run(7, jobs=(('stop', 'in_progress'),)), run(150), run(160)]
-    assert agent.queue_ahead(ignored, me) == [], 'finished, stop-only and later runs are not ahead'
+    assert agent.queue_ahead([run(5, status='completed'), run(150), run(160)], me) == [], 'finished and later runs are not ahead'
     assert agent.MAX_AGENTS == 3 and agent.MAX_ROUNDS == 2
 
 
@@ -146,6 +145,25 @@ def test_at_most_three_agents_run_at_once_first_come_first_served():
 ])
 def test_only_docs_and_tests_are_in_the_auto_merge_tier(files, expected):
     assert agent.tier(files) == expected
+
+
+def test_a_rename_counts_by_both_paths():
+    listing = [{'filename': 'docs/settings.json', 'previous_filename': '.claude/settings.json', 'status': 'renamed'},
+               {'filename': 'docs/AGENTS.md', 'status': 'modified'}]
+    files = agent.changed_paths(listing)
+    assert files == ['docs/settings.json', '.claude/settings.json', 'docs/AGENTS.md']
+    d = agent.decide(**GREEN, files=files)
+    assert (d['verdict'], d['kind'], d['next'], d['tier']) == ('needs-owner', 'eyes', None, 'owner')
+    out_of_src = agent.changed_paths([{'filename': 'docs/cost_model.py', 'previous_filename': 'src/investigator/cost_model.py'}])
+    assert agent.tier(out_of_src) == 'owner'
+
+
+def test_a_claude_md_or_claude_folder_at_any_depth_needs_the_owner():
+    assert agent.owner_eyes(['docs/CLAUDE.md', 'tests/CLAUDE.local.md', 'tests/.claude/settings.json', 'docs/claude.md',
+                             'docs/NOT_CLAUDE.md.txt']) == ['docs/CLAUDE.md', 'tests/CLAUDE.local.md', 'tests/.claude/settings.json']
+    d = agent.decide(**GREEN, files=['docs/CLAUDE.md'])
+    assert agent.tier(['docs/CLAUDE.md']) == 'auto' and (d['verdict'], d['next']) == ('needs-owner', None), \
+        'in the docs tier by path, but instructions to every reviewer: never auto-merged'
 
 
 def test_what_the_owner_looks_at():
@@ -184,6 +202,17 @@ def test_golden_problems_catch_deleted_cases_removed_keys_and_loosened_budgets()
     assert agent.golden_problems(None, golden_text(cases), 'g') == [], 'a new golden file is not a weakening'
 
 
+def test_every_other_change_to_an_existing_case_is_listed_for_the_reviewer():
+    cases = [{'id': 'r', 'mode': 'offline', 'question': 'Why?', 'expect': {'forbidden': ['a', 'b'], 'status': 'complete', 'values': {'k': 1}}}]
+    changed = [{'id': 'r', 'mode': 'offline', 'question': 'Why not?', 'expect': {'forbidden': ['a'], 'status': 'complete', 'values': {'k': 999}}},
+               {'id': 'new', 'mode': 'offline', 'expect': {}}]
+    assert agent.golden_problems(golden_text(cases), golden_text(changed), 'g') == [], 'none of these is a hard failure'
+    assert agent.golden_changes(golden_text(cases), golden_text(changed), 'g') == [
+        'g: case `r` changed `question`', 'g: case `r` changed `expect.forbidden`: ["a", "b"] -> ["a"]',
+        'g: case `r` changed `expect.values`: {"k": 1} -> {"k": 999}']
+    assert agent.golden_changes(golden_text(cases), golden_text(cases), 'g') == []
+
+
 GREEN = dict(issue=126, ci='success', evals='pass')
 
 
@@ -200,7 +229,8 @@ def test_fix_first_goes_back_to_the_builder_twice_then_to_the_owner():
         d = agent.decide(**GREEN, files=['src/x.py'], gaps=gap, rounds=rounds, agent_built=True)
         assert (d['verdict'], d['next']) == ('fix-first', 'fix') and d['reasons'] == ['src/investigator/agent.py:10: criterion 2 is not shown']
     done = agent.decide(**GREEN, files=['src/x.py'], gaps=gap, rounds=2, agent_built=True)
-    assert (done['verdict'], done['next']) == ('needs-owner', None) and done['reasons'][0].startswith('2 fix rounds did not close')
+    assert (done['verdict'], done['kind'], done['next']) == ('needs-owner', 'unresolved', None)
+    assert done['reasons'][0].startswith('2 fix rounds did not close')
     theirs = agent.decide(**GREEN, files=['src/x.py'], gaps=gap, rounds=5, agent_built=False)
     assert (theirs['verdict'], theirs['next']) == ('fix-first', None), "someone else's pull request is labelled, never pushed to"
 
@@ -214,20 +244,20 @@ def test_measured_failures_are_fix_first_whatever_the_reviewer_said():
         assert d['verdict'] == 'fix-first' and any(text in r for r in d['reasons']), (kwargs, d)
 
 
-@pytest.mark.parametrize('kwargs, text', [
-    (dict(issue=None), 'names no issue'),
-    (dict(reviewer=False), 'wrote no verdict'),
-    (dict(ci='missing', ci_detail='no `deterministic` check'), 'CI did not pass'),
-    (dict(ci='pending'), 'CI did not pass'),
-    (dict(evals='missing'), 'evals did not run'),
-    (dict(issue_labels=['waiting-on-owner']), 'waiting-on-owner'),
-    (dict(files=['src/investigator/web/app.js']), 'src/investigator/web/app.js'),
-    (dict(files=['.github/workflows/agent.yml']), '.github/workflows/agent.yml'),
-    (dict(files=['Dockerfile', 'docs/DEPLOYMENT.md']), 'Dockerfile'),
+@pytest.mark.parametrize('kwargs, text, kind', [
+    (dict(issue=None), 'names no issue', 'unresolved'),
+    (dict(reviewer=False), 'wrote no verdict', 'unresolved'),
+    (dict(ci='missing', ci_detail='no `deterministic` check'), 'CI did not pass', 'unresolved'),
+    (dict(ci='pending'), 'CI did not pass', 'unresolved'),
+    (dict(evals='missing'), 'evals did not run', 'unresolved'),
+    (dict(issue_labels=['waiting-on-owner']), 'waiting-on-owner', 'eyes'),
+    (dict(files=['src/investigator/web/app.js']), 'src/investigator/web/app.js', 'eyes'),
+    (dict(files=['.github/workflows/agent.yml']), '.github/workflows/agent.yml', 'eyes'),
+    (dict(files=['Dockerfile', 'docs/DEPLOYMENT.md']), 'Dockerfile', 'eyes'),
 ])
-def test_needs_owner(kwargs, text):
+def test_needs_owner(kwargs, text, kind):
     d = agent.decide(**{**GREEN, 'files': ['docs/a.md'], **kwargs})
-    assert (d['verdict'], d['label'], d['next']) == ('needs-owner', 'review: needs-owner', None)
+    assert (d['verdict'], d['label'], d['next'], d['kind']) == ('needs-owner', 'review: needs-owner', None, kind)
     assert text in ' '.join(d['reasons'])
 
 
@@ -246,6 +276,9 @@ def test_the_verdict_comment_carries_its_head_round_and_gaps():
     marks = agent.review_marks([as_comment(body), as_comment(body.replace('round=1', 'round=2'), login=OWNER, cid=2)])
     assert [(m['sha'][:3], m['verdict'], m['round']) for m in marks] == [('ccc', 'fix-first', 1)], 'only the workflow writes verdicts'
     assert agent.rounds_spent([as_comment(body)]) == 1 and agent.rounds_spent([]) == 0
+    assert agent.round_for_head([as_comment(body)], 'c' * 40) == 1 and agent.round_for_head([as_comment(body)], 'd' * 40) == 0
+    again = agent.verdict_comment(d, sha='c' * 40, issue=126, number=200, rnd=1, run_url='u', checks=[], already=True)
+    assert 'already sent back as fix round 1 of 2' in again and '@claude' not in again
     approve = agent.verdict_comment(agent.decide(**GREEN, files=['docs/a.md']), sha='d' * 40, issue=126, number=201, rnd=0,
                                     run_url='u', checks=[])
     assert 'Auto-merge is on' in approve and '@claude' not in approve
@@ -265,6 +298,11 @@ def test_status_reads_the_label_the_way_the_workflow_writes_it():
     relabelled = agent.status_row(pull(5, 'issue-126-x', labels=['review: needs-owner'], sha=sha), ['src/a.py'], marks)
     assert relabelled['status'] == 'review: stale'
     assert agent.status_row(pull(5, 'b'), [], [])['status'] == 'review: none'
+    for files, kind in ((['src/investigator/web/app.js'], 'eyes'), (['src/a.py'], 'unresolved')):
+        d = agent.decide(**GREEN, files=files) if kind == 'eyes' else agent.decide(**GREEN, files=files, reviewer=False)
+        marks = agent.review_marks([as_comment(agent.verdict_comment(d, sha=sha, issue=126, number=5, rnd=0, run_url='u', checks=[]))])
+        row = agent.status_row(pull(5, 'b', labels=['review: needs-owner'], sha=sha), files, marks)
+        assert (row['status'], row['kind']) == ('review: needs-owner', kind)
 
 
 def test_ci_state():
@@ -332,6 +370,7 @@ class Stub:
         subprocess.run([*git, 'update-ref', 'refs/remotes/origin/main', 'HEAD'], check=True)
         self.git = git
         self.state = {}
+        self.event = ('workflow_dispatch', {})
         self.log = tmp_path / 'gh.log'
 
     def run(self, *args):
@@ -340,7 +379,9 @@ class Stub:
         out = self.root / 'github_output'
         out.write_text('')
         env = {**os.environ, 'PATH': f'{self.root / "bin"}:{os.environ["PATH"]}', 'STUB_STATE': str(self.root / 'state.json'),
-               'STUB_LOG': str(self.log), 'GITHUB_REPOSITORY': 'o/r', 'GITHUB_OUTPUT': str(out), 'GITHUB_RUN_ID': '77'}
+               'STUB_LOG': str(self.log), 'GITHUB_REPOSITORY': 'o/r', 'GITHUB_REPOSITORY_OWNER': 'o', 'GITHUB_OUTPUT': str(out),
+               'GITHUB_RUN_ID': '77', 'GITHUB_EVENT_NAME': self.event[0], 'GITHUB_EVENT_PATH': str(self.root / 'event.json')}
+        (self.root / 'event.json').write_text(json.dumps(self.event[1]))
         proc = subprocess.run(['python3', str(SCRIPT), *args], cwd=self.repo, env=env, capture_output=True, text=True)
         calls = [json.loads(line) for line in self.log.read_text().splitlines()]
         text = out.read_text()
@@ -397,26 +438,30 @@ def test_verify_makes_the_pull_request_close_the_issue_and_labels_it(tmp_path):
     assert proc.returncode == 1 and 'ended without a pull request' in posted(calls, 'issues/126/comments')[0]['body']
 
 
-def review_state(stub, *, files, labels=('agent-built',), comments=(), check='success', issue_labels=('agent-ready',)):
+def review_state(stub, *, files, labels=('agent-built',), comments=(), check='success', issue_labels=('agent-ready',), mergeable=True):
     sha = 'b' * 40
     stub.state = {f'repos/o/r/commits/{sha}/check-runs?per_page=100': {'check_runs': [
                       {'name': 'deterministic', 'status': 'completed', 'conclusion': check, 'html_url': 'https://ci'}]},
-                  'repos/o/r/pulls/200': pull(200, 'issue-126-x', body='Closes #126', labels=labels, sha=sha),
+                  'repos/o/r/pulls/200': {**pull(200, 'issue-126-x', body='Closes #126', labels=labels, sha=sha), 'mergeable': mergeable},
                   'repos/o/r/issues/200': pull(200, 'issue-126-x', labels=labels),
                   'repos/o/r/issues/200/comments?per_page=100': list(comments),
                   'repos/o/r/issues/126': {'number': 126, 'title': TITLE, 'state': 'open', 'labels': [{'name': l} for l in issue_labels]}}
-    folder = stub.repo / '.agent-review'
-    folder.mkdir(exist_ok=True)
-    (folder / 'meta.json').write_text(json.dumps({'pr': 200, 'sha': sha, 'issue': 126, 'issue_labels': list(issue_labels),
-                                                  'files': files, 'golden': [], 'conflicts': False}))
-    (folder / 'evals.exit').write_text('0\n')
-    (folder / 'evals.txt').write_text('...\n294 passed, 0 failed, 15 skipped\n')
+    for folder in ('.agent-facts', '.agent-judge', '.agent-evals'):
+        (stub.repo / folder).mkdir(exist_ok=True)
+    (stub.repo / '.agent-facts' / 'meta.json').write_text(json.dumps(
+        {'pr': 200, 'sha': sha, 'issue': 126, 'issue_labels': list(issue_labels), 'files': files, 'golden': []}))
+    (stub.repo / '.agent-judge' / 'gaps.json').unlink(missing_ok=True)
+    (stub.repo / '.agent-evals' / 'evals.exit').write_text('0\n')
+    (stub.repo / '.agent-evals' / 'evals.txt').write_text('...\n294 passed, 0 failed, 15 skipped\n')
     return sha
 
 
+VERDICT_ARGS = ('--poll', '0', '--ci-timeout', '0', '--mergeable-tries', '1')
+
+
 def verdict(stub, sha, gaps):
-    (stub.repo / '.agent-review' / 'gaps.json').write_text(json.dumps(gaps))
-    return stub.run('verdict', '--pr', '200', '--sha', sha, '--poll', '0', '--ci-timeout', '0')
+    (stub.repo / '.agent-judge' / 'gaps.json').write_text(json.dumps(gaps))
+    return stub.run('verdict', '--pr', '200', '--sha', sha, *VERDICT_ARGS)
 
 
 def test_a_fix_first_verdict_comments_labels_and_dispatches_one_fix_round(tmp_path):
@@ -487,8 +532,9 @@ def test_a_docs_only_approve_turns_on_auto_merge_and_a_src_approve_does_not(tmp_
 def test_no_reviewer_verdict_and_failing_ci(tmp_path):
     stub = Stub(tmp_path)
     sha = review_state(stub, files=['docs/a.md'])
-    proc, calls, out = stub.run('verdict', '--pr', '200', '--sha', sha, '--poll', '0', '--ci-timeout', '0')
+    proc, calls, out = stub.run('verdict', '--pr', '200', '--sha', sha, *VERDICT_ARGS)
     assert out['verdict'] == 'needs-owner' and 'wrote no verdict' in posted(calls, 'issues/200/comments')[0]['body']
+    assert 'verdict=needs-owner round=0 kind=unresolved -->' in posted(calls, 'issues/200/comments')[0]['body']
     sha = review_state(stub, files=['docs/a.md'], check='failure')
     proc, calls, out = verdict(stub, sha, [])
     assert (out['verdict'], out['next']) == ('fix-first', 'fix')
@@ -571,6 +617,14 @@ def test_the_reviewer_runs_mains_rules_and_runs_pr_code_only_without_secrets():
     assert set(allowed) == {'Read', 'Glob', 'Grep', 'LS', 'Write', 'Bash(git -C pr diff:*)', 'Bash(git -C pr log:*)', 'Bash(git -C pr show:*)'}
     assert '.claude/agents/reviewer.md' in judge and '.agent-review/gaps.json' in judge
     assert 'agent.py verdict --pr "$PR" --sha "$SHA"' in verdict and 'actions: write' in verdict
+    # the facts are the verdict job's own; the other jobs hand on one or two files each, into their own folders
+    assert 'path: pr' in verdict and 'python3 ../.github/scripts/agent.py prepare --pr "$PR" --out ../.agent-facts' in verdict
+    assert '--facts .agent-facts --gaps .agent-judge/gaps.json --evals .agent-evals' in verdict
+    assert 'path: .agent-judge' in verdict and 'path: .agent-evals' in verdict and 'path: .agent-review' not in verdict
+    assert 'path: |\n            .agent-evals/evals.exit\n            .agent-evals/evals.txt\n' in evals
+    assert 'path: .agent-review/gaps.json' in judge
+    assert "needs.reset.outputs.draft != 'true'" in evals and "needs.reset.outputs.draft != 'true'" in judge
+    assert '.agent-review/golden.md' in judge and 'do not repeat' not in judge
     assert 'cancel-in-progress: true' in text.split('\njobs:', 1)[0]
 
 
@@ -608,7 +662,7 @@ def test_the_workflows_parse_when_pyyaml_is_available():
     assert set(reviewer['jobs']) == {'reset', 'evals', 'judge', 'verdict'}
     assert builder['jobs']['build']['timeout-minutes'] == 60 and builder['jobs']['build']['needs'] == ['gate', 'queue']
     assert reviewer['jobs']['verdict']['needs'] == ['reset', 'evals', 'judge']
-    assert reviewer['jobs']['verdict']['if'] == "${{ !cancelled() && needs.reset.result == 'success' }}"
+    assert reviewer['jobs']['verdict']['if'] == "${{ !cancelled() && needs.reset.result == 'success' && needs.reset.outputs.draft != 'true' }}"
     # a ` #` in a plain YAML scalar starts a comment: the stop step's message must survive whole
     assert builder['jobs']['stop']['steps'][0]['run'].rstrip().endswith("cancelled by this job's concurrency group\"")
     claude_args = next(s for s in builder['jobs']['build']['steps'] if s.get('id') == 'claude')['with']['claude_args']
@@ -636,11 +690,13 @@ def test_review_pr_and_approve_pr_read_the_label_the_way_the_workflow_does():
         text = (ROOT / '.claude' / 'skills' / skill / 'SKILL.md').read_text(encoding='utf-8')
         assert 'python3 .github/scripts/agent.py status $ARGUMENTS' in text, skill
         for label in agent.LABELS.values():
-            assert f'`{label}`' in text, (skill, label)
+            assert f'`{label}' in text, (skill, label)   # `review: needs-owner` may carry its kind: `review: needs-owner (eyes)`
         assert '`review: stale`' in text
+    approve = (ROOT / '.claude' / 'skills' / 'approve-pr' / 'SKILL.md').read_text(encoding='utf-8')
+    assert '`review: needs-owner (eyes)`' in approve and '`review: needs-owner (unresolved)`' in approve
     review = (ROOT / '.claude' / 'skills' / 'review-pr' / 'SKILL.md').read_text(encoding='utf-8')
     assert '`decide` in `.github/scripts/agent.py`' in review
-    eyes = review.split('`review: needs-owner`', 1)[1].split('\n', 1)[0]
+    eyes = next(line for line in review.splitlines() if line.lstrip().startswith("- `needs the owner's eyes"))
     for path in (*agent.OWNER_EYES_DIRS, 'server.py', 'Dockerfile', 'CLAUDE.md'):
         assert f'`{path}`' in eyes, path
 
@@ -653,6 +709,79 @@ def test_the_issues_skill_lists_the_merge_batch_in_merge_order():
              pull(52, 'issue-20-c', body='Closes #20', labels=['review: fix-first']),
              pull(53, 'issue-20-d', body='Closes #20', labels=['review: approve']),
              pull(54, 'claude/x', body='no issue', labels=['review: approve'])]
-    files = {50: ['docs/A.md'], 51: ['src/investigator/analysis.py'], 53: ['tests/test_urls.py'], 54: ['src/a.py']}
-    batch = backlog.merge_batch(pulls, issues, files)
+    files = {50: ['docs/A.md'], 51: ['src/investigator/analysis.py'], 53: ['tests/test_urls.py'], 54: ['src/a.py'], 55: ['src/b.py']}
+    pulls.append(pull(55, 'issue-12-e', body='Closes #12', labels=['review: approve'], sha='f' * 40))   # pushed since its approve
+
+    def approved(n, sha='a' * 40):
+        return [as_comment(f'<!-- agent-review sha={sha} verdict=approve round=0 -->', cid=n)]
+    marks = {n: agent.review_marks(approved(n)) for n in (50, 51, 53, 54, 55)}
+    batch = backlog.merge_batch(pulls, issues, files, marks)
     assert [(r['number'], r['issue'], r['tier']) for r in batch] == [(53, 20, 'auto'), (51, 12, 'owner'), (50, 30, 'auto'), (54, None, 'owner')]
+    assert 55 not in [r['number'] for r in batch], 'an approve for an older head is stale, out of the batch'
+
+
+def test_a_second_review_of_the_same_head_spends_no_second_round(tmp_path):
+    """A re-run of the review (or a reopen) on a head already sent back as round 1 records round 1 again and
+    dispatches nothing: only the builder's next push earns round 2."""
+    stub = Stub(tmp_path)
+    sha = 'b' * 40
+    sent = [as_comment(f'<!-- agent-review sha={sha} verdict=fix-first round=1 -->\n1. a.py:1: x', cid=1)]
+    sha = review_state(stub, files=['src/investigator/agent.py'], comments=sent)
+    proc, calls, out = verdict(stub, sha, [{'where': 'a.py:1', 'gap': 'x'}])
+    assert proc.returncode == 0, proc.stderr
+    assert (out['verdict'], out['next'], out['round']) == ('fix-first', 'fix', '1')
+    assert not [c for c in calls if c[:2] == ['workflow', 'run']], 'no second dispatch for the same head'
+    assert 'already sent back as fix round 1 of 2' in posted(calls, 'issues/200/comments')[0]['body']
+
+
+def test_a_branch_that_conflicts_with_main_is_fix_first(tmp_path):
+    stub = Stub(tmp_path)
+    sha = review_state(stub, files=['docs/a.md'], mergeable=False)
+    proc, calls, out = verdict(stub, sha, [])
+    assert out['verdict'] == 'fix-first' and 'conflicts with main' in posted(calls, 'issues/200/comments')[0]['body']
+    assert not [c for c in calls if c[:2] == ['pr', 'merge']]
+
+
+def test_the_owners_comment_on_an_issue_puts_the_label_on_it(tmp_path):
+    stub = Stub(tmp_path)
+    stub.event = ('issue_comment', {'action': 'created', 'comment': {'body': '@claude go', 'user': {'login': 'o'}}, 'issue': {'number': 31}})
+    proc, calls, out = stub.run('gate')
+    assert proc.returncode == 0, proc.stderr
+    assert (out['mode'], out['issue'], out['key'], out['needs_label']) == ('build', '31', 'issue-31', 'true')
+    assert posted(calls, 'issues/31/labels') == [{'labels[]': 'agent-ready'}]
+    stub.event = ('issues', {'action': 'unlabeled', 'label': {'name': 'agent-ready'}, 'issue': {'number': 31}})
+    proc, calls, out = stub.run('gate')
+    assert (out['mode'], out['key']) == ('stop', 'issue-31') and not calls, 'the stop job shares the build\'s group'
+    stub.event = ('issue_comment', {'action': 'created', 'comment': {'body': '@claude rename it', 'user': {'login': 'o'}},
+                                    'issue': {'number': 200, 'pull_request': {'url': 'x'}}})
+    stub.state = {'repos/o/r/pulls/200': pull(200, 'issue-31-x', body='Closes #31')}
+    proc, calls, out = stub.run('gate')
+    assert (out['mode'], out['pr'], out['issue'], out['key']) == ('fix', '200', '31', 'issue-31'), 'a PR fix joins its issue\'s group'
+    assert out['request'] == '@claude rename it' and not posted(calls, 'labels')
+
+
+def test_verify_asks_for_a_new_review_when_it_had_to_add_closes(tmp_path):
+    stub = Stub(tmp_path)
+    branch = 'issue-126-x'
+    stub.state = {f'repos/o/r/pulls?state=open&head=o:{branch}&per_page=10': [pull(200, branch, body='No link')]}
+    proc, calls, _ = stub.run('verify', '--mode', 'build', '--issue', '126', '--branch', branch)
+    assert [c for c in calls if c[:2] == ['workflow', 'run']] == [
+        ['workflow', 'run', 'agent-review.yml', '--repo', 'o/r', '--ref', 'main', '-f', 'pr=200']]
+    stub.state = {f'repos/o/r/pulls?state=open&head=o:{branch}&per_page=10': [pull(200, branch, body='Closes #126')]}
+    proc, calls, _ = stub.run('verify', '--mode', 'build', '--issue', '126', '--branch', branch)
+    assert not [c for c in calls if c[:2] == ['workflow', 'run']] and not posted(calls, 'pulls/200')
+
+
+def test_the_queue_starts_with_fewer_than_three_ahead_and_gives_up_loudly(tmp_path):
+    stub = Stub(tmp_path)
+    runs = 'repos/o/r/actions/workflows/agent.yml/runs?per_page=100'
+    stub.state = {runs: {'workflow_runs': [run(10), run(20), run(30, status='completed'), run(90)]}}
+    proc, calls, _ = stub.run('queue', '--run-id', '77', '--issue', '126', '--poll', '0', '--max-wait', '0')
+    assert proc.returncode == 0 and '2 agent run(s) ahead; starting' in proc.stdout
+    assert len(calls) == 1, 'one API call per poll'
+    stub.state = {runs: {'workflow_runs': [run(10), run(20), run(30)]}}
+    proc, calls, _ = stub.run('queue', '--run-id', '77', '--issue', '126', '--poll', '0', '--max-wait', '0')
+    assert proc.returncode == 1 and 'gave up' in posted(calls, 'issues/126/comments')[0]['body']
+    stub.state = {}   # the listing fails: a warning, then the deadline, never a silent crash
+    proc, calls, _ = stub.run('queue', '--run-id', '77', '--issue', '126', '--poll', '0', '--max-wait', '0')
+    assert proc.returncode == 1 and 'could not list' in proc.stdout and posted(calls, 'issues/126/comments')

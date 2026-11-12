@@ -8,22 +8,22 @@ Two workflow files and one script do it: [`.github/workflows/agent.yml`](https:/
 
 ```
  owner: label the issue agent-ready   (or comment @claude on it)
-                 │
-                 ▼
- agent.yml   gate ──► queue (at most 3 agents at once) ──► build (one run per issue, 60 min)
-             checks out main, branch issue-<n>-<slug>, runs /fix-issue <n>;
-             Claude pushes and opens ONE pull request that says "Closes #n"; the run labels it agent-built
-                 │
-                 ▼
- agent-review.yml   on every push to a pull request: the evals, the reviewer agent, CI, the golden diff
-             ──► one verdict comment and one label on the head
-                 │
-     ┌───────────┼─────────────────────────────┬───────────────────────────┐
- review: fix-first               review: approve                    review: needs-owner
- an agent-built PR goes back     docs/ and tests/ only:             the owner looks: the preview,
- to agent.yml for a fix round    auto-merge after CI                the workflows, a pending decision,
- on the same branch (at most     anything else: the merge batch,    or two fix rounds that did not
- two rounds, then needs-owner)   merged by the owner, /approve-pr   close the gaps
+            │
+            ▼
+ agent.yml    gate ──► queue (at most 3 at once) ──► build (one run per issue, 60 min)
+              checks out main, branch issue-<n>-<slug>, runs /fix-issue <n>;
+              Claude pushes, opens ONE pull request "Closes #n"; the run labels it agent-built
+            │
+            ▼
+ agent-review.yml   on every push to a pull request: evals, reviewer agent, CI, golden diff
+              ──► one verdict comment and one label on that head
+            │
+     ┌──────┴────────────────────────┬──────────────────────────────┐
+ review: fix-first             review: approve                review: needs-owner
+ agent-built: back to          docs/ and tests/ only:         the owner looks: the
+ agent.yml for a fix round     auto-merge after CI;           preview, workflows, a
+ on the same branch (two       anything else: the merge       pending decision, or two
+ at most, then needs-owner)    batch, /approve-pr <n>         rounds that did not fix it
 ```
 
 ## Labels
@@ -44,22 +44,24 @@ The review workflow creates the five agent labels on its first run if they are m
 | Event | Effect |
 | --- | --- |
 | `agent-ready` added to an issue | A build: the issue's branch from `main`, or the one branch an earlier run left without a pull request. |
-| `@claude` in a comment by the owner, on an issue | The same as the label. |
+| `@claude` in a comment by the owner, on an issue | The same as the label: the run puts `agent-ready` on the issue, so removing it stops the run and its pull request gets fix rounds. |
 | `@claude` in a comment by the owner, on a pull request | A fix run on that pull request's branch, with the comment as the request. Anyone else's `@claude` does nothing. |
 | `review: fix-first` on an `agent-built` pull request | The review workflow dispatches a fix round (`agent.yml` with `issue`, `pr`, `round`) on the same branch. |
-| `agent-ready` removed | The issue's running build or fix round is cancelled; one still queued does nothing when it starts. |
+| `agent-ready` removed | The issue's running build or fix run is cancelled; a queued build or reviewer fix round does nothing when it starts. A queued `@claude` fix run on a pull request still runs: it is the owner's own request. |
 | Actions → Agent → *Run workflow* | A build (`issue` only) or a fix run (`issue` and `pr`) by hand. |
 
 **One run per issue.** The build job's concurrency group is the issue, so a second label waits behind the first run, and every run first checks for an open pull request that closes the issue or comes from an `issue-<n>-` branch. If there is one, the run refuses and says so on the issue: labelling an issue again never opens a second pull request. A branch whose pull request was closed is not reused; delete it to start the issue over.
 
-**At most three at once.** The `queue` job waits until fewer than three earlier Agent runs are still going, first come first served. A single concurrency group cannot do this: GitHub runs one job per group and keeps only the newest waiting one, cancelling the rest, so one `agents` group would mean one agent at a time and would silently drop the issues labelled in between.
+**At most three at once.** The `queue` job waits until fewer than three earlier Agent runs are still going, first come first served, polling every two minutes with one API call (the runs share the workflow token's hourly request budget with Preview and the review). After 330 minutes in the queue a run gives up and says so on the issue; label it again to retry. A single concurrency group cannot do this: GitHub runs one job per group and keeps only the newest waiting one, cancelling the rest, so one `agents` group would mean one agent at a time and would silently drop the issues labelled in between.
 
 ## The review verdict
 
-The reviewer agent ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md)) reads the issue and the diff and lists correctness gaps; it never chooses the label. The workflow measures everything else and `decide` in `agent.py` turns it into one verdict:
+The reviewer agent ([.claude/agents/reviewer.md](../.claude/agents/reviewer.md)) reads the issue, the diff and every changed expectation of an existing golden case, and lists correctness gaps; it never chooses the label. The workflow measures everything else and `decide` in `agent.py` turns it into one verdict. Files are counted by every path they touch, so a rename out of `src/` or `.claude/` into `docs/` is not a docs-only change.
 
 - **`review: fix-first`**: a gap the reviewer named; a golden case deleted, an `expect` key removed, a case's `mode` changed or a `max_ms` / `max_cost_usd` raised (checked against the merge base, whatever the pull request says); a failing `deterministic` check; failing `python3 evals/run.py`; or a branch that conflicts with `main`. An `agent-built` pull request whose issue still carries `agent-ready` goes back to the builder, at most **two** rounds; a third fix-first becomes `review: needs-owner`. Anyone else's pull request is labelled and left to its author.
-- **`review: needs-owner`**: no linked issue (`Closes #n`); no reviewer verdict (no credential, or the run failed); CI that did not finish within 30 minutes; the issue labelled `waiting-on-owner`; or a diff touching what the owner looks at before merge: `src/investigator/web/`, `src/investigator/server.py`, the `Dockerfile`, `deploy/`, `.github/`, `.claude/` or `CLAUDE.md`.
+- **`review: needs-owner`**, of two kinds, named in the comment's marker and by `status`:
+  - *eyes*: the issue is labelled `waiting-on-owner`, or the diff touches what the owner looks at before merge: `src/investigator/web/`, `src/investigator/server.py`, the `Dockerfile`, `deploy/`, `.github/`, or a `CLAUDE.md` or `.claude/` folder at any depth (Claude Code reads a nested `CLAUDE.md` as instructions). The owner looks, then may merge.
+  - *unresolved*: no linked issue (`Closes #n`); no reviewer verdict (no credential, or the run failed); CI that did not finish within 30 minutes or evals that did not run; or two fix rounds that left gaps. Nothing is approved until it is resolved; `/approve-pr` treats it as not reviewed.
 - **`review: approve`**: none of the above.
 
 The verdict comment starts with a hidden marker (`<!-- agent-review sha=… verdict=… round=… -->`) naming the head it judged. `python3 .github/scripts/agent.py status <pr>` reads the label and the newest marker together, the way `/review-pr` and `/approve-pr` do: `review: approve` only when both agree on the pull request's current head, `review: stale` when the head moved since.
@@ -71,7 +73,7 @@ The verdict comment starts with a hidden marker (`<!-- agent-review sha=… verd
 | **auto** | every changed file is under `docs/` or `tests/`, or is `README.md` or `evals/README.md` | On `review: approve` the review workflow turns on GitHub auto-merge with a merge commit (no squash); GitHub merges once the required checks pass. |
 | **owner** | anything else: `src/` (the tools, the planner, data generation, the cost model and money, `web/`), `evals/golden*.json`, the workflows, the skills, CLAUDE.md | The owner's merge word, `/approve-pr <n>`, which checks CI, the eval diff and the `review:` label first. |
 
-Protected `main` keeps requiring the `deterministic` check, for both tiers. A merge that auto-merge makes is GitHub acting for the workflow's token, and GitHub starts no workflow from that, so the merge of an auto-tier pull request is not deployed on push; the nightly deploy of `main` ([DEPLOYMENT.md](DEPLOYMENT.md), "The nightly deploy") takes it the next weekday morning, and only the `/docs` pages and the changelog can differ in the meantime.
+Protected `main` keeps requiring the `deterministic` check, for both tiers. A merge that auto-merge makes is GitHub acting for the workflow's token, and GitHub starts no workflow from that, so the merge of an auto-tier pull request is not deployed on push; the nightly deploy of `main` ([DEPLOYMENT.md](DEPLOYMENT.md), "The nightly deploy") takes it the next weekday morning, and only the `/docs` pages and the changelog can differ in the meantime. For the same reason the Preview workflow's close job does not run for an auto-merged pull request, so its `pr-<n>` tag stays on the Cloud Run service (scaled to zero, costing nothing, still answering at its preview URL) until it is removed by hand: `gcloud run services update-traffic <service> --remove-tags pr-<n>`. Sweeping the tags of closed pull requests automatically is a follow-up, since it changes the Cloud Run workflows.
 
 **The merge batch.** `/issues` lists the open pull requests labelled `review: approve` in merge order (the backlog order of the issue each closes, then the pull request number) with their tier. The coordinator's daily summary quotes that list, and the owner merges the owner-tier ones in that order.
 
@@ -108,7 +110,7 @@ Optional repository variables: `AGENT_MODEL` (passed as `--model`; unset uses Cl
 
 The builder runs with a fixed tool list (`--allowedTools` in `agent.yml`): reading and editing files, Python and Node (the tests and the evals), `git` without force pushes or rebases, and `gh` only to read issues and pull requests and to create and edit its own pull request. It cannot merge (`gh pr merge` and `gh api` are denied), cannot edit `.github/`, cannot reach the network with `curl`, and the project's `.claude/settings.json` deny list (force pushes, `gcloud` writes) applies as in any session. An issue that needs a workflow change is done in a session. The reviewer has a read-only token and can only read files and write its list of gaps; the review workflow, not the model, comments, labels and merges.
 
-These are guard rails, not a sandbox: Python can do whatever the runner can. What actually bounds an agent is who can start one (the owner's label and comments only), protected `main`, the owner tier, and `review: needs-owner` on any change to `.github/`, `.claude/` or CLAUDE.md. The review workflow runs on `pull_request_target`, so its definition and scripts come from `main` and a pull request cannot rewrite the rules that review and merge it; the pull request's code runs only in the job that runs the evals, with no secret and a read-only token, and fork pull requests are never reviewed.
+These are guard rails, not a sandbox: Python can do whatever the runner can. What actually bounds an agent is who can start one (the owner's label and comments only), protected `main`, the owner tier, and `review: needs-owner` on any change to `.github/`, `.claude/` or CLAUDE.md. The review workflow runs on `pull_request_target`, so its definition and scripts come from `main` and a pull request cannot rewrite the rules that review and merge it. The pull request's code runs only in the job that runs the evals, with no secret and a read-only token, and that job hands on two files, its exit code and its table; the verdict job works out the files list, the golden check and the issue itself, from its own checkout, and takes only the gaps from the model. Fork pull requests are never reviewed.
 
 ## Troubleshooting
 
@@ -117,3 +119,4 @@ These are guard rails, not a sandbox: Python can do whatever the runner can. Wha
 - **The verdict warns "auto-merge not enabled".** Allow auto-merge (step 3) and protect `main` (step 4).
 - **The run refused.** Its comment on the issue says why: an open pull request already closes the issue, or a branch from an earlier pull request is in the way.
 - **A run ended without a pull request.** Its comment links the run; label the issue again to resume on the same branch.
+- **A fix round pushed nothing.** The head is unchanged, and a head is sent back at most once (a second review of it spends no second round), so comment `@claude` on the pull request with what to do.

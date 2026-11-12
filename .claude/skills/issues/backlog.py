@@ -77,12 +77,14 @@ def status_of(issue: dict, open_numbers: set, by_order: dict, closes: dict) -> t
     return 'ready', ''
 
 
-def merge_batch(pulls: list, issues: dict, files: dict) -> list[dict]:
+def merge_batch(pulls: list, issues: dict, files: dict, marks: dict) -> list[dict]:
     """The approved pull requests in merge order: the backlog order of the issue each closes (an issue that
-    is not open sorts last), then the pull request number. `files` maps a pull request to its changed files."""
+    is not open sorts last), then the pull request number. `files` maps a pull request to its changed files
+    and `marks` to the review workflow's verdict comments; a pull request is in the batch only when
+    `agent.status_row` reads `review: approve`, i.e. the approve is for its current head."""
     rows = []
     for pr in pulls:
-        if agent.LABELS['approve'] not in [l['name'] for l in pr.get('labels', [])]:
+        if agent.status_row(pr, files.get(pr['number'], []), marks.get(pr['number'], []))['status'] != agent.LABELS['approve']:
             continue
         n = agent.linked_issue(pr.get('body'))
         issue = issues.get(n) or {}
@@ -113,8 +115,9 @@ def main(argv):
                      'title': ORDER.sub('', issue['title']).strip(), 'labels': [l['name'] for l in issue.get('labels', [])],
                      'status': status, 'ask': ask, 'url': issue['html_url']})
     approved = [pr for pr in pulls if agent.LABELS['approve'] in [l['name'] for l in pr.get('labels', [])]]
-    files = {pr['number']: [f['filename'] for f in gh(f'repos/{REPO}/pulls/{pr["number"]}/files?per_page=100')] for pr in approved}
-    batch = merge_batch(approved, {i['number']: i for i in issues}, files)
+    files = {pr['number']: agent.changed_paths(gh(f'repos/{REPO}/pulls/{pr["number"]}/files?per_page=100')) for pr in approved}
+    marks = {pr['number']: agent.review_marks(gh(f'repos/{REPO}/issues/{pr["number"]}/comments?per_page=100')) for pr in approved}
+    batch = merge_batch(approved, {i['number']: i for i in issues}, files, marks)
     if '--json' in argv:
         print(json.dumps({'issues': rows, 'merge_batch': batch}, indent=1))
         return 0

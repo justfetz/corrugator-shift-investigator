@@ -10,7 +10,8 @@ The owner has invoked this skill, which is the approval of record for pull reque
 3. `git fetch origin main pull/$ARGUMENTS/head:pr-$ARGUMENTS && git diff origin/main...pr-$ARGUMENTS -- evals/`. A deleted case or a removed `expect` key in `evals/golden.json` or `evals/golden_values.json` blocks the merge unless the owner wrote "approve anyway" in this session; quote the diff when you stop.
 4. The review verdict must be approve. Run `python3 .github/scripts/agent.py status $ARGUMENTS`, which reads the `review:` label exactly as the review workflow writes it:
    - `review: approve` (the label and the newest verdict comment agree on the current head) → go on.
-   - `review: needs-owner` → ask once whether the owner looked (the preview for `web/`, the diff for workflows and rules); stop if the answer is no.
+   - `review: needs-owner (eyes)`: the diff touches what the owner looks at (the preview for `web/`, workflows, rules) or the issue waits on the owner → ask once whether the owner looked or decided; stop if the answer is no.
+   - `review: needs-owner (unresolved)`: no linked issue, no reviewer verdict, CI or evals that did not finish, or two fix rounds that left gaps → it is not reviewed: stop on no linked issue or on gaps left (quote them); otherwise run `/review-pr $ARGUMENTS` here and go on only on its `approve`.
    - `review: fix-first` → stop, and quote the verdict comment's gaps.
    - `review: stale` or `review: none` (the head moved, or the workflow did not run) → run `/review-pr $ARGUMENTS` in this session; go on only on its `approve`, or on `needs the owner's eyes` after the question above.
 5. Merge: `gh api -X PUT repos/justfetz/corrugator-shift-investigator/pulls/$ARGUMENTS/merge -f merge_method=merge --jq '{merged,sha}'`.

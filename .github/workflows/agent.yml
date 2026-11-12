@@ -14,7 +14,8 @@
 # refuses when an open pull request already closes the issue or comes from its branch.
 # At most three at once: the `queue` job. A GitHub concurrency group runs one job at a time and keeps only
 # the newest waiting one (it cancels the others), so one `agents` group would mean one agent at a time and
-# would drop queued issues; `queue` waits instead until fewer than three earlier runs are still going.
+# would drop queued issues; `queue` waits instead until fewer than three earlier runs are still going, and
+# after 330 minutes gives up with a comment on the issue.
 # Caps: 60 minutes per build, `--max-turns` (AGENT_MAX_TURNS, default 200), the key's spend limit.
 #
 # Pushes and the pull request come from the Claude GitHub App (the action's default credential, not this
@@ -54,6 +55,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      issues: write   # an owner's @claude on an issue puts agent-ready on it, so it is exactly the label
     outputs:
       mode: ${{ steps.gate.outputs.mode }}
       issue: ${{ steps.gate.outputs.issue }}
@@ -93,10 +95,12 @@ jobs:
     needs: gate
     if: needs.gate.outputs.mode == 'build' || needs.gate.outputs.mode == 'fix'
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 345   # agent.py gives up at 330 minutes and says so on the issue
     permissions:
       actions: read
       contents: read
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,7 +110,9 @@ jobs:
       - name: Wait until fewer than three agent runs are ahead
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/agent.py queue --run-id "$GITHUB_RUN_ID"
+          ISSUE: ${{ needs.gate.outputs.issue }}
+          PR: ${{ needs.gate.outputs.pr }}
+        run: python3 .github/scripts/agent.py queue --run-id "$GITHUB_RUN_ID" --issue "$ISSUE" --pr "$PR"
 
   build:
     needs: [gate, queue]
@@ -120,7 +126,7 @@ jobs:
       pull-requests: write
       issues: write
       id-token: write   # the action exchanges the job's OIDC token for the Claude GitHub App's token
-      actions: read
+      actions: write    # verify re-dispatches the review when it had to add "Closes #n" to the body
     steps:
       - uses: actions/checkout@v4
         with:
