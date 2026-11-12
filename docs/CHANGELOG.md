@@ -10,6 +10,7 @@ commits pushed to `main` without a pull request are not listed; `git log` has th
 
 - [#109](https://github.com/justfetz/corrugator-shift-investigator/pull/109) #31b: the money on the card — dollar line, opportunities bars, the arithmetic, dollars on tiles, minutes · % · $, live rates
 - [#91](https://github.com/justfetz/corrugator-shift-investigator/pull/91) 13b · Rolling synthetic year with per-day seeding ([#35](https://github.com/justfetz/corrugator-shift-investigator/issues/35))
+- [#119](https://github.com/justfetz/corrugator-shift-investigator/pull/119) Smoke test: no stale body in the log, explicit "Live at" priority, no OpenAI default in the docs
 - [#110](https://github.com/justfetz/corrugator-shift-investigator/pull/110) /docs follow-up: indented code on /docs/metrics, DEPLOYMENT live-model section, smoke test reports main
 - [#112](https://github.com/justfetz/corrugator-shift-investigator/pull/112) Serve the demo at shift.talktomymachine.ai: allow-list the custom domain
 - [#108](https://github.com/justfetz/corrugator-shift-investigator/pull/108) The question's own shift and window win over the rail; typo-tolerant measures ([#105](https://github.com/justfetz/corrugator-shift-investigator/issues/105))

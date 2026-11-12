@@ -182,7 +182,7 @@ def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREV
     log.write_text('')
     env = {**os.environ, 'PATH': f'{stub}:{os.environ["PATH"]}', 'ORIGINS': ','.join(origins), 'LIVE_MODEL': live_model,
            'STUB_UP': ' '.join(up), 'STUB_LIVE': ' '.join(live), 'STUB_NXDOMAIN': ' '.join(nxdomain), 'STUB_LOG': str(log),
-           'RUN_DAY': '2026-11-11', 'STUB_AS_OF': as_of}
+           'RUN_DAY': '2026-11-11', 'STUB_AS_OF': as_of, 'GITHUB_ENV': str(tmp_path / 'github_env')}   # never CI's own env file
     proc = subprocess.run(['bash', '-c', step_script(DEPLOY.read_text(encoding='utf-8'), 'Smoke test')],
                           env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)   # interleaved, as in the run log
     return proc.returncode, proc.stdout, log.read_text().split()
@@ -384,6 +384,8 @@ def test_the_deploy_fails_a_live_changelog_without_the_merged_pull_request(tmp_p
     smoke_step = text.split('- name: Smoke test', 1)[1].split('- name:', 1)[0]
     assert 'echo "LIVE=$LIVE" >> "${GITHUB_ENV:-/dev/null}"' in smoke_step
     assert smoke_step.index('GITHUB_ENV:-/dev/null') < smoke_step.index('echo "Live at')
+    code, log, _ = smoke(tmp_path, up=[MAIN_HASH, MAIN])
+    assert code == 0 and (tmp_path / 'github_env').read_text() == f'LIVE={MAIN}\n', 'the check reads the URL the smoke test reported'
     page = tmp_path / 'changelog.html'
     page.write_text(Renderer().render(changelog([('2026-11-12', 128, 'CLAUDE.md aligned with how the project runs (#101)')])))
     script = ROOT / '.github' / 'scripts' / 'check_changelog.py'
@@ -393,6 +395,9 @@ def test_the_deploy_fails_a_live_changelog_without_the_merged_pull_request(tmp_p
         return proc.returncode, proc.stdout
 
     assert run('Merge pull request #128 from justfetz/docs-claude-md-alignment') == (0, 'changelog lists #128\n')
+    assert run('Merge pull request #128') == (0, 'changelog lists #128\n')        # a title edited at merge (#119 was)
+    code, out = run('Merge pull request #12 from justfetz/x')                      # #128 on the page is not #12
+    assert code == 1 and '#12' in out
     assert run('CLAUDE.md aligned (#128)')[0] == 0                                   # a squash merge
     code, out = run('Merge pull request #129 from justfetz/issue-129-x')
     assert code == 1 and '::error::' in out and '#129' in out

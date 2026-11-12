@@ -44,7 +44,7 @@ python -m investigator.server --port 7860            # local workbench at http:/
 - The offline path never calls a model. Live calls are bounded in calls, seconds and bytes, and go only through the provider adapters.
 - Public mode never accepts a visitor key.
 - Contracts move with their code in the same PR: `docs/RECORDS.md` with `records.py` and `synth.py`, `docs/AGENT_CONTRACT.md` with the tool schemas, bounds and scope checks, `docs/URLS.md` with `urls.py`.
-- No doc states a test or case count. Counts drift, and every PR conflicts on them; the test run's own output, `evals/last_run.json` and `/evals` are the counts.
+- No doc states a current count of tests, cases, runs or recordings. Counts drift, and every PR conflicts on them; the test run's own output, `evals/last_run.json` and `/evals` are the counts. A dated past result ("the first slice passed 106 tests") is history and may stay.
 - Keep this file short. Procedures live in `.claude/skills/`.
 
 ## How sessions work
@@ -52,12 +52,12 @@ python -m investigator.server --port 7860            # local workbench at http:/
 - One issue, one session, one PR. Use the branch the session gives you and put `Closes #<n>` in the PR body. If an open PR already closes the issue, stop and say so: never two sessions on one issue.
 - The coordinator, a Claude chat working with the owner, writes the issues, reviews each PR with the `reviewer` subagent, and posts the verdict and the owner's decisions as PR comments. A session's next task is the newest coordinator comment on its PR: do every item, then reply on the PR with what changed for each.
 - Claude never merges on its own. A PR merges only on the owner's word for that PR, by `/approve-pr <n>` or "merge <n>" to the coordinator; both check CI, the eval diff and the review verdict first.
-- To catch a branch up with `main`, merge `main` into it and push; never rebase a pushed branch. Force pushes are denied by `.claude/settings.json`, so a rebase strands the work on a branch nobody can update. In the eval files, `golden.json` merges by case `id` (keep both sides' cases), `history.jsonl` keeps both sides' lines with main's first, and `last_run.json` takes main's copy and is rewritten by `python3 evals/run.py --track`.
+- To catch a branch up with `main`, merge `main` into it and push; never rebase a pushed branch. Force pushes are denied by `.claude/settings.json`, so a rebase strands the work on a branch nobody can update. In the eval files, `golden.json` merges by case `id` (keep both sides' cases), `history.jsonl` keeps both sides' lines with main's first, and `last_run.json` takes main's copy; then run `python3 evals/run.py --track` and commit both files (`tests/test_evalboard.py` checks that `last_run.json` matches the newest history line).
 - Start by reading this file and the issue, then run the tests and evals before changing anything so the baseline is known.
 - Done when: tests pass; `python3 evals/run.py` passes with no case removed or weakened; each acceptance criterion in the issue is demonstrated in the PR description with the command and its output; docs the change touches are updated in the same PR.
 - The PR title is its changelog line: every merge is listed on `/docs/changelog` (the deploy regenerates `docs/CHANGELOG.md` from the merged PRs and fails the run when the live page misses the merge), so write the title as what changed for a reader, with the issue number.
 - PR description: what changed, how it was tested (paste the eval table), and the eval and latency delta. A few minutes after the PR opens, the Preview workflow comments a URL where that PR runs; the owner looks at it during `/review-pr` (it is not reachable from a cloud session), so render locally and quote what you checked.
-- Before opening the PR, have the `reviewer` subagent check the diff against the issue. Fix correctness gaps; ignore style nits. The Codex connector also reviews every PR: fix each of its findings or answer it on its thread with the reason; an unanswered thread blocks approval.
+- Before opening the PR, have the `reviewer` subagent check the diff against the issue. Fix correctness gaps; ignore style nits. The Codex connector also reviews every PR: fix each of its findings or answer it on its thread with the reason, outdated threads included; an unanswered thread blocks approval.
 - Use `/issues` (the ordered backlog with a status per issue), `/fix-issue <n>`, `/add-golden-case <what>`, `/run-evals`, `/review-pr <n>` and `/approve-pr <n>` for the repeatable parts. Sessions label an issue `waiting-on-owner` when they ask the owner something in it.
 
 ## Permissions and safety

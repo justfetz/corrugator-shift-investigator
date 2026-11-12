@@ -5,7 +5,7 @@
 
 <changelog page> is the body of GET /docs/changelog from the revision now live. <head commit subject>
 is `git log -1 --format=%s` of the commit deployed. When that subject is a pull request's merge
-("Merge pull request #N from ...") or a squash ("... (#N)"), the page must link to pull request N.
+("Merge pull request #N", with or without "from <branch>") or a squash ("... (#N)"), the page must link to pull request N.
 Any other subject (a direct push) has no pull request to look for and passes.
 
 The Changelog step before the build may not fail the deploy, so this check runs after the revision is
@@ -20,7 +20,7 @@ REPO = 'https://github.com/justfetz/corrugator-shift-investigator'
 
 def pull_number(subject):
     """The pull request a head commit subject merges, or None."""
-    merge = re.match(r'Merge pull request #(\d+) from \S+', subject or '')
+    merge = re.match(r'Merge pull request #(\d+)\b', subject or '')
     squash = re.search(r'\(#(\d+)\)\s*$', subject or '')
     match = merge or squash
     return int(match.group(1)) if match else None

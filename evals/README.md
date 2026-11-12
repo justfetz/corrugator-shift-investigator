@@ -109,7 +109,7 @@ tool calls), half the set under 13 ms. That is wider than the 13–60 ms the iss
 quotes for single questions, because the set also holds the refusals and the
 multi-turn stories.
 
-Eleven cases carry an explicit `max_ms: 500`: the two multi-turn stories
+These cases carry an explicit `max_ms: 500`: the two multi-turn stories
 (`story-monday-warp`, `story-trim-creep`), the eight- and nine-week trends
 (`period-trend-minutes-per-stop`, `period-trim-trend`, `period-trend-warp-weekly`,
 `period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
@@ -118,7 +118,7 @@ compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
 other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
 four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
 418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,
-`period-trend-minutes-per-stop` 266 ms), all eleven stayed under 500 ms, the next
+`period-trend-minutes-per-stop` 266 ms), all of them stayed under 500 ms, the next
 slowest case reached 156 ms, and the run-level gate held at p50 26 ms, p95 232 ms.
 Raise a budget only with the number that justifies it in the PR; never to make
 a slow change pass.
@@ -220,7 +220,7 @@ faithfulness, grounding, refusal, value and data_quality 1.0, investigation ≥
 0.8. Offline cases stay pass / fail one by one. The exit status counts failed
 offline cases plus live (provider, type) pairs under their threshold.
 A live row costs a fraction of a cent with `claude-haiku-5-5` and roughly a
-cent with `gpt-4.1-mini`; the table prints the measured cost per case. Fifteen
+cent with `gpt-4.1-mini`; the table prints the measured cost per case. The
 Anthropic recordings are committed under `fixtures/anthropic/`; none for OpenAI.
 
 ## Tracking runs over time
@@ -396,9 +396,9 @@ text, so a score or a grade always belongs to the words it was given. The judge
 reads `investigator.judge.narrative_cases`: the question and its scope, the
 narrative as a reader sees it (`Finding: ... (cites r1 row 0 trim_pct)`), and the
 tool results it was written from, rows first, floats to four decimals, the
-writer's twelve-row preview, at most 24,000 characters. Four narratives can be
-judged and graded today, all four scripted: since the rolling year (#91) every
-live recording is stale and replays nothing, so the seventeen recorded narratives
+writer's twelve-row preview, at most 24,000 characters. Only the scripted narratives can be
+judged and graded today: since the rolling year (#91) every
+live recording is stale and replays nothing, so the recorded narratives
 come back once the live recordings are re-recorded (#71). Until then the target
 of twenty reads "20 once the live recordings are re-recorded (#71)" wherever it is
 shown.
