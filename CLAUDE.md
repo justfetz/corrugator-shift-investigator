@@ -56,7 +56,7 @@ python -m investigator.server --port 7860            # local workbench at http:/
 - Done when: tests pass; `python3 evals/run.py` passes with no case removed or weakened; each acceptance criterion in the issue is demonstrated in the PR description with the command and its output; docs the change touches are updated in the same PR.
 - The PR title is its changelog line: every merge is listed on `/docs/changelog` (the deploy regenerates `docs/CHANGELOG.md` from the merged PRs and fails the run when the live page misses the merge), so write the title as what changed for a reader, with the issue number.
 - PR description: what changed, how it was tested (paste the eval table), and the eval and latency delta. A few minutes after the PR opens, the Preview workflow comments a URL where that PR runs; the owner looks at it during `/review-pr` (it is not reachable from a cloud session), so render locally and quote what you checked.
-- Before opening the PR, have the `reviewer` subagent check the diff against the issue. Fix correctness gaps; ignore style nits.
+- Before opening the PR, have the `reviewer` subagent check the diff against the issue. Fix correctness gaps; ignore style nits. The Codex connector also reviews every PR: fix each of its findings or answer it on its thread with the reason; an unanswered thread blocks approval.
 - Use `/issues` (the ordered backlog with a status per issue), `/fix-issue <n>`, `/add-golden-case <what>`, `/run-evals`, `/review-pr <n>` and `/approve-pr <n>` for the repeatable parts. Sessions label an issue `waiting-on-owner` when they ask the owner something in it.
 
 ## Permissions and safety

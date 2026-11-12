@@ -157,7 +157,7 @@ window holds.
 The file carries the dataset `content_hash`. `run.py` compares it with the golden
 store before scoring and fails every value case when they differ ("stale
 goldens; run make_value_goldens.py"), so an intended generator change forces a
-deliberate regeneration and an unintended one is caught. The 85 cases cover
+deliberate regeneration and an unintended one is caught. The cases cover
 every KPI tile for September and August (all shifts and per shift), one week
 and one production day per shift, the year's first week and month and 4-4-5
 period (no or a partial previous window) and the last week (partial),
@@ -264,8 +264,8 @@ page writes here.
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 295 cases make 301 runs because six offline cases also have a
-recording. A live run on the page is always a **replay** of the committed
+recorded variant: a case with a recording makes two runs, so the run count is
+the case count plus the recorded cases. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can
 reach a provider, whatever keys the server holds. Latency on the page is this
