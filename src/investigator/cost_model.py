@@ -446,10 +446,44 @@ def _rank(rows, key):
     return rows
 
 
+# The owner's ruling on the money cards (PR #111, 2026-11-12): planned maintenance (schedule-driven) and a power outage
+# (external) are on a shift's or a day's card with their dollars, apart from the ranked recorded losses, as the lenses show
+# them. The ranking and the recorded-losses total leave them out; `all_in_*` is the total with them.
+GAP_APART_NOTE = {'schedule-driven': 'planned maintenance is scheduled time', 'external': 'outside the plant, not controllable'}
+
+
+def apart_of(row):
+    """A downtime breakdown row's place on the money card: schedule-driven (planned maintenance), external (a power
+    outage) or None, ranked among the recorded losses."""
+    return 'schedule-driven' if row.get('scheduled') else 'external' if row.get('external') else None
+
+
+def rank_gaps(rows):
+    """The money card's gaps: the recorded losses ranked by dollars; the gaps apart after them with no rank, schedule-driven
+    then external (APART), each group by dollars (web/money.js ranks them the same way)."""
+    ranked = _rank([r for r in rows if not r.get('apart')], 'usd')
+    rest = sorted([r for r in rows if r.get('apart')], key=lambda r: (APART[r['apart']], -(r['usd'] or 0), r['gap']))
+    for r in rest:
+        r['rank'] = None
+    return ranked + rest
+
+
+def gap_totals(rows):
+    """The card's two totals: the recorded losses (`total_*`, the ranked gaps, and the chips and arithmetic of them) and
+    the all-in total with the gaps apart (`all_in_usd`, `all_in_usd_per_year`), each added left to right in row order."""
+    ranked = [r for r in rows if not r.get('apart')]
+    usd = [r['usd'] for r in rows if r['usd'] is not None]
+    years = [r['usd_per_year'] for r in rows]
+    return {**_totals(ranked), **summary(ranked), 'apart_gaps': len(rows) - len(ranked),
+            'all_in_usd': round(_add(usd), 2) if usd else 0.0,
+            'all_in_usd_per_year': round(_add(years), 0) if rows and None not in years else None}
+
+
 def shift_dollars(analysis, shift, rates):
-    """`get_shift_dollars`: where the money went in one shift, every gap priced, ranked by dollars.
+    """`get_shift_dollars`: where the money went in one shift, every gap priced, the recorded losses ranked by dollars.
     Gaps: each downtime reason (minutes), the speed gap to the required 675 ft/min (running time
-    only), side trim, shear and each dry-end reason (square feet)."""
+    only), side trim, shear and each dry-end reason (square feet). Planned maintenance and a power outage are apart,
+    unranked and outside the recorded-losses total (`apart`; the owner, PR #111)."""
     kpis = analysis.get_shift_kpis(shift)
     stops = analysis.get_downtime_breakdown(shift)
     rejects = analysis.get_quality_breakdown(shift)
@@ -457,26 +491,29 @@ def shift_dollars(analysis, shift, rates):
     gross = k['gross_sqft']
     rows = []
     for r in stops['rows']:
+        apart = apart_of(r)
         rows.append({'gap': f'Downtime: {r["category"]}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
                      'quantity': round(r['down_minutes'], 2), 'unit': 'min', 'source_ids': r['source_ids'],
+                     'apart': apart, **({'apart_note': GAP_APART_NOTE[apart]} if apart else {}),
                      **price('downtime', r['down_minutes'], rates, gross, SHIFT_MINUTES)})
     if gross:
         running = SHIFT_MINUTES - (k['downtime_pct'] or 0) * SHIFT_MINUTES / 100
         required = ASSUMPTIONS['required_fpm']
         gap_ft = max(0.0, required * running - k['observed_lineal_ft'])
         rows.append({'gap': f'Speed gap to {required:g} ft/min', 'kind': 'speed', 'quantity': round(gap_ft, 1), 'unit': 'lineal ft',
-                     'source_ids': k['source_ids'], **price('speed', gap_ft / required, rates, gross, SHIFT_MINUTES)})
+                     'source_ids': k['source_ids'], 'apart': None, **price('speed', gap_ft / required, rates, gross, SHIFT_MINUTES)})
         rows.append({'gap': 'Side trim', 'kind': 'trim', 'quantity': round(k['trim_pct'] * gross / 100, 1), 'unit': 'sq ft',
-                     'source_ids': k['source_ids'], **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
+                     'source_ids': k['source_ids'], 'apart': None, **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
         rows.append({'gap': 'Shear chops', 'kind': 'waste', 'quantity': round(k['shear_pct'] * gross / 100, 1), 'unit': 'sq ft',
-                     'source_ids': k['source_ids'], **price('waste', k['shear_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
+                     'source_ids': k['source_ids'], 'apart': None, **price('waste', k['shear_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
     for r in rejects['rows']:
         rows.append({'gap': f'Dry-end: {r["reason"]}', 'kind': 'waste', 'quantity': round(r['rejected_sqft'], 1), 'unit': 'sq ft',
-                     'source_ids': r['source_ids'], **price('waste', r['rejected_sqft'], rates, gross, SHIFT_MINUTES)})
+                     'source_ids': r['source_ids'], 'apart': None, **price('waste', r['rejected_sqft'], rates, gross, SHIFT_MINUTES)})
+    rows = rank_gaps(rows)
     data = {'production_day': kpis['production_day'], 'shift': shift, 'dataset_version': kpis['dataset_version'],
-            'rows': _rank(rows, 'usd'), 'coverage': kpis['coverage'], 'excluded_records': kpis['excluded_records'],
+            'rows': rows, 'coverage': kpis['coverage'], 'excluded_records': kpis['excluded_records'],
             'trace': _trace([kpis, stops, rejects]), 'gross_sqft': round(gross or 0, 1), 'scheduled_minutes': SHIFT_MINUTES,
-            **_totals(rows), **summary(rows)}
+            **gap_totals(rows)}
     if gross:
         data.update(trim_over_target(k['trim_pct'], gross, SHIFT_MINUTES, rates))
         if kpis['coverage'] == 'complete':
@@ -501,7 +538,8 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
     gaps = {}
     for d in used:
         for r in d['rows']:
-            g = gaps.setdefault(r['gap'], {'gap': r['gap'], 'kind': r['kind'], 'unit': r['unit'], 'shown': [], 'terms': [], 'shifts': [], 'pricing': None})
+            g = gaps.setdefault(r['gap'], {'gap': r['gap'], 'kind': r['kind'], 'unit': r['unit'], 'apart': r.get('apart'),
+                                          'shown': [], 'terms': [], 'shifts': [], 'pricing': None})
             g['shown'].append(r['quantity'])
             g['shifts'].append(d['shift'])
             if r.get('price_terms'):
@@ -512,16 +550,18 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
         places = 2 if g['unit'] == 'min' else 1
         quantity = round(_add(g['terms']), 2 if g['pricing'] in TIME_KINDS else 1) if g['terms'] else None
         rows.append({'gap': g['gap'], 'kind': g['kind'], 'quantity': round(_add(g['shown']), places), 'unit': g['unit'], 'shifts': g['shifts'],
+                     'apart': g['apart'], **({'apart_note': GAP_APART_NOTE[g['apart']]} if g['apart'] else {}),
                      **price(g['pricing'] or 'downtime', quantity, rates, gross, minutes)})
     trim = round(_add(r['price_terms']['quantity'] for d in used for r in d['rows'] if r['kind'] == 'trim' and r.get('price_terms')), 1)
+    rows = rank_gaps(rows)
     data = {'production_day': parts[0]['production_day'], 'shift': None, 'dataset_version': parts[0]['dataset_version'],
-            'rows': _rank(rows, 'usd'), 'coverage': 'complete' if complete else 'partial',
+            'rows': rows, 'coverage': 'complete' if complete else 'partial',
             'excluded_records': [x for d in parts if d['coverage'] != 'complete' for x in d['excluded_records']],
             'excluded_shifts': [d['shift'] for d in parts if d['coverage'] != 'complete'] if complete else [],
             'shifts': [{'shift': d['shift'], 'coverage': d['coverage']} for d in parts],
             'trace': {'sql': ';\n'.join(d['trace']['sql'] for d in parts), 'parameters': [d['trace']['parameters'] for d in parts],
                       'elapsed_ms': sum(d['trace']['elapsed_ms'] for d in parts)},
-            'gross_sqft': round(gross, 1), 'scheduled_minutes': minutes, **_totals(rows), **summary(rows)}
+            'gross_sqft': round(gross, 1), 'scheduled_minutes': minutes, **gap_totals(rows)}
     if gross:
         data.update(trim_over_target(trim / gross * 100, gross, minutes, rates))
     return _envelope(data, rates)

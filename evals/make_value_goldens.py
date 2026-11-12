@@ -822,13 +822,34 @@ def money_summary(gaps, priced, gross, minutes, rates, trim_sqft=None):
     return values
 
 
+# The owner's ruling on the money cards (PR #111): planned maintenance (the reason every PM stop carries) is schedule-driven
+# and an external reason (a power outage, targets.json) external; both are on the card, apart from the ranked losses.
+GAP_APART = {"Downtime: Planned maintenance": "schedule-driven", **{f"Downtime: {r}": "external" for r in EXTERNAL_REASONS}}
+
+
+def apart_values(values, priced):
+    """Each gap's place on the card (`apart`; a gap apart has no rank) and the all-in total with the gaps apart."""
+    for g in priced:
+        values[f"rows:gap={g}"]["apart"] = exact(GAP_APART.get(g))
+        if g in GAP_APART:
+            values[f"rows:gap={g}"]["rank"] = exact(None)
+    n = len(priced)
+    return {"apart_gaps": exact(sum(g in GAP_APART for g in priced)),
+            "all_in_usd": [round(sum(e["usd"][0] for e in priced.values()), 6), 0.011 * n],
+            "all_in_usd_per_year": [round(sum(e["usd_per_year"][0] for e in priced.values()), 3), 1.01 * n]}
+
+
 def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
-    """get_shift_dollars by hand: each gap of shift_gaps priced on the shift's gross and 480 minutes and ranked by
-    dollars, with the card's summary (money_summary)."""
+    """get_shift_dollars by hand: each gap of shift_gaps priced on the shift's gross and 480 minutes; the recorded losses
+    ranked by dollars and totalled, with the card's summary of them (money_summary); planned maintenance and an outage
+    apart, unranked, in the all-in total only (the owner, PR #111)."""
     rates = rates_of(rates_text)
     gaps, gross = shift_gaps(plain, day, shift)
-    priced = {g: money(kind, q, gross, 480, rates) for g, (kind, q) in gaps.items()}
-    values = {f"rows:gap={g}": e for g, e in priced.items()}
+    everything = {g: money(kind, q, gross, 480, rates) for g, (kind, q) in gaps.items()}
+    values = {f"rows:gap={g}": e for g, e in everything.items()}
+    extra = apart_values(values, everything)
+    priced = {g: e for g, e in everything.items() if g not in GAP_APART}
+    gaps = {g: v for g, v in gaps.items() if g not in GAP_APART}
     top = max(priced, key=lambda g: (priced[g]["usd"][0], [-ord(c) for c in g]))
     values["#0"] = {"gap": exact(top)}
     n = len(priced)
@@ -847,8 +868,8 @@ def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
                    "total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in priced.values()), 3), 1.01 * n],
                    "total_contribution_usd": exact(None) if rates[2] is None else
                        [round(sum(e["contribution_usd"][0] for e in priced.values()), 6), 0.011 * n],
-                   "contribution_status": exact("margin not set" if rates[2] is None else "set"), **summary["$"]}
-    return case(id, "get_shift_dollars", {"shift": shift}, {"coverage": "complete", "row_count": n, "values": values},
+                   "contribution_status": exact("margin not set" if rates[2] is None else "set"), **summary["$"], **extra}
+    return case(id, "get_shift_dollars", {"shift": shift}, {"coverage": "complete", "row_count": len(everything), "values": values},
                 day=day, note=note, rates=rates_text)
 
 
@@ -869,8 +890,11 @@ def day_dollars_case(plain, id, day, rates_text=None, shifts=(1, 2, 3), corrupt=
             gaps[gap] = (kind, gaps.get(gap, (kind, 0.0))[1] + q)
     gaps = {g: (kind, round(q, 2 if kind in ("downtime", "speed") else 1)) for g, (kind, q) in gaps.items()}
     gross, minutes = round(gross, 1), 480 * len(counted)
-    priced = {g: money(kind, q, gross, minutes, rates) for g, (kind, q) in gaps.items()}
-    values = {f"rows:gap={g}": e for g, e in priced.items()}
+    everything = {g: money(kind, q, gross, minutes, rates) for g, (kind, q) in gaps.items()}
+    values = {f"rows:gap={g}": e for g, e in everything.items()}
+    extra = apart_values(values, everything)   # planned maintenance and an outage apart (the owner, PR #111)
+    priced = {g: e for g, e in everything.items() if g not in GAP_APART}
+    gaps = {g: v for g, v in gaps.items() if g not in GAP_APART}
     values["#0"] = {"gap": exact(max(priced, key=lambda g: (priced[g]["usd"][0], [-ord(c) for c in g])))}
     for shift in shifts:   # each shift named with its coverage; its own total is its get_shift_dollars step
         values[f"shifts:shift={shift}"] = {"coverage": exact("incomplete" if shift in bad else "complete")}
@@ -880,8 +904,8 @@ def day_dollars_case(plain, id, day, rates_text=None, shifts=(1, 2, 3), corrupt=
     values["$"] = {"shift": exact(None), "excluded_shifts": exact(sorted(bad)), "scheduled_minutes": exact(minutes), "gross_sqft": num(gross, 1),
                    "total_usd": [round(sum(e["usd"][0] for e in priced.values()), 6), 0.011 * n],
                    "total_usd_per_year": [round(sum(e["usd_per_year"][0] for e in priced.values()), 3), 1.01 * n],
-                   "contribution_status": exact("margin not set" if rates[2] is None else "set"), **summary["$"]}
-    expect = {"coverage": "complete", "row_count": n, "values": values}
+                   "contribution_status": exact("margin not set" if rates[2] is None else "set"), **summary["$"], **extra}
+    expect = {"coverage": "complete", "row_count": len(everything), "values": values}
     if bad:
         expect["excluded_records"] = day_setups(plain, day, 2, corrupt=True)[1]
     arguments = {"shifts": list(shifts)}
@@ -1386,6 +1410,11 @@ def build(data=None):
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0914-shift-2", "2026-09-14", 2,
                                     note="Where the money went in shift 2: every gap priced at the post's rates; contribution reads 'margin not set', never $0."))
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0930-shift-1", "2026-09-30", 1))
+    cases.append(shift_dollars_case(plain, "value-dollars-shift-0917-shift-1-planned-apart", "2026-09-17", 1,
+                                    note="Thursday's first shift holds the planned maintenance window: on the card, apart from the ranked losses, "
+                                         "and in the all-in total only (the owner, PR #111)."))
+    cases.append(day_dollars_case(plain, "value-dollars-day-0916-outage-apart", "2026-09-16",
+                                  note="The day of September's power outage (third shift): the outage is apart, unranked, in the all-in total only."))
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0914-shift-2-rates", "2026-09-14", 2, "paper:66,hour:1500,margin:40",
                                     note="The same shift with paper x1.2, machine time x1.25 and a $40/MSF margin: each dollar scales with its own rate only."))
     cases.append(day_dollars_case(plain, "value-dollars-day-0914", "2026-09-14",

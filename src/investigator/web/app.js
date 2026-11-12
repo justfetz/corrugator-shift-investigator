@@ -887,13 +887,14 @@ function moneyFacts(m){
  if(dropped.length)warning=`Shift ${dropped.join(' and ')}: data incomplete, not counted in these dollars; they are the complete shifts'.`;
  else if(d.coverage!=='complete')warning=`Incomplete data: ${excluded||'some'} excluded record${excluded===1?'':'s'}. These dollars are the observed records only, not the whole ${levers?'window':day?'day':'shift'}; do not rank them.`;
  const rows=d.rows.map(r=>({name:r.gap||r.lever,bucket:bucketOf(r),usd:r.usd||0,year:r.usd_per_year,minutes:r.machine_minutes||0,share:Money.share(r),
-  area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),control:r.control||null,trim:r.kind==='trim',rows:[r]}));
+  area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),control:r.control||r.apart||null,apart:!!r.apart,trim:r.kind==='trim',rows:[r]}));
  const counted=day?(d.shifts||[]).filter(x=>!dropped.includes(x.shift)).map(x=>x.shift):[];
  // each counted shift's own total a year: its get_shift_dollars step beside the day total, re-priced with it
  const own=day?counted.map(n=>(m.result.trace||[]).find(x=>x.ok&&x.tool==='get_shift_dollars'&&x.data&&x.data.shift===n&&x.data.production_day===d.production_day)):[];
  const perShift=day&&own.length&&own.every(Boolean)?own.map(x=>`shift ${x.data.shift} ${Money.short(atRates(m,x).total_usd_per_year)}/yr`).join(' · '):null;
  return {levers,day,data:d,rows,cfg,rates,warning,lens:levers?d.lens||'all':null,
   total:d.total_usd, year:d.total_usd_per_year, paper:d.total_paper_usd, machine:d.total_machine_time_usd, contribution:d.total_contribution_usd,
+  apart:d.apart_gaps||0, allIn:d.all_in_usd, allInYear:d.all_in_usd_per_year,   // the all-in total with the gaps apart (the owner, PR #111)
   buckets:(d.buckets||[]).map(b=>[b.bucket,b.usd]),
   when:levers?WHEN[d.window&&d.window.period]||'this window':day?((d.shifts||[]).length===3?'this day':'these shifts'):'this shift',
   who:levers?(d.shift?`Shift ${d.shift}`:'All shifts'):day?(counted.length===3?'All shifts':`Shift${counted.length===1?'':'s'} ${counted.join(' and ')}`):`Shift ${d.shift}`,
@@ -925,6 +926,8 @@ function fillDollarLine(line,f){
  const lead=node('p',undefined,'dollar-lead');
  lead.append(node('span','≈ '),node('strong',Money.money(f.total),'figure'),node('span',` ${f.levers?'in levers':'recorded losses'} ${f.when}`));
  if(f.year!==null&&f.year!==undefined)lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',f.when==='this day'?' at this day\'s rate':' at this rate'));
+ // the card states both totals (the owner, PR #111): the recorded losses, and all in with planned maintenance and an outage
+ if(f.apart)lead.append(node('span',` · ${Money.money(f.allIn)}${f.allInYear!==null&&f.allInYear!==undefined?` (${Money.short(f.allInYear)}/yr)`:''} all in, with the schedule-driven and external downtime`,'all-in'));
  const margin=f.rates.values.margin_usd_msf;   // the line says plainly whether contribution is priced
  lead.append(node('span',margin===null||margin===undefined?` · contribution: ${f.cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(margin)}/MSF, not added`,'contrib'));
  const chips=node('p',undefined,'chips');
@@ -965,7 +968,7 @@ function opportunityPanel(f,m,rec){
  let table=false, all=false;
  const draw=()=>{
   box.replaceChildren();
-  const ranked=lensOrder([...f.rows].sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1)||(a.name<b.name?-1:a.name>b.name?1:0)),f.lens);
+  const ranked=lensOrder([...f.rows].sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1)||(a.name<b.name?-1:a.name>b.name?1:0)),f.lens).sort((a,b)=>a.apart-b.apart);   // a money card's gaps apart go last (PR #111); a stable sort
   const shown=all?ranked:ranked.slice(0,PANEL_ROWS);
   if(table)box.append(moneyTable(ranked,f));
   else box.append(moneyBars(shown,mode,yearly,true));

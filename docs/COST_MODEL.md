@@ -58,8 +58,13 @@ stops (a power outage) external, none of them priced, so the envelope's
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
   reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus
   downtime; the lineal feet not made / 675 = machine minutes), side trim, shear and each dry-end reason.
-  Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`, `total_usd_per_year`,
-  `total_contribution_usd` (null while the margin is not set). Asked as "where did the money go this shift".
+  Planned maintenance and a power outage are on the card with their dollars, apart from the ranked recorded
+  losses (the owner's ruling on PR #111): each carries `apart` (`schedule-driven` or `external`, with an
+  `apart_note`) and no rank, and the answer lists them under "Schedule-driven, shown apart" and "External, not
+  controllable", as the lenses do. Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`,
+  `total_usd_per_year`, `total_contribution_usd` (null while the margin is not set), the recorded losses only, and
+  the chips and arithmetic of them; `all_in_usd` and `all_in_usd_per_year` add the gaps apart (`apart_gaps` counts
+  them), and the headline and the card's dollar line state both. Asked as "where did the money go this shift".
 - `get_opportunities(window, shift, lens)`: where to look, the levers ranked in $/yr: the speed of each
   wet-end run under its grade's trailing-year speed (the owner's baseline, [METRICS](METRICS.md#the-owners-targets-and-bands-issue-101);
   minutes = the run's lineal feet short of the baseline in its running minutes / the baseline), side-trim
@@ -165,7 +170,8 @@ also return the trim line (`trim_over_target`): `trim_pct_of_gross`, `trim_targe
 `trim_over_usd` and `trim_over_usd_per_year` (points / 100 × 1.8M MSF × paper), with `trim_over_terms` to
 re-derive them at another target. Every priced row carries `share_of_window_pct`, its quantity as a share of
 the window's gross or scheduled minutes (the % of Show as). An all-shifts day (or the shifts a question named,
-`shifts=1,3`) reads `get_day_dollars(shifts)`: each gap of `get_shift_dollars` summed over those shifts that are
+`shifts=1,3`) reads `get_day_dollars(shifts)` (its gaps apart and its all-in total as the shift's; the shift that
+lost the most is chosen by the recorded losses, so an outage never decides it): each gap of `get_shift_dollars` summed over those shifts that are
 complete (an incomplete one is named in `excluded_shifts`, not added), rounded as the window tools round (0.1 sq
 ft, 0.01 min) and priced once on their gross (to 0.1) and 480 minutes a complete shift, so its $/yr is the day's
 own and a Day window's tiles price the same quantities as its chips. `shifts` names each shift and its coverage;

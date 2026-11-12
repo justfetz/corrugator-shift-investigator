@@ -119,7 +119,10 @@ These cases carry an explicit `max_ms: 500`: the two multi-turn stories
 `period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
 `value-trend-warp-8w`, `value-trend-stops-9w-missing-weeks`) and the three-shift
 compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
-other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
+other case passes 53 ms. The three shifts' money with the day's total
+(`money-day-ranks-shifts-without-the-outage`, PR #111: seven tool calls, the day pricing each shift
+again) runs 210 ms in-process and 204 ms over GET in a warm, uncontended run, and 236–294 ms over GET
+run alone, so it carries the same 500. Under about 2x CPU contention (four busy loops on the
 four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
 418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,
 `period-trend-minutes-per-stop` 266 ms), all of them stayed under 500 ms, the next

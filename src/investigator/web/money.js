@@ -12,8 +12,8 @@ const Money=(()=>{
  const PAPER=new Set(['trim','waste','paper']), TIME=new Set(['downtime','speed']);
  const MONEY_TOOLS=new Set(['get_shift_dollars','get_opportunities','get_day_dollars']);
  const WINDOW_FIELDS=['usd','paper_usd','machine_time_usd','contribution_usd'], YEAR_FIELDS=['usd_per_year','contribution_usd_per_year'];
- const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','controllable_usd','controllable_contribution_usd','dry_end_usd'],
-  TOTAL_YEAR=['total_usd_per_year','controllable_usd_per_year','dry_end_usd_per_year'];
+ const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','controllable_usd','controllable_contribution_usd','dry_end_usd','all_in_usd'],
+  TOTAL_YEAR=['total_usd_per_year','controllable_usd_per_year','dry_end_usd_per_year','all_in_usd_per_year'];
  const LABEL_KEYS=['gap','lever','category','label','reason'];
  // Python's f'{x:.{d}f}': correctly rounded on the binary value, a tie to even (toFixed breaks a tie upward).
  // A double is a tie at d places only when x * 2^(d+1) is an odd integer.
@@ -127,6 +127,19 @@ const Money=(()=>{
   rows.forEach((r,i)=>{r.rank=i+1;});
   return rows;
  }
+ // cost_model.rank_gaps (the owner, PR #111): a money card's recorded losses ranked by dollars; the gaps apart (planned
+ // maintenance, schedule-driven; a power outage, external) after them with no rank, by group (APART) and dollars.
+ function rankGaps(rows){
+  const name=r=>r.gap, byUsd=(a,b)=>((b.usd||0)-(a.usd||0))||(name(a)<name(b)?-1:name(a)>name(b)?1:0);
+  const ranked=rank(rows.filter(r=>!r.apart),'usd'), rest=rows.filter(r=>r.apart).sort((a,b)=>(APART[a.apart]-APART[b.apart])||byUsd(a,b));
+  rest.forEach(r=>{r.rank=null;}); rows.splice(0,rows.length,...ranked,...rest); return rows;
+ }
+ // cost_model.gap_totals: the all-in total, every gap added left to right in row order, the gaps apart included.
+ function allIn(rows){
+  const usd=rows.map(r=>r.usd).filter(v=>v!==null&&v!==undefined), years=rows.map(r=>r.usd_per_year);
+  return {apart_gaps:rows.filter(r=>r.apart).length,all_in_usd:usd.length?round(add(usd),2):0,
+   all_in_usd_per_year:rows.length&&!years.some(v=>v===null||v===undefined)?round(add(years),0):null};
+ }
  // cost_model.opportunities (issue #101): the levers in the order and with the ranks the lens gives them. ownership: side
  // trim, all of it, first always (every owner asks what trim costs), then the rest by dollars a year; supervisor: the
  // controllable levers ranked, then the others with no rank, by control (schedule-driven, then external; cost_model.APART)
@@ -228,8 +241,11 @@ const Money=(()=>{
   const rows=Array.isArray(data.rows)?data.rows:[], byIndex=rows.map(r=>repriceRow(tool,r,rates,cfg)), out={...data,rows:[...byIndex]};
   if(tool==='get_speed_variance')speedVariance(data,byIndex,out,rates,cfg);   // a chart of it has the rows only
   if(MONEY_TOOLS.has(tool)){
-   if(tool==='get_opportunities')rankLevers(out.rows,data.lens); else rank(out.rows,'usd');
-   Object.assign(out,totals(out.rows,cfg)); if('buckets' in data)Object.assign(out,summary(out.rows));
+   if(tool==='get_opportunities')rankLevers(out.rows,data.lens); else rankGaps(out.rows);
+   // the recorded losses' totals, chips and arithmetic leave the gaps apart out (the owner, PR #111); a lever is never apart
+   const counted=out.rows.filter(r=>!r.apart);
+   Object.assign(out,totals(counted,cfg)); if('buckets' in data)Object.assign(out,summary(counted));
+   if('all_in_usd' in data)Object.assign(out,allIn(out.rows));
    if(tool==='get_opportunities'&&'controllable_usd' in data)Object.assign(out,controllable(out.rows));
    if(tool==='get_opportunities'&&'dry_end_usd' in data)Object.assign(out,dryEnd(out.rows));
   }
@@ -284,7 +300,7 @@ const Money=(()=>{
  function candidates(line,steps,live){
   const m=REF.exec(line), out=[];
   const rowFields=(s,i)=>{ for(const f of [...WINDOW_FIELDS,...YEAR_FIELDS])out.push({old:s.before.rows[i][f],now:s.after.byIndex[i][f],year:YEAR_FIELDS.includes(f)}); };
-  const totalFields=s=>{ for(const f of [...TOTAL_WINDOW,...TOTAL_YEAR])if(f in s.before)out.push({old:s.before[f],now:s.after[f],year:TOTAL_YEAR.includes(f),controllable:f.startsWith('controllable_'),subtotal:f.startsWith('dry_end_')}); };
+  const totalFields=s=>{ for(const f of [...TOTAL_WINDOW,...TOTAL_YEAR])if(f in s.before)out.push({old:s.before[f],now:s.after[f],year:TOTAL_YEAR.includes(f),controllable:f.startsWith('controllable_'),subtotal:f.startsWith('dry_end_'),allin:f.startsWith('all_in_')}); };
   const step=m?steps[Number(m[1])-1]:null;
   if(m&&!step)return out;   // the line cites an unpriced query: its dollars, if any, are not this layer's
   if(step&&m[2]==='row'&&step.before.rows[Number(m[3])]){ rowFields(step,Number(m[3])); totalFields(step); }
@@ -304,7 +320,8 @@ const Money=(()=>{
  // other line takes them, so a window whose controllable total reads as its all-lever total (no planned maintenance,
  // side trim at or under the target) re-prices each line to its own figure (review of #111).
  // The ownership lens's dry-end subtotal (PR #111) is the same: only the line naming the tag scrap takes it, first.
- const CONTROLLABLE=/\bcontrollable (?:losses|buckets)\b/, TAG_SCRAP=/\(tag scrap\)/;
+ // A money card's all-in total (PR #111) is the figure followed by "all in", and no other figure takes it.
+ const CONTROLLABLE=/\bcontrollable (?:losses|buckets)\b/, TAG_SCRAP=/\(tag scrap\)/, ALL_IN=/^ all in\b/;
  function repriceLine(line,steps,live){
   if(!line.includes('$'))return line;
   const names=CONTROLLABLE.test(line), tag=TAG_SCRAP.test(line);
@@ -312,8 +329,8 @@ const Money=(()=>{
   const first=c=>names?c.controllable:tag?c.subtotal:false;
   const pool=[...all.filter(first),...all.filter(c=>!first(c))], used=new Set();
   return renamed(line,steps).replace(TOKEN,(token,at,whole)=>{
-   const yearly=YEARLY.test(whole.slice(at+token.length));
-   const order=[...pool.filter(c=>c.year===yearly),...pool.filter(c=>c.year!==yearly)];
+   const after=whole.slice(at+token.length), yearly=YEARLY.test(after), allin=ALL_IN.test(after);
+   const order=[...pool.filter(c=>c.year===yearly),...pool.filter(c=>c.year!==yearly)].filter(c=>!!c.allin===allin);
    const hit=order.find(c=>!used.has(c)&&c.old!==null&&c.old!==undefined&&money(c.old)===token);
    if(!hit)return token;
    used.add(hit); return money(hit.now);
@@ -324,6 +341,10 @@ const Money=(()=>{
  // answer is then written again about that one, in the shape's own order: the headline, a line per other shift, the
  // focus shift's ranked gaps, what else the answer said, its notes, and where to look.
  const OTHER=/^- Shift (\d): \*\*\$[\d,]+\*\* of recorded losses · /, FOCUSED=/^- Shift (\d) · \d+\. /, ON=/ on shift (\d)(, the \w+ of the )/;
+ // shapes.all_in and the apart blocks of shapes.shape_dollars (the owner, PR #111)
+ const ALL_IN_CLAUSE=/ · \$[\d,]+ all in, with the schedule-driven and external downtime/, APART_LABELS={'schedule-driven':'Schedule-driven, shown apart',external:'External, not controllable'};
+ const allInText=d=>d.apart_gaps?` · ${money(d.all_in_usd)} all in, with the schedule-driven and external downtime`:'';
+ const APART_LINE=/^- Shift \d · (?!\d+\. ).+ · (?:schedule-driven|external), .+ \(query \d+ · row \d+\)$/;
  function refocus(sections,steps,rates,cfg){
   const dollars=steps.map((s,i)=>s&&s.tool==='get_shift_dollars'?{s,q:i+1,shift:s.before.shift}:null).filter(Boolean);
   const head=sections[0]||'', on=ON.exec(head), ref=REF.exec(head);
@@ -335,12 +356,17 @@ const Money=(()=>{
   const d=focus.s.after;
   // The headline is the old one about the new shift: its two figures, its shift and its query.
   const top=head.replace(/^\*\*\$[\d,]+\*\*/,`**${money(d.total_usd)}**`).replace(/\$[\d,]+(?= per year)/,money(d.total_usd_per_year))
-   .replace(ON,` on shift ${focus.shift}$2`).replace(/\(query \d+\)$/,`(query ${focus.q})`);
+   .replace(ALL_IN_CLAUSE,'').replace(/ \(query \d+\)$/,`${allInText(d)} (query ${focus.q})`).replace(ON,` on shift ${focus.shift}$2`);
   const others=dollars.filter(x=>x!==focus&&x.s.after.coverage==='complete').sort((a,b)=>a.shift-b.shift)
-   .map(x=>`- Shift ${x.shift}: **${money(x.s.after.total_usd)}** of recorded losses · ${money(x.s.after.total_usd_per_year)} per year (query ${x.q})`);
-  const gaps=d.rows.map((r,i)=>`- Shift ${focus.shift} · ${r.rank}. ${r.gap}: **${money(r.usd)}**`+(r.usd_per_year!==null&&r.usd_per_year!==undefined?` · ${money(r.usd_per_year)}/yr`:'')+` (query ${focus.q} · row ${i})`);
+   .map(x=>`- Shift ${x.shift}: **${money(x.s.after.total_usd)}** of recorded losses · ${money(x.s.after.total_usd_per_year)} per year${allInText(x.s.after)} (query ${x.q})`);
+  const yearly=r=>r.usd_per_year!==null&&r.usd_per_year!==undefined?` · ${money(r.usd_per_year)}/yr`:'';
+  const gaps=d.rows.map((r,i)=>r.apart?null:`- Shift ${focus.shift} · ${r.rank}. ${r.gap}: **${money(r.usd)}**${yearly(r)} (query ${focus.q} · row ${i})`).filter(Boolean);
+  for(const [apart,label] of Object.entries(APART_LABELS)){   // the gaps apart, each group under its label (shapes.shape_dollars)
+   const mine=d.rows.map((r,i)=>[r,i]).filter(([r])=>r.apart===apart);
+   if(mine.length)gaps.push(label,...mine.map(([r,i])=>`- Shift ${focus.shift} · ${r.gap}: **${money(r.usd)}**${yearly(r)} · ${apart}, ${r.apart_note} (query ${focus.q} · row ${i})`));
+  }
   const look=sections.indexOf('Where to look'), body=sections.slice(1,look<0?sections.length:look), looks=look<0?[]:sections.slice(look);
-  const rest=body.filter(l=>!OTHER.test(l)&&!FOCUSED.test(l)&&!CONTRIBUTION.test(l)&&!l.startsWith('How a dollar is priced, for ')&&!(l.startsWith('Rates: ')&&l.endsWith(' '+cfg.note)));
+  const rest=body.filter(l=>!OTHER.test(l)&&!FOCUSED.test(l)&&!APART_LINE.test(l)&&!Object.values(APART_LABELS).includes(l)&&!CONTRIBUTION.test(l)&&!l.startsWith('How a dollar is priced, for ')&&!(l.startsWith('Rates: ')&&l.endsWith(' '+cfg.note)));
   const notes=[contributionLine(d,cfg),d.rows.length?`How a dollar is priced, for ${d.rows[0].gap}: ${d.rows[0].usd_basis}.`:null,`${provenance(rates,cfg)} ${cfg.note}`].filter(Boolean);
   return [top,...others,...gaps,...rest,...notes,...looks.map(l=>l.replace(new RegExp(` for shift ${was}”$`),` for shift ${focus.shift}”`))];
  }

@@ -140,7 +140,11 @@ PARITY_URLS = ('/corr/1/day/2026-09-14/shift/2?measure=dollars', '/corr/1/day/20
                # the owner on PR #111: a week whose speed variance holds an external stop (a power outage) and planned
                # maintenance, each its own unpriced bucket, and a day whose supervisor lens lists a power outage apart
                '/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1',
-               '/corr/1/day/2026-05-04?measure=money&lens=supervisor')
+               '/corr/1/day/2026-05-04?measure=money&lens=supervisor',
+               # the owner's ruling on PR #111: planned maintenance and an outage apart on a shift's and a day's money card; on
+               # 2026-09-16 the outage moves the day's focus, so a rate can move it again
+               '/corr/1/day/2026-09-17/shift/1?measure=dollars', '/corr/1/day/2026-09-16/shift/3?measure=dollars',
+               '/corr/1/day/2026-09-16?measure=dollars')
 PARITY_RATES = ('paper:60,hour:1350.5,margin:35,trim:3.1', 'paper:41.37,hour:5000', 'margin:12.5,trim:4', 'trim:2.5',
                 'hour:1', 'paper:99999.99,margin:0.01')
 

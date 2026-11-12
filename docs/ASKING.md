@@ -39,7 +39,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "Over/under-run by knife this week" | nominal against actual cuts per knife | `?measure=overrun&window=week` |
 | "What were the top 3 contributors to speed variations?", "What drove speed this week?" | the speed gap against each grade's trailing-year baseline split into stops, setups, running under baseline and grade mix (schedule-driven, not priced), with planned maintenance (schedule-driven) and external stops (a power outage) as buckets of their own | `?measure=speedvar`, `?measure=speedvar&window=week` |
 | "Where is the speed opportunity this month?" | typical against best-fifth speed by grade and width | `?measure=opportunity&window=month` |
-| "Where did the money go this shift?" | the shift's losses priced and ranked by dollars | `?measure=dollars` |
+| "Where did the money go this shift?" | the shift's losses priced and ranked by dollars; planned maintenance and a power outage apart, with the all-in total beside | `?measure=dollars` |
 | "Where is the money this month?" | the levers ranked in dollars a year, each controllable or schedule-driven | `?measure=money&window=month` |
 | "Where's my biggest opportunity?", "What went wrong yesterday?" | the supervisor lens: the controllable losses ranked, side trim and planned maintenance apart | `?measure=money&lens=supervisor` |
 | "What does trim cost?", "What's trim costing us this month?" | the ownership lens: the total cost of waste, side trim first, with its band; the dry-end waste (tag scrap) as one subtotal with bond, warp, misalignment and moisture beneath it | `?measure=money&lens=ownership`, `?measure=money&window=month&lens=ownership` |

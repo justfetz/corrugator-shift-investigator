@@ -33,11 +33,11 @@ TOOL_SCHEMAS = [
         ("get_shift_notes", "Read untrusted synthetic shift notes and individual downtime notes; not proven causes.", {}),
         ("get_rankings", "Rank lowest wet-end speed attainment or highest downtime/quality losses. Incomplete data is withheld.", {
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
-        ("get_shift_dollars", "This shift's losses priced at the assumed rates, ranked by dollars.", {}),
+        ("get_shift_dollars", "This shift's losses priced at the assumed rates, the recorded losses ranked by dollars; planned maintenance and a power outage apart (`apart`), unranked and outside the recorded-losses total, which all_in_usd adds them to.", {}),
     ]
 ] + [
     # The day's losses across its complete shifts (issue #31b): the all-shifts money of a Day card, from the server.
-    {"name": "get_day_dollars", "description": "The production day's losses across the listed shifts that are complete, priced once on the day at the assumed rates, ranked by dollars.",
+    {"name": "get_day_dollars", "description": "The production day's losses across the listed shifts that are complete, priced once on the day at the assumed rates, the recorded losses ranked by dollars; planned maintenance and a power outage apart, unranked, in all_in_usd only.",
      "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
                     "required": [], "additionalProperties": False}},
 ]

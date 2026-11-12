@@ -7186,6 +7186,93 @@
    }
   },
   {
+   "id": "money-card-planned-maintenance-apart",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-17",
+   "shift": 1,
+   "question": "Where did the money go this shift?",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes, $2,580 at the post's rates: it was the shift's second-ranked loss.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-17/shift/1?measure=dollars",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "shape": {
+     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 1\\)$",
+     "bullets": [
+      3,
+      14
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^Schedule-driven, shown apart$",
+     "^- Downtime: Planned maintenance: \\*\\*\\$2,580\\*\\* · \\$[0-9,]+/yr · schedule-driven, planned maintenance is scheduled time \\(query 1 · row [0-9]+\\)$",
+     "^- 2\\. Shear chops: \\*\\*\\$[0-9,]+\\*\\*"
+    ],
+    "sections_not_match": "^- [0-9]+\\. Downtime: (Planned maintenance|Power outage)|^External, not controllable$"
+   }
+  },
+  {
+   "id": "money-card-power-outage-apart",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-16",
+   "shift": 3,
+   "question": "Where did the money go this shift?",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Third shift on 2026-09-16 had the September power outage, 11 minutes, $220: it was the shift's seventh-ranked loss.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-16/shift/3?measure=dollars",
+    "status": "complete",
+    "shifts": [
+     3
+    ],
+    "shape": {
+     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 1\\)$",
+     "bullets": [
+      3,
+      16
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^External, not controllable$",
+     "^- Downtime: Power outage: \\*\\*\\$220\\*\\* · \\$[0-9,]+/yr · external, outside the plant, not controllable \\(query 1 · row [0-9]+\\)$"
+    ],
+    "sections_not_match": "^- [0-9]+\\. Downtime: (Planned maintenance|Power outage)|^Schedule-driven, shown apart$"
+   }
+  },
+  {
+   "id": "money-day-ranks-shifts-without-the-outage",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-16",
+   "scope": "day",
+   "question": "Where did the money go?",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Across 2026-09-16 the shifts are ranked by their recorded losses without the outage: third shift's $7,418 held the $220 outage, so without it first shift, $7,335, lost the most; the outage stays on third shift's line, apart. Seven tool calls (each shift's dollars and the day's, which prices them again), so the budget is 500 ms, as for the shift comparisons.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-16?measure=dollars",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses on shift 1, the highest of the three shifts ",
+     "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 3\\)$"
+    ],
+    "sections_not_match": "^- Shift [123] · [0-9]+\\. Downtime: (Planned maintenance|Power outage)",
+    "max_ms": 500
+   }
+  },
+  {
    "id": "week-downtime-by-reason-is-the-review",
    "type": "routing",
    "mode": "offline",

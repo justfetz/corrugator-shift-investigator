@@ -161,6 +161,14 @@ def argmin(rows, key):
     return min(candidates)[1] if candidates else None
 
 
+def all_in(data):
+    """A money card's all-in total, with the gaps it shows apart (planned maintenance, a power outage; the owner on PR #111);
+    nothing when it holds none, since the recorded losses are then all of it."""
+    if not data.get('apart_gaps'):
+        return ''
+    return f' · {money(data["all_in_usd"])} all in, with the schedule-driven and external downtime'
+
+
 def pareto_lead(rows):
     """The Pareto row a finding leads with: the first that is neither planned maintenance (scheduled time, #101) nor
     external downtime (a power outage, PR #111); the first row when there is no other."""
@@ -422,7 +430,8 @@ class DailyAnswer:
             return self.ranked(ranking, 0, prefix=f'Shift {shift}, ') if ranking else None
         if self.intent == 'dollars' and tools.get('get_shift_dollars'):
             d = tools['get_shift_dollars']
-            return bullet(f'Shift {shift}: **{money(d["data"]["total_usd"])}** of recorded losses · {money(d["data"]["total_usd_per_year"])} per year', d)
+            return bullet(f'Shift {shift}: **{money(d["data"]["total_usd"])}** of recorded losses · {money(d["data"]["total_usd_per_year"])} per year'
+                          f'{all_in(d["data"])}', d)
         return None
 
     # ---- findings shared by several shapes
@@ -735,9 +744,15 @@ class DailyAnswer:
         if not d:
             return self.shape_generic(s)
         data, rows = d['data'], d['data']['rows']
-        head = f'**{money(data["total_usd"])}** of recorded losses{self.clause(s, low=False)} · {money(data["total_usd_per_year"])} per year at the post\'s volumes {ref(d)}'
-        bullets = [bullet(f'{r["rank"]}. {r["gap"]}: **{money(r["usd"])}**' + (f' · {money(r["usd_per_year"])}/yr' if r.get('usd_per_year') is not None else ''), d, i)
-                   for i, r in enumerate(rows)]
+        head = (f'**{money(data["total_usd"])}** of recorded losses{self.clause(s, low=False)} · {money(data["total_usd_per_year"])} per year at '
+                f'the post\'s volumes{all_in(data)} {ref(d)}')
+        yearly = lambda r: f' · {money(r["usd_per_year"])}/yr' if r.get('usd_per_year') is not None else ''
+        bullets = [bullet(f'{r["rank"]}. {r["gap"]}: **{money(r["usd"])}**{yearly(r)}', d, i) for i, r in enumerate(rows) if not r.get('apart')]
+        # planned maintenance and a power outage: on the card with their dollars, apart from the ranked losses (the owner, PR #111)
+        for apart, label in (('schedule-driven', 'Schedule-driven, shown apart'), ('external', 'External, not controllable')):
+            mine = [(i, r) for i, r in enumerate(rows) if r.get('apart') == apart]
+            if mine:
+                bullets += [label] + [bullet(f'{r["gap"]}: **{money(r["usd"])}**{yearly(r)} · {apart}, {r["apart_note"]}', d, i) for i, r in mine]
         notes = [x for x in [contribution(data)] if x] + (money_notes(d, rows[0], 'gap') if rows else money_notes(d))
         looks = [look('The downtime behind the machine-time dollars, by reason', f'Show the downtime breakdown{self.dsuffix(s)}'),
                  look('The rejected area behind the dry-end dollars, by reason', f'Show dry-end rejects by reason{self.suffix(s)}')]
