@@ -1,0 +1,5 @@
+{
+ "about": "The owner's grades of recorded analyst narratives, made on the local grading page (/evals/grade). One grade per narrative: good or bad, pass (true) or fail (false) on each rubric line, and the reason. `digest` names the exact text graded; a grade whose narrative has since changed is left out of the agreement. evals/run.py --judge reports the judge's agreement with these grades (issue #25).",
+ "target": 20,
+ "grades": []
+}

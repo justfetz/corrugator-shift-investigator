@@ -2,9 +2,14 @@
 
 Everything here is read from the `evals/` folder as shipped (the repository checkout, or the
 folder `INVESTIGATOR_EVALS` names in the image): `golden.json`, `golden_values.json`, the
-recorded fixtures, `history.jsonl` and `last_run.json`. Nothing is written. A case is run by the
-same `evals/run.py` the regression gate uses, loaded from that folder; a live case is always
-*replayed* from its recorded fixture (`live=False`), so no path from the page reaches a model.
+recorded fixtures, `history.jsonl`, `last_run.json` and the narrative judge's two files
+(`judge_last_run.json`, `judge_calibration.json`). A case is run by the same `evals/run.py` the
+regression gate uses, loaded from that folder; a live case is always *replayed* from its recorded
+fixture (`live=False`), so no path from the page reaches a model.
+
+One thing is written, and only by the local workbench: the owner's grades of recorded narratives
+(`save_grade`, the /evals/grade page of issue #25) go to `judge_calibration.json`. The hosted demo
+has no grading route at all.
 """
 from datetime import datetime, timezone
 import importlib.util
@@ -14,6 +19,8 @@ from pathlib import Path
 import sys
 import threading
 import time
+
+from . import judge as judging
 
 ALL_TTL_SECONDS = 60   # a whole-set run is answered from the previous one for this long
 
@@ -217,6 +224,7 @@ class EvalBoard:
         self.plan = [(case, provider) for case, provider in self.runner.plan_rows(list(self.cases.values()), False, None)]
         self.all_lock = threading.Lock()
         self._all = None            # (monotonic time, payload) of the last whole-set run
+        self._narratives = None     # the recorded and scripted narratives the owner grades, replayed once per process
         self._board = self._build()
 
     # ------------------------------------------------------------ static data
@@ -242,8 +250,28 @@ class EvalBoard:
                         'pass_rate_pct': round(100 * passed / total, 1) if total else None,
                         'p50_ms': latency.get('p50'), 'p95_ms': latency.get('p95'),
                         'recorded_cost_usd': round(sum(p.get('recorded_cost_usd') or 0 for p in line.get('live', {}).values()), 5),
-                        'models': sorted({p['model'] for p in line.get('live', {}).values() if p.get('model')}), 'exit': line.get('exit')})
+                        'models': sorted({p['model'] for p in line.get('live', {}).values() if p.get('model')}), 'exit': line.get('exit'),
+                        'judge_cost_per_case_usd': (line.get('judge') or {}).get('cost_per_case_usd')})
         return out
+
+    def _judge(self, history, rerecord=False):
+        """The narrative judge as the page shows it (issue #25): the rubric, the newest judged run's scores when
+        `judge_last_run.json` belongs to a tracked line, and its agreement with the owner's grades. The grades' own
+        reasons stay in the file; the page gets their count (every saved grade, as the grading page counts them) and
+        the agreement. `rerecord`: a live recording is stale, so the target of 20 waits on re-recording (#71)."""
+        stored = judging.load_json(self.folder / judging.LAST_RUN_FILE, None)
+        tracked = {(h['ran_at'], h['commit']) for h in history}
+        if stored and (stored.get('ran_at'), stored.get('commit')) not in tracked:
+            stored = None   # a judged run nobody tracked in history.jsonl is not shown as the judge's result
+        grades = judging.load_grades(self.folder)
+        rows = stored['rows'] if stored else []
+        return {'rubric': [{k: c[k] for k in ('key', 'name', 'criterion', 'steps')} for c in judging.RUBRIC],
+                'rubric_digest': judging.rubric_digest(), 'target': judging.CALIBRATION_TARGET, 'target_text': judging.target_text(rerecord),
+                'bar_pct': judging.AGREEMENT_BAR_PCT,
+                'last': ({'ran_at': stored['ran_at'], 'commit': stored['commit'], **stored['summary'],
+                          'rubric_current': stored['summary'].get('rubric') == judging.rubric_digest()} if stored else None),
+                'rows': [{k: r[k] for k in ('id', 'run', 'turn', 'source', 'question', 'scores', 'reasons', 'cost_usd')} for r in rows],
+                'graded': len(grades), 'agreement': judging.agreement(rows, grades)}
 
     def _last_rows(self, newest):
         """Per-row results of the newest history line, or {} when last_run.json is not that run's."""
@@ -296,6 +324,8 @@ class EvalBoard:
         newest = history[-1] if history else None
         last = self._last_rows(newest)
         cases = [self._case(case, last) for case in self.cases.values()]
+        # A stale recording replays nothing, so the judge's calibration target waits on re-recording (#71).
+        self._rerecord = any((run.get('recording') or {}).get('stale') for case in cases for run in case['runs'])
         by_type = {}
         for case in cases:
             by_type[case['type']] = by_type.get(case['type'], 0) + 1
@@ -309,10 +339,17 @@ class EvalBoard:
                            'recordings': sum(1 for c in cases for r in c['runs'] if r.get('recording'))},
                 'thresholds': {'live_pass_rate': self.runner.THRESHOLDS, 'offline_latency_ms': self.runner.LATENCY_BUDGET_MS,
                                'case_max_ms': self.runner.DEFAULT_MAX_MS},
-                'last_run': newest, 'history': history, 'types': list(self.runner.TYPES), 'cases': cases}
+                'last_run': newest, 'history': history, 'types': list(self.runner.TYPES), 'cases': cases,
+                'judge': self._judge(history, self._rerecord)}
 
-    def board(self):
-        return self._board
+    def board(self, public=False):
+        """The page's data. The hosted demo's copy leaves out the judge's reasons: they are model prose that no check
+        of this project reads, so they stay on the owner's local workbench; the scores and the agreement are shown."""
+        if not public:
+            return self._board
+        judge = dict(self._board['judge'], rows=[{k: v for k, v in r.items() if k != 'reasons'} for r in self._board['judge']['rows']],
+                     reasons='local workbench only')
+        return dict(self._board, judge=judge)
 
     @property
     def summary(self):
@@ -380,3 +417,55 @@ class EvalBoard:
                        'latency_ms': self.runner.offline_latency(rows), 'model_called': False, 'cached': False, 'rows': rows}
             self._all = (time.monotonic(), payload)
             return payload
+
+    # ------------------------------------------------------------ grading (local workbench only, issue #25)
+
+    def narratives(self, lock):
+        """Every narrative the golden set's runs write without a model: each recorded live run replayed, and each
+        scripted analyst plan that carries a narrative. The same ids and digests `evals/run.py --judge` scores,
+        so a grade and a judged score of the same text meet in `judging.agreement`. Built once per process."""
+        if self._narratives is None:
+            found = []
+            for case, provider in self.plan:
+                if provider == '?' or (provider is None and not (case.get('plan') is not None and case.get('narrative'))):
+                    continue
+                with lock:
+                    try:
+                        _, _, _, _, results = self.runner.run_case_detail(case, provider, live=False, record=False)
+                    finally:
+                        self.runner.close_datasets()
+                turns = case.get('turns') or [case.get('question') or '']
+                found.extend(judging.narrative_cases(self.row_id(case, provider), turns, results,
+                                                     'scripted plan' if provider is None else f'recorded {provider}'))
+            self._narratives = found
+        return self._narratives
+
+    def grading(self, lock):
+        """The grading page's data: each narrative with what the owner already said about it. The judge's own
+        scores are left out on purpose, so the owner's grades are not anchored on them."""
+        grades = {g.get('id'): g for g in judging.load_grades(self.folder)}
+        items = []
+        for n in self.narratives(lock):
+            grade = grades.get(n['id'])
+            items.append({**{k: n[k] for k in ('id', 'run', 'turn', 'source', 'question', 'scope', 'narrative', 'digest')},
+                          'evidence': n['context'], 'grade': grade, 'stale': bool(grade) and grade.get('digest') != n['digest']})
+        return {'rubric': [{k: c[k] for k in ('key', 'name', 'criterion', 'steps')} for c in judging.RUBRIC],
+                **self._grade_counts(grades.values(), {n['id']: n['digest'] for n in self.narratives(lock)}),
+                'narratives': items, 'file': 'evals/' + judging.CALIBRATION_FILE}
+
+    def _grade_counts(self, grades, digests):
+        """`graded` is every saved grade, the number /evals shows too; `set_aside` the ones not of a narrative's current
+        text (changed, or not replayable while the recordings are stale), which agreement leaves out."""
+        grades = list(grades)
+        current = sum(1 for g in grades if digests.get(g.get('id')) == g.get('digest'))
+        return {'graded': len(grades), 'set_aside': len(grades) - current, 'target': judging.CALIBRATION_TARGET,
+                'target_text': judging.target_text(len(digests) < judging.CALIBRATION_TARGET)}
+
+    def save_grade(self, payload, lock):
+        """Validate one grade against the narrative the page showed and write it to judge_calibration.json."""
+        digests = {n['id']: n['digest'] for n in self.narratives(lock)}
+        grade = judging.validate_grade(payload, digests)
+        with self.all_lock:   # one writer at a time; the file is replaced whole
+            grades = judging.save_grade(self.folder, grade)
+            self._board['judge'] = self._judge(self._board['history'], self._rerecord)   # /evals counts the new grade at once
+        return {'saved': grade, **self._grade_counts(grades, digests)}

@@ -15,3 +15,5 @@ dist/
 !evals/history.jsonl
 # A fixture week of the question log for the /review-questions skill's test (issue #125)
 !tests/question_log_week.jsonl
+# DeepEval's local folder (the optional judge extra, issue #25)
+.deepeval/
