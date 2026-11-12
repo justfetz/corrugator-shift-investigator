@@ -11,6 +11,7 @@ import time
 from uuid import uuid4
 from investigator.periods import ACCOUNTING_445_START, weekdays, window
 from investigator.record_store import default_store
+from investigator.records import stop_label   # how the planned stop reads (owner ruling (c), 2026-11-12)
 
 
 class LegacyPeriodReports:
@@ -105,7 +106,7 @@ class LegacyPeriodReports:
                 row['previous_minutes'] = None
         if recurring and complete:
             top=recurring[0]
-            sections.append(f'Most recorded downtime: {top["place"]} / {top["reason"]}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
+            sections.append(f'Most recorded downtime: {top["place"]} / {stop_label(top["reason"])}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
         rankings=[]
         if complete:
             for s in shifts:
