@@ -24,14 +24,14 @@ For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics
 
 ## Run it
 
-The public demo is on Google Cloud Run: <https://corrugator-shift-investigator-65612311806.us-central1.run.app>. It is synthetic data, read-only tools, and the offline planner by default. Locally:
+The public demo is on Google Cloud Run at <https://shift.talktomymachine.ai> (also <https://corrugator-shift-investigator-65612311806.us-central1.run.app>). It is synthetic data, read-only tools, and the offline planner by default. Locally:
 
 ```bash
 pip install -e . pytest                              # Python >= 3.11; the dependencies are duckdb and reportlab
 python -m investigator.server --port 7860            # the workbench at http://127.0.0.1:7860
-python -m pytest -q                                  # 1568 tests (17 skip while the live recordings are stale), about 5 minutes
+python -m pytest -q                                  # about 5 minutes; the Anthropic recordings skip while they are stale
 node --check src/investigator/web/app.js && node tests/test_ui.cjs
-python3 evals/run.py                                 # the golden set: 286 cases offline in about 21 s; the regression gate
+python3 evals/run.py                                 # the golden set offline in about 21 s; the regression gate (counts on /evals)
 python3 evals/run.py --live --provider anthropic     # the live cases against a real model; needs ANTHROPIC_API_KEY, costs cents
 ```
 

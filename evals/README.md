@@ -260,7 +260,7 @@ page writes here.
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`286/301 golden · 12 ms p50` while the 15 recordings are stale) is `evals.badge` of
+- The badge on the main page (`<passed>/<runs> golden · <p50> ms p50`) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
