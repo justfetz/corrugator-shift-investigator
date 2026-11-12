@@ -1492,6 +1492,30 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   els['rates-reset'].events.click();
  }
 
+ // the owner's ruling on PR #111 (tests/ui_fixtures/money_apart.json, Thursday's first shift): planned maintenance is on the
+ // money card with its dollars, apart from the ranked losses; the line states the recorded losses and the all-in total, the
+ // bar of the gap apart comes last, and a rate re-prices both totals without ranking the gap apart
+ {
+  const apart=JSON.parse(fs.readFileSync('tests/ui_fixtures/money_apart.json','utf8')), d=apart.trace.find(e=>e.tool==='get_shift_dollars').data;
+  vm.runInContext(`thread.push({id:++seq,question:'q-apart',title:'apart',scope:{day:'2026-09-17',period:'day',shift:1,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(apart)},url:${JSON.stringify(apart.url)},revealed:true});openId=seq;renderCard();`,ctx);
+  const card=()=>els.messages.children.filter(e=>/^message\b/.test(e.className)).pop(), lineOf=()=>card().children.find(e=>e.className==='dollar-line');
+  const pm=d.rows.find(r=>r.apart==='schedule-driven');
+  assert.ok(pm&&pm.rank===null&&d.all_in_usd>d.total_usd,'planned maintenance apart, outside the recorded losses');
+  assert.equal(textOf(lineOf().children[0]),`≈ ${Money.money(d.total_usd)} recorded losses this shift · ${Money.short(d.total_usd_per_year)}/yr at this rate · ${Money.money(d.all_in_usd)} (${Money.short(d.all_in_usd_per_year)}/yr) all in, with the schedule-driven and external downtime · contribution: margin not set`);
+  const bars=()=>walk(els.money.children[0]).filter(e=>e.class==='lbl').map(e=>e.textContent);
+  const allBars=walk(els.money.children[0]).find(e=>e.tag==='button'&&/^All \d+$/.test(e.textContent)); if(allBars)allBars.events.click();
+  assert.ok(bars().pop().startsWith('Downtime: Planned'),'the gap apart is the last bar: '+bars().join(' | '));
+  els['rates-change'].events.click(); const af=els['rates-fields'].children.map(f=>f.children[1]); af[1].value='5000'; af[1].events.input();
+  const now=Money.reprice('get_shift_dollars',d,Money.effective(cfg,{machine_usd_hour:5000}),cfg), prose=all(els.messages);
+  const pmNow=now.rows.find(r=>r.apart==='schedule-driven');
+  assert.ok(pmNow.rank===null&&now.rows.indexOf(pmNow)===now.rows.length-1,'at $5,000/hr planned maintenance is still apart, after every ranked loss');
+  assert.ok(pmNow.usd>now.rows[0].usd,'it now outweighs the first ranked loss, and still has no rank');
+  assert.equal(now.total_usd,Money.round(now.rows.filter(r=>!r.apart).reduce((s,r)=>s+r.usd,0),2));
+  assert.ok(prose.includes(`${Money.money(now.total_usd)} of recorded losses · ${Money.money(now.total_usd_per_year)} per year at the post's volumes · ${Money.money(now.all_in_usd)} all in`),'the headline states both totals at the new rates');
+  assert.ok(prose.includes(`Downtime: Planned maintenance: ${Money.money(pmNow.usd)}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered');
+  els['rates-reset'].events.click();
+ }
+
  // the analyst prices at the card's rates, and its interpretation is never rewritten: at other rates it says which it was written at
  vm.runInContext("config.live_modes=['anthropic'];",ctx);
  const posts=[]; const narr={kind:'finding',text:'Order change cost 127.33 this shift.',citations:['Shift 2, usd, r:2, row 0']};
