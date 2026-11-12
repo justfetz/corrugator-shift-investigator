@@ -71,8 +71,8 @@ Use raw quantities to calculate KPIs; aggregate numerators and denominators befo
 | Shift average speed | Lineal feet / all shift minutes, including downtime |
 | Maintenance downtime | Maintenance minutes / shift minutes x 100; target 2.5% |
 | Operator downtime | Operator minutes / shift minutes x 100; separate target 2.5% |
-| Trim | Side-trim square feet / gross square feet x 100; flag above 3.25% per setup |
-| Shear waste | Sheared square feet / gross square feet x 100; typical 0.4-1%, not yet an alarm rule |
+| Trim | Side-trim square feet / gross square feet x 100; home run 2.75%, target 3%, flag above 3.25% per setup; schedule-driven (the owner's bands, `targets.json`) |
+| Shear waste | Sheared square feet / gross square feet x 100; home run 0.5%, target 0.75%, flag above 1% (the owner's bands, `targets.json`) |
 | Dry-end waste | Rejected square feet / the yield after trim and shear (gross minus side trim minus shear) x 100; target 1%, flag above 1.25% (the owner's bands, `targets.json`) |
 | Throughput | Gross square feet / lineal feet x 12; average gross web width in inches |
 | Run length | Lineal per dry-end setup and per wet-end change; boundary counting to be defined |
