@@ -540,7 +540,7 @@ def test_the_analyst_plans_in_the_scope_the_question_names(monkeypatch, tmp_path
         assert 'it names shift 1; "last week" is the Mon-Fri production week containing 2026-09-07' in calls[0]['system']
         # a question that names nothing the controls do not: the same prompt as before, with no scope sentence
         calls.clear()
-        status, _, body = post(server, {**ASK, 'mode': 'anthropic', 'question': 'How much downtime?'})
+        status, _, body = post(server, {**ASK, 'mode': 'anthropic', 'question': 'How much downtime this shift?'})
         assert status == 200 and [json.loads(line) for line in body.decode().splitlines()][-1]['result']['status'] == 'complete'
         assert 'names its own scope' not in calls[0]['system'] and json.loads(calls[0]['messages'][0]['content'])['allowed_shifts'] == [2]
     finally:

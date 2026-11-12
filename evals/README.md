@@ -14,6 +14,10 @@ python3 evals/run.py --only why-slow              # one case
 python3 evals/make_value_goldens.py               # regenerate golden_values.json after an intended generator change
 ```
 
+A case the owner set carries `reviewed_by`: `owner-pending` until the owner has read
+it on the preview, then `owner`. Issue #101's owner cases are `owner` once the owner has read them; the power-outage and
+planned-maintenance cases added with the owner's decisions on PR #111 stay `owner-pending` until the owner reads them.
+
 `tests/test_evals.py` runs the same offline cases and recorded fixtures in CI,
 so a change that breaks a golden case fails the build; `tests/test_goldens_values.py`
 fails the build when the committed value goldens are not what the generator produces.
@@ -61,7 +65,7 @@ Every case, whatever its type, also checks:
   where-to-look question `→ “…”` state no measurement and are not read as numbers);
 - every number on a cited line is a value of the row it cites (issue #75, `unprovenanced`): a section with a `**figure**`
   carries exactly one, and one evidence reference that resolves to a successful step of the trace and a row of
-  its result (`detail M`, `weekday M`: its sub-reason and weekday lists); every number in the figure renders a
+  its result (`detail M`, `weekday M`, `flag M`: its sub-reason, weekday and flag lists); every number in the figure renders a
   value of that row, or, with no row named, a count of the result's rows, a below-target count or a total of its
   envelope; every other number on the line is one of those, a count of the result's rows or a rule constant. A figure
   moved to the wrong row, changed by a digit, stated beside a row it does not cite, or citing a chart step fails the case.
@@ -115,7 +119,10 @@ These cases carry an explicit `max_ms: 500`: the two multi-turn stories
 `period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
 `value-trend-warp-8w`, `value-trend-stops-9w-missing-weeks`) and the three-shift
 compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
-other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
+other case passes 53 ms. The three shifts' money with the day's total
+(`money-day-ranks-shifts-without-the-outage`, PR #111: seven tool calls, the day pricing each shift
+again) runs 210 ms in-process and 204 ms over GET in a warm, uncontended run, and 236–294 ms over GET
+run alone, so it carries the same 500. Under about 2x CPU contention (four busy loops on the
 four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
 418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,
 `period-trend-minutes-per-stop` 266 ms), all of them stayed under 500 ms, the next

@@ -165,7 +165,9 @@ def test_month_counts_and_weighted_totals(periods):
     assert 'All three shifts (24 hours per date)' in result['charts'][0]['title']
     rows=result['tables'][2]['rows']
     assert totals['paper_changes']==sum(r['paper_changes'] for r in rows)
-    assert totals['dry_end_pct']==pytest.approx(sum(r['dry_end_pct']*r['gross_sqft'] for r in rows)/sum(r['gross_sqft'] for r in rows))
+    # dry-end waste is a percent of the yield after trim and shear (issue #101), so the window weights each day by its yield
+    yields=[r['gross_sqft']*(1-(r['trim_pct']+r['shear_pct'])/100) for r in rows]
+    assert totals['dry_end_pct']==pytest.approx(sum(r['dry_end_pct']*y for r, y in zip(rows, yields))/sum(yields))
     assert result['usage']['model_calls']==0
 
 

@@ -28,6 +28,7 @@ import math
 import os
 import re
 from pathlib import Path
+from . import targets
 
 DEFINITION = json.loads((Path(__file__).with_name('rates.json')).read_text())
 RATE_SPECS = {r['id']: r for r in DEFINITION['rates']}
@@ -228,6 +229,11 @@ WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'bond': 'waste', 'warp': 'waste
 PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_breakdown',
                 'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
 GAIN = 'not priced: this bucket ran better than the reference (a gain, not a loss)'
+SCHEDULE_DRIVEN_MIX = 'not priced: the grade mix is schedule-driven, the order book decides which grades run (issue #101)'
+# the speed-variance buckets that are not the crew's (the owner, PR #111): why each is left unpriced
+NOT_PRICED = {'mix': SCHEDULE_DRIVEN_MIX,
+              'planned': 'not priced: planned maintenance is schedule-driven, the maintenance plan sets its stops (PR #111)',
+              'external': 'not priced: external stops (a power outage) are outside the plant, not controllable (PR #111)'}
 
 
 def window_minutes(data):
@@ -258,11 +264,12 @@ def attach(tool, data, rates, gross_sqft=None):
 
 
 def speed_variance_dollars(data, rates):
-    """Each speed-variance bucket as machine time (issue #92): its lineal feet over the reference speed
-    are the minutes the corrugator would need at that speed to make them, priced like the speed gap.
-    A bucket that ran better than the reference is a gain and is not priced, whichever way the gap goes;
-    the gap as a whole is priced on the envelope (`gap_usd`) when the window is slower than its reference,
-    so the bucket dollars add up to it only when every bucket is a loss."""
+    """Each controllable speed-variance bucket as machine time (issue #92): its lineal feet over the reference
+    speed are the minutes the corrugator would need at that speed to make them, priced like the speed gap. A
+    bucket that ran better than the reference is a gain and is not priced, whichever way the gap goes. The grade
+    mix is schedule-driven (the owner, issue #101: the order book decides which grades run), so it is never
+    priced as machine time; the envelope's controllable dollars (`controllable_usd`) are the priced loss buckets,
+    stops, setups and running under baseline, and the gap as a whole is not priced, since it holds the mix."""
     minutes, reference = data['scheduled_minutes'], data['reference_speed_fpm']
 
     def priced_for(feet):
@@ -272,11 +279,19 @@ def speed_variance_dollars(data, rates):
         out['usd_basis'] = f'{feet:,.1f} lineal ft / {reference:,.1f} ft/min reference speed = ' + out['usd_basis']
         return out
     for row in data['rows']:
-        row.update(priced_for(row['gap_lineal_ft']))
-    gap = priced_for(data['gap_lineal_ft'])
+        if row.get('control') != 'controllable':   # the mix and planned stops (schedule-driven), external stops: not priced
+            row.update({**price('speed', None, rates), 'usd_basis': NOT_PRICED[row['bucket']]})
+        else:
+            row.update(priced_for(row['gap_lineal_ft']))
+    priced = [r for r in data['rows'] if r.get('control') == 'controllable' and r['usd'] is not None]
+
+    def total(key, places=2):   # left to right (_add), as web/money.js re-derives it at other rates
+        values = [r[key] for r in priced if r[key] is not None]
+        return round(_add(values), places) if values else None
     # the margin's status is the rates', not the gap's: a faster window still prices its loss buckets
-    data.update({'gap_machine_minutes': gap['machine_minutes'], 'gap_usd': gap['usd'], 'gap_usd_per_year': gap['usd_per_year'],
-                 'gap_contribution_usd': gap['contribution_usd'],
+    data.update({'controllable_machine_minutes': total('machine_minutes'), 'controllable_usd': total('usd'),
+                 'controllable_usd_per_year': total('usd_per_year', 0) if priced and all(r['usd_per_year'] is not None for r in priced) else None,
+                 'controllable_contribution_usd': total('contribution_usd'),
                  'contribution_status': MARGIN_NOT_SET if rates['values']['margin_usd_msf'] is None else 'set'})
     return data
 
@@ -431,10 +446,44 @@ def _rank(rows, key):
     return rows
 
 
+# The owner's ruling on the money cards (PR #111, 2026-11-12): planned maintenance (schedule-driven) and a power outage
+# (external) are on a shift's or a day's card with their dollars, apart from the ranked recorded losses, as the lenses show
+# them. The ranking and the recorded-losses total leave them out; `all_in_*` is the total with them.
+GAP_APART_NOTE = {'schedule-driven': 'planned maintenance is scheduled time', 'external': 'outside the plant, not controllable'}
+
+
+def apart_of(row):
+    """A downtime breakdown row's place on the money card: schedule-driven (planned maintenance), external (a power
+    outage) or None, ranked among the recorded losses."""
+    return 'schedule-driven' if row.get('scheduled') else 'external' if row.get('external') else None
+
+
+def rank_gaps(rows):
+    """The money card's gaps: the recorded losses ranked by dollars; the gaps apart after them with no rank, schedule-driven
+    then external (APART), each group by dollars (web/money.js ranks them the same way)."""
+    ranked = _rank([r for r in rows if not r.get('apart')], 'usd')
+    rest = sorted([r for r in rows if r.get('apart')], key=lambda r: (APART[r['apart']], -(r['usd'] or 0), r['gap']))
+    for r in rest:
+        r['rank'] = None
+    return ranked + rest
+
+
+def gap_totals(rows):
+    """The card's two totals: the recorded losses (`total_*`, the ranked gaps, and the chips and arithmetic of them) and
+    the all-in total with the gaps apart (`all_in_usd`, `all_in_usd_per_year`), each added left to right in row order."""
+    ranked = [r for r in rows if not r.get('apart')]
+    usd = [r['usd'] for r in rows if r['usd'] is not None]
+    years = [r['usd_per_year'] for r in rows]
+    return {**_totals(ranked), **summary(ranked), 'apart_gaps': len(rows) - len(ranked),
+            'all_in_usd': round(_add(usd), 2) if usd else 0.0,
+            'all_in_usd_per_year': round(_add(years), 0) if rows and None not in years else None}
+
+
 def shift_dollars(analysis, shift, rates):
-    """`get_shift_dollars`: where the money went in one shift, every gap priced, ranked by dollars.
+    """`get_shift_dollars`: where the money went in one shift, every gap priced, the recorded losses ranked by dollars.
     Gaps: each downtime reason (minutes), the speed gap to the required 675 ft/min (running time
-    only), side trim, shear and each dry-end reason (square feet)."""
+    only), side trim, shear and each dry-end reason (square feet). Planned maintenance and a power outage are apart,
+    unranked and outside the recorded-losses total (`apart`; the owner, PR #111)."""
     kpis = analysis.get_shift_kpis(shift)
     stops = analysis.get_downtime_breakdown(shift)
     rejects = analysis.get_quality_breakdown(shift)
@@ -442,26 +491,29 @@ def shift_dollars(analysis, shift, rates):
     gross = k['gross_sqft']
     rows = []
     for r in stops['rows']:
+        apart = apart_of(r)
         rows.append({'gap': f'Downtime: {r["category"]}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
                      'quantity': round(r['down_minutes'], 2), 'unit': 'min', 'source_ids': r['source_ids'],
+                     'apart': apart, **({'apart_note': GAP_APART_NOTE[apart]} if apart else {}),
                      **price('downtime', r['down_minutes'], rates, gross, SHIFT_MINUTES)})
     if gross:
         running = SHIFT_MINUTES - (k['downtime_pct'] or 0) * SHIFT_MINUTES / 100
         required = ASSUMPTIONS['required_fpm']
         gap_ft = max(0.0, required * running - k['observed_lineal_ft'])
         rows.append({'gap': f'Speed gap to {required:g} ft/min', 'kind': 'speed', 'quantity': round(gap_ft, 1), 'unit': 'lineal ft',
-                     'source_ids': k['source_ids'], **price('speed', gap_ft / required, rates, gross, SHIFT_MINUTES)})
+                     'source_ids': k['source_ids'], 'apart': None, **price('speed', gap_ft / required, rates, gross, SHIFT_MINUTES)})
         rows.append({'gap': 'Side trim', 'kind': 'trim', 'quantity': round(k['trim_pct'] * gross / 100, 1), 'unit': 'sq ft',
-                     'source_ids': k['source_ids'], **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
+                     'source_ids': k['source_ids'], 'apart': None, **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
         rows.append({'gap': 'Shear chops', 'kind': 'waste', 'quantity': round(k['shear_pct'] * gross / 100, 1), 'unit': 'sq ft',
-                     'source_ids': k['source_ids'], **price('waste', k['shear_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
+                     'source_ids': k['source_ids'], 'apart': None, **price('waste', k['shear_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
     for r in rejects['rows']:
         rows.append({'gap': f'Dry-end: {r["reason"]}', 'kind': 'waste', 'quantity': round(r['rejected_sqft'], 1), 'unit': 'sq ft',
-                     'source_ids': r['source_ids'], **price('waste', r['rejected_sqft'], rates, gross, SHIFT_MINUTES)})
+                     'source_ids': r['source_ids'], 'apart': None, **price('waste', r['rejected_sqft'], rates, gross, SHIFT_MINUTES)})
+    rows = rank_gaps(rows)
     data = {'production_day': kpis['production_day'], 'shift': shift, 'dataset_version': kpis['dataset_version'],
-            'rows': _rank(rows, 'usd'), 'coverage': kpis['coverage'], 'excluded_records': kpis['excluded_records'],
+            'rows': rows, 'coverage': kpis['coverage'], 'excluded_records': kpis['excluded_records'],
             'trace': _trace([kpis, stops, rejects]), 'gross_sqft': round(gross or 0, 1), 'scheduled_minutes': SHIFT_MINUTES,
-            **_totals(rows), **summary(rows)}
+            **gap_totals(rows)}
     if gross:
         data.update(trim_over_target(k['trim_pct'], gross, SHIFT_MINUTES, rates))
         if kpis['coverage'] == 'complete':
@@ -486,7 +538,8 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
     gaps = {}
     for d in used:
         for r in d['rows']:
-            g = gaps.setdefault(r['gap'], {'gap': r['gap'], 'kind': r['kind'], 'unit': r['unit'], 'shown': [], 'terms': [], 'shifts': [], 'pricing': None})
+            g = gaps.setdefault(r['gap'], {'gap': r['gap'], 'kind': r['kind'], 'unit': r['unit'], 'apart': r.get('apart'),
+                                          'shown': [], 'terms': [], 'shifts': [], 'pricing': None})
             g['shown'].append(r['quantity'])
             g['shifts'].append(d['shift'])
             if r.get('price_terms'):
@@ -497,64 +550,189 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
         places = 2 if g['unit'] == 'min' else 1
         quantity = round(_add(g['terms']), 2 if g['pricing'] in TIME_KINDS else 1) if g['terms'] else None
         rows.append({'gap': g['gap'], 'kind': g['kind'], 'quantity': round(_add(g['shown']), places), 'unit': g['unit'], 'shifts': g['shifts'],
+                     'apart': g['apart'], **({'apart_note': GAP_APART_NOTE[g['apart']]} if g['apart'] else {}),
                      **price(g['pricing'] or 'downtime', quantity, rates, gross, minutes)})
     trim = round(_add(r['price_terms']['quantity'] for d in used for r in d['rows'] if r['kind'] == 'trim' and r.get('price_terms')), 1)
+    rows = rank_gaps(rows)
     data = {'production_day': parts[0]['production_day'], 'shift': None, 'dataset_version': parts[0]['dataset_version'],
-            'rows': _rank(rows, 'usd'), 'coverage': 'complete' if complete else 'partial',
+            'rows': rows, 'coverage': 'complete' if complete else 'partial',
             'excluded_records': [x for d in parts if d['coverage'] != 'complete' for x in d['excluded_records']],
             'excluded_shifts': [d['shift'] for d in parts if d['coverage'] != 'complete'] if complete else [],
             'shifts': [{'shift': d['shift'], 'coverage': d['coverage']} for d in parts],
             'trace': {'sql': ';\n'.join(d['trace']['sql'] for d in parts), 'parameters': [d['trace']['parameters'] for d in parts],
                       'elapsed_ms': sum(d['trace']['elapsed_ms'] for d in parts)},
-            'gross_sqft': round(gross, 1), 'scheduled_minutes': minutes, **_totals(rows), **summary(rows)}
+            'gross_sqft': round(gross, 1), 'scheduled_minutes': minutes, **gap_totals(rows)}
     if gross:
         data.update(trim_over_target(trim / gross * 100, gross, minutes, rates))
     return _envelope(data, rates)
 
 
-def opportunities(store, window, shift, rates):
-    """`get_opportunities`: where to look for improvement in a window, the levers ranked in $/yr.
-    Levers: the speed gap to each cell's best fifth, side-trim points over the trim target, each
-    downtime reason (order change is setup time), shear and each dry-end reason. Each names the
-    records behind it. It ranks levers and names records; it never prescribes a machine adjustment."""
+LENSES = ('all', 'supervisor', 'ownership')
+# The owner's two lenses (issue #101, targets.json): which levers a supervisor controls, and why.
+CONTROL = {'speed': ('controllable', 'speed under the grade baseline'), 'trim': ('schedule-driven', 'the order mix and its web widths'),
+           'downtime': ('controllable', 'maintenance and operator downtime'), 'setup': ('controllable', 'operator downtime at order changes'),
+           'scheduled': ('schedule-driven', 'planned maintenance is scheduled time'), 'shear': ('controllable', 'sequencing'),
+           'dry_end': ('controllable', 'temperatures'), 'unexplained': ('unattributed', 'the scale reading less the recorded waste'),
+           'external': ('external', 'outside the plant, not controllable')}   # a power outage (targets.json; the owner on PR #111)
+# The supervisor lens lists what it does not rank by control, each group by dollars a year: schedule-driven, then external.
+APART = {'schedule-driven': 0, 'external': 1}
+TOTAL_TRIM = 'Side trim (all recorded)'
+# The ownership lens's dry-end subtotal (the owner, PR #111): bond, warp, misalignment and moisture are dry-end waste,
+# the tag scrap, priced and ranked as one line with each kind kept beneath it, since the detail is what supervisors go after.
+DRY_END_GROUP, DRY_END_LABEL = 'dry_end', 'Dry-end waste (tag scrap)'
+
+
+def _by_year(r):
+    return (-(r['usd_per_year'] or 0), r['lever'])
+
+
+def owner_order(rows):
+    """The ownership lens's levers after side trim: the dry-end group and each other lever ranked by dollars a year (the
+    group by the sum of its rows, added left to right as web/money.js does), the group's rows beneath it by dollars a year.
+    A lever's rank is its place among the groups (trim is 1); a row inside the group carries no rank of its own. Returns
+    the rows in that order and the group's rank (None without one)."""
+    groups = {}
+    for r in rows:
+        groups.setdefault(r.get('group') or r['lever'], []).append(r)
+    for members in groups.values():
+        members.sort(key=_by_year)
+    size = {k: _add(r['usd_per_year'] or 0 for r in members) for k, members in groups.items()}
+    out, group_rank = [], None
+    for rank, key in enumerate(sorted(groups, key=lambda k: (-size[k], k)), 2):
+        for r in groups[key]:
+            r['rank'] = None if r.get('group') else rank
+        if groups[key][0].get('group'):
+            group_rank = rank
+        out += groups[key]
+    return out, group_rank
+
+
+def dry_end_subtotal(rows, rank):
+    """The dry-end subtotal's figures (the owner, PR #111): the group's dollars, the sum of its rows left to right."""
+    mine = [r for r in rows if r.get('group') == DRY_END_GROUP]
+    years = [r['usd_per_year'] for r in mine]
+    return {'dry_end_rank': rank, 'dry_end_kinds': len(mine), 'dry_end_usd': round(_add(r['usd'] or 0 for r in mine), 2),
+            'dry_end_usd_per_year': None if any(v is None for v in years) else round(_add(v or 0 for v in years), 0)}
+
+
+def _control(row, key):
+    row['control'], row['control_note'] = CONTROL[key]
+    return row
+
+
+def opportunities(store, window, shift, rates, lens='all'):
+    """`get_opportunities`: where to look for improvement in a window, the levers ranked in $/yr, each marked
+    controllable or schedule-driven (issue #101). Levers: the speed under each grade's trailing-year baseline
+    (every wet-end run against its grade's sustained speed), side-trim points over the trim target, each
+    downtime reason (order change is setup time; planned maintenance is scheduled time), shear and each
+    dry-end reason. Each names the records behind it. It ranks levers and names records; it never prescribes
+    a machine adjustment.
+
+    `lens` picks the owner's view of the same numbers: `all` ranks every lever; `supervisor` ranks the
+    controllable losses and lists the schedule-driven ones after, unranked; `ownership` is the total cost of
+    waste, side trim first (all of it, not only the points over target), then shear, each dry-end reason and
+    the unexplained remainder by dollars."""
+    if lens not in LENSES:
+        raise ValueError('lens is all, supervisor or ownership')
     waste = store.get_waste_breakdown(window, shift)
     pareto = store.get_downtime_pareto(window, 'reason', 'minutes', shift)
-    speed = store.get_speed_opportunity(window, 'width', shift)
+    speed = store.speed_baseline_gap(window, shift)
     gross = waste['gross_sqft']
     minutes = window_minutes(waste)
     by = {r['category']: r for r in waste['rows']}
     v = rates['values']
     rows = []
-    cells = [r for r in speed['rows'] if (r['opportunity_hours'] or 0) > 0]
-    rows.append({'lever': 'Speed gap to best-fifth speed', 'kind': 'speed', 'quantity': speed['total_opportunity_hours'], 'unit': 'hours',
-                 'records': f'{len(cells)} grade and width cells: ' + ', '.join(c['label'] for c in cells[:5]) + (' and more' if len(cells) > 5 else ''),
-                 **price('speed', speed['total_opportunity_hours'] * 60, rates, gross, minutes)})
     trim_pct = by['trim']['pct_of_gross']
-    over = max(0.0, (trim_pct or 0) - v['trim_target_pct'])
-    over_sqft = over / 100 * gross if gross else 0.0
-    rows.append({'lever': f'Side trim over the {v["trim_target_pct"]:g}% target', 'kind': 'trim', 'quantity': round(over, 4), 'unit': 'points',
-                 'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross' + ('' if over else ', at or under target'),
-                 **price('trim', over_sqft, rates, gross, minutes)})
-    if rows[-1]['price_terms']:
-        rows[-1]['price_terms']['trim_pct'] = trim_pct or 0   # the points over a changed target are re-derived from it (web/money.js)
-    for r in pareto['rows']:
-        rows.append({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if r['category'] == 'Order change' else ''),
-                     'kind': 'setup' if r['category'] == 'Order change' else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
-                     'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)})
-    for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
-        r = by[key]
-        if r['sqft']:
-            rows.append({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft',
-                         'records': f'{r["label"]}: {r["pct_of_gross"]}% of gross', **price('waste', r['sqft'], rates, gross, minutes)})
+
+    def share(r):
+        """A waste lever's share as the owner reads it (targets.json): the dry-end families over the yield after trim
+        and shear, the rest over gross."""
+        if r.get('pct_of_yield') is not None:
+            return {'pct_of_yield': r['pct_of_yield']}, f'{r["label"]}: {r["pct_of_yield"]}% of the yield after trim and shear'
+        return {'pct_of_gross': r['pct_of_gross']}, f'{r["label"]}: {r["pct_of_gross"]}% of gross'
+    if lens == 'ownership':
+        trim = by['trim']
+        rows.append(_control({'lever': TOTAL_TRIM, 'kind': 'trim', 'quantity': trim['sqft'], 'unit': 'sq ft', 'pct_of_gross': trim_pct,
+                              'band': trim.get('band'), 'band_text': trim.get('band_text'),
+                              'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross',
+                              **price('trim', trim['sqft'], rates, gross, minutes)}, 'trim'))
+        for key, control in (('shear', 'shear'), ('bond', 'dry_end'), ('warp', 'dry_end'), ('misalignment', 'dry_end'), ('moisture', 'dry_end'),
+                             ('unexplained', 'unexplained')):
+            r = by[key]
+            if r['sqft'] and r['sqft'] > 0:
+                pct, records = share(r)
+                rows.append(_control({'lever': r['label'] + (' (all recorded)' if key != 'unexplained' else ''), 'kind': 'waste' if key != 'unexplained' else 'paper',
+                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct, **({'group': DRY_END_GROUP} if control == 'dry_end' else {}),
+                                      'records': records, **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, control))
+    else:
+        rows.append(_control({'lever': "Speed under each grade's trailing-year speed", 'kind': 'speed', 'quantity': speed['gap_minutes'], 'unit': 'min',
+                              'records': f'{speed["runs_under"]} of {len(speed["runs"])} wet-end runs under their grade baseline',
+                              **price('speed', speed['gap_minutes'], rates, gross, minutes)}, 'speed'))
+        over = max(0.0, (trim_pct or 0) - v['trim_target_pct'])
+        over_sqft = over / 100 * gross if gross else 0.0
+        rows.append(_control({'lever': f'Side trim over the {v["trim_target_pct"]:g}% target', 'kind': 'trim', 'quantity': round(over, 4), 'unit': 'points',
+                              'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross' + ('' if over else ', at or under target'),
+                              **price('trim', over_sqft, rates, gross, minutes)}, 'trim'))
+        if rows[-1]['price_terms']:
+            rows[-1]['price_terms']['trim_pct'] = trim_pct or 0   # the points over a changed target are re-derived from it (web/money.js)
+        for r in pareto['rows']:
+            planned = r['category'] == 'Planned maintenance'
+            setup = r['category'] == 'Order change'
+            external = r['category'] in targets.EXTERNAL_REASONS
+            rows.append(_control({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if setup else ' (scheduled time)' if planned else
+                                                                            ' (external)' if external else ''),
+                                  'kind': 'setup' if setup else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
+                                  'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)},
+                                 'scheduled' if planned else 'setup' if setup else 'external' if external else 'downtime'))
+        for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
+            r = by[key]
+            if r['sqft']:
+                pct, records = share(r)
+                rows.append(_control({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft', **pct,
+                                      'records': records, **price('waste', r['sqft'], rates, gross, minutes)},
+                                     'shear' if key == 'shear' else 'dry_end'))
+    group = {}
+    if lens == 'ownership':   # trim first, always: every owner asks what trim costs; then the rest by dollars, tag scrap as one
+        rows[0]['rank'] = 1
+        rest, group_rank = owner_order(rows[1:])
+        rows = rows[:1] + rest
+        if group_rank is not None:
+            d = by['dry_end']
+            group = {**dry_end_subtotal(rows, group_rank), 'dry_end_label': DRY_END_LABEL, 'dry_end_sqft': d['sqft'],
+                     'dry_end_pct_of_yield': d['pct_of_yield'], 'dry_end_band': d.get('band'), 'dry_end_band_text': d.get('band_text')}
+    elif lens == 'supervisor':   # the controllable losses ranked; the schedule-driven ones after, not ranked
+        ranked = _rank([r for r in rows if r['control'] == 'controllable'], 'usd_per_year')
+        rest = sorted([r for r in rows if r['control'] != 'controllable'],
+                      key=lambda r: (APART.get(r['control'], len(APART)), -(r['usd_per_year'] or 0), r['lever']))
+        for r in rest:
+            r['rank'] = None
+        rows = ranked + rest
+    else:
+        rows = _rank(rows, 'usd_per_year')
+    controllable = [r for r in rows if r['control'] == 'controllable']
     coverage = waste['window']['coverage']
-    data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift,
-            'dataset_version': waste['dataset_version'], 'rows': _rank(rows, 'usd_per_year'),
+    speed_part = {'trace': {'sql': speed['trace']['sql'], 'parameters': speed['trace']['parameters'], 'elapsed_ms': 0.0}}
+    notes = {'all': ('Levers are gaps priced at the rates: the speed of each wet-end run under its grade\'s trailing-year speed, side-trim '
+                     'points over the target, and each recorded downtime reason. Shear and dry-end waste are priced in full, all '
+                     'recorded, not over their targets. Per year at the post\'s volumes. These name where to look and the records behind '
+                     'each lever; they do not prescribe a machine adjustment.'),
+             'supervisor': ('The supervisor lens: the controllable losses ranked, maintenance and operator downtime, the speed of each '
+                            'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste. Side trim and planned maintenance '
+                            'are schedule-driven and listed after, then external downtime (a power outage), which is not controllable. Shear and dry-end waste are priced in full, all recorded, not over their '
+                            'targets. Peel and core are controllable too, but the records carry no peel or core quantity. Per year at the '
+                            'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
+             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
+                           'waste, shear and the unexplained remainder (the scale reading less the recorded waste). The dry-end waste is the '
+                           'tag scrap: bond, warp, misalignment and moisture, one subtotal with each kind beneath it. Per year at the post\'s volumes.')}[lens]
+    data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
+            'dataset_version': waste['dataset_version'], 'rows': rows,
             'coverage': 'complete' if coverage == 'complete' else coverage, 'excluded_records': [],
-            'source_rows': {'waste': waste['source_rows'], 'stops': pareto['source_rows'], 'speed': speed['source_rows']},
-            'trace': _trace([waste, pareto, speed]), 'gross_sqft': gross, 'scheduled_minutes': minutes,
-            **_totals(rows), **summary(rows),
-            'method_note': ('Levers are gaps priced at the rates: the speed gap to each cell\'s best-fifth speed, side-trim points '
-                            'over the target, each recorded downtime reason, and all recorded shear and dry-end waste (no benchmark '
-                            'for those). Per year at the post\'s volumes. These name where to look and the records behind each '
-                            'lever; they do not prescribe a machine adjustment.')}
+            'source_rows': {'waste': waste['source_rows'], 'stops': pareto['source_rows'], 'runs': len(speed['runs'])},
+            'trace': _trace([waste, pareto, speed_part]), 'gross_sqft': gross, 'scheduled_minutes': minutes,
+            **_totals(rows), **summary(rows), **group,
+            # the controllable losses in their ranked order, added left to right (_add) as web/money.js re-derives them
+            'controllable_levers': len(controllable), 'controllable_usd': round(_add(r['usd'] or 0 for r in controllable), 2),
+            'controllable_usd_per_year': round(_add(r['usd_per_year'] or 0 for r in controllable), 0) if all(r['usd_per_year'] is not None for r in controllable) else None,
+            'runs_under_baseline': speed['runs_under'], 'baseline_since': speed['since'], 'baseline_through': speed['through'],
+            'method_note': notes}
     return _envelope(data, rates)

@@ -114,7 +114,7 @@ The same seed gives byte-identical JSONL, and a day gives the same records whate
 | --- | --- | --- |
 | `stop_id` | text | `ST` + start `YYYYMMDDHHMMSS` |
 | `start_date`, `start_time`, `end_date`, `end_time`, `duration_sec` | | whole seconds; stops never overlap and always sit inside one setup |
-| `kind` | Maintenance / Operator / PM | PM = planned maintenance window; every PM stop carries the reason `Planned maintenance` |
+| `kind` | Maintenance / Operator / PM | PM = planned maintenance window; every PM stop carries the reason `Planned maintenance`. A `Power outage` stop is recorded as Maintenance; the investigator's tables count it as `External` (the owner's rule in `targets.json`, PR #111) |
 | `place` | text | Upper knife, Lower knife, Shear knife, Slitter/scorer, Double backer, Splicer 1-5, Glue dams, Stacker, Single facer, Steam system, Power |
 | `reason` | text | nine unplanned reasons - Knife / slitter jam, Missed splice, Raw material (roll), Stacker, Order change, Glue / starch, Steam / moisture, Power outage, Other - plus `Planned maintenance`, used only by `PM`-kind stops so the planned window is its own Pareto row rather than inflating Other |
 | `shift_number`, `production_date` | | the shift the stop fell in |

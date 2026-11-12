@@ -1,0 +1,51 @@
+{
+ "about": "The plant's targets and flag bands (issue #101), from the owner's golden review of 2026-11-10. They drive the band beside every headline figure, the downtime flags and the two lenses on the cost model's levers. A band is home run (at or under home_run), on target (at or under target), over target (above target, at or under flag) or flag (above flag: \"what's going on?\"). A null flag is the owner's to set; a measure the records do not carry is listed so the standard is on record, and no answer shows it until a tool returns it.",
+ "source": "owner, 2026-11-10",
+ "bands": [
+  {"id": "operator", "label": "Operator downtime", "unit": "% of scheduled minutes", "home_run": null, "target": 2.5, "flag": 2.5,
+   "denominator": "scheduled minutes (480 a shift, 1,440 a production day)", "lever": "controllable", "source": "owner, 2026-11-10"},
+  {"id": "maintenance", "label": "Maintenance downtime", "unit": "% of scheduled minutes", "home_run": null, "target": 2.5, "flag": 2.5,
+   "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10",
+   "note": "Unplanned maintenance stops, breakdowns and faults; planned maintenance (PM) is schedule-driven and sits below the ranked reasons, and an external stop (a power outage) is not maintenance: neither counts against this band or trips its flag."},
+  {"id": "op_maint", "label": "Downtime (operator and maintenance)", "unit": "% of scheduled minutes", "home_run": null, "target": 5.0, "flag": 5.0,
+   "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10"},
+  {"id": "trim", "label": "Side trim", "unit": "% of gross", "home_run": 2.75, "target": 3.0, "flag": 3.25,
+   "denominator": "gross sq ft", "lever": "schedule-driven", "source": "owner, 2026-11-10",
+   "note": "Always the largest waste percentage; the order mix and the web widths it runs on decide it."},
+  {"id": "shear", "label": "Shear (chop)", "unit": "% of gross", "home_run": 0.5, "target": 0.75, "flag": 1.0,
+   "denominator": "gross sq ft (full-web cuts, about 34 in a piece, at order and grade changes)", "lever": "controllable", "source": "owner, 2026-11-10",
+   "note": "Controllable through sequencing."},
+  {"id": "dry_end", "label": "Dry-end waste (bond, warp, misalignment, moisture)", "unit": "% of yield", "home_run": 0.75, "target": 1.0, "flag": 1.25,
+   "denominator": "yield after trim and shear (gross minus side trim minus shear)", "lever": "controllable", "source": "owner, 2026-11-10",
+   "note": "Controllable through temperatures."},
+  {"id": "peel", "label": "Peel (roll prep)", "unit": "% of roll stock consumed", "home_run": null, "target": 0.5, "flag": null,
+   "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10",
+   "note": "Target about 0.5%; the flag is the owner's to set. The records carry no peel quantity yet."},
+  {"id": "core", "label": "Core (at splice)", "unit": "% of roll stock consumed", "home_run": null, "target": 0.1, "flag": null,
+   "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10",
+   "note": "Target about 0.1%; the flag is the owner's to set. The records carry no core quantity yet."}
+ ],
+ "external": {
+  "kind": "External",
+  "reasons": ["Power outage"],
+  "lever": "external",
+  "note": "Downtime from outside the plant, not controllable: a power outage. It shows in downtime as its own kind, External, apart from the ranked reasons, and never counts against the maintenance or operator band or trips their flags. The records log it as a maintenance stop; the investigator counts it as External whatever kind the record gives it.",
+  "source": "owner, 2026-11-12"
+ },
+ "speed": {
+  "baseline": "Each grade's sustained average speed over the trailing year: lineal feet over running minutes (stops out) of every setup of that grade in the 365 days ending on the day asked about, inside the record store. Never the maximum speed, which is a ramp-up point.",
+  "gap": "A run under its grade's baseline is a speed gap: the lineal feet it would have made at the baseline in its running minutes, less the feet it made.",
+  "source": "owner, 2026-11-10"
+ },
+ "recurrence": {
+  "window": "the 365 days ending on the day asked about, inside the record store",
+  "times": "shifts on which the same reason, in the same kind of downtime, was over its kind's band on its own (minutes over the band's share of the shift's 480)",
+  "weekly_top_five": "Monday-to-Friday weeks in which that reason was among the five reasons with the most unplanned minutes",
+  "source": "owner, 2026-11-10"
+ },
+ "lenses": {
+  "ownership": "The total cost of waste in dollars, side trim first: it is always the largest percentage, and every owner asks what trim costs.",
+  "supervisor": "The controllable losses ranked: maintenance and operator downtime (breakdowns and faults), dry-end waste (temperatures), speed under each grade's baseline, shear (sequencing), peel and core. Side trim and planned maintenance are shown as schedule-driven, and external downtime (a power outage) as not controllable.",
+  "source": "owner, 2026-11-10"
+ }
+}

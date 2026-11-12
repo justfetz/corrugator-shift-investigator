@@ -26,7 +26,20 @@ All of it is synthetic: one machine, a rolling year that moves forward every wee
 
 ## Rules the process sets
 
-A production day runs from 07:00 to 07:00 and is labeled by its starting date. Shift 1 is 07:00–15:00, shift 2 is 15:00–23:00 and shift 3 is 23:00–07:00, each 480 minutes. A dry-end setup changes when either knife's order combination changes; a paper change is a wet-end run and holds one or more setups. Speed is measured over elapsed time, including downtime. Maintenance and operator downtime are each compared with a 2.5% shift target; trim above 3.25% per setup and dry-end waste above 1% are flagged. Recorded reasons and notes are observations, not proof of a mechanical cause.
+A production day runs from 07:00 to 07:00 and is labeled by its starting date. Shift 1 is 07:00–15:00, shift 2 is 15:00–23:00 and shift 3 is 23:00–07:00, each 480 minutes. A dry-end setup changes when either knife's order combination changes; a paper change is a wet-end run and holds one or more setups. Speed is measured over elapsed time, including downtime. Recorded reasons and notes are observations, not proof of a mechanical cause.
+
+The owner's standards are in `src/investigator/targets.json` (issue #101), and every band an answer prints is read from it. A band reads home run, on target, over target or flag:
+
+| Measure | Denominator | Home run | Target | Flag | Lever |
+|---|---|---|---|---|---|
+| Operator downtime | scheduled minutes (480 a shift) | | 2.5% | over 2.5% | controllable |
+| Maintenance downtime (breakdowns and faults) | scheduled minutes | | 2.5% | over 2.5% | controllable |
+| Operator and maintenance together | scheduled minutes | | 5% | over 5% | controllable |
+| Side trim | gross | 2.75% | 3.0% | over 3.25% (also per setup) | schedule-driven |
+| Shear (chop) | gross | 0.5% | 0.75% | over 1.0% | controllable (sequencing) |
+| Dry-end waste (bond, warp, misalignment, moisture) | yield after trim and shear | 0.75% | 1.0% | over 1.25% | controllable (temperatures) |
+
+Downtime has no gap between target and flag, so anything over 2.5% of a shift is a flag. Planned maintenance is scheduled time: it is schedule-driven, never ranked, and never counted in the maintenance band. A power outage is **external** downtime, outside the plant and not controllable. It shows in downtime as its own kind, but it never counts against the maintenance or operator band and never trips their flags. The records log it as a maintenance stop; the investigator counts it as External (the owner, PR #111). Each grade's speed is held to its sustained average speed over the trailing year, never its target or its maximum.
 
 ## What it will not do
 

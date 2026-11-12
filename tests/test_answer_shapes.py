@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from investigator.agent import Agent, Context, parse_request
+from investigator.agent import Agent, Context, parse_request, question_scope, route
 from investigator.record_store import default_store
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -19,10 +19,10 @@ from run import RULE_CONSTANTS, renderings  # noqa: E402
 DAY = '2026-09-14'
 GOLDEN = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
 BOLD = re.compile(r'\*\*([^*]+)\*\*')
-REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday) (\d+))?\)$')
+REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday|flag) (\d+))?\)$')
 LOOK = re.compile(r' → “([^”]+)”$')
 NUMBER = re.compile(r'\d[\d,]*(?:\.\d+)?')
-PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile'}
+PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile', 'flag': 'flags'}
 MAX_WORDS = 40      # the owner's rule: no paragraph over about forty words
 MAX_CLAUSES = 3     # and no list of more than three like items joined into one sentence with semicolons
 
@@ -133,8 +133,10 @@ INTENT_QUESTIONS = [
     ('period_speed_opportunity', 'Where is the speed opportunity this month?', 'day', 'day'),
     ('period_money', 'Where is the money this month?', 'day', 'day'),
     ('period_speedvar', 'What were the top 3 contributors to speed variations?', 'shift', 'day'),
+    ('period_review', 'What were the top downtime reasons this week?', 'day', 'day'),
 ]
-ALIASES = [('period_downtime', 'Show downtime by reason', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]
+# downtime by reason over a window is the owner's review (issue #101); by equipment it is still the Pareto's alias
+ALIASES = [('period_downtime', 'Show downtime by equipment', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]
 
 
 def opening(sections):
@@ -154,7 +156,7 @@ def test_no_two_intents_share_an_opening_sentence():
     for alias, question, canonical in ALIASES:   # the same plan answers the same way
         result, context = ask(question, scope='day', period='week')
         assert context.history[-1]['intent'] == alias
-        week, _ = ask({'period_pareto': 'Which downtime reason cost the most minutes?', 'period_waste': 'Waste breakdown'}[canonical], scope='day', period='week')
+        week, _ = ask({'period_pareto': 'Which equipment cost the most downtime minutes?', 'period_waste': 'Waste breakdown'}[canonical], scope='day', period='week')
         assert opening(result['sections']) == opening(week['sections'])
     # dollars over a window (`measure=dollars` under a ranged grain, intent period_dollars) is the levers' plan
     from investigator.urls import resolve_url
@@ -254,10 +256,18 @@ def golden_answers():
 @pytest.mark.parametrize('case', list(golden_answers()), ids=lambda c: c['id'])
 def test_no_section_runs_on_and_every_where_to_look_question_routes(case):
     """No section over about forty words, no more than three clauses joined with semicolons (a longer list is
-    bullets or a table), and each where-to-look link is a question the offline router answers in the same scope."""
+    bullets or a table), and each where-to-look link is a question the offline router answers in the same scope: the
+    scope the card answered, as the client asks it, which the look must not move (review of #111: a bare downtime look
+    under one shift met the owner's default and answered the previous day, all shifts)."""
     store = default_store()
     context = Context(case.get('day', DAY), case.get('shift', 2), period=case.get('period', 'day'))
     context.scope = case.get('scope', 'shift')
+    turns = case.get('turns') or [case['question']]
+    if len(turns) == 1:
+        try:
+            context = question_scope(turns[0], context, store.production_days)   # the scope the server answers it in
+        except ValueError:
+            return
     try:
         analysis = store.day_analysis(context.production_day, case.get('corrupt', False))
     except ValueError:
@@ -282,4 +292,5 @@ def test_no_section_runs_on_and_every_where_to_look_question_routes(case):
         assert len(text.split(';')) <= MAX_CLAUSES, f'{len(text.split(";"))} semicolon clauses: {section!r}'
         m = LOOK.search(section)
         if m:
-            parse_request(m[1], context)
+            _, asked = route(m[1], context, store.production_days)
+            assert asked is context, f"the look {m[1]!r} moves the card's scope: {asked.read}"
