@@ -198,7 +198,7 @@ rates in force too (what the page's own address returns from the server), so a r
 row it shows. An analyst's interpretation is not rewritten (a
 model's sentence moved to other figures could claim what no row says, or keep a comparison the new figures
 reverse): at other rates it says which rates it was written at, and the evidence under it is re-priced. So
-the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twenty-seven answers
+the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over a set of answers
 (the two lenses on a month and on a shift's week, a supervisor week with no planned maintenance and trim under its
 target, a speed variance whose mix is schedule-driven, one with planned maintenance and an external stop each in its
 own bucket, and a supervisor day with a power outage, among them) at six sets of rates (`tests/money_cli.cjs parity`), and the value case

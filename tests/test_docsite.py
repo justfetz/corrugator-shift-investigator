@@ -261,9 +261,13 @@ def test_changelog_lists_merged_and_squashed_pull_requests(tmp_path):
     git(repo, 'checkout', '-q', 'main')
     git(repo, 'merge', '-q', '--no-ff', 'feature', '-m', 'Merge pull request #9 from someone/feature',
         '-m', 'Docs site for issue #93')
+    git(repo, 'checkout', '-q', '-b', 'edited')
+    git(repo, 'commit', '-q', '--allow-empty', '-m', 'Smoke test work')
+    git(repo, 'checkout', '-q', 'main')
+    git(repo, 'merge', '-q', '--no-ff', 'edited', '-m', 'Merge pull request #19', '-m', 'Smoke test: no stale body')   # title cut at merge, as #119's was
     pulls = docsite.merged_pulls(root=repo)
-    assert [(n, t) for _, n, t in pulls] == [(9, 'Docs site for issue #93'), (7, 'Squashed change [wip]')], \
-        'first-parent only: a branch commit is not a merged pull request, and a direct push is skipped'
+    assert [(n, t) for _, n, t in pulls] == [(19, 'Smoke test: no stale body'), (9, 'Docs site for issue #93'), (7, 'Squashed change [wip]')], \
+        'first-parent only: a branch commit is not a merged pull request, a direct push is skipped, an edited merge title still counts'
     text = docsite.changelog(pulls)
     assert text.startswith(docsite.CHANGELOG_HEAD)
     assert f'- [#9]({docsite.REPO}/pull/9) Docs site for issue [#93]({docsite.REPO}/issues/93)' in text
