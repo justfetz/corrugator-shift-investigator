@@ -383,7 +383,7 @@ TEMPLATE = """<!doctype html>
 </article>
 <nav class="docs-pager" aria-label="Previous and next page">{pager}</nav>
 <p class="docs-source">Rendered from <a href="{source_url}">{source}</a> in the repository.</p>
-<p class="docs-source">Questions asked on the hosted demo are logged anonymously to improve the answers; no personal data is kept (<a href="/docs/data#the-question-log">what is kept</a>).</p>
+<p class="docs-source">Questions asked on the hosted demo are logged anonymously to improve the answers; the question log keeps no IP address, browser details or cookies (<a href="/docs/data#the-question-log">what is kept</a>).</p>
 </main></div></body></html>
 """
 

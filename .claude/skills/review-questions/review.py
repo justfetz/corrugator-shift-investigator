@@ -27,6 +27,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import unicodedata
 
 ROOT = Path(__file__).resolve().parents[3]
 DATASET, TABLE = 'question_log', 'run_googleapis_com_stdout'   # the sink's dataset; Cloud Run's stdout log table
@@ -34,6 +35,7 @@ BATCH = 10
 GOLDEN_DAY = '2026-09-14'   # the golden set's default day (evals/golden.json `about`)
 # What makes a question worth a golden case, and how much: the misses first.
 WEIGHT = {'refused': 3, 'catch_all': 3, 'thumbs_down': 2, 'analyst_plan_rejected': 2, 'typo_corrected': 1, 'scope_moved': 1}
+PREVIEW = re.compile(r'-pr-\d+-')   # a pull request's preview revision (preview.yml tags it pr-<n>): the owner's own clicks
 UNIT = re.compile(r"\b((?:lineal|feet|ft) per (?:setup|wet end)|setups?|paper changes?|order changes?|wet ends?|stops?|splices?|step-?ups?|rolls?|orders?|sheets?|"
                   r"boards?|minutes?|hours?|feet|ft per setup|msf|sq ft|percent|dollars?)\b", re.I)
 
@@ -42,13 +44,26 @@ def sql(project, days=7):
     """The raw events of the last `days` days; the grouping is done here, so a file and BigQuery read the same."""
     return (f"SELECT TO_JSON_STRING(jsonPayload) AS line FROM `{project}.{DATASET}.{TABLE}` "
             f"WHERE jsonPayload.log = 'question_log' AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {int(days)} DAY) "
+            r"AND NOT REGEXP_CONTAINS(IFNULL(JSON_VALUE(TO_JSON_STRING(jsonPayload), '$.revision'), ''), r'-pr-[0-9]+-') "
             "ORDER BY timestamp")
 
 
 def from_bigquery(project, days=7):
     out = subprocess.run(['bq', 'query', '--use_legacy_sql=false', '--format=json', '--max_rows=100000', sql(project, days)],
                          capture_output=True, text=True, check=True).stdout
-    return [json.loads(row['line']) for row in json.loads(out or '[]')]
+    return live([json.loads(row['line']) for row in json.loads(out or '[]')])
+
+
+def live(events):
+    """The demo's own lines: a preview revision's (a pull request being reviewed) are left out."""
+    return [e for e in events if not PREVIEW.search(str(e.get('revision') or ''))]
+
+
+def clean(text):
+    """A visitor's text as the report shows it: format characters gone, whitespace collapsed to single spaces and
+    backticks turned into quotes, so it cannot leave the code span or the JSON fence it is printed in."""
+    text = ''.join(ch for ch in str(text or '') if unicodedata.category(ch) != 'Cf')
+    return ' '.join(text.split()).replace('`', "'")
 
 
 def from_file(path):
@@ -62,7 +77,7 @@ def from_file(path):
             record = json.loads(record['line'])                                            # a row of the SQL above
         if isinstance(record, dict) and record.get('log') == 'question_log':
             events.append(record)
-    return events
+    return live(events)
 
 
 def short(text, limit=120):
@@ -108,12 +123,12 @@ def questions(events):
         votes = {(f.get('card'), f['vote']) for f in parts['feedback'] if f.get('vote') in ('up', 'down')}
         if any(vote == 'down' for _, vote in votes):
             flags.add('thumbs_down')
-        out.append({'line': line, 'session': asked.get('session'), 'ts': asked.get('ts'), 'question': asked.get('question') or '',
+        out.append({'line': line, 'session': asked.get('session'), 'ts': asked.get('ts'), 'question': clean(asked.get('question')),
                     'scope': asked.get('scope') or {}, 'url': asked.get('url'), 'measure': asked.get('measure'),
                     'status': (parts['answer'] or {}).get('status') or asked.get('status'), 'refusal': asked.get('refusal'),
                     'flags': flags, 'analyst': (parts['analyst'] or {}).get('status'),
                     'up': sum(vote == 'up' for _, vote in votes), 'down': sum(vote == 'down' for _, vote in votes),
-                    'comments': [f['comment'] for f in parts['feedback'] if f.get('comment')]})
+                    'comments': [clean(f['comment']) for f in parts['feedback'] if f.get('comment')]})
     return sorted(out, key=lambda q: q['ts'] or '')
 
 
@@ -202,8 +217,8 @@ def candidates(rows, known=None):
 
 
 def quoted(text):
-    """A visitor's text in a code span: never Markdown, never a mention."""
-    return '`' + str(text).replace('`', "'") + '`'
+    """A visitor's text in a code span on one line: never Markdown, never a mention, never out of its span."""
+    return '`' + clean(text) + '`'
 
 
 def report(rows, known=None, batch=1):

@@ -69,6 +69,25 @@ def test_the_report_lists_the_week_and_the_first_batch_of_ten():
 
 def test_a_visitor_text_stays_in_a_code_span():
     assert review.quoted('ask `@someone` <b>') == "`ask '@someone' <b>`"
+    # the coordinator's review of PR 131: three backticks, a blank line and format characters cannot leave the span
+    hostile = 'how many setups\n\n```\n@justfetz see\u202e this\U000e0041 ``` last week'
+    assert review.quoted(hostile) == "`how many setups ''' @justfetz see this ''' last week`"
+    events = [{'log': 'question_log', 'event': 'question', 'line': 'a' * 16, 'session': None, 'ts': '2026-11-02T08:00:00Z',
+               'question': hostile, 'scope': {'shift': 2, 'scope': 'shift', 'period': 'day'}, 'url': '/corr/1/week/2026-09-07/shift/2?measure=kpis',
+               'measure': 'kpis', 'status': 'routed', 'refusal': None, 'flags': ['catch_all']},
+              {'log': 'question_log', 'event': 'feedback', 'line': 'a' * 16, 'card': 'answer', 'vote': 'down', 'comment': 'a\n\n```b'}]
+    text = review.report(review.questions(events), {})
+    assert text.count('```') == 4 and '```json' in text           # only the draft's own fence and the bank's span
+    body = text.split('## Candidates', 1)[1]
+    assert '\n\n```\n@' not in text and all(line.count('`') % 2 == 0 for line in body.splitlines() if '@justfetz' in line)
+
+
+def test_a_preview_revisions_lines_are_left_out():
+    base = {'log': 'question_log', 'event': 'question', 'session': None, 'ts': 't', 'question': 'hello', 'flags': ['refused']}
+    events = [{**base, 'line': 'a' * 16, 'revision': 'corrugator-shift-investigator-pr-131-db3bc14-156'},
+              {**base, 'line': 'b' * 16, 'revision': 'corrugator-shift-investigator-main-db3bc14-77-1'}, {**base, 'line': 'c' * 16, 'revision': None}]
+    assert [e['line'] for e in review.live(events)] == ['b' * 16, 'c' * 16]
+    assert "r'-pr-[0-9]+-'" in review.sql('p', 7)
 
 
 def test_the_command_line_and_the_sql():

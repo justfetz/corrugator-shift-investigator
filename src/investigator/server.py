@@ -45,7 +45,7 @@ from .anthropic_provider import resolve_model
 from .cost_model import client_config, effective as effective_rates, parse_rates
 from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
-from .questionlog import QuestionLog, check_comment, ids as log_ids, scope_of, valid_id
+from .questionlog import LINES_PER_MIN, QuestionLog, check_comment, ids as log_ids, scope_of, valid_id
 from .record_store import default_store
 from . import targets
 from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
@@ -154,6 +154,7 @@ class Workbench:
         self.feedback_requests = deque()   # POST /api/feedback has windows of its own: a thumbs up never spends a question
         self.feedback_windows = {}         # client ip -> deque of feedback timestamps, limited like rate_windows
         self.feedback_seen = OrderedDict() # (line, 'vote' | 'comment') already logged here: one of each per card
+        self.log_windows = {}              # client ip -> deque of question-log lines written (LINES_PER_MIN); the ip is never logged
         self.rate_lock = threading.Lock()
         self.reports = OrderedDict()
         # The rolling year of synthetic production, built once per process; the eval harness passes the golden window's store.
@@ -515,6 +516,22 @@ class Workbench:
         from .reports import report_pdf
         return report_pdf(result)
 
+    def log_allowed(self, ip):
+        """Whether one more question-log line may be written for this client in the last minute (LINES_PER_MIN):
+        the answers are never throttled by it, only the lines, so a script with well-formed ids cannot flood the log
+        or the weekly review. Called after the response; the address only counts."""
+        now = time.monotonic()
+        with self.rate_lock:
+            for stale in [k for k, window in self.log_windows.items() if not window or window[-1] < now-60]:
+                del self.log_windows[stale]
+            window = self.log_windows.setdefault(ip, deque())
+            while window and window[0] < now-60:
+                window.popleft()
+            if len(window) >= LINES_PER_MIN:
+                return False
+            window.append(now)
+            return True
+
     def feedback(self, payload, ip):
         """A thumbs up or down on a card (issue #125), and its optional comment: limited like /api/ask, on windows of
         its own (FEEDBACK_PER_MIN for the container, DEMO_RATE_LIMIT_PER_MIN per IP), so feedback never spends a
@@ -568,7 +585,8 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             pending, self.pending_log = getattr(self, 'pending_log', None), None
             if pending:
                 try:
-                    app.qlog.write(pending())
+                    if app.log_allowed(self._client_ip()):
+                        app.qlog.write(pending())
                 except Exception:
                     pass   # the log never fails a request
 

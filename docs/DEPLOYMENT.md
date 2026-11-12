@@ -129,14 +129,24 @@ WRITER=$(gcloud logging sinks describe question-log --project "$PROJECT_ID" --fo
 bq add-iam-policy-binding --dataset=true --member="$WRITER" --role=roles/bigquery.dataEditor "$PROJECT_ID:question_log"
 ```
 
-The sink writes the lines to the partitioned table `question_log.run_googleapis_com_stdout`, with each line under `jsonPayload`. BigQuery adds a column only once a line has carried a value for it (no comment, no column `comment`), so one view reads every field through the line's JSON and works from the first line on. It joins a question's lines into the one row per question the review reads:
+**Cloud Run's request log (optional, the owner's call).** Separately from the question log, Cloud Run's own request log records every request's URL with the visitor's IP address and user agent, as any web server's access log does, and the URL of `/q` holds the question. It stays in Cloud Logging for 30 days and is not copied to BigQuery. To keep those `/q` entries out of it altogether, exclude them from the `_Default` sink:
+
+```bash
+gcloud logging sinks update _Default --project "$PROJECT_ID" \
+  --add-exclusion=name=question-urls,filter='resource.type="cloud_run_revision" AND resource.labels.service_name="corrugator-shift-investigator" AND log_id("run.googleapis.com/requests") AND httpRequest.requestUrl:"/q?"'
+```
+
+The cost: a failing `/q` no longer shows in the request log (its status still shows in the question log's `refused` lines). `--remove-exclusions=question-urls` undoes it.
+
+The sink writes the lines to the partitioned table `question_log.run_googleapis_com_stdout`, with each line under `jsonPayload`. BigQuery adds a column only once a line has carried a value for it (no comment, no column `comment`), so one view reads every field through the line's JSON and works from the first line on. A pull request's preview revision (`…-pr-<n>-…`, the owner's own clicks while reviewing) is left out, here and in `/review-questions`. It joins a question's lines into the one row per question the review reads:
 
 ```sql
 CREATE OR REPLACE VIEW `PROJECT_ID.question_log.question_lines` AS
 WITH lines AS (
   SELECT timestamp, JSON_VALUE(j, '$.event') AS event, JSON_VALUE(j, '$.line') AS line, j
   FROM (SELECT timestamp, TO_JSON_STRING(jsonPayload) AS j FROM `PROJECT_ID.question_log.run_googleapis_com_stdout`
-        WHERE jsonPayload.log = 'question_log')),
+        WHERE jsonPayload.log = 'question_log'
+          AND NOT REGEXP_CONTAINS(IFNULL(JSON_VALUE(TO_JSON_STRING(jsonPayload), '$.revision'), ''), r'-pr-[0-9]+-'))),
 answers AS (SELECT line, ANY_VALUE(JSON_VALUE(j, '$.status')) AS status,
                    MAX(SAFE_CAST(JSON_VALUE(j, '$.server_ms') AS FLOAT64)) AS server_ms
             FROM lines WHERE event = 'answer' GROUP BY line),

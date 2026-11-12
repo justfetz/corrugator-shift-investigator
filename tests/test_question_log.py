@@ -6,6 +6,7 @@ so each check waits for the lines it expects.
 import http.client
 import io
 import json
+from pathlib import Path
 import random
 import secrets
 import string
@@ -228,13 +229,27 @@ def test_a_key_email_phone_or_ip_typed_into_a_question_is_replaced():
     out = redact(typed, 500)
     for secret in ('sk-ant', 'me@example.com', '555-123-4567', '10.1.2.3'):
         assert secret not in out
-    assert out == 'why slow [key] [email] [phone] [ip] on 2026-09-14 shift 2'
+    assert out == 'why slow [key] [email] [number] [ip] on 2026-09-14 shift 2'
     # IPv6 too (Codex on PR 131): compressed, full, with a zone, IPv4-mapped; a clock time or a MAC address is left alone
     for address in ('2001:db8:85a3::8a2e:370:7334', 'fe80::1', 'fe80::1%eth0', '::ffff:10.1.2.3', '::1',
                     '2001:0db8:85a3:0000:0000:8a2e:0370:7334'):
         assert redact(f'from {address} why slow', 500) == 'from [ip] why slow', address
     assert redact('downtime 07:00:00 to 15:00 on 00:1a:2b:3c:4d:5e', 500) == 'downtime 07:00:00 to 15:00 on 00:1a:2b:3c:4d:5e'
     assert redact('Note:: a, b', 500) == 'Note:: a, b'
+    # the coordinator's review of PR 131: a bracketed address with a port, an IPv4 address before a full stop
+    assert redact('at [2001:db8::1]:443 ok', 500) == 'at [[ip]]:443 ok'
+    assert redact('my box is 10.1.2.3.', 500) == 'my box is [ip].'
+    # personal numbers: nine or more digits with separators, a 3-4 local number; dates, times and figures are kept
+    for number in ('020 7946 0958', '030 12345678', '123-4567', '123-45-6789', '4111 1111 1111 1111', '4111-1111-1111-1111',
+                   '(555) 123-4567', '+44 20 7946 0958', '5551234567'):
+        assert redact(f'call {number} now', 500) == 'call [number] now', number
+    for kept in ('what happened 2026-09-14 15:00 on shift 2', 'downtime on 2026-09-14 and 2026-09-15', '13,233.4 MSF and 1,529,065 ft',
+                 'why was 600.0 ft/min 75%', 'see /corr/1/week/2026-09-07/shift/2?measure=kpis'):
+        assert redact(kept, 500) == kept, kept
+    # key shapes with / and + (an AWS secret key), mixed case
+    assert redact('aws wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY and Ab+9/xyzXYZ012345678901', 500) == 'aws [key] and [key]'
+    # invisible format characters (category Cf) are removed: bidi overrides, zero-width, BOM, the tag characters
+    assert redact('rev\u202eesrever zero\u200bwidth \u2066iso\u2069 rlm\u200f bom\ufeff tag\U000e0041\U000e0049', 500) == 'revesrever zerowidth iso rlm bom tag'
     assert redact('how-many-setups-did-we-run-last-week', 500) == 'how-many-setups-did-we-run-last-week'
     assert len(redact('x' * 2000, 500)) == 500
     # replaced before the cut: nothing straddling the 500th character survives as a fragment
@@ -273,9 +288,18 @@ def test_the_113_examples_are_catch_all(app, question, period):
 
 @pytest.mark.parametrize('question,period', [
     ('How did this week go versus the previous one?', 'week'), ('How did September go versus August?', 'day'),
-    ('how many setups yesterday', 'day'), ('Why was this shift slow?', 'day')])
+    ('how many setups yesterday', 'day'), ('Why was this shift slow?', 'day'),
+    ('How did shift 1 go compared with last week on lineal per paper change?', 'day')])
 def test_a_kpi_question_or_a_count_that_lands_right_is_not(app, question, period):
     assert 'catch_all' not in logged(app, question, period)['flags']
+
+
+def test_no_golden_answered_right_on_kpis_is_flagged_catch_all():
+    # every golden whose expected address is measure=kpis is a right answer there (the coordinator's review of PR 131)
+    cases = json.loads((Path(__file__).resolve().parents[1] / 'evals' / 'golden.json').read_text())['cases']
+    on_kpis = [c for c in cases if '?measure=kpis' in ((c.get('expect') or {}).get('url') or '') and isinstance(c.get('question'), str)]
+    assert len(on_kpis) >= 10
+    assert [c['id'] for c in on_kpis if 'catch_all' in flags_of(c['question'], measure='kpis')] == []
 
 
 def test_refused_typo_and_moved_scope(app):
@@ -368,7 +392,7 @@ def test_feedback_is_a_line_and_accepts_no_markup(public):
     assert said['comment'] == 'the number of setups, not the MSF' and said['card'] == 'answer'
     assert analyst['card'] == 'analyst' and analyst['session'] is None
     for bad in ('<b>more</b>', 'see `code`', '&lt;x&gt;', '[link](https://x.example)', '![x](y)', 'two\nlines', 'tab\there',
-                'x' * 301, 42):
+                'x' * 301, 42, 'rev\u202ebad', 'zero\u200bwidth', 'bom\ufeff', 'tag\U000e0041', 'iso\u2066x\u2069', 'rlm\u200f'):
         status, _, body = feedback(public, {'line': '00000000000000cc', 'vote': 'down', 'comment': bad}, token)
         assert status == 400 and 'plain text' in body['error'], bad
     for bad in ({'line': LINE, 'vote': 'meh'}, {'line': 'not-an-id', 'vote': 'up'}, {'line': LINE, 'vote': 'up', 'session': 'x'},
@@ -411,6 +435,25 @@ def test_feedback_is_not_taken_without_the_log():
         assert status == 404 and 'not collected' in json.loads(body)['error']
     finally:
         stop(server, thread)
+
+
+def test_lines_per_client_are_capped_but_answers_never_are(monkeypatch):
+    monkeypatch.setattr('investigator.server.LINES_PER_MIN', 3)
+    server, thread = start()
+    try:
+        statuses = [ask(server, 'Why was this shift slow?', ids(line=f'{i:016x}'))[0] for i in range(4)]
+        time.sleep(0.3)
+    finally:
+        stop(server, thread)
+    assert statuses == [200, 200, 200, 200]                         # every question answered
+    assert len(server.app.qlog.stream.getvalue().splitlines()) == 3   # three lines (a question and its answer, then a question)
+
+
+def test_a_format_character_in_a_question_is_removed_from_its_line(public):
+    status, _ = ask(public, 'why\u202e was \u200bshift slow\U000e0041?', ids())
+    assert status == 200
+    question = lines(public, 2)[0]
+    assert question['question'] == 'why was shift slow?'
 
 
 # ---- after the response ---------------------------------------------------------------------------------------
