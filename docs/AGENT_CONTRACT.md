@@ -26,7 +26,7 @@ No conversation or subscriber information is persisted. The local server retains
 - get_order_matrix: dimensions, outs, cuts, requested/planned/produced sheets and remaining quantities per fragment (the record families carry no order ledger, so requested and remaining sheets are null).
 - render_chart: supported bar or line specification referencing a successful result from this run.
 
-Period tools read the whole record store (two production months, Monday to Friday) instead of the selected day. Each takes a `window` of `{"period": "day|week|month|fiscal", "anchor": "YYYY-MM-DD"}` (fiscal = the 4-4-5 accounting period; KPI envelopes flag unequal production-day counts) — week is the Mon–Fri production week containing the anchor, month the calendar month, and the previous window is computed the same way — plus an optional `shift` (null = all three shifts; under Selected shift only the selected shift is enforced in application code). All are read-only, bounded (fixed queries, bound values, 1,000-row limit, two-second interrupt), and return `window`, `previous_window`, `coverage`, `source_rows` and rows whose percentages are ratios of sums (METRICS.md).
+Period tools read the whole record store (the rolling year, Monday to Friday) instead of the selected day. Each takes a `window` of `{"period": "day|week|month|fiscal", "anchor": "YYYY-MM-DD"}` (fiscal = the 4-4-5 accounting period; KPI envelopes flag unequal production-day counts) — week is the Mon–Fri production week containing the anchor, month the calendar month, and the previous window is computed the same way — plus an optional `shift` (null = all three shifts; under Selected shift only the selected shift is enforced in application code). All are read-only, bounded (fixed queries, bound values, 1,000-row limit, two-second interrupt), and return `window`, `previous_window`, `coverage`, `source_rows` and rows whose percentages are ratios of sums (METRICS.md).
 
 - get_period_kpis(window, compare, shift): the dashboard tiles with current, previous, delta, `better` direction and a `change` label; deltas withheld unless both windows are complete.
 - compare_periods(current_window, previous_window, shift): the same table for two arbitrary windows.
@@ -75,7 +75,7 @@ A shape depends on the plan that ran and the scope, never on the wording of the 
 
 One screen offers date/shift scope, questions, calculated metrics, charts, report download and expandable tool/context/SQL traces. It labels synthetic data and offline planning. No fabricated email signup/success flow exists.
 
-The server binds only to 127.0.0.1. It enforces Host, Origin, a random request token, JSON content type, 16 KB request bodies and a shared 60-requests/minute limit. Static files have an explicit allowlist and a restrictive content security policy. Labels are rendered as text, not HTML. This single-process teaching server is not suitable for public hosting.
+By default the server binds only to 127.0.0.1. It enforces Host, Origin, a random request token, JSON content type, 16 KB request bodies and a shared 60-requests/minute limit. Static files have an explicit allowlist and a restrictive content security policy. Labels are rendered as text, not HTML. The hosted demo runs the same single process in public mode (below, and [deployment](DEPLOYMENT.md)); it is a demo, not a multi-tenant service.
 
 Optional WebMCP registration invokes the same visible investigation action and validates its question argument. Browsers without support use the ordinary interface. Browser-level WebMCP execution has not been verified; no claim of that validation is made.
 
@@ -83,7 +83,7 @@ Optional WebMCP registration invokes the same visible investigation action and v
 
 Tests exercise a full investigation, follow-up scope, all-shift comparison, exact chart/evidence equality, missing evidence, forbidden tools, call/deadline limits, incomplete records, history retention, date changes and HTTP protections. Unit/HTTP tests and JavaScript syntax checks do not replace visual browser QA or live-model evaluation.
 
-Still pending: live-provider validation, public service-wide budget infrastructure, email provider and verified subscriptions, plant timezone/DST, overlapping-stop and cross-shift allocation, production security/deployment and broader scenario calibration. The implementation follow-up on the repaired PDF/history/guidance defects is in the archived review, `archive/REVIEW_2026-09-07.md`; semantic evaluation is the golden set's job now (`evals/README.md`).
+Still pending: live-provider validation on the current dataset (the Anthropic recordings are stale until re-recorded), public service-wide budget infrastructure, email provider and verified subscriptions, plant timezone/DST, overlapping-stop and cross-shift allocation, production security/deployment and broader scenario calibration. The implementation follow-up on the repaired PDF/history/guidance defects is in the archived review, `archive/REVIEW_2026-09-07.md`; semantic evaluation is the golden set's job now (`evals/README.md`).
 
 
 ## Evidence-reporting extension

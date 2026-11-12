@@ -29,14 +29,10 @@ OWNER_ASK = re.compile(r'^.*\bowner\b.*$', re.I | re.M)
 
 
 def gh(path: str):
-    out = subprocess.run(['gh', 'api', path, '--paginate'], capture_output=True, text=True, check=True).stdout
-    # --paginate concatenates JSON arrays; join them.
-    items = []
-    for chunk in re.split(r'\]\s*\[', out.strip()):
-        chunk = chunk if chunk.startswith('[') else '[' + chunk
-        chunk = chunk if chunk.endswith(']') else chunk + ']'
-        items.extend(json.loads(chunk))
-    return items
+    # One compact JSON object per line (--jq '.[]'), so a page boundary never has to be found inside the text:
+    # splitting the concatenated arrays on '][' broke on an issue body that contained those two characters.
+    out = subprocess.run(['gh', 'api', path, '--paginate', '--jq', '.[]'], capture_output=True, text=True, check=True).stdout
+    return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
 def order_key(title: str):
