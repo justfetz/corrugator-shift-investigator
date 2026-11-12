@@ -61,8 +61,11 @@ reference speed; a bucket that ran better is not priced; [speed variance](METRIC
 - `get_opportunities(window, shift)`: where to look, the levers ranked in $/yr: the speed gap to each
   cell's best-fifth speed (`get_speed_opportunity`'s total hours), side-trim points over the trim target
   (points / 100 x gross, priced as paper: per year this is the post's trim formula), each downtime reason
-  (Order change is labelled setup time), and all recorded shear and each dry-end reason (no benchmark for
-  those, so the whole loss). Each lever names the records behind it. It ranks levers and names records; it
+  (Order change is labelled setup time), and all recorded shear, the changeover rejects counted with it, and
+  each dry-end family: bond, warp, misalignment, other (no benchmark for those, so the whole loss). The
+  cutoff-knife and stacker waste boards and the planning / admin entries are priced on the waste breakdown's
+  own rows but are not levers: the boards are defaults the record carries, and admin entries are not
+  production waste (issue #100). Each lever names the records behind it. It ranks levers and names records; it
   never prescribes a machine adjustment. Asked as "where is the money this month", "what's costing us",
   "opportunities"; under the Day control "where is the money" is the shift's own `get_shift_dollars`.
 

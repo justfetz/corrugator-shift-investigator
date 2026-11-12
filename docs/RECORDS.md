@@ -17,7 +17,7 @@ write_jsonl(data, "artifacts/synthetic")   # one .jsonl per family and dimension
 same = read_jsonl("artifacts/synthetic")   # dataclasses again; manifest hash must match
 ```
 
-The same seed gives byte-identical JSONL, and a day gives the same records whatever range it is generated in. Two months generate in about a second and a half, the golden window (456 production days) in about fifteen seconds. Generated files are ignored by git (`*.jsonl`); write them under `artifacts/`.
+The same seed gives byte-identical JSONL, and a day gives the same records whatever range it is generated in. Two months generate in about a second and a half, the golden window (456 production days) in about seventeen seconds. Generated files are ignored by git (`*.jsonl`); write them under `artifacts/`.
 
 ## Units and conventions
 
