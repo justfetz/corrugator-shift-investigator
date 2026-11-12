@@ -424,7 +424,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       2.731587,
+       2.696864,
        5.1e-05
       ],
       "better": [
@@ -432,11 +432,11 @@
        null
       ],
       "previous": [
-       2.688492,
+       2.655423,
        5.1e-05
       ],
       "delta": [
-       0.043095,
+       0.041441,
        0.000102
       ],
       "change": [
@@ -704,11 +704,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       17307.4,
+       17087.4,
        0.011
       ],
       "usd_per_year": [
-       202294.286,
+       199722.857,
        1.139
       ]
      },
@@ -1142,7 +1142,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       2.688492,
+       2.655423,
        5.1e-05
       ],
       "better": [
@@ -1150,11 +1150,11 @@
        null
       ],
       "previous": [
-       2.423913,
+       2.384662,
        5.1e-05
       ],
       "delta": [
-       0.264579,
+       0.270761,
        0.000102
       ],
       "change": [
@@ -1422,11 +1422,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       16260.0,
+       16060.0,
        0.011
       ],
       "usd_per_year": [
-       199102.041,
+       196653.061,
        1.145
       ]
      },
@@ -3301,11 +3301,11 @@
        null
       ],
       "previous": [
-       0.833499,
+       0.734292,
        5.1e-05
       ],
       "delta": [
-       0.265617,
+       0.364824,
        0.000102
       ],
       "change": [
@@ -4010,7 +4010,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       0.833499,
+       0.734292,
        5.1e-05
       ],
       "better": [
@@ -4022,7 +4022,7 @@
        5.1e-05
       ],
       "delta": [
-       0.265413,
+       0.166207,
        0.000102
       ],
       "change": [
@@ -4290,11 +4290,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       1680.4,
+       1480.4,
        0.011
       ],
       "usd_per_year": [
-       61728.98,
+       54382.041,
        1.414
       ]
      },
@@ -4727,7 +4727,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       1.309975,
+       1.205808,
        5.1e-05
       ],
       "better": [
@@ -4739,7 +4739,7 @@
        5.1e-05
       ],
       "delta": [
-       0.347673,
+       0.243506,
        0.000102
       ],
       "change": [
@@ -5007,11 +5007,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       2766.6,
+       2546.6,
        0.011
       ],
       "usd_per_year": [
-       97010.649,
+       89296.364,
        1.396
       ]
      },
@@ -5452,11 +5452,11 @@
        null
       ],
       "previous": [
-       0.549064,
+       0.43131,
        5.1e-05
       ],
       "delta": [
-       0.413238,
+       0.530991,
        0.000102
       ],
       "change": [
@@ -6161,7 +6161,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       3.164583,
+       3.011806,
        5.1e-05
       ],
       "better": [
@@ -6173,7 +6173,7 @@
        5.1e-05
       ],
       "delta": [
-       0.524074,
+       0.371296,
        0.000102
       ],
       "change": [
@@ -6441,11 +6441,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       4557.0,
+       4337.0,
        0.011
       ],
       "usd_per_year": [
-       234360.0,
+       223045.714,
        1.578
       ]
      },
@@ -9748,7 +9748,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       1.98125,
+       1.522917,
        5.1e-05
       ],
       "better": [
@@ -9760,7 +9760,7 @@
        5.1e-05
       ],
       "delta": [
-       1.065972,
+       0.607639,
        0.000102
       ],
       "change": [
@@ -10028,11 +10028,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       951.0,
+       731.0,
        0.011
       ],
       "usd_per_year": [
-       146725.714,
+       112782.857,
        2.808
       ]
      },
@@ -11184,7 +11184,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       2.906076,
+       2.867882,
        5.1e-05
       ],
       "better": [
@@ -11192,11 +11192,11 @@
        null
       ],
       "previous": [
-       2.744097,
+       2.709375,
        5.1e-05
       ],
       "delta": [
-       0.161979,
+       0.158507,
        0.000102
       ],
       "change": [
@@ -11464,11 +11464,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       16739.0,
+       16519.0,
        0.011
       ],
       "usd_per_year": [
-       215215.714,
+       212387.143,
        1.151
       ]
      },
@@ -11902,7 +11902,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       2.744097,
+       2.709375,
        5.1e-05
       ],
       "better": [
@@ -11910,11 +11910,11 @@
        null
       ],
       "previous": [
-       2.258657,
+       2.222546,
        5.1e-05
       ],
       "delta": [
-       0.48544,
+       0.486829,
        0.000102
       ],
       "change": [
@@ -12182,11 +12182,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       15806.0,
+       15606.0,
        0.011
       ],
       "usd_per_year": [
-       203220.0,
+       200648.571,
        1.151
       ]
      },
@@ -12620,7 +12620,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       2.456742,
+       2.42202,
        5.1e-05
       ],
       "better": [
@@ -12900,11 +12900,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       16981.0,
+       16741.0,
        0.011
       ],
       "usd_per_year": [
-       181939.286,
+       179367.857,
        1.128
       ]
      },
@@ -14056,7 +14056,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       2.547101,
+       2.51087,
        5.1e-05
       ],
       "better": [
@@ -14336,11 +14336,11 @@
      },
      "tile_money:metric=maintenance_pm_pct": {
       "usd": [
-       16872.0,
+       16632.0,
        0.011
       ],
       "usd_per_year": [
-       188631.056,
+       185947.826,
        1.133
       ]
      },
@@ -15494,7 +15494,7 @@
      },
      "metric=maintenance_pm_pct": {
       "current": [
-       2.731587,
+       2.696864,
        5.1e-05
       ],
       "better": [
@@ -15502,11 +15502,11 @@
        null
       ],
       "previous": [
-       2.688492,
+       2.655423,
        5.1e-05
       ],
       "delta": [
-       0.043095,
+       0.041441,
        0.000102
       ],
       "change": [
@@ -41550,7 +41550,7 @@
        null
       ]
      },
-     "rows:lever=Downtime: Power outage": {
+     "rows:lever=Downtime: Power outage (external)": {
       "paper_usd": [
        null,
        null
@@ -41584,7 +41584,7 @@
        null
       ],
       "control": [
-       "controllable",
+       "external",
        null
       ]
      },
@@ -42632,6 +42632,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        4,
        null
@@ -42667,6 +42671,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -42708,6 +42716,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        6,
        null
@@ -42743,6 +42755,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -42784,6 +42800,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        8,
        null
@@ -42819,6 +42839,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -42860,6 +42884,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        1,
        null
@@ -42895,6 +42923,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -43062,6 +43094,26 @@
        0.0,
        5.1e-05
       ],
+      "external_minutes": [
+       0,
+       0.0051
+      ],
+      "external_stops": [
+       0,
+       null
+      ],
+      "external_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "previous_external_minutes": [
+       0,
+       0.0051
+      ],
+      "previous_external_pct": [
+       0.0,
+       5.1e-05
+      ],
       "flag_count": [
        1,
        null
@@ -43088,7 +43140,7 @@
     "coverage": "complete",
     "row_count": 6,
     "values": {
-     "category=Power outage \u00b7 maintenance": {
+     "category=Power outage \u00b7 external": {
       "stops": [
        1,
        null
@@ -43109,8 +43161,12 @@
        false,
        null
       ],
+      "external": [
+       true,
+       null
+      ],
       "rank": [
-       1,
+       null,
        null
       ],
       "previous_stops": [
@@ -43147,8 +43203,12 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
-       6,
+       5,
        null
       ],
       "previous_stops": [
@@ -43185,8 +43245,12 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
-       3,
+       2,
        null
       ],
       "previous_stops": [
@@ -43223,8 +43287,12 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
-       2,
+       1,
        null
       ],
       "previous_stops": [
@@ -43261,8 +43329,12 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
-       5,
+       4,
        null
       ],
       "previous_stops": [
@@ -43299,8 +43371,12 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
-       4,
+       3,
        null
       ],
       "previous_stops": [
@@ -43316,64 +43392,6 @@
        5.1e-05
       ]
      },
-     "flags:#0": {
-      "production_day": [
-       "2026-05-04",
-       null
-      ],
-      "shift": [
-       1,
-       null
-      ],
-      "crew": [
-       "Crew C",
-       null
-      ],
-      "kind": [
-       "Maintenance",
-       null
-      ],
-      "reason": [
-       "Power outage",
-       null
-      ],
-      "band": [
-       "flag",
-       null
-      ],
-      "minutes": [
-       21.666667,
-       0.0051
-      ],
-      "pct_of_shift": [
-       4.513889,
-       5.1e-05
-      ],
-      "reason_minutes": [
-       15.0,
-       0.0051
-      ],
-      "recurrence_since": [
-       "2025-09-30",
-       null
-      ],
-      "shifts_counted": [
-       155,
-       null
-      ],
-      "times_over_band": [
-       2,
-       null
-      ],
-      "weeks_in_top_five": [
-       2,
-       null
-      ],
-      "weeks_counted": [
-       32,
-       null
-      ]
-     },
      "$": {
       "scheduled_minutes": [
        480,
@@ -43384,15 +43402,15 @@
        null
       ],
       "maintenance_minutes": [
-       21.666667,
+       6.666667,
        0.0051
       ],
       "maintenance_stops": [
-       4,
+       3,
        null
       ],
       "maintenance_pct": [
-       4.513889,
+       1.388889,
        5.1e-05
       ],
       "previous_maintenance_minutes": [
@@ -43424,15 +43442,15 @@
        5.1e-05
       ],
       "op_maint_minutes": [
-       27.366667,
+       12.366667,
        0.0051
       ],
       "op_maint_stops": [
-       9,
+       8,
        null
       ],
       "op_maint_pct": [
-       5.701389,
+       2.576389,
        5.1e-05
       ],
       "previous_op_maint_minutes": [
@@ -43463,8 +43481,28 @@
        0.0,
        5.1e-05
       ],
-      "flag_count": [
+      "external_minutes": [
+       15.0,
+       0.0051
+      ],
+      "external_stops": [
        1,
+       null
+      ],
+      "external_pct": [
+       3.125,
+       5.1e-05
+      ],
+      "previous_external_minutes": [
+       0,
+       0.0051
+      ],
+      "previous_external_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "flag_count": [
+       0,
        null
       ]
      }
@@ -43510,6 +43548,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        7,
        null
@@ -43545,6 +43587,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -43586,6 +43632,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        6,
        null
@@ -43621,6 +43671,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -43662,6 +43716,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        3,
        null
@@ -43697,6 +43755,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -43738,6 +43800,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        1,
        null
@@ -43773,6 +43839,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -43814,6 +43884,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        11,
        null
@@ -43849,6 +43923,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -43890,6 +43968,10 @@
        true,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        null,
        null
@@ -43928,6 +44010,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        10,
        null
@@ -43945,7 +44031,7 @@
        5.1e-05
       ]
      },
-     "category=Power outage \u00b7 maintenance": {
+     "category=Power outage \u00b7 external": {
       "stops": [
        1,
        null
@@ -43966,8 +44052,12 @@
        false,
        null
       ],
+      "external": [
+       true,
+       null
+      ],
       "rank": [
-       12,
+       null,
        null
       ],
       "previous_stops": [
@@ -44159,64 +44249,6 @@
      },
      "flags:#3": {
       "production_day": [
-       "2026-09-16",
-       null
-      ],
-      "shift": [
-       3,
-       null
-      ],
-      "crew": [
-       "Crew C",
-       null
-      ],
-      "kind": [
-       "Maintenance",
-       null
-      ],
-      "reason": [
-       "Power outage",
-       null
-      ],
-      "band": [
-       "flag",
-       null
-      ],
-      "minutes": [
-       18.65,
-       0.0051
-      ],
-      "pct_of_shift": [
-       3.885417,
-       5.1e-05
-      ],
-      "reason_minutes": [
-       11.0,
-       0.0051
-      ],
-      "recurrence_since": [
-       "2025-09-30",
-       null
-      ],
-      "shifts_counted": [
-       756,
-       null
-      ],
-      "times_over_band": [
-       7,
-       null
-      ],
-      "weeks_in_top_five": [
-       1,
-       null
-      ],
-      "weeks_counted": [
-       51,
-       null
-      ]
-     },
-     "flags:#4": {
-      "production_day": [
        "2026-09-09",
        null
       ],
@@ -44273,7 +44305,7 @@
        null
       ]
      },
-     "flags:#5": {
+     "flags:#4": {
       "production_day": [
        "2026-09-28",
        null
@@ -44331,7 +44363,7 @@
        null
       ]
      },
-     "flags:#6": {
+     "flags:#5": {
       "production_day": [
        "2026-09-09",
        null
@@ -44389,7 +44421,7 @@
        null
       ]
      },
-     "flags:#7": {
+     "flags:#6": {
       "production_day": [
        "2026-09-11",
        null
@@ -44447,7 +44479,7 @@
        null
       ]
      },
-     "flags:#8": {
+     "flags:#7": {
       "production_day": [
        "2026-09-09",
        null
@@ -44505,7 +44537,7 @@
        null
       ]
      },
-     "flags:#9": {
+     "flags:#8": {
       "production_day": [
        "2026-09-10",
        null
@@ -44563,7 +44595,7 @@
        null
       ]
      },
-     "flags:#10": {
+     "flags:#9": {
       "production_day": [
        "2026-09-01",
        null
@@ -44621,7 +44653,7 @@
        null
       ]
      },
-     "flags:#11": {
+     "flags:#10": {
       "production_day": [
        "2026-09-15",
        null
@@ -44679,7 +44711,7 @@
        null
       ]
      },
-     "flags:#12": {
+     "flags:#11": {
       "production_day": [
        "2026-09-04",
        null
@@ -44737,7 +44769,7 @@
        null
       ]
      },
-     "flags:#13": {
+     "flags:#12": {
       "production_day": [
        "2026-09-07",
        null
@@ -44795,7 +44827,7 @@
        null
       ]
      },
-     "flags:#14": {
+     "flags:#13": {
       "production_day": [
        "2026-09-21",
        null
@@ -44845,7 +44877,7 @@
        null
       ],
       "weeks_in_top_five": [
-       19,
+       20,
        null
       ],
       "weeks_counted": [
@@ -44853,7 +44885,7 @@
        null
       ]
      },
-     "flags:#15": {
+     "flags:#14": {
       "production_day": [
        "2026-09-15",
        null
@@ -44911,7 +44943,7 @@
        null
       ]
      },
-     "flags:#16": {
+     "flags:#15": {
       "production_day": [
        "2026-09-25",
        null
@@ -44969,7 +45001,7 @@
        null
       ]
      },
-     "flags:#17": {
+     "flags:#16": {
       "production_day": [
        "2026-09-10",
        null
@@ -45027,7 +45059,7 @@
        null
       ]
      },
-     "flags:#18": {
+     "flags:#17": {
       "production_day": [
        "2026-09-21",
        null
@@ -45085,7 +45117,7 @@
        null
       ]
      },
-     "flags:#19": {
+     "flags:#18": {
       "production_day": [
        "2026-09-02",
        null
@@ -45143,7 +45175,7 @@
        null
       ]
      },
-     "flags:#20": {
+     "flags:#19": {
       "production_day": [
        "2026-09-07",
        null
@@ -45201,7 +45233,7 @@
        null
       ]
      },
-     "flags:#21": {
+     "flags:#20": {
       "production_day": [
        "2026-09-08",
        null
@@ -45259,7 +45291,7 @@
        null
       ]
      },
-     "flags:#22": {
+     "flags:#21": {
       "production_day": [
        "2026-09-08",
        null
@@ -45317,7 +45349,7 @@
        null
       ]
      },
-     "flags:#23": {
+     "flags:#22": {
       "production_day": [
        "2026-09-18",
        null
@@ -45367,7 +45399,7 @@
        null
       ],
       "weeks_in_top_five": [
-       18,
+       19,
        null
       ],
       "weeks_counted": [
@@ -45375,7 +45407,7 @@
        null
       ]
      },
-     "flags:#24": {
+     "flags:#23": {
       "production_day": [
        "2026-09-23",
        null
@@ -45433,7 +45465,7 @@
        null
       ]
      },
-     "flags:#25": {
+     "flags:#24": {
       "production_day": [
        "2026-09-08",
        null
@@ -45491,7 +45523,7 @@
        null
       ]
      },
-     "flags:#26": {
+     "flags:#25": {
       "production_day": [
        "2026-09-02",
        null
@@ -45549,7 +45581,7 @@
        null
       ]
      },
-     "flags:#27": {
+     "flags:#26": {
       "production_day": [
        "2026-09-28",
        null
@@ -45607,7 +45639,7 @@
        null
       ]
      },
-     "flags:#28": {
+     "flags:#27": {
       "production_day": [
        "2026-09-15",
        null
@@ -45665,7 +45697,7 @@
        null
       ]
      },
-     "flags:#29": {
+     "flags:#28": {
       "production_day": [
        "2026-09-01",
        null
@@ -45723,7 +45755,7 @@
        null
       ]
      },
-     "flags:#30": {
+     "flags:#29": {
       "production_day": [
        "2026-09-21",
        null
@@ -45781,7 +45813,7 @@
        null
       ]
      },
-     "flags:#31": {
+     "flags:#30": {
       "production_day": [
        "2026-09-11",
        null
@@ -45849,23 +45881,23 @@
        null
       ],
       "maintenance_minutes": [
-       343.366667,
+       332.366667,
        0.0051
       ],
       "maintenance_stops": [
-       172,
+       171,
        null
       ],
       "maintenance_pct": [
-       1.083859,
+       1.049137,
        5.1e-05
       ],
       "previous_maintenance_minutes": [
-       241.0,
+       231.0,
        0.0051
       ],
       "previous_maintenance_pct": [
-       0.796958,
+       0.763889,
        5.1e-05
       ],
       "operator_minutes": [
@@ -45889,23 +45921,23 @@
        5.1e-05
       ],
       "op_maint_minutes": [
-       1077.35,
+       1066.35,
        0.0051
       ],
       "op_maint_stops": [
-       669,
+       668,
        null
       ],
       "op_maint_pct": [
-       3.400726,
+       3.366004,
        5.1e-05
       ],
       "previous_op_maint_minutes": [
-       846.016667,
+       836.016667,
        0.0051
       ],
       "previous_op_maint_pct": [
-       2.797674,
+       2.764605,
        5.1e-05
       ],
       "pm_minutes": [
@@ -45928,8 +45960,28 @@
        1.891534,
        5.1e-05
       ],
+      "external_minutes": [
+       11.0,
+       0.0051
+      ],
+      "external_stops": [
+       1,
+       null
+      ],
+      "external_pct": [
+       0.034722,
+       5.1e-05
+      ],
+      "previous_external_minutes": [
+       10.0,
+       0.0051
+      ],
+      "previous_external_pct": [
+       0.033069,
+       5.1e-05
+      ],
       "flag_count": [
-       32,
+       31,
        null
       ]
      }
@@ -45975,6 +46027,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        3,
        null
@@ -46010,6 +46066,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46051,6 +46111,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        2,
        null
@@ -46086,6 +46150,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46127,6 +46195,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        4,
        null
@@ -46162,6 +46234,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46203,6 +46279,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        7,
        null
@@ -46238,6 +46318,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46463,6 +46547,26 @@
        0.0,
        5.1e-05
       ],
+      "external_minutes": [
+       0,
+       0.0051
+      ],
+      "external_stops": [
+       0,
+       null
+      ],
+      "external_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "previous_external_minutes": [
+       0,
+       0.0051
+      ],
+      "previous_external_pct": [
+       0.0,
+       5.1e-05
+      ],
       "flag_count": [
        2,
        null
@@ -46510,6 +46614,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        1,
        null
@@ -46545,6 +46653,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46586,6 +46698,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        4,
        null
@@ -46621,6 +46737,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46662,6 +46782,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        5,
        null
@@ -46697,6 +46821,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46738,6 +46866,10 @@
        false,
        null
       ],
+      "external": [
+       false,
+       null
+      ],
       "rank": [
        6,
        null
@@ -46773,6 +46905,10 @@
        0.0051
       ],
       "scheduled": [
+       false,
+       null
+      ],
+      "external": [
        false,
        null
       ],
@@ -46879,6 +47015,26 @@
        null
       ],
       "previous_pm_pct": [
+       null,
+       null
+      ],
+      "external_minutes": [
+       0,
+       0.0051
+      ],
+      "external_stops": [
+       0,
+       null
+      ],
+      "external_pct": [
+       0.0,
+       5.1e-05
+      ],
+      "previous_external_minutes": [
+       null,
+       null
+      ],
+      "previous_external_pct": [
        null,
        null
       ],
@@ -47371,7 +47527,7 @@
        null
       ]
      },
-     "rows:lever=Downtime: Power outage": {
+     "rows:lever=Downtime: Power outage (external)": {
       "paper_usd": [
        null,
        null
@@ -47405,11 +47561,11 @@
        null
       ],
       "control": [
-       "controllable",
+       "external",
        null
       ],
       "rank": [
-       15,
+       null,
        null
       ]
      },
@@ -47737,12 +47893,12 @@
        0.0187
       ],
       "controllable_levers": [
-       15,
+       14,
        null
       ],
       "controllable_usd_per_year": [
-       2042774.551,
-       41.04
+       2040203.122,
+       37.54
       ]
      }
     }
@@ -47847,7 +48003,7 @@
        null
       ],
       "rank": [
-       2,
+       3,
        null
       ],
       "pct_of_gross": [
@@ -47893,7 +48049,7 @@
        null
       ],
       "rank": [
-       3,
+       null,
        null
       ],
       "pct_of_yield": [
@@ -47939,7 +48095,7 @@
        null
       ],
       "rank": [
-       4,
+       null,
        null
       ],
       "pct_of_yield": [
@@ -47985,7 +48141,7 @@
        null
       ],
       "rank": [
-       6,
+       null,
        null
       ],
       "pct_of_yield": [
@@ -48031,7 +48187,7 @@
        null
       ],
       "rank": [
-       7,
+       null,
        null
       ],
       "pct_of_yield": [
@@ -48077,7 +48233,7 @@
        null
       ],
       "rank": [
-       5,
+       4,
        null
       ]
      },
@@ -48091,6 +48247,42 @@
        5.1e-05
       ]
      },
+     "#1": {
+      "lever": [
+       "Dry-end: bond (all recorded)",
+       null
+      ]
+     },
+     "#2": {
+      "lever": [
+       "Dry-end: warp (all recorded)",
+       null
+      ]
+     },
+     "#3": {
+      "lever": [
+       "Dry-end: misalignment (all recorded)",
+       null
+      ]
+     },
+     "#4": {
+      "lever": [
+       "Dry-end: moisture (all recorded)",
+       null
+      ]
+     },
+     "#5": {
+      "lever": [
+       "Shear chops (all recorded)",
+       null
+      ]
+     },
+     "#6": {
+      "lever": [
+       "Unexplained (bale minus accounted waste)",
+       null
+      ]
+     },
      "$": {
       "total_usd_per_year": [
        5088881.356,
@@ -48099,6 +48291,34 @@
       "total_usd": [
        442249.260685,
        0.117755
+      ],
+      "dry_end_rank": [
+       2,
+       null
+      ],
+      "dry_end_kinds": [
+       4,
+       null
+      ],
+      "dry_end_label": [
+       "Dry-end waste (tag scrap)",
+       null
+      ],
+      "dry_end_usd_per_year": [
+       1083600.055,
+       5.832
+      ],
+      "dry_end_usd": [
+       94170.268352,
+       0.077716
+      ],
+      "dry_end_sqft": [
+       1604162.3,
+       0.051
+      ],
+      "dry_end_pct_of_yield": [
+       1.065385,
+       5.1e-05
       ]
      }
     }
@@ -48121,7 +48341,7 @@
    "note": "Against each grade's trailing-year baseline at the usual grade mix (the share of the setup clock over the same year; issue #101): the buckets add up to the gap taken directly, and the grade mix is schedule-driven, never priced.",
    "expect": {
     "coverage": "complete",
-    "row_count": 4,
+    "row_count": 6,
     "values": {
      "$": {
       "against": [
@@ -48169,7 +48389,15 @@
        null
       ],
       "stops_share_pct": [
-       77.914448,
+       45.237667,
+       0.051
+      ],
+      "planned_share_pct": [
+       32.277118,
+       0.051
+      ],
+      "external_share_pct": [
+       0.399663,
        0.051
       ],
       "setups_share_pct": [
@@ -48185,21 +48413,67 @@
        0.051
       ],
       "controllable_usd": [
-       38558.08,
+       25635.34,
        0.06999999999999999
       ]
      },
      "bucket=stops": {
       "gap_fpm": [
-       31.158225,
+       18.090681,
        0.0051
       ],
       "gap_lineal_ft": [
-       987092.558333,
+       573112.758333,
        0.051
       ],
       "share_of_gap_pct": [
-       77.914448,
+       45.237667,
+       0.051
+      ],
+      "top_item": [
+       "Missed splice",
+       null
+      ],
+      "top_item_fpm": [
+       4.123746,
+       0.0051
+      ],
+      "items": [
+       7,
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "machine_time_usd": [
+       17890.207585,
+       1.70502
+      ],
+      "usd": [
+       17890.207585,
+       1.70502
+      ],
+      "usd_per_year": [
+       209106.322,
+       20.939
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=planned": {
+      "gap_fpm": [
+       12.907718,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       408916.5,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       32.277118,
        0.051
       ],
       "top_item": [
@@ -48211,27 +48485,57 @@
        0.0051
       ],
       "items": [
-       9,
+       1,
        null
       ],
       "control": [
-       "controllable",
+       "schedule-driven",
        null
       ],
-      "machine_time_usd": [
-       30812.942095,
-       2.927304
-      ],
       "usd": [
-       30812.942095,
-       2.927304
-      ],
-      "usd_per_year": [
-       360151.271,
-       35.225
+       null,
+       null
       ],
       "contribution_status": [
-       "margin not set",
+       "not priced",
+       null
+      ]
+     },
+     "bucket=external": {
+      "gap_fpm": [
+       0.159826,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       5063.3,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       0.399663,
+       0.051
+      ],
+      "top_item": [
+       "Power outage",
+       null
+      ],
+      "top_item_fpm": [
+       0.159826,
+       0.0051
+      ],
+      "items": [
+       1,
+       null
+      ],
+      "control": [
+       "external",
+       null
+      ],
+      "usd": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "not priced",
        null
       ]
      },
@@ -48365,21 +48669,21 @@
        null
       ]
      },
-     "details:item=Planned maintenance": {
+     "details:item=Missed splice": {
       "bucket": [
        "stops",
        null
       ],
       "gap_fpm": [
-       12.907718,
+       4.123746,
        0.0051
       ],
       "minutes": [
-       522.0,
+       208.466667,
        0.0051
       ],
       "stops": [
-       4,
+       139,
        null
       ]
      }
@@ -48678,7 +48982,7 @@
    "note": "Shift 3 against shift 1 over the same week: shift 1's Thursday planned maintenance makes stops an offset; the heavier grade mix of shift 3 is part of its gap.",
    "expect": {
     "coverage": "complete",
-    "row_count": 4,
+    "row_count": 6,
     "values": {
      "$": {
       "against": [
@@ -48726,7 +49030,15 @@
        null
       ],
       "stops_share_pct": [
-       -78.165308,
+       11.331263,
+       0.051
+      ],
+      "planned_share_pct": [
+       -94.539536,
+       0.051
+      ],
+      "external_share_pct": [
+       5.042965,
        0.051
       ],
       "setups_share_pct": [
@@ -48742,21 +49054,67 @@
        0.051
       ],
       "controllable_usd": [
-       4346.71,
-       0.05
+       4728.38,
+       0.06999999999999999
       ]
      },
      "bucket=stops": {
       "gap_fpm": [
-       -32.685996,
+       4.738337,
        0.0051
       ],
       "gap_lineal_ft": [
-       -78446.39,
+       11372.01,
        0.051
       ],
       "share_of_gap_pct": [
-       -78.165308,
+       11.331263,
+       0.051
+      ],
+      "top_item": [
+       "Knife / slitter jam",
+       null
+      ],
+      "top_item_fpm": [
+       3.255119,
+       0.0051
+      ],
+      "items": [
+       7,
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "machine_time_usd": [
+       381.674778,
+       0.051848
+      ],
+      "usd": [
+       381.674778,
+       0.051848
+      ],
+      "usd_per_year": [
+       58886.966,
+       9.009
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ]
+     },
+     "bucket=planned": {
+      "gap_fpm": [
+       -39.533125,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       -94879.5,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       -94.539536,
        0.051
       ],
       "top_item": [
@@ -48768,11 +49126,49 @@
        0.0051
       ],
       "items": [
-       9,
+       1,
        null
       ],
       "control": [
-       "controllable",
+       "schedule-driven",
+       null
+      ],
+      "usd": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "not priced",
+       null
+      ]
+     },
+     "bucket=external": {
+      "gap_fpm": [
+       2.108792,
+       0.0051
+      ],
+      "gap_lineal_ft": [
+       5061.1,
+       0.051
+      ],
+      "share_of_gap_pct": [
+       5.042965,
+       0.051
+      ],
+      "top_item": [
+       "Power outage",
+       null
+      ],
+      "top_item_fpm": [
+       2.108792,
+       0.0051
+      ],
+      "items": [
+       1,
+       null
+      ],
+      "control": [
+       "external",
        null
       ],
       "usd": [

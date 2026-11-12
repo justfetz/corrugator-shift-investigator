@@ -210,12 +210,23 @@ SPEED_MIN_RUN_MINUTES = 2.0
 SPEED_MIN_SETUPS = 10
 _SPEED_SLICES = ("width", "crew")
 # Speed variance (issue #92): the gap between a reference speed and the window's speed with stops, split
-# into four buckets that add up to it. The setup bucket is the order-change stop, the changeover the
-# cost model prices as setup time too; every other recorded stop is the stops bucket.
+# into buckets that add up to it. The setup bucket is the order-change stop, the changeover the cost model
+# prices as setup time too; planned maintenance and external stops (a power outage) are a bucket each (PR #111);
+# every other recorded stop, unplanned maintenance and operator, is the stops bucket.
 SPEEDVAR_AGAINST = ("baseline", "previous", "shift")
 SPEEDVAR_ALIASES = {"target": "baseline"}   # the reference was each grade's target before the owner's baseline (issue #101)
 SPEEDVAR_SETUP_REASON = "Order change"
-SPEEDVAR_BUCKETS = (("stops", "Stops"), ("setups", "Setups"), ("below_baseline", "Below baseline"), ("mix", "Grade mix"))
+# Stops are the unplanned maintenance and operator stops; planned maintenance (schedule-driven) and external stops
+# (a power outage) are buckets of their own, listed only when either side holds one (the owner, PR #111).
+SPEEDVAR_BUCKETS = (("stops", "Stops"), ("planned", "Planned maintenance"), ("external", "External stops"), ("setups", "Setups"),
+                    ("below_baseline", "Below baseline"), ("mix", "Grade mix"))
+SPEEDVAR_OPTIONAL = ("planned", "external")
+# Each bucket's lever (issue #101; PR #111): the grade mix and planned maintenance are schedule-driven, a power outage
+# is external, and the rest is the crew's.
+SPEEDVAR_CONTROL = {"mix": ("schedule-driven", "the order mix decides which grades run"),
+                    "planned": ("schedule-driven", "the maintenance plan sets planned stops"),
+                    "external": ("external", "outside the plant, not controllable")}
+SPEEDVAR_CREW = ("controllable", "stops, changeovers and running speed on the floor")
 SPEEDVAR_SHARE_MIN_FPM = 0.05   # a gap smaller than this has no meaningful shares: they are left null
 
 
@@ -518,7 +529,8 @@ class RecordStore:
                            sh.scheduled_minutes, len(sh.wet_end_ids)])
         for st in data["stops"]:
             day = cls._iso(st.production_date)
-            stops.append([st.stop_id, day, st.shift_number, st.setup_id, st.kind, st.place, st.reason,
+            # a power outage is External, not maintenance (targets.json, the owner on PR #111); the records keep their kind
+            stops.append([st.stop_id, day, st.shift_number, st.setup_id, targets.stop_kind(st.kind, st.reason), st.place, st.reason,
                           float(st.duration_sec), st.start, st.end, st.user_info])
         return {"setups": setups, "customers": customers, "rejects": rejects,
                 "wet_ends": wet_ends, "shifts": shifts, "stops": stops}
@@ -604,7 +616,7 @@ class RecordStore:
                     reject_rows.append([s.setup_id, s.shift_number, r.reason, r.detail, float(r.sheets), r.sqft])
             shift_rows = [[sh.shift_number, float(sh.scheduled_minutes * 60), shift_note(sh.group_name)]
                           for sh in sorted(families["shifts"], key=lambda sh: sh.shift_number)]
-            stop_rows = [[st.stop_id, st.shift_number, st.kind, st.place, st.reason, float(st.duration_sec),
+            stop_rows = [[st.stop_id, st.shift_number, targets.stop_kind(st.kind, st.reason), st.place, st.reason, float(st.duration_sec),
                           st.start, st.end, st.user_info] for st in sorted(families["stops"], key=lambda st: st.start)]
         return Analysis.from_rows(day, self.day_version(day, corrupt), shift_rows, setup_rows, stop_rows, order_rows, reject_rows,
                                   errors=errors, store=self)
@@ -1169,10 +1181,10 @@ class RecordStore:
             "grades": ("SELECT grade, max(target) AS target, count(*) AS setups, sum(feet) AS feet, sum(seconds) / 60 AS elapsed_min, "
                        "sum(seconds - stop_seconds) / 60 AS run_min "
                        f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY grade ORDER BY grade"),
-            "stops": ("SELECT st.reason AS reason, s.grade AS grade, count(*) AS stops, sum(st.seconds) / 60 AS minutes "
+            "stops": ("SELECT st.kind AS kind, st.reason AS reason, s.grade AS grade, count(*) AS stops, sum(st.seconds) / 60 AS minutes "
                       "FROM stops st JOIN setups s ON s.setup_id = st.setup_id "
                       f"WHERE s.production_date BETWEEN ? AND ?{clause.replace(' shift', ' s.shift')} "
-                      "GROUP BY st.reason, s.grade ORDER BY st.reason, s.grade"),
+                      "GROUP BY st.kind, st.reason, s.grade ORDER BY st.kind, st.reason, s.grade"),
         }
         fetched = {}
         for name, sql in queries.items():
@@ -1215,30 +1227,33 @@ class RecordStore:
         per-grade speed: each setup's clock is its running time plus its stops."""
         t = p["minutes"]
         grades = p["grades"]
-        stops, setups = {}, {}
+        stops, planned, external, setups = {}, {}, {}, {}
         for r in p["stops"]:
             if r["reason"] == SPEEDVAR_SETUP_REASON:
                 cell = setups.setdefault(r["grade"], {"minutes": 0.0, "stops": 0, "loss": 0.0})
-            else:
-                cell = stops.setdefault(r["reason"], {"minutes": 0.0, "stops": 0, "loss": 0.0})
+            else:   # by kind: planned maintenance and external stops apart from the unplanned ones (PR #111)
+                bucket = planned if r["kind"] == "PM" else external if r["kind"] == targets.EXTERNAL_KIND else stops
+                cell = bucket.setdefault(r["reason"], {"minutes": 0.0, "stops": 0, "loss": 0.0})
             cell["minutes"] += r["minutes"]
             cell["stops"] += r["stops"]
             cell["loss"] += r["base_ft"] / t
         return {"speed": p["feet"] / t, "base": sum(g["speed"] * g["elapsed_min"] for g in grades.values()) / t,
                 "share": {k: g["elapsed_min"] / t for k, g in grades.items()},
                 "speeds": {k: g["speed"] for k, g in grades.items()},
-                "stops": stops, "setups": setups,
+                "stops": stops, "planned": planned, "external": external, "setups": setups,
                 "below": {k: {"loss": (g["speed"] * g["run_min"] - g["feet"]) / t, "run_min": g["run_min"], "feet": g["feet"]}
                           for k, g in grades.items()}}
 
     def get_speed_variance(self, window, shift=None, against="baseline", against_shift=None):
-        """Why speed differed from a reference, in four buckets that add up to the gap (issue #92).
+        """Why speed differed from a reference, in buckets that add up to the gap (issue #92): stops, setups,
+        running under baseline and the grade mix, and planned maintenance and external stops when either side has one.
 
         Every grade is held at its baseline, the owner's speed standard (issue #101, targets.json): its
         sustained average speed over the trailing year ending on the window's last day, never its target
         or its maximum. Speed is the KPI tile's speed with stops: lineal feet / scheduled minutes. For
         each side, per scheduled minute: baseline speed (each grade's baseline x its setup clock) - stops
-        (minutes stopped x the stopped setup's grade baseline, every reason but order change) - setups
+        (minutes stopped x the stopped setup's grade baseline, every unplanned reason but order change; planned
+        maintenance and external stops the same way, each its own bucket) - setups
         (order-change stops, the same way) - running under baseline (baseline x running minutes - feet,
         per grade) = speed with stops, exactly, because each setup record's clock is its running time
         plus its stops.
@@ -1278,7 +1293,7 @@ class RecordStore:
             fallback |= {g for g in grades if g not in baselines["grades"]}
             reference_base = sum(g["speed"] * g["elapsed_min"] for g in grades.values()) / standard["total"]
             r = {"speed": reference_base, "base": reference_base, "share": {k: g["elapsed_min"] / standard["total"] for k, g in grades.items()},
-                 "speeds": {k: g["speed"] for k, g in grades.items()}, "stops": {}, "setups": {}, "below": {}}
+                 "speeds": {k: g["speed"] for k, g in grades.items()}, "stops": {}, "planned": {}, "external": {}, "setups": {}, "below": {}}
             reference_minutes = None
             reference_label = "baseline: each grade's trailing-year sustained speed at the usual grade mix"
         else:
@@ -1302,10 +1317,11 @@ class RecordStore:
 
         def item(bucket, name, value, **extra):
             return {"bucket": bucket, "item": name, "gap_fpm": value, **extra}
-        details = {"stops": [], "setups": [], "below_baseline": [], "mix": []}
-        for reason in sorted(set(c["stops"]) | set(r["stops"])):
-            cur, ref = c["stops"].get(reason, {}), r["stops"].get(reason, {})
-            details["stops"].append(item("stops", reason, cur.get("loss", 0.0) - ref.get("loss", 0.0),
+        details = {"stops": [], "planned": [], "external": [], "setups": [], "below_baseline": [], "mix": []}
+        for key in ("stops", "planned", "external"):
+            for reason in sorted(set(c[key]) | set(r[key])):
+                cur, ref = c[key].get(reason, {}), r[key].get(reason, {})
+                details[key].append(item(key, reason, cur.get("loss", 0.0) - ref.get("loss", 0.0),
                                          current_loss_fpm=cur.get("loss", 0.0), reference_loss_fpm=ref.get("loss", 0.0),
                                          minutes=round(cur.get("minutes", 0.0), 2), stops=cur.get("stops", 0)))
         for grade in sorted(set(c["setups"]) | set(r["setups"])):
@@ -1325,7 +1341,8 @@ class RecordStore:
             details["mix"].append(item("mix", grade, (ref_share - now_share) * (speeds[grade] - r["base"]),
                                        time_share_pct=round(now_share * 100, 2), reference_time_share_pct=round(ref_share * 100, 2),
                                        baseline_fpm=speeds[grade]))
-        totals = {"stops": sum(x["gap_fpm"] for x in details["stops"]), "setups": sum(x["gap_fpm"] for x in details["setups"]),
+        totals = {"stops": sum(x["gap_fpm"] for x in details["stops"]), "planned": sum(x["gap_fpm"] for x in details["planned"]),
+                  "external": sum(x["gap_fpm"] for x in details["external"]), "setups": sum(x["gap_fpm"] for x in details["setups"]),
                   "below_baseline": sum(x["gap_fpm"] for x in details["below_baseline"]), "mix": r["base"] - c["base"]}
         sharable = abs(gap) >= SPEEDVAR_SHARE_MIN_FPM
         direction = 1 if gap >= 0 else -1
@@ -1341,6 +1358,8 @@ class RecordStore:
             return entry
         rows = []
         for key, label in SPEEDVAR_BUCKETS:
+            if key in SPEEDVAR_OPTIONAL and not details[key]:
+                continue   # no planned or external stop on either side: no bucket
             items = sorted(details[key], key=lambda x: (x["gap_fpm"] * direction < 0, -abs(x["gap_fpm"]), x["item"]))
             details[key] = items
             # the bucket's top item pulls the way the bucket does: the largest loss of a loss, the largest offset of an offset
@@ -1350,9 +1369,9 @@ class RecordStore:
             # a loss bucket carries each side's loss rate; the mix is a difference of baseline speeds, in the envelope
             losses = {} if key == "mix" else {"current_loss_fpm": sum(x["current_loss_fpm"] for x in items),
                                               "reference_loss_fpm": sum(x["reference_loss_fpm"] for x in items)}
-            # the grade mix is the order book's (schedule-driven, the owner's lever rule of issue #101); the losses are the crew's
-            control = ("schedule-driven", "the order mix decides which grades run") if key == "mix" else \
-                ("controllable", "stops, changeovers and running speed on the floor")
+            # the grade mix is the order book's and planned stops the maintenance plan's (schedule-driven, issue #101 and
+            # PR #111), a power outage is outside the plant (external); the other losses are the crew's
+            control = SPEEDVAR_CONTROL.get(key, SPEEDVAR_CREW)
             rows.append({"bucket": key, "label": label, "gap_fpm": totals[key], **losses,
                          "items": len(items), "top_item": top["item"] if top else None,
                          "top_item_fpm": round(top["gap_fpm"], 2) if top else None,
@@ -1370,8 +1389,9 @@ class RecordStore:
                 "baseline per scheduled minute: stopped minutes at the stopped setup's baseline (order changes are the setup bucket), "
                 "and running time at the baseline minus the feet made. The grade mix is the reference's baseline speed minus this "
                 "window's: the same baselines weighted by each grade's share of the setup clock. The order mix decides it, so it is "
-                "schedule-driven; the other three are controllable. The four buckets add up to the gap, and each bucket's details add "
-                "up to it. The records carry one running speed per setup, so there is no separate ramp after a changeover.")
+                "schedule-driven. Planned maintenance stops are a bucket of their own, schedule-driven; external stops (a power outage) "
+                "are another, outside the plant and not controllable; the unplanned stops, setups and running under baseline are controllable. "
+                "The buckets add up to the gap, and each bucket's details add up to it. The records carry one running speed per setup, so there is no separate ramp after a changeover.")
         reference_note = (f"Against the baseline, the reference is each grade's baseline weighted by its share of the setup clock over the "
                           f"same trailing year, all shifts: {r['base']:,.1f} ft/min. This window "
                           f"ran {c['speed']:,.1f} ft/min with stops; its grade baselines at its own mix make {c['base']:,.1f} ft/min."
@@ -1574,7 +1594,8 @@ class RecordStore:
         """The owner's downtime answer (issue #101, targets.json): maintenance and operator downtime first, each
         and together against its band as a percent of scheduled minutes (480 a shift, 1,440 a production day);
         every recorded reason, by kind, ranked by its percent of scheduled minutes with its stop count and minutes
-        per stop; planned maintenance (PM) is scheduled time, listed last and not ranked; and the flags: each shift
+        per stop; external downtime (a power outage, targets.json) and planned maintenance (PM, scheduled time) listed
+        apart and not ranked, neither in the maintenance or operator figure; and the flags: each shift
         over a band, with its supervisor slot and the leading reason's recurrence over the trailing year. The previous
         window of the same kind is beside, as in the Pareto: each reason's and each total's minutes and percent of
         that window's scheduled minutes (zero for a reason it did not record; None when that window is outside the
@@ -1603,27 +1624,31 @@ class RecordStore:
         prior_scheduled = prior_sched["scheduled"] if prior_sched else None
         rows = []
         for r in grouped:
-            planned = r["kind"] not in self.RANKED_KINDS
+            # ranked: maintenance and operator; apart: external (a power outage, outside the plant) and PM (scheduled time)
+            external = r["kind"] == targets.EXTERNAL_KIND
+            planned = r["kind"] not in self.RANKED_KINDS and not external
             before = prior.get((r["kind"], r["reason"]))
             prior_minutes = (before["minutes"] if before else 0.0) if available else None
             row = {"kind": r["kind"], "reason": r["reason"],
                    "category": f"{r['reason']} · {'scheduled' if planned else r['kind'].lower()}",
                    "stops": r["stops"], "minutes": round(r["minutes"], 2), "scheduled_minutes": scheduled,
                    "pct_of_scheduled": _ratio(r["minutes"], scheduled, 100),
-                   "minutes_per_stop": _ratio(r["minutes"], r["stops"], places=2), "scheduled": planned,
+                   "minutes_per_stop": _ratio(r["minutes"], r["stops"], places=2), "scheduled": planned, "external": external,
+                   "control": "external" if external else "schedule-driven" if planned else "controllable",
                    "previous_stops": (before["stops"] if before else 0) if available else None,
                    "previous_minutes": round(prior_minutes, 2) if available else None,
                    "previous_pct_of_scheduled": _ratio(prior_minutes, prior_scheduled, 100) if available else None}
-            if planned:
+            if planned or external:
                 row.update(rank=None, band=None, band_text=None)
             else:
                 targets.mark(row, self.KIND_BANDS[r["kind"]], row["pct_of_scheduled"])
             rows.append(row)
-        rows.sort(key=lambda r: (r["scheduled"], -r["minutes"], r["category"]))
-        for i, r in enumerate([r for r in rows if not r["scheduled"]], 1):
+        rows.sort(key=lambda r: (r["scheduled"] or r["external"], r["scheduled"], -r["minutes"], r["category"]))
+        for i, r in enumerate([r for r in rows if not (r["scheduled"] or r["external"])], 1):
             r["rank"] = i
         totals = {}
-        for key, kinds in (("maintenance", ("Maintenance",)), ("operator", ("Operator",)), ("op_maint", self.RANKED_KINDS), ("pm", ("PM",))):
+        for key, kinds in (("maintenance", ("Maintenance",)), ("operator", ("Operator",)), ("op_maint", self.RANKED_KINDS), ("pm", ("PM",)),
+                           ("external", (targets.EXTERNAL_KIND,))):
             mine = [r for r in grouped if r["kind"] in kinds]
             minutes = sum(r["minutes"] for r in mine)
             before = sum(r["minutes"] for r in prior_grouped if r["kind"] in kinds) if available else None
@@ -1631,7 +1656,7 @@ class RecordStore:
                            f"{key}_pct": _ratio(minutes, scheduled, 100),
                            f"previous_{key}_minutes": round(before, 2) if available else None,
                            f"previous_{key}_pct": _ratio(before, prior_scheduled, 100) if available else None})
-            if key != "pm":
+            if key not in ("pm", "external"):
                 targets.annotate(totals, {f"{key}_pct": (key, key)})
         flags, count = self.downtime_flags(current["start"], current["end"], shift, trace)
         source = {"shifts": sched["shifts"], "stops": sum(r["stops"] for r in grouped),
@@ -1639,8 +1664,9 @@ class RecordStore:
                   "previous_stops": sum(r["stops"] for r in prior_grouped) if available else None}
         return self._envelope("get_downtime_review", current, previous, shift, rows, trace, started, source,
                               scheduled_minutes=scheduled, previous_scheduled_minutes=prior_scheduled, **totals, flags=flags, flag_count=count,
-                              method_note=("Each reason is ranked by its minutes over the scheduled minutes, 480 a shift; planned "
-                                           "maintenance is scheduled time and is listed last, not ranked. A flag is a shift whose "
+                              method_note=("Each reason is ranked by its minutes over the scheduled minutes, 480 a shift; external "
+                                           "downtime (a power outage, outside the plant) is listed apart and never counts against a band, "
+                                           "and planned maintenance is scheduled time and is listed last; neither is ranked. A flag is a shift whose "
                                            "maintenance or operator downtime is over its band. Its recurrence counts, over the trailing "
                                            "year, the shifts on which the same reason was over the band on its own, and the weeks it was "
                                            "among the five reasons with the most unplanned minutes."))
@@ -1739,7 +1765,8 @@ def generator_fingerprint():
     machine is simply ignored."""
     here = Path(__file__).parent
     digest = hashlib.sha256()
-    for path in sorted(here.glob("*.py")):
+    # targets.json too: which stops count as External is the owner's rule there, and the stops table carries it
+    for path in [*sorted(here.glob("*.py")), here / "targets.json"]:
         digest.update(path.name.encode("utf-8"))
         digest.update(path.read_bytes())
     return digest.hexdigest()

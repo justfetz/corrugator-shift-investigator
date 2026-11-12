@@ -12,8 +12,8 @@ const Money=(()=>{
  const PAPER=new Set(['trim','waste','paper']), TIME=new Set(['downtime','speed']);
  const MONEY_TOOLS=new Set(['get_shift_dollars','get_opportunities','get_day_dollars']);
  const WINDOW_FIELDS=['usd','paper_usd','machine_time_usd','contribution_usd'], YEAR_FIELDS=['usd_per_year','contribution_usd_per_year'];
- const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','controllable_usd','controllable_contribution_usd'],
-  TOTAL_YEAR=['total_usd_per_year','controllable_usd_per_year'];
+ const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','controllable_usd','controllable_contribution_usd','dry_end_usd'],
+  TOTAL_YEAR=['total_usd_per_year','controllable_usd_per_year','dry_end_usd_per_year'];
  const LABEL_KEYS=['gap','lever','category','label','reason'];
  // Python's f'{x:.{d}f}': correctly rounded on the binary value, a tie to even (toFixed breaks a tie upward).
  // A double is a tie at d places only when x * 2^(d+1) is an odd integer.
@@ -129,15 +129,34 @@ const Money=(()=>{
  }
  // cost_model.opportunities (issue #101): the levers in the order and with the ranks the lens gives them. ownership: side
  // trim, all of it, first always (every owner asks what trim costs), then the rest by dollars a year; supervisor: the
- // controllable levers ranked, the schedule-driven ones after them by dollars a year with no rank; all: every lever.
+ // controllable levers ranked, then the others with no rank, by control (schedule-driven, then external; cost_model.APART)
+ // and within each by dollars a year; all: every lever.
+ const APART={'schedule-driven':0,external:1};
+ // Ownership (cost_model.owner_order): after trim, the dry-end group (the tag scrap, PR #111) by the sum of its rows and each
+ // other lever by dollars a year; the group holds the rank, its rows beneath it by dollars a year and with no rank.
  function rankLevers(rows,lens){
   const byYear=(a,b)=>((b.usd_per_year||0)-(a.usd_per_year||0))||(a.lever<b.lever?-1:a.lever>b.lever?1:0);
-  if(lens==='ownership'){ const [first,...rest]=rows; rest.sort(byYear); rows.splice(0,rows.length,first,...rest); rows.forEach((r,i)=>{r.rank=i+1;}); return rows; }
+  const apart=r=>r.control in APART?APART[r.control]:Object.keys(APART).length;
+  if(lens==='ownership'){
+   const [first,...rest]=rows, groups=new Map(); first.rank=1;
+   for(const r of rest){ const k=r.group||r.lever; if(!groups.has(k))groups.set(k,[]); groups.get(k).push(r); }
+   const size=new Map(); for(const [k,m] of groups){ m.sort(byYear); size.set(k,add(m.map(r=>r.usd_per_year||0))); }
+   const keys=[...groups.keys()].sort((a,b)=>(size.get(b)-size.get(a))||(a<b?-1:a>b?1:0)), out=[first];
+   keys.forEach((k,i)=>{ for(const r of groups.get(k)){ r.rank=r.group?null:i+2; out.push(r); } });
+   rows.splice(0,rows.length,...out); return rows;
+  }
   if(lens==='supervisor'){
-   const mine=rows.filter(r=>r.control==='controllable').sort(byYear), rest=rows.filter(r=>r.control!=='controllable').sort(byYear);
+   const mine=rows.filter(r=>r.control==='controllable').sort(byYear), rest=rows.filter(r=>r.control!=='controllable').sort((a,b)=>(apart(a)-apart(b))||byYear(a,b));
    mine.forEach((r,i)=>{r.rank=i+1;}); rest.forEach(r=>{r.rank=null;}); rows.splice(0,rows.length,...mine,...rest); return rows;
   }
   return rank(rows,'usd_per_year');
+ }
+ // The ownership lens's dry-end subtotal (cost_model.dry_end_subtotal): its rows' dollars added left to right, its place among the groups.
+ function dryEnd(rows){
+  const keys=[]; for(const r of rows.slice(1)){ const k=r.group||r.lever; if(!keys.includes(k))keys.push(k); }
+  const mine=rows.filter(r=>r.group==='dry_end'), years=mine.map(r=>r.usd_per_year);
+  return {dry_end_rank:keys.indexOf('dry_end')+2,dry_end_kinds:mine.length,dry_end_usd:round(add(mine.map(r=>r.usd||0)),2),
+   dry_end_usd_per_year:years.some(v=>v===null||v===undefined)?null:round(add(years.map(v=>v||0)),0)};
  }
  // The controllable losses (cost_model.opportunities): the controllable levers in their ranked order, added left to right.
  function controllable(rows){
@@ -197,7 +216,7 @@ const Money=(()=>{
  function speedVariance(data,byIndex,out,rates,cfg){
   byIndex.forEach((r,i)=>{ const was=data.rows[i]; if(!was.price_terms)return; const lead=SPEEDVAR_LEAD.exec(was.usd_basis||''); if(lead)r.usd_basis=lead[0]+r.usd_basis; });
   if(!('controllable_usd' in data))return;   // a chart of it has the rows only
-  const priced=byIndex.filter(r=>r.control!=='schedule-driven'&&r.usd!==null&&r.usd!==undefined);
+  const priced=byIndex.filter(r=>r.control==='controllable'&&r.usd!==null&&r.usd!==undefined);   // never the mix, planned or external stops
   const total=(key,places=2)=>{ const vs=priced.map(r=>r[key]).filter(v=>v!==null&&v!==undefined); return vs.length?round(add(vs),places):null; };
   Object.assign(out,{controllable_machine_minutes:total('machine_minutes'),controllable_usd:total('usd'),
    controllable_usd_per_year:priced.length&&priced.every(r=>r.usd_per_year!==null&&r.usd_per_year!==undefined)?total('usd_per_year',0):null,
@@ -212,6 +231,7 @@ const Money=(()=>{
    if(tool==='get_opportunities')rankLevers(out.rows,data.lens); else rank(out.rows,'usd');
    Object.assign(out,totals(out.rows,cfg)); if('buckets' in data)Object.assign(out,summary(out.rows));
    if(tool==='get_opportunities'&&'controllable_usd' in data)Object.assign(out,controllable(out.rows));
+   if(tool==='get_opportunities'&&'dry_end_usd' in data)Object.assign(out,dryEnd(out.rows));
   }
   if(data.trim_over_terms)Object.assign(out,trimOver(data.trim_over_terms,rates,cfg));
   if(Array.isArray(data.tile_money))out.tile_money=data.tile_money.map(t=>tile(t,rates,cfg));
@@ -264,7 +284,7 @@ const Money=(()=>{
  function candidates(line,steps,live){
   const m=REF.exec(line), out=[];
   const rowFields=(s,i)=>{ for(const f of [...WINDOW_FIELDS,...YEAR_FIELDS])out.push({old:s.before.rows[i][f],now:s.after.byIndex[i][f],year:YEAR_FIELDS.includes(f)}); };
-  const totalFields=s=>{ for(const f of [...TOTAL_WINDOW,...TOTAL_YEAR])if(f in s.before)out.push({old:s.before[f],now:s.after[f],year:TOTAL_YEAR.includes(f),controllable:f.startsWith('controllable_')}); };
+  const totalFields=s=>{ for(const f of [...TOTAL_WINDOW,...TOTAL_YEAR])if(f in s.before)out.push({old:s.before[f],now:s.after[f],year:TOTAL_YEAR.includes(f),controllable:f.startsWith('controllable_'),subtotal:f.startsWith('dry_end_')}); };
   const step=m?steps[Number(m[1])-1]:null;
   if(m&&!step)return out;   // the line cites an unpriced query: its dollars, if any, are not this layer's
   if(step&&m[2]==='row'&&step.before.rows[Number(m[3])]){ rowFields(step,Number(m[3])); totalFields(step); }
@@ -283,11 +303,14 @@ const Money=(()=>{
  // supervisor lens) and "The controllable buckets are …" (the speed variance): such a line takes them first, and no
  // other line takes them, so a window whose controllable total reads as its all-lever total (no planned maintenance,
  // side trim at or under the target) re-prices each line to its own figure (review of #111).
- const CONTROLLABLE=/\bcontrollable (?:losses|buckets)\b/;
+ // The ownership lens's dry-end subtotal (PR #111) is the same: only the line naming the tag scrap takes it, first.
+ const CONTROLLABLE=/\bcontrollable (?:losses|buckets)\b/, TAG_SCRAP=/\(tag scrap\)/;
  function repriceLine(line,steps,live){
   if(!line.includes('$'))return line;
-  const names=CONTROLLABLE.test(line), all=candidates(line,steps,live).filter(c=>names||!c.controllable);
-  const pool=names?[...all.filter(c=>c.controllable),...all.filter(c=>!c.controllable)]:all, used=new Set();
+  const names=CONTROLLABLE.test(line), tag=TAG_SCRAP.test(line);
+  const all=candidates(line,steps,live).filter(c=>(names||!c.controllable)&&(tag||!c.subtotal));
+  const first=c=>names?c.controllable:tag?c.subtotal:false;
+  const pool=[...all.filter(first),...all.filter(c=>!first(c))], used=new Set();
   return renamed(line,steps).replace(TOKEN,(token,at,whole)=>{
    const yearly=YEARLY.test(whole.slice(at+token.length));
    const order=[...pool.filter(c=>c.year===yearly),...pool.filter(c=>c.year!==yearly)];
@@ -326,12 +349,26 @@ const Money=(()=>{
  // The numbered lines of one result fill its numbered slots in rank order, wherever the answer put those slots (the
  // supervisor lens lists five beside the headline and the other controllable levers under a label, issue #101), and
  // its unnumbered lines (the levers a lens shows unranked) fill theirs in row order.
+ // The ownership lens with its dry-end subtotal (PR #111): the subtotal line goes with its group, so the block of lever
+ // lines is written again in the re-ranked order, the subtotal before the group's first row, each line renumbered.
+ function grouped(out,s,g,RANKED){
+  const at=out.findIndex(l=>l.startsWith('- ')&&TAG_SCRAP.test(l)&&RANKED.test(l)), lines=new Map();
+  for(const x of [...g.ranked,...g.plain])lines.set(s.after.byIndex[x.i],x.line);
+  const slots=[...g.ranked,...g.plain].map(x=>x.at).concat(at<0?[]:[at]).sort((a,b)=>a-b), seq=[];
+  s.after.rows.forEach((r,pos)=>{
+   if(r.group==='dry_end'&&at>=0&&!seq.some(x=>x.sub))seq.push({sub:true,line:out[at].replace(RANKED,(m,who)=>`- ${who}${s.after.dry_end_rank}. `)});
+   const line=lines.get(r); if(line===undefined)return;
+   seq.push({line:(RANKED.test(line)?line.replace(RANKED,(m,who)=>`- ${who}${r.rank}. `):line).replace(/ · row \d+\)$/,` · row ${pos})`)});
+  });
+  slots.forEach((slot,j)=>{ out[slot]=seq[j].line; });
+ }
  function reorder(lines,steps){
   const RANKED=/^- ((?:Shift \d · )?)(\d+)\. /;
   const cite=line=>{ const m=REF.exec(line); if(!line.startsWith('- ')||!m||m[2]!=='row')return null; const s=steps[Number(m[1])-1]; return s&&MONEY_TOOLS.has(s.tool)?{s,i:Number(m[3])}:null; };
   const out=[...lines], groups=new Map();
   out.forEach((line,at)=>{ const k=cite(line); if(!k)return; const g=groups.get(k.s)||{ranked:[],plain:[]}; (RANKED.test(line)?g.ranked:g.plain).push({at,line,i:k.i}); groups.set(k.s,g); });
   for(const [s,g] of groups){
+   if(s.tool==='get_opportunities'&&s.after.lens==='ownership'&&'dry_end_rank' in s.after){ grouped(out,s,g,RANKED); continue; }
    const pos=x=>s.after.rows.indexOf(s.after.byIndex[x.i]);
    const fill=(slots,write)=>{ const sorted=[...slots].sort((x,y)=>pos(x)-pos(y)); slots.forEach((slot,j)=>{ out[slot.at]=write(sorted[j]); }); };
    fill(g.ranked,x=>x.line.replace(RANKED,(m,who)=>`- ${who}${s.after.byIndex[x.i].rank}. `).replace(/ · row \d+\)$/,` · row ${pos(x)})`));

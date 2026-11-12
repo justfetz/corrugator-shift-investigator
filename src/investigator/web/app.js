@@ -740,15 +740,22 @@ function afterPaint(f){if(typeof requestAnimationFrame==='function')requestAnima
 // The shift KPI tiles: the numbers of one get_shift_kpis row on seven tiles, one row of the card (#63). A tile that
 // measures a loss gets a money slot, filled from the card's money answer when it lands (paintTiles, #31b).
 let tileSlots=[];
+// A row without its band (a period report's) is read against the owner's numbers (targets.json via /api/config), never a
+// threshold typed here: "target 2.5%" where the target is the flag, else "target 1%, flag above 1.25%".
+function standard(id){
+ const b=config&&config.targets&&config.targets[id]; if(!b||b.target===null||b.target===undefined)return '';
+ return b.flag===null||b.flag===undefined||b.flag===b.target?`target ${b.target}%`:`target ${b.target}%, flag above ${b.flag}%`;
+}
+function over(id,value,at){ const b=config&&config.targets&&config.targets[id]; return !!b&&b[at]!==null&&b[at]!==undefined&&value>b[at]; }
 function shiftTiles(entry,result,prefix){
  const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete', who=prefix?`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · `:'';
  const n=(v,places)=>Number(v).toLocaleString(undefined,{minimumFractionDigits:places,maximumFractionDigits:places});
  for(const [label,value,unit,places,sub,bad,title,metric] of [
   ['Speed',r.observed_shift_fpm,'ft/min',1,`${n(r.speed_to_target_pct,1)}% of target`,r.speed_to_target_pct<100,'Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.','observed_shift_fpm'],
-  ['Maintenance',r.maintenance_pct,'%',2,r.maintenance_band_text||'target 2.5%',r.maintenance_band?r.maintenance_band==='flag':r.maintenance_pct>2.5,undefined,'maintenance_pct'],
-  ['Operator',r.operator_pct,'%',2,r.operator_band_text||'target 2.5%',r.operator_band?r.operator_band==='flag':r.operator_pct>2.5,undefined,'operator_pct'],
+  ['Maintenance',r.maintenance_pct,'%',2,r.maintenance_band_text||standard('maintenance'),r.maintenance_band?r.maintenance_band==='flag':over('maintenance',r.maintenance_pct,'flag'),undefined,'maintenance_pct'],
+  ['Operator',r.operator_pct,'%',2,r.operator_band_text||standard('operator'),r.operator_band?r.operator_band==='flag':over('operator',r.operator_pct,'flag'),undefined,'operator_pct'],
   // the owner's bands ride on the row (issue #101): dry-end waste is a percent of the yield after trim and shear
-  ['Dry-end waste',r.dry_end_pct,'%',2,r.dry_end_band_text?`of yield · ${r.dry_end_band_text}`:(r.dry_end_pct>1?'above 1%':'flag above 1%'),r.dry_end_band?['over target','flag'].includes(r.dry_end_band):r.dry_end_pct>1,undefined,'dry_end_pct'],
+  ['Dry-end waste',r.dry_end_pct,'%',2,'of yield'+((r.dry_end_band_text||standard('dry_end'))?` · ${r.dry_end_band_text||standard('dry_end')}`:''),r.dry_end_band?['over target','flag'].includes(r.dry_end_band):over('dry_end',r.dry_end_pct,'target'),undefined,'dry_end_pct'],
   ['Trim',r.trim_pct,'%',2,`shear ${n(r.shear_pct,2)}%`+(r.trim_band_text?` · ${r.trim_band_text}`:''),r.trim_band==='flag',undefined,'trim_pct'],
   ['Setups',r.valid_setups,'',0,`${n(r.paper_changes,0)} paper changes`,false,'Dry-end setups; paper changes are the count of distinct wet-end runs, as defined by the plant expert.'],
   ['Throughput',r.throughput_in,'in',1,`${n(r.lineal_per_setup,0)} ft / setup`,false]]){
@@ -934,8 +941,10 @@ const PANEL_ROWS=8;
 // The lens orders the levers before the unit does (issue #101), as the server ranks them: under the supervisor lens the
 // controllable levers come first, the schedule-driven ones (side trim, planned maintenance) after them, unranked; under
 // the ownership lens side trim, all of it, is first. Within those, the unit shown ranks them.
+const APART={'schedule-driven':0,external:1};   // cost_model.APART: what the supervisor lens lists apart, in this order
 function lensOrder(rows,lens){
- if(lens==='supervisor')return [...rows.filter(r=>r.control==='controllable'),...rows.filter(r=>r.control!=='controllable')];
+ const apart=r=>r.control in APART?APART[r.control]:2;
+ if(lens==='supervisor')return [...rows.filter(r=>r.control==='controllable'),...rows.filter(r=>r.control!=='controllable').sort((a,b)=>apart(a)-apart(b))];
  if(lens==='ownership'){ const i=rows.findIndex(r=>r.trim); return i<0?rows:[rows[i],...rows.filter((_,j)=>j!==i)]; }
  return rows;
 }

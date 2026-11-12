@@ -28,6 +28,7 @@ import math
 import os
 import re
 from pathlib import Path
+from . import targets
 
 DEFINITION = json.loads((Path(__file__).with_name('rates.json')).read_text())
 RATE_SPECS = {r['id']: r for r in DEFINITION['rates']}
@@ -229,6 +230,10 @@ PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_br
                 'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
 GAIN = 'not priced: this bucket ran better than the reference (a gain, not a loss)'
 SCHEDULE_DRIVEN_MIX = 'not priced: the grade mix is schedule-driven, the order book decides which grades run (issue #101)'
+# the speed-variance buckets that are not the crew's (the owner, PR #111): why each is left unpriced
+NOT_PRICED = {'mix': SCHEDULE_DRIVEN_MIX,
+              'planned': 'not priced: planned maintenance is schedule-driven, the maintenance plan sets its stops (PR #111)',
+              'external': 'not priced: external stops (a power outage) are outside the plant, not controllable (PR #111)'}
 
 
 def window_minutes(data):
@@ -274,11 +279,11 @@ def speed_variance_dollars(data, rates):
         out['usd_basis'] = f'{feet:,.1f} lineal ft / {reference:,.1f} ft/min reference speed = ' + out['usd_basis']
         return out
     for row in data['rows']:
-        if row.get('control') == 'schedule-driven':
-            row.update({**price('speed', None, rates), 'usd_basis': SCHEDULE_DRIVEN_MIX})
+        if row.get('control') != 'controllable':   # the mix and planned stops (schedule-driven), external stops: not priced
+            row.update({**price('speed', None, rates), 'usd_basis': NOT_PRICED[row['bucket']]})
         else:
             row.update(priced_for(row['gap_lineal_ft']))
-    priced = [r for r in data['rows'] if r.get('control') != 'schedule-driven' and r['usd'] is not None]
+    priced = [r for r in data['rows'] if r.get('control') == 'controllable' and r['usd'] is not None]
 
     def total(key, places=2):   # left to right (_add), as web/money.js re-derives it at other rates
         values = [r[key] for r in priced if r[key] is not None]
@@ -527,8 +532,47 @@ LENSES = ('all', 'supervisor', 'ownership')
 CONTROL = {'speed': ('controllable', 'speed under the grade baseline'), 'trim': ('schedule-driven', 'the order mix and its web widths'),
            'downtime': ('controllable', 'maintenance and operator downtime'), 'setup': ('controllable', 'operator downtime at order changes'),
            'scheduled': ('schedule-driven', 'planned maintenance is scheduled time'), 'shear': ('controllable', 'sequencing'),
-           'dry_end': ('controllable', 'temperatures'), 'unexplained': ('unattributed', 'the scale reading less the recorded waste')}
+           'dry_end': ('controllable', 'temperatures'), 'unexplained': ('unattributed', 'the scale reading less the recorded waste'),
+           'external': ('external', 'outside the plant, not controllable')}   # a power outage (targets.json; the owner on PR #111)
+# The supervisor lens lists what it does not rank by control, each group by dollars a year: schedule-driven, then external.
+APART = {'schedule-driven': 0, 'external': 1}
 TOTAL_TRIM = 'Side trim (all recorded)'
+# The ownership lens's dry-end subtotal (the owner, PR #111): bond, warp, misalignment and moisture are dry-end waste,
+# the tag scrap, priced and ranked as one line with each kind kept beneath it, since the detail is what supervisors go after.
+DRY_END_GROUP, DRY_END_LABEL = 'dry_end', 'Dry-end waste (tag scrap)'
+
+
+def _by_year(r):
+    return (-(r['usd_per_year'] or 0), r['lever'])
+
+
+def owner_order(rows):
+    """The ownership lens's levers after side trim: the dry-end group and each other lever ranked by dollars a year (the
+    group by the sum of its rows, added left to right as web/money.js does), the group's rows beneath it by dollars a year.
+    A lever's rank is its place among the groups (trim is 1); a row inside the group carries no rank of its own. Returns
+    the rows in that order and the group's rank (None without one)."""
+    groups = {}
+    for r in rows:
+        groups.setdefault(r.get('group') or r['lever'], []).append(r)
+    for members in groups.values():
+        members.sort(key=_by_year)
+    size = {k: _add(r['usd_per_year'] or 0 for r in members) for k, members in groups.items()}
+    out, group_rank = [], None
+    for rank, key in enumerate(sorted(groups, key=lambda k: (-size[k], k)), 2):
+        for r in groups[key]:
+            r['rank'] = None if r.get('group') else rank
+        if groups[key][0].get('group'):
+            group_rank = rank
+        out += groups[key]
+    return out, group_rank
+
+
+def dry_end_subtotal(rows, rank):
+    """The dry-end subtotal's figures (the owner, PR #111): the group's dollars, the sum of its rows left to right."""
+    mine = [r for r in rows if r.get('group') == DRY_END_GROUP]
+    years = [r['usd_per_year'] for r in mine]
+    return {'dry_end_rank': rank, 'dry_end_kinds': len(mine), 'dry_end_usd': round(_add(r['usd'] or 0 for r in mine), 2),
+            'dry_end_usd_per_year': None if any(v is None for v in years) else round(_add(v or 0 for v in years), 0)}
 
 
 def _control(row, key):
@@ -578,7 +622,7 @@ def opportunities(store, window, shift, rates, lens='all'):
             if r['sqft'] and r['sqft'] > 0:
                 pct, records = share(r)
                 rows.append(_control({'lever': r['label'] + (' (all recorded)' if key != 'unexplained' else ''), 'kind': 'waste' if key != 'unexplained' else 'paper',
-                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct,
+                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct, **({'group': DRY_END_GROUP} if control == 'dry_end' else {}),
                                       'records': records, **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, control))
     else:
         rows.append(_control({'lever': "Speed under each grade's trailing-year speed", 'kind': 'speed', 'quantity': speed['gap_minutes'], 'unit': 'min',
@@ -594,10 +638,12 @@ def opportunities(store, window, shift, rates, lens='all'):
         for r in pareto['rows']:
             planned = r['category'] == 'Planned maintenance'
             setup = r['category'] == 'Order change'
-            rows.append(_control({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if setup else ' (scheduled time)' if planned else ''),
+            external = r['category'] in targets.EXTERNAL_REASONS
+            rows.append(_control({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if setup else ' (scheduled time)' if planned else
+                                                                            ' (external)' if external else ''),
                                   'kind': 'setup' if setup else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
                                   'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)},
-                                 'scheduled' if planned else 'setup' if setup else 'downtime'))
+                                 'scheduled' if planned else 'setup' if setup else 'external' if external else 'downtime'))
         for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
             r = by[key]
             if r['sqft']:
@@ -605,13 +651,19 @@ def opportunities(store, window, shift, rates, lens='all'):
                 rows.append(_control({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft', **pct,
                                       'records': records, **price('waste', r['sqft'], rates, gross, minutes)},
                                      'shear' if key == 'shear' else 'dry_end'))
-    if lens == 'ownership':   # trim first, always: every owner asks what trim costs; then the rest by dollars
-        rows = rows[:1] + sorted(rows[1:], key=lambda r: (-(r['usd_per_year'] or 0), r['lever']))
-        for i, r in enumerate(rows, 1):
-            r['rank'] = i
+    group = {}
+    if lens == 'ownership':   # trim first, always: every owner asks what trim costs; then the rest by dollars, tag scrap as one
+        rows[0]['rank'] = 1
+        rest, group_rank = owner_order(rows[1:])
+        rows = rows[:1] + rest
+        if group_rank is not None:
+            d = by['dry_end']
+            group = {**dry_end_subtotal(rows, group_rank), 'dry_end_label': DRY_END_LABEL, 'dry_end_sqft': d['sqft'],
+                     'dry_end_pct_of_yield': d['pct_of_yield'], 'dry_end_band': d.get('band'), 'dry_end_band_text': d.get('band_text')}
     elif lens == 'supervisor':   # the controllable losses ranked; the schedule-driven ones after, not ranked
         ranked = _rank([r for r in rows if r['control'] == 'controllable'], 'usd_per_year')
-        rest = sorted([r for r in rows if r['control'] != 'controllable'], key=lambda r: (-(r['usd_per_year'] or 0), r['lever']))
+        rest = sorted([r for r in rows if r['control'] != 'controllable'],
+                      key=lambda r: (APART.get(r['control'], len(APART)), -(r['usd_per_year'] or 0), r['lever']))
         for r in rest:
             r['rank'] = None
         rows = ranked + rest
@@ -626,17 +678,18 @@ def opportunities(store, window, shift, rates, lens='all'):
                      'each lever; they do not prescribe a machine adjustment.'),
              'supervisor': ('The supervisor lens: the controllable losses ranked, maintenance and operator downtime, the speed of each '
                             'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste; side trim and planned maintenance '
-                            'are schedule-driven and listed after. Shear and dry-end waste are priced in full, all recorded, not over their '
+                            'are schedule-driven and listed after, then external downtime (a power outage), which is not controllable. Shear and dry-end waste are priced in full, all recorded, not over their '
                             'targets. Peel and core are controllable too, but the records carry no peel or core quantity. Per year at the '
                             'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
-             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then shear, each dry-end reason '
-                           'and the unexplained remainder (the scale reading less the recorded waste). Per year at the post\'s volumes.')}[lens]
+             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
+                           'waste (tag scrap: bond, warp, misalignment and moisture, one subtotal with each kind beneath it), shear and '
+                           'the unexplained remainder (the scale reading less the recorded waste). Per year at the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': waste['dataset_version'], 'rows': rows,
             'coverage': 'complete' if coverage == 'complete' else coverage, 'excluded_records': [],
             'source_rows': {'waste': waste['source_rows'], 'stops': pareto['source_rows'], 'runs': len(speed['runs'])},
             'trace': _trace([waste, pareto, speed_part]), 'gross_sqft': gross, 'scheduled_minutes': minutes,
-            **_totals(rows), **summary(rows),
+            **_totals(rows), **summary(rows), **group,
             # the controllable losses in their ranked order, added left to right (_add) as web/money.js re-derives them
             'controllable_levers': len(controllable), 'controllable_usd': round(_add(r['usd'] or 0 for r in controllable), 2),
             'controllable_usd_per_year': round(_add(r['usd_per_year'] or 0 for r in controllable), 0) if all(r['usd_per_year'] is not None for r in controllable) else None,

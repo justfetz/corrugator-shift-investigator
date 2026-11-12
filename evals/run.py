@@ -83,7 +83,11 @@ DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
-RULE_CONSTANTS = {'2.5', '1', '3.25', '480', '12', '0'}   # 0.4 (shear guidance) retired by the owner's bands, issue #101
+# The stated rules an answer may print beside its figures: 480 scheduled minutes a shift, the 12 minutes a downtime flag
+# takes of them, and the downtime and per-setup trim flags, read from the owner's targets.json (issue #101) so a changed
+# band moves with it. 0.4 (shear guidance) was retired by the owner's bands.
+_BANDS = {b['id']: b for b in json.loads((ROOT / 'src' / 'investigator' / 'targets.json').read_text())['bands']}
+RULE_CONSTANTS = {'1', '480', '12', '0'} | {f'{_BANDS[m]["flag"]:g}' for m in ('maintenance', 'operator', 'trim')}
 # The answer shape (issue #75), stated here independently of the application: a bold figure, the
 # evidence a line cites, a where-to-look question, and the result field each evidence part names.
 BOLD = re.compile(r'\*\*([^*]+)\*\*')
@@ -366,6 +370,9 @@ def evidence_vocabulary(trace):
                         strings.add(value)
                     else:
                         numbers.update(renderings(value))
+        # A band's words on the envelope (`*_band_text`, issue #101: a subtotal's or a total's band) are tool output, as
+        # a row's are; only those exact strings, never the envelope's notes.
+        strings.update(v for k, v in data.items() if isinstance(v, str) and k.endswith('band_text'))
         # Envelope scalars (a window total, a band width, a gross area) are tool output as much as rows are.
         for value in data.values():
             if isinstance(value, (int, float)) and not isinstance(value, bool):

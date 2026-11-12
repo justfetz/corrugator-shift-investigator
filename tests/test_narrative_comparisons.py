@@ -59,7 +59,7 @@ def packet():
 ADDED_BY_101 = {'get_shift_kpis': {'dry_end_band', 'dry_end_band_text', 'maintenance_band', 'maintenance_band_text', 'op_maint_band',
                                    'op_maint_band_text', 'op_maint_pct', 'operator_band', 'operator_band_text', 'shear_band',
                                    'shear_band_text', 'trim_band', 'trim_band_text', 'yield_sqft'},
-                'get_downtime_breakdown': {'minutes_per_stop', 'scheduled', 'stops'},
+                'get_downtime_breakdown': {'minutes_per_stop', 'scheduled', 'stops', 'external'},   # external: the owner on PR #111
                 'get_waste_breakdown': {'band', 'band_text'}}
 
 

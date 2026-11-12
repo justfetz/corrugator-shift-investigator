@@ -27,6 +27,7 @@ import argparse
 import json
 import sys
 from collections import defaultdict
+from dataclasses import replace
 from datetime import date, timedelta
 from calendar import monthrange
 from pathlib import Path
@@ -38,6 +39,10 @@ from investigator.fixture import GRADES  # noqa: E402  grade targets: a configur
 from investigator.synth import DATASET_SPAN_DAYS, generate_window  # noqa: E402
 
 OUT = ROOT / 'evals' / 'golden_values.json'
+# The owner's rule (PR #111, 2026-11-12), read from targets.json itself and not from the module the tools use: a stop
+# whose reason is external (a power outage) is counted as its own kind, never as the maintenance the records log it as.
+_EXTERNAL = json.loads((ROOT / 'src' / 'investigator' / 'targets.json').read_text())['external']
+EXTERNAL_KIND, EXTERNAL_REASONS = _EXTERNAL['kind'], set(_EXTERNAL['reasons'])
 # The golden window: every production day from AS_OF minus DATASET_SPAN_DAYS to AS_OF (evals/run.py GOLDEN_AS_OF).
 SEED, AS_OF, MACHINE = 2026, "2026-09-30", "CORR-1"
 FIRST_DAY = (date.fromisoformat(AS_OF) - timedelta(days=DATASET_SPAN_DAYS)).isoformat()   # 2025-09-30, a Tuesday
@@ -129,7 +134,8 @@ class Plain:
     """Plain Python sums over the record families; nothing here queries a database."""
 
     def __init__(self, data):
-        self.data = data
+        # every stop is read under the kind the owner counts it as (EXTERNAL_KIND for an external reason)
+        self.data = {**data, "stops": [replace(st, kind=EXTERNAL_KIND) if st.reason in EXTERNAL_REASONS else st for st in data["stops"]]}
         self.days = {date(int(s.production_date[:4]), int(s.production_date[4:6]), int(s.production_date[6:]))
                      for s in data["shifts"]}
 
@@ -930,7 +936,8 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
         minutes[st.reason] += st.duration_sec / 60
         stops[st.reason] += 1
     for r, m in minutes.items():
-        lever = f"Downtime: {r}" + (" (setup time)" if r == "Order change" else " (scheduled time)" if r == "Planned maintenance" else "")
+        lever = f"Downtime: {r}" + (" (setup time)" if r == "Order change" else " (scheduled time)" if r == "Planned maintenance" else
+                                    " (external)" if r in EXTERNAL_REASONS else "")
         levers[lever] = money("downtime", round(m, 2), gross, scheduled, rates, 0.01)
         terms[lever] = ("downtime", round(m, 2))
     labels = {"shear": "Shear chops", "bond": "Dry-end: bond", "warp": "Dry-end: warp", "misalignment": "Dry-end: misalignment", "moisture": "Dry-end: moisture"}
@@ -938,7 +945,8 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
         if round(t[key], 1):
             levers[f"{label} (all recorded)"] = money("waste", round(t[key], 1), gross, scheduled, rates, 0.1)
             terms[f"{label} (all recorded)"] = ("waste", round(t[key], 1))
-    control = {k: "schedule-driven" if k.startswith("Side trim") or k.endswith("(scheduled time)") else "controllable" for k in levers}
+    control = {k: "schedule-driven" if k.startswith("Side trim") or k.endswith("(scheduled time)") else
+               "external" if k.endswith("(external)") else "controllable" for k in levers}
     values = {f"rows:lever={k}": {**e, "control": exact(control[k])} for k, e in levers.items()}
     summary = money_summary(terms, levers, gross, scheduled, rates)   # the panel's chips and the arithmetic's sums (#31b review)
     values.update({k: v for k, v in summary.items() if k != "$"})
@@ -962,8 +970,9 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
 
 def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
     """get_opportunities with lens=ownership by hand: the total cost of each waste the records hold, side trim first
-    (all of it, priced as paper), then shear, each dry-end reason (paper plus the run time they took) and the
-    unexplained remainder (paper), by dollars a year; the total of them all."""
+    (all of it, priced as paper), then by dollars a year shear, the dry-end reasons (paper plus the run time they
+    took) as one group, the tag scrap, with its subtotal (the owner, PR #111), and the unexplained remainder (paper);
+    the total of them all."""
     rates = rates_of(None)
     span = window(period, anchor)
     t = plain.sums(*span, shift)
@@ -978,8 +987,19 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
     unexplained = round(t["bale"] - t["trim"] - t["shear"] - t["rejects"], 1)
     if unexplained > 0:
         levers["Unexplained (bale minus accounted waste)"] = (money("paper", unexplained, gross, scheduled, rates, 0.1), "unattributed")
-    order = [trim] + sorted((k for k in levers if k != trim), key=lambda k: -levers[k][0]["usd_per_year"][0])
-    values = {f"rows:lever={k}": {**levers[k][0], "control": exact(levers[k][1]), "rank": exact(order.index(k) + 1)} for k in levers}
+    # the dry-end families are one group, the tag scrap (the owner, PR #111): after trim, the group (by the sum of its
+    # kinds) and each other lever by dollars a year; the group holds the rank, its kinds beneath it hold none
+    dry = [k for k in levers if k.startswith("Dry-end: ")]
+    groups = {k: [k] for k in levers if k != trim and k not in dry}
+    if dry:
+        groups["dry_end"] = sorted(dry, key=lambda k: -levers[k][0]["usd_per_year"][0])
+    year = lambda keys: sum(levers[k][0]["usd_per_year"][0] for k in keys)
+    ranked = sorted(groups, key=lambda g: -year(groups[g]))
+    rank_of = {trim: 1, **{k: (None if g == "dry_end" else i) for i, g in enumerate(ranked, 2) for k in groups[g]}}
+    values = {f"rows:lever={k}": {**levers[k][0], "control": exact(levers[k][1]), "rank": exact(rank_of[k])} for k in levers}
+    order = [trim] + [k for g in ranked for k in groups[g]]
+    for i, k in enumerate(order):
+        values[f"#{i}"] = {"lever": exact(k)}
     # a dry-end family is read against the yield after trim and shear (issue #101), shear against gross
     net = t["gross"] - t["trim"] - t["shear"]
     for key in ("bond", "warp", "misalignment", "moisture"):
@@ -990,6 +1010,13 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
     values["#0"] = {"lever": exact(trim), "pct_of_gross": num(t["trim"] / t["gross"] * 100, 4)}
     values["$"] = {"total_usd_per_year": [round(sum(e["usd_per_year"][0] for e, _ in levers.values()), 3), sum(e["usd_per_year"][1] for e, _ in levers.values())],
                    "total_usd": [round(sum(e["usd"][0] for e, _ in levers.values()), 6), sum(e["usd"][1] for e, _ in levers.values())]}
+    if dry:   # the subtotal: its kinds' dollars added up; its share and band are the dry-end waste's over the yield
+        mine = groups["dry_end"]
+        values["$"].update({"dry_end_rank": exact(ranked.index("dry_end") + 2), "dry_end_kinds": exact(len(mine)),
+                            "dry_end_label": exact("Dry-end waste (tag scrap)"),
+                            "dry_end_usd_per_year": [round(year(mine), 3), sum(levers[k][0]["usd_per_year"][1] for k in mine) + 1],
+                            "dry_end_usd": [round(sum(levers[k][0]["usd"][0] for k in mine), 6), sum(levers[k][0]["usd"][1] for k in mine) + 0.01],
+                            "dry_end_sqft": num(t["rejects"], 1), "dry_end_pct_of_yield": num(t["rejects"] / net * 100, 4)})
     return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift, "lens": "ownership"},
                 {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note)
 
@@ -1059,17 +1086,20 @@ def review_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note
         prev_count[(st.kind, st.reason)] += 1
     then = lambda value: value if prev_available else None
     label = {k: f"{k[1]} · {'scheduled' if k[0] == 'PM' else k[0].lower()}" for k in minutes}
-    ranked = sorted((k for k in minutes if k[0] != "PM"), key=lambda k: (-round(minutes[k], 2), label[k]))
+    # ranked: maintenance and operator only; planned maintenance (scheduled time) and external downtime are apart
+    ranked = sorted((k for k in minutes if k[0] in ("Maintenance", "Operator")), key=lambda k: (-round(minutes[k], 2), label[k]))
     values = {}
     for k, m in minutes.items():
         values[f"category={label[k]}"] = {"stops": exact(count[k]), "minutes": num(m, 2), "pct_of_scheduled": num(m / scheduled * 100, 4),
                                           "minutes_per_stop": num(m / count[k], 2), "scheduled": exact(k[0] == "PM"),
+                                          "external": exact(k[0] == EXTERNAL_KIND),
                                           "rank": exact(ranked.index(k) + 1 if k in ranked else None),
                                           "previous_stops": exact(then(prev_count.get(k, 0))),
                                           "previous_minutes": num(then(prev_minutes.get(k, 0.0)), 2),
                                           "previous_pct_of_scheduled": num(then(prev_minutes.get(k, 0.0) / prev_scheduled * 100 if prev_available else None), 4)}
     envelope = {"scheduled_minutes": exact(scheduled), "previous_scheduled_minutes": exact(prev_scheduled)}
-    for key, kinds in (("maintenance", ("Maintenance",)), ("operator", ("Operator",)), ("op_maint", ("Maintenance", "Operator")), ("pm", ("PM",))):
+    for key, kinds in (("maintenance", ("Maintenance",)), ("operator", ("Operator",)), ("op_maint", ("Maintenance", "Operator")), ("pm", ("PM",)),
+                       ("external", (EXTERNAL_KIND,))):
         m = sum(v for k, v in minutes.items() if k[0] in kinds)
         before = sum(v for k, v in prev_minutes.items() if k[0] in kinds)
         envelope.update({f"{key}_minutes": num(m, 2), f"{key}_stops": exact(sum(c for k, c in count.items() if k[0] in kinds)),
@@ -1129,10 +1159,13 @@ def speedvar_side(plain, span, shift, speed):
     target_of = {s.setup_id: speed[s.quality_id] for s in setups}
     grade_of = {s.setup_id: s.quality_id for s in setups}
     stops, setup_loss = defaultdict(lambda: [0.0, 0.0, 0]), defaultdict(float)   # reason -> [feet lost, minutes, count]
+    planned, external = defaultdict(float), defaultdict(float)   # reason -> feet lost: the two buckets apart (PR #111)
     for st in plain.between("stops", *span, shift):
         lost = st.duration_sec / 60 * target_of[st.setup_id]
         if st.reason == "Order change":
             setup_loss[grade_of[st.setup_id]] += lost
+        elif st.kind in ("PM", EXTERNAL_KIND):
+            (planned if st.kind == "PM" else external)[st.reason] += lost
         else:
             cell = stops[st.reason]
             cell[0] += lost
@@ -1147,6 +1180,7 @@ def speedvar_side(plain, span, shift, speed):
             "target": sum(speed[g] * m for g, m in clock.items()) / minutes,
             "share": {g: m / minutes for g, m in clock.items()},
             "stops": {r: c[0] / minutes for r, c in stops.items()}, "stop_cells": dict(stops),
+            "planned": {r: v / minutes for r, v in planned.items()}, "external": {r: v / minutes for r, v in external.items()},
             "setups": {g: v / minutes for g, v in setup_loss.items()}, "below": {g: v / minutes for g, v in below.items()}}
 
 
@@ -1166,17 +1200,21 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="baseline", aga
             clock[s.quality_id] += s.elapsed_seconds / 60
         total = sum(clock.values())
         standard = sum(speed[g] * m for g, m in clock.items()) / total
-        r = {"speed": standard, "target": standard, "share": {g: m / total for g, m in clock.items()}, "stops": {}, "setups": {}, "below": {}}
+        r = {"speed": standard, "target": standard, "share": {g: m / total for g, m in clock.items()}, "stops": {}, "planned": {}, "external": {},
+             "setups": {}, "below": {}}
     else:
         r = speedvar_side(plain, previous(period, *span) if against == "previous" else span,
                           shift if against == "previous" else against_shift, speed)
     gap = r["speed"] - c["speed"]
     minus = lambda key: {k: c[key].get(k, 0.0) - r[key].get(k, 0.0) for k in set(c[key]) | set(r[key])}
-    items = {"stops": minus("stops"), "setups": minus("setups"), "below_baseline": minus("below"),
+    items = {"stops": minus("stops"), "planned": minus("planned"), "external": minus("external"), "setups": minus("setups"),
+             "below_baseline": minus("below"),
              "mix": {g: (r["share"].get(g, 0.0) - c["share"].get(g, 0.0)) * (speed[g] - r["target"]) for g in set(c["share"]) | set(r["share"])}}
-    buckets = {"stops": sum(c["stops"].values()) - sum(r["stops"].values()), "setups": sum(c["setups"].values()) - sum(r["setups"].values()),
-               "below_baseline": sum(c["below"].values()) - sum(r["below"].values()), "mix": r["target"] - c["target"]}
-    assert abs(sum(buckets.values()) - gap) < 1e-6, "the four buckets add up to the gap, taken directly"
+    buckets = {key: sum(c[key].values()) - sum(r[key].values()) for key in ("stops", "planned", "external", "setups")}
+    buckets.update({"below_baseline": sum(c["below"].values()) - sum(r["below"].values()), "mix": r["target"] - c["target"]})
+    # planned maintenance and external stops are a bucket only when either side holds one (the owner, PR #111)
+    buckets = {k: v for k, v in buckets.items() if k not in ("planned", "external") or items[k]}
+    assert abs(sum(buckets.values()) - gap) < 1e-6, "the buckets add up to the gap, taken directly"
     rates = rates_of(None)
     reference = round(r["speed"], 1)
     values = {"$": {"against": exact(against), "speed_all_fpm": num(c["speed"], 1), "reference_speed_fpm": num(r["speed"], 1),
@@ -1192,8 +1230,10 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="baseline", aga
         row = {"gap_fpm": num(value, 2), "gap_lineal_ft": num(value * c["minutes"], 1), "share_of_gap_pct": num(value / gap * 100, 1),
                "top_item": exact(leading[0][1] if leading else None), "top_item_fpm": num(leading[0][0], 2) if leading else exact(None),
                "items": exact(len(items[key]))}
-        row["control"] = exact("schedule-driven" if key == "mix" else "controllable")
-        if feet > 0 and key != "mix":   # each controllable loss bucket priced as machine time: its lineal feet at the reference speed
+        # the grade mix and planned maintenance are schedule-driven, external stops are external: never priced
+        control = "schedule-driven" if key in ("mix", "planned") else "external" if key == "external" else "controllable"
+        row["control"] = exact(control)
+        if feet > 0 and control == "controllable":   # each controllable loss bucket priced as machine time: its lineal feet at the reference speed
             priced = money("speed", feet / reference, None, c["minutes"], rates, 0.06 * feet / reference ** 2 + 0.06 / reference)
             row.update({k: priced[k] for k in ("machine_time_usd", "usd", "usd_per_year", "contribution_status")})
             controllable.append(priced["usd"][0])
@@ -1201,7 +1241,7 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="baseline", aga
             row.update({"usd": exact(None), "contribution_status": exact("not priced")})
         values[f"bucket={key}"] = row
         values["$"][f"{key}_share_pct"] = num(value / gap * 100, 1)
-    # the controllable dollars: the priced loss buckets, never the grade mix (each rounded to the cent, as the tool sums them)
+    # the controllable dollars: the priced loss buckets, never the grade mix, planned or external stops (each rounded to the cent, as the tool sums them)
     values["$"]["controllable_usd"] = [round(sum(controllable), 2), 0.02 * len(controllable) + 0.01] if controllable else exact(None)
     top_stop = max(c["stop_cells"], key=lambda k: c["stop_cells"][k][0])
     lost, mins, count = c["stop_cells"][top_stop]
@@ -1213,7 +1253,7 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="baseline", aga
     coverage = plain.coverage(*span)
     if against == "previous":
         coverage = "complete" if coverage == "complete" and plain.coverage(*previous(period, *span)) == "complete" else "partial"
-    return case(id, "get_speed_variance", arguments, {"coverage": coverage, "row_count": 4, "values": values}, day=day, note=note)
+    return case(id, "get_speed_variance", arguments, {"coverage": coverage, "row_count": len(buckets), "values": values}, day=day, note=note)
 
 
 # ---------------------------------------------------------------- the case list

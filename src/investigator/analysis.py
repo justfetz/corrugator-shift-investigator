@@ -79,7 +79,8 @@ TABLES = {
     # the record families up to three reasons per knife position.
     "rejects": "id VARCHAR, shift INTEGER, reason VARCHAR, detail VARCHAR, sheets DOUBLE, sqft DOUBLE",
 }
-STOP_KINDS = ("Maintenance", "Operator", "PM")
+# The kinds the tables carry: the records' three, and External, which the owner's rule (targets.json) gives a power outage.
+STOP_KINDS = ("Maintenance", "Operator", "PM", targets.EXTERNAL_KIND)
 
 
 class Analysis:
@@ -122,7 +123,7 @@ class Analysis:
                     if node.get("kind") not in ("Maintenance", "Operator"):
                         raise ValueError("Unsupported downtime kind")
                     intervals.append((start, end))
-                    stop_rows.append([ident, i, node.get("kind"), node.attrib["place"], node.attrib["reason"], elapsed, start, end, self._note(node)])
+                    stop_rows.append([ident, i, targets.stop_kind(node.get("kind"), node.attrib["reason"]), node.attrib["place"], node.attrib["reason"], elapsed, start, end, self._note(node)])
                 elif node.tag == "setup":
                     if start != prior_setup:
                         raise ValueError("Setup timeline must partition shift")
@@ -300,7 +301,7 @@ class Analysis:
         row=data['rows'][0]
         stops,speed,quality=(c['rows'] for c in components)
         # the largest unplanned reason: planned maintenance is scheduled time and sorts last (issue #101)
-        lead=next((r for r in stops if not r['scheduled']), stops[0] if stops else None)
+        lead=next((r for r in stops if not (r['scheduled'] or r['external'])), stops[0] if stops else None)
         row.update({'largest_downtime_reason':lead['category'] if lead else 'No recorded stops',
                     'largest_downtime_minutes':lead['down_minutes'] if lead else 0,
                     'largest_downtime_scheduled':bool(lead and lead['scheduled']),
@@ -319,19 +320,21 @@ class Analysis:
         if group_by not in ("reason", "kind", "place") or kind not in (None, *STOP_KINDS):
             raise ValueError("Unsupported filter or grouping")
         """Recorded stops grouped by reason, place or kind, each with its stop count and minutes per stop; planned
-        maintenance (PM) is scheduled time and sorts last (issue #101). On a record-store day the result also
+        maintenance (PM) is scheduled time and sorts last (issue #101), after external downtime (a power outage,
+        outside the plant; the owner on PR #111). On a record-store day the result also
         carries `flags`: the shift's maintenance or operator downtime over its band, with the supervisor slot and
         the leading reason's recurrence over the trailing year (RecordStore.downtime_flags)."""
         # group_by is strictly allowlisted; all visitor values are bound.
         sql = f"""SELECT {group_by} AS category, sum(seconds)/60 AS down_minutes,
         sum(seconds)/28800*100 AS shift_percent, count(*) AS stops, sum(seconds)/60/count(*) AS minutes_per_stop,
-        bool_and(kind = 'PM') AS scheduled, list(id ORDER BY id) AS source_ids
+        bool_and(kind = 'PM') AS scheduled, bool_and(kind = '{targets.EXTERNAL_KIND}') AS external, list(id ORDER BY id) AS source_ids
         FROM stops WHERE shift = ?"""
         params = [shift]
         if kind:
             sql += " AND kind = ?"
             params.append(kind)
-        sql += f" GROUP BY {group_by} ORDER BY scheduled, down_minutes DESC, category"
+        # unplanned maintenance and operator reasons first; then external downtime (a power outage); then PM
+        sql += f" GROUP BY {group_by} ORDER BY scheduled OR external, scheduled, down_minutes DESC, category"
         result = self._query(shift, sql, params)
         if self.store is not None:
             trace = {"sql": [], "parameters": []}

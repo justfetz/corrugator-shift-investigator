@@ -6,7 +6,7 @@
    "denominator": "scheduled minutes (480 a shift, 1,440 a production day)", "lever": "controllable", "source": "owner, 2026-11-10"},
   {"id": "maintenance", "label": "Maintenance downtime", "unit": "% of scheduled minutes", "home_run": null, "target": 2.5, "flag": 2.5,
    "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10",
-   "note": "Unplanned maintenance stops; planned maintenance (PM) is scheduled time and sits below the ranked reasons."},
+   "note": "Unplanned maintenance stops, breakdowns and faults; planned maintenance (PM) is schedule-driven and sits below the ranked reasons, and an external stop (a power outage) is not maintenance: neither counts against this band or trips its flag."},
   {"id": "op_maint", "label": "Downtime (operator and maintenance)", "unit": "% of scheduled minutes", "home_run": null, "target": 5.0, "flag": 5.0,
    "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10"},
   {"id": "trim", "label": "Side trim", "unit": "% of gross", "home_run": 2.75, "target": 3.0, "flag": 3.25,
@@ -25,6 +25,13 @@
    "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10",
    "note": "Target about 0.1%; the flag is the owner's to set. The records carry no core quantity yet."}
  ],
+ "external": {
+  "kind": "External",
+  "reasons": ["Power outage"],
+  "lever": "external",
+  "note": "Downtime from outside the plant, not controllable: a power outage. It shows in downtime as its own kind, External, apart from the ranked reasons, and never counts against the maintenance or operator band or trips their flags. The records log it as a maintenance stop; the investigator counts it as External whatever kind the record gives it.",
+  "source": "owner, 2026-11-12"
+ },
  "speed": {
   "baseline": "Each grade's sustained average speed over the trailing year: lineal feet over running minutes (stops out) of every setup of that grade in the 365 days ending on the day asked about, inside the record store. Never the maximum speed, which is a ramp-up point.",
   "gap": "A run under its grade's baseline is a speed gap: the lineal feet it would have made at the baseline in its running minutes, less the feet it made.",
@@ -38,7 +45,7 @@
  },
  "lenses": {
   "ownership": "The total cost of waste in dollars, side trim first: it is always the largest percentage, and every owner asks what trim costs.",
-  "supervisor": "The controllable losses ranked: maintenance and operator downtime, dry-end waste (temperatures), speed under each grade's baseline, shear (sequencing), peel and core. Side trim is shown as schedule-driven.",
+  "supervisor": "The controllable losses ranked: maintenance and operator downtime (breakdowns and faults), dry-end waste (temperatures), speed under each grade's baseline, shear (sequencing), peel and core. Side trim and planned maintenance are shown as schedule-driven, and external downtime (a power outage) as not controllable.",
   "source": "owner, 2026-11-10"
  }
 }

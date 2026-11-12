@@ -1,8 +1,9 @@
 """Speed variance (issue #92): the speed gap split into stops, setups, running under baseline and grade mix,
-every grade held at its trailing-year baseline (the owner's speed standard, issue #101), the mix schedule-driven.
+every grade held at its trailing-year baseline (the owner's speed standard, issue #101), the mix schedule-driven;
+planned maintenance (schedule-driven) and external stops (a power outage) are buckets of their own (the owner, PR #111).
 
 The value goldens (evals/golden_values.json, `value-speedvar-*`) pin the numbers a second way, from plain
-Python sums over the records. These tests pin the identity itself (the four buckets add up to the gap, and
+Python sums over the records. These tests pin the identity itself (the buckets add up to the gap, and
 each bucket's details add up to it, for every reference), the router's phrasings and their canonical URLs,
 the scope rule for a second shift, the pricing of each bucket and the answer's shape.
 """
@@ -19,6 +20,10 @@ DAY = "2026-09-14"
 # (test_an_offset_larger_than_the_third_contributor_gets_a_line).
 OFFSET_WEEK = "2026-01-26"
 BUCKETS = [key for key, _ in SPEEDVAR_BUCKETS]
+CORE = ["stops", "setups", "below_baseline", "mix"]   # always there; planned maintenance and external stops when held
+# The week of 7 September 2026: shift 2 runs above shift 1, and its unplanned stops (missed splices) ran worse, an offset
+# that is a controllable loss and gets a line (test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain).
+GAIN_WEEK = "2026-09-07"
 
 
 @pytest.fixture(scope="module")
@@ -36,12 +41,14 @@ CASES = [("day", 2, "baseline", None), ("week", None, "baseline", None), ("month
 
 
 @pytest.mark.parametrize("period, shift, against, against_shift", CASES)
-def test_the_four_buckets_add_up_to_the_gap_and_the_details_to_each_bucket(store, period, shift, against, against_shift):
+def test_the_buckets_add_up_to_the_gap_and_the_details_to_each_bucket(store, period, shift, against, against_shift):
     data = variance(store, period, shift, against, against_shift)
     rows = {r["bucket"]: r for r in data["rows"]}
-    assert sorted(rows) == sorted(BUCKETS) and len(data["rows"]) == 4
-    # each of the four is rounded to 0.01 ft/min on its own, so their sum may sit 0.02 off the rounded gap
-    assert abs(sum(r["gap_fpm"] for r in data["rows"]) - data["gap_fpm"]) <= 0.025
+    # the four always; planned maintenance and external stops exactly when a stop of theirs is on either side
+    held = {d["bucket"] for d in data["details"]}
+    assert sorted(rows) == sorted(CORE + [k for k in ("planned", "external") if k in held]) and len(data["rows"]) == len(rows)
+    # each bucket is rounded to 0.01 ft/min on its own, so their sum may sit 0.01 a bucket off the rounded gap
+    assert abs(sum(r["gap_fpm"] for r in data["rows"]) - data["gap_fpm"]) <= 0.005 * len(rows) + 0.005
     assert abs(sum(r["gap_lineal_ft"] for r in data["rows"]) - data["gap_lineal_ft"]) <= 0.25
     assert abs(data["reference_speed_fpm"] - data["speed_all_fpm"] - data["gap_fpm"]) <= 0.11   # two speeds rounded to 0.1, the gap to 0.01
     for key, row in rows.items():
@@ -52,7 +59,7 @@ def test_the_four_buckets_add_up_to_the_gap_and_the_details_to_each_bucket(store
             assert row["top_item_fpm"] * row["gap_fpm"] > 0 and row["top_item"] in {d["item"] for d in items}
     if abs(data["gap_fpm"]) >= 0.05:
         assert abs(sum(r["share_of_gap_pct"] for r in data["rows"]) - 100) <= 0.25
-        assert all(data[f"{key}_share_pct"] == rows[key]["share_of_gap_pct"] for key in BUCKETS)
+        assert all(data[f"{key}_share_pct"] == rows[key]["share_of_gap_pct"] for key in rows)
     # the buckets that make the gap come first, largest first, then the offsets
     toward = [r["gap_fpm"] * (1 if data["gap_fpm"] >= 0 else -1) >= 0 for r in data["rows"]]
     assert toward == sorted(toward, reverse=True)
@@ -105,11 +112,12 @@ def test_every_grade_is_held_at_its_baseline_not_its_target(store):
 def test_one_shift_against_another_is_the_mirror_of_the_reverse(store):
     a, b = variance(store, "week", 3, "shift", 1), variance(store, "week", 1, "shift", 3)
     assert abs(a["gap_fpm"] + b["gap_fpm"]) <= 0.01 and a["speed_all_fpm"] == b["reference_speed_fpm"]
-    for key in ("stops", "setups", "below_baseline"):   # the loss buckets mirror exactly; the mix is held at each reference's own target speed
-        ra, rb = (next(r for r in d["rows"] if r["bucket"] == key) for d in (a, b))
-        assert abs(ra["gap_fpm"] + rb["gap_fpm"]) <= 0.01
-    stops = next(r for r in a["rows"] if r["bucket"] == "stops")
-    assert stops["gap_fpm"] < 0 and stops["top_item"] == "Planned maintenance"   # shift 1 carries the Thursday PM: an offset for shift 3
+    for key in ("stops", "planned", "external", "setups", "below_baseline"):   # the loss buckets mirror exactly; the mix is held at each reference's own target speed
+        ra, rb = (next((r for r in d["rows"] if r["bucket"] == key), None) for d in (a, b))
+        assert (ra is None) == (rb is None) and (ra is None or abs(ra["gap_fpm"] + rb["gap_fpm"]) <= 0.01)
+    planned = next(r for r in a["rows"] if r["bucket"] == "planned")
+    assert planned["gap_fpm"] < 0 and planned["top_item"] == "Planned maintenance"   # shift 1 carries the Thursday PM: an offset for shift 3
+    assert planned["control"] == "schedule-driven" and next(r for r in a["rows"] if r["bucket"] == "stops")["top_item"] != "Planned maintenance"
 
 
 @pytest.mark.parametrize("args, message", [
@@ -127,13 +135,19 @@ def test_refusals_say_what_to_change(store, args, message):
 
 def test_each_controllable_loss_bucket_is_priced_as_machine_time_and_the_mix_and_an_offset_are_not(store):
     """Review of #111: the grade mix is schedule-driven (the order book decides it), so it is never priced as machine
-    time; the controllable dollars are the priced loss buckets, and the gap as a whole (which holds the mix) is not priced."""
+    time; the controllable dollars are the priced loss buckets, and the gap as a whole (which holds the mix) is not priced.
+    The owner on PR #111: planned maintenance is schedule-driven and a power outage external, so neither is priced either."""
     rates = cost_model.effective()
     data = cost_model.attach("get_speed_variance", variance(store, "week", 3, "shift", 1), rates)
     mix = next(r for r in data["rows"] if r["bucket"] == "mix")
     assert mix["gap_lineal_ft"] > 0 and mix["usd"] is None and mix["usd_basis"] == cost_model.SCHEDULE_DRIVEN_MIX
+    controls = {r["bucket"]: r["control"] for r in data["rows"]}
+    assert controls == {"stops": "controllable", "planned": "schedule-driven", "external": "external", "setups": "controllable",
+                        "below_baseline": "controllable", "mix": "schedule-driven"}   # the week holds shift 1's PM and shift 3's power outage
     for row in data["rows"]:
-        if row["bucket"] == "mix":
+        if row["bucket"] in ("planned", "external"):
+            assert row["usd"] is None and row["usd_basis"] == cost_model.NOT_PRICED[row["bucket"]]
+        if row["control"] != "controllable":
             continue
         if row["gap_lineal_ft"] > 0:
             minutes = row["gap_lineal_ft"] / data["reference_speed_fpm"]
@@ -141,7 +155,7 @@ def test_each_controllable_loss_bucket_is_priced_as_machine_time_and_the_mix_and
             assert "lineal ft / 595.9 ft/min reference speed" in row["usd_basis"]   # shift 1's speed with stops that week, in the golden year
         else:
             assert row["usd"] is None and row["usd_basis"] == cost_model.GAIN
-    priced = [r["usd"] for r in data["rows"] if r["bucket"] != "mix" and r["usd"] is not None]
+    priced = [r["usd"] for r in data["rows"] if r["control"] == "controllable" and r["usd"] is not None]
     assert priced and data["controllable_usd"] == round(sum(priced), 2) and "gap_usd" not in data
     assert data["contribution_status"] == "margin not set" and "provenance" in data
 
@@ -246,38 +260,43 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
 
 
 def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(store):
-    """Review of #92: "offset" pulls against the gap. Shift 1 against shift 3 this week is a gain (above); its stops
-    ran worse (shift 1's Thursday planned maintenance), so stops is the offset on the card (the week of 26 January in the year, its third row) and is priced as machine
-    time, while the gain buckets and the gap itself are not; the contribution status is the rates', not the gap's."""
-    data = cost_model.attach("get_speed_variance", variance(store, "week", 1, "shift", 3, anchor=OFFSET_WEEK), cost_model.effective())
+    """Review of #92: "offset" pulls against the gap. Shift 2 against shift 1 in the week of 7 September is a gain (above);
+    its unplanned stops ran worse (missed splices), so stops is an offset on the card and is priced as machine time, while
+    the gain buckets, the schedule-driven ones (shift 1's planned maintenance, the mix) and the gap itself are not; the
+    contribution status is the rates', not the gap's."""
+    data = cost_model.attach("get_speed_variance", variance(store, "week", 2, "shift", 1, anchor=GAIN_WEEK), cost_model.effective())
     assert data["direction"] == "above" and data["gap_fpm"] < 0 and "gap_usd" not in data
     assert data["contribution_status"] == "margin not set"
     for row in data["rows"]:
-        assert (row["usd"] is not None) == (row["gap_fpm"] > 0 and row["bucket"] != "mix")
-        if row["bucket"] == "mix":
-            assert row["usd_basis"] == cost_model.SCHEDULE_DRIVEN_MIX
+        assert (row["usd"] is not None) == (row["gap_fpm"] > 0 and row["control"] == "controllable")
+        if row["control"] != "controllable":
+            assert row["usd_basis"] == cost_model.NOT_PRICED[row["bucket"]]
         elif row["gap_fpm"] < 0:
             assert row["usd_basis"] == cost_model.GAIN
-    agent = Agent(store.day_analysis(OFFSET_WEEK))
-    sections = agent.ask("Why did speed differ on shift 1 versus shift 3 this week?", Context(OFFSET_WEEK, 2, scope="day"))["sections"]
-    assert sections[0].startswith("Speed gap **") and " on shift 1 above shift 3: " in sections[0]
+    agent = Agent(store.day_analysis(GAIN_WEEK))
+    sections = agent.ask("Why did speed differ on shift 2 versus shift 1 this week?", Context(GAIN_WEEK, 2, scope="day"))["sections"]
+    assert sections[0].startswith("Speed gap **") and " on shift 2 above shift 1: " in sections[0]
     stops = next(s for s in sections if s.startswith("- Stops: "))
     assert "the other way, an offset" in stops and " · $" in stops
-    assert ("Shift 1 is faster than shift 3, so the gap is a gain and is not priced; the controllable buckets that ran worse are priced "
+    planned = next(s for s in sections if s.startswith("- Planned maintenance: "))
+    assert "of the gap" in planned and " · $" not in planned and "schedule-driven" in planned
+    assert ("Shift 2 is faster than shift 1, so the gap is a gain and is not priced; the controllable buckets that ran worse are priced "
             "as machine time.") in sections
     assert any(s.startswith("Contribution margin not set") for s in sections) and not any(s.startswith("The whole gap is") for s in sections)
 
 
 def test_an_offset_larger_than_the_third_contributor_gets_a_line(store):
     """Owner, PR #91: the card lists the three buckets adding to the gap, and a bucket pulling against it gets a line
-    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 14 September: below-target
-    running, grade mix and setups (1.3 ft/min) add to the gap; stops (35.6 ft/min, -85%) pull against it."""
+    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 14 September: below-baseline
+    running, grade mix and unplanned stops (4.7 ft/min) add to the gap; shift 1's planned maintenance (39.5 ft/min, -94%,
+    its own bucket since the owner's decision on PR #111) pulls against it."""
     agent = Agent(store.day_analysis(DAY))
     sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(DAY, 2, scope="day"))["sections"]
     lines = [s for s in sections if s.startswith("- ")][:4]
-    assert [s.split(":")[0] for s in lines] == ["- Below baseline", "- Grade mix", "- Setups", "- Stops"]
+    assert [s.split(":")[0] for s in lines] == ["- Below baseline", "- Grade mix", "- Stops", "- Planned maintenance"]
     assert all("of the gap" in s for s in lines[:3]) and "the other way, an offset" in lines[3]
-    assert lines[3].endswith("(query 1 · row 3)") and "largest Planned maintenance" in lines[3]   # its own row of the tool
+    assert lines[3].endswith("(query 1 · row 5)") and "largest Planned maintenance" in lines[3]   # its own row of the tool, the last
+    assert "schedule-driven, the maintenance plan sets planned stops" in lines[3] and " · $" not in lines[3]
     # an offset smaller than the third contributor stays off: shift 2 against shift 1 in the week of 4 May 2026
     agent = Agent(store.day_analysis("2026-05-04"))
     sections = agent.ask("Why did speed differ on shift 2 versus shift 1 this week?", Context("2026-05-04", 2, scope="day"))["sections"]
@@ -298,7 +317,8 @@ def test_the_waterfall_draws_in_the_pdf(store):
     drawing = drawing_for(chart)
     bars = [e for e in drawing.contents if isinstance(e, Rect)]
     texts = [e.text for e in drawing.contents if isinstance(e, String)]
-    assert len(bars) == 4 and f"{chart['start']:,.1f} ft/min" in texts and f"{chart['end']:,.1f} ft/min" in texts
-    assert {"Shift 1", "Shift 3", "Stops", "Grade mix"} <= set(texts)
+    buckets = [r["label"] for r in next(e for e in result["trace"] if e["tool"] == "get_speed_variance")["data"]["rows"]]
+    assert len(bars) == len(buckets) == 6 and f"{chart['start']:,.1f} ft/min" in texts and f"{chart['end']:,.1f} ft/min" in texts
+    assert {"Shift 1", "Shift 3", "Stops", "Grade mix", "Planned maintenance", "External stops"} <= set(texts)
     pdf = report_pdf(result)
     assert pdf.startswith(b"%PDF") and len(pdf) > 3000

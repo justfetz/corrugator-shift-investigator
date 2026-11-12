@@ -82,6 +82,7 @@ def test_config_reports_the_production_calendar_and_refuses_other_days(running):
     assert config['dataset_hash']==store.content_hash and len(config['dataset_hash'])==64
     assert '2026-08-03' in config['days'] and '2025-09-30' in config['days'] and '2026-09-12' not in config['days']
     assert {t['name'] for t in config['tools']}>={'get_period_kpis','compare_periods','get_downtime_pareto','get_waste_breakdown','get_stops_profile','get_trend'}
+    assert config['targets']['dry_end']['flag']==1.25 and config['targets']['maintenance']['target']==2.5   # the owner's bands for a tile without one
     headers={'Content-Type':'application/json','X-Workbench-Token':config['token']}
     for day,message in (('2026-09-12','Saturday'),('2026-09-13','Sunday'),('2025-09-29','outside the dataset'),('2026-10-01','outside the dataset'),('2026/09/14','YYYY-MM-DD')):
         status,_,body=request(running,'POST','/api/ask',json.dumps({'day':day,'shift':2,'question':'Show speed'}),headers)

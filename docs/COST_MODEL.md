@@ -51,7 +51,8 @@ The fields are flat on the row, beside the quantity, so the live narrative cites
 field and the narrative validator substitutes every dollar from the tool result. They ride on
 `get_quality_breakdown`, `get_downtime_breakdown`, `get_waste_breakdown`, `get_downtime_pareto` and
 `get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each controllable bucket's lineal feet / the
-reference speed; a bucket that ran better is not priced, and the grade mix is schedule-driven, never priced, so the envelope's
+reference speed; a bucket that ran better is not priced, and the grade mix and planned maintenance are schedule-driven and external
+stops (a power outage) external, none of them priced, so the envelope's
 `controllable_usd` is the priced buckets and the gap as a whole is not priced; [speed variance](METRICS.md#speed-variance-issue-92)), and on the two money tools:
 
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
@@ -63,17 +64,22 @@ reference speed; a bucket that ran better is not priced, and the grade mix is sc
   wet-end run under its grade's trailing-year speed (the owner's baseline, [METRICS](METRICS.md#the-owners-targets-and-bands-issue-101);
   minutes = the run's lineal feet short of the baseline in its running minutes / the baseline), side-trim
   points over the trim target (points / 100 x gross, priced as paper: per year this is the post's trim
-  formula), each downtime reason (Order change is labelled setup time, Planned maintenance scheduled time),
-  and all recorded shear and each dry-end reason (the whole loss). Each lever names the records behind it
-  and is marked `control`: `controllable` or `schedule-driven`, with a `control_note` (sequencing,
-  temperatures, the order mix and its web widths). It ranks levers and names records; it never prescribes
+  formula), each downtime reason (Order change is labelled setup time, Planned maintenance scheduled time,
+  Power outage external), and all recorded shear and each dry-end reason (the whole loss). Each lever names
+  the records behind it and is marked `control`: `controllable`, `schedule-driven` or `external` (a power
+  outage, outside the plant: the owner on PR #111), with a `control_note` (sequencing, temperatures, the
+  order mix and its web widths). It ranks levers and names records; it never prescribes
   a machine adjustment. Asked as "where is the money this month", "what's costing us", "opportunities";
   under the Day control "where is the money" is the shift's own `get_shift_dollars`.
   `lens` reads the same numbers the owner's two ways (issue #101): `supervisor` ranks the controllable
-  losses and lists side trim and planned maintenance after, unranked ("where's my biggest opportunity",
-  "what went wrong yesterday"); `ownership` is the total cost of waste, side trim first (all of it, with
-  its band), then shear, each dry-end reason and the unexplained remainder (`control` `unattributed`) by
-  dollars ("what does trim cost", "what's trim costing us"); `all`, the default, ranks every lever. A
+  losses and lists side trim and planned maintenance after, unranked, then external downtime, each group by
+  dollars (`cost_model.APART`; "where's my biggest opportunity", "what went wrong yesterday"); `ownership` is
+  the total cost of waste, side trim first (all of it, with its band), then by dollars shear, the dry-end
+  waste and the unexplained remainder (`control` `unattributed`) ("what does trim cost", "what's trim costing
+  us"). Bond, warp, misalignment and moisture are one group, the tag scrap (the owner, PR #111): the group is
+  ranked by the sum of its rows and carries the rank (`dry_end_rank`, with `dry_end_usd` and
+  `dry_end_usd_per_year` added left to right, and the dry-end waste's `dry_end_pct_of_yield` and band), and
+  each kind is its own row beneath the subtotal line (`group: dry_end`, no rank). `all`, the default, ranks every lever. A
   dry-end family's share is read against the yield after trim and shear (`pct_of_yield`), as the dry-end
   band is; shear and trim against gross.
 
@@ -178,20 +184,24 @@ rows: each dollar figure becomes the same field re-priced, the rates, formula an
 written again, a ranked money list is put in its new order, and an all-shifts money answer is written
 about the shift that lost the most at the new rates. The levers are ranked the way their lens ranks them (issue
 #101): under the supervisor lens the controllable levers are ranked and the schedule-driven ones (side trim,
-planned maintenance) follow them with no rank, however large a rate makes them; under the ownership lens all of side
-trim stays first, however small; the controllable totals the supervisor headline states are re-derived too (a line
+planned maintenance), then the external ones (a power outage), follow them with no rank, however large a rate makes
+them; under the ownership lens all of side trim stays first, however small, and the dry-end subtotal is re-derived
+from its kinds and moves with them (a rate that ranks another lever above it writes the subtotal line and its kinds
+again in that order, renumbered; only the line naming the tag scrap takes the subtotal's figures); the controllable totals the supervisor headline states are re-derived too (a line
 that names controllable losses or buckets takes them, and no other line does, so a window whose controllable total
 reads as its all-lever total keeps each figure its own), and the
 card's panel orders its bars by the lens before the unit. The supervisor card lists every controllable lever (five
 beside the headline, the others under a label), so a lever a rate moves into the top five is written there. The
-speed variance's controllable dollars are re-derived the same way; its grade mix is never priced. "What came back, per query" shows each query's result at the
+speed variance's controllable dollars are re-derived the same way; its grade mix, planned maintenance and external
+stops are never priced. "What came back, per query" shows each query's result at the
 rates in force too (what the page's own address returns from the server), so a re-numbered row citation names the
 row it shows. An analyst's interpretation is not rewritten (a
 model's sentence moved to other figures could claim what no row says, or keep a comparison the new figures
 reverse): at other rates it says which rates it was written at, and the evidence under it is re-priced. So
-the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twenty-five answers
+the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over twenty-seven answers
 (the two lenses on a month and on a shift's week, a supervisor week with no planned maintenance and trim under its
-target, and a speed variance whose mix is schedule-driven, among them) at six sets of rates (`tests/money_cli.cjs parity`), and the value case
+target, a speed variance whose mix is schedule-driven, one with planned maintenance and an external stop each in its
+own bucket, and a supervisor day with a power outage, among them) at six sets of rates (`tests/money_cli.cjs parity`), and the value case
 `value-dollars-shift-0914-shift-2-client` holds the server's `get_shift_dollars` at other rates to the
 client's figures (`evals/client_money.json`, written by `evals/make_client_money.py`). `price_terms`
 never reaches a model (the narrative packet and the OpenAI compaction drop it). A card's money is its

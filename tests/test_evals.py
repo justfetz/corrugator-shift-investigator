@@ -297,7 +297,7 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
     a case whose question lands elsewhere, and every offline question is also answered over its URL."""
     routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c]   # an analyst-plan case is a scripted live round: no URL
-    assert len(routing) == 164 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + 17 issue #101 cases (eight from the review of #111)
+    assert len(routing) == 166 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + 19 issue #101 cases (eight from the review of #111, two from the owner's decisions on it)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

@@ -38,15 +38,17 @@ elements.mode.querySelector=()=>null;
 // Public demo: with the server's model available the default stays offline (issue #42) and the model is a choice; without it the OpenAI option is gone and offline is forced.
 vm.runInContext("config={public:true,live_model_available:true,days:['2026-09-01','2026-09-30'],token:'t'};applyPublicMode()",context);assert.equal(elements.mode.value,'offline');assert.equal(elements['key-label'].hidden,true);assert.match(elements['mode-badge'].textContent,/model available/);
 elements.mode.value='openai';vm.runInContext("config={public:true,live_model_available:false,days:['2026-09-01','2026-09-30'],token:'t'};applyPublicMode()",context);assert.equal(elements.mode.value,'offline');assert.equal(elements.mode.disabled,true);
-vm.runInContext("config={days:['2026-09-01','2026-09-30'],token:'test'}",context);elements.mode.disabled=false;elements.mode.value='offline';
+// the owner's bands as /api/config serves them (targets.client_config): a tile whose row has no band is read against them
+const TARGETS=Object.fromEntries(JSON.parse(fs.readFileSync('src/investigator/targets.json','utf8')).bands.map(b=>[b.id,{home_run:b.home_run,target:b.target,flag:b.flag,unit:b.unit}]));
+vm.runInContext(`config={days:['2026-09-01','2026-09-30'],token:'test',targets:${JSON.stringify(TARGETS)}}`,context);elements.mode.disabled=false;elements.mode.value='offline';
 const row={observed_shift_fpm:600,speed_to_target_pct:75,valid_setups:60,paper_changes:30,maintenance_pct:3,operator_pct:1,dry_end_pct:1.2,trim_pct:2,shear_pct:.5,throughput_in:94,lineal_per_setup:4800};
 context.result={run_id:'test',session_id:'session',production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',context:{shift:2},usage:{tool_calls:1,model_calls:0},trace:[{tool:'get_shift_kpis',ok:true,elapsed_ms:1,data:{shift:2,coverage:'complete',rows:[row]}}],tables:[{title:'get_shift_notes',shift:2,coverage:'complete',rows:[{notes:'<script>untrusted</script>'}]}],charts:[{title:'Output heatmap',type:'calendar_heatmap',coverage:'complete',unit:'estimated good sq ft',rows:[{day:'2026-09-14',available:true,estimated_good_sqft:1000000,gross_sqft:1020000,speed_to_target_pct:75,downtime_pct:4,maintenance_pct:3,operator_pct:1,dry_end_pct:1.2,trim_pct:2,shear_pct:.5,paper_changes:27,valid_setups:60,heavy_hitter:'Upper knife / Knife jam',heavy_hitter_minutes:12,heavy_hitter_stops:3}]},{shift:2,coverage:'complete',unit:'ft/min',x:'wet_end_id',y:'actual_fpm',rows:[{wet_end_id:'W2-01',actual_fpm:600,target_fpm:800,speed_to_target_pct:75,grade:'200-C'}]}]};
 const first=context.result.charts[0].rows[0];
 context.result.charts[0].rows.push({...first,day:'2026-09-15',estimated_good_sqft:1500000},{...first,day:'2026-09-16',estimated_good_sqft:2000000},{day:'2026-09-17',available:false});
 vm.runInContext('showResult(result)',context);assert.equal(elements.metrics.children.length,7);assert.equal(elements.tables.children.length,1);assert.equal(elements.charts.children.length,1);
 // issue #63: the eleven numbers of the KPI row sit on seven tiles, one row of the card (value, unit, and a second number beneath)
-assert.deepEqual(elements.metrics.children.map(t=>[t.children[0].textContent,t.children[1].children.map(c=>c.textContent).join(' '),t.children[2].textContent]),[['Speed','600.0 ft/min','75.0% of target'],['Maintenance','3.00 %','target 2.5%'],['Operator','1.00 %','target 2.5%'],['Dry-end waste','1.20 %','above 1%'],['Trim','2.00 %','shear 0.50%'],['Setups','60','30 paper changes'],['Throughput','94.0 in','4,800 ft / setup']]);
-assert.deepEqual(elements.metrics.children.filter(t=>/flag/.test(t.children[2].className)).map(t=>t.children[0].textContent),['Speed','Maintenance','Dry-end waste']);   // under target, over 2.5%, over 1%
+assert.deepEqual(elements.metrics.children.map(t=>[t.children[0].textContent,t.children[1].children.map(c=>c.textContent).join(' '),t.children[2].textContent]),[['Speed','600.0 ft/min','75.0% of target'],['Maintenance','3.00 %','target 2.5%'],['Operator','1.00 %','target 2.5%'],['Dry-end waste','1.20 %','of yield · target 1%, flag above 1.25%'],['Trim','2.00 %','shear 0.50%'],['Setups','60','30 paper changes'],['Throughput','94.0 in','4,800 ft / setup']]);
+assert.deepEqual(elements.metrics.children.filter(t=>/flag/.test(t.children[2].className)).map(t=>t.children[0].textContent),['Speed','Maintenance','Dry-end waste']);   // under target, over 2.5%, over the 1% target
 vm.runInContext('showResult(result)',context);assert.equal(elements.charts.children.length,1);assert.equal(elements.tables.children.length,1);assert.equal(elements.trace.children.length,1);   // a second answer replaces the first one's evidence, never stacks on it
 const heatmap=elements.heatmaps.children[0];
 const cells=heatmap.children.find(e=>e.className==='heatmap-grid').children.filter(e=>e.tag==='button');
@@ -1382,10 +1384,29 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   }else{
    assert.equal(rows[0].lever,'Side trim (all recorded)'); assert.equal(rows[0].rank,1);
    assert.ok(rows[0].usd_per_year<rows[1].usd_per_year,'side trim is no longer the largest at these rates, and stays first');
-   assert.deepEqual(rows.map(r=>r.rank),rows.map((_,i)=>i+1)); assert.ok(rows.slice(1).every((r,i)=>!i||rows[i].usd_per_year>=r.usd_per_year),'the rest by dollars a year');
+   // the rest by dollars a year, the dry-end kinds as one group (the tag scrap, the owner on PR #111) with no rank of their own
+   const dry=rows.filter(r=>r.group==='dry_end'), first=rows.indexOf(dry[0]), sum=Money.round(dry.reduce((s,r)=>s+r.usd_per_year,0),0);
+   assert.ok(dry.length===4&&rows.slice(first,first+4).every(r=>r.group==='dry_end')&&dry.every(r=>r.rank===null),'the dry-end kinds together, unranked');
+   assert.ok(dry.every((r,i)=>!i||dry[i-1].usd_per_year>=r.usd_per_year),'the kinds by dollars a year beneath the subtotal');
+   assert.equal(now.dry_end_usd_per_year,sum); assert.equal(now.dry_end_rank,first+1);
+   const sizes=[...rows.slice(1,first).map(r=>r.usd_per_year),sum,...rows.slice(first+4).map(r=>r.usd_per_year)];
+   assert.ok(sizes.every((v,i)=>!i||sizes[i-1]>=v),'the groups by dollars a year: '+sizes.join(', '));
    assert.ok(prose.includes(`Side trim costs ${Money.money(rows[0].usd_per_year)} a year`),'the headline is side trim at the new rates');
-   assert.ok(prose.includes(`2. ${rows[1].lever}: ${Money.money(rows[1].usd_per_year)}/yr`),'the second lever is the largest of the rest');
+   const sub=prose.indexOf(`${now.dry_end_rank}. Dry-end waste (tag scrap), the 4 kinds below: ${Money.money(sum)}/yr`);
+   const kinds=dry.map(r=>prose.indexOf(`${r.lever}: ${Money.money(r.usd_per_year)}/yr`));
+   assert.ok(sub>=0&&kinds.every((x,i)=>x>(i?kinds[i-1]:sub)),'the subtotal at the new rates, each kind beneath it in order');
+   assert.ok(!/\d+\. Dry-end: /.test(prose),'the kinds are not numbered on their own');
    assert.ok(opens(bars[0],rows[0].lever),'the panel puts side trim first: '+bars.join(' | '));
+   // a rate that moves a group past the tag scrap: the subtotal line moves with its kinds and every line is renumbered
+   const moved=JSON.parse(JSON.stringify(data)), unexplained=moved.rows.find(r=>r.lever.startsWith('Unexplained'));
+   unexplained.price_terms.quantity=3e6;   // a remainder larger than all the dry-end waste, so at paper-heavy rates it ranks second
+   const heavy=Money.effective(cfg,{paper_usd_msf:100,machine_usd_hour:1}), after=Money.reprice('get_opportunities',moved,heavy,cfg);
+   const step={tool:'get_opportunities',before:moved,after}, q=lensed.trace.findIndex(e=>e.tool==='get_opportunities');
+   const lines=Money.repriceSections(lensed.sections,lensed.trace.map((e,i)=>i===q?step:null),heavy,cfg);
+   const u=lines.findIndex(l=>l.startsWith('- 2. Unexplained')), d=lines.findIndex(l=>l.startsWith('- 3. Dry-end waste (tag scrap)'));
+   assert.ok(u>=0&&d===u+1,'the remainder is second, the tag scrap third: '+lines.join(' | '));
+   assert.ok(lines.slice(d+1,d+5).every(l=>l.startsWith('- Dry-end: ')),'its four kinds beneath it');
+   assert.ok(lines[d+5].startsWith('- 4. Shear chops'),'then shear, fourth');
   }
   els['rates-reset'].events.click();
  }

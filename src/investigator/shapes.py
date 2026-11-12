@@ -131,6 +131,8 @@ def flag_lines(result, flags):
 
 
 PLANNED = ('Planned maintenance', 'PM')   # the Pareto's planned-maintenance category, by reason and by kind: scheduled time
+# the Pareto's external categories, by reason and by kind (a power outage; the owner on PR #111): outside the plant
+EXTERNAL = (*sorted(targets.EXTERNAL_REASONS), targets.EXTERNAL_KIND)
 FIRST_REASONS = 3   # the card shows five findings (web/app.js BULLETS_SHOWN): three reasons, then a flag and its recurrence
 FIRST_FLAGS = 5     # the largest flags listed beside the top reasons; every other flag follows the other reasons
 
@@ -554,7 +556,8 @@ class DailyAnswer:
         rows = dt['data']['rows']
         # Ranked by downtime % of the shift (the tool's order), stop count and minutes per stop beside; PM last.
         bullets = [bullet(f'{r["category"]}: **{f2(r["shift_percent"])}%** of the shift · {f2(r["down_minutes"])} min over {stops_text(r["stops"])}, '
-                          f'{f2(r["minutes_per_stop"])} min per stop' + (' · scheduled time, not ranked' if r.get('scheduled') else '') + priced(r), dt, i)
+                          f'{f2(r["minutes_per_stop"])} min per stop' + (' · scheduled time, not ranked' if r.get('scheduled') else
+                                                                          ' · external, not controllable' if r.get('external') else '') + priced(r), dt, i)
                    for i, r in enumerate(rows)]
         flags = [line for shift in [s, *[x for x in self.complete if x != s]] for d in [self.shifts[shift].get('get_downtime_breakdown')]
                  if d and d['data'].get('flags') for line in flag_lines(d, d['data']['flags'])]
@@ -1055,8 +1058,9 @@ class PeriodAnswer:
         data, rows = p['data'], p['data']['rows']
         minutes = data.get('measure', 'minutes') == 'minutes'
         noun = {'reason': 'reasons', 'place': 'places', 'kind': 'kinds'}.get(data.get('group_by'), 'reasons')
-        # Planned maintenance is scheduled time (issue #101): it never leads; it is listed where the tool put it, marked.
-        lead = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED), 0)
+        # Planned maintenance is scheduled time (issue #101) and a power outage is external (PR #111): neither leads;
+        # each is listed where the tool put it, marked.
+        lead = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED + EXTERNAL), 0)
         if rows:
             r = rows[lead]
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
@@ -1065,13 +1069,14 @@ class PeriodAnswer:
         else:
             head = f'No recorded stops in this window{self.where(data)} {ref(p)}'
         bullets = []
-        for i, r in sorted(enumerate(rows), key=lambda x: (x[1]['category'] in PLANNED, x[0])):   # scheduled time drops to the bottom
+        for i, r in sorted(enumerate(rows), key=lambda x: (x[1]['category'] in PLANNED + EXTERNAL, x[1]['category'] in PLANNED, x[0])):   # external, then scheduled time, at the bottom
             if i == lead:
                 continue
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
             other = f'over {n(r["stops"])} stops' if minutes else f'· {pval(r["minutes"])} min'
             previous = f'previous {pval(r["previous_minutes"])} min' if r.get('previous_minutes') is not None else 'previous unavailable'
-            planned = ' · scheduled time, not an unplanned loss' if r['category'] in PLANNED else ''
+            planned = (' · scheduled time, not an unplanned loss' if r['category'] in PLANNED else
+                       ' · external, not controllable' if r['category'] in EXTERNAL else '')
             bullets.append(bullet(f'{r["category"]}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{planned}{priced(r)}', p, i))
         notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[lead], 'category') if rows else [])
         return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'waste'))
@@ -1220,8 +1225,20 @@ class PeriodAnswer:
         figure = f'**{money(r["usd_per_year"])}/yr**' if r.get('usd_per_year') is not None else f'**{money(r["usd"])}** in the window'
         return bullet(f'{str(r["rank"]) + ". " if numbered and r.get("rank") else ""}{r["lever"]}: {figure} · {r["records"]} · {r["control"]}, {r["control_note"]}', o, i)
 
+    @staticmethod
+    def dry_end_line(o):
+        """The ownership lens's dry-end subtotal: bond, warp, misalignment and moisture are dry-end waste, the tag scrap
+        (the owner, PR #111); its dollars are the lines beneath it added up, its share and band the dry-end waste's."""
+        d = o['data']
+        figure = (f'**{money(d["dry_end_usd_per_year"])}/yr**' if d.get('dry_end_usd_per_year') is not None else
+                  f'**{money(d["dry_end_usd"])}** in the window')
+        return bullet(f'{d["dry_end_rank"]}. {d["dry_end_label"]}, the {n(d["dry_end_kinds"])} kinds below: {figure} · '
+                      f'{money(d["dry_end_usd"])} in this window · {pval(d["dry_end_pct_of_yield"])}% of the yield after trim and shear'
+                      f'{band(d.get("dry_end_band_text"))} · controllable, temperatures', o)
+
     def money_supervisor(self, o):
-        """The supervisor lens: the controllable losses ranked by dollars a year; side trim and planned maintenance after, schedule-driven."""
+        """The supervisor lens: the controllable losses ranked by dollars a year; side trim and planned maintenance after, schedule-driven;
+        then external downtime (a power outage), not controllable."""
         data, rows = o['data'], o['data']['rows']
         mine = [(i, r) for i, r in enumerate(rows) if r['control'] == 'controllable']
         head = (f'**{money(data["controllable_usd_per_year"])} a year** in controllable losses across {n(data["controllable_levers"])} levers{self.where(data)} · '
@@ -1232,9 +1249,10 @@ class PeriodAnswer:
         bullets = [self.lever_line(o, i, r) for i, r in mine[:5]]
         if len(mine) > 5:
             bullets += ['The other controllable levers'] + [self.lever_line(o, i, r) for i, r in mine[5:]]
-        rest = [(i, r) for i, r in enumerate(rows) if r['control'] != 'controllable']
-        if rest:
-            bullets += ['Schedule-driven, shown apart'] + [self.lever_line(o, i, r, numbered=False) for i, r in rest]
+        for control, label in (('schedule-driven', 'Schedule-driven, shown apart'), ('external', 'External, not controllable')):
+            rest = [(i, r) for i, r in enumerate(rows) if r['control'] == control]
+            if rest:   # the tool lists each group apart (cost_model.APART), so a re-rank in the browser keeps it under its label
+                bullets += [label] + [self.lever_line(o, i, r, numbered=False) for i, r in rest]
         notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + (money_notes(o, mine[0][1], 'lever') if mine else money_notes(o))
         return head, bullets, notes, self.window_looks(data, ('pareto', 'waste', 'opportunity'))
 
@@ -1245,7 +1263,13 @@ class PeriodAnswer:
         figure = f'**{money(trim["usd_per_year"])} a year**' if trim.get('usd_per_year') is not None else f'**{money(trim["usd"])}**'
         head = (f'Side trim costs {figure}{self.where(data)} · {money(trim["usd"])} in this window · {pval(trim["pct_of_gross"])}% of gross'
                 f'{band(trim.get("band_text"))} {ref(o, 0)}')
-        bullets = [self.lever_line(o, i, r) for i, r in enumerate(rows) if i > 0]
+        bullets = []
+        for i, r in enumerate(rows):
+            if i == 0:
+                continue
+            if r.get('group') == 'dry_end' and rows[i - 1].get('group') != 'dry_end':
+                bullets.append(self.dry_end_line(o))   # the tag scrap as one line, each kind beneath it (the owner, PR #111)
+            bullets.append(self.lever_line(o, i, r, numbered=not r.get('group')))
         total = (f'**{money(data["total_usd_per_year"])} a year**' if data.get('total_usd_per_year') is not None else f'**{money(data["total_usd"])}**')
         bullets.append(bullet(f'All the waste recorded: {total} across {len(rows)} kinds · {money(data["total_usd"])} in this window', o))
         notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + money_notes(o, trim, 'lever')
@@ -1254,7 +1278,8 @@ class PeriodAnswer:
     def period_review(self, tools, r):
         """The owner's downtime answer (get_downtime_review, issue #101): maintenance and operator downtime against their
         bands, the reasons ranked by % of scheduled minutes with stops and minutes per stop, the flags with who to ask and
-        how often the reason recurred, and planned maintenance last as scheduled time."""
+        how often the reason recurred; then external downtime (a power outage, not controllable) and planned maintenance
+        (scheduled time), each apart."""
         data, rows = r['data'], r['data']['rows']
         where = self.where(data)
         if not data['scheduled_minutes']:
@@ -1266,7 +1291,7 @@ class PeriodAnswer:
         # touch the ranking of this one (it is the comparison beside it, as in the Pareto).
         whole = data['window']['coverage'] == 'complete'
         bullets = []
-        for i, x in [(i, x) for i, x in enumerate(rows) if not x['scheduled']][:5]:   # the top five; the chart and table hold all
+        for i, x in [(i, x) for i, x in enumerate(rows) if not (x['scheduled'] or x.get('external'))][:5]:   # the top five; the chart and table hold all
             bullets.append(bullet(f'{str(x["rank"]) + ". " if whole else ""}{x["reason"]}, {x["kind"].lower()}: '
                                   f'**{pval(x["pct_of_scheduled"])}%** of scheduled minutes · {pval(x["minutes"])} min over {stops_text(x["stops"])}, '
                                   f'{pval(x["minutes_per_stop"])} min per stop' + (band(x['band_text']) if x['band'] in ('over target', 'flag') else '') +
@@ -1278,6 +1303,12 @@ class PeriodAnswer:
             bullets += ['The previous window'] + [bullet(
                 f'**{pval(data["previous_op_maint_pct"])}%** of its scheduled minutes in maintenance and operator downtime · '
                 f'maintenance {pval(data["previous_maintenance_pct"])}% · operator {pval(data["previous_operator_pct"])}%', r)]
+        external = [(i, x) for i, x in enumerate(rows) if x.get('external')]
+        if external:   # outside the plant (the owner, PR #111): in the downtime, never in a band or a flag
+            bullets += ['External, not controllable'] + [
+                bullet(f'{x["reason"]}: **{pval(x["minutes"])} min** over {stops_text(x["stops"])} · {pval(x["pct_of_scheduled"])}% of scheduled minutes · '
+                       'external, outside the plant', r, i)
+                for i, x in external]
         planned = [(i, x) for i, x in enumerate(rows) if x['scheduled']]
         if planned:
             bullets += ['Scheduled time, not ranked'] + [
@@ -1297,8 +1328,9 @@ class PeriodAnswer:
         return head, bullets, notes, looks[:3]
 
     # speed variance (issue #92): what each bucket is called in the headline, and where its records are
-    SPEEDVAR_WORDS = {'stops': 'stops', 'setups': 'setups', 'below_baseline': 'running under baseline', 'mix': 'mix'}
-    SPEEDVAR_LOOKS = {'stops': 'pareto', 'setups': 'pareto', 'below_baseline': 'speed', 'mix': 'grade'}
+    SPEEDVAR_WORDS = {'stops': 'stops', 'planned': 'planned maintenance', 'external': 'external stops', 'setups': 'setups',
+                      'below_baseline': 'running under baseline', 'mix': 'mix'}
+    SPEEDVAR_LOOKS = {'stops': 'pareto', 'planned': 'pareto', 'external': 'pareto', 'setups': 'pareto', 'below_baseline': 'speed', 'mix': 'grade'}
 
     def period_speedvar(self, tools, v):
         """The speed gap and the share of each bucket (get_speed_variance), then the three largest buckets with the
@@ -1326,8 +1358,9 @@ class PeriodAnswer:
             share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
             top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'
                    if whole and r.get('top_item') and r.get('top_item_fpm') is not None else '')
-            # every bucket is marked controllable or schedule-driven (issue #101); the grade mix is the order book's, never priced
-            control = (f' · schedule-driven, {r["control_note"]}' if r.get('control') == 'schedule-driven' else
+            # every bucket is marked (issue #101; PR #111): the grade mix and planned maintenance are schedule-driven, a power
+            # outage is external; neither is ever priced
+            control = (f' · {r["control"]}, {r["control_note"]}' if r.get('control') in ('schedule-driven', 'external') else
                        ' · controllable' if r.get('control') else '')
             bullets.append(bullet(f'{r["label"]}: **{f1(abs(r["gap_fpm"]))} ft/min** {"of the gap" if toward else "the other way, an offset"}{share}'
                                   f' · {f0(abs(r["gap_lineal_ft"]))} lineal ft{top}{priced(r)}{control}', v, i))
@@ -1340,7 +1373,8 @@ class PeriodAnswer:
         elif data.get('controllable_usd') is not None:
             notes.append(f'The controllable buckets are {money(data["controllable_usd"])} of machine time' +
                          (f' ({money(data["controllable_usd_per_year"])}/yr at the post\'s volumes)' if data.get('controllable_usd_per_year') is not None else '') +
-                         '; the grade mix is schedule-driven and not priced, nor is a bucket that ran better than the reference.')
+                         '; the grade mix and planned maintenance are schedule-driven and external stops are outside the plant, so none '
+                         'of them is priced, nor is a bucket that ran better than the reference.')
         if data.get('contribution_status') == MARGIN_NOT_SET:
             notes.append(contribution(data))
         elif data.get('controllable_contribution_usd') is not None:

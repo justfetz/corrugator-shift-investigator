@@ -14,7 +14,19 @@ BANDS = {b['id']: b for b in DEFINITION['bands']}
 SOURCE = DEFINITION['source']
 HOME_RUN, ON_TARGET, OVER_TARGET, FLAG = 'home run', 'on target', 'over target', 'flag'
 TRIM_FLAG_PCT = BANDS['trim']['flag']          # the per-setup trim flag the KPI tools count setups above
+# External downtime (the owner, PR #111, 2026-11-12): a stop whose cause is outside the plant, a power outage, is
+# its own kind. The records log it as maintenance; every table the tools read counts it as External instead, so it
+# shows in downtime and never counts against the maintenance band or trips its flag.
+EXTERNAL = DEFINITION['external']
+EXTERNAL_KIND = EXTERNAL['kind']
+EXTERNAL_REASONS = frozenset(EXTERNAL['reasons'])
 SHIFT_MINUTES = 480
+
+
+def stop_kind(kind, reason):
+    """The kind a stop is counted under: External for a reason the owner calls external (targets.json), whatever
+    kind the record gives it; otherwise the record's own kind."""
+    return EXTERNAL_KIND if reason in EXTERNAL_REASONS else kind
 
 
 def pct(value):
@@ -90,7 +102,15 @@ def prompt_text():
         return '/'.join(f'{spec[k]:g}' for k in ('home_run', 'target', 'flag')) + f'% {of.get(spec["unit"], spec["unit"])}'
     return (f'{downtime} ({pct(both["target"])} together); over is a flag.\n'
             f'Owner bands (home run / target / flag): trim {three(BANDS["trim"])}; shear {three(BANDS["shear"])};\n'
-            f'dry-end waste {three(BANDS["dry_end"])}. Planned maintenance is scheduled time.')
+            f'dry-end waste {three(BANDS["dry_end"])}. Planned maintenance is scheduled time, schedule-driven.\n'
+            f'{EXTERNAL_KIND} downtime ({", ".join(sorted(EXTERNAL_REASONS)).lower()}) is from outside the plant: it shows '
+            'in downtime, is not controllable and never counts against the maintenance or operator band.')
+
+
+def client_config():
+    """The bands' numbers for the card (`/api/config`): a tile whose row carries no band of its own is read against
+    these, never against a threshold typed into web/app.js."""
+    return {b['id']: {k: b[k] for k in ('home_run', 'target', 'flag', 'unit')} for b in DEFINITION['bands']}
 
 
 # The KPI tile (record_store.KPI_CATALOG) each band reads, for the period tools' one-measure rows.
