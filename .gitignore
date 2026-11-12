@@ -13,3 +13,5 @@ dist/
 *.jsonl
 # The eval ledger is committed: one line per `evals/run.py --track` run
 !evals/history.jsonl
+# DeepEval's local folder (the optional judge extra, issue #25)
+.deepeval/

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Grade the analyst · Shift Investigator</title><link rel="stylesheet" href="/style.css"><script src="/grade.js" defer></script></head>
+<body><header class="app"><div class="wrap"><div class="brand"><b>Shift Investigator</b><span>grading the analyst's narratives</span></div><a class="nav-btn" href="/evals">Back to the golden set</a><span class="badge">Local workbench / no model calls</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
+<div class="title"><p class="meta">judge calibration</p><h1>Grade the analyst</h1><p class="lede">Each answer below is an interpretation a model wrote, replayed from its recording (or a scripted analyst round from the golden set), with the tool results it was written from. Say whether it is good or bad, mark each rubric line pass or fail, and say why. The judge is trusted only as far as it agrees with these grades. Its own scores are not shown here, so your grades stay yours.</p></div>
+<main class="wrap evals-page grade-page">
+<section class="card" aria-label="Progress">
+<div class="section-heading"><h2>Progress</h2><span class="muted mono" id="file-note"></span></div>
+<p id="progress" class="evals-summary" role="status">Replaying the recorded narratives…</p>
+<details class="trace-json"><summary>The rubric the judge applies, line by line</summary><ol id="rubric"></ol></details>
+</section>
+<section class="card" aria-label="Narratives">
+<div class="section-heading"><h2>Narratives</h2><div class="seg" id="show-filter" role="group" aria-label="Show"><button type="button" class="seg-btn" data-value="todo" aria-pressed="true">To grade</button><button type="button" class="seg-btn" data-value="all" aria-pressed="false">All</button></div></div>
+<div id="items"></div>
+</section>
+<footer>Synthetic data · grades are saved on this machine to <code>evals/judge_calibration.json</code>; commit them with a pull request · <a href="https://github.com/justfetz/corrugator-shift-investigator/blob/main/evals/README.md#the-narrative-judge">How the judge is calibrated</a></footer>
+</main></body></html>
