@@ -41,14 +41,14 @@ OWNER_ASK = re.compile(r'^.*\bowner\b.*$', re.I | re.M)
 
 
 def gh(path: str):
-    out = subprocess.run(['gh', 'api', path, '--paginate'], capture_output=True, text=True, check=True).stdout
-    # --paginate concatenates JSON arrays; join them.
-    items = []
-    for chunk in re.split(r'\]\s*\[', out.strip()):
-        chunk = chunk if chunk.startswith('[') else '[' + chunk
-        chunk = chunk if chunk.endswith(']') else chunk + ']'
-        items.extend(json.loads(chunk))
-    return items
+    out = subprocess.run(['gh', 'api', path, '--paginate', '--slurp'], capture_output=True, text=True, check=True).stdout
+    return flatten(json.loads(out))
+
+
+def flatten(pages):
+    """`gh api --paginate --slurp` prints one JSON array of pages; join them. (Splitting the text on `][` broke
+    on any comment or body that contains those two characters.)"""
+    return [item for page in pages for item in (page if isinstance(page, list) else [page])]
 
 
 def order_key(title: str):

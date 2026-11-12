@@ -75,7 +75,7 @@ The verdict comment starts with a hidden marker (`<!-- agent-review sha=… verd
 
 Protected `main` keeps requiring the `deterministic` check, for both tiers. A merge that auto-merge makes is GitHub acting for the workflow's token, and GitHub starts no workflow from that, so the merge of an auto-tier pull request is not deployed on push; the nightly deploy of `main` ([DEPLOYMENT.md](DEPLOYMENT.md), "The nightly deploy") takes it the next weekday morning, and only the `/docs` pages and the changelog can differ in the meantime. For the same reason the Preview workflow's close job does not run for an auto-merged pull request, so its `pr-<n>` tag stays on the Cloud Run service (scaled to zero, costing nothing, still answering at its preview URL) until it is removed by hand: `gcloud run services update-traffic <service> --remove-tags pr-<n>`. Sweeping the tags of closed pull requests automatically is a follow-up, since it changes the Cloud Run workflows.
 
-**The merge batch.** `/issues` lists the open pull requests labelled `review: approve` in merge order (the backlog order of the issue each closes, then the pull request number) with their tier. The coordinator's daily summary quotes that list, and the owner merges the owner-tier ones in that order.
+**The merge batch.** `/issues` lists the open pull requests whose `review: approve` is for their current head (as `agent.py status` reads it) in merge order (the backlog order of the issue each closes, then the pull request number) with their tier. The coordinator's daily summary quotes that list, and the owner merges the owner-tier ones in that order.
 
 ## Caps and cost
 

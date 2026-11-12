@@ -785,3 +785,56 @@ def test_the_queue_starts_with_fewer_than_three_ahead_and_gives_up_loudly(tmp_pa
     stub.state = {}   # the listing fails: a warning, then the deadline, never a silent crash
     proc, calls, _ = stub.run('queue', '--run-id', '77', '--issue', '126', '--poll', '0', '--max-wait', '0')
     assert proc.returncode == 1 and 'could not list' in proc.stdout and posted(calls, 'issues/126/comments')
+
+
+def test_an_unreadable_golden_file_is_fix_first_not_a_crash():
+    base = golden_text([{'id': 'a', 'mode': 'offline', 'expect': {'status': 'complete'}}])
+    assert agent.golden_problems(base, '{"cases": [', 'evals/golden.json')[0].startswith(
+        'evals/golden.json is not a readable golden file on this head')
+    assert agent.golden_problems(base, '{"cases": [{"mode": "offline"}]}', 'g')[0].startswith('g is not a readable golden file')
+    assert agent.golden_changes(base, '{"cases": [', 'g') == [] and agent.golden_problems('{broken', base, 'g') == []
+
+
+def test_an_added_expectation_is_listed_for_the_reviewer():
+    base = golden_text([{'id': 'a', 'mode': 'offline', 'expect': {'status': 'complete'}}])
+    head = golden_text([{'id': 'a', 'mode': 'offline', 'expect': {'status': 'complete', 'max_ms': 5000}}])
+    assert agent.golden_problems(base, head, 'g') == []
+    assert agent.golden_changes(base, head, 'g') == ['g: case `a` added `expect.max_ms`: 5000'], \
+        'a budget above the default loosens the case: the reviewer sees it'
+
+
+def test_a_verdict_without_its_facts_still_labels_the_head(tmp_path):
+    stub = Stub(tmp_path)
+    sha = review_state(stub, files=['docs/a.md'])
+    (stub.repo / '.agent-facts' / 'meta.json').unlink()
+    proc, calls, out = verdict(stub, sha, [])
+    assert proc.returncode == 1 and out['verdict'] == 'needs-owner'
+    assert 'kind=unresolved' in posted(calls, 'issues/200/comments')[0]['body']
+    assert posted(calls, 'issues/200/labels') == [{'labels[]': 'review: needs-owner'}]
+    assert not [c for c in calls if c[:2] in (['pr', 'merge'], ['workflow', 'run'])]
+
+
+def test_a_fix_round_that_cannot_be_dispatched_says_how_to_start_it(tmp_path):
+    stub = Stub(tmp_path)
+    refusing = GH_STUB.replace("if args[:2] == ['pr', 'merge']",
+                               "if args[:2] == ['workflow', 'run']:\n    sys.stderr.write('HTTP 403')\n    sys.exit(1)\nif args[:2] == ['pr', 'merge']")
+    (stub.root / 'bin' / 'gh').write_text(refusing)
+    sha = review_state(stub, files=['src/investigator/agent.py'])
+    proc, calls, out = verdict(stub, sha, [{'where': 'a.py:1', 'gap': 'x'}])
+    assert proc.returncode == 1
+    bodies = [b['body'] for b in posted(calls, 'issues/200/comments')]
+    assert len(bodies) == 2 and 'could not be started' in bodies[1] and '`@claude`' in bodies[1]
+
+
+def test_a_fix_run_that_gives_up_in_the_queue_points_to_at_claude(tmp_path):
+    stub = Stub(tmp_path)
+    stub.state = {'repos/o/r/actions/workflows/agent.yml/runs?per_page=100': {'workflow_runs': [run(10), run(20), run(30)]}}
+    proc, calls, _ = stub.run('queue', '--run-id', '77', '--issue', '126', '--pr', '200', '--poll', '0', '--max-wait', '0')
+    body = posted(calls, 'issues/200/comments')[0]['body']
+    assert proc.returncode == 1 and 'comment `@claude` on this pull request' in body and 'label the issue' not in body
+
+
+def test_the_backlog_joins_slurped_pages_whatever_the_bodies_contain(monkeypatch):
+    pages = [[{'number': 1, 'body': 'quoting rows[0][1] and ][ here'}], [{'number': 2, 'body': ''}]]
+    monkeypatch.setattr(backlog.subprocess, 'run', lambda *a, **k: subprocess.CompletedProcess(a, 0, json.dumps(pages), ''))
+    assert [i['number'] for i in backlog.gh('repos/x/y/issues')] == [1, 2]

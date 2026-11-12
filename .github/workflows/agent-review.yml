@@ -196,6 +196,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Work out the facts (the files, the golden check, the issue) with main's script
+        continue-on-error: true   # without them the verdict is needs-owner (unresolved), said on the pull request
         working-directory: pr
         env:
           GH_TOKEN: ${{ github.token }}

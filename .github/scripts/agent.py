@@ -202,6 +202,15 @@ def changed_paths(api_files: list) -> list[str]:
     return out
 
 
+def golden_cases(text: str) -> dict:
+    """A golden file's cases by id; raises ValueError when the file is not a golden file."""
+    data = json.loads(text)
+    cases = data.get('cases') if isinstance(data, dict) else None
+    if not isinstance(cases, list) or not all(isinstance(c, dict) and 'id' in c for c in cases):
+        raise ValueError('no list of cases with ids')
+    return {c['id']: c for c in cases}
+
+
 def golden_problems(base_text: str | None, head_text: str | None, name: str) -> list[str]:
     """A golden file weakened between main and the head: a case deleted, an `expect` key (or a key of a
     dict-valued one, such as a value case's `values`) removed, a case's `mode` changed, or a budget
@@ -210,8 +219,14 @@ def golden_problems(base_text: str | None, head_text: str | None, name: str) -> 
         return []
     if not head_text:
         return [f'{name} was deleted']
-    base = {c['id']: c for c in json.loads(base_text).get('cases', [])}
-    head = {c['id']: c for c in json.loads(head_text).get('cases', [])}
+    try:
+        base = golden_cases(base_text)
+    except ValueError:
+        return []   # main's own file is broken: nothing to compare against
+    try:
+        head = golden_cases(head_text)
+    except ValueError as err:
+        return [f'{name} is not a readable golden file on this head ({str(err)[:120]})']
     out = [f'{name}: case `{cid}` was deleted' for cid in base if cid not in head]
     for cid, old in base.items():
         new = head.get(cid)
@@ -237,8 +252,10 @@ def golden_changes(base_text: str | None, head_text: str | None, name: str) -> l
     listed for the reviewer to judge against the issue."""
     if not base_text or not head_text:
         return []
-    base = {c['id']: c for c in json.loads(base_text).get('cases', [])}
-    head = {c['id']: c for c in json.loads(head_text).get('cases', [])}
+    try:
+        base, head = golden_cases(base_text), golden_cases(head_text)
+    except ValueError:
+        return []   # golden_problems reports an unreadable head
     out = []
     for cid, old in base.items():
         new = head.get(cid)
@@ -252,6 +269,8 @@ def golden_changes(base_text: str | None, head_text: str | None, name: str) -> l
         for key in sorted(set(was) & set(now)):
             if was[key] != now[key]:
                 out.append(f'{name}: case `{cid}` changed `expect.{key}`: {json.dumps(was[key])[:200]} -> {json.dumps(now[key])[:200]}')
+        # a key the case did not have: often a tighter check, but a budget (`max_ms`) above the default loosens it
+        out += [f'{name}: case `{cid}` added `expect.{key}`: {json.dumps(now[key])[:200]}' for key in sorted(set(now) - set(was))]
     return out
 
 
@@ -508,10 +527,12 @@ def cmd_queue(args) -> int:
         else:
             print('::warning::could not list the agent runs; trying again at the next poll', flush=True)
         if time.time() > deadline:
+            retry = ('comment `@claude` on this pull request with what to fix (a re-run of the review does not send the '
+                     'same head back twice)' if args.pr else f'label the issue `{READY}` again (or comment `@claude` on it)')
             where = args.pr or args.issue
             if where:
                 comment(where, f'The agent waited {args.max_wait} minutes for a place among the {MAX_AGENTS} that run at once '
-                               f'and gave up. [Run]({run_url()}); label the issue `{READY}` again (or comment `@claude`) to retry.' + FOOTER)
+                               f'and gave up. [Run]({run_url()}); to retry, {retry}.' + FOOTER)
             print(f'::error::no place in the queue after {args.max_wait} minutes')
             return 1
         time.sleep(args.poll)
@@ -708,7 +729,21 @@ def cmd_verdict(args) -> int:
     evals' exit code come from the other jobs, each from its own artifact, so neither the pull request's
     code (which ran in the evals job) nor the model can rewrite the files list or the golden check."""
     p, sha = int(args.pr), args.sha
-    meta = json.loads(Path(args.facts, 'meta.json').read_text(encoding='utf-8'))
+    try:
+        meta = json.loads(Path(args.facts, 'meta.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        meta = None
+    if meta is None:
+        # This job's own `prepare` failed (an API call, an unreadable checkout): never approve, but say so on
+        # the head rather than leave it unlabelled after `reset` took the old label off.
+        decision = {'verdict': 'needs-owner', 'label': LABELS['needs-owner'], 'next': None, 'tier': 'owner', 'kind': 'unresolved',
+                    'reasons': ['the review could not work out the pull request\'s facts (its `prepare` step failed: see the run); '
+                                'run the Agent review workflow again for this pull request']}
+        comment(p, verdict_comment(decision, sha=sha, issue=None, number=p, rnd=0, run_url=run_url(), checks=[]))
+        set_review_label(p, decision['label'])
+        print('::error::no facts for this head; labelled needs-owner')
+        output(verdict='needs-owner', next='', round=0, issue='')
+        return 1
     if meta['sha'] != sha:
         print(f'::warning::the review inputs are for {meta["sha"][:7]}, not {sha[:7]}; nothing decided')
         return 0
@@ -733,7 +768,7 @@ def cmd_verdict(args) -> int:
     agent_built = BUILT in labels_of(pr) and bool(issue_now) and READY in labels_of(issue_now)
     decision = decide(issue=meta['issue'], issue_labels=labels_of(issue_now) if issue_now else meta['issue_labels'], reviewer=gaps is not None, gaps=gaps or [],
                       golden=meta['golden'], ci=state, ci_detail=detail, evals=evals, evals_detail=evals_detail,
-                      files=meta['files'], rounds=rounds - (1 if already else 0), agent_built=agent_built,
+                      files=meta['files'], rounds=already - 1 if already else rounds, agent_built=agent_built,
                       conflicts=pr.get('mergeable') is False)
     rnd = (already or rounds + 1) if decision['next'] == 'fix' else 0
     checks = [f'CI: {state} ({detail})', f'evals: {evals}' + (f' ({evals_detail})' if evals_detail else ''),
@@ -747,8 +782,13 @@ def cmd_verdict(args) -> int:
     print(f"{decision['label']} on PR #{p} at {sha[:7]}; next: {decision['next'] or 'the owner'}")
     output(verdict=decision['verdict'], next=decision['next'] or '', round=rnd, issue=meta['issue'] or '')
     if decision['next'] == 'fix' and not already:
-        gh('workflow', 'run', 'agent.yml', '--repo', REPO, '--ref', 'main',
-           '-f', f'issue={meta["issue"]}', '-f', f'pr={p}', '-f', f'round={rnd}')
+        sent = subprocess.run(['gh', 'workflow', 'run', 'agent.yml', '--repo', REPO, '--ref', 'main',
+                               '-f', f'issue={meta["issue"]}', '-f', f'pr={p}', '-f', f'round={rnd}'], capture_output=True, text=True)
+        if sent.returncode:
+            comment(p, f'The fix round could not be started ({sent.stderr.strip()[:200]}). Comment `@claude` on this pull '
+                       'request with the gaps above to start it by hand.' + FOOTER)
+            print(f'::error::could not dispatch fix round {rnd}')
+            return 1
     elif decision['next'] == 'auto-merge':
         merge = subprocess.run(['gh', 'pr', 'merge', str(p), '--auto', '--merge', '--match-head-commit', sha, '--repo', REPO],
                                capture_output=True, text=True)
