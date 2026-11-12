@@ -219,6 +219,12 @@ def test_a_key_email_phone_or_ip_typed_into_a_question_is_replaced():
     for secret in ('sk-ant', 'me@example.com', '555-123-4567', '10.1.2.3'):
         assert secret not in out
     assert out == 'why slow [key] [email] [phone] [ip] on 2026-09-14 shift 2'
+    # IPv6 too (Codex on PR 131): compressed, full, with a zone, IPv4-mapped; a clock time or a MAC address is left alone
+    for address in ('2001:db8:85a3::8a2e:370:7334', 'fe80::1', 'fe80::1%eth0', '::ffff:10.1.2.3', '::1',
+                    '2001:0db8:85a3:0000:0000:8a2e:0370:7334'):
+        assert redact(f'from {address} why slow', 500) == 'from [ip] why slow', address
+    assert redact('downtime 07:00:00 to 15:00 on 00:1a:2b:3c:4d:5e', 500) == 'downtime 07:00:00 to 15:00 on 00:1a:2b:3c:4d:5e'
+    assert redact('Note:: a, b', 500) == 'Note:: a, b'
     assert redact('how-many-setups-did-we-run-last-week', 500) == 'how-many-setups-did-we-run-last-week'
     assert len(redact('x' * 2000, 500)) == 500
     # replaced before the cut: nothing straddling the 500th character survives as a fragment

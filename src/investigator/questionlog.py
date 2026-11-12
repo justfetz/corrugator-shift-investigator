@@ -44,6 +44,11 @@ COUNTABLE = re.compile(
 
 EMAIL = re.compile(r'[\w.+-]+@[\w-]+(\.[\w-]+)+')
 IPV4 = re.compile(r'(?<![\w.])\d{1,3}(\.\d{1,3}){3}(?![\w.])')
+# IPv6: eight full groups, or a compressed form with `::` (an IPv4 tail and a %zone included). A clock time (07:00:00)
+# or a MAC address has neither, so it is left alone.
+H4 = r'[0-9A-Fa-f]{1,4}'
+IPV6 = re.compile(rf'(?<![\w:.])(?=[:\w]*[0-9A-Fa-f])(?:(?:{H4}:){{7}}{H4}|(?:{H4}(?::{H4}){{0,6}})?::(?:{H4}(?::{H4}){{0,6}})?'
+                  rf'(?::\d{{1,3}}(?:\.\d{{1,3}}){{3}})?)(?:%[\w.]+)?(?![\w:]|\.\d)')
 PHONE = re.compile(r'(?<![\w-])\+?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]\d{4}(?![\w-])|(?<![\w-])\+\d[\d\s-]{8,}\d(?![\w-])|\b\d{10,}\b')
 TOKEN = re.compile(r'[A-Za-z0-9_\-]{20,}')
 # Markup a comment may not carry: tags, entities, Markdown links, images and code. A question is logged as typed.
@@ -61,6 +66,7 @@ def redact(text, limit):
     """`text` with emails, IP addresses, phone numbers and key-like tokens replaced, then cut to `limit` characters
     (replaced first, so nothing straddling the cut survives as a fragment)."""
     text = EMAIL.sub('[email]', text)
+    text = IPV6.sub('[ip]', text)
     text = IPV4.sub('[ip]', text)
     text = PHONE.sub('[phone]', text)
     return TOKEN.sub(_keylike, text)[:limit]
