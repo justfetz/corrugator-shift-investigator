@@ -35335,7 +35335,7 @@
     },
     "shift": null
    },
-   "note": "Owner ruling (d), 2026-11-12: over September, the waste breakdown's recorded lines (trim, shear, changeover, cutoff-knife and stacker boards, dry-end, planning / admin) plus good_output_sqft add back to gross_sqft (the generator checks the sum before writing). The bale and its unexplained remainder are a scale reading, not a line.",
+   "note": "Owner ruling (d), 2026-11-12: over September, the waste breakdown's recorded lines (trim, shear, changeover, cutoff-knife and stacker boards, dry-end, planning / admin) plus good_output_sqft add back to gross_sqft; the generator computes good output both as gross minus the month's line totals and as each setup's own good output summed, and writes only when they agree. The bale and its unexplained remainder are a scale reading, not a line.",
    "expect": {
     "coverage": "complete",
     "row_count": 14,

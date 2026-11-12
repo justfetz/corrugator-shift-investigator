@@ -2850,6 +2850,97 @@
    }
   },
   {
+   "id": "shift-cracks-cost",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What did cracks cost this shift?",
+   "note": "Review of PR #123 (items 1 and 2 of the coordinator's list): on the shift, cracks (the cracking category, in the other family) names a dry-end reject family, so it routes as warp does, to the shift's reject breakdown (priced when money is asked), not to the money card or a refusal.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quality",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "shift-moisture-cost",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What did moisture cost this shift?",
+   "note": "Review of PR #123 (items 1 and 2 of the coordinator's list): on the shift, moisture (its own family, owner 2026-11-12) names a dry-end reject family, so it routes as warp does, to the shift's reject breakdown (priced when money is asked), not to the money card or a refusal.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quality",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "shift-show-cracked-board",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Show cracked board",
+   "note": "Review of PR #123 (items 1 and 2 of the coordinator's list): on the shift, cracked board names a dry-end reject family, so it routes as warp does, to the shift's reject breakdown (priced when money is asked), not to the money card or a refusal.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quality",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "shift-show-moisture",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Show moisture",
+   "note": "Review of PR #123 (items 1 and 2 of the coordinator's list): on the shift, moisture names a dry-end reject family, so it routes as warp does, to the shift's reject breakdown (priced when money is asked), not to the money card or a refusal.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quality",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "trend-steam-moisture-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Trend of steam / moisture stops over eight weeks",
+   "note": "Review of PR #123: 'Steam / moisture' is a recorded stop reason; a trend of its stops is the stops series, not the moisture rejects' series.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=trend&metric=stops",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "trend-steam-moisture-downtime",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Weekly trend of steam/moisture downtime",
+   "note": "Review of PR #123: a trend of steam / moisture downtime is the downtime series, not the moisture rejects' series.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=trend&metric=downtime_pct",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "shift-summary-good-output",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Summarize this shift",
+   "note": "Owner ruling (d), 2026-11-12: the shift card shows good output, the saleable board, as gross minus every recorded waste line, each line's own figure on the line (the value case value-good-output-adds-back-shift checks the arithmetic).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=summary",
+    "status": "complete",
+    "sections_match": "^- Good output: \\*\\*[0-9,]+ sq ft\\*\\* of [0-9,]+ gross, after trim [0-9,]+, shear [0-9,]+, dry-end [0-9,]+, changeover rejects [0-9,]+, waste boards [0-9,]+ and planning / admin [0-9,]+ sq ft \\(query [0-9]+ · row 0\\)$"
+   }
+  },
+  {
+   "id": "month-waste-good-output",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Show the waste breakdown this month",
+   "note": "Owner ruling (d), 2026-11-12: the month's waste card shows good output beside every waste line (gross minus every recorded line but the bale; value-good-output-adds-back-month checks the arithmetic).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=month",
+    "status": "complete",
+    "sections_match": "^- Good output: \\*\\*[0-9,.]+ sq ft\\*\\*, [0-9.]+% of [0-9,.]+ sq ft gross, after every recorded waste line above but the bale \\(query [0-9]+\\)$"
+   }
+  },
+  {
    "id": "period-fiscal-vs-previous",
    "type": "routing",
    "mode": "offline",

@@ -438,13 +438,15 @@ function paretoChart(chart,wrap){
  const svg=svgNode('svg',{viewBox:`0 0 ${f.W} ${f.H}`,role:'img','aria-label':chart.title||'downtime Pareto'});
  xAxis(svg,f.x0,f.x1,f.top,f.top+rows.length*36,max,chart.unit);
  rows.forEach((r,i)=>{const y=f.top+i*36, v=Number(r[key])||0, prev=r[prevKey]===null||r[prevKey]===undefined?null:Number(r[prevKey]);
-  labelText(svg,r.category,f.x0-8,y+19,f.chars);
+  labelText(svg,stopLabel(r.category),f.x0-8,y+19,f.chars);
   svg.append(barPath(f.x0,y+6,(v/max)*(f.x1-f.x0),14,i<3?'bar vital':'bar rest'));
   if(prev!==null)svg.append(barPath(f.x0,y+22,(prev/max)*(f.x1-f.x0),6,'bar prev'));
-  const detail=`${r.category}: ${fmtVal(v,chart.unit)} over ${r.stops} stops, ${r.share_pct}% of the window, cumulative ${r.cumulative_pct}%; previous window ${prev===null?'unavailable':fmtVal(prev,chart.unit)}.`;
+  const detail=`${stopLabel(r.category)}: ${fmtVal(v,chart.unit)} over ${r.stops} stops, ${r.share_pct}% of the window, cumulative ${r.cumulative_pct}%; previous window ${prev===null?'unavailable':fmtVal(prev,chart.unit)}.`;
   const t=svgNode('text',{x:f.x1+8,y:y+19,tabindex:0,'aria-label':detail,class:'val'},`${fmtVal(v,'')} · ${Math.round(r.share_pct)}% · cum ${Math.round(r.cumulative_pct)}%`);t.append(svgNode('title',{},detail));svg.append(t);});
  wrap.append(svg,legend([['vital','top three'],['rest','the rest'],['prev','previous window']]));
 }
+// The planned stop reads as both its reason and its kind wherever it shows (owner, 2026-11-12), never a bare code.
+function stopLabel(name){return ['Planned maintenance','Scheduled','PM'].includes(name)?'Planned maintenance (scheduled)':name;}
 // Waste breakdown: the dry-end split as stacked bars (current and previous), then every category paired.
 function wasteChart(chart,wrap){
  const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3'],['moisture','s4'],['other','s5']].filter(([k])=>byKey[k]);  // the five dry-end families; a result without one (an older recording) stacks the ones it has

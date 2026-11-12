@@ -121,10 +121,10 @@ Every measure is a raw numerator or denominator, never a percentage, so any wind
 | `misalignment_sqft` | `DOUBLE` | Reject lines of the MISALIGNMENT family: `misalignment_pct` |
 | `moisture_sqft` | `DOUBLE` | Reject lines of the MOISTURE family: `moisture_pct` |
 | `other_sqft` | `DOUBLE` | Reject lines of the OTHER family (cracking, handling, paper, print): `other_pct` |
-| `changeover_sqft` | `DOUBLE` | Changeover reject lines, counted with shear (the waste breakdown's changeover row): `unexplained_pct` |
-| `admin_sqft` | `DOUBLE` | Planning / admin reject lines, reported apart (the waste breakdown's admin row): `unexplained_pct` |
-| `cutoff_waste_sqft` | `DOUBLE` | The lanes' cutoff-knife waste boards (the waste breakdown's cutoff_waste row): `unexplained_pct` |
-| `stacker_waste_sqft` | `DOUBLE` | The lanes' stacker waste boards (the waste breakdown's stacker_waste row): `unexplained_pct` |
+| `changeover_sqft` | `DOUBLE` | Changeover reject lines, counted with shear (the waste breakdown's changeover row): `estimated_good_sqft`, `unexplained_pct` |
+| `admin_sqft` | `DOUBLE` | Planning / admin reject lines, reported apart (the waste breakdown's admin row): `estimated_good_sqft`, `unexplained_pct` |
+| `cutoff_waste_sqft` | `DOUBLE` | The lanes' cutoff-knife waste boards (the waste breakdown's cutoff_waste row): `estimated_good_sqft`, `unexplained_pct` |
+| `stacker_waste_sqft` | `DOUBLE` | The lanes' stacker waste boards (the waste breakdown's stacker_waste row): `estimated_good_sqft`, `unexplained_pct` |
 | `setups_above_trim_target` | `INTEGER` | Setups whose own trim is above 3.25 % of their gross: `setups_above_trim_target` |
 | `grade_gross_sqft` | `MAP(VARCHAR, DOUBLE)` | Grade mix: sum(G) per board grade (a window sums the maps; the values add to `gross_sqft`) |
 | `scheduled_seconds` | `DOUBLE` | Scheduled shift time: `speed_all_fpm`, `downtime_pct`, `maintenance_pm_pct`, `operator_pct` |

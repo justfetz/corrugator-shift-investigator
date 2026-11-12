@@ -375,18 +375,19 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
 # The names the record contract must never carry (issue #100, owner 2026-11-11): the vendor whose dry-end record the
 # contract was modelled on, its product names, its record codes and its source-system table names. The contract
 # describes a generic corrugator dry-end setup record. The names are spelled here in pieces, so this file does not
-# hold them either. A short name must stand alone: a letter, digit, '+', '/' or '_' before it, or a letter after it,
-# is a base64 blob or another word; a digit after it is still the name (a numbered table, machine or knife). The long
-# ones match anywhere. Every match ignores case (taken from #122, with the record codes added).
+# hold them either. A short name must stand alone: a letter, digit, '+' or '/' before it, or a letter, '+' or '/' after
+# it, is a base64 blob or another word; a digit or an underscore on either side is still the name (a numbered table,
+# machine or knife, a snake_case column or slug). The long ones match anywhere. Every match ignores case (taken from #122, with the record codes added).
 SHORT_VENDOR_NAMES = ("B" + "HS", "P0" + "4[PGTS]", "H" + "QM", "A" + "SM", "K" + "QF")
-LONG_VENDOR_NAMES = ("Production" + "_Center", "BQMES" + "PAHT", "Modul" + "e ?Facer", "Modul" + " Facer", "K" + "QFSquare")
-VENDOR_PATTERN = re.compile("(?<![A-Za-z0-9+/_])(?:" + "|".join(SHORT_VENDOR_NAMES) + ")(?![A-Za-z+/_])|" + "|".join(LONG_VENDOR_NAMES),
+LONG_VENDOR_NAMES = ("Production" + "_Center", "BQMES" + "PAHT", "Modul" + "e[ _-]?Facer", "Modul" + "[ _-]Facer", "K" + "QFSquare")
+VENDOR_PATTERN = re.compile("(?<![A-Za-z0-9+/])(?:" + "|".join(SHORT_VENDOR_NAMES) + ")(?![A-Za-z+/])|" + "|".join(LONG_VENDOR_NAMES),
                             re.IGNORECASE)
 
 
 def test_the_vendor_pattern_catches_the_names_the_owner_gave_and_not_a_base64_blob():
     for text in ("Production" + "_Center1", "the production" + "_center1 table", "B" + "HS-2", "B" + "HS2", "a b" + "hs line",
-                 "BQMES" + "PAHT", "P0" + "4P-shaped", "Modul" + "eFacer", "H" + "QM1", "a" + "sm2", "K" + "QFSquareFootage"):
+                 "BQMES" + "PAHT", "P0" + "4P-shaped", "Modul" + "eFacer", "H" + "QM1", "a" + "sm2", "K" + "QFSquareFootage",
+                 "k" + "qf_sqft", "b" + "hs_line", "h" + "qm_total", "P0" + "4P_x", "col_a" + "sm", "Modul" + "e-Facer", "Modul" + "e_Facer"):
         assert VENDOR_PATTERN.search(text), text
     for text in ("x9B" + "HSq", "+B" + "HS/", "aB" + "HS", "CORR-2", "LINE-2", "wa" + "sm", "cutoff_knife", "stacker_waste_boards"):
         assert not VENDOR_PATTERN.search(text), text

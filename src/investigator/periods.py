@@ -12,6 +12,7 @@ from datetime import date, timedelta
 import time
 from uuid import uuid4
 from .record_store import FISCAL_START, default_store, fiscal_bounds, fiscal_period, shift_note
+from .records import stop_label
 
 ACCOUNTING_445_START = FISCAL_START  # shared with the period tools: one 4-4-5 calendar in the app
 
@@ -178,7 +179,7 @@ class PeriodReports:
                 row['previous_minutes'] = None
         if recurring and complete:
             top=recurring[0]
-            sections.append(f'Most recorded downtime: {top["place"]} / {top["reason"]}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
+            sections.append(f'Most recorded downtime: {top["place"]} / {stop_label(top["reason"])}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
         rankings=[]
         if complete:
             for s in shifts:

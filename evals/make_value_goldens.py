@@ -67,8 +67,9 @@ def boards(setup):
     return sum(lane.cutoff_waste_sqft + lane.stacker_waste_sqft for lane in setup.lanes)
 
 
-def good(setup):
-    """Good output, the saleable board (owner, 2026-11-12): gross minus every recorded waste line."""
+def good_of(setup):
+    """A setup's good output, the saleable board (owner, 2026-11-12): its gross minus every recorded waste line, from its
+    own reject lines and lanes."""
     return (setup.total_produced_sqft - setup.trim_sqft - setup.chop_sqft - dry_end(setup) - line_sqft(setup, "shear")
             - boards(setup) - line_sqft(setup, "excluded"))
 CORRUPT_TRIM_SQFT = 99999999.0   # the fixture's bad-trim value the corrupt toggle injects
@@ -433,8 +434,10 @@ def waste_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=
             "previous_pct_of_gross": num(prior, 4),
             "delta_pct_points": [round(pct - prior, 6), 1.02e-4] if prior is not None else exact(None)}
     good = now["gross"] - sum(a[k] for k in GOOD_LINES)
-    if abs(sum(a[k] for k in GOOD_LINES) + good - now["gross"]) > 1e-6:
-        raise AssertionError(f"{id}: the waste lines and good output do not add back to gross")
+    # Two roads to good output: the window's line totals off its gross, and each setup's own good output summed.
+    by_setup = sum(good_of(s) for s in plain.between("dry_end_setups", *cur, shift))
+    if abs(by_setup - good) > 0.01:
+        raise AssertionError(f"{id}: good output by setup {by_setup} is not gross minus the window's lines {good}")
     values["$"] = {"gross_sqft": num(now["gross"], 1), "previous_gross_sqft": num(before["gross"], 1) if prev_available else exact(None),
                    "good_output_sqft": num(good, 1), "good_output_pct": num(good / now["gross"] * 100, 4)}
     coverage = "complete" if plain.coverage(*cur) == "complete" and plain.coverage(*prev) == "complete" else "partial"
@@ -694,7 +697,7 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
         "valid_setups": exact(len(setups)), "paper_changes": exact(wet_ends),
         "speed_to_target_pct": approx(feet / sum(GRADES[s.quality_id] * s.elapsed_seconds / 60 for s in setups) * 100),
         "observed_lineal_ft": approx(feet), "observed_shift_fpm": approx(feet / 480),
-        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(good(s) for s in setups)),
+        "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(good_of(s) for s in setups)),
         "trim_sqft": approx(trim), "shear_sqft": approx(shear), "reject_sqft": approx(rejects),
         "changeover_sqft": approx(sum(line_sqft(s, "shear") for s in setups)), "waste_board_sqft": approx(sum(boards(s) for s in setups)),
         "admin_sqft": approx(sum(line_sqft(s, "excluded") for s in setups)),
@@ -708,8 +711,8 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
         "setups_above_trim_target": exact(sum(1 for s in setups if s.trim_sqft / s.total_produced_sqft * 100 > 3.25)),
     }
     lines = trim + shear + rejects + sum(line_sqft(s, "shear") + boards(s) + line_sqft(s, "excluded") for s in setups)
-    if setups and abs(lines + sum(good(s) for s in setups) - gross) > 1e-6:
-        raise AssertionError(f"{id}: the waste lines and good output do not add back to gross")
+    if setups and abs(gross - lines - sum(good_of(s) for s in setups)) > 0.01:   # the shift's line totals against each setup's own
+        raise AssertionError(f"{id}: good output by setup is not gross minus the shift's lines")
     expect = {"coverage": "incomplete" if excluded else "complete", "row_count": 1, "values": {"#0": row}}
     if excluded:
         expect["excluded_records"] = excluded
@@ -1218,7 +1221,8 @@ def build(data=None):
     cases.append(waste_case(plain, "value-good-output-adds-back-month", "month", "2026-09-14",
                             note="Owner ruling (d), 2026-11-12: over September, the waste breakdown's recorded lines (trim, shear, "
                                  "changeover, cutoff-knife and stacker boards, dry-end, planning / admin) plus good_output_sqft add "
-                                 "back to gross_sqft (the generator checks the sum before writing). The bale and its unexplained "
+                                 "back to gross_sqft; the generator computes good output both as gross minus the month's line "
+                                 "totals and as each setup's own good output summed, and writes only when they agree. The bale and its unexplained "
                                  "remainder are a scale reading, not a line."))
     cases.append(day_kpi_case(plain, "value-dq-corrupt-trim-excluded", "2026-09-14", 2, corrupt=True,
                               note="Expected values are sums over the remaining valid setups: the 99,999,999 sq ft trim is reported in excluded_records, not averaged in."))

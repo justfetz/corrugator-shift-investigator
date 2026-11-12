@@ -86,6 +86,11 @@ def test_the_scheduler_searches_every_pairing_and_never_does_worse_than_the_work
     web, lanes = planner._choose(order(15, 35, 2000), [order(17, 47, 3000)], 2.0, None)
     used = sum(o["w"] * outs for o, outs in lanes)
     assert web == narrowest_web(used, 2.0) and trim_pct(web, used) <= 4.0
+    # Jerry's 1,512-sheet remainder alone: the narrowest paper that fits, and no worse than the example's 5 out on
+    # 90 in (5.6%); the search finds 6 out on 105 in at 2.9%
+    web, lanes = planner._choose(order(17, 47, 1512), [], 2.0, None)
+    used = sum(o["w"] * outs for o, outs in lanes)
+    assert web == narrowest_web(used, 2.0) and trim_pct(web, used) <= trim_pct(90, 85)
 
 
 def test_lane_run_lets_a_near_tie_finish_both_lanes():

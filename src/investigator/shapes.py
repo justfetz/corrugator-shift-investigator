@@ -92,7 +92,7 @@ def money_notes(result, row=None, label=None, formula=True):
     data = result['data']
     if 'provenance' not in data:
         return []
-    notes = [f'How a dollar is priced, for {row[label]}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
+    notes = [f'How a dollar is priced, for {stop_label(row[label])}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
     return notes + [f'{data["provenance"]} {data["cost_note"]}']
 
 
@@ -1017,6 +1017,10 @@ class PeriodAnswer:
             head = f'No waste recorded in this window{self.where(data)} {ref(w)}'
         bullets = [bullet(f'{x["label"]}: **{pval(x["pct_of_gross"])}%** of gross · {f1(x["sqft"])} sq ft · {self.points(x)}{priced(x)}', w, j)
                    for j, x in enumerate(rows) if j != i]
+        if data.get('good_output_sqft') is not None:
+            # Good output, the saleable board: gross minus every recorded waste line but the bale (owner, 2026-11-12)
+            bullets.append(bullet(f'Good output: **{f1(data["good_output_sqft"])} sq ft**, {pval(data["good_output_pct"])}% of '
+                                  f'{f1(data["gross_sqft"])} sq ft gross, after every recorded waste line above but the bale', w))
         details = data.get('details') or []
         if details:
             bullets += ['Dry-end by reported sub-reason'] + [
