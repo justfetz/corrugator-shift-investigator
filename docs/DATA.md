@@ -35,14 +35,14 @@ Every line carries `log` (`question_log`), `v` (the schema, 1), `event`, `ts` (U
 
 | Event | Written when | Fields |
 | --- | --- | --- |
-| `question` | `/q` routed the question, or refused it | `question` (at most 500 characters; emails, phone numbers, IP addresses and key-like tokens replaced), `truncated`, `scope` (the rail's `day`, `shift`, `scope`, `period`, `corrupt`), `follow_ups` (how many prior views the question followed; the views themselves are not kept), `url` (the canonical address without its `after=` chain), `measure`, `status` (`routed` or `refused`), `refusal`, `server_ms` (the routing), `flags` |
+| `question` | `/q` routed the question, or refused it | `question` (at most 500 characters; emails, phone numbers, IP addresses and key-like tokens replaced), `truncated`, `scope` (the rail's `day`, `shift`, `scope`, `period`, `corrupt`), `follow_ups` (how many prior views the question followed; the views themselves are not kept), `url` (the canonical address without its `after=` chain and without the visitor's `rates=`), `measure`, `status` (`routed` or `refused`), `refusal`, `server_ms` (the routing), `flags` |
 | `answer` | that address answered it (the page follows `/q`'s redirect) | `url`, `measure`, `status` (`complete`, `partial`, `incomplete`, or `refused`, `limited`, `failed`), `refusal`, `server_ms` (the answer) |
 | `analyst` | an "Ask the analyst" round on it ended, or was refused | `question`, `truncated`, `scope`, `mode` (the provider), `status` (the round's: `complete`, `plan_rejected`, `unavailable`, `partial`, …), `narrative`, `model_calls`, `tool_calls`, `refusal`, `server_ms`, `flags` |
 | `feedback` | a thumbs up or down on its card, and the optional comment | `card` (`answer`, or `analyst` for the analyst's card), `vote` (`up` or `down`), `comment` (at most 300 characters of plain text, the same replacements as a question) |
 
 The flags are computed when the line is written: `refused` (the router refused it), `catch_all` (it landed on `measure=kpis` while it names a countable noun or a unit, or asks for a count: the #113 guard), `typo_corrected` (a misspelt measure word was read as the measure), `scope_moved` (its words moved the shift or the window, issue #105) and, on an analyst line, `analyst_plan_rejected`.
 
-What a line never holds: an IP address, a user agent, a cookie, a key or any other request header's value, the follow-up chain, a model's prompt or narrative, an evidence row. Cloud Logging keeps the lines 30 days; the BigQuery copy keeps each day 90 days.
+What a line never holds: an IP address, a user agent, a cookie, a key or any other request header's value, the follow-up chain, the visitor's own rates, a model's prompt or narrative, an evidence row. Cloud Logging keeps the lines 30 days; the BigQuery copy keeps each day 90 days.
 
 ## When the data is built
 

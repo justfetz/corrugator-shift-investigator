@@ -124,6 +124,16 @@ def test_a_refused_question_is_one_line_and_the_after_chain_is_not_kept(public):
     assert question['flags'] == ['typo_corrected'] and question['measure'] == 'downtime'
 
 
+def test_the_visitors_rates_are_not_kept(public):
+    # rates= carries the visitor's own cost figures (Codex on PR 131): the logged address keeps the routing, not them
+    status, result = ask(public, 'Where is the money?', ids(), rates='paper:61.25,margin:37.5')
+    assert status == 200 and 'rates=paper:61.25' in result['url']
+    question, answer = lines(public, 2)
+    assert question['url'] == answer['url'] == '/corr/1/day/2026-09-14/shift/2?measure=dollars'
+    text = public.app.qlog.stream.getvalue()
+    assert '61.25' not in text and '37.5' not in text and 'rates' not in text
+
+
 def test_no_id_no_line_and_the_loopback_workbench_logs_nothing():
     server, thread = start(public=False)
     try:

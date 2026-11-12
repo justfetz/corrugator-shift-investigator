@@ -13,7 +13,8 @@ A question is one row of the `question_lines` view the review query reads, the f
 
 What a line never holds: an IP address, a user agent, a cookie, a key, or any request header's value. The handler
 passes this module the two ids and nothing else from the request's headers, and an id is kept only when it is 16
-lowercase hex characters (`ids`); anything else is dropped. The after= chain is not kept either, only its length.
+lowercase hex characters (`ids`); anything else is dropped. The after= chain is not kept either, only its length,
+nor the visitor's rates= (their own cost figures).
 The question is cut at 500 characters and a comment at 300, and anything in them shaped like an email address, a
 phone number, an IP address or a key is replaced before the line is written (`redact`).
 
@@ -90,8 +91,13 @@ def measure_of(url):
 
 
 def bare(url):
-    """The URL without its after= chain: the address that answers the question, not the views before it."""
-    return url.split('&after=', 1)[0] if url else url
+    """The URL without its after= chain and without the visitor's rates=: the address that answers the question, not
+    the views before it, and not the visitor's own cost figures (Codex on PR 131). The routing parameters stay."""
+    if not url:
+        return url
+    path, _, query = url.split('&after=', 1)[0].partition('?')
+    kept = [part for part in query.split('&') if part and not part.startswith('rates=')]
+    return path + ('?' + '&'.join(kept) if kept else '')
 
 
 def flags_of(question, measure=None, status=None, moved=False, corrected=False):
