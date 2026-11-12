@@ -6227,7 +6227,7 @@
      "^- Grade mix: \\*\\*[0-9.,]+ ft/min\\*\\* (of the gap|the other way, an offset) · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · schedule-driven, the order mix decides which grades run \\(query 1 · row [0-3]\\)$",
      "^- (Stops|Setups|Below baseline): \\*\\*[0-9.,]+ ft/min\\*\\* .* · controllable \\(query 1 · row [0-3]\\)$",
      "^Each grade is held at its baseline, its sustained average speed over the trailing year, never its target or its maximum\\.$",
-     "^The controllable buckets are \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); the grade mix and planned maintenance are schedule-driven and external stops are outside the plant, so none of them is priced, nor is a bucket that ran better than the reference\\.$"
+     "^The controllable buckets are \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); the mix, planned maintenance and external stops are not priced, nor is a bucket that ran better than the reference\\.$"
     ],
     "sections_not_match": "^- Grade mix: .*\\$",
     "shifts": [
@@ -6511,7 +6511,7 @@
      "render_chart"
     ],
     "sections_match": [
-     "^The controllable buckets are \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); the grade mix and planned maintenance are schedule-driven and external stops are outside the plant, so none of them is priced, nor is a bucket that ran better than the reference\\.$",
+     "^The controllable buckets are \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); the mix, planned maintenance and external stops are not priced, nor is a bucket that ran better than the reference\\.$",
      "^Contribution margin not set"
     ]
    }
@@ -6957,7 +6957,7 @@
      "^- Knife / slitter jam: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$",
      "^Flags and who to ask$",
      "^- Shift 3, 2026-09-21: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 2 · flag 0\\)$",
-     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, shift 3 · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 2 · flag 0\\)$"
+     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*0\\*\\* of [0-9]+ shifts since [0-9-]+, shift 3 · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 2 · flag 0\\)$"
     ],
     "sections_not_match": "Power outage"
    },
@@ -6994,7 +6994,7 @@
     "charts": 1,
     "sections_match": [
      "^- Shift 3, 2026-09-21: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
-     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*[0-9]+\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 1 · flag 0\\)$",
+     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*0\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 1 · flag 0\\)$",
      "^2026-09-21 \\(Mon\\), all shifts, versus 2026-09-18 \\(Fri\\)\\. Window coverage: complete; previous complete\\.$"
     ]
    }
@@ -7082,6 +7082,28 @@
      "^- Power outage: \\*\\*15\\.00 min\\*\\* over 1 stop · 1\\.04% of scheduled minutes · external, outside the plant \\(query 1 · row [0-9]+\\)$"
     ],
     "sections_not_match": "^- [0-9]+\\. Power outage|^- Shift 1, 2026-05-04: .*maintenance downtime"
+   }
+  },
+  {
+   "id": "power-outage-never-leads-the-week-overview",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-05-04",
+   "shift": 1,
+   "period": "week",
+   "question": "Why was this week bad?",
+   "note": "Review of the owner's decisions on PR #111: a power outage is external, outside the plant, so like planned maintenance it never leads the period overview's downtime finding. In the week of 4 May 2026 shift 1's largest stop reason by minutes after planned maintenance was the 15-minute outage; the finding names the largest unplanned reason instead.",
+   "expect": {
+    "url": "/corr/1/week/2026-05-04/shift/1?measure=overview",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "sections_match": [
+     "^- (?!Power outage|Planned maintenance)[^:]+: \\*\\*[0-9.]+ min\\*\\* of downtime, [0-9.]+% of the window's minutes"
+    ],
+    "sections_not_match": "^- Power outage: "
    }
   },
   {

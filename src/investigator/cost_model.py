@@ -677,13 +677,13 @@ def opportunities(store, window, shift, rates, lens='all'):
                      'recorded, not over their targets. Per year at the post\'s volumes. These name where to look and the records behind '
                      'each lever; they do not prescribe a machine adjustment.'),
              'supervisor': ('The supervisor lens: the controllable losses ranked, maintenance and operator downtime, the speed of each '
-                            'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste; side trim and planned maintenance '
+                            'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste. Side trim and planned maintenance '
                             'are schedule-driven and listed after, then external downtime (a power outage), which is not controllable. Shear and dry-end waste are priced in full, all recorded, not over their '
                             'targets. Peel and core are controllable too, but the records carry no peel or core quantity. Per year at the '
                             'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
              'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
-                           'waste (tag scrap: bond, warp, misalignment and moisture, one subtotal with each kind beneath it), shear and '
-                           'the unexplained remainder (the scale reading less the recorded waste). Per year at the post\'s volumes.')}[lens]
+                           'waste, shear and the unexplained remainder (the scale reading less the recorded waste). The dry-end waste is the '
+                           'tag scrap: bond, warp, misalignment and moisture, one subtotal with each kind beneath it. Per year at the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': waste['dataset_version'], 'rows': rows,
             'coverage': 'complete' if coverage == 'complete' else coverage, 'excluded_records': [],

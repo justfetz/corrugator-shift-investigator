@@ -24,7 +24,7 @@ TOOL_SCHEMAS = [
         ("get_shift_kpis", "Calculate shift output, downtime, waste and width metrics.", {}),
         ("get_shift_overview", "Read KPIs, largest recorded losses, grade-target performance and supporting chart evidence together. Use for broad daily summaries, one call per allowed shift.", {}),
         ("get_downtime_breakdown", "Group recorded stops by reason, place or kind.", {
-            "kind": {"type": ["string", "null"], "enum": [None, "Maintenance", "Operator", "PM", "External"]},
+            "kind": {"type": ["string", "null"], "enum": [None, "Maintenance", "Operator", "PM"]},
             "group_by": {"type": "string", "enum": ["reason", "place", "kind"]}}),
         ("get_wet_end_performance", "Compare elapsed-time speed with each wet-end grade target.", {}),
         ("get_quality_breakdown", "Show dry-end rejected area by recorded defect.", {}),

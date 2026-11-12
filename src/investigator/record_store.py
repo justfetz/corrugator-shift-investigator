@@ -1664,9 +1664,9 @@ class RecordStore:
                   "previous_stops": sum(r["stops"] for r in prior_grouped) if available else None}
         return self._envelope("get_downtime_review", current, previous, shift, rows, trace, started, source,
                               scheduled_minutes=scheduled, previous_scheduled_minutes=prior_scheduled, **totals, flags=flags, flag_count=count,
-                              method_note=("Each reason is ranked by its minutes over the scheduled minutes, 480 a shift; external "
-                                           "downtime (a power outage, outside the plant) is listed apart and never counts against a band, "
-                                           "and planned maintenance is scheduled time and is listed last; neither is ranked. A flag is a shift whose "
+                              method_note=("Each reason is ranked by its minutes over the scheduled minutes, 480 a shift. External "
+                                           "downtime (a power outage, outside the plant) and planned maintenance (scheduled time) are "
+                                           "listed apart, never ranked or counted against a band. A flag is a shift whose "
                                            "maintenance or operator downtime is over its band. Its recurrence counts, over the trailing "
                                            "year, the shifts on which the same reason was over the band on its own, and the weeks it was "
                                            "among the five reasons with the most unplanned minutes."))

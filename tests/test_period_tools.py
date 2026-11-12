@@ -12,11 +12,16 @@ day (30 September 2025) are the ones that read unavailable.
 """
 from collections import defaultdict
 from datetime import date, timedelta
+import json
+from pathlib import Path
 import re
 import pytest
 from investigator.agent import Agent, Context, PERIOD_TOOLS, TOOL_SCHEMAS, parse_request
 from investigator.record_store import (KPI_CATALOG, TREND_METRICS, default_store, fiscal_bounds, parse_window, previous_window, window_label)
 from investigator.synth import generate_months
+
+# The owner's rule (PR #111, targets.json): a power outage counts as External downtime, never as maintenance.
+EXTERNAL = json.loads((Path(__file__).resolve().parent.parent / "src" / "investigator" / "targets.json").read_text())["external"]
 
 
 @pytest.fixture(scope="module")
@@ -53,7 +58,7 @@ def plain_kpis(data, start, end, shift=None):
     net = gross - trim - shear
     kinds = defaultdict(float)
     for st in stops:
-        kinds[st.kind] += st.duration_sec / 60
+        kinds[EXTERNAL["kind"] if st.reason in EXTERNAL["reasons"] else st.kind] += st.duration_sec / 60
     return {
         "volume_msf": gross / 1000, "lineal_ft": feet, "speed_run_fpm": feet / running, "speed_all_fpm": feet / scheduled,
         "downtime_pct": stop_minutes / scheduled * 100, "downtime_minutes": stop_minutes, "stops": len(stops),
@@ -140,7 +145,8 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
     # warp over the yield after trim and shear (issue #101); of gross it is 0.3280 and 0.4698
     assert rows["warp_pct"]["current"] == pytest.approx(0.3407, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4863, abs=1e-4)
     assert rows["downtime_pct"]["current"] == pytest.approx(5.0485, abs=1e-4)
-    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.7316, abs=1e-4)
+    # 2.7316 before the owner's rule of PR #111: 09-16's 11-minute power outage is external, 11 / 31,680 scheduled minutes = 0.0347 points
+    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.6969, abs=1e-4)
     assert rows["setups"]["current"] == 2596 and rows["paper_changes"]["current"] == 898
     assert result["source_rows"]["current"]["setups"] == 2596 and result["source_rows"]["previous"]["setups"] == 2507
     # downtime_pct is a ratio of sums: it is NOT the mean of the 66 shift percentages

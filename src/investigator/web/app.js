@@ -567,7 +567,7 @@ const labels={setup_id:'Setup',wet_end_id:'Wet-end / paper change',grade:'Grade'
 const TABLE_COLUMNS={get_grade_totals:['grade','volume_msf','share_of_volume_pct','speed_run_fpm','speed_to_target_pct','setups','trim_pct','dry_end_pct','delta_volume_msf'],
  get_speed_variance:['label','gap_fpm','share_of_gap_pct','gap_lineal_ft','current_loss_fpm','reference_loss_fpm','top_item','top_item_fpm','usd','usd_per_year']};
 function showTable(data){
- const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'All grade totals',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width',get_speed_variance:'Speed gap by contributor: stops, setups, running under baseline, grade mix (schedule-driven)'};
+ const titles={get_order_matrix:'Orders and quantities — fragments; demand repeats on continuing orders',get_setup_matrix:'Setup matrix',get_shift_notes:'Shift and downtime notes (synthetic, unverified)',get_rankings:`${data.metric||''} ranking / largest losses first`,get_grade_totals:'All grade totals',get_overrun:'Over/under-run by knife (nominal vs actual cuts)',get_speed_opportunity:'Speed opportunity: typical vs best fifth, by grade and width / crew',get_rollstock:'Paper consumed (rollstock) by grade and web width',get_speed_variance:'Speed gap by contributor: stops, setups, running under baseline, grade mix and planned maintenance (schedule-driven), external stops'};
  const box=node('details');box.open=data.title==='get_setup_matrix'||data.title==='get_rankings';box.append(node('summary',`${data.shift?'Shift '+data.shift+' / ':''}${titles[data.title]||data.title} (${data.rows.length} rows)`));
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
@@ -741,21 +741,26 @@ function afterPaint(f){if(typeof requestAnimationFrame==='function')requestAnima
 // measures a loss gets a money slot, filled from the card's money answer when it lands (paintTiles, #31b).
 let tileSlots=[];
 // A row without its band (a period report's) is read against the owner's numbers (targets.json via /api/config), never a
-// threshold typed here: "target 2.5%" where the target is the flag, else "target 1%, flag above 1.25%".
-function standard(id){
- const b=config&&config.targets&&config.targets[id]; if(!b||b.target===null||b.target===undefined)return '';
- return b.flag===null||b.flag===undefined||b.flag===b.target?`target ${b.target}%`:`target ${b.target}%, flag above ${b.flag}%`;
+// threshold typed here, in targets.band and targets.band_text's own words: the tile then reads as a banded row would.
+const BAND_WORDS=['home run','on target','over target','flag'];
+function bandOf(id,value){
+ const b=config&&config.targets&&config.targets[id]; if(!b||value===null||value===undefined||b.target===null||b.target===undefined)return null;
+ const word=b.home_run!==null&&b.home_run!==undefined&&value<=b.home_run?'home run':value<=b.target?'on target':b.flag!==null&&b.flag!==undefined&&value>b.flag?'flag':'over target';
+ const g=v=>`${Number(v)}%`, text=word==='home run'?`home run (${g(b.home_run)} or under)`:word==='on target'?`on target (${g(b.target)} or under)`:
+  word==='over target'?`over the ${g(b.target)} target`+(b.flag!==null&&b.flag!==undefined?`, under the ${g(b.flag)} flag`:''):`flag: over ${g(b.flag)}`+(b.target!==b.flag?`, the target is ${g(b.target)}`:'');
+ return {word,text};
 }
-function over(id,value,at){ const b=config&&config.targets&&config.targets[id]; return !!b&&b[at]!==null&&b[at]!==undefined&&value>b[at]; }
+const standard=(id,value)=>(bandOf(id,value)||{}).text||'';
+const over=(id,value,...words)=>words.includes((bandOf(id,value)||{}).word);
 function shiftTiles(entry,result,prefix){
  const r=entry.data.rows[0], incomplete=entry.data.coverage!=='complete', who=prefix?`${entry.data.shift?'Shift '+entry.data.shift:result.period_label} · `:'';
  const n=(v,places)=>Number(v).toLocaleString(undefined,{minimumFractionDigits:places,maximumFractionDigits:places});
  for(const [label,value,unit,places,sub,bad,title,metric] of [
   ['Speed',r.observed_shift_fpm,'ft/min',1,`${n(r.speed_to_target_pct,1)}% of target`,r.speed_to_target_pct<100,'Lineal feet / sum(grade target ft/min × elapsed minutes) × 100. Includes downtime; weighted by grade duration.','observed_shift_fpm'],
-  ['Maintenance',r.maintenance_pct,'%',2,r.maintenance_band_text||standard('maintenance'),r.maintenance_band?r.maintenance_band==='flag':over('maintenance',r.maintenance_pct,'flag'),undefined,'maintenance_pct'],
-  ['Operator',r.operator_pct,'%',2,r.operator_band_text||standard('operator'),r.operator_band?r.operator_band==='flag':over('operator',r.operator_pct,'flag'),undefined,'operator_pct'],
+  ['Maintenance',r.maintenance_pct,'%',2,r.maintenance_band_text||standard('maintenance',r.maintenance_pct),r.maintenance_band?r.maintenance_band==='flag':over('maintenance',r.maintenance_pct,'flag'),undefined,'maintenance_pct'],
+  ['Operator',r.operator_pct,'%',2,r.operator_band_text||standard('operator',r.operator_pct),r.operator_band?r.operator_band==='flag':over('operator',r.operator_pct,'flag'),undefined,'operator_pct'],
   // the owner's bands ride on the row (issue #101): dry-end waste is a percent of the yield after trim and shear
-  ['Dry-end waste',r.dry_end_pct,'%',2,'of yield'+((r.dry_end_band_text||standard('dry_end'))?` · ${r.dry_end_band_text||standard('dry_end')}`:''),r.dry_end_band?['over target','flag'].includes(r.dry_end_band):over('dry_end',r.dry_end_pct,'target'),undefined,'dry_end_pct'],
+  ['Dry-end waste',r.dry_end_pct,'%',2,'of yield'+((r.dry_end_band_text||standard('dry_end',r.dry_end_pct))?` · ${r.dry_end_band_text||standard('dry_end',r.dry_end_pct)}`:''),r.dry_end_band?['over target','flag'].includes(r.dry_end_band):over('dry_end',r.dry_end_pct,'over target','flag'),undefined,'dry_end_pct'],
   ['Trim',r.trim_pct,'%',2,`shear ${n(r.shear_pct,2)}%`+(r.trim_band_text?` · ${r.trim_band_text}`:''),r.trim_band==='flag',undefined,'trim_pct'],
   ['Setups',r.valid_setups,'',0,`${n(r.paper_changes,0)} paper changes`,false,'Dry-end setups; paper changes are the count of distinct wet-end runs, as defined by the plant expert.'],
   ['Throughput',r.throughput_in,'in',1,`${n(r.lineal_per_setup,0)} ft / setup`,false]]){
@@ -954,7 +959,7 @@ function opportunityPanel(f,m,rec){
  const mode=unitMode()||'usd', yearly=true, wrap=node('div',undefined,'chart money-panel');   // every money query has its rows' own $/yr
  wrap.append(node('h3',`${f.levers?'Where the money is':'Where the money went'} · ${f.who} · ${f.label}`));
  wrap.append(node('p',(f.levers?(f.lens==='ownership'?'The total cost of the waste recorded at your rates, side trim first. ':
-  f.lens==='supervisor'?'The controllable losses at your rates, ranked; the schedule-driven ones (side trim, planned maintenance) after them, unranked. ':
+  f.lens==='supervisor'?'The controllable losses at your rates, ranked; the schedule-driven ones (side trim, planned maintenance), then the external ones (a power outage), after them, unranked. ':
   'Each lever is a gap priced at your rates: the speed of each run under its grade\'s trailing-year speed, side trim over the target, each recorded stop, all shear and dry-end waste. '):f.day?'Each gap of the day, its shifts\' records summed and priced once on the day, at your rates. ':'Each gap of the shift priced at your rates. ')+`${mode==='usd'?'Ranked by dollars a year at this rate':'Ranked by '+UNIT_WORDS[mode]}. Where to look, not what to change.`,'muted'));
  const box=node('div',undefined,'money-box'); wrap.append(box);
  let table=false, all=false;

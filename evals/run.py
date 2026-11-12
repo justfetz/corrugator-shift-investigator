@@ -61,6 +61,7 @@ sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
 from investigator.cost_model import parse_rates  # noqa: E402
+from investigator import targets as owner_targets  # noqa: E402  the owner's bands (targets.json), read as data
 from investigator.record_store import RecordStore, dataset_window, default_store  # noqa: E402
 
 GOLDEN = ROOT / 'evals' / 'golden.json'
@@ -86,8 +87,7 @@ TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
 # The stated rules an answer may print beside its figures: 480 scheduled minutes a shift, the 12 minutes a downtime flag
 # takes of them, and the downtime and per-setup trim flags, read from the owner's targets.json (issue #101) so a changed
 # band moves with it. 0.4 (shear guidance) was retired by the owner's bands.
-_BANDS = {b['id']: b for b in json.loads((ROOT / 'src' / 'investigator' / 'targets.json').read_text())['bands']}
-RULE_CONSTANTS = {'1', '480', '12', '0'} | {f'{_BANDS[m]["flag"]:g}' for m in ('maintenance', 'operator', 'trim')}
+RULE_CONSTANTS = {'1', '480', '12', '0'} | {f'{owner_targets.BANDS[m]["flag"]:g}' for m in ('maintenance', 'operator', 'trim')}
 # The answer shape (issue #75), stated here independently of the application: a bold figure, the
 # evidence a line cites, a where-to-look question, and the result field each evidence part names.
 BOLD = re.compile(r'\*\*([^*]+)\*\*')

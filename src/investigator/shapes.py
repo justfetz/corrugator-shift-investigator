@@ -981,7 +981,8 @@ class PeriodAnswer:
         pareto, waste = tools.get('get_downtime_pareto'), tools.get('get_waste_breakdown')
         if pareto and pareto['data']['rows']:
             rows = pareto['data']['rows']
-            i = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED), 0)   # planned maintenance never leads (#101)
+            # planned maintenance (#101) and a power outage (external, PR #111) never lead
+            i = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED + EXTERNAL), 0)
             r = rows[i]
             bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, i))
         if waste:
@@ -1373,8 +1374,8 @@ class PeriodAnswer:
         elif data.get('controllable_usd') is not None:
             notes.append(f'The controllable buckets are {money(data["controllable_usd"])} of machine time' +
                          (f' ({money(data["controllable_usd_per_year"])}/yr at the post\'s volumes)' if data.get('controllable_usd_per_year') is not None else '') +
-                         '; the grade mix and planned maintenance are schedule-driven and external stops are outside the plant, so none '
-                         'of them is priced, nor is a bucket that ran better than the reference.')
+                         '; the mix, planned maintenance and external stops are not priced, nor is a bucket that ran better than the '
+                         'reference.')
         if data.get('contribution_status') == MARGIN_NOT_SET:
             notes.append(contribution(data))
         elif data.get('controllable_contribution_usd') is not None:
