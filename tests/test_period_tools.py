@@ -134,15 +134,15 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
     # Pinned goldens of the default seed (ratios of sums, never averages of averages).
     # (Issue #100 scheduled orders into setups: these were 156,429.0 / 152,043.4 MSF, 673 / 546 stops, 2,596 setups;
     # issue #35 before it: 160,260.2 / 150,593.0 MSF, 617 / 567 stops, 2,672 setups.)
-    assert rows["volume_msf"]["current"] == pytest.approx(162382.6) and rows["volume_msf"]["previous"] == pytest.approx(157948.8)
-    assert rows["lineal_ft"]["current"] == pytest.approx(18931590.5)
-    assert rows["stops"]["current"] == 669 and rows["stops"]["previous"] == 538
-    assert rows["trim_pct"]["current"] == pytest.approx(3.4851, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(3.0857, abs=1e-4)
-    assert rows["warp_pct"]["current"] == pytest.approx(0.3208, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4617, abs=1e-4)
-    assert rows["downtime_pct"]["current"] == pytest.approx(4.9042, abs=1e-4)
-    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.6354, abs=1e-4)
-    assert rows["setups"]["current"] == 2612 and rows["paper_changes"]["current"] == 806
-    assert result["source_rows"]["current"]["setups"] == 2612 and result["source_rows"]["previous"]["setups"] == 2622
+    assert rows["volume_msf"]["current"] == pytest.approx(162481.0) and rows["volume_msf"]["previous"] == pytest.approx(157982.5)
+    assert rows["lineal_ft"]["current"] == pytest.approx(18959016.3)
+    assert rows["stops"]["current"] == 665 and rows["stops"]["previous"] == 533
+    assert rows["trim_pct"]["current"] == pytest.approx(3.4945, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(3.1246, abs=1e-4)
+    assert rows["warp_pct"]["current"] == pytest.approx(0.3306, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4698, abs=1e-4)
+    assert rows["downtime_pct"]["current"] == pytest.approx(4.8681, abs=1e-4)
+    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.6160, abs=1e-4)
+    assert rows["setups"]["current"] == 2614 and rows["paper_changes"]["current"] == 799
+    assert result["source_rows"]["current"]["setups"] == 2614 and result["source_rows"]["previous"]["setups"] == 2619
     # downtime_pct is a ratio of sums: it is NOT the mean of the 66 shift percentages
     shift_pcts = []
     for sh in between(data["shifts"], date(2026, 9, 1), date(2026, 9, 30)):

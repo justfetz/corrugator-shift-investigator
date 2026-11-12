@@ -134,6 +134,7 @@ same grain, which these answers carry already or which their store form carries.
 | `measure=quality&compare=prev` under Day | `measure=waste` |
 | `measure=compare&compare=prev` under Day | `measure=kpis` (`shifts=` kept: the tiles per shift) |
 | `measure=overview`, `summary` or `fpm` with `compare=prev` under Day | `measure=kpis`: the day's KPI tiles against the previous production day |
+| `measure=trend&metric=moisture_pct` | `measure=trend&metric=dry_end_pct`: record contract v2 (issue #100) retired the moisture family, which the approved reject taxonomy does not have; the dry-end rejects' trend is the closest series the records hold (the other dry-end family is `metric=other_pct`) |
 | a default spelled out (`by=reason`, `unit=minutes`, `weeks=8`) or the fields in another order | the canonical spelling |
 
 Issue #20's examples: `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=reason&compare=prev` →

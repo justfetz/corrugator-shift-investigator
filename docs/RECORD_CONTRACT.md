@@ -72,19 +72,23 @@ One row per lane; lane N of the setup record carries one customer's slice of the
 | `sheet_type`, `filler` | the same | (ours) | pallet bottom and cap sheets are the plant's own (customer C000) |
 | `stack_height` | `stack_height_sheets` | (ours) | sheets per stack at the stacker |
 | `folds`, `sheets_per_pallet`, `pallets`, `perforation_length_in` | the same | `FoldsN`, `SheetsPerPalletN`, `PalletsN`, `PerforationLengthN` | fanfold delivery only; null otherwise |
+| `width_share` | (derived) | (ours) | the lane's outs × sheet width / the setup's used width |
+| `allocated_trim_sqft`, `allocated_shear_sqft` | (derived) | (ours) | the setup's side trim and shear chops × `width_share`: each customer's part of the setup's own waste (identity 6); a setup's lanes add up to its trim and shear |
 
 ## The identities every setup satisfies
 
-The generator schedules orders into setups (owner, 2026-11-11), so every setup row satisfies these, and `tests/test_record_contract.py` and `tests/test_records_invariants.py` check each one over every record of August and September 2026:
+The generator schedules orders into setups (owner, 2026-11-11), so every setup row satisfies these, and `tests/test_record_contract.py` and `tests/test_records_invariants.py` check each one over every record of August and September 2026 (the acceptance test of identity 1 over every setup of the golden window):
 
-1. `used_width = Σ lanes (outs × sheet_width)`; `trim_in = web_width − used_width`, split evenly both sides; `trim_pct = trim_in / web_width`. The web is the narrowest paper at least as wide as the used width plus the day's minimum trim (in the store, `Σ outs × sheet_width_in ≤ width_in − trim_in` for every setup, the acceptance test).
+1. `used_width = Σ lanes (outs × sheet_width)`; `trim_in = web_width − used_width`, split evenly both sides; `trim_pct = trim_in / web_width`. The web is the narrowest paper at least as wide as the used width plus the day's minimum trim (the acceptance test: in the store's lane view, `Σ outs × sheet_width_in + the day's minimum trim ≤ width_in`, with `trim_in` exactly the rest and the web the narrowest that fits, for every setup from 1 January 2025 to 30 September 2026).
 2. Per lane: `lineal_ft = cuts × sheet_length / 12`; `sheets = cuts × outs`.
 3. Lanes on one setup end within **one knife rotation**: `|lineal₁ − lineal₂| < max(sheet_length) / 12`, as scheduled and as run.
 4. The setup's order travel (lineal minus the shear chops) is the longest lane as run; `scheduled_lineal_ft` is the longest lane as scheduled.
-5. An order is complete when its sheets over its setups reach the demand; until then the remainder rolls into a later setup of its day (often on one knife at more outs, possibly on narrower paper). An order never runs again once complete; the few open when the production day closes stay open (nothing carries into the next day).
-6. Gross = web × lineal; trim sq ft = trim inches × order travel; a setup's waste is allocated to its customers by each lane's share of the used width.
+5. An order is complete when its scheduled sheets (nominal cuts × outs) over its setups reach the demand; until then the remainder rolls into a later setup of its day (often on one knife at more outs, possibly on narrower paper). An order never runs again once complete. A setup closed at a shift boundary before its last cuts ran (under a minute of running left) gives those sheets back to its orders, so the only orders left short are the ones their production day closed on (nothing carries into the next day). Counted on actual cuts, an order lands anywhere in the over/under-run window around its demand.
+6. Gross = web × lineal; trim sq ft = trim inches × order travel; a setup's own waste (side trim and shear chops) is allocated to its customers by each lane's share of the used width (`setup_orders.width_share`, `allocated_trim_sqft`, `allocated_shear_sqft`); reject lines and waste boards are already each lane's own.
 
-The owner's worked example is a test, number for number: AC Box 15 × 35 in (2,000 sheets) beside Jerry's Packaging 17 × 47 in (3,000 sheets) on a 100-in web, 3 out each, uses 96 in and trims 4 in (2 in a side, 4.0%); AC Box sets the length at ⌈2,000 / 3⌉ = 667 cuts = 1,945.4 ft; Jerry's runs ⌊1,945.4 × 12 / 47⌋ = 496 cuts = 1,942.7 ft (1,488 sheets, 1,512 remain); the remainder at 5 out runs on 90-in paper (5.6%; 10.5% on 95 in, 15% on 100 in), 303 cuts = 1,186.8 ft, 1,515 sheets.
+The owner's worked example is a test, number for number, with the outs as the owner chose them: AC Box 15 × 35 in (2,000 sheets) beside Jerry's Packaging 17 × 47 in (3,000 sheets) on a 100-in web, 3 out each, uses 96 in and trims 4 in (2 in a side, 4.0%); AC Box sets the length at ⌈2,000 / 3⌉ = 667 cuts = 1,945.4 ft; Jerry's runs ⌊1,945.4 × 12 / 47⌋ = 496 cuts = 1,942.7 ft (1,488 sheets, 1,512 remain); the remainder at 5 out goes on 90-in paper, the narrowest that fits (5.6%; 10.5% on 95 in, 15% on 100 in), 303 cuts = 1,186.8 ft, 1,515 sheets.
+
+The generator's scheduler applies the same arithmetic but chooses the outs too, so on these two orders it does better than the example: it puts AC Box at 2 out beside Jerry's at 4 out, which uses 98 in of the 100-in web at 2.0% trim, and both orders finish in one setup (1,007 and 750 cuts). For a lone 1,512-sheet remainder it picks 6 out on 105-in paper, at 2.9%. The worked-example test reproduces the example as the owner computed it and checks that the scheduler never does worse. That the scheduler may beat the example is a decision for the owner to confirm.
 
 ### How the generator schedules
 

@@ -220,6 +220,8 @@ def test_what_the_grammar_refuses(url, reason):
 D, W, M, P = '/corr/1/day/2026-09-14', '/corr/1/week/2026-09-14', '/corr/1/month/2026-09-14', '/corr/1/period/2026-09-14'
 ALIASES = [
     (f'{D}/shift/2?measure=downtime&by=reason&compare=prev', f'{D}/shift/2?measure=pareto'),
+    # record contract v2 (issue #100) retired the moisture family: an address written before it keeps answering
+    (f'{D}?measure=trend&metric=moisture_pct', f'{D}?measure=trend&metric=dry_end_pct'),
     (f'{P}/shift/3?measure=waste&by=grade', f'{P}/shift/3?measure=grade'),
     (f'{M}?measure=rollstock&compare=prev', f'{M}?measure=rollstock'),
     # compare=prev where the answer carries the previous window already: prev is its default

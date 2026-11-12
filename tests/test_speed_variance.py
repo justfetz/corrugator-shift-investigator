@@ -235,8 +235,8 @@ def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(stor
 def test_an_offset_larger_than_the_third_contributor_gets_a_line(store):
     """Owner, PR #91: the card lists the three buckets adding to the gap, and a bucket pulling against it gets a line
     too when it is larger than the third of them. Shift 3 against shift 1 in the week of 3 August 2026 (re-anchored from
-    14 September by issue #100's records): below-target running, grade mix and setups (1.2 ft/min) add to the gap; stops
-    (45.4 ft/min, -210%, shift 1's Thursday planned maintenance) pull against it."""
+    14 September by issue #100's records): below-target running, grade mix and setups (2.1 ft/min) add to the gap; stops
+    (46.1 ft/min, -185%, shift 1's Thursday planned maintenance) pull against it."""
     week = "2026-08-03"
     agent = Agent(store.day_analysis(week))
     sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(week, 2, scope="day"))["sections"]

@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[1]
 # generator change, and say so in the commit. (Issue #100, record contract v2, orders scheduled into setups:
 # was b07c2a7933dbb0339b843d9e1a78f36f3c1b544c3c37135f94da3092aecb38c7; issue #35, per-day seeding, before it:
 # d9143ff1d15029b5992069d664eb8430d3e0aaed617b82a953f84e0a4964e6c5.)
-PINNED_HASH = "cc1dc318165a47734aa7a643b9fdda335a215917d3438f9f3c9646be24bf7d4c"
+PINNED_HASH = "6b382246f16ab8b03a38adc2ac5d017f1575b2bb1e0d559d0aff3975ecff418f"
 
 
 def day_bytes(data, day):

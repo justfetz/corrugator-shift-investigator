@@ -26,7 +26,7 @@ def test_committed_file_is_what_the_generator_produces():
 
 def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
     cases = COMMITTED['cases']
-    assert 40 <= len(cases) <= 90 and len({c['id'] for c in cases}) == len(cases)
+    assert 40 <= len(cases) <= 100 and len({c['id'] for c in cases}) == len(cases)
     tools = {c['tool'] for c in cases}
     assert tools == {'get_period_kpis', 'compare_periods', 'get_downtime_pareto', 'get_waste_breakdown',
                      'get_stops_profile', 'get_trend', 'get_grade_totals', 'get_overrun', 'get_speed_opportunity', 'get_rollstock',
@@ -104,4 +104,4 @@ def test_plain_tiles_are_ratios_of_sums_not_averages_of_averages():
     days = [d for d in sorted(plain.days) if d.month == 9]
     per_day = [plain.tiles(plain.sums(d, d))['trim_pct'] for d in days]
     assert month['trim_pct'] != pytest.approx(sum(per_day) / len(per_day), abs=1e-6)
-    assert month['trim_pct'] == pytest.approx(3.4851, abs=1e-4) and month['stops'] == 669   # issue #100: was 3.2256 and 673 (3.2274 and 617 before #35)
+    assert month['trim_pct'] == pytest.approx(3.4945, abs=1e-4) and month['stops'] == 665   # issue #100: was 3.2256 and 673 (3.2274 and 617 before #35)

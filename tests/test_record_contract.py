@@ -13,9 +13,9 @@ import random
 import pytest
 
 from investigator import records as R
-from investigator.record_store import TABLES, RecordStore
+from investigator.record_store import TABLES, RecordStore, default_store
 from investigator.synth import (CONSTRUCTION, CUSTOMERS, DATASET_FIRST_DAY, _Planner, fill_outs, generate_months, lane_run,
-                                narrowest_web, trim_pct, window_bounds, window_days)
+                                min_trim_in, narrowest_web, trim_pct, window_bounds, window_days)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -97,11 +97,15 @@ def test_lane_run_lets_a_near_tie_finish_both_lanes():
 # ------------------------------------------------------------------ identities over the records
 
 def test_orders_complete_or_roll_their_remainder_into_a_later_setup(data):
-    """Identity 5: an order is complete when its sheets over its setups reach the demand; until then the remainder
-    rolls into a later setup of its day (often on one knife at more outs, possibly on narrower paper). An order
-    never runs again once complete; the few left open are the ones the day closed on."""
-    sheets, complete, quantity = defaultdict(int), set(), {}
-    for setup in data["dry_end_setups"]:
+    """Identity 5, on scheduled (nominal) sheets: an order is complete when its sheets over its setups reach the
+    demand, and it never runs again; until then the remainder rolls into a later setup of its day (often on one
+    knife at more outs, possibly on narrower paper). A setup closed at a shift boundary before its last cuts ran
+    gives those sheets back to its orders, so an order left short is one its day closed on: after its last
+    setup, its grade starts no other setup that day. (Counted on actual cuts an order lands anywhere in the
+    over/under-run window around its demand.)"""
+    sheets, complete, quantity, last = defaultdict(int), set(), {}, {}
+    setups = data["dry_end_setups"]
+    for index, setup in enumerate(setups):
         for lane in setup.lanes:
             if lane.filler:
                 assert lane.order_quantity == 0 and lane.customer_id == "C000"
@@ -109,37 +113,53 @@ def test_orders_complete_or_roll_their_remainder_into_a_later_setup(data):
             assert lane.order_number not in complete, lane.order_number
             quantity[lane.order_number] = lane.order_quantity
             sheets[lane.order_number] += lane.nominal_cuts * lane.number_of_outs
+            last[lane.order_number] = index
             if sheets[lane.order_number] >= lane.order_quantity:
                 complete.add(lane.order_number)
-    assert len(complete) / len(quantity) > 0.85, len(complete) / len(quantity)
+    short = [order for order in quantity if order not in complete]
+    for order in short:
+        at = setups[last[order]]
+        later = [s for s in setups[last[order] + 1:] if s.production_date == at.production_date
+                 and s.quality_id == at.quality_id and s.change_code == "O"]
+        assert later == [], (order, at.setup_id, later[0].setup_id)
+    assert len(complete) / len(quantity) > 0.9, len(complete) / len(quantity)
     appearances = defaultdict(int)
-    for setup in data["dry_end_setups"]:
+    for setup in setups:
         if setup.change_code == "O":
             for lane in setup.lanes:
                 appearances[lane.order_number] += 1
     assert sum(1 for n in appearances.values() if n >= 2) > 0.2 * len(appearances)   # remainders do roll over
 
 
-def test_per_customer_waste_allocation_is_the_lanes_share_of_used_width(data):
-    """Identity 6: a setup's waste is allocated to its customers by each lane's share of the used width; the
-    shares add to one and the allocations to the setup's waste."""
-    for setup in data["dry_end_setups"][:2000]:
-        shares = [lane.used_width_in / setup.used_width_in for lane in setup.lanes]
-        assert sum(shares) == pytest.approx(1.0)
-        waste = setup.trim_sqft + setup.chop_sqft
-        assert sum(waste * share for share in shares) == pytest.approx(waste)
-
-
-def test_setup_orders_outs_times_width_fit_the_web_minus_trim_for_every_setup(store):
-    """Issue #100 acceptance: in the store's lane view, sum of outs x sheet width over a setup's lanes is at most
-    the web width minus the trim, for every setup; it is exactly that, and never wider than the paper minus the
-    one-inch-a-side minimum trim."""
-    rows = sql(store, """SELECT s.setup_id, s.width_in, s.trim_in, sum(o.outs * o.sheet_width_in) AS used, count(*) AS lanes, max(s.lanes)
+def test_per_customer_waste_allocation_is_the_lanes_share_of_used_width(store):
+    """Identity 6: a setup's own waste (side trim and shear chops) is allocated to its customers by each lane's
+    share of the used width. The store's lane view carries the share and the two allocations; they add up to the
+    setup's figures for every setup (the reject lines and waste boards are already each lane's own)."""
+    rows = sql(store, """SELECT s.setup_id, s.trim, s.shear, sum(o.width_share), sum(o.allocated_trim_sqft), sum(o.allocated_shear_sqft),
+                                bool_and(abs(o.width_share - o.outs * o.sheet_width_in / (s.width_in - s.trim_in)) < 1e-9)
                          FROM setups s JOIN setup_orders o ON o.setup_id = s.setup_id GROUP BY ALL""")
-    assert len(rows) == sql(store, "SELECT count(*) FROM setups")[0][0] > 2000
-    for setup_id, width, trim_in, used, lanes, declared in rows:
-        assert used <= width - trim_in + 1e-9, setup_id
-        assert used == pytest.approx(width - trim_in) and used <= width - 2.0 + 1e-9
+    assert len(rows) == sql(store, "SELECT count(*) FROM setups")[0][0]
+    for setup_id, trim, shear, share, trim_part, shear_part, by_width in rows:
+        assert share == pytest.approx(1.0) and by_width, setup_id
+        assert trim_part == pytest.approx(trim, abs=1e-6) and shear_part == pytest.approx(shear, abs=1e-6)
+    by_customer = dict(sql(store, "SELECT customer_id, sum(allocated_trim_sqft) FROM setup_orders GROUP BY customer_id"))
+    assert sum(by_customer.values()) == pytest.approx(sql(store, "SELECT sum(trim) FROM setups")[0][0], rel=1e-9)
+
+
+def test_setup_orders_outs_times_width_fit_the_web_minus_trim_for_every_setup():
+    """Issue #100 acceptance, over every setup of the golden window (1 January 2025 to 30 September 2026): in the
+    store's lane view, sum of outs x sheet width over a setup's lanes leaves the day's minimum trim on the web
+    (used + minimum trim <= web width), the trim column is exactly what is left (used = web - trim), and the web
+    is the narrowest paper that holds the lanes with that trim."""
+    store = default_store()
+    rows = store._db.execute("""SELECT s.setup_id, s.production_date, s.width_in, s.trim_in, sum(o.outs * o.sheet_width_in) AS used,
+                                       count(*) AS lanes, max(s.lanes)
+                                FROM setups s JOIN setup_orders o ON o.setup_id = s.setup_id GROUP BY ALL""").fetchall()
+    assert len(rows) == store._db.execute("SELECT count(*) FROM setups").fetchone()[0] > 50_000
+    for setup_id, day, width, trim_in, used, lanes, declared in rows:
+        minimum = min_trim_in(day)
+        assert used + minimum <= width + 1e-9, (setup_id, used, minimum, width)
+        assert used == pytest.approx(width - trim_in) and width == narrowest_web(used, minimum), setup_id
         assert lanes == declared and 1 <= lanes <= 3
 
 

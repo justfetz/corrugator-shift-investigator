@@ -158,9 +158,9 @@ window holds.
 The file carries the dataset `content_hash`. `run.py` compares it with the golden
 store before scoring and fails every value case when they differ ("stale
 goldens; run make_value_goldens.py"), so an intended generator change forces a
-deliberate regeneration and an unintended one is caught. The 90 cases cover
+deliberate regeneration and an unintended one is caught. The 91 cases cover
 every KPI tile for September and August (all shifts and per shift), one week
-and one production day per shift, the data's first week and month and 4-4-5
+and one production day per shift, the data's first and second weeks, first month and first 4-4-5
 period (no or a partial previous window) and the last week (partial),
 `compare_periods` both ways, the downtime Pareto of the
 missed-splice week by reason, place and kind, the waste breakdown for both

@@ -91,7 +91,8 @@ TABLES = {
                      "customer_id VARCHAR, order_quantity INTEGER, sheet_width_in DOUBLE, sheet_length_in DOUBLE, outs INTEGER, "
                      "cutoff_knife INTEGER, nominal_cuts INTEGER, actual_cuts INTEGER, sheet_type VARCHAR, filler BOOLEAN, "
                      "cutoff_waste_boards INTEGER, stacker_waste_boards INTEGER, cutoff_waste_sqft DOUBLE, stacker_waste_sqft DOUBLE, "
-                     "stack_height INTEGER, folds INTEGER, sheets_per_pallet INTEGER, pallets INTEGER, perforation_length_in DOUBLE"),
+                     "stack_height INTEGER, folds INTEGER, sheets_per_pallet INTEGER, pallets INTEGER, perforation_length_in DOUBLE, "
+                     "width_share DOUBLE, allocated_trim_sqft DOUBLE, allocated_shear_sqft DOUBLE"),
     "customers": "customer_id VARCHAR, name VARCHAR, destination VARCHAR, ship_to VARCHAR",
     "rejects": ("setup_id VARCHAR, production_date DATE, shift INTEGER, family VARCHAR, category VARCHAR, reason VARCHAR, "
                 "liner VARCHAR, side VARCHAR, position INTEGER, sheets INTEGER, sqft DOUBLE, counted_in VARCHAR"),
@@ -533,13 +534,18 @@ class RecordStore:
                            s.total_nominal_ft, s.avg_speed_fpm, s.trim_in, s.trim_pct, s.swing_knife_sqft, s.is_fanfold,
                            s.sheet_type, s.filler, len(s.lanes), round(s.changeover_sqft, 1), round(s.admin_sqft, 1),
                            round(s.cutoff_waste_sqft, 1), round(s.stacker_waste_sqft, 1)])
+            used = s.used_width_in
             for c in s.lanes:
+                # identity 6: the setup's own waste (side trim and shear chops) allocated to each customer by its lane's
+                # share of the used width; the reject lines and waste boards are already the lane's own
+                share = c.used_width_in / used
                 lanes.append([s.setup_id, day, s.shift_number, c.lane, c.order_number, c.part_number, c.customer_id,
                               c.order_quantity, float(c.sheet_width_in), float(c.sheet_length_in), c.number_of_outs,
                               c.cutoff_allocation, c.nominal_cuts, c.actual_cuts, c.sheet_type, c.filler, c.cutoff_waste_boards,
                               c.stacker_waste_boards, c.cutoff_waste_sqft, c.stacker_waste_sqft, c.stack_height_sheets,
                               c.folds, c.sheets_per_pallet, c.pallets,
-                              None if c.perforation_length_in is None else float(c.perforation_length_in)])
+                              None if c.perforation_length_in is None else float(c.perforation_length_in),
+                              share, s.trim_sqft * share, s.chop_sqft * share])
             for r in s.rejects:
                 rejects.append([s.setup_id, day, s.shift_number, r.family, r.category, r.reason, r.liner, r.side, r.lane,
                                 r.sheets, r.sqft, R.counted_in(r.category)])

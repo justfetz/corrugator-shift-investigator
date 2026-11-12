@@ -376,8 +376,7 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
 # record the contract was modelled on, its product names and its source-system table and record names. The
 # contract describes a generic corrugator dry-end setup record. Built from fragments so this file does not
 # name them either.
-VENDOR_PATTERNS = tuple(re.compile(p) for p in (
-    r"\b" + "B" + "HS" + r"\b",
+VENDOR_PATTERNS = (re.compile(r"\b" + "B" + "HS" + r"\b", re.I),) + tuple(re.compile(p) for p in (   # in any letter case, slugs too
     "Production" + "_Center",
     "BQ" + "MES" + "PAHT",
     r"\bP0" + "4[PGTS]" + r"\b",

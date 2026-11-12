@@ -77,8 +77,9 @@ LANE_WASTE_BOARDS = {"cutoff": (1, 2), "stacker": (1, 4)}   # per out and per la
 CHANGEOVER_RATE = 0.0015                  # changeover rejects on an order change, a fraction of gross
 ADMIN_RATE = 0.0004                       # planning / admin entries, a fraction of gross
 # Rejects are episodic: the chance a lane of a setup records a category at all. When it does, the line is
-# the category's rate over that chance, so the expected area is the rate (simulation choices).
-REJECT_CHANCE = {"bond": 0.6, "warp": 0.6, "misalignment": 0.5, "cracking": 0.15, "handling": 0.15, "paper": 0.12,
+# the category's rate over that chance, so the expected area is the rate (simulation choices). Warp, the seeded
+# story's category, is on every lane, so its weekly August and Monday steps stand clear of the draw's noise.
+REJECT_CHANCE = {"bond": 0.6, "warp": 1.0, "misalignment": 0.5, "cracking": 0.15, "handling": 0.15, "paper": 0.12,
                  "print": 0.08, "changeover": 0.7, "admin": 0.08}
 STOP_COMMENT_EMPTY = {"Order change": 0.80, "Planned maintenance": 0.30}   # share of stops with no comment; default below
 STOP_COMMENT_EMPTY_DEFAULT = 0.45
@@ -363,6 +364,25 @@ class _Planner:
         """Drop the open paper run and continuation (at the end of the production day)."""
         self.wet, self.carry, self.grade, self.block_left = None, None, None, 0
 
+    def reopen(self, plan, lead_cuts):
+        """A setup closed at a shift boundary before its last cuts ran (the rest was under a minute of running):
+        give each order back the sheets it was scheduled but did not run, so its remainder rolls into a later
+        setup like any other (identity 5). An order that is already the continuation keeps its place; one that
+        had finished goes back to the front of its grade's open orders."""
+        d = plan["definer"]
+        length, total, nominal = plan["lanes"][d][0]["L"], plan["actual"][d], plan["nominal"][d]
+        ran = _nominal_at(nominal, lead_cuts, total)
+        for i, (order, outs) in enumerate(plan["lanes"]):
+            if order["filler"]:
+                continue
+            unrun = plan["nominal"][i] - (ran if i == d else ran * length // order["L"])
+            if unrun <= 0:
+                continue
+            was_open = order["remaining"] > 0
+            order["remaining"] += unrun * outs
+            if not was_open and order["remaining"] > 0 and not (self.carry and self.carry[0] is order):
+                self.pools[plan["quality"]].insert(0, order)
+
     def _order(self, quality):
         rng = self.rng
         self.order_seq += 1
@@ -497,7 +517,7 @@ class _Planner:
         run = max(MIN_RUN_SECONDS, round(lineal / fpm * 60))
         return {"quality": quality, "width": web, "lanes": lanes, "nominal": cuts, "actual": actual_cuts, "definer": definer,
                 "code": "O", "chops": chops, "fpm": fpm, "run": run, "wet_end_id": self.wet["id"], "new_wet": new_wet,
-                "fanfold": bool(lanes[0][0]["fanfold"]), "cursor": 0, "nominal_cursor": 0}
+                "fanfold": bool(lanes[0][0]["fanfold"]), "cursor": 0}
 
 
 def _stop(rng, kind, reason, place, seconds, chops=0, note=None):
@@ -602,6 +622,7 @@ class _Frame:
     base_chops: int
     split_from: str | None = None
     final: bool = False        # the plan's last record: it takes every remaining cut
+    cuts: tuple = (0, 0)       # (from, to): the plan's lead-lane actual cuts this record runs (`_lead_cuts`)
 
     @property
     def code(self):
@@ -644,7 +665,8 @@ def _layout(rng, slots, planner, machine_code, outage_slots, week_factors=None):
                 per_slot[id(slot)] = seq
                 day_text, time_text = R.stamp(cursor)
                 frame = _Frame(plan, parts, cursor, slot,
-                               f"{machine_code}{day_text}{time_text}{seq % 100:02d}", chops, split, final)
+                               f"{machine_code}{day_text}{time_text}{seq % 100:02d}", chops, split, final,
+                               _lead_cuts(plan, parts, chops, final))
                 frames.append(frame)
                 return frame
 
@@ -654,7 +676,8 @@ def _layout(rng, slots, planner, machine_code, outage_slots, week_factors=None):
                 continue
             first, second = _split(segments, boundary)
             if _run_seconds(second) < MIN_RUN_SECONDS:
-                emit(first)                       # remainder too small: close here, the plan's last cuts are not run
+                frame = emit(first)               # remainder too small: close here; the cuts not run go back to their orders
+                planner.reopen(plan, frame.cuts[1])
             elif _run_seconds(first) < MIN_RUN_SECONDS and frames and frames[-1].slot is slot:
                 frames[-1].segments.append(("run", boundary))   # stretch the prior record
                 if slot.contiguous_next:
@@ -715,24 +738,39 @@ def _position(rng, category, reason, quality):
     return (rng.choice(liners) if liners else None), (rng.choice(sides) if sides else None)
 
 
-def _frame_cuts(plan, frame, run, chop_ft):
-    """Allocate the plan's cuts to one record: the lane that set the length is allocated by the record's
-    running time (the plan's last record takes what is left); the other lanes follow its travel by floor,
-    so every record's lanes end within one knife rotation and the records of a plan add up to it.
-    Returns (nominal cuts, actual cuts, scheduled travel ft, actual travel ft), the travels being the
-    record's longest lane."""
+def _nominal_at(nominal, lead_cuts, total):
+    """The scheduled lead-lane cuts that go with `lead_cuts` of `total` actual ones (all of them at the end)."""
+    return nominal if lead_cuts == total else int(round(nominal * lead_cuts / total))
+
+
+def _lead_cuts(plan, segments, base_chops, final):
+    """The plan's lead-lane actual cuts a record runs, as (from, to), allocated when the record is laid out: by
+    its running time less its shear chops (the plan's last record takes what is left), so a setup closed at a
+    shift boundary knows exactly which cuts did not run."""
+    d = plan["definer"]
+    length, total = plan["lanes"][d][0]["L"], plan["actual"][d]
+    start = plan["cursor"]
+    if final:
+        end = total
+    else:
+        chops = base_chops + sum(s[2]["chops"] for s in segments if s[0] == "stop")
+        travel = max(0.0, plan["fpm"] * _run_seconds(segments) / 60 - chops * CHOP_LENGTH_IN / 12)
+        end = min(total, start + int(round(travel * 12 / length)))
+    plan["cursor"] = end
+    return start, end
+
+
+def _frame_cuts(plan, frame):
+    """The cuts of one record: the lane that set the length runs the cuts its layout allocated (`_lead_cuts`);
+    the other lanes follow its travel by floor, so every record's lanes end within one knife rotation and the
+    records of a plan add up to it. Returns (nominal cuts, actual cuts, scheduled travel ft, actual travel ft),
+    the travels being the record's longest lane."""
     d = plan["definer"]
     lanes = plan["lanes"]
     lead_length = lanes[d][0]["L"]
     total_actual, total_nominal = plan["actual"][d], plan["nominal"][d]
-    a0, n0 = plan["cursor"], plan["nominal_cursor"]
-    if frame.final:
-        a1 = total_actual
-    else:
-        travel = max(0.0, plan["fpm"] * run / 60 - chop_ft)
-        a1 = min(total_actual, a0 + int(round(travel * 12 / lead_length)))
-    n1 = total_nominal if a1 == total_actual else int(round(total_nominal * a1 / total_actual))
-    plan["cursor"], plan["nominal_cursor"] = a1, n1
+    a0, a1 = frame.cuts
+    n0, n1 = _nominal_at(total_nominal, a0, total_actual), _nominal_at(total_nominal, a1, total_actual)
     actual, nominal = [], []
     for i, (order, _) in enumerate(lanes):
         if i == d:
@@ -756,7 +794,7 @@ def _setup_record(rng, frame, ctx, machine_id):
     end = frame.start + timedelta(seconds=elapsed)
     chops = frame.base_chops + sum(s[2]["chops"] for s in stop_segments)
     chop_ft = chops * CHOP_LENGTH_IN / 12
-    nominal, actual, scheduled_ft, order_travel = _frame_cuts(plan, frame, run, chop_ft)
+    nominal, actual, scheduled_ft, order_travel = _frame_cuts(plan, frame)
     lineal = round(order_travel + chop_ft, 1)
     chop_sqft = round(chop_ft * width / 12, 1)
     gross = round(lineal * width / 12, 1)

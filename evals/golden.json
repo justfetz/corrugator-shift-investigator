@@ -2770,7 +2770,7 @@
     "tables": [
      "get_trend"
     ],
-    "sections_not_match": "\\bmoisture\\b"
+    "sections_not_match": "weeks of moisture|moisture \\*\\*"
    }
   },
   {
@@ -6122,7 +6122,7 @@
     "shape": {
      "headline_match": "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* below target: (stops|setups|below-target running|mix) [0-9.-]+%, .* \\(query 1\\)$",
      "bullets": [
-      3,
+      4,
       4
      ],
      "look": [

@@ -3,16 +3,16 @@
 A ten-minute walk through the Corrugator Shift Investigator in the order the data flows: from one seed to the record families, through the invariants that hold them together, into a store and a set of bounded tools, through a planner that may only choose, out as evidence with a trail, and finally into a golden set that owns its own truth. Every section names the file that does the work and the test that proves it. Nothing here is a real plant, a vendor protocol, or a proof of cause; the last section says so plainly.
 
 ```
- seed 2026 + date ──► synth.generate_day() ×456 ──► the record contract's families ──► content hash 31a02861ad3b…
-                     ▲                         (the year ending 2026-09-30)
-                     │                      dry-end setups  31,488
-              stories.py (answer keys)      wet ends        11,030
-              read by the generator only    shifts             786
-                                            stops            6,739
+ seed 2026 + date ──► synth.generate_day() ×456 ──► the record contract's families ──► content hash acd9f8ad8e5a…
+                     ▲                    (1 January 2025 to 2026-09-30)
+                     │                      dry-end setups  56,555
+              stories.py (answer keys)      wet ends        17,531
+              read by the generator only    shifts           1,368
+                                            stops           11,317
                                                    │
                                                    ▼
                                   RecordStore: one in-memory DuckDB, built once
-                                  setups · customers · rejects · wet_ends · shifts · stops
+                                  setups · setup_orders · rejects · wet_ends · rolls · shifts · stops
                                       │                                  │
                          day_analysis(day, corrupt)              six period tools
                          five per-day tables, validated          any day / week / month window
@@ -56,11 +56,14 @@ One example of each, taken from Monday 14 September, shift 2, as the generator w
             "sheet_width_in": 48.0, "sheet_length_in": 40, "number_of_outs": 1, "cutoff_allocation": 2, "nominal_cuts": 7076, "actual_cuts": 7183,
             "sheet_type": "cap_sheet", "filler": true, "cutoff_waste_boards": 1, "stacker_waste_boards": 4, "cutoff_waste_sqft": 13.3,
             "stacker_waste_sqft": 53.3, "stack_height_sheets": 279, "folds": null, "sheets_per_pallet": null, "pallets": null, "perforation_length_in": null}],
- "rejects": [{"category": "bond", "reason": "Dry board", "lane": 1, "sheets": 58, "sqft": 812.2, "liner": null, "side": null},
-             {"category": "warp", "reason": "Twist warp", "lane": 1, "sheets": 42, "sqft": 588.1, "liner": null, "side": null},
-             {"category": "changeover", "reason": "Cut off", "lane": 1, "sheets": 23, "sqft": 322.1, "liner": null, "side": null},
-             {"category": "bond", "reason": "Zipper board", "lane": 2, "sheets": 26, "sqft": 346.7, "liner": null, "side": null},
-             {"category": "misalignment", "reason": "Misalign", "lane": 2, "sheets": 19, "sqft": 253.3, "liner": null, "side": "drive"}],
+ "rejects": [{"category": "bond", "reason": "Delamination", "lane": 1, "sheets": 56, "sqft": 784.2, "liner": "bottom", "side": null},
+             {"category": "warp", "reason": "Down warp", "lane": 1, "sheets": 20, "sqft": 280.1, "liner": null, "side": null},
+             {"category": "misalignment", "reason": "Misalign", "lane": 1, "sheets": 30, "sqft": 420.1, "liner": null, "side": "operator"},
+             {"category": "changeover", "reason": "Cut off", "lane": 1, "sheets": 17, "sqft": 238.1, "liner": null, "side": null},
+             {"category": "warp", "reason": "Up warp", "lane": 2, "sheets": 34, "sqft": 453.3, "liner": null, "side": null},
+             {"category": "paper", "reason": "Wrong color", "lane": 2, "sheets": 16, "sqft": 213.3, "liner": null, "side": null},
+             {"category": "changeover", "reason": "Cut off", "lane": 2, "sheets": 9, "sqft": 120.0, "liner": null, "side": null},
+             {"category": "admin", "reason": "Order fill", "lane": 2, "sheets": 31, "sqft": 413.3, "liner": null, "side": null}],
  "production_date": "20260914", "wet_end_id": "WE20260914022", "split_from_setup_id": null}
 ```
 
@@ -69,8 +72,8 @@ Read it the way the tools do:
 - **Order travel:** the chops (471.0 sq ft, exactly nineteen 34-inch full-web cuts) are subtracted to get the travel that reached the knives, 23,945.2 ft. That is lane 1's 7,766 cuts × 37 in, the longest lane.
 - **Scheduling:** lane 1 was scheduled for 7,650 cuts (23,587.5 ft, `total_nominal_ft`) to finish its order. The over/under-run gave it 116 cuts more (1.5%).
 - **The filler:** the cap sheet ran as far as its pair, ⌊7,650 × 37 / 40⌋ = 7,076 cuts scheduled. Both lanes end within one knife rotation.
-- **Paper:** the paper is the narrowest of 90–110 in that holds 102½ inches plus the 2-inch minimum trim.
-- **Rejects:** each reject line names a category and reason from `reject_reasons.json`, and a position where the reason has one (the misalign is on the drive side). The changeover line counts with shear, never as dry-end quality.
+- **Paper:** the paper is the narrowest of 90–110 in that holds 102½ inches plus that day's minimum trim (2.36 in: the 2-inch baseline plus the slitter rebuild's creep).
+- **Rejects:** each reject line names a category and reason from `reject_reasons.json`, and a position where the reason has one (the delamination is on the bottom liner, the misalign on the operator side). The changeover lines count with shear and the order-fill line is a planning / admin entry, never dry-end quality.
 
 **Wet end**, one paper run: consecutive setups sharing grade and web width. This one holds three setups, the one above last. Its totals are exact sums of theirs:
 
@@ -92,9 +95,9 @@ Read it the way the tools do:
 
 ```json
 {"shift_number": 2, "production_date": "20260914", "group_name": "Crew B", "start_time": "150000", "end_time": "230000", "duration": "080000",
- "total_lineal_ft": 315647.4, "total_produced_sqft": 2694376.9, "side_trim_sqft": 82194.9, "chop_sqft": 10992.0, "reject_sqft": 27680.3,
- "changeover_sqft": 3616.0, "admin_sqft": 2775.3, "cutoff_waste_sqft": 1697.6, "stacker_waste_sqft": 1913.2,
- "max_speed_fpm": 854.7, "avg_speed_fpm": 657.6, "wet_end_ids": ["WE20260914012", "…", "WE20260914025"], "scheduled_minutes": 480, "bale_sqft": 135063.3}
+ "total_lineal_ft": 315647.4, "total_produced_sqft": 2694376.9, "side_trim_sqft": 82194.9, "chop_sqft": 10992.0, "reject_sqft": 33025.2,
+ "changeover_sqft": 4356.4, "admin_sqft": 1396.2, "cutoff_waste_sqft": 1697.6, "stacker_waste_sqft": 1913.2,
+ "max_speed_fpm": 854.7, "avg_speed_fpm": 657.6, "wet_end_ids": ["WE20260914012", "…", "WE20260914025"], "scheduled_minutes": 480, "bale_sqft": 144113.5}
 ```
 
 **Stop**, one row of the downtime log, always inside exactly one setup. It has a category (`kind`), a place, a reason and the operator's comment. The comment is often empty, as this one is, and is quoted verbatim when it is not:
@@ -138,7 +141,7 @@ Only the generator imports `stories.py`. The analysis layer, the agent, the serv
 
 `src/investigator/record_store.py` builds the window once per process (about twenty-five seconds generating, or about 400 ms loading the folder the image prebuilt) into one in-memory DuckDB with external access disabled: the record contract's tables `setups`, `setup_orders`, `customers`, `rejects`, `reject_reasons`, `wet_ends`, `rolls`, `shifts`, `stops` ([the record contract](RECORD_CONTRACT.md)). Two doors lead out of it.
 
-`day_analysis(production_day, corrupt=False)` validates each setup of one day (finite non-negative quantities, a known web width and grade, gross = lineal × width / 12, waste within gross, a sane interval, one to three knife positions in order, reject lines that reconcile) and loads the five per-day tables the daily tools have always read. A record that fails validation is excluded with its raw values and makes its shift's coverage `incomplete`; the `corrupt` toggle injects a 99,999,999 sq ft trim value into the first setup of shift 2 so that path can be demonstrated on demand. A weekend date or a date outside the window (30 September 2025 – 30 September 2026 in the tests) is refused with the calendar reason; the server returns the same message as a 400.
+`day_analysis(production_day, corrupt=False)` validates each setup of one day (finite non-negative quantities, a known web width and grade, gross = lineal × width / 12, waste within gross, a sane interval, one to three order lanes in order, reject lines that reconcile with their lane's sheet size) and loads the five per-day tables the daily tools have always read. A record that fails validation is excluded with its raw values and makes its shift's coverage `incomplete`; the `corrupt` toggle injects a 99,999,999 sq ft trim value into the first setup of shift 2 so that path can be demonstrated on demand. A weekend date or a date outside the window (1 January 2025 – 30 September 2026 in the tests) is refused with the calendar reason; the server returns the same message as a 400.
 
 The six period tools read the store directly with bound window dates, so "this month versus last" is one fixed read over the whole dataset, not a loop over days.
 
@@ -189,7 +192,7 @@ The answer is assembled by application code, not the model: `sections` (plain-te
 | investigation | a superintendent's multi-turn question finds a seeded story | required evidence covering the story window, its numbers in the prose, no cause asserted that the evidence lacks |
 | data_quality | the corrupt record is flagged, excluded, reported, never averaged in | coverage, the reported raw value, the impossible number absent, rankings withheld, the remaining sums pinned |
 
-**How the goldens are made.** With synthetic data we own the truth, so an expected answer is never typed by hand and never read back from the tool it checks. `evals/make_value_goldens.py` computes every value case by plain Python sums over `synth.generate_window()` for the golden window (the year ending 2026-09-30) — its own calendar arithmetic, its own ratio-of-sums formulas, its own Pareto ordering — and writes `golden_values.json` stamped with the dataset content hash. The runner scores the golden set against the store of that window, whatever window the serving process holds, and compares the hash with it before scoring and fails every value case when they differ, so an intended generator change forces a deliberate regeneration and an accidental one is caught. A tolerance rides with each number to cover the tool's display rounding; integers, strings and `null` are exact. The committed file must be byte-for-byte what the generator produces (`tests/test_goldens_values.py`).
+**How the goldens are made.** With synthetic data we own the truth, so an expected answer is never typed by hand and never read back from the tool it checks. `evals/make_value_goldens.py` computes every value case by plain Python sums over `synth.generate_window()` for the golden window (1 January 2025 to 2026-09-30) — its own calendar arithmetic, its own ratio-of-sums formulas, its own Pareto ordering — and writes `golden_values.json` stamped with the dataset content hash. The runner scores the golden set against the store of that window, whatever window the serving process holds, and compares the hash with it before scoring and fails every value case when they differ, so an intended generator change forces a deliberate regeneration and an accidental one is caught. A tolerance rides with each number to cover the tool's display rounding; integers, strings and `null` are exact. The committed file must be byte-for-byte what the generator produces (`tests/test_goldens_values.py`).
 
 **How an investigation is scored.** The three investigation cases ask about the three stories in plain words ("We had a rough week. Where did we lose the most downtime minutes this week?"). Rules in the case, evaluated by application code, require specific evidence — a place Pareto covering 7–11 September in which Splicer 3 minutes are at least three times the week before; a trim trend that shows the week of 17 August and rises at least 0.4 pp by the week of 28 September; the Monday 14 September waste breakdown with warp above the Friday before and bond flat — require the numbers those rules found to appear in the answer, and forbid the prose from asserting the rebuild, a splicer fault or weekend moisture as the cause. "Coincides with", "warrants inspection" and "ask the crew" pass; "caused by the rebuild" fails. The same cases run offline against the rule-based planner and, with `--live`, against Anthropic or OpenAI, whose responses are recorded as fixtures and replayed afterwards; live types pass by pass rate (routing ≥ 0.9, investigation ≥ 0.8, the rest 1.0).
 
