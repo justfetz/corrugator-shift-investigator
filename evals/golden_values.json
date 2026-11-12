@@ -43135,7 +43135,7 @@
     },
     "shift": 1
    },
-   "note": "The most maintenance downtime any shift has in the golden year (first shift): a power outage plus jams; recurrence counts shift 1's own year.",
+   "note": "First shift on the day of a 15-minute power outage: the outage is external (the owner, PR #111), so the shift's maintenance (jams and a stacker stop) is on target and no flag fires; the outage is listed apart.",
    "expect": {
     "coverage": "complete",
     "row_count": 6,
@@ -48686,6 +48686,42 @@
        139,
        null
       ]
+     },
+     "details:item=Power outage": {
+      "bucket": [
+       "external",
+       null
+      ],
+      "gap_fpm": [
+       0.159826,
+       0.0051
+      ],
+      "minutes": [
+       11.0,
+       0.0051
+      ],
+      "stops": [
+       1,
+       null
+      ]
+     },
+     "details:item=Planned maintenance": {
+      "bucket": [
+       "planned",
+       null
+      ],
+      "gap_fpm": [
+       12.907718,
+       0.0051
+      ],
+      "minutes": [
+       522.0,
+       0.0051
+      ],
+      "stops": [
+       4,
+       null
+      ]
      }
     }
    }
@@ -49325,6 +49361,24 @@
       ],
       "stops": [
        13,
+       null
+      ]
+     },
+     "details:item=Power outage": {
+      "bucket": [
+       "external",
+       null
+      ],
+      "gap_fpm": [
+       2.108792,
+       0.0051
+      ],
+      "minutes": [
+       11.0,
+       0.0051
+      ],
+      "stops": [
+       1,
        null
       ]
      }

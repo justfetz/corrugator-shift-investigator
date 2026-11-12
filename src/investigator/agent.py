@@ -78,14 +78,14 @@ PERIOD_TOOL_SCHEMAS = [
         ("get_opportunities", "Improvement levers of a window ranked by $/yr at the assumed rates, each marked controllable or schedule-driven. lens: all (every lever ranked, default); supervisor (the controllable losses ranked, schedule-driven trim and planned maintenance after); ownership (the total cost of waste, side trim first).",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER, "lens": {"type": "string", "enum": ["all", "supervisor", "ownership"]}}, ["window"]),
         ("get_downtime_review", "The owner's downtime answer for a window: maintenance and operator downtime as % of scheduled minutes against their "
-         f"{targets.pct(targets.BANDS['maintenance']['flag'])} bands ({targets.pct(targets.BANDS['op_maint']['flag'])} together); every reason by kind ranked by % of scheduled minutes with stops and minutes per stop, planned maintenance last as scheduled time; and the flags: each shift over a band, its supervisor slot, and the leading reason's recurrence over the trailing year.",
+         f"{targets.pct(targets.BANDS['maintenance']['flag'])} bands ({targets.pct(targets.BANDS['op_maint']['flag'])} together); every reason by kind ranked by % of scheduled minutes with stops and minutes per stop, external downtime (a power outage, not controllable) and planned maintenance (scheduled time) apart and unranked, never in a band; and the flags: each shift over a band, its supervisor slot, and the leading reason's recurrence over the trailing year.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
-        ("get_speed_variance", "Why speed with stops differed from a reference: the gap in ft/min and lineal ft split into four buckets that add up to it, "
-         "every grade held at its baseline (its sustained average speed over the trailing year, never its target or maximum): stops (minutes "
-         "stopped at the grade's baseline), setups (order-change stops), running under the grade's baseline, and grade mix (the reference's "
-         "baseline speed minus this window's). Each bucket names its top stop reason or grade and is marked controllable or schedule-driven; "
-         "details split every bucket and add up to it; the controllable buckets are priced as machine time, the grade mix (schedule-driven) is "
-         "not. against: baseline (each grade's baseline at the usual grade mix; default), previous (the previous window of the same kind), "
+        ("get_speed_variance", "Why speed with stops differed from a reference: the gap in ft/min and lineal ft split into buckets that add up to it, "
+         "every grade held at its baseline (its sustained average speed over the trailing year, never its target or maximum): stops (unplanned "
+         "minutes stopped, at the grade's baseline), planned maintenance and external stops (a power outage; each its own bucket when either "
+         "side has one), setups (order-change stops), running under the grade's baseline, and grade mix (the reference's baseline speed minus "
+         "this window's). Each bucket names its top stop reason or grade and is marked controllable, schedule-driven (the grade mix, planned "
+         "maintenance) or external; details split every bucket and add up to it; only the controllable buckets are priced as machine time. against: baseline (each grade's baseline at the usual grade mix; default), previous (the previous window of the same kind), "
          "shift (against_shift over the same window; shift is the one explained). Use for 'top contributors to speed variation', 'why did "
          "speed vary', 'what drove speed', 'speed loss breakdown'.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER, "against": {"type": "string", "enum": ["baseline", "previous", "shift"]},
@@ -319,8 +319,8 @@ CHANGE_SPEED = (rf"\bhow (fast|quick|quickly) (did|do|can|could) we (change|chan
                 rf"|\b(speed|pace) of (the |our )?{CHANGE_NOUNS}\b")
 
 
-# Speed variance (issue #92): why speed differed from target, from the previous window or between shifts, as
-# stops, setups, running below target and grade mix. "What were the top 3 contributors to speed variation",
+# Speed variance (issue #92): why speed differed from the baseline, from the previous window or between shifts, as
+# stops, planned maintenance and external stops (PR #111), setups, running under baseline and grade mix. "What were the top 3 contributors to speed variation",
 # "why did speed vary", "what drove speed", "speed loss breakdown", "biggest speed losses", "why was speed below
 # target". A "why ... slow" stays the overview (DIAGNOSIS_WORDS), the gap to the best fifth the opportunity, and
 # "what does the speed gap cost" the shift's dollars, whose speed-gap row prices it (issue #31).

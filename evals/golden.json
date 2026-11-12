@@ -7093,7 +7093,7 @@
    "shift": 1,
    "period": "week",
    "question": "Why was this week bad?",
-   "note": "Review of the owner's decisions on PR #111: a power outage is external, outside the plant, so like planned maintenance it never leads the period overview's downtime finding. In the week of 4 May 2026 shift 1's largest stop reason by minutes after planned maintenance was the 15-minute outage; the finding names the largest unplanned reason instead.",
+   "note": "Review of the owner's decisions on PR #111: a power outage is external, outside the plant, so like planned maintenance it never leads the period overview's downtime finding. In the week of 4 May 2026 shift 1's largest stop reason by minutes after planned maintenance was the 15-minute outage; the finding names the largest unplanned reason instead. The note on how a dollar is priced is for the row the finding names, Order change, never the Pareto's first row (planned maintenance) (coordinator re-review of the decisions).",
    "expect": {
     "url": "/corr/1/week/2026-05-04/shift/1?measure=overview",
     "status": "complete",
@@ -7101,9 +7101,90 @@
      1
     ],
     "sections_match": [
-     "^- (?!Power outage|Planned maintenance)[^:]+: \\*\\*[0-9.]+ min\\*\\* of downtime, [0-9.]+% of the window's minutes"
+     "^- (?!Power outage|Planned maintenance)[^:]+: \\*\\*[0-9.]+ min\\*\\* of downtime, [0-9.]+% of the window's minutes",
+     "^How a dollar is priced, for Order change: "
     ],
-    "sections_not_match": "^- Power outage: "
+    "sections_not_match": "^- Power outage: |^How a dollar is priced, for (Planned maintenance|Power outage):"
+   }
+  },
+  {
+   "id": "power-outage-never-leads-the-shift-overview",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-16",
+   "shift": 3,
+   "question": "Why was this shift bad?",
+   "note": "Re-review of the owner's decisions on PR #111: a power outage is external and planned maintenance is schedule-driven, so neither leads the shift overview's downtime finding or is priced as its largest loss. Third shift on 2026-09-16 had the year's September power outage, 11 minutes, its largest stop by minutes. The finding names the largest unplanned reason.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-16/shift/3?measure=overview",
+    "status": "complete",
+    "shifts": [
+     3
+    ],
+    "sections_match": [
+     "^- (?!Power outage|Planned maintenance)[^:]+: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest unplanned reason"
+    ],
+    "sections_not_match": "^- (Shift [123], )?(Power outage|Planned maintenance): \\*\\*[0-9.]+ min\\*\\* of recorded downtime"
+   }
+  },
+  {
+   "id": "planned-maintenance-never-leads-the-shift-overview",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-17",
+   "shift": 1,
+   "question": "Why was this shift bad?",
+   "note": "Re-review of the owner's decisions on PR #111: a power outage is external and planned maintenance is schedule-driven, so neither leads the shift overview's downtime finding or is priced as its largest loss. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes. The finding names the largest unplanned reason.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-17/shift/1?measure=overview",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "sections_match": [
+     "^- (?!Power outage|Planned maintenance)[^:]+: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest unplanned reason"
+    ],
+    "sections_not_match": "^- (Shift [123], )?(Power outage|Planned maintenance): \\*\\*[0-9.]+ min\\*\\* of recorded downtime"
+   }
+  },
+  {
+   "id": "power-outage-never-leads-the-shift-compare",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-16",
+   "shift": 3,
+   "scope": "day",
+   "question": "Compare all shifts",
+   "note": "Re-review of the owner's decisions on PR #111: a power outage is external and planned maintenance is schedule-driven, so neither leads the all-shift comparison's downtime finding or is priced as its largest loss. On 2026-09-16 the slowest shift is third shift, whose largest stop by minutes was the 11-minute power outage. The finding names the largest unplanned reason.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-16?measure=compare",
+    "status": "complete",
+    "sections_match": [
+     "^- Shift 3, (?!Power outage|Planned maintenance)[^:]+: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest unplanned reason"
+    ],
+    "sections_not_match": "^- (Shift [123], )?(Power outage|Planned maintenance): \\*\\*[0-9.]+ min\\*\\* of recorded downtime"
+   }
+  },
+  {
+   "id": "planned-maintenance-never-leads-the-shift-compare",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2026-09-17",
+   "shift": 1,
+   "scope": "day",
+   "question": "Compare all shifts",
+   "note": "Re-review of the owner's decisions on PR #111: a power outage is external and planned maintenance is schedule-driven, so neither leads the all-shift comparison's downtime finding or is priced as its largest loss. On Thursday 2026-09-17 the slowest shift is first shift, whose largest stop by minutes was the 129-minute planned maintenance window. The finding names the largest unplanned reason.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-17?measure=compare",
+    "status": "complete",
+    "sections_match": [
+     "^- Shift 1, (?!Power outage|Planned maintenance)[^:]+: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest unplanned reason"
+    ],
+    "sections_not_match": "^- (Shift [123], )?(Power outage|Planned maintenance): \\*\\*[0-9.]+ min\\*\\* of recorded downtime"
    }
   },
   {

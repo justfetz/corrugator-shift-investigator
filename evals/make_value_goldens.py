@@ -1159,13 +1159,16 @@ def speedvar_side(plain, span, shift, speed):
     target_of = {s.setup_id: speed[s.quality_id] for s in setups}
     grade_of = {s.setup_id: s.quality_id for s in setups}
     stops, setup_loss = defaultdict(lambda: [0.0, 0.0, 0]), defaultdict(float)   # reason -> [feet lost, minutes, count]
-    planned, external = defaultdict(float), defaultdict(float)   # reason -> feet lost: the two buckets apart (PR #111)
+    planned, external = defaultdict(lambda: [0.0, 0.0, 0]), defaultdict(lambda: [0.0, 0.0, 0])   # the two buckets apart (PR #111)
     for st in plain.between("stops", *span, shift):
         lost = st.duration_sec / 60 * target_of[st.setup_id]
         if st.reason == "Order change":
             setup_loss[grade_of[st.setup_id]] += lost
         elif st.kind in ("PM", EXTERNAL_KIND):
-            (planned if st.kind == "PM" else external)[st.reason] += lost
+            cell = (planned if st.kind == "PM" else external)[st.reason]
+            cell[0] += lost
+            cell[1] += st.duration_sec / 60
+            cell[2] += 1
         else:
             cell = stops[st.reason]
             cell[0] += lost
@@ -1180,7 +1183,8 @@ def speedvar_side(plain, span, shift, speed):
             "target": sum(speed[g] * m for g, m in clock.items()) / minutes,
             "share": {g: m / minutes for g, m in clock.items()},
             "stops": {r: c[0] / minutes for r, c in stops.items()}, "stop_cells": dict(stops),
-            "planned": {r: v / minutes for r, v in planned.items()}, "external": {r: v / minutes for r, v in external.items()},
+            "planned": {r: c[0] / minutes for r, c in planned.items()}, "external": {r: c[0] / minutes for r, c in external.items()},
+            "apart_cells": {**{("planned", r): c for r, c in planned.items()}, **{("external", r): c for r, c in external.items()}},
             "setups": {g: v / minutes for g, v in setup_loss.items()}, "below": {g: v / minutes for g, v in below.items()}}
 
 
@@ -1247,6 +1251,10 @@ def speedvar_case(plain, id, period, anchor, shift=None, against="baseline", aga
     lost, mins, count = c["stop_cells"][top_stop]
     values[f"details:item={top_stop}"] = {"bucket": exact("stops"), "gap_fpm": num(lost / c["minutes"] - r["stops"].get(top_stop, 0.0), 2),
                                           "minutes": num(mins, 2), "stops": exact(count)}
+    # planned maintenance and an outage, each in its own bucket: this side's minutes and stops pinned (coordinator re-review)
+    for (key, reason), (lost, mins, count) in sorted(c["apart_cells"].items()):
+        values[f"details:item={reason}"] = {"bucket": exact(key), "gap_fpm": num(lost / c["minutes"] - r[key].get(reason, 0.0), 2),
+                                            "minutes": num(mins, 2), "stops": exact(count)}
     arguments = {"window": {"period": period, "anchor": anchor}, "shift": shift, "against": against}
     if against == "shift":
         arguments["against_shift"] = against_shift
@@ -1400,7 +1408,7 @@ def build(data=None):
     cases.append(review_case(plain, "value-review-day-0930", "day", "2026-09-30", day="2026-09-30",
                              note="The golden year's last production day, all shifts: a flagged operator shift and its recurrence over the year."))
     cases.append(review_case(plain, "value-review-day-0504-shift-1", "day", "2026-05-04", 1, day="2026-05-04",
-                             note="The most maintenance downtime any shift has in the golden year (first shift): a power outage plus jams; recurrence counts shift 1's own year."))
+                             note="First shift on the day of a 15-minute power outage: the outage is external (the owner, PR #111), so the shift's maintenance (jams and a stacker stop) is on target and no flag fires; the outage is listed apart."))
     cases.append(review_case(plain, "value-review-september", "month", "2026-09-14",
                              note="A month: every one of its many flags, each with its own trailing year."))
     cases.append(review_case(plain, "value-review-day-0928", "day", "2026-09-28", day="2026-09-28",

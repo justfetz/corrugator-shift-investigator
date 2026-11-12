@@ -161,6 +161,12 @@ def argmin(rows, key):
     return min(candidates)[1] if candidates else None
 
 
+def pareto_lead(rows):
+    """The Pareto row a finding leads with: the first that is neither planned maintenance (scheduled time, #101) nor
+    external downtime (a power outage, PR #111); the first row when there is no other."""
+    return next((j for j, x in enumerate(rows) if x['category'] not in PLANNED + EXTERNAL), 0)
+
+
 def argmax(rows, key):
     candidates = [(-r[key], i) for i, r in enumerate(rows) if r.get(key) is not None]
     return min(candidates)[1] if candidates else None
@@ -422,13 +428,23 @@ class DailyAnswer:
     # ---- findings shared by several shapes
     @staticmethod
     def largest_reason(dt, prefix=''):
+        """The shift's largest unplanned downtime reason: planned maintenance (scheduled time, #101) and a power outage
+        (external, the owner on PR #111) never lead, as in the Pareto; on a shift that holds nothing else the largest is
+        named with its mark."""
         rows = dt['data']['rows']
+        apart = lambda r: bool(r.get('scheduled') or r.get('external'))
+        i = argmax([r if not apart(r) else {**r, 'down_minutes': None} for r in rows], 'down_minutes')
+        if i is not None:
+            whole = argmax(rows, 'down_minutes')
+            noun = {'reason': 'reasons', 'place': 'places', 'kind': 'kinds'}.get(dt['arguments'].get('group_by', 'reason'), 'reasons')
+            rank = ('the largest unplanned reason' if whole != i else
+                    f'the largest of {len(rows)} {noun}' if len(rows) > 1 else f'the only one of the {noun}')
+            return bullet(f'{prefix}{rows[i]["category"]}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, {rank}{priced(rows[i])}', dt, i)
         i = argmax(rows, 'down_minutes')
         if i is None:
             return None
-        noun = {'reason': 'reasons', 'place': 'places', 'kind': 'kinds'}.get(dt['arguments'].get('group_by', 'reason'), 'reasons')
-        rank = f'the largest of {len(rows)} {noun}' if len(rows) > 1 else f'the only one of the {noun}'
-        return bullet(f'{prefix}{rows[i]["category"]}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, {rank}{priced(rows[i])}', dt, i)
+        mark = 'scheduled time, not an unplanned loss' if rows[i].get('scheduled') else 'external, not controllable'
+        return bullet(f'{prefix}{rows[i]["category"]}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, the only downtime · {mark}', dt, i)
 
     @staticmethod
     def slowest_run(we, prefix=''):
@@ -981,8 +997,7 @@ class PeriodAnswer:
         pareto, waste = tools.get('get_downtime_pareto'), tools.get('get_waste_breakdown')
         if pareto and pareto['data']['rows']:
             rows = pareto['data']['rows']
-            # planned maintenance (#101) and a power outage (external, PR #111) never lead
-            i = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED + EXTERNAL), 0)
+            i = pareto_lead(rows)
             r = rows[i]
             bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, i))
         if waste:
@@ -992,13 +1007,16 @@ class PeriodAnswer:
                 bullets.append(bullet(f'{r["label"]}: **{pval(r["pct_of_gross"])}%** of gross{rank} · {self.points(r)}{priced(r)}', waste, i))
         return bullets + [self.kpi_bullet(k, 'downtime_pct'), self.kpi_bullet(k, 'dry_end_pct')]
 
-    @staticmethod
-    def loss_notes(tools):
+    def loss_notes(self, tools):
+        """How a dollar is priced, for the rows the findings name (loss_bullets): the Pareto's largest unplanned reason
+        and the largest waste, never a row the answer does not state."""
         notes = []
-        for key, label in (('get_downtime_pareto', 'category'), ('get_waste_breakdown', 'label')):
-            result = tools.get(key)
-            if result and result['data']['rows']:
-                notes += money_notes(result, result['data']['rows'][0], label)
+        pareto, waste = tools.get('get_downtime_pareto'), tools.get('get_waste_breakdown')
+        if pareto and pareto['data']['rows']:
+            notes += money_notes(pareto, pareto['data']['rows'][pareto_lead(pareto['data']['rows'])], 'category')
+        if waste and waste['data']['rows']:
+            i, r = self.largest_waste(waste)
+            notes += money_notes(waste, r if r else waste['data']['rows'][0], 'label')
         return notes
 
     @staticmethod
@@ -1061,7 +1079,7 @@ class PeriodAnswer:
         noun = {'reason': 'reasons', 'place': 'places', 'kind': 'kinds'}.get(data.get('group_by'), 'reasons')
         # Planned maintenance is scheduled time (issue #101) and a power outage is external (PR #111): neither leads;
         # each is listed where the tool put it, marked.
-        lead = next((j for j, x in enumerate(rows) if x['category'] not in PLANNED + EXTERNAL), 0)
+        lead = pareto_lead(rows)
         if rows:
             r = rows[lead]
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'

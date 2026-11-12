@@ -15,7 +15,8 @@ python3 evals/make_value_goldens.py               # regenerate golden_values.jso
 ```
 
 A case the owner set carries `reviewed_by`: `owner-pending` until the owner has read
-it on the preview, then `owner` (issue #101's five cases are pending).
+it on the preview, then `owner`. Issue #101's five owner cases are `owner`; the seven power-outage and planned-maintenance cases
+added with the owner's decisions on PR #111 are `owner-pending`.
 
 `tests/test_evals.py` runs the same offline cases and recorded fixtures in CI,
 so a change that breaks a golden case fails the build; `tests/test_goldens_values.py`
