@@ -27,7 +27,8 @@ REPO = 'https://github.com/justfetz/corrugator-shift-investigator'
 # one its heading links to; slug '' is /docs itself. Every source must exist (tests/test_docsite.py).
 SECTIONS = (
     ('Overview', (('', 'docs/OVERVIEW.md', 'Overview'),
-                  ('how-this-is-built', 'docs/HOW_THIS_IS_BUILT.md', 'How this is built'))),
+                  ('how-this-is-built', 'docs/HOW_THIS_IS_BUILT.md', 'How this is built'),
+                  ('agents', 'docs/AGENTS.md', 'Agents: issue to pull request'))),
     ('Asking questions', (('asking-questions', 'docs/ASKING.md', 'Asking questions'),
                           ('workbench', 'docs/WORKBENCH.md', 'The workbench, step by step'),
                           ('urls', 'docs/URLS.md', 'The URL grammar'),

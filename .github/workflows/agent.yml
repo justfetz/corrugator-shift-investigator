@@ -1,0 +1,194 @@
+# The builder (issue #126). Labelling an issue `agent-ready` starts Claude Code on it: the job checks out
+# main, makes the issue's `issue-<n>-<slug>` branch, runs the repository's /fix-issue procedure with this
+# repository's CLAUDE.md and .claude/ (agents, skills, settings), and Claude opens one pull request that
+# closes the issue. docs/AGENTS.md is the owner's guide; .github/scripts/agent.py holds every rule called here.
+#
+# What starts a run: the `agent-ready` label on an issue; `@claude` in a comment by the repository owner
+# (on an issue: the same as the label; on a pull request: a fix run with the comment as the request);
+# workflow_dispatch with `issue` (a build) or `issue`, `pr` and `round` (a fix round: the review
+# workflow, agent-review.yml, sends these when its verdict is `review: fix-first`).
+# What stops one: removing the label. The `stop` job joins the issue's concurrency group with
+# cancel-in-progress, which cancels a build or fix round running for that issue; a run still queued
+# finds the label gone when it starts and does nothing.
+# One run per issue: the build job's concurrency group is the issue (`agent-issue-<n>`), and `plan`
+# refuses when an open pull request already closes the issue or comes from its branch.
+# At most three at once: the `queue` job. A GitHub concurrency group runs one job at a time and keeps only
+# the newest waiting one (it cancels the others), so one `agents` group would mean one agent at a time and
+# would drop queued issues; `queue` waits instead until fewer than three earlier runs are still going.
+# Caps: 60 minutes per build, `--max-turns` (AGENT_MAX_TURNS, default 200), the key's spend limit.
+#
+# Pushes and the pull request come from the Claude GitHub App (the action's default credential, not this
+# workflow's GITHUB_TOKEN), because GitHub starts no workflow from a GITHUB_TOKEN push: Tests, Preview and
+# the review workflow would never see the agent's work. That is why the checkout keeps no credential.
+name: Agent
+on:
+  issues:
+    types: [labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: The issue to build, or whose pull request to fix
+        required: true
+      pr:
+        description: The pull request to fix (empty for a build)
+        required: false
+        default: ''
+      round:
+        description: The fix round (set by the review workflow; 0 for a fix run by hand)
+        required: false
+        default: '0'
+permissions:
+  contents: read
+jobs:
+  gate:
+    # Most issue comments are not for the agent; a skipped job costs nothing and never queues.
+    if: >-
+      (github.event_name == 'issues' && github.event.label.name == 'agent-ready') ||
+      (github.event_name == 'issue_comment' && github.event.comment.user.login == github.repository_owner &&
+       contains(github.event.comment.body, '@claude')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      mode: ${{ steps.gate.outputs.mode }}
+      issue: ${{ steps.gate.outputs.issue }}
+      pr: ${{ steps.gate.outputs.pr }}
+      round: ${{ steps.gate.outputs.round }}
+      key: ${{ steps.gate.outputs.key }}
+      needs_label: ${{ steps.gate.outputs.needs_label }}
+      request: ${{ steps.gate.outputs.request }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Read the event
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/agent.py gate
+
+  stop:
+    needs: gate
+    if: needs.gate.outputs.mode == 'stop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    concurrency:
+      group: agent-${{ needs.gate.outputs.key }}
+      cancel-in-progress: true
+    steps:
+      - name: Cancel the issue's agent run
+        env:
+          ISSUE: ${{ needs.gate.outputs.issue }}
+        run: |
+          echo "agent-ready was removed from issue ${ISSUE}; a run building it, if any, is cancelled by this job's concurrency group"
+
+  queue:
+    needs: gate
+    if: needs.gate.outputs.mode == 'build' || needs.gate.outputs.mode == 'fix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Wait until fewer than three agent runs are ahead
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/agent.py queue --run-id "$GITHUB_RUN_ID"
+
+  build:
+    needs: [gate, queue]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: agent-${{ needs.gate.outputs.key }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write   # the action exchanges the job's OIDC token for the Claude GitHub App's token
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false   # the agent pushes as the Claude GitHub App, so CI runs on its commits
+      - name: Check that an Anthropic credential is configured
+        # Learns whether each exists, never a value. One is enough: an API key or a subscription token.
+        # docs/AGENTS.md, "Set up once".
+        env:
+          HAVE_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAVE_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+        run: |
+          if [ "$HAVE_KEY" != true ] && [ "$HAVE_OAUTH" != true ]; then
+            echo "::error::no Anthropic credential: add the repository secret ANTHROPIC_API_KEY (or CLAUDE_CODE_OAUTH_TOKEN); see docs/AGENTS.md, 'Set up once'"
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install the project (the agent runs the tests and the evals)
+        run: python -m pip install -e . pytest
+      - name: Choose the branch, or refuse
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.gate.outputs.mode }}
+          ISSUE: ${{ needs.gate.outputs.issue }}
+          PR: ${{ needs.gate.outputs.pr }}
+          ROUND: ${{ needs.gate.outputs.round }}
+          NEEDS_LABEL: ${{ needs.gate.outputs.needs_label }}
+          REQUEST: ${{ needs.gate.outputs.request }}
+        run: >-
+          python3 .github/scripts/agent.py plan --mode "$MODE" --issue "$ISSUE" --pr "$PR" --round "$ROUND"
+          --needs-label "$NEEDS_LABEL" --request "$REQUEST"
+      - name: Run Claude Code
+        id: claude
+        if: steps.plan.outputs.go == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.plan.outputs.prompt }}
+          # A fix round is dispatched by the review workflow's GITHUB_TOKEN, so its actor is github-actions[bot].
+          allowed_bots: github-actions,github-actions[bot]
+          settings: |
+            {"env": {"BASH_DEFAULT_TIMEOUT_MS": "600000", "BASH_MAX_TIMEOUT_MS": "1200000"}}
+          # The project's .claude/settings.json deny list (force pushes, gcloud writes) applies as well.
+          claude_args: >-
+            --max-turns ${{ vars.AGENT_MAX_TURNS || '200' }}
+            ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,Agent,TodoWrite,Bash(python:*),Bash(python3:*),Bash(node:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git fetch:*),Bash(git merge:*),Bash(git checkout:*),Bash(git branch:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(gh issue view:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr create:*),Bash(gh pr edit:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(find:*),Bash(sort:*),Bash(diff:*),Bash(mkdir:*)"
+            --disallowedTools "Bash(gh pr merge:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh secret:*),Bash(gh label:*),Bash(git push --force:*),Bash(git push -f:*),Bash(git rebase:*),Bash(git reset --hard:*),Bash(curl:*),Bash(wget:*),Edit(.github/**),Write(.github/**)"
+      - name: Check the outcome (one pull request that closes the issue, or a pushed fix)
+        if: steps.plan.outputs.go == 'true' && !cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.gate.outputs.mode }}
+          ISSUE: ${{ steps.plan.outputs.issue }}
+          PR: ${{ needs.gate.outputs.pr }}
+          BRANCH: ${{ steps.plan.outputs.branch }}
+          BEFORE: ${{ steps.plan.outputs.before }}
+        run: >-
+          python3 .github/scripts/agent.py verify --mode "$MODE" --issue "$ISSUE" --pr "$PR" --branch "$BRANCH"
+          --before "$BEFORE"
+      - name: Record the run's cost in the job summary
+        if: always() && steps.plan.outputs.go == 'true'
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          LABEL: agent ${{ needs.gate.outputs.mode }} of issue ${{ steps.plan.outputs.issue }}
+        run: python3 .github/scripts/agent.py cost "$EXECUTION_FILE" --label "$LABEL" | tee -a "$GITHUB_STEP_SUMMARY"
