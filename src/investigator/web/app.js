@@ -1193,7 +1193,7 @@ function harvest(rec,key){
 function drawBody(rec){
  const {body,own}=bodyShell(), kept={latest,stepIndex};
  slots={...own,trace:node('div'),context:node('div'),calls:node('span')};   // the trail is drawn for the open card only
- try{ paintAnswer(rec); analystOffer(rec); }
+ try{ paintAnswer(rec); analystOffer(rec); feedbackOffer(rec); }
  finally{ slots=null; latest=kept.latest; stepIndex=kept.stepIndex; }
  relabel(body,`card-${rec.id}-`);
  return body;
@@ -1263,7 +1263,7 @@ function renderCard(){
   $('card-foot').hidden=false;syncPdf();
   if(rec.state==='done'&&!rec.revealed){ rec.revealed=true; pendingReveal={summary,t0:rec.t0}; }   // first time this answer is drawn: it is revealed once, reopening shows it settled
  }
- if(rec.state!=='pending')analystOffer(rec);
+ if(rec.state!=='pending'){ analystOffer(rec); feedbackOffer(rec); }
  renderEarlier();
  scheduleFollow();
  if(pendingReveal){ const {summary,t0}=pendingReveal; pendingReveal=null; reveal(summary,t0); }
@@ -1481,6 +1481,71 @@ function analystOffer(rec){
  row.append(b,node('span',`${rec.state==='error'?'The offline planner has no pattern for this question. ':''}${PROVIDERS[mode].name} picks the queries in one call and writes an interpretation under the numbers. A few seconds; ${config&&config.public?"uses this site's key under a spend cap":'uses your key and incurs API charges'}.`,'muted'));
  $('messages').append(row);
 }
+// ---- The question log and feedback on a card (issue #125). While the server keeps the log (config.question_log: the
+// hosted demo), each question this page asks carries a random line id, and the tab a random session id
+// (sessionStorage), as two headers; nothing else about the visitor is sent, and a reloaded card replays without them.
+// Every answered card, the analyst's included, offers a thumbs up or down once, never required; a thumbs down asks
+// "What were you looking for?" (optional, plain text, at most 300 characters). Both POST /api/feedback.
+const LOG_SESSION_KEY='csi-log-session', LOG_ID=/^[0-9a-f]{16}$/;
+let logSession=null;
+function questionLog(){ return !!(config&&config.question_log); }
+function randomId(){
+ const bytes=new Uint8Array(8);
+ try{ globalThis.crypto.getRandomValues(bytes); }catch(e){ for(let i=0;i<bytes.length;i++)bytes[i]=Math.floor(Math.random()*256); }
+ return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function logSessionId(){
+ if(logSession)return logSession;
+ const store=tabStore(); let held=null; try{ held=store&&store.getItem(LOG_SESSION_KEY); }catch(e){ held=null; }
+ logSession=LOG_ID.test(held||'')?held:randomId(); try{ if(store)store.setItem(LOG_SESSION_KEY,logSession); }catch(e){ /* blocked storage: one id for this page */ }
+ return logSession;
+}
+function logHeaders(rec){ return questionLog()&&rec.line?{'X-Question-Line':rec.line,'X-Question-Session':logSessionId()}:{}; }
+const FEEDBACK_THANKS='Thanks: kept with this question, anonymously.';
+function feedbackOffer(rec){
+ if(!questionLog()||!rec.line||!/^(done|error)$/.test(rec.state))return;
+ rec.feedback=rec.feedback||{vote:null,state:'ask',note:'',draft:''};
+ const row=node('div',undefined,'feedback-row'); row.setAttribute('role','group'); row.setAttribute('aria-label','Feedback on this answer');
+ rec.feedbackEl=row; paintFeedback(rec); $('messages').append(row);
+}
+function paintFeedback(rec){
+ const f=rec.feedback, row=rec.feedbackEl; if(!row)return;
+ const parts=[];
+ if(f.state==='ask'){
+  parts.push(node('span','Did this answer it?','muted'));
+  for(const [vote,face,label] of [['up','👍','Yes, this answered my question'],['down','👎','No, this is not what I was looking for']]){
+   const b=node('button',face,'secondary feedback-vote'); b.type='button'; b.title=label; b.setAttribute('aria-label',label);
+   b.addEventListener('click',()=>sendVote(rec,vote)); parts.push(b);
+  }
+ }else if(f.state==='comment'){
+  const form=node('form',undefined,'feedback-form'), input=node('input'), send=node('button','Send','secondary'), skip=node('button','No thanks','secondary');
+  input.type='text'; input.maxLength=300; input.value=f.draft; input.placeholder='What were you looking for? (optional)';
+  input.setAttribute('aria-label','What were you looking for? Optional, plain text, at most 300 characters');
+  input.addEventListener('input',()=>{ f.draft=input.value; });
+  send.type='submit'; skip.type='button';
+  form.addEventListener('submit',event=>{ if(event&&event.preventDefault)event.preventDefault(); sendComment(rec,input.value); });
+  skip.addEventListener('click',()=>{ f.state='done'; f.note=FEEDBACK_THANKS; paintFeedback(rec); });
+  form.append(input,send,skip); parts.push(node('span','Noted.','muted'),form); rec.feedbackInput=input;
+ }
+ if(f.note)parts.push(node('span',f.note,f.failed?'warning-note':'muted'));
+ row.replaceChildren(...parts);
+}
+async function sendFeedback(rec,extra){
+ const response=await post('/api/feedback',{line:rec.line,session:logSessionId(),card:PROVIDERS[rec.mode]?'analyst':'answer',...extra});
+ if(!response.ok){ let error='The feedback was not recorded'; try{ error=(await response.json()).error||error; }catch(e){ /* not JSON */ } throw new Error(error); }
+}
+function sendVote(rec,vote){
+ const f=rec.feedback; if(f.vote)return;   // once per card
+ f.vote=vote; f.state=vote==='up'?'done':'comment'; f.note=vote==='up'?FEEDBACK_THANKS:''; f.failed=false; paintFeedback(rec);
+ if(vote==='down')try{ rec.feedbackInput.focus?.({preventScroll:true}); }catch(e){ /* the stub has no focus */ }   // the clicked button is gone: the keyboard lands in the box
+ return sendFeedback(rec,{vote}).catch(error=>{ f.state='done'; f.note=error.message; f.failed=true; paintFeedback(rec); });
+}
+function sendComment(rec,text){
+ const f=rec.feedback, comment=String(text||'').trim(); f.draft=comment;
+ f.state='done'; f.note=FEEDBACK_THANKS; f.failed=false; paintFeedback(rec);
+ if(!comment)return Promise.resolve();
+ return sendFeedback(rec,{vote:'down',comment}).catch(error=>{ f.state='comment'; f.note=error.message; f.failed=true; paintFeedback(rec); });
+}
 // The one render entry for an answer, asked or opened from an address: the record takes the result and its card
 // (open or one line in the thread) is drawn again. The ms is submit to rendered.
 // A card replayed on a reload (#86) keeps the time it was first answered in.
@@ -1502,7 +1567,8 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
  // request. Nothing is disabled to prevent it, so this is what keeps a second paid round from going out.
  const twin=thread.find(r=>r.state==='pending'&&r.epoch===epoch&&r.question===question&&r.mode===recMode&&r.report===report&&r.corrupt===corrupt&&['day','period','shift','scope'].every(k=>r.scope[k]===scope[k]));
  if(twin){ if(openId!==twin.id)openCard(twin); return twin.done; }
- const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,source:source||null,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null,live:null};
+ const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,source:source||null,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null,live:null,
+  line:questionLog()&&!report?((source&&source.line)||randomId()):null};   // the question log's line id (#125): an analyst round asked from a card shares that card's
  thread.push(rec);openId=rec.id;renderCard();scheduleFollow(true);   // the skeleton card is in the DOM before this task yields: within one frame of the submit; the pane brings it into view (#86)
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
  // What the visitor chose is read now; the request itself waits its turn. Two questions out at once would both carry
@@ -1520,7 +1586,7 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
    if(p){
     const body={question,day:scope.day,shift:scope.shift,corrupt,session_id:current?sessionId:null,mode:rec.mode,scope:scope.scope,period:scope.period};
     const rates=paramOf(rec.askUrl||'','rates'); if(rates)body.rates=rates;   // the analyst prices at the rates the card was asked at (#31b)
-    const pending=post('/api/ask',body,headers);
+    const pending=post('/api/ask',body,{...headers,...logHeaders(rec)});
     for(const entry of Object.values(PROVIDERS))delete headers[entry.header];
     response=await pending;
     if(response.ok){   // a live round is a stream (#67); a refusal before it starts is plain JSON
@@ -1548,7 +1614,7 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
     const priors=current?conversation:[];
     rec.askUrl=report?reportUrl(address,priors):questionUrl(question,address,priors);
     saveThread();   // the stored address now carries the real priors, not the ones at submit time
-    response=await fetch(rec.askUrl,{headers:{Accept:'application/json'}});
+    response=await fetch(rec.askUrl,{headers:{Accept:'application/json',...logHeaders(rec)}});   // the ids ride the /q redirect to the answer (#125)
    }
    const result=await response.json();if(!response.ok)throw new Error(result.error||'Request failed');
    if(p&&current){
@@ -1671,6 +1737,7 @@ async function init(){
  if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
  applyPublicMode();loadMoney(currentAddress());updateScope();
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
+ if(questionLog())$('log-foot').hidden=false;   // the question log's disclosure (#125)
  if(config.evals){$('evals-foot').hidden=false;if(config.evals.badge){$('evals-badge').textContent=config.evals.badge+' →';$('evals-badge').title=`Golden evals, last tracked run ${config.evals.ran_at||''}${config.evals.commit?' at commit '+config.evals.commit:''}. Browse every case and run it yourself.`;$('evals-badge').hidden=false;}}
  const address=currentAddress(), addressable=!!(address&&CANONICAL.test(pathOf(address))), cards=storedThread();
  let addressed=-1; if(addressable)for(let i=cards.length-1;i>=0;i--)if(sameView(cards[i].url,address)){addressed=i;break;}

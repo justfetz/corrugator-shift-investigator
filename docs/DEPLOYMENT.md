@@ -113,6 +113,66 @@ The demo also answers at `https://shift.talktomymachine.ai` through a [Cloud Run
 
 The same container runs on Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
 
+## The question log
+
+The hosted demo writes one anonymous JSON line per question event to stdout (issue #125; the fields are on [the Data page](DATA.md#the-question-log)): the question and where it routed, its answer, an analyst round on it, and a thumbs up or down on its card (`POST /api/feedback`, limited like `/api/ask` on windows of its own: 60 a minute for the container and `DEMO_RATE_LIMIT_PER_MIN` per IP, plain text only). It is on by default when `PUBLIC_DEMO_ORIGIN` is set; `QUESTION_LOG=0` turns it off and `QUESTION_LOG=1` turns it on for the loopback workbench. Cloud Run ships stdout to Cloud Logging, which keeps it 30 days in the `_Default` bucket, with no new service. A line is printed after its response is written, so an answer's time does not change.
+
+**The copy in BigQuery: the owner runs this, once.** It is a GCP configuration change (a dataset, a log sink and one IAM binding on the dataset), so sessions do not run it. Each day's partition expires after 90 days (7,776,000 s):
+
+```bash
+PROJECT_ID=<project>
+bq --location=US mk --dataset --default_partition_expiration=7776000 "$PROJECT_ID:question_log"
+gcloud logging sinks create question-log "bigquery.googleapis.com/projects/$PROJECT_ID/datasets/question_log" \
+  --project "$PROJECT_ID" --use-partitioned-tables \
+  --log-filter='resource.type="cloud_run_revision" AND resource.labels.service_name="corrugator-shift-investigator" AND jsonPayload.log="question_log"'
+WRITER=$(gcloud logging sinks describe question-log --project "$PROJECT_ID" --format='value(writerIdentity)')
+bq add-iam-policy-binding --dataset=true --member="$WRITER" --role=roles/bigquery.dataEditor "$PROJECT_ID:question_log"
+```
+
+The sink writes the lines to the partitioned table `question_log.run_googleapis_com_stdout`, with each line under `jsonPayload`. Once a day of lines has arrived (BigQuery learns the columns from them), one view joins a question's lines into the one row per question that the review reads:
+
+```sql
+CREATE OR REPLACE VIEW `PROJECT_ID.question_log.question_lines` AS
+WITH events AS (
+  SELECT timestamp, jsonPayload AS p FROM `PROJECT_ID.question_log.run_googleapis_com_stdout`
+  WHERE jsonPayload.log = 'question_log'),
+answers AS (SELECT p.line AS line, ANY_VALUE(p.status) AS status, MAX(p.server_ms) AS server_ms
+            FROM events WHERE p.event = 'answer' GROUP BY line),
+rounds AS (SELECT p.line AS line, ANY_VALUE(p.status) AS status FROM events WHERE p.event = 'analyst' GROUP BY line),
+votes AS (SELECT p.line AS line, ANY_VALUE(p.vote) AS vote, STRING_AGG(p.comment, ' | ') AS comment
+          FROM events WHERE p.event = 'feedback' AND p.card = 'answer' GROUP BY line)
+SELECT q.p.line AS line, q.p.session AS session, q.timestamp AS asked_at, q.p.question AS question, q.p.scope AS scope,
+       q.p.url AS url, q.p.measure AS measure, COALESCE(answers.status, q.p.status) AS status, q.p.refusal AS refusal,
+       q.p.server_ms + IFNULL(answers.server_ms, 0) AS server_ms, q.p.flags AS flags,
+       rounds.line IS NOT NULL AS analyst_clicked, rounds.status AS analyst_status,
+       votes.vote AS vote, votes.comment AS comment, q.p.version AS version, q.p.dataset AS dataset
+FROM events AS q
+LEFT JOIN answers ON answers.line = q.p.line
+LEFT JOIN rounds ON rounds.line = q.p.line
+LEFT JOIN votes ON votes.line = q.p.line
+WHERE q.p.event = 'question';
+```
+
+**The weekly review.** The `/review-questions` skill reads the last seven days (`python3 .claude/skills/review-questions/review.py --bq "$PROJECT_ID"`, one `bq query` over the raw lines) and proposes golden cases and question-bank entries in batches of ten. The same lists by hand, in the console:
+
+```sql
+-- the top refused and catch-all questions
+SELECT LOWER(TRIM(question)) AS question, COUNT(*) AS asks, COUNT(DISTINCT session) AS sessions,
+       LOGICAL_OR('refused' IN UNNEST(flags)) AS refused, LOGICAL_OR('catch_all' IN UNNEST(flags)) AS catch_all,
+       ANY_VALUE(COALESCE(refusal, url)) AS example
+FROM `PROJECT_ID.question_log.question_lines`
+WHERE asked_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+  AND ('refused' IN UNNEST(flags) OR 'catch_all' IN UNNEST(flags))
+GROUP BY 1 ORDER BY asks DESC LIMIT 50;
+-- thumbs down, with the comments
+SELECT asked_at, question, url, comment FROM `PROJECT_ID.question_log.question_lines`
+WHERE vote = 'down' AND asked_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY) ORDER BY asked_at DESC;
+-- the most-asked phrasings
+SELECT LOWER(TRIM(question)) AS question, COUNT(*) AS asks, COUNT(DISTINCT session) AS sessions
+FROM `PROJECT_ID.question_log.question_lines`
+WHERE asked_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY) GROUP BY 1 ORDER BY asks DESC LIMIT 50;
+```
+
 ## Decisions on record
 
 Each of these was a choice, made with a measurement where there was one. Revisit them when the traffic or the backlog changes, not before.
@@ -127,6 +187,7 @@ Each of these was a choice, made with a measurement where there was one. Revisit
 | Docs in the image (issue #93) | `COPY docs/*.md ./docs/`, rendered once by `python -m investigator.docsite build /app/docs-site --root /app`, `INVESTIGATOR_DOCS=/app/docs-site` | `/docs` serves the prebuilt pages with an ETag like the other static files; nothing is rendered per request and the renderer is the standard library. The changelog page is `docs/CHANGELOG.md`, which the deploy of `main` regenerates before the build, so it lists the pull request being deployed. That step can never fail the deploy: it fetches the full history itself (the checkout is unchanged), it is `continue-on-error` with a three-minute timeout, and the generator replaces the committed file only with a list at least as long, written by rename; anything else ships the committed file. A preview builds the committed file. `/guide`, the old page, is a 301 to `/docs`. |
 | Container size: `--cpu 1 --memory 1Gi --concurrency 20 --timeout 180` | One small container | The whole dataset is in-memory DuckDB and an answer takes tens of milliseconds offline. Concurrency 20 is fine because static files and `/api/health` never wait on the investigation lock; investigations and PDFs serialize per container. 180 s covers a live-model investigation with its ten tool calls. |
 | Deploy credential | Keyless, Workload Identity Federation (issue #28) | A pasted service-account key was the one long-lived secret in GitHub and the one thing a repository leak would have handed over. The pool trusts one repository and the job's OIDC token lives for one run. The key stays as a fallback, announced by a warning on every run that uses it, only until the two variables exist; the cutover ends with its deletion. See "Keyless deploy" above. |
+| Question log (issue #125) | One JSON line per question event on stdout; a Cloud Logging sink copies them to a BigQuery dataset with 90-day partitions, set up by the owner | Every question a visitor asks is a free test case, and the misses (a count landing on the KPI summary, #113) are what the golden set lacks. Stdout costs no new service, credential or dependency: Cloud Run already ships it to Cloud Logging, and the sink is configuration. Questions only, never the visitor: no IP, user agent, cookie, key or header value, and the ids are random per question and per tab. A question's events are separate lines joined on its line id (the `question_lines` view), because the answer, the analyst round and the vote happen after `/q` has redirected, maybe on the other instance. Printed after the response, so offline latency is unchanged. The page offers a thumbs up or down on every card and says in its footer that questions are logged. |
 | Where keys live | Secret Manager, mounted by **name** | The workflow passes secret names through repository variables; Cloud Run reads the value at start. No key value ever passes through GitHub. |
 
 ## Recommended first host

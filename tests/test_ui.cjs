@@ -1416,3 +1416,77 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  }
  console.log('UI issue-31b checks passed: money.js gives the golden client figures with Python rounding, the dollar line under the headline with a chip per bucket, the opportunities bars and table, the arithmetic and its rates, $/shift and $/yr on the loss tiles, priced charts in dollars, one money fetch per scope, a rate edit re-prices every card (prose included) with no request and rides in the address and the next questions, minutes and % relabel, reset, a margin and a trim target, all three shifts with an incomplete one, the levers of a window re-priced and re-ranked in the prose, the analyst priced at the rates of its card and never rewritten, the report address keeping the rates, the money request only after the first paint.');
 })().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #125: the question log and feedback on a card. With config.question_log on (the hosted demo), the GET of an
+// asked question carries a random line id and the tab's random session id and nothing else, an analyst round asked from
+// a card reuses that card's line id, every answered card offers a thumbs up or down once, a thumbs down asks for an
+// optional comment, and the footer says the questions are logged. Off (the loopback workbench), none of it is sent or shown.
+(async()=>{
+ const tick=()=>new Promise(r=>setTimeout(r,0));
+ const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
+ const page=async questionLog=>{
+  const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+  Object.assign(els.day,{value:'2026-09-14'});els.period.value='day';els.shift.value='2';els.scope.value='shift';els.mode.value='offline';els.corrupt.checked=false;
+  const sent=[], store=new Map(), loc={pathname:'/',search:''};
+  const answer=url=>({run_id:'r',production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',url,sections:['Shift 2: 600.0 ft/min.'],context:{history:[]},usage:{tool_calls:1,model_calls:0},trace:[],tables:[],charts:[],report_markdown:'# x'});
+  const doc={getElementById:id=>{assert.ok(els[id],`Unknown control ${id}`);return els[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[],addEventListener(){}};
+  const fetchStub=async(path,init={})=>{ sent.push({path,method:init.method||'GET',headers:{...(init.headers||{})},body:init.body?JSON.parse(init.body):null});
+   if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days:['2026-09-14'],first_day:'2026-09-14',last_day:'2026-09-14',demo_guards:{max_turns:4,rate_limit_per_min:0},live_modes:['anthropic'],question_log:questionLog})};
+   if(path==='/api/feedback')return {ok:true,status:200,json:async()=>({ok:true})};
+   if(path==='/api/ask')return {ok:false,status:400,json:async()=>({error:'stubbed analyst'})};
+   if(path.startsWith('/q?'))return {ok:true,status:200,json:async()=>answer('/corr/1/day/2026-09-14/shift/2?measure=overview')};
+   return {ok:true,status:200,json:async()=>answer(path.replace('.json',''))};
+  };
+  const ctx={document:doc,fetch:fetchStub,window:{history:{pushState(){},replaceState(){}},location:loc,addEventListener(){}},location:loc,console,setTimeout,URL,URLSearchParams,Blob,AbortController,
+   sessionStorage:{getItem:k=>store.has(k)?store.get(k):null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)}};
+  vm.createContext(ctx);for(const f of ['trail.js','app.js'])vm.runInContext(fs.readFileSync('src/investigator/web/'+f,'utf8'),ctx);
+  for(let i=0;i<20&&!sent.some(r=>r.path==='/api/config');i++)await tick(); for(let i=0;i<5;i++)await tick();
+  const row=()=>els.messages.children.find(e=>e.className==='feedback-row');
+  return {els,sent,store,ctx,row};
+ };
+ const on=await page(true);
+ assert.equal(on.els['log-foot'].hidden,false);   // the disclosure in the footer
+ await vm.runInContext("ask('How many setups did we run last week?')",on.ctx);
+ const asked=on.sent.filter(r=>r.path.startsWith('/q?'));
+ assert.equal(asked.length,1);
+ assert.deepEqual(Object.keys(asked[0].headers).sort(),['Accept','X-Question-Line','X-Question-Session']);   // two random ids and nothing else
+ const line=asked[0].headers['X-Question-Line'], session=asked[0].headers['X-Question-Session'];
+ assert.match(line,/^[0-9a-f]{16}$/);assert.match(session,/^[0-9a-f]{16}$/);
+ assert.equal(on.store.get('csi-log-session'),session);   // the session id lives in this tab's sessionStorage
+ let row=on.row(); assert.ok(row,'an answered card offers feedback');
+ assert.equal(row['role'],'group');
+ let votes=row.children.filter(e=>/feedback-vote/.test(e.className||''));
+ assert.deepEqual(votes.map(b=>b.textContent),['👍','👎']);assert.deepEqual(votes.map(b=>b['aria-label']),['Yes, this answered my question','No, this is not what I was looking for']);
+ await votes[0].events.click();await tick();
+ const up=on.sent.filter(r=>r.path==='/api/feedback');
+ assert.equal(up.length,1);assert.equal(up[0].method,'POST');assert.deepEqual(up[0].body,{line,session,card:'answer',vote:'up'});
+ assert.equal(up[0].headers['X-Workbench-Token'],'t');   // the same POST guard as /api/ask
+ assert.equal(row.children.filter(e=>/feedback-vote/.test(e.className||'')).length,0,'shown once: the buttons are gone');
+ assert.match(textOf(row),/Thanks: kept with this question, anonymously\./);
+ // a second question gets its own line id; a thumbs down asks for an optional comment, sent with the same line id
+ await vm.runInContext("ask('Show speed to target')",on.ctx);
+ const second=on.sent.filter(r=>r.path.startsWith('/q?'))[1];
+ assert.notEqual(second.headers['X-Question-Line'],line);assert.equal(second.headers['X-Question-Session'],session);
+ row=on.row();votes=row.children.filter(e=>/feedback-vote/.test(e.className||''));
+ await votes[1].events.click();await tick();
+ const down=on.sent.filter(r=>r.path==='/api/feedback').slice(1);
+ assert.deepEqual(down.map(r=>r.body),[{line:second.headers['X-Question-Line'],session,card:'answer',vote:'down'}]);   // the vote is kept even if no comment follows
+ const form=row.children.find(e=>e.className==='feedback-form'), input=form.children[0];
+ assert.equal(input.placeholder,'What were you looking for? (optional)');assert.equal(input.maxLength,300);
+ input.value='the number of setups, not the MSF';input.events.input();
+ await form.events.submit({preventDefault(){}});await tick();
+ assert.deepEqual(on.sent.filter(r=>r.path==='/api/feedback').slice(2).map(r=>r.body),[{line:second.headers['X-Question-Line'],session,card:'answer',vote:'down',comment:'the number of setups, not the MSF'}]);
+ assert.equal(row.children.some(e=>e.className==='feedback-form'),false);
+ // "Ask the analyst" from a card is the same question: its POST carries that card's line id
+ const offer=on.els.messages.children.find(e=>e.className==='analyst-row');
+ await offer.children[0].events.click();for(let i=0;i<5;i++)await tick();
+ const analyst=on.sent.find(r=>r.path==='/api/ask');
+ assert.equal(analyst.headers['X-Question-Line'],second.headers['X-Question-Line']);assert.equal(analyst.headers['X-Question-Session'],session);
+ // a reload replays the thread without ids: a replay is not a question asked again
+ const off=await page(false);
+ assert.notEqual(off.els['log-foot'].hidden,false);   // index.html's hidden attribute stays: the stub has no attribute, so only 'not unhidden' is checked
+ await vm.runInContext("ask('How many setups did we run last week?')",off.ctx);
+ assert.deepEqual(Object.keys(off.sent.find(r=>r.path.startsWith('/q?')).headers),['Accept']);
+ assert.equal(off.row(),undefined);assert.equal(off.sent.some(r=>r.path==='/api/feedback'),false);
+ console.log('UI issue-125 checks passed: two random ids and nothing else on an asked question, the analyst from a card reuses its line id, a thumbs up or down once per card, an optional comment after a thumbs down, the footer disclosure, all of it off without the question log.');
+})().catch(error=>{console.error(error);process.exit(1);});

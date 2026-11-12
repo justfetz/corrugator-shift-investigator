@@ -27,6 +27,23 @@ The stories keep their 2026 dates in every window, so a window that starts after
 
 The investigation cases of the golden set ask about each story in a superintendent's words, and pass only when the answer finds the evidence and asserts no cause the records lack ([numbers and evals](EVALS.md)).
 
+## The question log
+
+The one thing the hosted demo writes about its visitors (issue #125): what they ask, so a question the router misses becomes a golden case. The page footer says so ("Questions are logged anonymously to improve the answers; no personal data is kept"). Each line is one JSON object on stdout, which Cloud Run ships to Cloud Logging; a log sink copies them to BigQuery ([deployment](DEPLOYMENT.md#the-question-log)), and the `/review-questions` skill turns a week of them into candidate golden cases. The lines of one question share its `line` id, a random value the page draws when the question is asked; `session` is a random value per browser tab, kept in sessionStorage, that groups a visitor's follow-ups. Both are 16 lowercase hex characters or are dropped. A reloaded card is not asked again and writes nothing.
+
+Every line carries `log` (`question_log`), `v` (the schema, 1), `event`, `ts` (UTC), `line`, `session`, `version`, `revision` (Cloud Run's revision name, so a preview's lines say so) and `dataset` (the first twelve characters of the dataset hash), and, for Cloud Logging, `severity` and `message`. Then, by event:
+
+| Event | Written when | Fields |
+| --- | --- | --- |
+| `question` | `/q` routed the question, or refused it | `question` (at most 500 characters; emails, phone numbers, IP addresses and key-like tokens replaced), `truncated`, `scope` (the rail's `day`, `shift`, `scope`, `period`, `corrupt`), `follow_ups` (how many prior views the question followed; the views themselves are not kept), `url` (the canonical address without its `after=` chain), `measure`, `status` (`routed` or `refused`), `refusal`, `server_ms` (the routing), `flags` |
+| `answer` | that address answered it (the page follows `/q`'s redirect) | `url`, `measure`, `status` (`complete`, `partial`, `incomplete`, or `refused`, `limited`, `failed`), `refusal`, `server_ms` (the answer) |
+| `analyst` | an "Ask the analyst" round on it ended, or was refused | `question`, `truncated`, `scope`, `mode` (the provider), `status` (the round's: `complete`, `plan_rejected`, `unavailable`, `partial`, …), `narrative`, `model_calls`, `tool_calls`, `refusal`, `server_ms`, `flags` |
+| `feedback` | a thumbs up or down on its card, and the optional comment | `card` (`answer`, or `analyst` for the analyst's card), `vote` (`up` or `down`), `comment` (at most 300 characters of plain text, the same replacements as a question) |
+
+The flags are computed when the line is written: `refused` (the router refused it), `catch_all` (it landed on `measure=kpis` while it names a countable noun or a unit, or asks for a count: the #113 guard), `typo_corrected` (a misspelt measure word was read as the measure), `scope_moved` (its words moved the shift or the window, issue #105) and, on an analyst line, `analyst_plan_rejected`.
+
+What a line never holds: an IP address, a user agent, a cookie, a key or any other request header's value, the follow-up chain, a model's prompt or narrative, an evidence row. Cloud Logging keeps the lines 30 days; the BigQuery copy keeps each day 90 days.
+
 ## When the data is built
 
 The image generates the store once, at build time: `python -m investigator.prebuilt /app/prebuilt` builds the year ending yesterday (about 15 s), and `--as-of 2026-09-30 /app/prebuilt-golden` builds the golden year the `/evals` page scores against. The server loads the first folder at start-up in about a quarter of a second instead of generating for about 12 s; the loopback workbench generates when the server starts (`INVESTIGATOR_AS_OF` pins its window, otherwise it ends yesterday). The data never changes while a server runs: there is no upload, no import and no job that adds days.
