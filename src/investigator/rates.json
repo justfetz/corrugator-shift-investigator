@@ -3,7 +3,7 @@
  "post": "https://justfetz.github.io/posts/corrugator-dashboard.html",
  "rates": [
   {"id": "paper_usd_msf", "short": "paper", "label": "Paper", "unit": "$/MSF", "default": 55,
-   "source": "post", "note": "Paper cost per thousand square feet of board; prices waste."},
+   "source": "post", "note": "The paper in a thousand square feet of combined board (liners and medium, the medium's take-up included), not a single paper grade's price; prices waste board (trim, shear, rejects), which is combined board."},
   {"id": "machine_usd_hour", "short": "hour", "label": "Machine time", "unit": "$/hr", "default": 1200,
    "source": "post", "note": "Bottleneck shadow price of corrugator time (the post: more than $1,200 an hour); prices downtime, the speed gap and the run time shear and rejects consumed."},
   {"id": "margin_usd_msf", "short": "margin", "label": "Board contribution margin", "unit": "$/MSF", "default": null,

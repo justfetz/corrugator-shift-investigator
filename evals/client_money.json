@@ -14,7 +14,7 @@
     "value": 55,
     "source": "post",
     "default_source": "post",
-    "note": "Paper cost per thousand square feet of board; prices waste.",
+    "note": "The paper in a thousand square feet of combined board (liners and medium, the medium's take-up included), not a single paper grade's price; prices waste board (trim, shear, rejects), which is combined board.",
     "max": 100000
    },
    {
