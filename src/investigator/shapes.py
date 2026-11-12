@@ -21,6 +21,8 @@ Any other line is a plain sentence: a caveat, the window and its coverage, a rep
 """
 import re
 
+from .records import stop_label
+
 LOOK = 'Where to look'
 # `(query 2 · row 0)`, `(query 3)`: the evidence a bullet or headline cites.
 REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday) (\d+))?\)')
@@ -32,7 +34,7 @@ ALIASES = {'period_downtime': 'period_pareto', 'period_quality': 'period_waste',
 MARGIN_NOT_SET = 'margin not set'   # cost_model.MARGIN_NOT_SET: no owner margin, so no contribution is priced
 WORDS = {2: 'two', 3: 'three'}
 TREND_NAMES = {'trim_pct': 'side trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry-end rejects', 'warp_pct': 'warp', 'bond_pct': 'bond',
-               'misalignment_pct': 'misalignment', 'other_pct': 'other dry-end rejects', 'speed_run_fpm': 'speed without stops',
+               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'other_pct': 'other dry-end rejects', 'speed_run_fpm': 'speed without stops',
                'speed_all_fpm': 'speed with stops', 'downtime_pct': 'downtime', 'stops': 'stops', 'minutes_per_stop': 'minutes per stop',
                'msf_per_day': 'MSF per production day', 'lineal_per_setup': 'lineal per setup', 'lineal_per_paper_change': 'lineal per paper change'}
 RANK_LABELS = {'speed': 'Lowest speed attainment', 'downtime': 'Most downtime', 'quality': 'Most rejected area'}
@@ -261,7 +263,7 @@ class DailyAnswer:
     def kind_pct(self, tools):
         dt = tools.get('get_downtime_breakdown')
         kind = dt['arguments'].get('kind') if dt else None
-        return {'Maintenance': 'maintenance_pct', 'Operator': 'operator_pct', 'PM': 'pm_pct'}.get(kind, 'downtime_pct')
+        return {'Maintenance': 'maintenance_pct', 'Operator': 'operator_pct', 'Scheduled': 'pm_pct', 'PM': 'pm_pct'}.get(kind, 'downtime_pct')
 
     def focus(self):
         if self.intent == 'dollars' and len(self.complete) > 1:
@@ -382,7 +384,7 @@ class DailyAnswer:
             return None
         noun = {'reason': 'reasons', 'place': 'places', 'kind': 'kinds'}.get(dt['arguments'].get('group_by', 'reason'), 'reasons')
         rank = f'the largest of {len(rows)} {noun}' if len(rows) > 1 else f'the only one of the {noun}'
-        return bullet(f'{prefix}{rows[i]["category"]}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, {rank}{priced(rows[i])}', dt, i)
+        return bullet(f'{prefix}{stop_label(rows[i]["category"])}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, {rank}{priced(rows[i])}', dt, i)
 
     @staticmethod
     def slowest_run(we, prefix=''):
@@ -490,13 +492,13 @@ class DailyAnswer:
         if kind in ('Maintenance', 'Operator'):
             value = row[self.kind_pct(tools)]
             head = f'**{f2(value)}%** of the shift in {kind.lower()} downtime{self.clause(s, low=False)}, {side(value, 2.5, "over", "under")} the 2.5% target {ref(k, 0)}'
-        elif kind == 'PM':
-            head = f'**{f2(row["pm_pct"])}%** of the shift in planned maintenance{self.clause(s, low=False)} {ref(k, 0)}'
+        elif kind in ('Scheduled', 'PM'):
+            head = f'**{f2(row["pm_pct"])}%** of the shift in planned maintenance (scheduled){self.clause(s, low=False)} {ref(k, 0)}'
         else:
             head = (f'**{f2(row["downtime_pct"])}%** of the shift in recorded downtime{self.clause(s, low=False)} · maintenance '
                     f'{f2(row["maintenance_pct"])}% · operator {f2(row["operator_pct"])}% {ref(k, 0)}')
         rows = dt['data']['rows']
-        bullets = [bullet(f'{r["category"]}: **{f2(r["down_minutes"])} min**, {f2(r["shift_percent"])}% of the shift{priced(r)}', dt, i) for i, r in enumerate(rows)]
+        bullets = [bullet(f'{stop_label(r["category"])}: **{f2(r["down_minutes"])} min**, {f2(r["shift_percent"])}% of the shift{priced(r)}', dt, i) for i, r in enumerate(rows)]
         notes = (self.priced_notes(dt, 'down_minutes', 'category') if rows else ['No recorded stops in this filter.'])
         looks = [look('The reported notes on those stops (synthetic, unverified)', f'Show the shift notes{self.suffix(s)}'),
                  look('The stop minutes allocated to each setup', f'Show the setup matrix{self.suffix(s)}'), self.regroup(dt, s)]
@@ -602,13 +604,20 @@ class DailyAnswer:
                 f'{f1(row["speed_to_target_pct"])}% of grade target{self.rank()} {ref(o, 0)}')
         bullets = []
         if row['largest_downtime_minutes']:
-            bullets.append(bullet(f'{row["largest_downtime_reason"]}: **{f2(row["largest_downtime_minutes"])} min**, the largest downtime reason', o, 0))
+            bullets.append(bullet(f'{stop_label(row["largest_downtime_reason"])}: **{f2(row["largest_downtime_minutes"])} min**, the largest downtime reason', o, 0))
         if row['largest_reject_sqft']:
             bullets.append(bullet(f'{row["largest_reject_reason"]}: **{f1(row["largest_reject_sqft"])} sq ft**, the largest dry-end reject reason', o, 0))
         if row['wet_end_runs_observed']:
             bullets.append(bullet(f'Wet-end runs below their grade target: **{row["wet_end_runs_below_target"]}** of {row["wet_end_runs_observed"]}', o, 0))
         bullets.append(bullet(f'Downtime: **{f2(row["downtime_pct"])}%** of the shift · maintenance {f2(row["maintenance_pct"])}% · operator {f2(row["operator_pct"])}%', o, 0))
         bullets.append(bullet(f'Dry-end waste: **{f2(row["dry_end_pct"])}%** of gross, {side(row["dry_end_pct"], 1)} the 1% flag', o, 0))
+        if row.get('estimated_good_sqft') is not None and row.get('changeover_sqft') is not None:
+            # Good output is the saleable board: gross minus every recorded waste line, the subtraction on its own line
+            # (owner, 2026-11-12); each loss is priced once, on its line in the shift's dollars.
+            bullets.append(bullet(f'Good output: **{f0(row["estimated_good_sqft"])} sq ft** of {f0(row["gross_sqft"])} gross, after trim '
+                                  f'{f0(row["trim_sqft"])}, shear {f0(row["shear_sqft"])}, dry-end {f0(row["reject_sqft"])}, changeover '
+                                  f'rejects {f0(row["changeover_sqft"])}, waste boards {f0(row["waste_board_sqft"])} and planning / admin '
+                                  f'{f0(row["admin_sqft"])} sq ft', o, 0))
         looks = [look('Each setup with its speed, stops and rejects', f'Show the setup matrix{self.suffix(s)}'),
                  look('The shift and downtime notes (synthetic, unverified)', f'Show the shift notes{self.suffix(s)}')]
         return head, bullets, [], looks
@@ -673,7 +682,7 @@ class DailyAnswer:
             return [bullet(f'Speed: **{f1(row["observed_shift_fpm"])} ft/min** including downtime · {f1(row["speed_to_target_pct"])}% of grade target', result, 0)], []
         if tool == 'get_downtime_breakdown':
             by = {'reason': '', 'place': ' at ', 'kind': ' of kind '}.get(result['arguments'].get('group_by', 'reason'), '')
-            return [bullet(f'{by.strip().capitalize() + " " if by else ""}{r["category"]}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift{priced(r)}', result, i)
+            return [bullet(f'{by.strip().capitalize() + " " if by else ""}{stop_label(r["category"])}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift{priced(r)}', result, i)
                     for i, r in enumerate(data['rows'])], self.priced_notes(result, 'down_minutes', 'category')
         if tool == 'get_wet_end_performance':
             return [b for b in (self.slowest_run(result)[0], self.below(result)) if b], []
@@ -907,7 +916,7 @@ class PeriodAnswer:
         pareto, waste = tools.get('get_downtime_pareto'), tools.get('get_waste_breakdown')
         if pareto and pareto['data']['rows']:
             r = pareto['data']['rows'][0]
-            bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, 0))
+            bullets.append(bullet(f'{stop_label(r["category"])}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, 0))
         if waste:
             i, r = self.largest_waste(waste)
             if r:
@@ -986,7 +995,7 @@ class PeriodAnswer:
             r = rows[0]
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
             rank = f', the largest of {len(rows)} {noun}' if self.whole(data) else ''
-            head = f'**{fig}** at {r["category"]}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"}{priced(r)} {ref(p, 0)}'
+            head = f'**{fig}** at {stop_label(r["category"])}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"}{priced(r)} {ref(p, 0)}'
         else:
             head = f'No recorded stops in this window{self.where(data)} {ref(p)}'
         bullets = []
@@ -994,7 +1003,7 @@ class PeriodAnswer:
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
             other = f'over {n(r["stops"])} stops' if minutes else f'· {pval(r["minutes"])} min'
             previous = f'previous {pval(r["previous_minutes"])} min' if r.get('previous_minutes') is not None else 'previous unavailable'
-            bullets.append(bullet(f'{r["category"]}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{priced(r)}', p, i))
+            bullets.append(bullet(f'{stop_label(r["category"])}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{priced(r)}', p, i))
         notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[0], 'category') if rows else [])
         return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'waste'))
 
@@ -1013,7 +1022,7 @@ class PeriodAnswer:
             bullets += ['Dry-end by reported sub-reason'] + [
                 bullet(f'{d["detail"]} ({d["reason"].lower()}): **{pval(d["share_of_dry_end_pct"])}%** of dry-end rejects · {f1(d["sqft"])} sq ft', w, j, 'detail')
                 for j, d in enumerate(details)]
-        notes = ['Bale is a scale reading; unexplained is bale minus trim, shear and rejects.']
+        notes = ['Bale is a scale reading; unexplained is bale minus every recorded waste line.']
         if details:
             notes.append('Sub-reasons are reported observations, not proven causes.')
         notes += money_notes(w, r, 'label') if r else []
@@ -1157,7 +1166,7 @@ class PeriodAnswer:
             r = rows[i]
             toward = r['gap_fpm'] * sign >= 0
             share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
-            top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'
+            top = (f' · largest {stop_label(r["top_item"])} at {f1(abs(r["top_item_fpm"]))} ft/min'
                    if whole and r.get('top_item') and r.get('top_item_fpm') is not None else '')
             bullets.append(bullet(f'{r["label"]}: **{f1(abs(r["gap_fpm"]))} ft/min** {"of the gap" if toward else "the other way, an offset"}{share}'
                                   f' · {f0(abs(r["gap_lineal_ft"]))} lineal ft{top}{priced(r)}', v, i))

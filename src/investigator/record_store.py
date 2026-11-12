@@ -77,13 +77,13 @@ ROW_LIMIT = 1000
 # The record contract's tables (docs/RECORD_CONTRACT.md). The older working names the tools read stay as
 # they were (feet = lineal_ft, gross = gross_sqft, trim = trim_sqft, shear = shear_sqft, rejects = dry-end
 # quality reject sq ft, seconds = elapsed, width_in = web_width_in, grade = quality_id); the contract's new
-# columns carry its names. `rejects` on a setup is the four dry-end families only: changeover and admin
+# columns carry its names. `rejects` on a setup is the five dry-end families only: changeover and admin
 # reject lines and the lanes' cutoff and stacker waste boards are their own columns and waste lines.
 TABLES = {
-    "setups": ("setup_id VARCHAR, production_date DATE, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, "
+    "setups": ("setup_id VARCHAR, production_date DATE, shift INTEGER, wet_end_id VARCHAR, quality_id VARCHAR, "
                "target DOUBLE, started TIMESTAMP, ended TIMESTAMP, seconds DOUBLE, stop_seconds DOUBLE, "
-               "stops INTEGER, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, "
-               "width_in DOUBLE, change_code VARCHAR, split_from VARCHAR, run_seconds DOUBLE, scheduled_lineal_ft DOUBLE, "
+               "stops INTEGER, lineal_ft DOUBLE, gross_sqft DOUBLE, trim_sqft DOUBLE, shear_sqft DOUBLE, reject_sqft DOUBLE, "
+               "web_width_in DOUBLE, change_code VARCHAR, split_from VARCHAR, run_seconds DOUBLE, scheduled_lineal_ft DOUBLE, "
                "avg_fpm DOUBLE, trim_in DOUBLE, trim_pct DOUBLE, swing_knife_sqft DOUBLE, is_fanfold BOOLEAN, sheet_type VARCHAR, "
                "filler BOOLEAN, lanes INTEGER, changeover_sqft DOUBLE, admin_sqft DOUBLE, cutoff_waste_sqft DOUBLE, "
                "stacker_waste_sqft DOUBLE"),
@@ -95,15 +95,15 @@ TABLES = {
                      "width_share DOUBLE, allocated_trim_sqft DOUBLE, allocated_shear_sqft DOUBLE"),
     "customers": "customer_id VARCHAR, name VARCHAR, destination VARCHAR, ship_to VARCHAR",
     "rejects": ("setup_id VARCHAR, production_date DATE, shift INTEGER, family VARCHAR, category VARCHAR, reason VARCHAR, "
-                "liner VARCHAR, side VARCHAR, position INTEGER, sheets INTEGER, sqft DOUBLE, counted_in VARCHAR"),
+                "liner VARCHAR, side VARCHAR, lane INTEGER, sheets INTEGER, sqft DOUBLE, counted_in VARCHAR"),
     "reject_reasons": ("category VARCHAR, category_label VARCHAR, family VARCHAR, counted_in VARCHAR, controllable VARCHAR, "
                        "driver VARCHAR, reason VARCHAR, liner_positions VARCHAR[], side_positions VARCHAR[], generated BOOLEAN"),
-    "wet_ends": ("wet_end_id VARCHAR, production_date DATE, grade VARCHAR, width_in DOUBLE, started TIMESTAMP, "
-                 "ended TIMESTAMP, feet DOUBLE, gross DOUBLE, trim DOUBLE, max_fpm DOUBLE, avg_fpm DOUBLE, setup_count INTEGER"),
+    "wet_ends": ("wet_end_id VARCHAR, production_date DATE, quality_id VARCHAR, web_width_in DOUBLE, started TIMESTAMP, "
+                 "ended TIMESTAMP, lineal_ft DOUBLE, gross_sqft DOUBLE, trim_sqft DOUBLE, max_fpm DOUBLE, avg_fpm DOUBLE, setup_count INTEGER"),
     "rolls": ("roll_id VARCHAR, production_date DATE, wet_end_id VARCHAR, stand VARCHAR, paper_grade VARCHAR, width_in DOUBLE, "
               "lineal_ft DOUBLE, peel_sqft DOUBLE, core_sqft DOUBLE, spliced_out BOOLEAN"),
-    "shifts": ("production_date DATE, shift INTEGER, crew VARCHAR, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, "
-               "rejects DOUBLE, bale DOUBLE, max_fpm DOUBLE, avg_fpm DOUBLE, scheduled_minutes INTEGER, wet_end_count INTEGER, "
+    "shifts": ("production_date DATE, shift INTEGER, crew VARCHAR, lineal_ft DOUBLE, gross_sqft DOUBLE, trim_sqft DOUBLE, shear_sqft DOUBLE, "
+               "reject_sqft DOUBLE, bale_sqft DOUBLE, max_fpm DOUBLE, avg_fpm DOUBLE, scheduled_minutes INTEGER, wet_end_count INTEGER, "
                "changeover_sqft DOUBLE, admin_sqft DOUBLE, cutoff_waste_sqft DOUBLE, stacker_waste_sqft DOUBLE"),
     "stops": ("stop_id VARCHAR, production_date DATE, shift INTEGER, setup_id VARCHAR, kind VARCHAR, place VARCHAR, "
               "reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, comment VARCHAR"),
@@ -124,11 +124,11 @@ SHIFT_KPIS = (
     ("setups", "INTEGER"), ("paper_changes", "INTEGER"), ("wet_end_ids", "VARCHAR[]"),
     ("lineal_ft", "DOUBLE"), ("target_ft", "DOUBLE"), ("elapsed_seconds", "DOUBLE"), ("setup_stop_seconds", "DOUBLE"),
     ("gross_sqft", "DOUBLE"), ("trim_sqft", "DOUBLE"), ("shear_sqft", "DOUBLE"), ("reject_sqft", "DOUBLE"),
-    ("bond_sqft", "DOUBLE"), ("warp_sqft", "DOUBLE"), ("misalignment_sqft", "DOUBLE"), ("other_sqft", "DOUBLE"),
+    ("bond_sqft", "DOUBLE"), ("warp_sqft", "DOUBLE"), ("misalignment_sqft", "DOUBLE"), ("moisture_sqft", "DOUBLE"), ("other_sqft", "DOUBLE"),
     ("changeover_sqft", "DOUBLE"), ("admin_sqft", "DOUBLE"), ("cutoff_waste_sqft", "DOUBLE"), ("stacker_waste_sqft", "DOUBLE"),
     ("setups_above_trim_target", "INTEGER"), ("grade_gross_sqft", "MAP(VARCHAR, DOUBLE)"),
     ("scheduled_seconds", "DOUBLE"), ("bale_sqft", "DOUBLE"),
-    ("stops", "INTEGER"), ("stop_seconds", "DOUBLE"), ("maintenance_seconds", "DOUBLE"), ("pm_seconds", "DOUBLE"),
+    ("stops", "INTEGER"), ("stop_seconds", "DOUBLE"), ("maintenance_seconds", "DOUBLE"), ("planned_maintenance_seconds", "DOUBLE"),
     ("operator_seconds", "DOUBLE"), ("source_ids", "VARCHAR[]"),
 )
 SHIFT_TRIM_TARGET_PCT = 3.25   # the per-setup trim flag of the daily KPI tool (analysis.get_shift_kpis)
@@ -139,24 +139,25 @@ valid AS (SELECT v.corrupt, s.* FROM setups s CROSS JOIN variants v
 excluded AS (SELECT x.corrupt, s.production_date, s.shift, count(*) AS n
              FROM kpi_excluded x JOIN setups s ON s.setup_id = x.setup_id GROUP BY ALL),
 setup_sums AS (SELECT corrupt, production_date, shift, count(*) AS setups, count(DISTINCT wet_end_id) AS paper_changes,
-                      list(DISTINCT wet_end_id ORDER BY wet_end_id) AS wet_end_ids, sum(feet) AS lineal_ft,
+                      list(DISTINCT wet_end_id ORDER BY wet_end_id) AS wet_end_ids, sum(lineal_ft) AS lineal_ft,
                       sum(target*seconds/60) AS target_ft, sum(seconds) AS elapsed_seconds, sum(stop_seconds) AS setup_stop_seconds,
-                      sum(gross) AS gross_sqft, sum(trim) AS trim_sqft, sum(shear) AS shear_sqft, sum(rejects) AS reject_sqft,
+                      sum(gross_sqft) AS gross_sqft, sum(trim_sqft) AS trim_sqft, sum(shear_sqft) AS shear_sqft, sum(reject_sqft) AS reject_sqft,
                       sum(changeover_sqft) AS changeover_sqft, sum(admin_sqft) AS admin_sqft,
                       sum(cutoff_waste_sqft) AS cutoff_waste_sqft, sum(stacker_waste_sqft) AS stacker_waste_sqft,
-                      count(*) FILTER (WHERE trim/gross*100 > {SHIFT_TRIM_TARGET_PCT}) AS setups_above_trim_target,
+                      count(*) FILTER (WHERE trim_sqft/gross_sqft*100 > {SHIFT_TRIM_TARGET_PCT}) AS setups_above_trim_target,
                       list(setup_id ORDER BY setup_id) AS source_ids
                FROM valid GROUP BY ALL),
-grade_sums AS (SELECT corrupt, production_date, shift, map(list(grade ORDER BY grade), list(gross ORDER BY grade)) AS grade_gross_sqft
-               FROM (SELECT corrupt, production_date, shift, grade, sum(gross) AS gross FROM valid GROUP BY ALL) GROUP BY ALL),
+grade_sums AS (SELECT corrupt, production_date, shift, map(list(quality_id ORDER BY quality_id), list(gross ORDER BY quality_id)) AS grade_gross_sqft
+               FROM (SELECT corrupt, production_date, shift, quality_id, sum(gross_sqft) AS gross FROM valid GROUP BY ALL) GROUP BY ALL),
 reject_sums AS (SELECT v.corrupt, v.production_date, v.shift,
                        sum(r.sqft) FILTER (WHERE r.family = 'BOND') AS bond_sqft, sum(r.sqft) FILTER (WHERE r.family = 'WARP') AS warp_sqft,
                        sum(r.sqft) FILTER (WHERE r.family = 'MISALIGNMENT') AS misalignment_sqft,
+                       sum(r.sqft) FILTER (WHERE r.family = 'MOISTURE') AS moisture_sqft,
                        sum(r.sqft) FILTER (WHERE r.family = 'OTHER') AS other_sqft
                 FROM rejects r JOIN valid v ON v.setup_id = r.setup_id GROUP BY ALL),
 stop_sums AS (SELECT production_date, shift, count(*) AS stops, sum(seconds) AS stop_seconds,
                      sum(seconds) FILTER (WHERE kind = 'Maintenance') AS maintenance_seconds,
-                     sum(seconds) FILTER (WHERE kind = 'PM') AS pm_seconds,
+                     sum(seconds) FILTER (WHERE kind = 'Scheduled') AS planned_maintenance_seconds,
                      sum(seconds) FILTER (WHERE kind = 'Operator') AS operator_seconds
               FROM stops GROUP BY ALL)
 SELECT sh.production_date, sh.shift, v.corrupt, sh.crew,
@@ -164,11 +165,11 @@ SELECT sh.production_date, sh.shift, v.corrupt, sh.crew,
        coalesce(ss.setups, 0), coalesce(ss.paper_changes, 0), coalesce(ss.wet_end_ids, []),
        coalesce(ss.lineal_ft, 0), coalesce(ss.target_ft, 0), coalesce(ss.elapsed_seconds, 0), coalesce(ss.setup_stop_seconds, 0),
        coalesce(ss.gross_sqft, 0), coalesce(ss.trim_sqft, 0), coalesce(ss.shear_sqft, 0), coalesce(ss.reject_sqft, 0),
-       coalesce(rs.bond_sqft, 0), coalesce(rs.warp_sqft, 0), coalesce(rs.misalignment_sqft, 0), coalesce(rs.other_sqft, 0),
+       coalesce(rs.bond_sqft, 0), coalesce(rs.warp_sqft, 0), coalesce(rs.misalignment_sqft, 0), coalesce(rs.moisture_sqft, 0), coalesce(rs.other_sqft, 0),
        coalesce(ss.changeover_sqft, 0), coalesce(ss.admin_sqft, 0), coalesce(ss.cutoff_waste_sqft, 0), coalesce(ss.stacker_waste_sqft, 0),
        coalesce(ss.setups_above_trim_target, 0), coalesce(gs.grade_gross_sqft, map()),
-       sh.scheduled_minutes * 60.0, sh.bale,
-       coalesce(st.stops, 0), coalesce(st.stop_seconds, 0), coalesce(st.maintenance_seconds, 0), coalesce(st.pm_seconds, 0),
+       sh.scheduled_minutes * 60.0, sh.bale_sqft,
+       coalesce(st.stops, 0), coalesce(st.stop_seconds, 0), coalesce(st.maintenance_seconds, 0), coalesce(st.planned_maintenance_seconds, 0),
        coalesce(st.operator_seconds, 0), coalesce(ss.source_ids, [])
 FROM shifts sh CROSS JOIN variants v
 LEFT JOIN setup_sums ss ON ss.corrupt = v.corrupt AND ss.production_date = sh.production_date AND ss.shift = sh.shift
@@ -197,10 +198,11 @@ KPI_CATALOG = (
     ("bond_pct", "Dry-end: bond", "% of gross", "lower"),
     ("warp_pct", "Dry-end: warp", "% of gross", "lower"),
     ("misalignment_pct", "Dry-end: misalignment", "% of gross", "lower"),
+    ("moisture_pct", "Dry-end: moisture", "% of gross", "lower"),
     ("other_pct", "Dry-end: other (cracking, handling, paper, print)", "% of gross", "lower"),
     ("bale_pct", "Bale (scale reading)", "% of gross", "lower"),
     ("unexplained_pct", "Unexplained (bale minus every recorded waste line)", "% of gross", "lower"),
-    ("maintenance_pm_pct", "Maintenance + PM downtime", "% of scheduled minutes", "lower"),
+    ("maintenance_pm_pct", "Maintenance + planned maintenance (scheduled) downtime", "% of scheduled minutes", "lower"),
     ("operator_pct", "Operator downtime", "% of scheduled minutes", "lower"),
     ("setups", "Setup records", "count", "neutral"),
     ("paper_changes", "Paper changes (distinct wet ends)", "count", "neutral"),
@@ -209,7 +211,7 @@ KPI_CATALOG = (
     ("bale_msf", "Baled waste (scale reading)", "MSF", "lower"),
 )
 KPI_UNITS = {key: unit for key, _, unit, _ in KPI_CATALOG}
-TREND_METRICS = ("trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct", "other_pct",
+TREND_METRICS = ("trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct", "moisture_pct", "other_pct",
                  "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day",
                  "lineal_per_setup", "lineal_per_paper_change")
 TREND_UNITS = {**{m: KPI_UNITS[m] for m in TREND_METRICS if m in KPI_UNITS}, "msf_per_day": "MSF per production day"}
@@ -219,7 +221,7 @@ TREND_UNITS = {**{m: KPI_UNITS[m] for m in TREND_METRICS if m in KPI_UNITS}, "ms
 WASTE_CATEGORIES = (("trim", "Side trim"), ("shear", "Shear chops"), ("changeover", "Changeover rejects (counted with shear)"),
                     ("cutoff_waste", "Cutoff-knife waste boards"), ("stacker_waste", "Stacker waste boards"),
                     ("bond", "Dry-end: bond"), ("warp", "Dry-end: warp"), ("misalignment", "Dry-end: misalignment"),
-                    ("other", "Dry-end: other (cracking, handling, paper, print)"),
+                    ("moisture", "Dry-end: moisture"), ("other", "Dry-end: other (cracking, handling, paper, print)"),
                     ("dry_end", "Dry-end rejects (all dry-end families)"), ("admin", "Planning / admin (not production waste)"),
                     ("bale", "Bale (scale reading)"), ("unexplained", "Unexplained (bale minus every recorded waste line)"))
 _STOP_GROUPS = ("reason", "place", "kind")
@@ -304,8 +306,8 @@ def _tile_sums(t):
     the stop seconds behind each ratio, unrounded. Kept off every model's packet (narrative.PACKET_DROP is per row;
     openai_provider.compact_result drops this key)."""
     return {"gross_sqft": t["gross_sqft"], "trim": t["trim_sqft"], "shear": t["shear_sqft"], "dry_end": t["reject_sqft"],
-            "bond": t["bond_sqft"], "warp": t["warp_sqft"], "misalignment": t["misalignment_sqft"], "other": t["other_sqft"],
-            "changeover": t["changeover_sqft"], "admin": t["admin_sqft"], "cutoff_waste": t["cutoff_waste_sqft"],
+            "bond": t["bond_sqft"], "warp": t["warp_sqft"], "misalignment": t["misalignment_sqft"], "moisture": t["moisture_sqft"],
+            "other": t["other_sqft"], "changeover": t["changeover_sqft"], "admin": t["admin_sqft"], "cutoff_waste": t["cutoff_waste_sqft"],
             "stacker_waste": t["stacker_waste_sqft"], "bale": t["bale_sqft"], "unexplained": t["bale_sqft"] - accounted_sqft(t),
             "maintenance_pm_seconds": t["maintenance_pm_seconds"], "operator_seconds": t["operator_seconds"]}
 
@@ -647,7 +649,8 @@ class RecordStore:
                     continue
                 setup_rows.append([s.setup_id, s.shift_number, s.wet_end_id, s.quality_id, float(GRADES[s.quality_id]),
                                    float(s.elapsed_seconds), s.lineal_ft, s.total_produced_sqft, trim, s.chop_sqft,
-                                   round(s.reject_sqft, 1), s.start, s.end, float(s.web_width_in)])
+                                   round(s.reject_sqft, 1), s.start, s.end, float(s.web_width_in), round(s.changeover_sqft, 1),
+                                   round(s.cutoff_waste_sqft + s.stacker_waste_sqft, 1), round(s.admin_sqft, 1)])
                 for c in s.lanes:
                     # The record families carry no order quantity ledger (docs/RECORDS.md):
                     # requested and remaining sheets are null, planned/produced are this record's.
@@ -732,10 +735,11 @@ class RecordStore:
                     "count(DISTINCT production_date) FILTER (WHERE setups > 0) AS production_days, "
                     "coalesce(sum(scheduled_seconds),0) AS scheduled_seconds, coalesce(sum(bale_sqft),0) AS bale_sqft, "
                     "coalesce(sum(stops),0) AS stop_count, coalesce(sum(stop_seconds),0) AS stop_seconds, "
-                    "coalesce(sum(maintenance_seconds + pm_seconds),0) AS maintenance_pm_seconds, "
+                    "coalesce(sum(maintenance_seconds + planned_maintenance_seconds),0) AS maintenance_pm_seconds, "
                     "coalesce(sum(operator_seconds),0) AS operator_seconds, "
                     "coalesce(sum(bond_sqft),0) AS bond_sqft, coalesce(sum(warp_sqft),0) AS warp_sqft, "
-                    "coalesce(sum(misalignment_sqft),0) AS misalignment_sqft, coalesce(sum(other_sqft),0) AS other_sqft, "
+                    "coalesce(sum(misalignment_sqft),0) AS misalignment_sqft, coalesce(sum(moisture_sqft),0) AS moisture_sqft, "
+                    "coalesce(sum(other_sqft),0) AS other_sqft, "
                     "coalesce(sum(changeover_sqft),0) AS changeover_sqft, coalesce(sum(admin_sqft),0) AS admin_sqft, "
                     "coalesce(sum(cutoff_waste_sqft),0) AS cutoff_waste_sqft, coalesce(sum(stacker_waste_sqft),0) AS stacker_waste_sqft "
                     f"FROM shift_kpis WHERE NOT corrupt AND production_date BETWEEN ? AND ?{clause}",
@@ -775,6 +779,7 @@ class RecordStore:
             "bond_pct": _ratio(t["bond_sqft"], gross, 100),
             "warp_pct": _ratio(t["warp_sqft"], gross, 100),
             "misalignment_pct": _ratio(t["misalignment_sqft"], gross, 100),
+            "moisture_pct": _ratio(t["moisture_sqft"], gross, 100),
             "other_pct": _ratio(t["other_sqft"], gross, 100),
             "bale_pct": _ratio(t["bale_sqft"], gross, 100),
             "unexplained_pct": _ratio(t["bale_sqft"] - accounted, gross, 100),
@@ -900,7 +905,7 @@ class RecordStore:
     def get_waste_breakdown(self, window, shift=None):
         """Every waste line of a window as square feet and percent of gross, previous window alongside:
         trim; shear and the changeover rejects counted with it; the cutoff-knife and stacker waste boards;
-        the four dry-end families (bond, warp, misalignment, other) and their total; planning / admin
+        the five dry-end families (bond, warp, misalignment, moisture, other) and their total; planning / admin
         entries apart; the bale and its unexplained remainder (WASTE_CATEGORIES)."""
         started, trace = time.perf_counter(), {"sql": [], "parameters": []}
         current = self._window(window)
@@ -910,7 +915,8 @@ class RecordStore:
         def areas(t):
             return {"trim": t["trim_sqft"], "shear": t["shear_sqft"], "changeover": t["changeover_sqft"],
                     "cutoff_waste": t["cutoff_waste_sqft"], "stacker_waste": t["stacker_waste_sqft"], "bond": t["bond_sqft"],
-                    "warp": t["warp_sqft"], "misalignment": t["misalignment_sqft"], "other": t["other_sqft"], "dry_end": t["reject_sqft"],
+                    "warp": t["warp_sqft"], "misalignment": t["misalignment_sqft"], "moisture": t["moisture_sqft"], "other": t["other_sqft"],
+                    "dry_end": t["reject_sqft"],
                     "admin": t["admin_sqft"], "bale": t["bale_sqft"], "unexplained": t["bale_sqft"] - accounted_sqft(t)}
         a, b = areas(now), areas(before)
         available = previous["coverage"] != "unavailable"
@@ -924,9 +930,13 @@ class RecordStore:
         details = [{"reason": d["reason"], "detail": d["detail"], "sqft": round(d["sqft"], 1), "sheets": d["sheets"],
                     "pct_of_gross": _ratio(d["sqft"], now["gross_sqft"], 100),
                     "share_of_dry_end_pct": _ratio(d["sqft"], now["reject_sqft"], 100, places=1)} for d in now["details"]]
+        # Good output is the saleable board: gross minus every recorded waste line (owner, 2026-11-12), so the
+        # lines and it add back to gross; the bale and its unexplained remainder are a scale reading, not a line.
+        lines = ("trim", "shear", "changeover", "cutoff_waste", "stacker_waste", "dry_end", "admin")
+        good = round(now["gross_sqft"] - sum(a[k] for k in lines), 1)
         return self._envelope("get_waste_breakdown", current, previous, shift, rows, trace, started, source,
                               gross_sqft=round(now["gross_sqft"], 1), previous_gross_sqft=round(before["gross_sqft"], 1) if available else None,
-                              details=details)
+                              good_output_sqft=good, good_output_pct=_ratio(good, now["gross_sqft"], 100), details=details)
 
     def get_stops_profile(self, window, shift=None):
         """Stops, minutes and minutes per stop for every production day of the
@@ -988,10 +998,10 @@ class RecordStore:
         current = self._window(window)
         previous = self._previous(current)
         clause, extra = self._shift_clause(shift)
-        sql = ("SELECT grade, max(target) AS target, count(*) AS setups, count(DISTINCT wet_end_id) AS wet_ends, "
-               "sum(feet) AS feet, sum(gross) AS gross, sum(seconds) AS seconds, sum(stop_seconds) AS stop_seconds, "
-               "sum(stops) AS stops, sum(trim) AS trim, sum(rejects) AS rejects "
-               f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY grade ORDER BY gross DESC, grade")
+        sql = ("SELECT quality_id AS grade, max(target) AS target, count(*) AS setups, count(DISTINCT wet_end_id) AS wet_ends, "
+               "sum(lineal_ft) AS feet, sum(gross_sqft) AS gross, sum(seconds) AS seconds, sum(stop_seconds) AS stop_seconds, "
+               "sum(stops) AS stops, sum(trim_sqft) AS trim, sum(reject_sqft) AS rejects "
+               f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY quality_id ORDER BY gross DESC, grade")
         fetched = {}
         for name, win in (("current", current), ("previous", previous)):
             params = [win["start"], win["end"], *extra]
@@ -1039,13 +1049,13 @@ class RecordStore:
         previous = self._previous(current)
         _, extra = self._shift_clause(shift)
         if shift is None:
-            sql = ("SELECT grade, width_in, count(*) AS paper_runs, coalesce(sum(feet),0) AS feet, coalesce(sum(gross),0) AS gross "
-                   "FROM wet_ends WHERE production_date BETWEEN ? AND ? GROUP BY grade, width_in")
+            sql = ("SELECT quality_id AS grade, web_width_in AS width_in, count(*) AS paper_runs, coalesce(sum(lineal_ft),0) AS feet, "
+                   "coalesce(sum(gross_sqft),0) AS gross FROM wet_ends WHERE production_date BETWEEN ? AND ? GROUP BY quality_id, web_width_in")
         else:
-            sql = ("SELECT w.grade AS grade, w.width_in AS width_in, count(DISTINCT s.wet_end_id) AS paper_runs, "
-                   "coalesce(sum(s.feet),0) AS feet, coalesce(sum(s.gross),0) AS gross "
+            sql = ("SELECT w.quality_id AS grade, w.web_width_in AS width_in, count(DISTINCT s.wet_end_id) AS paper_runs, "
+                   "coalesce(sum(s.lineal_ft),0) AS feet, coalesce(sum(s.gross_sqft),0) AS gross "
                    "FROM setups s JOIN wet_ends w ON w.wet_end_id = s.wet_end_id "
-                   "WHERE s.production_date BETWEEN ? AND ? AND s.shift = ? GROUP BY w.grade, w.width_in")
+                   "WHERE s.production_date BETWEEN ? AND ? AND s.shift = ? GROUP BY w.quality_id, w.web_width_in")
         fetched = {}
         for name, win in (("current", current), ("previous", previous)):
             params = [win["start"], win["end"], *extra]
@@ -1149,9 +1159,9 @@ class RecordStore:
             raise ValueError("slice_by must be width or crew")
         current = self._window(window)
         clause, extra = self._shift_clause(shift)
-        slice_sql = "s.width_in" if slice_by == "width" else "sh.crew"
-        sql = (f"WITH base AS (SELECT s.grade, {slice_sql} AS slice, s.target, s.feet, s.gross, s.rejects, "
-               "(s.seconds - s.stop_seconds) / 60 AS run_min, s.feet / ((s.seconds - s.stop_seconds) / 60) AS fpm "
+        slice_sql = "s.web_width_in" if slice_by == "width" else "sh.crew"
+        sql = (f"WITH base AS (SELECT s.quality_id AS grade, {slice_sql} AS slice, s.target, s.lineal_ft AS feet, s.gross_sqft AS gross, "
+               "s.reject_sqft AS rejects, (s.seconds - s.stop_seconds) / 60 AS run_min, s.lineal_ft / ((s.seconds - s.stop_seconds) / 60) AS fpm "
                "FROM setups s JOIN shifts sh ON sh.production_date = s.production_date AND sh.shift = s.shift "
                f"WHERE s.production_date BETWEEN ? AND ?{clause.replace(' shift', ' s.shift')} AND s.seconds - s.stop_seconds >= ? * 60), "
                "ranked AS (SELECT *, ntile(5) OVER (PARTITION BY grade, slice ORDER BY fpm DESC) AS fifth FROM base) "
@@ -1215,14 +1225,14 @@ class RecordStore:
         params = [window["start"], window["end"], *extra]
         queries = {
             "scheduled": f"SELECT count(*) AS shifts, coalesce(sum(scheduled_minutes), 0) AS minutes FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
-            "grades": ("SELECT grade, max(target) AS target, count(*) AS setups, sum(feet) AS feet, sum(seconds) / 60 AS elapsed_min, "
+            "grades": ("SELECT quality_id AS grade, max(target) AS target, count(*) AS setups, sum(lineal_ft) AS feet, sum(seconds) / 60 AS elapsed_min, "
                        "sum(seconds - stop_seconds) / 60 AS run_min "
-                       f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY grade ORDER BY grade"),
-            "stops": ("SELECT st.reason AS reason, s.grade AS grade, count(*) AS stops, sum(st.seconds) / 60 AS minutes, "
+                       f"FROM setups WHERE production_date BETWEEN ? AND ?{clause} GROUP BY quality_id ORDER BY quality_id"),
+            "stops": ("SELECT st.reason AS reason, s.quality_id AS grade, count(*) AS stops, sum(st.seconds) / 60 AS minutes, "
                       "sum(st.seconds * s.target) / 60 AS target_ft "
                       "FROM stops st JOIN setups s ON s.setup_id = st.setup_id "
                       f"WHERE s.production_date BETWEEN ? AND ?{clause.replace(' shift', ' s.shift')} "
-                      "GROUP BY st.reason, s.grade ORDER BY st.reason, s.grade"),
+                      "GROUP BY st.reason, s.quality_id ORDER BY st.reason, s.quality_id"),
         }
         fetched = {}
         for name, sql in queries.items():
@@ -1239,7 +1249,7 @@ class RecordStore:
         the setup clock every grade took over the whole record store (all shifts, both months). A window
         that ran more of a slow grade than usual is below this speed even if every grade made its target:
         that part of the gap is the mix."""
-        sql = "SELECT grade, max(target) AS target, sum(seconds) / 60 AS elapsed_min FROM setups GROUP BY grade ORDER BY grade"
+        sql = "SELECT quality_id AS grade, max(target) AS target, sum(seconds) / 60 AS elapsed_min FROM setups GROUP BY quality_id ORDER BY quality_id"
         rows = self._fetch(sql, [])
         trace["sql"].append(sql)
         trace["parameters"].append([])

@@ -164,7 +164,7 @@ and one production day per shift, the data's first and second weeks, first month
 period (no or a partial previous window) and the last week (partial),
 `compare_periods` both ways, the downtime Pareto of the
 missed-splice week by reason, place and kind, the waste breakdown for both
-months, the story week and the data's first week (every waste line of record contract v2), the stops profile for both
+months, the story week and the data's first week (every waste line of record contract v2, and good output, gross minus every line), the add-back of the waste lines and good output to gross for a shift and for September (owner ruling (d), 2026-11-12), the stops profile for both
 months, totals by grade and rollstock for both months and the data's first week,
 the trim, warp, stops (reaching before the data) and MSF-per-day trends, the three daily tools for three production days,
 the corrupt-record day, and the money tools' dollars (issue #31a: shift dollars for two shifts, one

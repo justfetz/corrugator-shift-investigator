@@ -447,7 +447,7 @@ function paretoChart(chart,wrap){
 }
 // Waste breakdown: the dry-end split as stacked bars (current and previous), then every category paired.
 function wasteChart(chart,wrap){
- const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3'],['other','s4'],['moisture','s4']].filter(([k])=>byKey[k]);  // a result without a family stacks the ones it has; moisture is the v1 records' fourth family (older recordings)
+ const byKey=Object.fromEntries(chart.rows.map(r=>[r.category,r])), parts=[['bond','s1'],['warp','s2'],['misalignment','s3'],['moisture','s4'],['other','s5']].filter(([k])=>byKey[k]);  // the five dry-end families; a result without one (an older recording) stacks the ones it has
  const W=CHART_W(), f=frame(W,2,34), unit=chart.unit;
  const stacks=[['current',r=>r.pct_of_gross],['previous',r=>r.previous_pct_of_gross]].map(([name,get])=>({name,segments:parts.map(([k,cls])=>({k,cls,value:byKey[k]?get(byKey[k]):null}))}));
  const available=stacks.filter(s=>s.segments.every(x=>x.value!==null&&x.value!==undefined));
@@ -463,7 +463,7 @@ function wasteChart(chart,wrap){
    const t=svgNode('text',{x:f.x1+8,y:y+18,tabindex:0,class:'val','aria-label':`${s.name}: dry-end ${fmtVal(total,unit)} = `+s.segments.map(v=>`${v.k} ${fmtVal(v.value,unit)}`).join(', ')},fmtVal(total,unit));svg.append(t);});
   wrap.append(node('p',`Dry-end rejects split by recorded reason; the ${parts.length} segments add to the dry-end total.`,'muted'),svg,legend(parts.map(([k,cls])=>[cls,k])));
  }
- const others=chart.rows.filter(r=>!['bond','warp','misalignment','other','moisture'].includes(r.category));
+ const others=chart.rows.filter(r=>!['bond','warp','misalignment','moisture','other'].includes(r.category));
  if(others.length){const sub=node('div',undefined,'subchart');sub.append(node('h4','All waste categories, % of gross'));pairedChart({...chart,rows:others},sub);wrap.append(sub);}
 }
 // Weekly trend: a 2px line with 8px markers; partial weeks are hollow and labelled; the last value is written at its point.
@@ -977,7 +977,7 @@ function arithmetic(f){
  const d=f.data;   // the money query's own sums (cost_model.summary): the area priced as paper, the machine minutes by kind, the MSF not made
  const out=[node('h3','The arithmetic, at your rates','label')];
  if(f.warning)out.push(node('p',f.warning,'warning-note'));
- out.push(line('Paper ',[`${Money.fmt(d.area_sqft,0)} sq ft of ${f.levers?'trim over target, shear and rejects':'trim, shear and rejects'} = `,b(`${Money.fmt(d.area_msf,1)} MSF`),` × $${paper}/MSF = `,b(Money.money(f.paper))]));
+ out.push(line('Paper ',[`${Money.fmt(d.area_sqft,0)} sq ft of ${f.levers?'trim over target, shear and rejects':'trim, shear, rejects and waste boards'} = `,b(`${Money.fmt(d.area_msf,1)} MSF`),` × $${paper}/MSF = `,b(Money.money(f.paper))]));
  out.push(line('Machine time ',[`${Money.fmt(d.machine_minutes,1)} min (stops ${Money.fmt(d.stop_minutes,1)} · speed gap ${Money.fmt(d.speed_minutes,1)} · waste run time ${Money.fmt(d.waste_run_minutes,1)}) = `,b(`${Money.fmt(d.msf_not_made,1)} MSF not made`),` at ${Money.gText(C.required_fpm)} ft/min (${Money.gText(C.msf_per_minute)} MSF a minute) × $${hour}/hr = `,b(Money.money(f.machine))]));
  out.push(trimLine(f,line,b));
  const total=[`= `,b(Money.money(f.total)),` ${f.when}`];

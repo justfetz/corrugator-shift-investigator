@@ -79,7 +79,7 @@ ADMIN_RATE = 0.0004                       # planning / admin entries, a fraction
 # Rejects are episodic: the chance a lane of a setup records a category at all. When it does, the line is
 # the category's rate over that chance, so the expected area is the rate (simulation choices). Warp, the seeded
 # story's category, is on every lane, so its weekly August and Monday steps stand clear of the draw's noise.
-REJECT_CHANCE = {"bond": 0.6, "warp": 1.0, "misalignment": 0.5, "cracking": 0.15, "handling": 0.15, "paper": 0.12,
+REJECT_CHANCE = {"bond": 0.6, "warp": 1.0, "misalignment": 0.5, "moisture": 0.3, "cracking": 0.15, "handling": 0.15, "paper": 0.12,
                  "print": 0.08, "changeover": 0.7, "admin": 0.08}
 STOP_COMMENT_EMPTY = {"Order change": 0.80, "Planned maintenance": 0.30}   # share of stops with no comment; default below
 STOP_COMMENT_EMPTY_DEFAULT = 0.45
@@ -148,9 +148,10 @@ COMMENTS = {
     "Steam / moisture": ("steam pressure dropped", "condensate trap stuck at the {place}", "preheater temperature low"),
     "Power outage": ("power bump, machine restarted", "lost power, restarted after supply returned"),
     "Other": ("maintenance fault at the {place}", "e-stop pulled at the {place}", "belt tracking off", "{place} fault, reset"),
-    "Planned maintenance": ("PM on the {place}", "planned work: {place}", "{place} PM, ran long"),
+    "Planned maintenance": ("planned maintenance on the {place}", "planned work: {place}", "{place} planned maintenance, ran long"),
 }
 REJECT_MIX = {   # reason weights inside the categories without a story (simulation choices)
+    "moisture": {"Wet board": 0.40, "Wet edges": 0.25, "Low moisture / brittle board": 0.20, "Steam or condensate spots": 0.15},
     "cracking": {"Cracking board": 0.45, "Wrinkles": 0.40, "Brake line": 0.15},
     "misalignment": {"Misalign": 0.30, "Web walking": 0.12, "Wrong scores": 0.08, "Light scores": 0.08, "Score cutting": 0.07,
                      "Bad slit cut": 0.08, "Knife not cutting to spec": 0.06, "Frozen slitters": 0.03, "Knife overheating": 0.02,
@@ -651,7 +652,7 @@ def _layout(rng, slots, planner, machine_code, outage_slots, week_factors=None):
                 if ctx.pm:
                     minutes, place, note = ctx.pm
                     minutes = minutes or rng.randint(*PM_MINUTES)
-                    _insert_stop(segments, _stop(rng, "PM", "Planned maintenance", place, minutes * 60, 0, note),
+                    _insert_stop(segments, _stop(rng, "Scheduled", "Planned maintenance", place, minutes * 60, 0, note),
                                  min(run, rng.randint(300, 900)))
                 if ctx.outage:
                     _insert_stop(segments, _stop(rng, "Maintenance", "Power outage", "Power",
@@ -726,10 +727,20 @@ def _weighted(rng, weights):
 def _positions(category, reason, double_wall):
     """The liner and side options the taxonomy allows a reason (DB and SF liners on double wall only)."""
     entry = next(r for r in R.categories()[category]["reasons"] if r["reason"] == reason)
+    if entry.get("double_wall_only") and not double_wall:
+        raise ValueError(f"{reason!r} is a double-wall reason")
     liners = entry.get("liner") or ()
-    if liners and not double_wall:
-        liners = tuple(x for x in liners if x not in ("DB", "SF")) or tuple(liners)
+    if not double_wall:   # a single-wall board has no DB or SF liner, so it never records one
+        liners = tuple(x for x in liners if x not in ("DB", "SF"))
     return tuple(liners), tuple(entry.get("side") or ())
+
+
+@lru_cache(maxsize=None)
+def _single_wall_mix(category, mix):
+    """A category's reason mix on a single-wall board: without the reasons only a double-wall board can have
+    (`double_wall_only` in the taxonomy: between the flutes, a wrong DB / SF liner)."""
+    double = {r["reason"] for r in R.categories()[category]["reasons"] if r.get("double_wall_only")}
+    return {k: v for k, v in mix if k not in double}
 
 
 def _position(rng, category, reason, quality):
@@ -806,9 +817,11 @@ def _setup_record(rng, frame, ctx, machine_id):
     rates = {"bond": warp["bond_rate"],
              "warp": warp["warp_rate_by_month"].get(ctx.month, warp["warp_rate_by_month"][9])
              * (warp["monday_multiplier"] if ctx.monday else 1),
-             "misalignment": warp["misalignment_rate"], **warp["other_rates"]}
-    mixes = {"bond": {k: v for k, v in warp["bond_reason_weights"].items() if quality in DOUBLE_WALL or "(DW)" not in k},
-             "warp": warp["warp_reason_weights"], **{k: REJECT_MIX[k] for k in ("cracking", "misalignment", "handling", "paper", "print")}}
+             "misalignment": warp["misalignment_rate"], "moisture": warp["moisture_rate"], **warp["other_rates"]}
+    mixes = {"bond": warp["bond_reason_weights"], "warp": warp["warp_reason_weights"],
+             **{k: REJECT_MIX[k] for k in ("moisture", "cracking", "misalignment", "handling", "paper", "print")}}
+    if quality not in DOUBLE_WALL:
+        mixes = {k: _single_wall_mix(k, tuple(mix.items())) for k, mix in mixes.items()}
     order_change = frame.code == "O"
     lanes, rejects = [], []
     for index, ((order, outs), lane_nominal, lane_actual) in enumerate(zip(plan["lanes"], nominal, actual), 1):

@@ -299,7 +299,7 @@ def test_mapped_tool_schemas_use_anyof_for_nullable_filters():
     tools = anthropic_tools(TOOL_SCHEMAS)
     walk(tools)
     kind = next(t for t in tools if t['name'] == 'get_downtime_breakdown')['input_schema']['properties']['kind']
-    assert kind == {'anyOf': [{'type': 'string', 'enum': ['Maintenance', 'Operator', 'PM']}, {'type': 'null'}]}
+    assert kind == {'anyOf': [{'type': 'string', 'enum': ['Maintenance', 'Operator', 'Scheduled', 'PM']}, {'type': 'null'}]}
     shift = next(t for t in tools if t['name'] == 'get_period_kpis')['input_schema']['properties']['shift']
     assert shift['anyOf'][0] == {'type': 'integer', 'enum': [1, 2, 3]} and shift['anyOf'][-1] == {'type': 'null'}
     assert 'description' in shift

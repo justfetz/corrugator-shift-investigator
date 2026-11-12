@@ -62,9 +62,10 @@ def plain_kpis(data, start, end, shift=None):
         "downtime_pct": stop_minutes / scheduled * 100, "downtime_minutes": stop_minutes, "stops": len(stops),
         "minutes_per_stop": stop_minutes / len(stops), "trim_pct": trim / gross * 100, "shear_pct": shear / gross * 100,
         "dry_end_pct": rejects / gross * 100, "bond_pct": reasons["BOND"] / gross * 100, "warp_pct": reasons["WARP"] / gross * 100,
-        "misalignment_pct": reasons["MISALIGNMENT"] / gross * 100, "other_pct": reasons["OTHER"] / gross * 100, "bale_pct": bale / gross * 100,
+        "misalignment_pct": reasons["MISALIGNMENT"] / gross * 100, "moisture_pct": reasons["MOISTURE"] / gross * 100,
+        "other_pct": reasons["OTHER"] / gross * 100, "bale_pct": bale / gross * 100,
         "unexplained_pct": (bale - accounted) / gross * 100,
-        "maintenance_pm_pct": (kinds["Maintenance"] + kinds["PM"]) / scheduled * 100, "operator_pct": kinds["Operator"] / scheduled * 100,
+        "maintenance_pm_pct": (kinds["Maintenance"] + kinds["Scheduled"]) / scheduled * 100, "operator_pct": kinds["Operator"] / scheduled * 100,
         "setups": len(setups), "paper_changes": len({s.wet_end_id for s in setups}),
         "lineal_per_setup": feet / len(setups), "lineal_per_paper_change": feet / len({s.wet_end_id for s in setups}),
         "bale_msf": bale / 1000,
@@ -132,13 +133,14 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
             improved = (row["delta"] < 0) == (better == "lower")
             assert row["change"] == ("better" if improved else "worse")
     # Pinned goldens of the default seed (ratios of sums, never averages of averages).
-    # (Issue #100 scheduled orders into setups: these were 156,429.0 / 152,043.4 MSF, 673 / 546 stops, 2,596 setups;
+    # (Moisture's own reject lines moved warp from 0.3306 / 0.4698; issue #100 scheduled orders into setups: these were 156,429.0 / 152,043.4 MSF, 673 / 546 stops, 2,596 setups;
     # issue #35 before it: 160,260.2 / 150,593.0 MSF, 617 / 567 stops, 2,672 setups.)
     assert rows["volume_msf"]["current"] == pytest.approx(162481.0) and rows["volume_msf"]["previous"] == pytest.approx(157982.5)
     assert rows["lineal_ft"]["current"] == pytest.approx(18959016.3)
     assert rows["stops"]["current"] == 665 and rows["stops"]["previous"] == 533
     assert rows["trim_pct"]["current"] == pytest.approx(3.4945, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(3.1246, abs=1e-4)
-    assert rows["warp_pct"]["current"] == pytest.approx(0.3306, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4698, abs=1e-4)
+    assert rows["warp_pct"]["current"] == pytest.approx(0.3257, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4718, abs=1e-4)
+    assert rows["moisture_pct"]["current"] == pytest.approx(0.0585, abs=1e-4)   # its own family again (owner, 2026-11-12)
     assert rows["downtime_pct"]["current"] == pytest.approx(4.8681, abs=1e-4)
     assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.6160, abs=1e-4)
     assert rows["setups"]["current"] == 2614 and rows["paper_changes"]["current"] == 799
@@ -233,8 +235,8 @@ def test_downtime_pareto_shares_cumulate_and_match_sums(store, data):
     assert by_reason["Planned maintenance"]["previous_minutes"] == pytest.approx(125.0, abs=0.01)
     assert (by_reason["Other"]["stops"], by_reason["Other"]["minutes"]) == (9, pytest.approx(12.37, abs=0.01))
     assert next(iter(by_reason)) == "Planned maintenance" and by_reason["Missed splice"]["cumulative_pct"] == pytest.approx(53.77, abs=0.01)
-    assert all(st.reason == "Planned maintenance" for st in data["stops"] if st.kind == "PM")
-    assert all(st.kind == "PM" for st in data["stops"] if st.reason == "Planned maintenance")
+    assert all(st.reason == "Planned maintenance" for st in data["stops"] if st.kind == "Scheduled")
+    assert all(st.kind == "Scheduled" for st in data["stops"] if st.reason == "Planned maintenance")
     by_count = store.get_downtime_pareto({"period": "week", "anchor": "2026-09-09"}, group_by="reason", measure="count")
     assert [r["stops"] for r in by_count["rows"]] == sorted((r["stops"] for r in by_count["rows"]), reverse=True)
     assert by_count["rows"][-1]["cumulative_pct"] == pytest.approx(100, abs=0.02)
@@ -250,7 +252,7 @@ def test_waste_breakdown_matches_sums_and_month_story(store, data):
     setups = between(data["dry_end_setups"], date(2026, 9, 1), date(2026, 9, 30))
     assert rows["trim"]["sqft"] == pytest.approx(sum(s.trim_sqft for s in setups), abs=0.1)
     assert rows["shear"]["sqft"] == pytest.approx(sum(s.chop_sqft for s in setups), abs=0.1)
-    assert rows["dry_end"]["sqft"] == pytest.approx(rows["bond"]["sqft"] + rows["warp"]["sqft"] + rows["misalignment"]["sqft"] + rows["other"]["sqft"], abs=0.2)
+    assert rows["dry_end"]["sqft"] == pytest.approx(rows["bond"]["sqft"] + rows["warp"]["sqft"] + rows["misalignment"]["sqft"] + rows["moisture"]["sqft"] + rows["other"]["sqft"], abs=0.2)
     assert rows["cutoff_waste"]["sqft"] == pytest.approx(sum(lane.cutoff_waste_sqft for s in setups for lane in s.lanes), abs=0.5)
     assert rows["changeover"]["sqft"] == pytest.approx(sum(s.changeover_sqft for s in setups), abs=0.5)
     assert rows["bale"]["sqft"] == pytest.approx(sum(sh.bale_sqft for sh in between(data["shifts"], date(2026, 9, 1), date(2026, 9, 30))), abs=0.1)

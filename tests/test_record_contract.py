@@ -9,12 +9,13 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 
 import pytest
 
 from investigator import records as R
 from investigator.record_store import TABLES, RecordStore, default_store
-from investigator.synth import (CONSTRUCTION, CUSTOMERS, DATASET_FIRST_DAY, _Planner, fill_outs, generate_months, lane_run,
+from investigator.synth import (CONSTRUCTION, CUSTOMERS, DATASET_FIRST_DAY, DOUBLE_WALL, _Planner, fill_outs, generate_months, lane_run,
                                 min_trim_in, narrowest_web, trim_pct, window_bounds, window_days)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,42 +45,43 @@ def order(width, length, quantity):
 # ------------------------------------------------------------------ the owner's worked example
 
 def test_the_owners_worked_example_reproduces_exactly():
-    """Owner, 2026-11-11. Orders: AC Box 15 x 35 in, 2,000 sheets; Jerry's Packaging 17 x 47 in, 3,000 sheets."""
-    # Setup 1, 100 in web, two knives. Jerry's at 3 out takes 51 in; AC Box fills what is left: 2 out would use
-    # 81 in, too little; the most that fit beside 51 in under the minimum trim is 3 out.
-    jerrys_in = 3 * 17
-    assert 2 * 15 + jerrys_in == 81
-    assert fill_outs(15, 100 - 2.0 - jerrys_in) == 3
-    used = 3 * 15 + jerrys_in
-    assert used == 96 and narrowest_web(used, 2.0) == 100
-    assert 100 - used == 4 and (100 - used) / 2 == 2 and trim_pct(100, used) == pytest.approx(4.0)
+    """Owner, 2026-11-11. Orders: AC Box 15 x 35 in, 2,000 sheets; Jerry's Packaging 17 x 47 in, 3,000 sheets. The
+    example leaves 2 in of trim a side (4 in); at that allowance the scheduler's own search (`_Planner._choose`)
+    picks the example's lanes and paper, and `lane_run` its cuts: the numbers come from the generator, not from
+    arithmetic redone here."""
+    allowance = 4.0
+    planner = _Planner(random.Random(0), "261111")
+    ac_box, jerrys = {**order(15, 35, 2000), "order_number": "SO-AC"}, {**order(17, 47, 3000), "order_number": "SO-JP"}
+    # Setup 1, 100 in web, two knives: 3 out x 15 in beside 3 out x 17 in uses 96 in, trimming 4 in, 2 in a side.
+    web, lanes = planner._choose(ac_box, [jerrys], allowance, None)
+    assert web == 100 and [(o["order_number"], outs) for o, outs in lanes] == [("SO-AC", 3), ("SO-JP", 3)]
+    used = sum(o["w"] * outs for o, outs in lanes)
+    assert used == 96 and (web - used) / 2 == 2 and trim_pct(web, used) == pytest.approx(4.0)
+    assert 2 * 15 + 3 * 17 == 81   # "2 outs x 15 in would be 81 in used, too little; bump to 3 out"
     # AC Box sets the length: ceil(2,000 / 3) = 667 cuts x 35 in / 12 = 1,945.4 lineal ft. Jerry's runs only as
     # far as its pair: floor(1,945.4 x 12 / 47) = 496 cuts = 1,942.7 ft, 2.7 ft apart, under one 47 in cut.
-    cuts, definer = lane_run([(2000, 3, 35), (3000, 3, 47)])
+    cuts, definer = lane_run([(o["remaining"], outs, o["L"]) for o, outs in lanes])
     assert cuts == [667, 496] and definer == 0
     ac_ft, jerrys_ft = cuts[0] * 35 / 12, cuts[1] * 47 / 12
     assert round(ac_ft, 1) == 1945.4 and round(jerrys_ft, 1) == 1942.7
     assert round(round(ac_ft, 1) - round(jerrys_ft, 1), 1) == 2.7 and ac_ft - jerrys_ft < 47 / 12
     assert cuts[0] * 3 == 2001 and cuts[1] * 3 == 1488 and 3000 - cuts[1] * 3 == 1512
-    # Setup 2, Jerry's remainder alone at 5 out = 85 in: the scheduler runs it on the narrowest web at least as
-    # wide as 85 in plus the minimum trim, 90 in paper: trim 5 in = 5.6%. On 95 in it would be 10.5%, on 100 in 15%.
-    assert narrowest_web(5 * 17, 2.0) == 90
+    # Setup 2, Jerry's remainder alone: the search picks 5 out = 85 in on the narrowest paper that fits, 90 in,
+    # trimming 5 in = 5.6% (10.5% on 95 in, 15% on 100 in); 303 cuts, 1,186.8 ft, 1,515 sheets, 3 over.
+    jerrys["remaining"] = 3000 - cuts[1] * 3
+    web, lanes = planner._choose(jerrys, [], allowance, None)
+    assert web == 90 and [(o["order_number"], outs) for o, outs in lanes] == [("SO-JP", 5)]
     assert [round(trim_pct(w, 85), 1) for w in (90, 95, 100)] == [5.6, 10.5, 15.0]
-    # Left to choose the outs too, the search does no worse: 6 out = 102 in on 105 in paper is 2.9%.
-    planner = _Planner(random.Random(0), "261111")
-    web, lanes = planner._choose(order(17, 47, 1512), [], 2.0, None)
-    used = sum(o["w"] * outs for o, outs in lanes)
-    assert web == narrowest_web(used, 2.0) and trim_pct(web, used) <= trim_pct(90, 85)
-    cuts, _ = lane_run([(1512, 5, 47)])
+    cuts, _ = lane_run([(jerrys["remaining"], 5, 47)])
     assert cuts == [303] and round(303 * 47 / 12, 1) == 1186.8 and 303 * 5 == 1515 and 1515 - 1512 == 3
     # The field view (owner's second table): web 100 / 90, scheduled nominal feet about 1,945 / 1,187, trim 4.0 / 5.6.
     assert (round(667 * 35 / 12), round(303 * 47 / 12)) == (1945, 1187)
 
 
 def test_the_scheduler_searches_every_pairing_and_never_does_worse_than_the_worked_example():
-    """The generator pairs the lead order with every open partner at every outs and paper width: on the owner's
-    two orders it finds a combination at least as tight as the example's 4.0% (2 out of AC Box beside 4 out of
-    Jerry's uses 98 in of the 100 in web), and every pick is the narrowest web that fits its lanes."""
+    """At the generator's own minimum trim (2 in, 1 in a side) the same search pairs the owner's two orders at
+    least as tight as the example's 4.0% (2 out of AC Box beside 4 out of Jerry's uses 98 in of the 100 in web),
+    and every pick is the narrowest web that fits its lanes."""
     planner = _Planner(random.Random(0), "261111")
     web, lanes = planner._choose(order(15, 35, 2000), [order(17, 47, 3000)], 2.0, None)
     used = sum(o["w"] * outs for o, outs in lanes)
@@ -135,15 +137,15 @@ def test_per_customer_waste_allocation_is_the_lanes_share_of_used_width(store):
     """Identity 6: a setup's own waste (side trim and shear chops) is allocated to its customers by each lane's
     share of the used width. The store's lane view carries the share and the two allocations; they add up to the
     setup's figures for every setup (the reject lines and waste boards are already each lane's own)."""
-    rows = sql(store, """SELECT s.setup_id, s.trim, s.shear, sum(o.width_share), sum(o.allocated_trim_sqft), sum(o.allocated_shear_sqft),
-                                bool_and(abs(o.width_share - o.outs * o.sheet_width_in / (s.width_in - s.trim_in)) < 1e-9)
+    rows = sql(store, """SELECT s.setup_id, s.trim_sqft, s.shear_sqft, sum(o.width_share), sum(o.allocated_trim_sqft), sum(o.allocated_shear_sqft),
+                                bool_and(abs(o.width_share - o.outs * o.sheet_width_in / (s.web_width_in - s.trim_in)) < 1e-9)
                          FROM setups s JOIN setup_orders o ON o.setup_id = s.setup_id GROUP BY ALL""")
     assert len(rows) == sql(store, "SELECT count(*) FROM setups")[0][0]
     for setup_id, trim, shear, share, trim_part, shear_part, by_width in rows:
         assert share == pytest.approx(1.0) and by_width, setup_id
         assert trim_part == pytest.approx(trim, abs=1e-6) and shear_part == pytest.approx(shear, abs=1e-6)
     by_customer = dict(sql(store, "SELECT customer_id, sum(allocated_trim_sqft) FROM setup_orders GROUP BY customer_id"))
-    assert sum(by_customer.values()) == pytest.approx(sql(store, "SELECT sum(trim) FROM setups")[0][0], rel=1e-9)
+    assert sum(by_customer.values()) == pytest.approx(sql(store, "SELECT sum(trim_sqft) FROM setups")[0][0], rel=1e-9)
 
 
 def test_setup_orders_outs_times_width_fit_the_web_minus_trim_for_every_setup():
@@ -152,7 +154,7 @@ def test_setup_orders_outs_times_width_fit_the_web_minus_trim_for_every_setup():
     (used + minimum trim <= web width), the trim column is exactly what is left (used = web - trim), and the web
     is the narrowest paper that holds the lanes with that trim."""
     store = default_store()
-    rows = store._db.execute("""SELECT s.setup_id, s.production_date, s.width_in, s.trim_in, sum(o.outs * o.sheet_width_in) AS used,
+    rows = store._db.execute("""SELECT s.setup_id, s.production_date, s.web_width_in, s.trim_in, sum(o.outs * o.sheet_width_in) AS used,
                                        count(*) AS lanes, max(s.lanes)
                                 FROM setups s JOIN setup_orders o ON o.setup_id = s.setup_id GROUP BY ALL""").fetchall()
     assert len(rows) == store._db.execute("SELECT count(*) FROM setups").fetchone()[0] > 50_000
@@ -211,7 +213,7 @@ def test_cutoff_knife_and_stacker_waste_boards_are_their_own_lines(store):
     rows = {r["category"]: r for r in result["rows"]}
     assert rows["cutoff_waste"]["sqft"] == pytest.approx(lane_sum[0], abs=1.0)
     assert rows["stacker_waste"]["sqft"] == pytest.approx(lane_sum[1], abs=1.0)
-    families = sum(rows[k]["sqft"] for k in ("bond", "warp", "misalignment", "other"))
+    families = sum(rows[k]["sqft"] for k in ("bond", "warp", "misalignment", "moisture", "other"))
     assert rows["dry_end"]["sqft"] == pytest.approx(families, abs=0.5)
     accounted = sum(rows[k]["sqft"] for k in ("trim", "shear", "changeover", "cutoff_waste", "stacker_waste", "dry_end", "admin"))
     assert rows["unexplained"]["sqft"] == pytest.approx(rows["bale"]["sqft"] - accounted, abs=1.0)
@@ -224,10 +226,10 @@ def test_the_reject_taxonomy_is_data_and_positions_are_attributes():
     """reject_reasons.json: category -> reason, owner-approved; liner and side are attributes, never reasons;
     every category names a family whose waste line is dry_end, shear or excluded."""
     taxonomy = json.loads((ROOT / "src" / "investigator" / "reject_reasons.json").read_text())
-    assert taxonomy["approved"] == "owner, 2026-11-11"
+    assert taxonomy["approved"] == "owner, 2026-11-11; moisture kept as its own category, owner 2026-11-12"
     assert taxonomy["attributes"] == {"liner": ["top", "bottom", "medium", "DB", "SF"], "side": ["drive", "operator", "middle"]}
     keys = [c["key"] for c in taxonomy["categories"]]
-    assert keys == ["bond", "warp", "cracking", "misalignment", "handling", "paper", "changeover", "print", "admin"]
+    assert keys == ["bond", "warp", "moisture", "cracking", "misalignment", "handling", "paper", "changeover", "print", "admin"]
     assert {f["counted_in"] for f in taxonomy["families"].values()} == {"dry_end", "shear", "excluded"}
     assert [f for f, v in taxonomy["families"].items() if v["counted_in"] == "dry_end"] == list(R.DRY_END_FAMILIES)
     assert R.counted_in("changeover") == "shear" and R.counted_in("admin") == "excluded" and R.counted_in("paper") == "dry_end"
@@ -250,8 +252,48 @@ def test_the_store_carries_the_taxonomy_and_every_reject_line_names_it(store):
     assert orphans == [(0,)]
     by_line = dict(sql(store, "SELECT counted_in, round(sum(sqft), 1) FROM rejects GROUP BY counted_in"))
     assert set(by_line) == {"dry_end", "shear", "excluded"}
-    setups = sql(store, "SELECT round(sum(rejects), 1), round(sum(changeover_sqft), 1), round(sum(admin_sqft), 1) FROM setups")[0]
+    setups = sql(store, "SELECT round(sum(reject_sqft), 1), round(sum(changeover_sqft), 1), round(sum(admin_sqft), 1) FROM setups")[0]
     assert setups == pytest.approx((by_line["dry_end"], by_line["shear"], by_line["excluded"]), abs=5.0)
+
+
+
+def test_a_single_wall_board_never_records_a_double_wall_reason_or_liner(data):
+    """Codex review of PR #123: a single-wall grade (26-C, 32-C, 55-C, 200-C) has no second flute and no DB or SF
+    liner, so its reject lines never carry a `double_wall_only` reason (a wrong DB/SF liner, between the flutes) or
+    a DB / SF position; double-wall grades do."""
+    double_only = {(c["key"], r["reason"]) for c in R.taxonomy()["categories"] for r in c["reasons"] if r.get("double_wall_only")}
+    assert ("paper", "Wrong DB/SF liner") in double_only and ("bond", "Between flutes (DW)") in double_only
+    single, double = [], []
+    for setup in data["dry_end_setups"]:
+        (double if setup.quality_id in DOUBLE_WALL else single).extend(setup.rejects)
+    assert single and double
+    assert [r for r in single if (r.category, r.reason) in double_only or r.liner in ("DB", "SF")] == []
+    assert any(r.liner in ("DB", "SF") for r in double) and any((r.category, r.reason) in double_only for r in double)
+
+
+def test_moisture_is_its_own_dry_end_family():
+    """Owner, 2026-11-12: moisture stays a reject category with its own reasons, not folded into other."""
+    moisture = R.categories()["moisture"]
+    assert moisture["family"] == "MOISTURE" and R.counted_in("moisture") == "dry_end" and len(moisture["reasons"]) >= 3
+    assert R.DRY_END_FAMILIES == ("BOND", "WARP", "MISALIGNMENT", "MOISTURE", "OTHER")
+    assert "moisture" not in {c["key"] for c in R.categories().values() if c["family"] == "OTHER"}
+
+
+def test_the_contract_document_maps_every_field_and_column():
+    """docs/RECORD_CONTRACT.md names every record field of every family and every column of every table, each in
+    backticks, so nothing reaches the store undocumented; it maps to typical MES fields and says what is not
+    modeled (taken from #122's test, adapted to this contract's families)."""
+    text = (ROOT / "docs" / "RECORD_CONTRACT.md").read_text(encoding="utf-8")
+    named = set(re.findall(r"`([a-z_]+)`", text))
+    for family in (*R.FAMILIES.values(), *R.DIMENSIONS.values(), R.OrderLane, R.RejectEntry):
+        missing = {f for f in family.__dataclass_fields__} - named
+        assert not missing, (family.__name__, missing)
+    for table, columns in TABLES.items():
+        missing = {c.split()[0] for c in columns.split(", ")} - named
+        assert not missing, (table, missing)
+    assert "not modeled" in text.lower() and "Typical MES field" in text
+    for change in R.CHANGE_CODES:
+        assert f"`{change}`" in text
 
 
 # ------------------------------------------------------------------ dimensions, sheet types, rolls

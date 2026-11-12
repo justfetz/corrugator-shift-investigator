@@ -55,14 +55,15 @@ reference speed; a bucket that ran better is not priced; [speed variance](METRIC
 
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
   reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus
-  downtime; the lineal feet not made / 675 = machine minutes), side trim, shear and each dry-end reason.
+  downtime; the lineal feet not made / 675 = machine minutes), side trim, shear, the changeover rejects,
+  the cutoff-knife and stacker waste boards (each its own gap, priced once: owner, 2026-11-12) and each dry-end reason.
   Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`, `total_usd_per_year`,
   `total_contribution_usd` (null while the margin is not set). Asked as "where did the money go this shift".
 - `get_opportunities(window, shift)`: where to look, the levers ranked in $/yr: the speed gap to each
   cell's best-fifth speed (`get_speed_opportunity`'s total hours), side-trim points over the trim target
   (points / 100 x gross, priced as paper: per year this is the post's trim formula), each downtime reason
   (Order change is labelled setup time), and all recorded shear, the changeover rejects counted with it, and
-  each dry-end family: bond, warp, misalignment, other (no benchmark for those, so the whole loss). The
+  each dry-end family: bond, warp, misalignment, moisture, other (no benchmark for those, so the whole loss). The
   cutoff-knife and stacker waste boards and the planning / admin entries are priced on the waste breakdown's
   own rows but are not levers: the boards are defaults the record carries, and admin entries are not
   production waste (issue #100). Each lever names the records behind it. It ranks levers and names records; it
@@ -75,7 +76,7 @@ A money word beside another question never replaces it. Downtime, rejects, waste
 overview and the comparison carry their dollars on the rows, so "which reason is costing us the most
 minutes" is the Pareto, priced, and "why was this week so bad in dollars" is the overview (a why, bad or
 killed question; the cost of a bare "slow", "what did slow running cost us", is the money answer, whose
-speed gap is priced). On the day grain "what did waste cost" is `get_shift_dollars` (side trim, shear and
+speed gap is priced). On the day grain "what did waste cost" is `get_shift_dollars` (side trim, shear, the changeover rejects, the waste boards and
 dry-end together); a named reject keeps the reject breakdown. A comparison, trend, speed against normal,
 volume ("how much did we make in dollars", "output per hour in dollars"; a loss of output, "what's costing
 us output", and a rate of a money word, "contribution per MSF", are money questions), rollstock, grade,

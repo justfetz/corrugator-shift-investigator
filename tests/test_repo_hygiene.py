@@ -372,16 +372,24 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
     assert not any('INVESTIGATOR_AS_OF' in line for line in dockerfile.splitlines() if line.startswith(('ENV', 'ARG')))   # never pinned
 
 
-# The names the record contract must never carry (issue #100, owner 2026-11-11): the vendor whose dry-end
-# record the contract was modelled on, its product names and its source-system table and record names. The
-# contract describes a generic corrugator dry-end setup record. Built from fragments so this file does not
-# name them either.
-VENDOR_PATTERNS = (re.compile(r"\b" + "B" + "HS" + r"\b", re.I),) + tuple(re.compile(p) for p in (   # in any letter case, slugs too
-    "Production" + "_Center",
-    "BQ" + "MES" + "PAHT",
-    r"\bP0" + "4[PGTS]" + r"\b",
-    "Module" + r" ?[Ff]acer",
-))
+# The names the record contract must never carry (issue #100, owner 2026-11-11): the vendor whose dry-end record the
+# contract was modelled on, its product names, its record codes and its source-system table names. The contract
+# describes a generic corrugator dry-end setup record. The names are spelled here in pieces, so this file does not
+# hold them either. A short name must stand alone: a letter, digit, '+', '/' or '_' before it, or a letter after it,
+# is a base64 blob or another word; a digit after it is still the name (a numbered table, machine or knife). The long
+# ones match anywhere. Every match ignores case (taken from #122, with the record codes added).
+SHORT_VENDOR_NAMES = ("B" + "HS", "P0" + "4[PGTS]", "H" + "QM", "A" + "SM", "K" + "QF")
+LONG_VENDOR_NAMES = ("Production" + "_Center", "BQMES" + "PAHT", "Modul" + "e ?Facer", "Modul" + " Facer", "K" + "QFSquare")
+VENDOR_PATTERN = re.compile("(?<![A-Za-z0-9+/_])(?:" + "|".join(SHORT_VENDOR_NAMES) + ")(?![A-Za-z+/_])|" + "|".join(LONG_VENDOR_NAMES),
+                            re.IGNORECASE)
+
+
+def test_the_vendor_pattern_catches_the_names_the_owner_gave_and_not_a_base64_blob():
+    for text in ("Production" + "_Center1", "the production" + "_center1 table", "B" + "HS-2", "B" + "HS2", "a b" + "hs line",
+                 "BQMES" + "PAHT", "P0" + "4P-shaped", "Modul" + "eFacer", "H" + "QM1", "a" + "sm2", "K" + "QFSquareFootage"):
+        assert VENDOR_PATTERN.search(text), text
+    for text in ("x9B" + "HSq", "+B" + "HS/", "aB" + "HS", "CORR-2", "LINE-2", "wa" + "sm", "cutoff_knife", "stacker_waste_boards"):
+        assert not VENDOR_PATTERN.search(text), text
 
 
 def test_no_tracked_file_names_the_vendor_or_its_source_tables():
@@ -400,9 +408,7 @@ def test_no_tracked_file_names_the_vendor_or_its_source_tables():
             text = path.read_text(encoding='utf-8')
         except (UnicodeDecodeError, OSError):
             continue          # binary files (fonts, images) carry no prose
-        for pattern in VENDOR_PATTERNS:
-            for match in pattern.finditer(text):
-                hits.append(f'{name}:{text.count(chr(10), 0, match.start()) + 1}: {match.group(0)}')
+        hits += [f'{name}:{text.count(chr(10), 0, m.start()) + 1}: {m.group(0)}' for m in VENDOR_PATTERN.finditer(text)]
     assert hits == []
 
 

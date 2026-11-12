@@ -30,7 +30,24 @@ MACHINE_WIDTH_IN = 110
 CHANGE_CODES = {"O": "order change", "S": "shift split"}
 SHEET_TYPES = ("product", "bottom_sheet", "cap_sheet")
 CUTOFF_KNIVES = (1, 2)   # lane N is assigned to cutoff knife N, which discharges to stacker N
-STOP_KINDS = ("Maintenance", "Operator", "PM")
+STOP_KINDS = ("Maintenance", "Operator", "Scheduled")
+# A planned stop's kind is Scheduled and its reason Planned maintenance; it reads as both, "Planned maintenance
+# (scheduled)", never as a bare code (owner, 2026-11-12). v1 recorded the kind as "PM": a filter may still name it.
+STOP_KIND_ALIASES = {"PM": "Scheduled"}
+SCHEDULED_STOP_LABEL = "Planned maintenance (scheduled)"
+
+
+def stop_kind(kind):
+    """A stop kind as recorded, with the v1 code PM read as Scheduled (None stays None)."""
+    return STOP_KIND_ALIASES.get(kind, kind) if kind is not None else None
+
+
+def stop_label(name):
+    """How a stop kind or reason reads wherever it is shown: the planned stop as "Planned maintenance (scheduled)",
+    its kind and its reason alike; every other name as recorded."""
+    return SCHEDULED_STOP_LABEL if name in ("Scheduled", "PM", PLANNED_STOP_REASON) else name
+
+
 STOP_PLACES = ("Upper knife", "Lower knife", "Shear knife", "Slitter/scorer",
                "Double backer", "Splicer 1", "Splicer 2", "Splicer 3", "Splicer 4",
                "Splicer 5", "Glue dams", "Stacker", "Single facer", "Steam system",
@@ -38,7 +55,7 @@ STOP_PLACES = ("Upper knife", "Lower knife", "Shear knife", "Slitter/scorer",
 UNPLANNED_STOP_REASONS = ("Knife / slitter jam", "Missed splice", "Raw material (roll)",
                           "Stacker", "Order change", "Glue / starch", "Steam / moisture",
                           "Power outage", "Other")
-PLANNED_STOP_REASON = "Planned maintenance"   # the reason every PM-kind stop carries
+PLANNED_STOP_REASON = "Planned maintenance"   # the reason every Scheduled-kind stop carries
 STOP_REASONS = UNPLANNED_STOP_REASONS + (PLANNED_STOP_REASON,)
 CREWS = ("Crew A", "Crew B", "Crew C")
 SCHEDULED_SHIFT_MINUTES = 480
@@ -60,7 +77,7 @@ def categories():
 
 @lru_cache(maxsize=1)
 def families():
-    """{family code: family entry}: BOND, WARP, MISALIGNMENT, OTHER (dry-end quality), CHANGEOVER, ADMIN."""
+    """{family code: family entry}: BOND, WARP, MISALIGNMENT, MOISTURE, OTHER (dry-end quality), CHANGEOVER, ADMIN."""
     return dict(taxonomy()["families"])
 
 
@@ -73,8 +90,9 @@ def counted_in(category):
     return families()[family_of(category)]["counted_in"]
 
 
-# The four families of dry-end quality waste, in tile order: the dry-end tile is exactly their sum.
-DRY_END_FAMILIES = ("BOND", "WARP", "MISALIGNMENT", "OTHER")
+# The five families of dry-end quality waste, in tile order: the dry-end tile is exactly their sum. Moisture is
+# its own family (owner, 2026-11-12): the link to the steam and temperatures along the machine.
+DRY_END_FAMILIES = ("BOND", "WARP", "MISALIGNMENT", "MOISTURE", "OTHER")
 
 
 def stamp(moment):
@@ -285,7 +303,7 @@ class DryEndSetupRecord:
 
     @property
     def reject_sqft(self):
-        """Dry-end quality rejects: the four dry-end families, never changeover or admin."""
+        """Dry-end quality rejects: the five dry-end families, never changeover or admin."""
         return self.reject_sqft_in("dry_end")
 
     @property
@@ -355,7 +373,7 @@ class ShiftRecord:
     group_name: crew label Crew A / B / C, rotating weekly; never a person.
     start_date/start_time, end_date/end_time, duration (always 080000).
     total_lineal_ft, total_produced_sqft, side_trim_sqft: sums of setups.
-    chop_sqft: shear chops. reject_sqft: dry-end quality rejects (the four dry-end families).
+    chop_sqft: shear chops. reject_sqft: dry-end quality rejects (the five dry-end families).
     changeover_sqft: changeover rejects (counted with shear). admin_sqft: planning / admin entries.
     cutoff_waste_sqft, stacker_waste_sqft: the lanes' cutoff-knife and stacker waste boards.
     max_speed_fpm: highest running speed of its setups.
@@ -410,10 +428,10 @@ class StopRecord:
 
     stop_id: ST + start stamp. start_date/start_time, end_date/end_time.
     duration_sec: whole seconds = end - start.
-    kind: the stop category: Maintenance, Operator or PM (the scheduled planned-maintenance window).
+    kind: the stop category: Maintenance, Operator or Scheduled (the planned-maintenance window).
     place: the reason group, an equipment location from STOP_PLACES.
     reason: one of STOP_REASONS - the nine unplanned reasons, or "Planned maintenance" for every
-        PM-kind stop; a recorded symptom, not a cause.
+        Scheduled-kind stop; a recorded symptom, not a cause.
     shift_number, production_date: the shift the stop fell in.
     setup_id: the dry-end setup record that contains the stop.
     comment: the operator's free text, verbatim; often empty ("").

@@ -1,6 +1,6 @@
 {
- "about": "The dry-end reject taxonomy (issue #100): category -> reason, with the position on the board as attributes (liner, side), never as reasons. Owner-approved grouping, 2026-11-11. `family` is the KPI tile a category counts in; `counted_in` says which waste line holds it: dry_end (dry-end quality waste), shear (counted with shear and sequencing, not dry-end quality) or excluded (planning and admin, not production waste, reported separately). `generated` false marks a reason the plant enters downstream of the corrugator (bookkeeping), which the synthetic dry-end records never carry. Generation weights are simulation choices and live in synth.py, not here.",
- "approved": "owner, 2026-11-11",
+ "about": "The dry-end reject taxonomy (issue #100): category -> reason, with the position on the board as attributes (liner, side), never as reasons. Owner-approved grouping, 2026-11-11. `family` is the KPI tile a category counts in; `counted_in` says which waste line holds it: dry_end (dry-end quality waste), shear (counted with shear and sequencing, not dry-end quality) or excluded (planning and admin, not production waste, reported separately). `double_wall_only` marks a reason only a double-wall board can have (a second flute, the DB and SF liners), which a single-wall setup never records. `generated` false marks a reason the plant enters downstream of the corrugator (bookkeeping), which the synthetic dry-end records never carry. Generation weights are simulation choices and live in synth.py, not here.",
+ "approved": "owner, 2026-11-11; moisture kept as its own category, owner 2026-11-12",
  "attributes": {
   "liner": ["top", "bottom", "medium", "DB", "SF"],
   "side": ["drive", "operator", "middle"]
@@ -9,6 +9,7 @@
   "BOND": {"key": "bond", "label": "Dry-end: bond", "counted_in": "dry_end"},
   "WARP": {"key": "warp", "label": "Dry-end: warp", "counted_in": "dry_end"},
   "MISALIGNMENT": {"key": "misalignment", "label": "Dry-end: misalignment", "counted_in": "dry_end"},
+  "MOISTURE": {"key": "moisture", "label": "Dry-end: moisture", "counted_in": "dry_end"},
   "OTHER": {"key": "other", "label": "Dry-end: other (cracking, handling, paper, print)", "counted_in": "dry_end"},
   "CHANGEOVER": {"key": "changeover", "label": "Changeover rejects (counted with shear)", "counted_in": "shear"},
   "ADMIN": {"key": "admin", "label": "Planning / admin (not production waste)", "counted_in": "excluded"}
@@ -34,6 +35,14 @@
     {"reason": "Twist warp"},
     {"reason": "S warp"},
     {"reason": "End-to-end warp"}
+   ]},
+  {"key": "moisture", "label": "Moisture", "family": "MOISTURE", "driver": "steam and temperature along the machine", "controllable": "yes",
+   "control_note": "the link to the steam and temperatures at the splicers, bridge, double backer hot plates and shear; those readings are a follow-up record family",
+   "reasons": [
+    {"reason": "Wet board", "liner": ["top", "bottom"]},
+    {"reason": "Wet edges", "side": ["drive", "operator"]},
+    {"reason": "Low moisture / brittle board"},
+    {"reason": "Steam or condensate spots", "liner": ["top", "bottom"]}
    ]},
   {"key": "cracking", "label": "Cracking / surface", "family": "OTHER", "driver": "board surface", "controllable": "yes",
    "reasons": [
@@ -76,7 +85,7 @@
     {"reason": "Marks in paper / dropped roll"},
     {"reason": "Wrong paper"},
     {"reason": "Wrong medium"},
-    {"reason": "Wrong DB/SF liner", "liner": ["DB", "SF"]},
+    {"reason": "Wrong DB/SF liner", "liner": ["DB", "SF"], "double_wall_only": true},
     {"reason": "Wrong flute size"},
     {"reason": "Liner inside out", "liner": ["top", "bottom", "DB", "SF"]},
     {"reason": "No coating"},

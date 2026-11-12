@@ -15,31 +15,32 @@ The store holds the contract as DuckDB tables (`record_store.TABLES`):
 | `setups` | run setup (the fact table) | `setup_id` | `wet_end_id` → `wet_ends`; `split_from` → `setups` |
 | `setup_orders` | order lane of a setup (the lane view; the record keeps the lanes embedded on the setup, as the MES does) | `setup_id`, `lane` | `customer_id` → `customers` |
 | `customers` | customer (a dimension, no measures) | `customer_id` | |
-| `rejects` | reject line: one lane's rejected sheets by category and reason | `setup_id`, `position` (lane), `category`, `reason` | `category`, `reason` → `reject_reasons` |
+| `rejects` | reject line: one lane's rejected sheets by category and reason | `setup_id`, `lane`, `category`, `reason` | `category`, `reason` → `reject_reasons` |
 | `reject_reasons` | reason of the reject taxonomy (`reject_reasons.json`) | `category`, `reason` | |
 | `stops` | row of the downtime log | `stop_id` | `setup_id` → `setups` |
 | `wet_ends` | paper run (consecutive setups on one grade and web width) | `wet_end_id` | |
 | `rolls` | roll of paper fed into a paper run | `roll_id` | `wet_end_id` → `wet_ends` |
 | `shifts` | 480-minute shift | `production_date`, `shift` | |
 
-The store keeps the working column names its tools already read where they predate the contract, and gives every new column the contract's name. In the tables below, **Ours** is the contract's name; where the store column differs it is in brackets.
+Every store column carries the contract's name, one name for each meaning (owner, 2026-11-12): the setup columns v1 called `grade`, `feet`, `gross`, `trim`, `shear`, `rejects` and `width_in` are `quality_id`, `lineal_ft`, `gross_sqft`, `trim_sqft`, `shear_sqft`, `reject_sqft` and `web_width_in`, and the shifts' and paper runs' columns match; a reject line's lane is `lane`, and "position" means only the `liner` and `side` attributes. A tool's own result rows keep the keys they publish (a grade breakdown's `grade`, a paper run's `width_in`). In the tables below, **Ours** is the store column.
 
 ## The dry-end setup (`setups`)
 
-| Ours [store column] | Record field | Typical MES field | Notes |
+| Ours | Record field | Typical MES field | Notes |
 | --- | --- | --- | --- |
 | `setup_id` | `setup_id` | `RunSetup` | key: machine code + start stamp + sequence in the shift |
+| (the table is one machine's) | `machine_id` | `MachineID` | the corrugator the record belongs to (`CORR-1`) |
 | `production_date`, `shift` | `production_date`, `shift_number` | `ProductionDate`, `ShiftNumber` | a production day starts 07:00 and carries its start date |
 | `started`, `ended` | `start_date` + `start_time`, `end_date` + `end_time` | `StartDate` + `StartTime`, `EndDate` + `EndTime` | the record keeps the MES's date and time pairs; the store joins them |
 | `run_seconds` | `actual_run_sec` | `ActualRunTime` | running time: elapsed minus the stops inside the setup. Elapsed is the store's `seconds` |
-| `lineal_ft` [`feet`] | `lineal_ft` | `LinealFeetProduced` | as run: the longest lane's actual cuts × its length / 12, plus the shear chops |
+| `lineal_ft` | `lineal_ft` | `LinealFeetProduced` | as run: the longest lane's actual cuts × its length / 12, plus the shear chops |
 | `scheduled_lineal_ft` | `total_nominal_ft` | `TotalScheduledNominalFeet` | the plan: the longest lane's nominal cuts × its length / 12 |
 | `avg_fpm` | `avg_speed_fpm` | `AverageSpeedFPM` | lineal / elapsed minutes, stops included |
-| `web_width_in` [`width_in`] | `web_width_in` | `WebWidth` | 90–110 in, 5-in steps: the narrowest paper at least as wide as the used width plus the minimum trim |
-| `quality_id` [`grade`] | `quality_id` | `QualityID` | the board grade key (`fixture.GRADES`: 26-C, 32-C, 55-C, 200-C, 275-BC, 275-EB) |
-| `gross_sqft` [`gross`] | `total_produced_sqft` | `TotalSquareFootageProduced` | web × lineal / 12 |
-| `trim_sqft` [`trim`], `trim_pct` | `trim_sqft`, `trim_pct` | `TrimSquareFootage`, `TrimPercentage` | trim inches × order travel / 12; trim inches / web × 100. The store adds `trim_in` |
-| `shear_sqft` [`shear`] | `chop_sqft` | `ChopSquareFootage` | the shear chops: full-web, 34 in each, part of gross |
+| `web_width_in` | `web_width_in` | `WebWidth` | 90–110 in, 5-in steps: the narrowest paper at least as wide as the used width plus the minimum trim |
+| `quality_id` | `quality_id` | `QualityID` | the board grade key (`fixture.GRADES`: 26-C, 32-C, 55-C, 200-C, 275-BC, 275-EB) |
+| `gross_sqft` | `total_produced_sqft` | `TotalSquareFootageProduced` | web × lineal / 12 |
+| `trim_sqft`, `trim_pct` | `trim_sqft`, `trim_pct` | `TrimSquareFootage`, `TrimPercentage` | trim inches × order travel / 12; trim inches / web × 100. The store adds `trim_in` |
+| `shear_sqft` | `chop_sqft` | `ChopSquareFootage` | the shear chops: full-web, 34 in each, part of gross |
 | `swing_knife_sqft` | `swing_knife_sqft` | `SwingKnifeSquareFootage` | optional: null when the machine has no swing knife (most machines; the demo corrugator has none), **never zero** |
 | `change_code` | `change_code` | `ChangeCode` | a code with a lookup (`records.CHANGE_CODES`): `O` a regular order change, `S` a shift split (the setup continues `split_from` across a shift boundary); others are added as they appear |
 | `stop_seconds`, `stops` | `stop_time_sec`, `number_of_stops` | `StopTimeForThisOrder`, `NumberOfStops` | the setup's summary of the downtime log: the sum and the count of its stop rows |
@@ -47,7 +48,7 @@ The store keeps the working column names its tools already read where they preda
 | `wet_end_id` | `wet_end_id` | (ours) | the paper run the setup belongs to |
 | `sheet_type`, `filler` | `sheet_type`, `filler` | (ours) | `product`, `bottom_sheet`, `cap_sheet` (product when any lane is); `filler` when a pallet-sheet lane was added to fill a tough trim |
 | `lanes` | `len(lanes)` | (ours) | 1–3 |
-| `rejects` | the dry-end families of `rejects` | (ours) | dry-end quality reject sq ft (bond, warp, misalignment, other) |
+| `reject_sqft` | the dry-end families of `rejects` | (ours) | dry-end quality reject sq ft (bond, warp, misalignment, moisture, other) |
 | `changeover_sqft`, `admin_sqft` | the changeover and admin lines of `rejects` | (ours) | changeover rejects (counted with shear) and planning / admin entries |
 | `cutoff_waste_sqft`, `stacker_waste_sqft` | sums over `lanes` | (ours) | the lanes' cutoff-knife and stacker waste boards in sq ft |
 | `split_from` | `split_from_setup_id` | (ours; carried by `ChangeCode` S) | the setup an S record continues |
@@ -86,9 +87,9 @@ The generator schedules orders into setups (owner, 2026-11-11), so every setup r
 5. An order is complete when its scheduled sheets (nominal cuts × outs) over its setups reach the demand; until then the remainder rolls into a later setup of its day (often on one knife at more outs, possibly on narrower paper). An order never runs again once complete. A setup closed at a shift boundary before its last cuts ran (under a minute of running left) gives those sheets back to its orders, so the only orders left short are the ones their production day closed on (nothing carries into the next day). Counted on actual cuts, an order lands anywhere in the over/under-run window around its demand.
 6. Gross = web × lineal; trim sq ft = trim inches × order travel; a setup's own waste (side trim and shear chops) is allocated to its customers by each lane's share of the used width (`setup_orders.width_share`, `allocated_trim_sqft`, `allocated_shear_sqft`); reject lines and waste boards are already each lane's own.
 
-The owner's worked example is a test, number for number, with the outs as the owner chose them: AC Box 15 × 35 in (2,000 sheets) beside Jerry's Packaging 17 × 47 in (3,000 sheets) on a 100-in web, 3 out each, uses 96 in and trims 4 in (2 in a side, 4.0%); AC Box sets the length at ⌈2,000 / 3⌉ = 667 cuts = 1,945.4 ft; Jerry's runs ⌊1,945.4 × 12 / 47⌋ = 496 cuts = 1,942.7 ft (1,488 sheets, 1,512 remain); the remainder at 5 out goes on 90-in paper, the narrowest that fits (5.6%; 10.5% on 95 in, 15% on 100 in), 303 cuts = 1,186.8 ft, 1,515 sheets.
+The owner's worked example is a test, number for number, driven through the scheduler's own functions: at the example's allowance of 2 in a side (4 in), the pairing search (`_Planner._choose`) picks the example's lanes and paper and `lane_run` its cuts. AC Box 15 × 35 in (2,000 sheets) beside Jerry's Packaging 17 × 47 in (3,000 sheets) on a 100-in web, 3 out each, uses 96 in and trims 4 in (2 in a side, 4.0%); AC Box sets the length at ⌈2,000 / 3⌉ = 667 cuts = 1,945.4 ft; Jerry's runs ⌊1,945.4 × 12 / 47⌋ = 496 cuts = 1,942.7 ft (1,488 sheets, 1,512 remain); the remainder at 5 out goes on 90-in paper, the narrowest that fits (5.6%; 10.5% on 95 in, 15% on 100 in), 303 cuts = 1,186.8 ft, 1,515 sheets.
 
-The generator's scheduler applies the same arithmetic but chooses the outs too, so on these two orders it does better than the example: it puts AC Box at 2 out beside Jerry's at 4 out, which uses 98 in of the 100-in web at 2.0% trim, and both orders finish in one setup (1,007 and 750 cuts). For a lone 1,512-sheet remainder it picks 6 out on 105-in paper, at 2.9%. The worked-example test reproduces the example as the owner computed it and checks that the scheduler never does worse. That the scheduler may beat the example is a decision for the owner to confirm.
+At the generator's own minimum trim (2 in, 1 in a side) the same search does better on these two orders: AC Box at 2 out beside Jerry's at 4 out uses 98 in of the 100-in web at 2.0% trim, and both orders finish in one setup. A second test checks that, at that minimum, the search never does worse than the example.
 
 ### How the generator schedules
 
@@ -101,32 +102,35 @@ The generator's scheduler applies the same arithmetic but chooses the outs too, 
 | `stop_id` | `stop_id` | key |
 | `setup_id` | `setup_id` | the run setup that holds the stop |
 | `started`, `ended`, `seconds` | `start_*`, `end_*`, `duration_sec` | `seconds = ended − started` |
-| `kind` | `kind` | the category: Maintenance, Operator, PM (the scheduled planned-maintenance window) |
+| `kind` | `kind` | the category: Maintenance, Operator or Scheduled (the planned-maintenance window). v1 recorded the planned kind as `PM`; a filter that names it (`kind=pm`, a tool's `PM`) answers as Scheduled |
 | `place` | `place` | the reason group: Splicer 1–5, Stacker, Upper / Lower / Shear knife, Slitter/scorer, Double backer, Single facer, Glue dams, Steam system, Power |
-| `reason` | `reason` | missed splice, knife / slitter jam, stacker, raw material, order change, …; PM stops carry Planned maintenance |
+| `reason` | `reason` | missed splice, knife / slitter jam, stacker, raw material, order change, …; a Scheduled stop carries Planned maintenance. Wherever it shows, the planned stop reads as both, "Planned maintenance (scheduled)", never as a bare code (owner, 2026-11-12) |
 | `comment` | `comment` | the operator's free text, verbatim: about half are empty (`''`, never null), the rest plausible detail ("operator missed splice, not paying attention", "stacker boards fell over") |
 
 For every setup, the sum of its stop rows' seconds equals `stop_seconds` and the row count `stops`. The category drives the downtime bands (issue #101). Comments are evidence to quote, never numbers: the answers show them as reported notes, labelled unverified.
 
 ## Dry-end rejects: category, reason, position
 
-The taxonomy is data, `src/investigator/reject_reasons.json`, owner-approved on 2026-11-11. A reject line records a **category** and a **reason**; where on the board is an **attribute**, never a reason: `liner` (top, bottom, medium, DB, SF) and `side` (drive, operator, middle). "Bottom liner" is an identity, not a cause; the focus is what damages the board. The store carries the file as `reject_reasons`, and every line of `rejects` names one of its rows.
+The taxonomy is data, `src/investigator/reject_reasons.json`, owner-approved on 2026-11-11, with moisture kept as its own category on 2026-11-12. A reject line records a **category** and a **reason**; where on the board is an **attribute**, never a reason: `liner` (top, bottom, medium, DB, SF) and `side` (drive, operator, middle). "Bottom liner" is an identity, not a cause; the focus is what damages the board. The store carries the file as `reject_reasons`, and every line of `rejects` names one of its rows.
 
 | Category | Family (tile) | Waste line | Controllable | Reasons (positions) |
 | --- | --- | --- | --- | --- |
-| Bond / delamination (temperature) | bond | dry-end | yes | Delamination (liner), Between flutes (DW), Blisters (liner), Blow out (side), Glue dam, Zipper board, Fuzzy edges (side), Loose / tight edges (side), Dry board, Low caliper |
+| Bond / delamination (temperature) | bond | dry-end | yes | Delamination (liner), Between flutes (double wall only), Blisters (liner), Blow out (side), Glue dam, Zipper board, Fuzzy edges (side), Loose / tight edges (side), Dry board, Low caliper |
 | Warp (temperature) | warp | dry-end | yes | Up warp, Down warp, Twist warp, S warp, End-to-end warp |
+| Moisture (steam and temperature along the machine) | moisture | dry-end | yes | Wet board (liner), Wet edges (side), Low moisture / brittle board, Steam or condensate spots (liner) |
 | Cracking / surface | other | dry-end | yes | Cracking board (liner), Wrinkles (liner), Brake line |
 | Misalignment / scoring / slitting | misalignment | dry-end | yes | Misalign (side), Web walking, Wrong scores, Light scores, Score cutting, Bad slit cut, Knife not cutting to spec (the lane's knife), Frozen slitters, Knife overheating, No change in slitters, Slitter off line, Moon outs, Wrong slat cuts, Wrong cut outs, Wrong dimensions / width |
 | Handling damage | other | dry-end | yes | Bander crush, Bander damage, Forklift damage, Stacker jam (the lane's stacker), Stacker in discharge, Fanfold jam, Manual discharge |
-| Paper / mill | other | dry-end | partly (receiving and roll prep) | Wrinkles in paper from mill, Marks in paper / dropped roll, Wrong paper, Wrong medium, Wrong DB/SF liner (liner), Wrong flute size, Liner inside out (liner), No coating, Wrong color |
+| Paper / mill | other | dry-end | partly (receiving and roll prep) | Wrinkles in paper from mill, Marks in paper / dropped roll, Wrong paper, Wrong medium, Wrong DB/SF liner (liner; double wall only), Wrong flute size, Liner inside out (liner), No coating, Wrong color |
 | Changeover | changeover | counted with shear | yes (sequencing) | Order change, Automatic order change, Paper change, Early paper change, Waste from a paper or flute change, Cut off, Small butt |
 | Print | other | dry-end | yes | Print wrinkle, Print / no print, Streaks in print |
 | Planning / admin (not production waste) | admin | reported apart | no | Order fill, Over scheduled, Overshipment\*, Max shipped\*, Count adjustment\*, Inventory write-off\*, Mis-tag\*, Tag without a unit\*, Lost unit – shipping\*, Used as dunnage, Re-arrange outs, Cap sheets, Not enough trim, Out of trim, Operator, Equipment entered as a reason, NULL, Blank |
 
+A reason marked double wall only (`double_wall_only` in the file) and the DB and SF liner positions are never recorded on a single-wall board (26-C, 32-C, 55-C, 200-C), which has neither a second flute nor those liners.
+
 \* Bookkeeping the plant enters downstream of the corrugator; in the taxonomy, never generated on a dry-end record (`"generated": false`). The plant list's two entries that name a machine section or a system rather than a cause are recorded as *Equipment entered as a reason*.
 
-**The four dry-end tiles.** The dry-end tile is exactly the sum of four families: bond, warp, misalignment and **other** (cracking / surface, handling damage, paper / mill, print). The v1 records' fourth family, moisture, is not a category of the approved taxonomy: moisture-driven defects are recorded as bond (dry board) or warp, so the `moisture_pct` tile became `other_pct`, and a question about moisture rejects is answered with the dry-end rejects. Dry-end waste as a share of the yield after trim and shear is issue #101's.
+**The five dry-end tiles.** The dry-end tile is exactly the sum of five families: bond, warp, misalignment, **moisture** and **other** (cracking / surface, handling damage, paper / mill, print). Moisture is its own category (owner, 2026-11-12): one of the dry-end reasons a superintendent tracks, and the link to the steam and temperatures at the splicers, bridge, double backer hot plates and shear, whose readings are a follow-up record family. Dry-end waste as a share of the yield after trim and shear is issue #101's.
 
 ## The waste lines and the bale
 
@@ -138,9 +142,11 @@ A window's waste breakdown (`get_waste_breakdown`) lists every line the records 
 | `shear` | the shear chops |
 | `changeover` | changeover rejects, counted with shear and sequencing, never dry-end quality |
 | `cutoff_waste`, `stacker_waste` | the lanes' cutoff-knife and stacker waste boards |
-| `bond`, `warp`, `misalignment`, `other`, `dry_end` | dry-end quality: the four families and their total |
+| `bond`, `warp`, `misalignment`, `moisture`, `other`, `dry_end` | dry-end quality: the five families and their total |
 | `admin` | planning / admin entries, reported apart (not production waste) |
 | `bale`, `unexplained` | the shift bale's scale reading, and the bale minus every line above (0.1–0.4% of gross) |
+
+**Good output** is the saleable board: gross minus every recorded line above but the bale (trim, shear, changeover, the cutoff-knife and stacker boards, dry-end and planning / admin), so the lines and good output add back to gross (owner, 2026-11-12). The waste breakdown carries it as `good_output_sqft` and `good_output_pct`, the daily KPI row as `estimated_good_sqft` beside each line it subtracts, and each loss is priced once, on its own line: the shift's dollars list the changeover rejects and the waste boards as their own gaps.
 
 ## Roll stock (`rolls`)
 
@@ -162,9 +168,30 @@ Peel and core are paper-side measures, before the board is made: they are not pa
 
 ## Wet-end runs (`wet_ends`) and shifts
 
-Unchanged in spirit from v1: a paper run is consecutive setups on one grade and web width, its totals exact sums of its setups; a shift's totals are exact sums of its setups, now with the changeover, admin and cutoff and stacker waste lines beside the dry-end rejects.
+A paper run is consecutive setups on one grade and web width, its totals exact sums of its setups; a shift's totals are exact sums of its setups, with the changeover, admin and cutoff and stacker waste lines beside the dry-end rejects.
 
-## Not modelled
+| Ours (`wet_ends`) | Record field | Notes |
+| --- | --- | --- |
+| `wet_end_id`, `production_date` | `wet_end_id`, `production_date` | key; the day the run started |
+| `quality_id`, `web_width_in` | `quality_id`, `web_width_in` | the run's grade and paper width |
+| `started`, `ended` | `start_date` + `start_time`, `end_date` + `end_time`, `duration` | the run's span |
+| `lineal_ft`, `gross_sqft`, `trim_sqft` | `lineal_ft`, `total_produced_sqft`, `side_trim_sqft` | sums of its setups |
+| `max_fpm`, `avg_fpm` | `max_speed_fpm`, `avg_speed_fpm` | peak and average speed |
+| `setup_count` | `setup_ids`, `shift_numbers` | the setups it holds and the shifts they ran in |
+
+| Ours (`shifts`) | Record field | Notes |
+| --- | --- | --- |
+| `production_date`, `shift`, `crew` | `production_date`, `shift_number`, `group_name` | key; the crew on shift |
+| (480 minutes) | `start_date` + `start_time`, `end_date` + `end_time`, `duration` | the shift's span |
+| `lineal_ft`, `gross_sqft`, `trim_sqft`, `shear_sqft`, `reject_sqft` | `total_lineal_ft`, `total_produced_sqft`, `side_trim_sqft`, `chop_sqft`, `reject_sqft` | sums of its setups |
+| `changeover_sqft`, `admin_sqft`, `cutoff_waste_sqft`, `stacker_waste_sqft` | the same | sums of its setups' lines |
+| `bale_sqft` | `bale_sqft` | the bale's scale reading for the shift |
+| `max_fpm`, `avg_fpm` | `max_speed_fpm`, `avg_speed_fpm` | peak and average speed |
+| `scheduled_minutes`, `wet_end_count` | `scheduled_minutes`, `wet_end_ids` | 480; the paper runs the shift touched |
+
+The reject lines (`rejects`) carry `setup_id`, `production_date`, `shift`, `family`, `category`, `reason`, `liner`, `side`, `lane`, `sheets`, `sqft` and `counted_in` (the record's `RejectEntry`: `category`, `reason`, `lane`, `sheets`, `sqft`, `liner`, `side`). The taxonomy table (`reject_reasons`) has one row per reason: `category`, `category_label`, `family`, `counted_in`, `controllable`, `driver`, `reason`, `liner_positions`, `side_positions` and `generated`.
+
+## Not modeled
 
 - **The swing knife's square footage**: the demo machine has none, so the field is null on every setup.
 - **A third lane**: the contract allows it; the demo machine's two cutoff knives mean the scheduler never pairs three.

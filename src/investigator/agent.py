@@ -24,7 +24,7 @@ TOOL_SCHEMAS = [
         ("get_shift_kpis", "Calculate shift output, downtime, waste and width metrics.", {}),
         ("get_shift_overview", "Read KPIs, largest recorded losses, grade-target performance and supporting chart evidence together. Use for broad daily summaries, one call per allowed shift.", {}),
         ("get_downtime_breakdown", "Group recorded stops by reason, place or kind.", {
-            "kind": {"type": ["string", "null"], "enum": [None, "Maintenance", "Operator", "PM"]},
+            "kind": {"type": ["string", "null"], "enum": [None, "Maintenance", "Operator", "Scheduled", "PM"]},
             "group_by": {"type": "string", "enum": ["reason", "place", "kind"]}}),
         ("get_wet_end_performance", "Compare elapsed-time speed with each wet-end grade target.", {}),
         ("get_quality_breakdown", "Show dry-end rejected area by recorded defect.", {}),
@@ -49,21 +49,21 @@ WINDOW_SCHEMA = {"type": "object", "description": "day = one production day (Mon
                                 "anchor": {"type": "string", "description": "YYYY-MM-DD; use the selected production day"}},
                  "required": ["period", "anchor"], "additionalProperties": False}
 SHIFT_FILTER = {"type": ["integer", "null"], "enum": [None, 1, 2, 3], "description": "null = all three shifts; under selected-shift scope only the selected shift is allowed"}
-TREND_METRICS = ["trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct", "other_pct",
+TREND_METRICS = ["trim_pct", "shear_pct", "dry_end_pct", "warp_pct", "bond_pct", "misalignment_pct", "moisture_pct", "other_pct",
                  "speed_run_fpm", "speed_all_fpm", "downtime_pct", "stops", "minutes_per_stop", "msf_per_day",
                  "lineal_per_setup", "lineal_per_paper_change"]
 PERIOD_TOOL_SCHEMAS = [
     {"name": name, "description": description, "parameters": {"type": "object", "properties": properties,
                                                               "required": required, "additionalProperties": False}}
     for name, description, properties, required in [
-        ("get_period_kpis", "Dashboard tiles for one window with the previous window of the same kind: volume MSF, lineal ft, speed with and without stops, downtime, stops, minutes per stop, trim, shear, dry-end (bond/warp/misalignment/other: cracking, handling, paper, print), bale, unexplained (bale minus every recorded waste line), maintenance+PM, operator, setups, paper changes, lineal per setup, lineal per paper change, baled MSF; each with delta and the better direction. Ratios of sums.",
+        ("get_period_kpis", "Dashboard tiles for one window with the previous window of the same kind: volume MSF, lineal ft, speed with and without stops, downtime, stops, minutes per stop, trim, shear, dry-end (bond/warp/misalignment/moisture/other: cracking, handling, paper, print), bale, unexplained (bale minus every recorded waste line), maintenance+PM, operator, setups, paper changes, lineal per setup, lineal per paper change, baled MSF; each with delta and the better direction. Ratios of sums.",
          {"window": WINDOW_SCHEMA, "compare": {"type": "boolean"}, "shift": SHIFT_FILTER}, ["window"]),
         ("compare_periods", "The same KPI table for two arbitrary windows (month vs month, week vs week, day vs day); the second window is the comparison base.",
          {"current_window": WINDOW_SCHEMA, "previous_window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["current_window", "previous_window"]),
         ("get_downtime_pareto", "Stops of a window grouped by reason, place or kind, ordered by minutes or count with share and cumulative share; previous-window minutes alongside.",
          {"window": WINDOW_SCHEMA, "group_by": {"type": "string", "enum": ["reason", "place", "kind"]},
           "measure": {"type": "string", "enum": ["minutes", "count"]}, "shift": SHIFT_FILTER}, ["window"]),
-        ("get_waste_breakdown", "Every waste line as square feet and percent of gross for a window, with the previous window: trim; shear and the changeover rejects counted with it; the cutoff-knife and stacker waste boards; the dry-end families bond, warp, misalignment and other (cracking, handling, paper, print) and their total; planning / admin entries apart (not production waste); the bale and the unexplained remainder. details lists the reported dry-end reasons (up / down / twist / S warp, delamination, blisters, misalign, ...) with share of dry-end.",
+        ("get_waste_breakdown", "Every waste line as square feet and percent of gross for a window, with the previous window: trim; shear and the changeover rejects counted with it; the cutoff-knife and stacker waste boards; the dry-end families bond, warp, misalignment, moisture and other (cracking, handling, paper, print) and their total; planning / admin entries apart (not production waste); the bale and the unexplained remainder. details lists the reported dry-end reasons (up / down / twist / S warp, delamination, blisters, misalign, ...) with share of dry-end.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_stops_profile", "Stops, minutes and minutes per stop for each production day of a window, plus its Monday-to-Friday weekday profile.",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
@@ -243,11 +243,14 @@ class OfflinePlanner:
 MONTH_NAMES = {name: index for index, name in enumerate(
     ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), 1)}
 WORD_NUMBERS = {w: i for i, w in enumerate(("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"), 1)}
+# The cracking / surface category in the words people use for it: crack, cracks, cracked, cracking (issue #100).
+CRACK_WORDS = r"crack(?:s|ed|ing)?"
 # Trend metric words, first match wins (the longer phrase comes before its prefix).
 TREND_WORDS = ((r"lineal per paper change|per paper change|per wet[- ]end|feet per paper change", "lineal_per_paper_change"),
                (r"lineal per setup|per setup|run length|feet per setup", "lineal_per_setup"),
                ("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bond", "bond_pct"),
-               ("misalignment", "misalignment_pct"), (r"\bother (dry[- ]end )?rejects?\b|\bcracking\b|\bhandling damage\b", "other_pct"),
+               ("misalignment", "misalignment_pct"), ("moisture", "moisture_pct"),
+               (rf"\bother (dry[- ]end )?rejects?\b|\b{CRACK_WORDS}\b|\bhandling damage\b", "other_pct"),
                (r"dry[- ]end|reject|quality", "dry_end_pct"),
                ("minutes per stop", "minutes_per_stop"), ("downtime", "downtime_pct"), (r"\bstops?\b", "stops"),
                (r"running speed|speed without stops", "speed_run_fpm"), (r"speed|\bfpm\b", "speed_all_fpm"),
@@ -282,7 +285,7 @@ MONEY_ONLY = ("Dollars come with where the money went this shift, the levers in 
               "volume, rollstock, grade, over/under-run, stops-per-day, summary, matrix, notes or ranking in dollars is not "
               "available yet: ask for it without dollars, or ask where the money is.")
 # Words that keep a money question about waste on the dry-end reject breakdown (the rejects, priced).
-MONEY_REJECT_WORDS = r"\b(rejects?|warp|bond|misalignment|cracking|quality)\b|\bdry[- ]end\b"
+MONEY_REJECT_WORDS = rf"\b(rejects?|warp|bond|misalignment|moisture|{CRACK_WORDS}|quality)\b|\bdry[- ]end\b"
 
 
 # Measure words decide the intent; grouping words (by grade, by width, by crew) only choose the breakdown.
@@ -412,8 +415,9 @@ def parse_period_request(lower, current, shifts):
     # "How much downtime last week": over a named window the downtime answer is the Pareto, as the day-shaped
     # downtime question is under a ranged Period control (period_plan), not the KPI tiles (issue #105).
     downtime = bool((period or months) and re.search(r"\bdowntime\b", lower))
-    reasons = {w for w in ("bond", "warp", "misalignment", "cracking", "handling") if re.search(rf"\b{w}\b", lower)}
-    waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(r"waste|trim|shear|reject|bond|warp|misalignment|cracking|changeover|bale|unexplained|twist|s-warp|delamination", lower))
+    reasons = {w for w, pattern in (("bond", "bond"), ("warp", "warp"), ("misalignment", "misalignment"), ("moisture", "moisture"),
+                                    ("cracking", CRACK_WORDS), ("handling", "handling")) if re.search(rf"\b{pattern}\b", lower)}
+    waste = len(reasons) >= 2 or 'waste breakdown' in lower or bool(period and re.search(rf"waste|trim|shear|reject|bond|warp|misalignment|moisture|{CRACK_WORDS}|changeover|bale|unexplained|twist|s-warp|delamination", lower))
     this_shift = bool(re.search(r"\b(this|the) shift\b.*\b(versus|vs|compared?|previous|last|before)\b", lower))
     grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b|\b\d{2,3}-?(c|bc|eb)\b|double ?wall", lower))
     rollstock = bool(re.search(r"roll[- ]?stock|\bpaper (consum|usage|used\b)|\bconsum\w*\b.*\bpaper\b|\bpaper\b.*\bconsum|how much paper\b|\brolls? (of paper )?(consumed|used)", lower))

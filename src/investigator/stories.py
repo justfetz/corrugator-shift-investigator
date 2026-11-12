@@ -49,15 +49,16 @@ SPLICER3_MISSED_SPLICE = {
 # Story 3: warp rejects are higher on the first production day after a weekend
 # (Monday) and higher in August than in any other month. Rates are fractions of
 # gross square feet by reject category (reject_reasons.json); bond,
-# misalignment and the other dry-end categories stay flat (dry-end quality total
+# misalignment, moisture and the other dry-end categories stay flat (dry-end quality total
 # about 1.0-1.1% of gross).
 WEEKEND_WARP = {
     "monday_multiplier": 1.5,
     "warp_rate_by_month": {8: 0.0042, 9: 0.0030},
     "bond_rate": 0.0040,
     "misalignment_rate": 0.0020,
-    # the rest of dry-end quality, by category (family OTHER): about 0.10% of gross together
-    "other_rates": {"cracking": 0.00035, "handling": 0.00030, "paper": 0.00025, "print": 0.00010},
+    "moisture_rate": 0.0006,               # its own family (owner, 2026-11-12)
+    # the rest of dry-end quality, by category (family OTHER): about 0.04% of gross together
+    "other_rates": {"cracking": 0.00014, "handling": 0.00012, "paper": 0.00010, "print": 0.00004},
     # reported reason mix inside a category (fractions of that category's rejects)
     "warp_reason_weights": {"Up warp": 0.42, "Down warp": 0.24, "Twist warp": 0.18, "S warp": 0.10, "End-to-end warp": 0.06},
     "bond_reason_weights": {"Delamination": 0.38, "Blisters": 0.12, "Blow out": 0.10, "Glue dam": 0.07, "Zipper board": 0.06,

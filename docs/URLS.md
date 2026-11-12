@@ -92,7 +92,7 @@ Modifiers, each refused when it does not apply to the measure:
 | --- | --- | --- |
 | `window=` | `week`, `month`, `period` (that window containing the day), or a month as `YYYY-MM` (anchored on its first day, inside the dataset or not: a month outside the data's window answers "unavailable" with the tool's reason, never zero) | the Period control's window on the day |
 | `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity; `grade` for `fpm` | `reason`; `width`; none |
-| `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
+| `kind=` | `maintenance`, `operator`, `scheduled` (`pm`, v1's code, is an alias) (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
 | `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
 | `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`); on other measures `prev` alone, as an alias (below) | `prev` |
@@ -134,7 +134,7 @@ same grain, which these answers carry already or which their store form carries.
 | `measure=quality&compare=prev` under Day | `measure=waste` |
 | `measure=compare&compare=prev` under Day | `measure=kpis` (`shifts=` kept: the tiles per shift) |
 | `measure=overview`, `summary` or `fpm` with `compare=prev` under Day | `measure=kpis`: the day's KPI tiles against the previous production day |
-| `measure=trend&metric=moisture_pct` | `measure=trend&metric=dry_end_pct`: record contract v2 (issue #100) retired the moisture family, which the approved reject taxonomy does not have; the dry-end rejects' trend is the closest series the records hold (the other dry-end family is `metric=other_pct`) |
+| `kind=pm` | `kind=scheduled`: the planned stop's kind, which v1 recorded as `PM` (owner, 2026-11-12) |
 | a default spelled out (`by=reason`, `unit=minutes`, `weeks=8`) or the fields in another order | the canonical spelling |
 
 Issue #20's examples: `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=reason&compare=prev` →

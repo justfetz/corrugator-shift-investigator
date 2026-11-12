@@ -3,6 +3,7 @@
 `canonical_url(parse_request(q))` is the address of a question; `resolve_url` is its inverse. The
 round trip is proved on every question the golden set asks (the answers compare equal step by step),
 and the grammar refuses what it cannot name instead of guessing."""
+from datetime import date
 import http.client
 import json
 import re
@@ -71,6 +72,23 @@ def test_every_golden_question_round_trips_through_its_url(case):
         after.append(resolved['text'])
     if 'url' in case['expect']:
         assert resolve_url(url, store)['text'] == case['expect']['url']
+
+
+def test_an_old_pm_kind_answers_as_the_scheduled_kind():
+    """Owner ruling (c), 2026-11-12: a planned stop's kind is Scheduled; v1 recorded it as PM, and an old `kind=pm`
+    address or a tool's PM filter keeps answering, as the Scheduled kind."""
+    from investigator import records as R
+    store = default_store()
+    new = resolve_url('/corr/1/day/2026-09-14/shift/1?measure=overview&kind=scheduled', store)
+    old = resolve_url('/corr/1/day/2026-09-14/shift/1?measure=overview&kind=pm', store)
+    assert new['request']['kind'] == old['request']['kind'] == 'Scheduled'
+    assert R.stop_kind('PM') == 'Scheduled' and R.stop_label('Scheduled') == R.stop_label('Planned maintenance') == 'Planned maintenance (scheduled)'
+    analysis = store.day_analysis('2026-09-17')   # a Thursday: shift 1 holds the planned window
+    try:
+        scheduled = analysis.get_downtime_breakdown(1, kind='Scheduled')['rows']
+        assert scheduled and analysis.get_downtime_breakdown(1, kind='PM')['rows'] == scheduled
+    finally:
+        analysis.close()
 
 
 def test_the_owner_examples_resolve():
@@ -184,7 +202,7 @@ def test_every_measure_has_a_meaning_under_every_grain():
     ('/corr/1/day/2026-09-14?measure=kpis&measure=waste', 'Repeated query field'),
     ('/corr/1/day/2026-09-14?measure=tons', 'Unknown measure'),
     ('/corr/1/day/2026-09-14?measure=downtime&by=crew', 'by is reason, place or kind'),
-    ('/corr/1/day/2026-09-14?measure=downtime&kind=pm', 'kind is maintenance or operator'),
+    ('/corr/1/day/2026-09-14?measure=overview&kind=planned', 'kind is maintenance, operator or scheduled'),
     ('/corr/1/day/2026-09-14?measure=trend', 'metric is one of'),
     ('/corr/1/day/2026-09-14?measure=trend&metric=trim_pct&weeks=30', '1 to 26'),
     ('/corr/1/day/2026-09-14?measure=waste&metric=trim_pct', 'metric= does not apply'),
@@ -220,8 +238,8 @@ def test_what_the_grammar_refuses(url, reason):
 D, W, M, P = '/corr/1/day/2026-09-14', '/corr/1/week/2026-09-14', '/corr/1/month/2026-09-14', '/corr/1/period/2026-09-14'
 ALIASES = [
     (f'{D}/shift/2?measure=downtime&by=reason&compare=prev', f'{D}/shift/2?measure=pareto'),
-    # record contract v2 (issue #100) retired the moisture family: an address written before it keeps answering
-    (f'{D}?measure=trend&metric=moisture_pct', f'{D}?measure=trend&metric=dry_end_pct'),
+    # owner ruling (c), 2026-11-12: the planned stop's kind is Scheduled; v1's code PM keeps answering as it
+    (f'{D}/shift/1?measure=overview&kind=pm', f'{D}/shift/1?measure=overview&kind=scheduled'),
     (f'{P}/shift/3?measure=waste&by=grade', f'{P}/shift/3?measure=grade'),
     (f'{M}?measure=rollstock&compare=prev', f'{M}?measure=rollstock'),
     # compare=prev where the answer carries the previous window already: prev is its default

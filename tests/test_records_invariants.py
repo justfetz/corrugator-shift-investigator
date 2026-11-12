@@ -270,11 +270,11 @@ def test_downtime_budget_per_month(data):
     for stop in data["stops"]:
         minutes[(month_of(stop), stop.kind)] += stop.duration_sec / 60
     for month in ("202608", "202609"):
-        planned = ratio(minutes[(month, "Maintenance")] + minutes[(month, "PM")], scheduled[month])
+        planned = ratio(minutes[(month, "Maintenance")] + minutes[(month, "Scheduled")], scheduled[month])
         assert 2.0 <= planned <= 3.0, (month, planned)
         operator = ratio(minutes[(month, "Operator")], scheduled[month])
         assert 1.0 <= operator <= 3.0, (month, operator)
-    pm = [s for s in data["stops"] if s.kind == "PM"]
+    pm = [s for s in data["stops"] if s.kind == "Scheduled"]
     thursdays = [d for d in production_days((("2026", 8), ("2026", 9))) if d.weekday() == 3]
     assert [s.production_date for s in pm] == [d.strftime("%Y%m%d") for d in thursdays]
     assert all(s.shift_number == 1 and 120 <= s.duration_sec / 60 <= 240 for s in pm)
@@ -294,9 +294,10 @@ def test_waste_bands_per_month(data):
     for month in ("202608", "202609"):
         assert 2.5 <= ratio(trim[month], gross[month]) <= 3.75    # schedule-driven: about 3%, September carries the story's creep
         assert 0.4 <= ratio(chop[month], gross[month]) <= 1.0
-        bond, warp, mis, other = (ratio(lines[(month, f)], gross[month]) for f in R.DRY_END_FAMILIES)
-        assert 0.9 <= bond + warp + mis + other <= 1.3   # "dry-end waste should be about 1%"
-        assert 0.3 <= bond <= 0.5 and 0.25 <= warp <= 0.55 and 0.15 <= mis <= 0.25 and 0.06 <= other <= 0.14
+        bond, warp, mis, moisture, other = (ratio(lines[(month, f)], gross[month]) for f in R.DRY_END_FAMILIES)
+        assert 0.9 <= bond + warp + mis + moisture + other <= 1.3   # "dry-end waste should be about 1%"
+        assert 0.3 <= bond <= 0.5 and 0.25 <= warp <= 0.55 and 0.15 <= mis <= 0.25   # moisture its own family (owner, 2026-11-12)
+        assert 0.03 <= moisture <= 0.10 and 0.02 <= other <= 0.07
         assert 0.08 <= ratio(lines[(month, "CHANGEOVER")], gross[month]) <= 0.25   # counted with shear
         assert 0.01 <= ratio(lines[(month, "ADMIN")], gross[month]) <= 0.08       # planning / admin, reported apart
         assert 0.1 <= ratio(lines[(month, "cutoff")] + lines[(month, "stacker")], gross[month]) <= 0.35
@@ -387,7 +388,7 @@ def test_knife_slitter_jams_end_with_the_trim_creep_on_31_october():
 def test_story_signals_are_visible_in_the_records(data):
     rebuild, splice, warp = stories.SLITTER_REBUILD, stories.SPLICER3_MISSED_SPLICE, stories.WEEKEND_WARP
     rebuild_text = rebuild["pm_date"].strftime("%Y%m%d")
-    pm = [s for s in data["stops"] if s.kind == "PM" and s.production_date == rebuild_text]
+    pm = [s for s in data["stops"] if s.kind == "Scheduled" and s.production_date == rebuild_text]
     assert len(pm) == 1 and pm[0].place == rebuild["place"] and pm[0].duration_sec == rebuild["pm_minutes"] * 60
     # Story 1: trim creeps up and knife/slitter stops rise after the rebuild.
     before = [s for s in data["dry_end_setups"] if s.production_date < rebuild_text]

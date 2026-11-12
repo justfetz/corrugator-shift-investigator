@@ -2749,15 +2749,15 @@
    "mode": "offline",
    "scope": "day",
    "question": "Trend of moisture rejects over eight weeks",
-   "note": "Issue #100: the owner-approved reject taxonomy has no moisture category (moisture-driven defects are recorded as bond, dry board, or warp), so the v1 moisture tile became the other dry-end family and a question about moisture rejects is answered with the dry-end rejects trend, the closest record-backed series; it never names a moisture figure. Before issue #100 it was metric=moisture_pct.",
+   "note": "Moisture is its own reject category (owner, 2026-11-12): one of the dry-end reasons a superintendent tracks, and the link to the steam and temperatures along the machine. Record contract v2 briefly folded it into 'other'; the owner kept it, so the question answers with the moisture series again, and so does its old address.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=trend&metric=dry_end_pct",
+    "url": "/corr/1/day/2026-09-14?measure=trend&metric=moisture_pct",
     "status": "complete",
     "tools": [
      {
       "tool": "get_trend",
       "arguments": {
-       "metric": "dry_end_pct",
+       "metric": "moisture_pct",
        "weeks": 8,
        "anchor": "2026-09-14",
        "shift": null
@@ -2765,12 +2765,11 @@
      }
     ],
     "charts": 1,
-    "sections_match": "the latest of [0-9]+ weeks of dry-end rejects \\(query 1 · row [0-9]+\\)$",
+    "sections_match": "the latest of [0-9]+ weeks of moisture \\(query 1 · row [0-9]+\\)$",
     "max_ms": 500,
     "tables": [
      "get_trend"
-    ],
-    "sections_not_match": "weeks of moisture|moisture \\*\\*"
+    ]
    }
   },
   {
@@ -2779,7 +2778,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Trend of cracking and handling damage rejects over eight weeks",
-   "note": "Issue #100: the fourth dry-end family, other, holds the taxonomy's cracking / surface, handling damage, paper / mill and print categories; its weekly series is other_pct.",
+   "note": "Issue #100: the fifth dry-end family, other, holds the taxonomy's cracking / surface, handling damage, paper / mill and print categories (moisture is its own family, owner 2026-11-12); its weekly series is other_pct.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=trend&metric=other_pct",
     "status": "complete",
@@ -2799,6 +2798,54 @@
     "max_ms": 500,
     "tables": [
      "get_trend"
+    ]
+   }
+  },
+  {
+   "id": "period-cracks-cost-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "What did cracks cost this month?",
+   "note": "Coordinator review of PR #123, item 2 (from #122's Codex review): the cracking / surface category in a plain word (cracks) routes as warp or bond do, to the month's waste breakdown with its dollars, not to the all-levers opportunities. The cracking category counts in the other dry-end family.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "period-cracked-board-month",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Show cracked board this month",
+   "note": "Coordinator review of PR #123, item 2 (from #122's Codex review): cracked board names the cracking / surface category; over a month it is the waste breakdown, as 'Show warp this month' is, not the generic KPI tiles. The cracking category counts in the other dry-end family.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
     ]
    }
   },
@@ -6139,6 +6186,63 @@
    }
   },
   {
+   "id": "speedvar-top-three-contributors-no-offset",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What were the top 3 contributors to speed variations on shift 1?",
+   "note": "Coordinator review of PR #123, item 5: the plain three-bullet speed-variance card, pinned again now that speedvar-top-three-contributors (14 September, shift 2) carries the offset line. On 15 September shift 1 no bucket pulls against the gap, so the card is three bullets for the three largest buckets and no offset.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-15/shift/1?measure=speedvar",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "tools": [
+     {
+      "tool": "get_speed_variance",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-15"
+       },
+       "shift": 1,
+       "against": "target"
+      }
+     }
+    ],
+    "tools_only": [
+     "get_speed_variance",
+     "render_chart"
+    ],
+    "charts": 1,
+    "chart_units": [
+     "ft/min"
+    ],
+    "tables": [
+     "get_speed_variance"
+    ],
+    "shape": {
+     "headline_match": "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* below target: (stops|setups|below-target running|mix) [0-9.-]+%, .* \\(query 1\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- (Stops|Setups|Below target|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row 0\\)$",
+     "^Against target, the reference is each grade's target weighted by its share of the setup clock",
+     "^The four buckets add up to the gap, and each bucket's details add up to it\\.$",
+     "^How a dollar is priced, for .*: [0-9,.]+ lineal ft / [0-9.,]+ ft/min reference speed = [0-9,.]+ min x \\$1,200/hr machine time"
+    ],
+    "sections_not_match": "the other way, an offset"
+   },
+   "day": "2026-09-15"
+  },
+  {
    "id": "speedvar-why-speed-varied-week",
    "type": "routing",
    "mode": "offline",
@@ -6321,7 +6425,7 @@
     "charts": 1,
     "sections_match": [
      "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 3 below shift 1: ",
-     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% .* · largest Planned maintenance at "
+     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% .* · largest Planned maintenance \\(scheduled\\) at "
     ]
    }
   },
@@ -6603,7 +6707,7 @@
     ],
     "sections_match": [
      "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 1 above shift 3: ",
-     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row [0-9]\\)$",
+     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance \\(scheduled\\) at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row [0-9]\\)$",
      "^Shift 1 is faster than shift 3, so the gap is a gain and is not priced; the buckets that ran worse are priced as machine time\\.$",
      "^Contribution margin not set"
     ],
@@ -6631,7 +6735,7 @@
     "sections_match": [
      "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 3 below shift 1: ",
      "^- Setups: \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · [0-9.]+% ",
-     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance at [0-9.,]+ ft/min"
+     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance \\(scheduled\\) at [0-9.,]+ ft/min"
     ]
    },
    "day": "2026-08-03"

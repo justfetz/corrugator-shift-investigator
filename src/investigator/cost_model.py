@@ -29,6 +29,8 @@ import os
 import re
 from pathlib import Path
 
+from .records import stop_label
+
 DEFINITION = json.loads((Path(__file__).with_name('rates.json')).read_text())
 RATE_SPECS = {r['id']: r for r in DEFINITION['rates']}
 SHORT = {r['short']: r['id'] for r in DEFINITION['rates']}
@@ -224,7 +226,7 @@ def _envelope(data, rates):
 
 # Waste breakdown categories and how each is priced; bale is the scale's total, priced as paper.
 WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'changeover': 'waste', 'cutoff_waste': 'waste', 'stacker_waste': 'waste',
-               'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste', 'other': 'waste', 'dry_end': 'waste', 'admin': 'waste',
+               'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste', 'moisture': 'waste', 'other': 'waste', 'dry_end': 'waste', 'admin': 'waste',
                'bale': 'paper', 'unexplained': 'paper'}
 PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_breakdown',
                 'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
@@ -404,7 +406,7 @@ def shift_tiles(analysis, shift, k, rates):
 # The window tiles priced like get_waste_breakdown's rows (sq ft to 0.1, the gross to 0.1) and the Pareto's (minutes to
 # 0.01 per reason), so a tile agrees with those rows on the same page to the cent.
 WASTE_TILES = {'trim_pct': 'trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry_end', 'bond_pct': 'bond', 'warp_pct': 'warp',
-               'misalignment_pct': 'misalignment', 'other_pct': 'other', 'bale_pct': 'bale', 'unexplained_pct': 'unexplained'}
+               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'other_pct': 'other', 'bale_pct': 'bale', 'unexplained_pct': 'unexplained'}
 
 
 def period_tiles(data, reasons, rates):
@@ -414,13 +416,13 @@ def period_tiles(data, reasons, rates):
     if not sums.get('gross_sqft'):
         return []
     gross, minutes = round(sums['gross_sqft'], 1), window_minutes(data)
-    reasons_of = {'dry_end': ('bond', 'warp', 'misalignment', 'other')}   # the dry-end tile is its families' rows, as the chip is
+    reasons_of = {'dry_end': ('bond', 'warp', 'misalignment', 'moisture', 'other')}   # the dry-end tile is its families' rows, as the chip is
     out = [tile(metric, [_part(WASTE_KINDS[k], round(sums[k], 1), gross, minutes) for k in reasons_of.get(key, (key,))], rates,
                 key.replace('_', '-') if key != 'dry_end' else 'dry-end rejects')
            for metric, key in WASTE_TILES.items()]
     stops = [_part('downtime', r['minutes'], gross, minutes) for r in reasons]
     out.append(tile('downtime_pct', stops, rates, 'all stops', ('downtime_pct', 'downtime_minutes', 'stops')))   # one entry, three tiles
-    out.append(tile('maintenance_pm_pct', [_part('downtime', round(sums['maintenance_pm_seconds'] / 60, 2), gross, minutes)], rates, 'maintenance and PM stops'))
+    out.append(tile('maintenance_pm_pct', [_part('downtime', round(sums['maintenance_pm_seconds'] / 60, 2), gross, minutes)], rates, 'maintenance and planned maintenance (scheduled) stops'))
     out.append(tile('operator_pct', [_part('downtime', round(sums['operator_seconds'] / 60, 2), gross, minutes)], rates, 'operator stops'))
     return out
 
@@ -435,7 +437,8 @@ def _rank(rows, key):
 def shift_dollars(analysis, shift, rates):
     """`get_shift_dollars`: where the money went in one shift, every gap priced, ranked by dollars.
     Gaps: each downtime reason (minutes), the speed gap to the required 675 ft/min (running time
-    only), side trim, shear and each dry-end reason (square feet)."""
+    only), side trim, shear, the changeover rejects, the cutoff-knife and stacker waste boards and each
+    dry-end reason (square feet). Each loss is priced once, on its own line (owner, 2026-11-12)."""
     kpis = analysis.get_shift_kpis(shift)
     stops = analysis.get_downtime_breakdown(shift)
     rejects = analysis.get_quality_breakdown(shift)
@@ -443,7 +446,7 @@ def shift_dollars(analysis, shift, rates):
     gross = k['gross_sqft']
     rows = []
     for r in stops['rows']:
-        rows.append({'gap': f'Downtime: {r["category"]}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
+        rows.append({'gap': f'Downtime: {stop_label(r["category"])}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
                      'quantity': round(r['down_minutes'], 2), 'unit': 'min', 'source_ids': r['source_ids'],
                      **price('downtime', r['down_minutes'], rates, gross, SHIFT_MINUTES)})
     if gross:
@@ -456,6 +459,10 @@ def shift_dollars(analysis, shift, rates):
                      'source_ids': k['source_ids'], **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
         rows.append({'gap': 'Shear chops', 'kind': 'waste', 'quantity': round(k['shear_pct'] * gross / 100, 1), 'unit': 'sq ft',
                      'source_ids': k['source_ids'], **price('waste', k['shear_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
+        for gap, key in (('Changeover rejects (counted with shear)', 'changeover_sqft'), ('Cutoff-knife and stacker waste boards', 'waste_board_sqft')):
+            if k.get(key):
+                rows.append({'gap': gap, 'kind': 'waste', 'quantity': round(k[key], 1), 'unit': 'sq ft', 'source_ids': k['source_ids'],
+                             **price('waste', k[key], rates, gross, SHIFT_MINUTES)})
     for r in rejects['rows']:
         rows.append({'gap': f'Dry-end: {r["reason"]}', 'kind': 'waste', 'quantity': round(r['rejected_sqft'], 1), 'unit': 'sq ft',
                      'source_ids': r['source_ids'], **price('waste', r['rejected_sqft'], rates, gross, SHIFT_MINUTES)})
@@ -539,10 +546,10 @@ def opportunities(store, window, shift, rates):
     if rows[-1]['price_terms']:
         rows[-1]['price_terms']['trim_pct'] = trim_pct or 0   # the points over a changed target are re-derived from it (web/money.js)
     for r in pareto['rows']:
-        rows.append({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if r['category'] == 'Order change' else ''),
+        rows.append({'lever': f'Downtime: {stop_label(r["category"])}' + (' (setup time)' if r['category'] == 'Order change' else ''),
                      'kind': 'setup' if r['category'] == 'Order change' else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
-                     'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)})
-    for key in ('shear', 'changeover', 'bond', 'warp', 'misalignment', 'other'):
+                     'records': f'{r["stops"]} stops recorded as {stop_label(r["category"])}', **price('downtime', r['minutes'], rates, gross, minutes)})
+    for key in ('shear', 'changeover', 'bond', 'warp', 'misalignment', 'moisture', 'other'):
         r = by[key]
         if r['sqft']:
             rows.append({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft',

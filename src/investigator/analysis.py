@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 from xml.parsers import expat
 import duckdb
 
+from . import records as R
+
 MAX_BYTES = 1_000_000
 
 
@@ -72,14 +74,14 @@ def load_rows(db, table, rows):
 WEB_WIDTHS = (106, 103, 100, 98, 95, 92, 87)
 TABLES = {
     "shifts": "shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR",
-    "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE",
+    "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE, changeover DOUBLE, waste_boards DOUBLE, admin DOUBLE",
     "stops": "id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, notes VARCHAR",
     "orders": "record_id VARCHAR, shift INTEGER, setup_id VARCHAR, order_id VARCHAR, grade VARCHAR, knife VARCHAR, width_in DOUBLE, length_in DOUBLE, outs INTEGER, cuts INTEGER, requested_sheets INTEGER, planned_sheets INTEGER, produced_sheets INTEGER, remaining_before INTEGER, remaining_after INTEGER",
     # One line per (setup, reject reason): the fixture writes one line per setup,
     # the record families up to three reasons per knife position.
     "rejects": "id VARCHAR, shift INTEGER, reason VARCHAR, detail VARCHAR, sheets DOUBLE, sqft DOUBLE",
 }
-STOP_KINDS = ("Maintenance", "Operator", "PM")
+STOP_KINDS = R.STOP_KINDS
 
 
 class Analysis:
@@ -270,14 +272,17 @@ class Analysis:
         return self._query(shift, """SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
         sum(feet) AS observed_lineal_ft, sum(feet)/480 AS observed_shift_fpm,
-        sum(gross) AS gross_sqft, sum(gross-trim-shear-rejects) AS estimated_good_sqft,
+        sum(gross) AS gross_sqft,
+        sum(gross-trim-shear-rejects-coalesce(changeover,0)-coalesce(waste_boards,0)-coalesce(admin,0)) AS estimated_good_sqft,
+        sum(trim) AS trim_sqft, sum(shear) AS shear_sqft, sum(rejects) AS reject_sqft, coalesce(sum(changeover),0) AS changeover_sqft,
+        coalesce(sum(waste_boards),0) AS waste_board_sqft, coalesce(sum(admin),0) AS admin_sqft,
         sum(gross)/nullif(sum(feet),0)*12 AS throughput_in,
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
         sum(shear)/nullif(sum(gross),0)*100 AS shear_pct,
         sum(rejects)/nullif(sum(gross),0)*100 AS dry_end_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Maintenance') AS maintenance_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Operator') AS operator_pct,
-        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'PM') AS pm_pct,
+        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Scheduled') AS pm_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ?) AS downtime_pct,
         sum(feet)/nullif(count(*),0) AS lineal_per_setup,
         sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
@@ -305,6 +310,7 @@ class Analysis:
         [record_id] AS source_ids FROM orders WHERE shift = ? ORDER BY record_id, knife""", [shift])
 
     def get_downtime_breakdown(self, shift, kind=None, group_by="reason"):
+        kind = R.stop_kind(kind)   # the v1 code PM is the Scheduled kind
         if group_by not in ("reason", "kind", "place") or kind not in (None, *STOP_KINDS):
             raise ValueError("Unsupported filter or grouping")
         # group_by is strictly allowlisted; all visitor values are bound.

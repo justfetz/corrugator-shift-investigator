@@ -47,8 +47,6 @@ GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
 QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'want',
                 'rates', 'corrupt', 'after', 'format')
-# Trend metrics an older address may still name, and the metric each answers with now (record contract v2).
-RETIRED_METRICS = {'moisture_pct': 'dry_end_pct'}
 PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'against', 'shifts', 'rank', 'want', 'rates', 'corrupt', 'after')
 AGAINST = ('target', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; target is the default
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
@@ -333,10 +331,6 @@ def _aliases(measure, fields, grain):
     the alias as typed when the measure changed, else None). An alias that cannot be normalized is a ValueError
     naming its field; any other field is left for the checks that follow, which refuse what does not apply."""
     out, typed = dict(fields), [f'measure={measure}']
-    if measure == 'trend' and out.get('metric') in RETIRED_METRICS:
-        # record contract v2 (issue #100): the approved reject taxonomy has no moisture family; an address written
-        # before it keeps answering, with the dry-end rejects' trend, the closest series the records hold
-        out['metric'] = RETIRED_METRICS[out['metric']]
     if measure == 'speedvar' and out.get('compare') == 'prev':
         # the speed variance against the previous window of the same grain is against=previous
         if out.get('against', 'previous') != 'previous':
@@ -407,9 +401,9 @@ def _request(measure, fields, context, window):
                 raise ValueError('by is reason, place or kind')
             kind = fields.get('kind')
             if kind is not None:
-                if kind not in ('maintenance', 'operator'):
-                    raise ValueError('kind is maintenance or operator')
-                kind = kind.capitalize()
+                if kind not in ('maintenance', 'operator', 'scheduled', 'pm'):
+                    raise ValueError('kind is maintenance, operator or scheduled')
+                kind = 'Scheduled' if kind == 'pm' else kind.capitalize()   # pm, the v1 code, is the scheduled kind
         metrics = list(RANK_METRICS)
         if measure == 'rank' and 'rank' in fields:
             metrics = fields['rank'].split(',')

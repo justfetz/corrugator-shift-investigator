@@ -2,7 +2,7 @@
    white cards with hairline borders, near-black ink, a teal brand, Inter + JetBrains Mono as stacks with
    system fallbacks (the page loads nothing from outside its own origin). Single-series bars are the brand
    teal (--bar), downtime minutes the orange (--bar-2); stacked series keep blue / orange / green / purple
-   (--s1..--s4). Status colors (--good/--bad/--neutral/--warn) are reserved for deltas and notes, never a series.
+   (--s1..--s5). Status colors (--good/--bad/--neutral/--warn) are reserved for deltas and notes, never a series.
    Light is the default whatever the OS prefers (issue #36); the dark tokens apply only under
    [data-theme="dark"], which theme.js sets from the visitor's pinned choice. Light-theme series
    colors are checked at 3:1 (WCAG 1.4.11) against the chart panel, --surface-2, where every chart
@@ -12,7 +12,7 @@
  --bg:#f3f5f5;--surface:#ffffff;--surface-2:#f8fafa;--surface-3:#eef2f2;
  --ink:#1b1b1b;--ink-2:#3c4242;--ink-3:#5a5f5f;--line:#d5dbdb;--line-2:#eef2f2;--rule:#e3e7e7;
  --brand:#0b6e66;--brand-ink:#084f4a;--brand-soft:#e6f2f1;--accent:#0b6e66;
- --s1:#2a78d6;--s2:#e85318;--s3:#159c6b;--s4:#8a5cc7;--prev:#85857f;--grid:#e3e7e7;--target:#e85318;--bar:#0b6e66;--bar-2:#c96a2c;
+ --s1:#2a78d6;--s2:#e85318;--s3:#159c6b;--s4:#8a5cc7;--s5:#b8860b;--prev:#85857f;--grid:#e3e7e7;--target:#e85318;--bar:#0b6e66;--bar-2:#c96a2c;
  --good:#0ca30c;--good-soft:#e9f6e9;--bad:#d03b3b;--bad-soft:#fbeaea;--neutral:#8a8a84;--neutral-soft:#eef2f2;
  --warn:#fab219;--warn-soft:#fff7e3;--warn-ink:#8a5a00;
  --code-bg:#f1f4f4;--code-ink:#1b1b1b;--focus:#2a78d6;
@@ -24,7 +24,7 @@
  --bg:#121212;--surface:#1a1a19;--surface-2:#222221;--surface-3:#2a2a28;
  --ink:#ecece8;--ink-2:#b5b5af;--ink-3:#93938d;--line:#3a3a37;--line-2:#262624;--rule:#2a2a28;
  --brand:#8fd1bb;--brand-ink:#8fd1bb;--brand-soft:#1b2a25;--accent:#8fd1bb;
- --s1:#3987e5;--s2:#f0784a;--s3:#2ec48a;--s4:#a988df;--prev:#56564f;--grid:#2e2e2c;--target:#f0784a;--bar:#3fa89c;--bar-2:#e08a4f;
+ --s1:#3987e5;--s2:#f0784a;--s3:#2ec48a;--s4:#a988df;--s5:#e0b347;--prev:#56564f;--grid:#2e2e2c;--target:#f0784a;--bar:#3fa89c;--bar-2:#e08a4f;
  --good:#3fbf6a;--good-soft:#163424;--bad:#ef6a5e;--bad-soft:#3b1f1c;--neutral:#8a8a84;--neutral-soft:#262624;
  --warn:#fab219;--warn-soft:#3a2c0e;--warn-ink:#f1c66a;
  --code-bg:#1b1b1a;--code-ink:#ecece8;--focus:#3987e5}
@@ -305,13 +305,13 @@ button.analyst{display:inline-flex;align-items:center;gap:8px;padding:0 14px}but
 .chart .band{fill:var(--surface-3)}.chart .bar.out{fill:var(--s2)}.chart .dot.out{fill:var(--s2)}.lg .sw.out{background:var(--s2)}.lg .sw.band{background:var(--surface-3);border:1px solid var(--grid)}
 .chart .grid{stroke:var(--grid);stroke-width:1}.chart .grid.base{stroke:var(--ink-3)}
 .chart .tick{font-size:11px;fill:var(--ink-2)}.chart .val.small{font-size:11px}.chart .lbl{fill:var(--ink-2)}.chart .val{fill:var(--ink)}
-.chart .seg.s1{fill:var(--s1)}.chart .seg.s2{fill:var(--s2)}.chart .seg.s3{fill:var(--s3)}.chart .seg.s4{fill:var(--s4)}.chart .inseg{fill:#000;font-size:11px}.chart .inseg.s4{fill:#fff}
+.chart .seg.s1{fill:var(--s1)}.chart .seg.s2{fill:var(--s2)}.chart .seg.s3{fill:var(--s3)}.chart .seg.s4{fill:var(--s4)}.chart .seg.s5{fill:var(--s5)}.chart .inseg{fill:#000;font-size:11px}.chart .inseg.s4{fill:#fff}
 .chart .line{fill:none;stroke:var(--bar);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .chart .dot{fill:var(--bar);stroke:var(--surface);stroke-width:2}.chart .dot.partial{fill:var(--surface);stroke:var(--bar);stroke-width:2}
 .chart text[tabindex]:focus-visible,.chart circle:focus-visible{outline:2px solid var(--focus)}
 .lg{font-family:var(--mono);font-size:11px;color:var(--ink-2);display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
 .lg span{display:inline-flex;align-items:center;gap:5px}.lg .sw{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--bar)}.lg .sw.s1{background:var(--s1)}
-.lg .sw.prev,.lg .sw.rest{background:var(--prev)}.lg .sw.s2{background:var(--s2)}.lg .sw.s3{background:var(--s3)}.lg .sw.s4{background:var(--s4)}
+.lg .sw.prev,.lg .sw.rest{background:var(--prev)}.lg .sw.s2{background:var(--s2)}.lg .sw.s3{background:var(--s3)}.lg .sw.s4{background:var(--s4)}.lg .sw.s5{background:var(--s5)}
 .subchart{margin-top:16px}.subchart h4{font-size:.85rem;margin:0 0 8px;font-weight:600;color:var(--ink-2)}
 .warning-note{color:var(--warn-ink);background:var(--warn-soft);padding:10px 12px;font-size:.875rem;border-radius:8px;border-left:2px solid var(--warn)}
 

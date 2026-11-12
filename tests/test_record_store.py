@@ -50,7 +50,7 @@ def test_store_is_the_rolling_year_built_once(store, data):
         sql = f"SELECT count(*) AS n FROM {table} WHERE production_date BETWEEN DATE '2026-08-01' AND DATE '2026-09-30'"
         assert store._fetch(sql, [])[0]["n"] == count, table
     assert store.counts["shifts"] == 3 * 456 and store.counts["setups"] > 9 * two_months["setups"]
-    assert store.counts["customers"] == 41 and store.counts["reject_reasons"] == 77
+    assert store.counts["customers"] == 41 and store.counts["reject_reasons"] == 81
     assert default_store() is store
     assert store.boot_seconds < 60
 
@@ -82,7 +82,7 @@ def test_shift_kpis_reconcile_to_summed_setup_records(store, data):
                     by_kind[st.kind] += st.duration_sec
             assert row["maintenance_pct"] == pytest.approx(by_kind["Maintenance"] / 28800 * 100)
             assert row["operator_pct"] == pytest.approx(by_kind["Operator"] / 28800 * 100)
-            assert row["pm_pct"] == pytest.approx(by_kind["PM"] / 28800 * 100)
+            assert row["pm_pct"] == pytest.approx(by_kind["Scheduled"] / 28800 * 100)
             assert row["downtime_pct"] == pytest.approx(sum(by_kind.values()) / 28800 * 100)
             assert sorted(row["source_ids"]) == sorted(s.setup_id for s in mine)
     finally:
@@ -137,7 +137,7 @@ def test_stops_orders_and_rejects_map_field_by_field(store, data):
             for s in setups:
                 if s.shift_number == shift:
                     for r in s.rejects:
-                        if r.family in ("BOND", "WARP", "MISALIGNMENT", "OTHER"):
+                        if r.family in ("BOND", "WARP", "MISALIGNMENT", "MOISTURE", "OTHER"):
                             expected[r.family] += r.sqft
             assert quality == pytest.approx(dict(expected))
             orders = analysis.get_order_matrix(shift)["rows"]
