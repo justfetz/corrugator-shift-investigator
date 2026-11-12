@@ -129,28 +129,33 @@ WRITER=$(gcloud logging sinks describe question-log --project "$PROJECT_ID" --fo
 bq add-iam-policy-binding --dataset=true --member="$WRITER" --role=roles/bigquery.dataEditor "$PROJECT_ID:question_log"
 ```
 
-The sink writes the lines to the partitioned table `question_log.run_googleapis_com_stdout`, with each line under `jsonPayload`. Once a day of lines has arrived (BigQuery learns the columns from them), one view joins a question's lines into the one row per question that the review reads:
+The sink writes the lines to the partitioned table `question_log.run_googleapis_com_stdout`, with each line under `jsonPayload`. BigQuery adds a column only once a line has carried a value for it (no comment, no column `comment`), so one view reads every field through the line's JSON and works from the first line on. It joins a question's lines into the one row per question the review reads:
 
 ```sql
 CREATE OR REPLACE VIEW `PROJECT_ID.question_log.question_lines` AS
-WITH events AS (
-  SELECT timestamp, jsonPayload AS p FROM `PROJECT_ID.question_log.run_googleapis_com_stdout`
-  WHERE jsonPayload.log = 'question_log'),
-answers AS (SELECT p.line AS line, ANY_VALUE(p.status) AS status, MAX(p.server_ms) AS server_ms
-            FROM events WHERE p.event = 'answer' GROUP BY line),
-rounds AS (SELECT p.line AS line, ANY_VALUE(p.status) AS status FROM events WHERE p.event = 'analyst' GROUP BY line),
-votes AS (SELECT p.line AS line, ANY_VALUE(p.vote) AS vote, STRING_AGG(p.comment, ' | ') AS comment
-          FROM events WHERE p.event = 'feedback' AND p.card = 'answer' GROUP BY line)
-SELECT q.p.line AS line, q.p.session AS session, q.timestamp AS asked_at, q.p.question AS question, q.p.scope AS scope,
-       q.p.url AS url, q.p.measure AS measure, COALESCE(answers.status, q.p.status) AS status, q.p.refusal AS refusal,
-       q.p.server_ms + IFNULL(answers.server_ms, 0) AS server_ms, q.p.flags AS flags,
-       rounds.line IS NOT NULL AS analyst_clicked, rounds.status AS analyst_status,
-       votes.vote AS vote, votes.comment AS comment, q.p.version AS version, q.p.dataset AS dataset
-FROM events AS q
-LEFT JOIN answers ON answers.line = q.p.line
-LEFT JOIN rounds ON rounds.line = q.p.line
-LEFT JOIN votes ON votes.line = q.p.line
-WHERE q.p.event = 'question';
+WITH lines AS (
+  SELECT timestamp, JSON_VALUE(j, '$.event') AS event, JSON_VALUE(j, '$.line') AS line, j
+  FROM (SELECT timestamp, TO_JSON_STRING(jsonPayload) AS j FROM `PROJECT_ID.question_log.run_googleapis_com_stdout`
+        WHERE jsonPayload.log = 'question_log')),
+answers AS (SELECT line, ANY_VALUE(JSON_VALUE(j, '$.status')) AS status,
+                   MAX(SAFE_CAST(JSON_VALUE(j, '$.server_ms') AS FLOAT64)) AS server_ms
+            FROM lines WHERE event = 'answer' GROUP BY line),
+rounds AS (SELECT line, ANY_VALUE(JSON_VALUE(j, '$.status')) AS status FROM lines WHERE event = 'analyst' GROUP BY line),
+votes AS (SELECT line, ANY_VALUE(JSON_VALUE(j, '$.vote')) AS vote, STRING_AGG(JSON_VALUE(j, '$.comment'), ' | ') AS comment
+          FROM lines WHERE event = 'feedback' AND JSON_VALUE(j, '$.card') = 'answer' GROUP BY line)
+SELECT q.line AS line, JSON_VALUE(q.j, '$.session') AS session, q.timestamp AS asked_at,
+       JSON_VALUE(q.j, '$.question') AS question, JSON_VALUE(q.j, '$.scope.day') AS day,
+       SAFE_CAST(JSON_VALUE(q.j, '$.scope.shift') AS INT64) AS shift, JSON_VALUE(q.j, '$.scope.scope') AS scope,
+       JSON_VALUE(q.j, '$.scope.period') AS period, JSON_VALUE(q.j, '$.url') AS url, JSON_VALUE(q.j, '$.measure') AS measure,
+       COALESCE(answers.status, JSON_VALUE(q.j, '$.status')) AS status, JSON_VALUE(q.j, '$.refusal') AS refusal,
+       SAFE_CAST(JSON_VALUE(q.j, '$.server_ms') AS FLOAT64) + IFNULL(answers.server_ms, 0) AS server_ms,
+       JSON_VALUE_ARRAY(q.j, '$.flags') AS flags, rounds.line IS NOT NULL AS analyst_clicked, rounds.status AS analyst_status,
+       votes.vote AS vote, votes.comment AS comment, JSON_VALUE(q.j, '$.version') AS version, JSON_VALUE(q.j, '$.dataset') AS dataset
+FROM lines AS q
+LEFT JOIN answers ON answers.line = q.line
+LEFT JOIN rounds ON rounds.line = q.line
+LEFT JOIN votes ON votes.line = q.line
+WHERE q.event = 'question';
 ```
 
 **The weekly review.** The `/review-questions` skill reads the last seven days (`python3 .claude/skills/review-questions/review.py --bq "$PROJECT_ID"`, one `bq query` over the raw lines) and proposes golden cases and question-bank entries in batches of ten. The same lists by hand, in the console:

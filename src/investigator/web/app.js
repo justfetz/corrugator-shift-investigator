@@ -1568,7 +1568,7 @@ async function ask(question,{report=false,mode='offline',title,scope:asked,corru
  const twin=thread.find(r=>r.state==='pending'&&r.epoch===epoch&&r.question===question&&r.mode===recMode&&r.report===report&&r.corrupt===corrupt&&['day','period','shift','scope'].every(k=>r.scope[k]===scope[k]));
  if(twin){ if(openId!==twin.id)openCard(twin); return twin.done; }
  const rec={id:++seq,question,title:title||question.trim(),scope,answered:null,mode:recMode,report,corrupt,epoch,source:source||null,state:'pending',t0:clock(),ms:null,result:null,error:null,note:null,url:null,live:null,
-  line:questionLog()&&!report?((source&&source.line)||randomId()):null};   // the question log's line id (#125): an analyst round asked from a card shares that card's
+  line:questionLog()&&!report?((PROVIDERS[recMode]&&source&&source.line)||randomId()):null};   // the question log's line id (#125): an analyst round asked from a card shares that card's; any other question, a where-to-look follow-up included, is its own
  thread.push(rec);openId=rec.id;renderCard();scheduleFollow(true);   // the skeleton card is in the DOM before this task yields: within one frame of the submit; the pane brings it into view (#86)
  $('status').textContent=report?'Preparing validated daily records; the first period report can take a minute…':'Asking…';
  // What the visitor chose is read now; the request itself waits its turn. Two questions out at once would both carry

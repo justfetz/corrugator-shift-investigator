@@ -58,12 +58,12 @@ def _keylike(token):
 
 
 def redact(text, limit):
-    """`text` cut to `limit` characters, with emails, IP addresses, phone numbers and key-like tokens replaced."""
-    text = text[:limit]
+    """`text` with emails, IP addresses, phone numbers and key-like tokens replaced, then cut to `limit` characters
+    (replaced first, so nothing straddling the cut survives as a fragment)."""
     text = EMAIL.sub('[email]', text)
     text = IPV4.sub('[ip]', text)
     text = PHONE.sub('[phone]', text)
-    return TOKEN.sub(_keylike, text)
+    return TOKEN.sub(_keylike, text)[:limit]
 
 
 def valid_id(value):

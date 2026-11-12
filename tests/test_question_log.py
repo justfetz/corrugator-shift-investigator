@@ -221,6 +221,9 @@ def test_a_key_email_phone_or_ip_typed_into_a_question_is_replaced():
     assert out == 'why slow [key] [email] [phone] [ip] on 2026-09-14 shift 2'
     assert redact('how-many-setups-did-we-run-last-week', 500) == 'how-many-setups-did-we-run-last-week'
     assert len(redact('x' * 2000, 500)) == 500
+    # replaced before the cut: nothing straddling the 500th character survives as a fragment
+    assert redact('x' * 495 + ' me@example.com', 500) == 'x' * 495 + ' [ema'
+    assert 'sk-ant' not in redact('y ' * 243 + 'sk-ant-api03-AbC123def456GhI789', 500)
 
 
 # ---- flags ------------------------------------------------------------------------------------------------
@@ -299,6 +302,33 @@ def test_an_analyst_round_is_a_line_with_its_plan_status(monkeypatch, tmp_path):
     assert round_['scope'] == {'day': '2026-09-14', 'shift': 2, 'scope': 'shift', 'period': 'day', 'corrupt': False}
     assert refusal['status'] == 'refused' and 'Sunday' in refusal['refusal'] and refusal['scope']['day'] == '2026-09-13'
     assert 'sk-ant' not in server.app.qlog.stream.getvalue()
+
+
+def test_analyst_clicks_refused_by_a_window_are_lines_and_fuzzed_headers_never_reach_one(monkeypatch, tmp_path):
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'sk-ant-server-key-for-tests-only-0001')
+    stub_model(monkeypatch, '{"unavailable": "test"}')
+    rng = random.Random(6)
+    server, thread = start(public=False, guards=DemoGuards(rate_limit_per_min=6, ledger=tmp_path / 'ledger.sqlite3'))
+    server.app.qlog.enabled = True
+    sent = []
+    try:
+        token = json.loads(request(server, 'GET', '/api/config')[2])['token']
+        body = json.dumps({'day': '2026-09-14', 'shift': 2, 'question': 'Why was this shift slow?', 'mode': 'anthropic'})
+        for i in range(7):   # six rounds in the per-IP window, then a refusal before the round begins
+            headers = {name: random_value(rng) for name in rng.sample([n for n in SENSITIVE if n not in ('Origin', 'X-Workbench-Token')], 8)}
+            sent.extend(headers.values())
+            status = request(server, 'POST', '/api/ask', body, {**headers, 'Content-Type': 'application/json', 'X-Workbench-Token': token,
+                                                               **ids(line=f'{i:016x}')})[0]
+            assert status == (200 if i < 6 else 429)
+        logged = lines(server, 7)
+    finally:
+        stop(server, thread)
+    # a fuzzed X-Anthropic-Key that is not shaped like a key is the loopback key field's own refusal, named without the value
+    assert all(entry['status'] == 'unavailable' or entry['refusal'].startswith('Enter a valid Anthropic API key') for entry in logged[:6])
+    assert logged[-1]['status'] == 'limited'
+    assert logged[-1]['refusal'] == 'too many questions, slow down' and logged[-1]['mode'] == 'anthropic' and logged[-1]['line'] == f'{6:016x}'
+    text = server.app.qlog.stream.getvalue()
+    assert [value for value in sent if value in text] == [] and token not in text and '127.0.0.1' not in text
 
 
 # ---- feedback -----------------------------------------------------------------------------------------------

@@ -541,11 +541,12 @@ class Workbench:
             raise ValueError('The card is "answer" or "analyst"')
         comment = check_comment(payload.get('comment'))
         key = (line, card, 'comment' if comment else 'vote')
-        if key in self.feedback_seen:
-            raise ValueError("This answer's feedback is already recorded")
-        self.feedback_seen[key] = True
-        if len(self.feedback_seen) > 4096:
-            self.feedback_seen.popitem(last=False)
+        with self.rate_lock:   # two identical posts at once: one is logged
+            if key in self.feedback_seen:
+                raise ValueError("This answer's feedback is already recorded")
+            self.feedback_seen[key] = True
+            if len(self.feedback_seen) > 4096:
+                self.feedback_seen.popitem(last=False)
         return line, session, card, payload['vote'], comment
 
 
@@ -691,6 +692,19 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 raise
             finally:
                 app.live_slots.release()
+
+        def _log_unrun_round(self, raw_body, status, refusal):
+            """An "Ask the analyst" click refused before its round began (the request window, the per-IP limit):
+            its analyst line, as `_live` writes one for a refusal inside the round. Nothing for any other request."""
+            if self.path != '/api/ask' or self.pending_log is not None:
+                return
+            try:
+                payload = json.loads(raw_body)
+            except ValueError:
+                return
+            if isinstance(payload, dict) and payload.get('mode') in LIVE_MODES and payload.get('report') is not True:
+                line, session = log_ids(self.headers)
+                self._log_later(app.qlog.analyst, line, session, payload, status, None, refusal, None)
 
         def _feedback(self, raw_body):
             """POST /api/feedback (issue #125): a thumbs up or down, and the optional comment, for one answer's line id."""
@@ -933,6 +947,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                         return self._send(429, {'error': 'Golden-case run limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
                     window.append(now)
                 elif not self._count_request():
+                    self._log_unrun_round(raw_body, 'limited', 'request window')
                     return self._send(429, {'error': 'Local request limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(app.requests[0]+60-time.monotonic()))})
                 if self.path == '/api/ask':
                     app.client_round(self._client_ip())  # a round is counted even if the question is later rejected
@@ -958,6 +973,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                         body = app.ask(payload, api_key=api_key, anthropic_key=anthropic_key)
                 self._send(200, body, 'application/pdf' if self.path == '/api/report' else 'application/json; charset=utf-8')
             except DemoLimit as exc:
+                self._log_unrun_round(raw_body, 'limited', str(exc))   # a round refused inside _live is logged there already
                 self._send(429, {'error': str(exc), 'code': exc.code}, extra={'Retry-After': str(exc.retry_after)})
             except (ValueError, UnicodeError, TypeError, KeyError) as exc:
                 self._send(400, {'error': str(exc)})

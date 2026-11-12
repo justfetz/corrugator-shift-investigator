@@ -1482,7 +1482,19 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  await offer.children[0].events.click();for(let i=0;i<5;i++)await tick();
  const analyst=on.sent.find(r=>r.path==='/api/ask');
  assert.equal(analyst.headers['X-Question-Line'],second.headers['X-Question-Line']);assert.equal(analyst.headers['X-Question-Session'],session);
- // a reload replays the thread without ids: a replay is not a question asked again
+ // any other question asked from a card (a where-to-look line, "Where is the money?") is a question of its own: a fresh id
+ const from=vm.runInContext("thread.find(r=>r.question==='Show speed to target')",on.ctx);
+ await vm.runInContext("ask('Which downtime reason cost the most minutes this week?',{mode:'offline',scope:thread[1].scope,source:thread[1]})",on.ctx);
+ const look=on.sent.filter(r=>r.path.startsWith('/q?')).pop();
+ assert.ok(look.path.includes('Which+downtime+reason'));assert.match(look.headers['X-Question-Line'],/^[0-9a-f]{16}$/);
+ assert.notEqual(look.headers['X-Question-Line'],from.line);assert.notEqual(look.headers['X-Question-Line'],line);
+ // a pasted address, back/forward and a reload's replay are not questions asked: no ids, with the log on
+ const before=on.sent.length;
+ await vm.runInContext("restore('/corr/1/day/2026-09-14/shift/2?measure=quality')",on.ctx);
+ await vm.runInContext("replayOne(Object.assign(thread[0],{askUrl:'/corr/1/day/2026-09-14/shift/2?measure=fpm'}))",on.ctx);
+ const quiet=on.sent.slice(before).filter(r=>r.path.startsWith('/corr/')||r.path.startsWith('/q?'));
+ assert.ok(quiet.length>=2,JSON.stringify(quiet));assert.ok(quiet.every(r=>!('X-Question-Line' in r.headers)&&!('X-Question-Session' in r.headers)),JSON.stringify(quiet));
+ // with the log off, nothing of it
  const off=await page(false);
  assert.notEqual(off.els['log-foot'].hidden,false);   // index.html's hidden attribute stays: the stub has no attribute, so only 'not unhidden' is checked
  await vm.runInContext("ask('How many setups did we run last week?')",off.ctx);
