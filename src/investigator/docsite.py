@@ -35,7 +35,8 @@ REPO = 'https://github.com/justfetz/corrugator-shift-investigator'
 SECTIONS = (
     ('Case study', (('case-study', 'docs/CASE_STUDY.md', 'Case study'),)),
     ('Overview', (('', 'docs/OVERVIEW.md', 'Overview'),
-                  ('how-this-is-built', 'docs/HOW_THIS_IS_BUILT.md', 'How this is built'))),
+                  ('how-this-is-built', 'docs/HOW_THIS_IS_BUILT.md', 'How this is built'),
+                  ('build-guide', 'docs/BUILD_GUIDE.md', 'The original build guide'))),
     ('Asking questions', (('asking-questions', 'docs/ASKING.md', 'Asking questions'),
                           ('workbench', 'docs/WORKBENCH.md', 'The workbench, step by step'),
                           ('urls', 'docs/URLS.md', 'The URL grammar'),
@@ -613,7 +614,7 @@ def _toc(all_pages, current, headings):
 
 TEMPLATE = """<!doctype html>
 <html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{title} · Shift Investigator docs</title><link rel="stylesheet" href="/style.css"></head>
-<body class="docs-body"><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>docs</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/evals">Golden evals</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
+<body class="docs-body"><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>docs</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/evals">Golden evals</a><a class="nav-btn" href="{repo}" title="The source on GitHub">GitHub</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
 <div class="wrap docs-layout">
 {toc}
 <main class="docs-page"><article>
@@ -671,7 +672,7 @@ def build_site(root=ROOT, strict=True):
             f'<a class="docs-prev" href="{prev["url"]}"><small>Previous</small>{html.escape(prev["label"])}</a>' if prev else '',
             f'<a class="docs-next" href="{nxt["url"]}"><small>Next</small>{html.escape(nxt["label"])}</a>' if nxt else ''])
         site[page['url']] = TEMPLATE.format(
-            title=html.escape(title), toc=_toc(all_pages, page, headings), body=body, pager=pager,
+            title=html.escape(title), toc=_toc(all_pages, page, headings), body=body, pager=pager, repo=REPO,
             source=html.escape(page['source']), source_url=html.escape(f'{REPO}/blob/main/{page["source"]}')).encode()
     return site
 
