@@ -115,15 +115,37 @@ QUANTITY_NOUN = re.compile(r'\b(set-?ups?|paper changes?|order changes?|changeov
                            r'|\bper (set-?up|paper change|stop|wet[- ]end)\b', re.I)
 ASKED_UNIT = re.compile(r'\b(minutes|mins|hours?|hrs?|feet|ft|footage|msf|sq ft|square feet|tons?|percent|costs?|dollars?|money)\b|[%$]', re.I)
 COUNT_ASKED = r'\b(?:how many|number of|count of|total)\b.*'
-# A ratio is in the unit it names ("minutes per setup" is not feet per setup); a bare "per setup" is the run length in feet.
-NAMED_PER = r'\b(minutes|mins|msf|sq ft|square feet|sheets|stops|hours)\s+per\s+(set-?up|paper change|wet[- ]end|order)\b'
+# A ratio is in the unit it names ("minutes per setup" is not feet per setup, "feet per stop" is not the stops; the coordinator's
+# re-review of PR 143, item 1); a bare "per setup" is the run length in feet.
+NAMED_PER = (r'\b(lineal feet|lineal ft|lineal|feet|ft|footage|minutes|mins|msf|sq ft|square feet|sheets|stops|setups?|paper changes?|'
+             r'splices?|jams?|hours|dollars)\s+per\s+(?:production\s+)?(set-?up|paper change|wet[- ]end|order|stop|day|week|run|hour|minute)s?\b')
+PER_NUMERATOR = {'lineal feet': 'ft', 'lineal ft': 'ft', 'lineal': 'ft', 'feet': 'ft', 'ft': 'ft', 'footage': 'ft', 'minutes': 'min(?:utes)?',
+                 'mins': 'min(?:utes)?', 'sq ft': 'sq ft', 'square feet': 'sq ft'}
+PER_DENOMINATOR = {'wet end': 'paper change', 'wet-end': 'paper change', 'day': '(?:production )?day', 'minute': 'min(?:ute)?'}
+
+
+def named_per(question):
+    """The headline pattern of a ratio the question names ("feet per stop" wants `ft per stop`), or None."""
+    named = re.search(NAMED_PER, question, re.I)
+    if not named:
+        return None
+    numerator, denominator = named[1].lower(), re.sub(r'set-?up', 'setup', named[2].lower())
+    if (numerator, denominator) == ('stops', 'day'):
+        return r'\bstops\b'   # the stops of each production day (the stops profile), led by the day with the most: not a ratio
+    return (rf'\b{PER_NUMERATOR.get(numerator, re.escape(numerator))}(?: per |/)'
+            rf'{PER_DENOMINATOR.get(denominator, re.escape(denominator))}\b')
+
+
 ASKED_UNITS = ((r'\bminutes per stop\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
                (r'\b(?:lineal|feet|ft|footage) per (?:paper change|wet[- ]end)\b|(?<!minutes )(?<!msf )\bper paper change\b', r'\bft(?: per |/)paper change\b'),
                (r'\b(?:lineal|feet|ft|footage) per set-?up\b|(?<!minutes )(?<!mins )(?<!msf )(?<!sheets )(?<!stops )\bper set-?up\b', r'\bft(?: per |/)setup\b'),
                (r'\bsquare f(?:ee|oo)t\b|\bsq\.? ?ft\b|\bsqft\b', r'\bsq ft\b'),
                (r'\bpercent(?:age)?\b|%', r'%'),
                (r'\bin msf\b|\bhow (?:many|much) msf\b', r'\bMSF\b'),
-               (r'\bhow many (?:minutes|mins)\b|\b(?:minutes|mins) (?:of|did|were|was|lost)\b|\bin minutes\b|\btotal (?:downtime )?minutes\b', r'\bmin(?:utes)?\b'),
+               (r'\bhow many (?:hours|hrs)\b|\b(?:hours|hrs) (?:did|were|was|lost)\b|\bin (?:hours|hrs)\b'   # not a span ("the first hours of the shift")
+                r'|\b(?:hours|hrs) of (?:downtime|stops?|maintenance|operator)\b', r'\bh(?:ou)?rs?\b'),
+               (r'\bhow many (?:minutes|mins)\b|\b(?:minutes|mins) (?:of|did|were|was|lost)\b|\bin minutes\b|\btotal (?:downtime )?minutes\b'
+                r'|\bhow long\b|\bhow much time\b', r'\bmin(?:utes)?\b'),
                (COUNT_ASKED + r'\b(?:order changes?(?!\s+(?:stops?|downtime|minutes)\b)|changeovers?)\b', r'\border changes\b'),   # order change stops are stops
                (COUNT_ASKED + r'\b(?:paper changes?|wet[- ]ends?)\b', r'\bpaper changes\b'),
                (COUNT_ASKED + r'\bset-?ups?\b', r'\bsetups\b'),
@@ -140,25 +162,25 @@ def catch_all_failures(question, url):
     if named and re.search(r'[?&]measure=kpis(&|$)', url or ''):
         return [f'{question[:60]!r} names {named[0]!r} but lands on the KPI summary (measure=kpis): a quantity question '
                 'opens with its quantity or is refused']
-    asked = re.search(r'\b(how many|number of|count of|how much|how long)\b', question, re.I) or ASKED_UNIT.search(question)
-    diagnosis = re.search(r'\bwhy\b|\bslow\w*\b|\bbad\b|\bkilled\b|\bsummar', question, re.I)
-    if asked and not diagnosis and re.search(r'[?&]measure=(overview|summary)(&|$)', url or ''):
-        return [f'{question[:60]!r} asks {asked[0]!r} but lands on a summary (overview or summary): a quantity question '
-                'opens with its quantity or is refused']
+    asked = re.search(r'\b(how many|number of|count of|how much|how long|how often)\b', question, re.I) or ASKED_UNIT.search(question)
+    diagnosis = re.search(r'\bwhy\b|\bslow\w*\b|\bfast\w*\b|\bspeeds?\b|\bfpm\b|\bft/min\b|\bfeet per minute\b|\bpace\b|\bbad\b|\bkilled\b'
+                          r'|\bsummar', question, re.I)
+    if asked and not diagnosis and re.search(r'[?&]measure=(overview|summary|compare)(&|$)', url or ''):
+        return [f'{question[:60]!r} asks {asked[0]!r} but lands on a summary (overview, summary or the shift comparison): a quantity '
+                'question opens with its quantity or is refused']
     return []
 
 
 def asked_unit_failures(question, sections):
-    """A count or unit question whose headline (the first section with a bold figure that is not a bullet, else the
-    first section) does not carry the unit it asked for (issue #113)."""
-    named = re.search(NAMED_PER, question, re.I)
-    want = (rf'\b{named[1]} per {named[2]}' if named else
-            next((unit for ask, unit in ASKED_UNITS if re.search(ask, question, re.I)), None))
+    """A count or unit question whose headline's lead clause (the first section with a bold figure that is not a bullet, else
+    the first section, up to its first ` · `) does not carry the unit it asked for (issue #113): "how many minutes did knife
+    jams take" answered `**10 stops** · 17.62 minutes` fails (the coordinator's re-review of PR 143, item 4)."""
+    want = named_per(question) or next((unit for ask, unit in ASKED_UNITS if re.search(ask, question, re.I)), None)
     if want is None or not sections:
         return []
-    head = next((s for s in sections if '**' in s and not s.startswith('- ')), sections[0])
+    head = next((s for s in sections if '**' in s and not s.startswith('- ')), sections[0]).split(' · ')[0]
     if not re.search(want, head, re.I):
-        return [f'asked for /{want}/ but the headline says {head[:70]!r}']
+        return [f'asked for /{want}/ but the headline leads with {head[:70]!r}']
     return []
 
 

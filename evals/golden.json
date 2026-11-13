@@ -9318,6 +9318,328 @@
    "expect": {
     "raises": "in square feet"
    }
+  },
+  {
+   "id": "ratio-feet-per-stop-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Feet per stop this week",
+   "note": "Issue #113 (exact over summary): re-review item 1: \"feet per stop\" answered with the stop count; any ratio the records do not keep is refused.",
+   "expect": {
+    "raises": "is not a ratio the records keep"
+   }
+  },
+  {
+   "id": "ratio-msf-per-day-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What was our MSF per day this week?",
+   "note": "Issue #113 (exact over summary): re-review item 1: a ratio the records do keep (the volume per production day tile) answers once the ratios without a rule are refused.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=msf_per_day",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ MSF per production day\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "slow-how-long-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How long were we slow on shift 2?",
+   "note": "Issue #113 (exact over summary): re-review item 2: answered with 12.8 minutes of downtime; slow is a speed, not a duration the records keep.",
+   "expect": {
+    "raises": "Slow is a speed"
+   }
+  },
+  {
+   "id": "slow-minutes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes were we slow this week?",
+   "note": "Issue #113 (exact over summary): re-review item 2.",
+   "expect": {
+    "raises": "Slow is a speed"
+   }
+  },
+  {
+   "id": "guard-compare-scrap-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "day",
+   "question": "How much scrap on shift 1 versus shift 2?",
+   "note": "Issue #113 (exact over summary): re-review item 3: landed on the shift comparison, which opens with speed.",
+   "expect": {
+    "raises": "Offline mode answers one quantity at a time"
+   }
+  },
+  {
+   "id": "unit-downtime-in-hours-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much downtime in hours last week?",
+   "note": "Issue #113 (exact over summary): re-review item 6: answered as a percent for shift 2; the records keep minutes, so it names the minutes question.",
+   "expect": {
+    "raises": "in minutes, not hours"
+   }
+  },
+  {
+   "id": "scope-stops-no-window-is-the-selected-day",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops did we have?",
+   "note": "Issue #113 (exact over summary): re-review item 6: no window named is the selected day for every quantity, as 'how many setups did we run' is (it was the day before), and no shift named is every shift.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&metric=stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "scope-percent-downtime-this-week-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What percent downtime this week?",
+   "note": "Issue #113 (exact over summary): re-review item 6: a quantity asked (a percent) with no shift named answers every shift, not the selected shift alone.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes "
+    ]
+   }
+  },
+  {
+   "id": "scope-msf-last-week-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many MSF did we run last week?",
+   "note": "Issue #113 (exact over summary): re-review item 6: volume in MSF for the week before, every shift.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ MSF\\*\\* across [0-9]+ grades"
+    ]
+   }
+  },
+  {
+   "id": "scope-stops-by-reason-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Number of stops by reason this week",
+   "note": "Issue #113 (exact over summary): re-review item 6: the Pareto counted, every shift.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=week&unit=count",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "count",
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ stops\\*\\* at .*, the largest of [0-9]+ reasons"
+    ]
+   }
+  },
+  {
+   "id": "per-reason-is-a-grouping",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Downtime per reason this week",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: \"per reason\" is \"by reason\", the downtime review, never a ratio refused; no quantity asked, so the selected shift.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "per-width-is-a-grouping",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Rollstock per width this month",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: \"per width\" is the rollstock by grade and width.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=rollstock&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_rollstock",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "ratio-make-per-day-is-msf-per-day",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much did we make per day this week?",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: what we made per day is MSF per production day, never a ratio refused.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=msf_per_day",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ MSF per production day\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "per-day-speed-is-the-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Average speed per day this week",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: speed per day is the speed answer, never a ratio refused.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ ft/min\\*\\* "
+    ]
+   }
+  },
+  {
+   "id": "ratio-feet-per-minute-is-the-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many feet per minute did we run this week?",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: answered **4,225,692 lineal ft**, the count of the numerator, as \"feet per stop\" answered the stops: a speed asked in its unit is the speed answer, every shift (a count asked with no shift named).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ ft/min\\*\\* "
+    ]
+   }
+  },
+  {
+   "id": "hours-of-the-shift-is-not-a-unit",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Were we slow in the first hours of the shift?",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: hours named as a span, not asked as a unit: the overview, never the hours refusal.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "slow-named-of-a-setup-is-the-setup-matrix",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What was our fastest setup time?",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: a speed word beside a setup time is how long a setup took, pointed to the setup matrix, never the slow refusal.",
+   "expect": {
+    "raises": "setup matrix"
+   }
   }
  ]
 }

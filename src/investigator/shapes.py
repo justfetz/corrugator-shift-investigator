@@ -1428,9 +1428,10 @@ class PeriodAnswer:
     # previous window and the band; the tiles it is read from (or the reasons, or the knives) follow, the rest folded
     QUANTITY_WORDS = {'setups': 'setups', 'paper_changes': 'paper changes', 'order_changes': 'order changes', 'stops': 'stops',
                       'lineal_ft': 'lineal ft', 'lineal_per_setup': 'ft per setup', 'lineal_per_paper_change': 'ft per paper change',
-                      'downtime_minutes': 'minutes', 'minutes_per_stop': 'minutes per stop', 'bale_msf': 'MSF'}
+                      'downtime_minutes': 'minutes', 'minutes_per_stop': 'minutes per stop', 'bale_msf': 'MSF',
+                      'msf_per_day': 'MSF per production day'}
     QUANTITY_PLACES = {'lineal_ft': 0, 'lineal_per_setup': 1, 'lineal_per_paper_change': 1, 'downtime_minutes': 1, 'minutes_per_stop': 2,
-                       'bale_msf': 1}
+                       'bale_msf': 1, 'msf_per_day': 1}
     QUANTITY_RELATED = {'setups': ('paper_changes', 'lineal_per_setup', 'lineal_ft'),
                         'paper_changes': ('setups', 'lineal_per_paper_change', 'lineal_ft'),
                         'order_changes': ('setups', 'paper_changes', 'lineal_per_setup'),
@@ -1440,7 +1441,8 @@ class PeriodAnswer:
                         'stops': ('downtime_minutes', 'minutes_per_stop', 'downtime_pct'),
                         'downtime_minutes': ('stops', 'minutes_per_stop', 'downtime_pct'),
                         'minutes_per_stop': ('stops', 'downtime_minutes', 'downtime_pct'),
-                        'bale_msf': ('bale_pct', 'unexplained_pct', 'volume_msf')}
+                        'bale_msf': ('bale_pct', 'unexplained_pct', 'volume_msf'),
+                        'msf_per_day': ('volume_msf', 'speed_all_fpm', 'downtime_pct')}
     QUANTITY_FOLDED = ('volume_msf', 'speed_all_fpm', 'downtime_pct', 'trim_pct', 'dry_end_pct')
     QUANTITY_NOTES = {
         'setups': 'A setup is a dry-end record: one that runs on across a shift change is counted in both shifts (a shift split).',
@@ -1449,7 +1451,8 @@ class PeriodAnswer:
         'paper_changes': 'A paper change is a wet-end run: the distinct wet ends the setups of the window ran on.',
         'stops': 'Every recorded stop is counted: planned maintenance and external downtime too.',
         'downtime_minutes': 'Every recorded stop is counted: planned maintenance and external downtime too.',
-        'bale_msf': 'The bale is a scale reading of the waste baled: trim, shear and rejects together, and what the records do not explain.'}
+        'bale_msf': 'The bale is a scale reading of the waste baled: trim, shear and rejects together, and what the records do not explain.',
+        'msf_per_day': 'MSF per production day is the gross MSF of the window over its production days with records: the like-for-like volume when windows hold different numbers of days.'}
     BEFORE = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before', 'fiscal': 'the period before'}
 
     def qnum(self, metric, value):
@@ -1506,6 +1509,8 @@ class PeriodAnswer:
             looks = self.window_looks(data, ('pareto', 'stops', 'trend_downtime'))
         elif metric == 'bale_msf':
             looks = self.window_looks(data, ('waste', 'trend_trim', 'grade'))
+        elif metric == 'msf_per_day':
+            looks = self.window_looks(data, ('grade', 'trend_volume', 'stops'))
         else:
             looks = []
             if data['window']['period'] == 'day' and getattr(self.context, 'period', 'day') == 'day':
