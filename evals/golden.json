@@ -7199,9 +7199,9 @@
     },
     "sections_match": [
      "^- 2\\. Dry-end waste \\(tag scrap\\), the 5 kinds below: \\*\\*\\$[0-9,]+/yr\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of the yield after trim and shear · (home run \\(0\\.75% or under\\)|on target \\(1% or under\\)|over the 1% target, under the 1\\.25% flag|flag: over 1\\.25%, the target is 1%) · controllable, each kind's cause on its line \\(query 1\\)$",
-     "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: bond: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-5]\\)$",
-     "^- Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: warp: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-5]\\)$",
-     "^- Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: misalignment: [0-9.]+% of the yield after trim and shear · controllable, slitter, scorer and knife \\(query 1 · row [1-5]\\)$",
+     "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: bond: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-4]\\)$",
+     "^- Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: warp: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-4]\\)$",
+     "^- Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: misalignment: [0-9.]+% of the yield after trim and shear · controllable, slitter, scorer and knife \\(query 1 · row [1-4]\\)$",
      "^- Dry-end: moisture \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: moisture: [0-9.]+% of the yield after trim and shear · controllable, steam and temperature along the machine \\(query 1 · row [1-5]\\)$",
      "^- Dry-end: other \\(cracking, handling, paper, print\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: other \\(cracking, handling, paper, print\\): [0-9.]+% of the yield after trim and shear · controllable, board surface; handling after the knife; paper as received, partly controllable \\(receiving and roll prep\\); pre-print \\(query 1 · row [1-5]\\)$",
      "^- 3\\. Shear chops \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, sequencing \\(query 1 · row 6\\)$",

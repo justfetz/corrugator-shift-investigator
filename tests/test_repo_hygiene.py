@@ -18,7 +18,7 @@ import pytest
 
 # The vendor, its products, record codes and source tables, and the other corrugator makers, spelled in pieces in
 # tests/vendor_names.py, which says what each pattern matches (issue #100).
-from vendor_names import MAKER_NAMES, MAKER_PATTERN, VENDOR_PATTERN
+from vendor_names import LONG_MAKER_NAMES, MAKER_NAMES, MAKER_PATTERN, PROSE_PATTERN, SHORT_MAKER_NAMES, VENDOR_PATTERN
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / '.github' / 'workflows'
@@ -388,14 +388,31 @@ def test_the_vendor_pattern_catches_the_names_the_owner_gave_and_not_a_base64_bl
 
 def test_the_maker_pattern_catches_every_maker_and_not_a_base64_blob_or_a_longer_word():
     """#120's case-study check listed the other corrugator makers literally; they are spelled in pieces now, and the
-    repo-wide guard below reads them too (coordinator re-review of #123, item 2)."""
+    repo-wide guard below reads them too (coordinator re-review of #123, item 2). A long name beside a '+' or '/' is still
+    the name, as #120's word boundaries had it; only the two three-letter names keep the base64 rule."""
     for name in MAKER_NAMES:
         for text in (f"a {name} line", f"the {name.lower()} corrugator", f"{name.upper()}-2", f"{name}2", f"{name.lower()}_dryend"):
             assert MAKER_PATTERN.search(text), text
-        for text in (f"x9{name}q", f"+{name}/", f"a{name}", f"{name}s"):
+        for text in (f"x9{name}q", f"a{name}", f"{name}s"):
             assert not MAKER_PATTERN.search(text), text
+    for name in LONG_MAKER_NAMES:
+        for text in (f"+{name}/", f"see /{name}", f"https://x.com/{name}", f"{name}+X", f"A/{name}"):
+            assert MAKER_PATTERN.search(text), text
+    for name in SHORT_MAKER_NAMES:
+        assert not MAKER_PATTERN.search(f"+{name}/"), name   # a blob's run of characters, not the name
     for text in ("CORR-2", "efficient", "simonize", "petersburg", "cutoff_knife", "stacker_waste_boards"):
         assert not MAKER_PATTERN.search(text), text
+
+
+def test_the_case_study_pattern_keeps_120s_word_boundaries():
+    """The case study is prose with no blob in it: #120 checked it between word boundaries, so a vendor's short name or
+    a maker beside a '/' or '+' was caught there; PROSE_PATTERN keeps that (the reviewer of the #123 fix round)."""
+    pairs = ("B" + "HS/" + "Fos" + "ber", "Kiwi" + "plan/" + "Am" + "tech", "see /" + "Fos" + "ber", "Fos" + "ber+" + "Ag" + "nati",
+             "+B" + "HS/", "a P0" + "4X code", "T" + "CY/x", "x/E" + "FI")
+    for text in pairs:
+        assert PROSE_PATTERN.search(text), text
+    for text in ("efficient", "simonize", "CORR-2", "the shear chops", "P04"):
+        assert not PROSE_PATTERN.search(text), text
 
 
 def test_no_tracked_file_names_the_vendor_or_its_source_tables():

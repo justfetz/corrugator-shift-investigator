@@ -6,8 +6,8 @@ paper run), the shift record, the stop record (the downtime log), the roll recor
 (roll stock fed into a paper run) and the customer dimension. Field names and units
 mirror the shape a corrugator's MES records them in, so the data reads like plant
 records; it describes a generic dry-end setup record, not any one vendor's table,
-and claims no wire-format compatibility. docs/RECORD_CONTRACT.md maps every field to
-its typical MES field and to the store column; docs/RECORDS.md documents the families.
+and claims no wire-format compatibility. docs/RECORD_CONTRACT.md gives every field its
+generic plant term and its store column; docs/RECORDS.md documents the families.
 
 Units: feet, inches, square feet, ft/min, whole seconds. Dates are YYYYMMDD
 and times HHMMSS in the fixed demo-local clock (no timezone, no DST).
