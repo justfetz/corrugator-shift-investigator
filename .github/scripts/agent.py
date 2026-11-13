@@ -79,8 +79,11 @@ FENCE = re.compile(r' {0,3}(`{3,}(?=[^`]*$)|~{3,})')
 # indented ones): an indented code line that starts with `>` counts as well, which only means a missed start.
 QUOTE = re.compile(r'[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+)*>')
 # Raw HTML that can run on across blank lines (CommonMark HTML blocks 1 to 5): a mention inside one starts nothing.
-HTML_REGION = re.compile(r'<!--.*?(?:-->|\Z)|<\?.*?(?:\?>|\Z)|<![A-Za-z].*?(?:>|\Z)|<!\[CDATA\[.*?(?:\]\]>|\Z)'
-                         r'|<(script|pre|style|textarea)\b.*?(?:</\1\s*>|\Z)', re.S | re.I)
+# Each kind is matched on its own and the regions are joined: one alternation takes non-overlapping matches, so an
+# earlier inline `<!--` or `<script>` could swallow the opening tag of a later block and hide that block's region.
+HTML_REGIONS = [re.compile(p, re.S | re.I) for p in (
+    r'<!--.*?(?:-->|\Z)', r'<\?.*?(?:\?>|\Z)', r'<![A-Za-z].*?(?:>|\Z)', r'<!\[CDATA\[.*?(?:\]\]>|\Z)',
+    r'<(script|pre|style|textarea)\b.*?(?:</\1\s*>|\Z)')]
 HIDDEN = '\0'       # what a fenced line becomes: no backtick left, and not blank
 AFTER_CR = '\x01'   # opens a line that a bare carriage return began: a line for Markdown, never one the mention starts
 ORDER = re.compile(r'^\s*(\d{1,2})([a-z]?)\s*·')
@@ -185,7 +188,7 @@ def mentions_claude(body: str | None) -> bool:
     starts = [0]
     for line in kept[:-1]:
         starts.append(starts[-1] + len(line) + 1)
-    regions = [(r.start(), r.end()) for r in HTML_REGION.finditer(text)]
+    regions = [(r.start(), r.end()) for pattern in HTML_REGIONS for r in pattern.finditer(text)]
     # Past the first fence whose container is in doubt, the fences may be out of step with Markdown's: nothing counts.
     end = next((n for n, doubtful in openers if doubtful or any(s < starts[n] < e for s, e in regions)), len(kept))
     quoted, clean = False, True   # clean: every earlier line of this block closes its spans and has no `<`

@@ -1385,7 +1385,9 @@ STARTS = ['@claude please start', 'Thanks.\n\n@claude fix the typo in docs/AGENT
 # Mentions Markdown does show, which the rule skips because it cannot rule out code or a quote without a full parser:
 # in doubt nothing starts, and the owner puts the mention after a blank line instead.
 MISSED = ['see <http://example.com/a>\n@claude go', 'an open `backtick\n@claude go', '> q\n```\nx\n```\n@claude go']
-QUOTED = ['`@claude` in backticks', 'Reviews quote `@claude` in backticks, as this one does', '``@claude fix it``',
+QUOTED = ['Note <!-- draft\n<pre>\n-->\n\n@claude fix the typo', 'see <!x\n<pre>\nkept >\n\n@claude fix the typo',
+          'x <script>\n<!-- y\n</script>\n\n@claude fix',   # an earlier inline match must not hide a later HTML block
+          '`@claude` in backticks', 'Reviews quote `@claude` in backticks, as this one does', '``@claude fix it``',
           '```\n@claude inside a fence\n```', '~~~\n@claude inside a tilde fence\n~~~', '```python\nx = 1\n@claude\n```',
           '````\n```\n@claude still fenced\n````', '```\n@claude in a fence never closed', '> @claude quoted',
           '> a quote\n@claude lazy continuation of the quote', '  > @claude an indented quote', '>@claude',
