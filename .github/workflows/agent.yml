@@ -23,8 +23,10 @@
 # the action as `github_token`. The job has no `id-token: write` (H5): the action's other path, the Claude
 # GitHub App, needs that permission to mint an OIDC token, and any step of a job that holds it can mint one
 # for any audience, which a Workload Identity pool that trusts the whole repository would accept. GitHub
-# starts no workflow from a GITHUB_TOKEN push or pull request, so the `dispatch` job, the only one with
-# `actions: write`, starts Tests on the branch and the review of the pull request after every run.
+# starts no workflow from a GITHUB_TOKEN push or pull request, so the `verify` job, the only one with
+# `actions: write`, checks the outcome with main's script and starts Tests on the branch and the review of
+# the pull request after every run. Nothing after the agent's step in the build job feeds another job: the
+# agent can rewrite the workspace's scripts, so only `plan`'s outputs, set before the agent ran, leave it.
 # The build refuses to start while `main` takes a direct push (H1).
 name: Agent
 on:
@@ -130,16 +132,17 @@ jobs:
       group: agent-${{ needs.gate.outputs.key }}
       cancel-in-progress: false
     # The agent's own token: it pushes its branch and opens its pull request with it. No `id-token: write`
-    # (H5) and no `actions: write` (the dispatch job starts CI and the review), so the agent can mint no
+    # (H5) and no `actions: write` (the verify job starts CI and the review), so the agent can mint no
     # OIDC token and dispatch no workflow. Never `statuses: write`: the review's verdict is a commit status.
     permissions:
       contents: write
       pull-requests: write
       issues: write
-    outputs:
-      dispatch: ${{ steps.verify.outputs.dispatch }}
-      pr: ${{ steps.verify.outputs.pr }}
-      branch: ${{ steps.verify.outputs.branch }}
+    outputs:   # plan's, set before the agent ran
+      go: ${{ steps.plan.outputs.go }}
+      branch: ${{ steps.plan.outputs.branch }}
+      issue: ${{ steps.plan.outputs.issue }}
+      before: ${{ steps.plan.outputs.before }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -202,19 +205,6 @@ jobs:
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,Agent,TodoWrite,Bash(python:*),Bash(python3:*),Bash(node:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git fetch:*),Bash(git merge:*),Bash(git checkout:*),Bash(git branch:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(gh issue view:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr create:*),Bash(gh pr edit:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(find:*),Bash(sort:*),Bash(diff:*),Bash(mkdir:*)"
             --disallowedTools "Bash(gh pr merge:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh secret:*),Bash(gh label:*),Bash(git push --force:*),Bash(git push -f:*),Bash(git rebase:*),Bash(git reset --hard:*),Bash(curl:*),Bash(wget:*),Edit(.github/**),Write(.github/**),Edit(.claude/**),Write(.claude/**),Edit(CLAUDE.md),Write(CLAUDE.md),Edit(**/CLAUDE.md),Write(**/CLAUDE.md)"
-      - name: Check the outcome (one pull request that closes the issue, or a pushed fix)
-        id: verify
-        if: steps.plan.outputs.go == 'true' && !cancelled()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MODE: ${{ needs.gate.outputs.mode }}
-          ISSUE: ${{ steps.plan.outputs.issue }}
-          PR: ${{ needs.gate.outputs.pr }}
-          BRANCH: ${{ steps.plan.outputs.branch }}
-          BEFORE: ${{ steps.plan.outputs.before }}
-        run: >-
-          python3 .github/scripts/agent.py verify --mode "$MODE" --issue "$ISSUE" --pr "$PR" --branch "$BRANCH"
-          --before "$BEFORE"
       - name: Record the run's cost in the job summary
         if: always() && steps.plan.outputs.go == 'true'
         env:
@@ -222,18 +212,19 @@ jobs:
           LABEL: agent ${{ needs.gate.outputs.mode }} of issue ${{ steps.plan.outputs.issue }}
         run: python3 .github/scripts/agent.py cost "$EXECUTION_FILE" --label "$LABEL" | tee -a "$GITHUB_STEP_SUMMARY"
 
-  dispatch:
-    # GitHub starts no workflow from the agent's GITHUB_TOKEN pushes, so this job starts Tests on the branch
-    # (its `deterministic` check lands on the head commit) and the review of the pull request. The only job
-    # with `actions: write`; it runs main's script and nothing the agent wrote.
+  verify:
+    # After the agent: one pull request that closes the issue, or a pushed fix; then Tests on the branch (its
+    # `deterministic` check lands on the head commit) and the review of the pull request, which GitHub would
+    # not start from the agent's GITHUB_TOKEN push. Main's script, from a fresh checkout, with plan's outputs:
+    # nothing the agent wrote decides what is dispatched. The only job with `actions: write`.
     needs: [gate, build]
-    if: ${{ !cancelled() && needs.build.outputs.dispatch == 'true' }}
+    if: ${{ !cancelled() && needs.build.outputs.go == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       actions: write
       contents: read
-      issues: write   # says so on the pull request when a dispatch fails
+      issues: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -241,9 +232,14 @@ jobs:
           ref: main
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - name: Start CI and the review on the agent's push
+      - name: Check the outcome, then start CI and the review
         env:
           GH_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.gate.outputs.mode }}
+          ISSUE: ${{ needs.build.outputs.issue }}
+          PR: ${{ needs.gate.outputs.pr }}
           BRANCH: ${{ needs.build.outputs.branch }}
-          PR: ${{ needs.build.outputs.pr }}
-        run: python3 .github/scripts/agent.py dispatch --branch "$BRANCH" --pr "$PR"
+          BEFORE: ${{ needs.build.outputs.before }}
+        run: >-
+          python3 .github/scripts/agent.py verify --mode "$MODE" --issue "$ISSUE" --pr "$PR" --branch "$BRANCH"
+          --before "$BEFORE"
