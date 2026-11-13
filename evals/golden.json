@@ -7579,6 +7579,59 @@
    }
   },
   {
+   "id": "money-card-side-trim-schedule-driven",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2025-08-21",
+   "shift": 1,
+   "question": "Where did the money go this shift?",
+   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). First shift on Thursday 2025-08-21 (the shift of money-card-planned-maintenance-apart, re-picked by PR #123) has side trim as a ranked loss: its line reads \" · schedule-driven\" after its dollars a year and nothing else changes. No other ranked line carries the tag, side trim is never listed apart or unranked, and the line names no reason (the supervisor lens's lever line does). The recorded-loss total still counts trim (the value cases value-dollars-* hold total_usd to the record sums).",
+   "expect": {
+    "url": "/corr/1/day/2025-08-21/shift/1?measure=dollars",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "shape": {
+     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 1\\)$",
+     "bullets": [
+      3,
+      14
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- [0-9]+\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query 1 · row [0-9]+\\)$",
+     "^- [0-9]+\\. Shear chops: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr \\(query 1 · row [0-9]+\\)$",
+     "^Schedule-driven, shown apart$"
+    ],
+    "sections_not_match": "^- Side trim|^- [0-9]+\\. (?!Side trim: ).* · schedule-driven|Side trim: .* · schedule-driven, "
+   }
+  },
+  {
+   "id": "money-day-side-trim-schedule-driven",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "day": "2025-08-21",
+   "scope": "day",
+   "question": "Where did the money go?",
+   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). Across Thursday 2025-08-21 the focus shift's gaps are listed ranked: its side-trim line carries \" · schedule-driven\", ranked, and no other ranked line does. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage.",
+   "expect": {
+    "url": "/corr/1/day/2025-08-21?measure=dollars",
+    "status": "complete",
+    "sections_match": [
+     "^- Shift [123] · [0-9]+\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query [0-9]+ · row [0-9]+\\)$"
+    ],
+    "sections_not_match": "^- Shift [123] · Side trim|^- Shift [123] · [0-9]+\\. (?!Side trim: ).* · schedule-driven",
+    "max_ms": 500
+   }
+  },
+  {
    "id": "week-downtime-by-reason-is-the-review",
    "type": "routing",
    "mode": "offline",
