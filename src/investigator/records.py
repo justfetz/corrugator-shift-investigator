@@ -1,9 +1,9 @@
 """Demo record families shaped like a corrugator controller's own record types.
 
 Four plain, JSON-serialisable dataclasses: the dry-end setup record (one per
-setup, "P04P"-shaped), the wet-end record ("P04G"-shaped), the shift record
-("P04T"-shaped) and the stop record ("P04S"-shaped). Field names and units
-mirror the machine's record *shape* so the data reads like plant records.
+setup), the wet-end record, the shift record and the stop record. Field names
+and units mirror the machine's record *shape* so the data reads like plant
+records.
 This is the project's own documented demo schema; it claims no vendor
 wire-format compatibility. Field-by-field documentation is docs/RECORDS.md.
 
@@ -107,7 +107,7 @@ class RejectEntry:
 
 @dataclass
 class DryEndSetupRecord:
-    """One dry-end setup ("P04P"-shaped). A setup is closed when either knife's
+    """One dry-end setup. A setup is closed when either knife's
     order combination changes (O / C) or at a shift boundary (S).
 
     setup_id: 20-character machine-style id (machine code + start stamp + seq).
@@ -200,7 +200,7 @@ class DryEndSetupRecord:
 
 @dataclass
 class WetEndRecord:
-    """One paper run ("P04G"-shaped): consecutive setups sharing web width and
+    """One paper run: consecutive setups sharing web width and
     board grade. Totals are exact sums over setup_ids.
 
     wet_end_id: WE + production date + sequence.
@@ -241,7 +241,7 @@ class WetEndRecord:
 
 @dataclass
 class ShiftRecord:
-    """One 480-minute shift ("P04T"-shaped). Totals are exact sums over the
+    """One 480-minute shift. Totals are exact sums over the
     setup records carrying this production_date and shift_number.
 
     shift_number: 1 (07:00), 2 (15:00), 3 (23:00). production_date: YYYYMMDD.
@@ -287,7 +287,7 @@ class ShiftRecord:
 
 @dataclass
 class StopRecord:
-    """One machine stop ("P04S"-shaped), always inside exactly one setup.
+    """One machine stop, always inside exactly one setup.
 
     stop_id: ST + start stamp. start_date/start_time, end_date/end_time.
     duration_sec: whole seconds = end - start.

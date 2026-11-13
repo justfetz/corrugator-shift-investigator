@@ -18,6 +18,7 @@ import pytest
 
 from investigator import cost_model, docsite
 from investigator.server import make_server
+from test_repo_hygiene import vendor_words   # the one vendor list: hashed, so no test file names a vendor
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / 'src' / 'investigator' / 'web'
@@ -512,9 +513,7 @@ def test_the_case_study_links_every_claim_and_names_no_plant_vendor():
     assert rows and all('](' in line.rsplit('|', 2)[-2] for line in rows), 'every result names its source'
     paragraphs = [block for block in re.split(r'\n\s*\n', text) if block and block[0].isalpha()]
     assert all('](' in block for block in paragraphs if '{{' in block or 'never' in block), 'a paragraph with a claim links it'
-    vendors = re.compile(r'\b(BHS|Fosber|Marquip|Agnati|Mitsubishi|Isowa|Kiwiplan|Amtech|Valmet|Peters|TCY|Kolbus|Simon|'
-                         r'Langston|EFI|Vanguard|P04[A-Z])\b')
-    assert not vendors.search(text), vendors.findall(text)
+    assert not vendor_words(text), vendor_words(text)
 
 
 def test_the_docs_print_as_the_document_alone():

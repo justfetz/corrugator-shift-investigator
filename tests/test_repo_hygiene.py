@@ -7,6 +7,7 @@ available. The docs must not link to files that were moved. Plain text checks, p
 credential-choice step's own shell run under bash for all eight combinations of the two variables
 and the secret, so no YAML dependency.
 """
+import hashlib
 import json
 import os
 import re
@@ -407,3 +408,76 @@ def test_the_deploy_fails_a_live_changelog_without_the_merged_pull_request(tmp_p
     code, out = subprocess.run([sys.executable, str(script), str(tmp_path / 'missing.html'), 'Merge pull request #128 from a/b'],
                                capture_output=True, text=True).returncode, ''
     assert code == 1
+
+
+# ---- Vendor-free (CLAUDE.md, "Plant-real and vendor-free"): no tracked file names a plant-equipment or
+# plant-software vendor, or carries a vendor's record code. The lists hold SHA-256 digests of lowercased
+# words, so this guard names no vendor itself. To add a name:
+#   python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].lower().encode()).hexdigest())" <name>
+VENDOR_WORDS = frozenset({
+    '0a5d17d3b19f82f8340d3977609aa9e86b4ad8b9bd71bd9eced9271f1d5b2e4a',
+    '19a3fa17c9b361367be1daa00122f9a89cd63463daf3321a96840d5f75712fc5',
+    '2ae51aec19821f26c9e68a250f067ce569a3454302107efc48d4e3f2a48efe90',
+    '2baf3c97c1ea4f8c8538489534644e178fe708d448b495e53b86a445ae13065c',
+    '33c07ddcf1cb7c83c5f0d99e4302b7e868a18521fe00c99535f909ba0106ec10',
+    '42c1d3399023a20cd71c01190d84b5524dbcdc76be43611fc5bf273eabb5d580',
+    '4d13e1dbe7ab3f90f7cf9f49beb4fa7abc5624967d6db79b9e61c022c065d083',
+    '4dd32b6f8c30c7df4446ca096df3fe4db04dfe44f70ad8f8e87ef74a0c896ec7',
+    '5b92408a0fd2f97797f739d6c5928189c298508f74ba96671f165d24bc728c37',
+    '6101dd8b98382dd27e6f2053282c0c435551c5387464540f9056d5787a241f04',
+    '6a62362c11e91c9f8205c47bbb30833a257c979f663b9a73d3c814ce228fe3dd',
+    '9d75e06d1aa43607dc2fbb49e8c32684439eade2c9cf0bb0682c7a6916053883',
+    'af29329bacb3df583087987924bcf112579269487577630e962c8f05a9925294',
+    'bac61e7fa7baaee50ccc8380ba162b95f34266484a50599e5d55071554c4b77b',
+    'dcfdc268f80e59046d6c6ba011a7c341a911e4a3d007ef7b7f9ba2ed62c0dda6',
+    'e4c1b0ed6b8808bbca3f48297d1652dcb815fd406c6cd7c3486560e533b79cfb',
+})
+# A controller's record code is a letter, two digits and a record letter. A family is listed by the digest
+# of its first three characters, so every record letter of the family is caught.
+VENDOR_CODE_FAMILIES = frozenset({
+    'cc58491fa05075c5f700d49f49a5a534d593f59317563e9cd8e6e4bb4810ab55',
+})
+WORD = re.compile(r'[A-Za-z0-9]+')
+RECORD_CODE = re.compile(r'[a-z][0-9]{2}[a-z]')
+
+
+def digest(word):
+    return hashlib.sha256(word.lower().encode()).hexdigest()
+
+
+def vendor_words(text, words=VENDOR_WORDS, families=VENDOR_CODE_FAMILIES):
+    """The words of `text` that name a listed vendor or are a record code of a listed family, in order of first use."""
+    hits, checked = [], set()
+    for word in WORD.findall(text):
+        low = word.lower()
+        if low in checked:
+            continue
+        checked.add(low)
+        if digest(low) in words or (RECORD_CODE.fullmatch(low) and digest(low[:3]) in families):
+            hits.append(word)
+    return hits
+
+
+def test_the_vendor_guard_catches_a_listed_name_and_every_record_of_a_listed_code_family():
+    assert len(VENDOR_WORDS) >= 16 and len(VENDOR_CODE_FAMILIES) >= 1, 'the lists are never emptied'
+    assert all(re.fullmatch(r'[0-9a-f]{64}', entry) for entry in VENDOR_WORDS | VENDOR_CODE_FAMILIES)
+    text = 'Line 1 is an ACMECORR double backer; its x12q and X12R records, but not X13Q, X12QQ or acmecorrs.'
+    assert vendor_words(text, {digest('acmecorr')}, {digest('x12')}) == ['ACMECORR', 'x12q', 'X12R']
+    assert vendor_words(text) == [], 'the made-up names are on neither list'
+
+
+def test_no_tracked_file_names_a_vendor_or_carries_a_vendor_record_code():
+    """Every tracked text file, its path included: docs, code, tests, goldens and the recorded live fixtures
+    (a model's narrative is held to the rule too). Binary files are skipped."""
+    names = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, capture_output=True, check=True).stdout.decode().split('\0')
+    found, read = {}, 0
+    for name in filter(None, names):
+        try:
+            text = (ROOT / name).read_text(encoding='utf-8')
+        except (UnicodeDecodeError, OSError):
+            continue
+        read += 1
+        if hits := vendor_words(name + '\n' + text):
+            found[name] = hits
+    assert read > 100, 'the scan reads the checkout'
+    assert not found, found
