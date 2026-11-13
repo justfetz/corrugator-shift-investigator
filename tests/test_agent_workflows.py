@@ -1381,7 +1381,10 @@ def test_the_owners_setup_makes_github_enforce_the_verdict():
 
 STARTS = ['@claude please start', 'Thanks.\n\n@claude fix the typo in docs/AGENTS.md', 'notes\r\n@claude go', '@Claude go',
           '```\ncode\n```\n@claude after the fence', '> quoted\n\n@claude after a blank line', 'x `y` z\n@claude go',
-          '@claude, rename the helper', '`a`\n@claude go', '\\`not code\n@claude go', 'see <http://example.com/a>\n@claude go']
+          '@claude, rename the helper', '`a`\n@claude go', '\\`not code\n@claude go', 'Thanks for `foo` and ``a ` b``.\n@claude fix the bar']
+# Mentions Markdown does show, which the rule skips because it cannot rule out code or a quote without a full parser:
+# in doubt nothing starts, and the owner puts the mention after a blank line instead.
+MISSED = ['see <http://example.com/a>\n@claude go', 'an open `backtick\n@claude go', '> q\n```\nx\n```\n@claude go']
 QUOTED = ['`@claude` in backticks', 'Reviews quote `@claude` in backticks, as this one does', '``@claude fix it``',
           '```\n@claude inside a fence\n```', '~~~\n@claude inside a tilde fence\n~~~', '```python\nx = 1\n@claude\n```',
           '````\n```\n@claude still fenced\n````', '```\n@claude in a fence never closed', '> @claude quoted',
@@ -1392,7 +1395,11 @@ QUOTED = ['`@claude` in backticks', 'Reviews quote `@claude` in backticks, as th
           # the reviewer's cases (CommonMark shows each mention inside a quote or code)
           '> quoted\n`code`\n@claude go', '- > quoted line\n@claude fix it', '1. > quoted\n@claude go',
           '\\`x`\n@claude`', '<http://x/`>`\n@claude`', '<a title="`">`\n@claude`',
-          'notes\r@claude go']   # a bare carriage return breaks no line, here or in agent.yml's condition
+          '`a\n> q\nb`\n@claude go', '- a\n    - > q\n@claude go', '10. item\n    > q\n@claude go',
+          'x <?x `?>`\n@claude`', 'x <!X `>`\n@claude`', 'x <![CDATA[ ` ]]>`\n@claude`',
+          # a bare carriage return breaks a line for fences and quotes, but the mention never starts such a line
+          # (agent.yml's condition looks for it after a newline only)
+          'notes\r@claude go', 'x\r```\n@claude\n```', 'x\r> q\n@claude go']
 
 
 @pytest.mark.parametrize('body', STARTS)
@@ -1410,6 +1417,13 @@ def test_a_mention_in_code_a_quote_or_mid_line_starts_nothing(body):
     for pr in (False, True):
         plan = agent.event_plan('issue_comment', comment_event(body, pr=pr), OWNER)
         assert plan['mode'] == 'skip' and 'starts with @claude' in plan['why'], (body, pr)
+
+
+@pytest.mark.parametrize('body', MISSED)
+def test_in_doubt_the_mention_starts_nothing_and_a_blank_line_settles_it(body):
+    assert not agent.mentions_claude(body), body
+    head, _, tail = body.rpartition('\n')
+    assert agent.mentions_claude(f'{head}\n\n{tail}'), 'after a blank line the same mention counts'
 
 
 def gate_prefilter(body):

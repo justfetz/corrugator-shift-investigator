@@ -72,17 +72,17 @@ LOOSENED_UP = ('max_ms', 'max_cost_usd')   # a golden budget that may only go do
 CLOSES = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)', re.I)
 # A comment asks for the agent only with a line that starts with the mention (N1): see `mentions_claude`.
 MENTION = re.compile(r'@claude(?![\w-]|\.\w)', re.I)
-FENCE = re.compile(r' {0,3}(`{3,}|~{3,})')
-# What a `>` quote looks like at a line's start, inside list items too (`- > quoted`, `1. > quoted`).
-QUOTE = re.compile(r' {0,3}(?:(?:[-+*]|\d{1,9}[.)])[ \t]+)*>')
-# Inline constructs that outrank a code span (CommonMark): an HTML comment, an autolink (URI or email), an HTML tag.
-INLINE_HTML = re.compile(r'<!--.*?(?:-->|\Z)'
-                         r'|<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*>'
-                         r"|<[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*>"
-                         r'|</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s"' "'" r'=<>`]+|' "'[^']*'" r'|"[^"]*"))?)*\s*/?>',
-                         re.S)
-BLANK_LINE = re.compile(r'\n[ \t]*\n')
-HIDDEN = '\0'   # what code and inline HTML become: not a space, so a line that held only code is not blank
+# A fence opens with three backticks or tildes, indented three spaces at most; a backtick fence's info string has no
+# backtick (CommonMark: "```x`" is a paragraph line, not a fence).
+FENCE = re.compile(r' {0,3}(`{3,}(?=[^`]*$)|~{3,})')
+# What a `>` quote looks like at a line's start, inside list items too (`- > quoted`, `1. > quoted`, nested and
+# indented ones): an indented code line that starts with `>` counts as well, which only means a missed start.
+QUOTE = re.compile(r'[ \t]*(?:(?:[-+*]|\d{1,9}[.)])[ \t]+)*>')
+# Raw HTML that can run on across blank lines (CommonMark HTML blocks 1 to 5): a mention inside one starts nothing.
+HTML_REGION = re.compile(r'<!--.*?(?:-->|\Z)|<\?.*?(?:\?>|\Z)|<![A-Za-z].*?(?:>|\Z)|<!\[CDATA\[.*?(?:\]\]>|\Z)'
+                         r'|<(script|pre|style|textarea)\b.*?(?:</\1\s*>|\Z)', re.S | re.I)
+HIDDEN = '\0'       # what a fenced line becomes: no backtick left, and not blank
+AFTER_CR = '\x01'   # opens a line that a bare carriage return began: a line for Markdown, never one the mention starts
 ORDER = re.compile(r'^\s*(\d{1,2})([a-z]?)\s*·')
 # Keys and tokens a model or a pull request's output could echo; scrubbed from everything the verdict posts. A PEM
 # block goes whole, from its BEGIN line to its END line (or to the end of the text when it has none), and an AWS
@@ -127,52 +127,49 @@ def linked_issue(body: str | None) -> int | None:
     return found[0] if found else None
 
 
-def hide_code(text: str) -> str:
-    """`text` (its fenced blocks already gone) with every code span, HTML comment, autolink and HTML tag replaced by
-    HIDDEN, scanned left to right the way CommonMark reads them: a backslash-escaped character never opens a code
-    span; an HTML comment, an autolink or a tag outranks a code span; a run of backticks opens a span only when a run
-    of the same length closes it before the paragraph ends (a blank line), and is plain text otherwise."""
-    out, i, n = [], 0, len(text)
+def closes_its_spans(line: str) -> bool:
+    """Whether every run of backticks on `line` opens a code span that closes on the same line, read the way
+    CommonMark reads them (a backslash-escaped character opens nothing; a span ends at the next run of the same
+    length; inside a span a backslash is literal)."""
+    i, n = 0, len(line)
     while i < n:
-        c = text[i]
-        if c == '\\' and i + 1 < n and not text[i + 1].isalnum() and not text[i + 1].isspace():
-            out.append(text[i:i + 2])
+        if line[i] == '\\' and i + 1 < n and not line[i + 1].isalnum() and not line[i + 1].isspace():
             i += 2
-            continue
-        m = INLINE_HTML.match(text, i) if c == '<' else None
-        if m:
-            out.append(HIDDEN)
-            i = m.end()
-            continue
-        if c != '`':
-            out.append(c)
-            i += 1
-            continue
-        j = i
-        while j < n and text[j] == '`':
-            j += 1
-        close = re.compile(f'(?<!`){"`" * (j - i)}(?!`)').search(text, j)
-        if close and not BLANK_LINE.search(text, j, close.start()):
-            out.append(HIDDEN)
+        elif line[i] == '`':
+            j = i
+            while j < n and line[j] == '`':
+                j += 1
+            close = re.compile(f'(?<!`){"`" * (j - i)}(?!`)').search(line, j)
+            if not close:
+                return False
             i = close.end()
         else:
-            out.append(text[i:j])
-            i = j
-    return ''.join(out)
+            i += 1
+    return True
 
 
 def mentions_claude(body: str | None) -> bool:
     """Whether a comment asks for the agent (N1): a line that starts with `@claude`, in column one, outside fenced
-    code, inline code, an HTML comment and a `>` quote: a quote inside a list item too, and a line right after a
-    quoted one with no blank line between, which Markdown shows inside the quote. Only a newline breaks a line, as
-    in agent.yml's condition. The coordinator's reviews and the sessions' replies are posted as the owner and quote
-    the mention in backticks; quoting it in code, in a quote or mid-sentence starts nothing. In doubt it starts
-    nothing: a missed start costs the owner a rephrased comment, an unwanted one costs an agent run."""
+    code, inline code, raw HTML and `>` quotes. The coordinator's reviews and the sessions' replies are posted as the
+    owner and quote the mention in backticks, in code blocks and in quotes; none of those starts anything.
+
+    The rule is built so that it never starts a run CommonMark shows inside code or a quote; in doubt it starts
+    nothing (a missed start costs the owner a rephrased comment, an unwanted one an agent run):
+    - fenced blocks are dropped first (a backtick fence's info string has no backtick);
+    - a line that opens a quote (inside a list item too) quotes every line after it up to a blank line, as
+      Markdown's lazy continuation does;
+    - a code span cannot cross a blank line, so it can reach the mention's line only from an earlier line of the
+      same blank-line-delimited block: the mention counts only when every earlier line of its block closes all its
+      own code spans and holds no `<` (raw HTML and autolinks outrank code spans), and when no HTML comment,
+      processing instruction, declaration, CDATA section or `<pre>`-like block left open earlier covers it;
+    - a bare carriage return breaks a line for the fences and the quotes, as in Markdown, but the mention counts only
+      on a line that opens the comment or follows a newline, as agent.yml's condition reads it."""
     kept, fence = [], ''
-    for line in (body or '').replace('\r\n', '\n').split('\n'):
-        m = FENCE.match(line)
+    for line in (body or '').replace('\r\n', '\n').replace('\r', '\n' + AFTER_CR).split('\n'):
+        bare = line.lstrip(AFTER_CR)
+        m = FENCE.match(bare)
         if fence:   # inside a fenced block until a fence of the same character, at least as long, alone on its line
-            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not bare[m.end():].strip():
                 fence = ''
             kept.append(HIDDEN)
         elif m:
@@ -180,14 +177,23 @@ def mentions_claude(body: str | None) -> bool:
             kept.append(HIDDEN)
         else:
             kept.append(line)
-    quoted = False
-    for line in hide_code('\n'.join(kept)).split('\n'):
-        if not line.strip():
-            quoted = False
-        elif QUOTE.match(line):
+    text = '\n'.join(kept)
+    starts = [0]
+    for line in kept[:-1]:
+        starts.append(starts[-1] + len(line) + 1)
+    regions = [(r.start(), r.end()) for r in HTML_REGION.finditer(text)]
+    quoted, clean = False, True   # clean: every earlier line of this block closes its spans and has no `<`
+    for line, at in zip(kept, starts):
+        bare = line.lstrip(AFTER_CR)
+        if not bare.strip():
+            quoted, clean = False, True
+            continue
+        if QUOTE.match(bare):
             quoted = True
-        elif not quoted and MENTION.match(line):
+        elif (not quoted and clean and MENTION.match(line)   # never on a line a bare carriage return began
+              and not any(start < at < end for start, end in regions)):
             return True
+        clean = clean and '<' not in bare and closes_its_spans(bare)
     return False
 
 
