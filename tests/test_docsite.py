@@ -616,7 +616,7 @@ def test_every_docs_page_links_to_the_repository(site):
 
 def test_the_readme_is_a_one_screen_front_door():
     """What it is and who it is for, a picture, three live questions, a diagram, three trust rules and the links;
-    the long text it replaced is a page of /docs, moved whole (docs/BUILD_GUIDE.md)."""
+    the long text it replaced is a page of /docs (docs/BUILD_GUIDE.md), linked from the last line."""
     from investigator.record_store import default_store
     from investigator.urls import page_url, resolve_url
     text = README.read_text(encoding='utf-8')

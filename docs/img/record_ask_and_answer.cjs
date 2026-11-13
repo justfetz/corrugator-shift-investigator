@@ -30,6 +30,8 @@ const question = 'Which downtime reason cost the most minutes this week?';
   await page.fill('#day', day);
   await page.dispatchEvent('#day', 'change');
   await page.evaluate(() => document.activeElement && document.activeElement.blur());   // no selected text in the first frame
+  // the header's eval badge states the current golden count, which drifts with every case (CLAUDE.md: no current counts)
+  await page.evaluate(() => { const badge = document.getElementById('evals-badge'); if (badge) badge.hidden = true; });
   await page.waitForTimeout(1200);
   await shot(1400);
   await page.click('#question');
