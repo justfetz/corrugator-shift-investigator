@@ -554,15 +554,43 @@ def test_a_figures_page_that_cannot_be_built_never_stops_the_workbench(tmp_path,
         server.app.close()
 
 
-def test_a_missing_figure_source_leaves_the_rest_of_the_docs_up(tmp_path, monkeypatch):
-    """Codex on #120: a checkout with every page but no evals/history.jsonl serves every page; only the case
-    study says it could not be built. A missing page source still means no site (a wheel without the repo)."""
+@pytest.mark.parametrize('missing', ['evals/history.jsonl', 'evals/last_run.json'])
+def test_a_missing_figure_source_leaves_the_rest_of_the_docs_up(tmp_path, monkeypatch, missing):
+    """Codex on #120 and the amended verdict's item 3: a checkout with every page but a figure input (history.jsonl,
+    last_run.json) serves every page, the others exactly as a whole build renders them; only the case study says it
+    could not be built. A missing page source still means no site (a wheel without the repo)."""
     root = figure_root(tmp_path)
-    (root / 'evals' / 'history.jsonl').unlink()
+    whole = docsite.build_site(root)
+    (root / missing).unlink()
+    with pytest.raises(OSError):
+        docsite.build_site(root)   # the image build stays strict
     monkeypatch.delenv('INVESTIGATOR_DOCS', raising=False)
     monkeypatch.setattr(docsite, 'ROOT', root)
+    monkeypatch.setattr(docsite, '_RENDERED', {})
     site = docsite.load_site()
     assert site is not None and set(site) == {p['url'] for p in docsite.pages()}
-    assert b'could not be built here' in site['/docs/case-study'] and b'history.jsonl' in site['/docs/case-study']
+    notice = site['/docs/case-study'].decode()
+    assert 'could not be built here' in notice and missing.rsplit('/', 1)[1] in notice
+    assert {url: page for url, page in site.items() if url != '/docs/case-study'} == \
+        {url: page for url, page in whole.items() if url != '/docs/case-study'}, 'every other page is untouched'
+    # And the workbench serves them: every /docs address is a 200, the case study its notice.
+    server = make_server(0)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        for page in docsite.pages():
+            client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=10)
+            try:
+                client.request('GET', page['url'])
+                response = client.getresponse()
+                assert response.status == 200, page['url']
+                assert response.read() == site[page['url']], page['url']
+            finally:
+                client.close()
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+        server.app.close()
     (root / 'docs' / 'URLS.md').unlink()
     assert docsite.load_site() is None
