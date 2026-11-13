@@ -73,7 +73,8 @@ def test_shift_kpis_reconcile_to_summed_setup_records(store, data):
             assert row["gross_sqft"] == pytest.approx(gross) and gross == pytest.approx(record.total_produced_sqft, abs=0.1)
             assert row["trim_pct"] == pytest.approx(sum(s.trim_sqft for s in mine) / gross * 100)
             assert row["shear_pct"] == pytest.approx(sum(s.chop_sqft for s in mine) / gross * 100)
-            assert row["dry_end_pct"] == pytest.approx(sum(s.reject_sqft for s in mine) / gross * 100)
+            net = gross - sum(s.trim_sqft + s.chop_sqft for s in mine)   # dry-end waste over the yield after trim and shear (issue #101)
+            assert row["dry_end_pct"] == pytest.approx(sum(s.reject_sqft for s in mine) / net * 100)
             assert row["speed_to_target_pct"] == pytest.approx(
                 feet / sum(GRADES[s.quality_id] * s.elapsed_seconds / 60 for s in mine) * 100)
             by_kind = defaultdict(float)

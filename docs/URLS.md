@@ -43,7 +43,7 @@ parses the question (`agent.route`), on `/q`, on `POST /api/ask` and for the ana
   from a Monday), `last week`, `last month` and `last period` (also `previous`, `prior`) the week, calendar month
   and 4-4-5 period before the selected day's. The path takes that window's grain and its first production day,
   since the selected day is not in it: "How much donwtime on 1st shift last week?" with shift 2 and Day on Mon 14
-  Sep is `/corr/1/week/2026-09-07/shift/1?measure=pareto`. A window that contains the selected day keeps the
+  Sep is `/corr/1/week/2026-09-07/shift/1?measure=review` (downtime by reason over a window is the owner's review, issue #101). A window that contains the selected day keeps the
   `window=` form above.
 - A relative window that is the **base of a comparison** ("our speed vs last week", "compared with last week",
   "over / since / from last week", "compare with yesterday") is not the window asked about: the KPI tiles or the
@@ -71,7 +71,7 @@ store measures run one record-store tool over a window.
 | --- | --- | --- |
 | `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow"); with `window=` the period form over that window ("why was this shift slow this week", "were we slow in August") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
 | `summary` | `get_shift_overview` in one call, three charts | the same three store tools as `overview` |
-| `downtime` | KPIs and downtime by `by=` (`kind=` narrows) | the Pareto alone: an alias of `pareto` |
+| `downtime` | KPIs and downtime by `by=` (`kind=` narrows); under all shifts by reason, an alias of `review` (issue #101) | by reason, an alias of `review`; by `by=place` or `kind`, an alias of `pareto` |
 | `fpm` | KPIs and wet-end speed against grade targets; with `window=` the period form over that window ("average speed this week", "our speed vs last week"); with `by=grade` speed without stops against each grade target, charted in ft/min ("fpm by grade") | KPI tiles and speed by grade against target; `by=grade` the speed-by-grade table alone |
 | `quality` | KPIs and dry-end rejects by reason | the waste breakdown alone: an alias of `waste` |
 | `compare` | KPIs, downtime and speed per shift (`shifts=` or all three) | KPI tiles per shift: an alias of `kpis` with `shifts=` |
@@ -81,8 +81,9 @@ store measures run one record-store tool over a window.
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
 | `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
 | `dollars` | `get_shift_dollars` per shift: where the money went, ranked by dollars; over more than one shift (all shifts, or `shifts=`) also `get_day_dollars` for those shifts, the total the card states (#31b) | the money levers: normalizes to `money` |
-| `money` | `get_opportunities` over the window: the levers ranked in $/yr | the same |
-| `speedvar` | `get_speed_variance` over the window: the speed gap against target split into stops, setups, below-target running and grade mix ("top 3 contributors to speed variation", "what drove speed", "speed loss breakdown"); `against=` changes the reference; `shifts=` lists one decomposition per shift, or with `against=shift` the shift explained and the one it is measured against | the same |
+| `money` | `get_opportunities` over the window: the levers ranked in $/yr, each controllable or schedule-driven; `lens=` reads them the owner's way | the same |
+| `speedvar` | `get_speed_variance` over the window: the speed gap against each grade's trailing-year baseline split into stops, setups, running under baseline and grade mix, with planned maintenance and external stops as buckets of their own when the window holds them ("top 3 contributors to speed variation", "what drove speed", "speed loss breakdown"); `against=` changes the reference; `shifts=` lists one decomposition per shift, or with `against=shift` the shift explained and the one it is measured against | the same |
+| `review` | `get_downtime_review` (issue #101): maintenance and operator downtime against their bands, every reason ranked by % of scheduled minutes with stops and minutes per stop, a power outage apart as external, planned maintenance (scheduled) last as scheduled time, and the flags with their supervisor slot and recurrence; the all-shifts downtime of a production day ("top downtime reasons yesterday", "show downtime by reason" under all shifts) | the same over the window |
 | `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |
 | `report` | refused: a day is investigated with a question | the deterministic period report (heatmap, daily matrix, recurring downtime, notes) |
 
@@ -96,9 +97,10 @@ Modifiers, each refused when it does not apply to the measure:
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
 | `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
 | `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`); on other measures `prev` alone, as an alias (below) | `prev` |
-| `against=` | `speedvar` only: `target` (each grade's target at the usual grade mix), `previous` (the previous window of the same grain), `shift` (needs `shifts=` with two shifts, the one explained first: `shifts=3,1`; refused under one shift, which cannot read another) | `target` |
+| `against=` | `speedvar` only: `baseline` (each grade's trailing-year baseline at the usual grade mix, issue #101; `target`, its old name, redirects to it), `previous` (the previous window of the same grain), `shift` (needs `shifts=` with two shifts, the one explained first: `shifts=3,1`; refused under one shift, which cannot read another) | `baseline` |
 | `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's); a store measure takes one, except `kpis`, and `pareto` and `waste` under a ranged grain, which run once per shift, and `speedvar`, which runs once per shift (or, with `against=shift`, takes exactly two) | all three for day plans, all shifts together for store tools |
 | `rank=` | `speed`, `downtime`, `quality` | all three |
+| `lens=` | `supervisor` (the controllable losses ranked; side trim and planned maintenance schedule-driven, then a power outage external, after), `ownership` (the total cost of waste, side trim first, the dry-end kinds under one tag-scrap subtotal), for `money` (issue #101) | every lever ranked |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
 | `rates=` | the visitor's rates, `paper:<$/MSF>`, `hour:<$/hr>`, `margin:<$/MSF>`, `trim:<% target>`, comma-separated in that order, at most two decimals each, ASCII digits only ([the cost model](COST_MODEL.md#overrides)); every measure takes it, and the answer's provenance line names each rate as "yours". The page writes it (#31b): a rate changed in the rail's rates panel (**Change rates**) re-prices the page in the browser and is written into the address bar (replaced, not pushed), into every question asked after it and into the canned questions' links; a prior view (`after=`) never carries it. The period report has no dollars of its own but keeps it, since its card carries the money of its window | the server's rates (`INVESTIGATOR_RATES`, else the post's) |
 | `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
@@ -126,9 +128,9 @@ same grain, which these answers carry already or which their store form carries.
 | `measure=waste&by=grade` | `measure=grade` (volume, lineal, speed and waste by grade, the previous window's volume beside) |
 | `measure=waste&by=setup` (Day) | `measure=setups` (the setup matrix) |
 | `compare=prev` on `kpis`, `pareto`, `waste`, `grade`, `rollstock` | the same address without it: `prev` is the default, the previous window is beside |
-| `measure=speedvar&compare=prev` | `measure=speedvar&against=previous` (the speed variance against the previous window of the same grain); `against=target` spelled out is dropped as the default |
+| `measure=speedvar&compare=prev` | `measure=speedvar&against=previous` (the speed variance against the previous window of the same grain); `against=baseline` (or its old name `against=target`) spelled out is dropped as the default |
 | `compare=prev` on `overview`, `summary`, `fpm` under a ranged grain, or `overview`, `fpm` with `window=` | the same address without it: the period form leads with the KPI tiles against the previous window |
-| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=pareto`, `waste`, `kpis` |
+| `measure=downtime`, `quality`, `compare` under a ranged grain (with or without `compare=prev`) | `measure=review` (by reason, issue #101; it carries the previous window, so `compare=prev` lands there too; `by=place` or `kind`, `measure=pareto`), `waste`, `kpis` |
 | `measure=dollars` under a ranged grain | `measure=money` (the levers of the window in $/yr; under Day, `dollars` is the shift's own dollars; not with several `shifts=`, as above) |
 | `measure=downtime&compare=prev` under Day | `measure=pareto` (`by=` kept): downtime against the previous production day |
 | `measure=quality&compare=prev` under Day | `measure=waste` |
@@ -159,7 +161,7 @@ shows the refusal of its `.json`.
 | "Which equipment caused the most downtime?" | `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=place` |
 | "Which downtime reason cost the most minutes this week?" — Day | `/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week` |
 | the same question — Week | `/corr/1/week/2026-09-14/shift/2?measure=pareto` |
-| "How much donwtime on 1st shift last week?" — Day, shift 2 (the question's own shift and window, issue #105) | `/corr/1/week/2026-09-07/shift/1?measure=pareto` |
+| "How much donwtime on 1st shift last week?" — Day, shift 2 (the question's own shift and window, issue #105) | `/corr/1/week/2026-09-07/shift/1?measure=review` |
 | "How much downtime did third shift have yesterday?" — Week, shift 1 | `/corr/1/day/2026-09-11/shift/3?measure=downtime` |
 | "How did September go versus August?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=kpis&window=2026-09&compare=2026-08` |
 | "fpm by grade" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade` |
@@ -172,6 +174,9 @@ shows the refusal of its `.json`.
 | "What were the top 3 contributors to speed variations?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=speedvar` |
 | "What drove speed this week versus last week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=speedvar&window=week&against=previous` |
 | "Why did speed differ on shift 3 versus shift 1 this week?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1` |
+| "What were the top downtime reasons yesterday?" — Day 2026-09-29, all shifts | `/corr/1/day/2026-09-28?measure=review` |
+| "Where's my biggest opportunity this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month&lens=supervisor` |
+| "What's trim costing us this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
 | the scope's own KPI tiles (what the page primes on load) | `/corr/1/week/2026-09-14.json?measure=kpis` |
 

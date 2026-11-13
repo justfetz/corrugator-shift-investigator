@@ -10,6 +10,7 @@ from xml.parsers import expat
 import duckdb
 
 from . import records as R
+from . import targets
 
 MAX_BYTES = 1_000_000
 
@@ -81,7 +82,8 @@ TABLES = {
     # the record families up to three reasons per knife position.
     "rejects": "id VARCHAR, shift INTEGER, reason VARCHAR, detail VARCHAR, sheets DOUBLE, sqft DOUBLE",
 }
-STOP_KINDS = R.STOP_KINDS
+# The kinds the tables carry: the records' three, and External, which the owner's rule (targets.json) gives a power outage.
+STOP_KINDS = (*R.STOP_KINDS, targets.EXTERNAL_KIND)
 
 
 class Analysis:
@@ -124,7 +126,7 @@ class Analysis:
                     if node.get("kind") not in ("Maintenance", "Operator"):
                         raise ValueError("Unsupported downtime kind")
                     intervals.append((start, end))
-                    stop_rows.append([ident, i, node.get("kind"), node.attrib["place"], node.attrib["reason"], elapsed, start, end, self._note(node)])
+                    stop_rows.append([ident, i, targets.stop_kind(node.get("kind"), node.attrib["reason"]), node.attrib["place"], node.attrib["reason"], elapsed, start, end, self._note(node)])
                 elif node.tag == "setup":
                     if start != prior_setup:
                         raise ValueError("Setup timeline must partition shift")
@@ -269,25 +271,33 @@ class Analysis:
                 "elapsed_ms": (time.perf_counter()-start)*1000}}
 
     def get_shift_kpis(self, shift):
-        return self._query(shift, """SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
+        """The shift's tiles. Dry-end waste is a percent of the yield after trim and shear (gross minus side
+        trim minus shear), the owner's denominator (issue #101); each banded figure carries its band
+        (`targets.SHIFT_KPI_BANDS`: `<measure>_band` and the words an answer prints, `<measure>_band_text`)."""
+        result = self._query(shift, f"""SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
         sum(feet) AS observed_lineal_ft, sum(feet)/480 AS observed_shift_fpm,
         sum(gross) AS gross_sqft,
         sum(gross-trim-shear-rejects-coalesce(changeover,0)-coalesce(waste_boards,0)-coalesce(admin,0)) AS estimated_good_sqft,
+        sum(gross-trim-shear) AS yield_sqft,
         sum(trim) AS trim_sqft, sum(shear) AS shear_sqft, sum(rejects) AS reject_sqft, coalesce(sum(changeover),0) AS changeover_sqft,
         coalesce(sum(waste_boards),0) AS waste_board_sqft, coalesce(sum(admin),0) AS admin_sqft,
         sum(gross)/nullif(sum(feet),0)*12 AS throughput_in,
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
         sum(shear)/nullif(sum(gross),0)*100 AS shear_pct,
-        sum(rejects)/nullif(sum(gross),0)*100 AS dry_end_pct,
+        sum(rejects)/nullif(sum(gross-trim-shear),0)*100 AS dry_end_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Maintenance') AS maintenance_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Operator') AS operator_pct,
+        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind IN ('Maintenance', 'Operator')) AS op_maint_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Scheduled') AS pm_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ?) AS downtime_pct,
         sum(feet)/nullif(count(*),0) AS lineal_per_setup,
         sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
-        count(*) FILTER (WHERE trim/gross*100 > 3.25) AS setups_above_trim_target,
-        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift, shift, shift])
+        count(*) FILTER (WHERE trim/gross*100 > {targets.TRIM_FLAG_PCT}) AS setups_above_trim_target,
+        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift, shift, shift, shift])
+        for row in result["rows"]:
+            targets.annotate(row, targets.SHIFT_KPI_BANDS)
+        return result
 
     def get_shift_overview(self, shift):
         """One bounded read bundle for a narrative covering speed, stops and waste."""
@@ -296,8 +306,11 @@ class Analysis:
                     self.get_quality_breakdown(shift)]
         row=data['rows'][0]
         stops,speed,quality=(c['rows'] for c in components)
-        row.update({'largest_downtime_reason':stops[0]['category'] if stops else 'No recorded stops',
-                    'largest_downtime_minutes':stops[0]['down_minutes'] if stops else 0,
+        # the largest unplanned reason: planned maintenance is scheduled time and sorts last (issue #101)
+        lead=next((r for r in stops if not (r['scheduled'] or r['external'])), stops[0] if stops else None)
+        row.update({'largest_downtime_reason':lead['category'] if lead else 'No recorded stops',
+                    'largest_downtime_minutes':lead['down_minutes'] if lead else 0,
+                    'largest_downtime_scheduled':bool(lead and lead['scheduled']),
                     'largest_reject_reason':quality[0]['reason'] if quality else 'No recorded rejects',
                     'largest_reject_sqft':quality[0]['rejected_sqft'] if quality else 0,
                     'wet_end_runs_below_target':sum(r['actual_fpm']<r['target_fpm'] for r in speed),
@@ -313,23 +326,66 @@ class Analysis:
         kind = R.stop_kind(kind)   # the v1 code PM is the Scheduled kind
         if group_by not in ("reason", "kind", "place") or kind not in (None, *STOP_KINDS):
             raise ValueError("Unsupported filter or grouping")
+        """Recorded stops grouped by reason, place or kind, each with its stop count and minutes per stop; planned
+        maintenance (the Scheduled kind) is scheduled time and sorts last (issue #101), after external downtime (a power outage,
+        outside the plant; the owner on PR #111). On a record-store day the result also
+        carries `flags`: the shift's maintenance or operator downtime over its band, with the supervisor slot and
+        the leading reason's recurrence over the trailing year (RecordStore.downtime_flags)."""
         # group_by is strictly allowlisted; all visitor values are bound.
         sql = f"""SELECT {group_by} AS category, sum(seconds)/60 AS down_minutes,
-        sum(seconds)/28800*100 AS shift_percent, list(id ORDER BY id) AS source_ids
+        sum(seconds)/28800*100 AS shift_percent, count(*) AS stops, sum(seconds)/60/count(*) AS minutes_per_stop,
+        bool_and(kind = 'Scheduled') AS scheduled, bool_and(kind = '{targets.EXTERNAL_KIND}') AS external, list(id ORDER BY id) AS source_ids
         FROM stops WHERE shift = ?"""
         params = [shift]
         if kind:
             sql += " AND kind = ?"
             params.append(kind)
-        sql += f" GROUP BY {group_by} ORDER BY down_minutes DESC, category"
-        return self._query(shift, sql, params)
+        # unplanned maintenance and operator reasons first; then external downtime (a power outage); then planned maintenance
+        sql += f" GROUP BY {group_by} ORDER BY scheduled OR external, scheduled, down_minutes DESC, category"
+        result = self._query(shift, sql, params)
+        if self.store is not None:
+            trace = {"sql": [], "parameters": []}
+            result["flags"], result["flag_count"] = self.store.downtime_flags(self.day, self.day, shift, trace)
+            result["trace"]["sql"] = ";\n".join([sql, *trace["sql"]])
+            result["trace"]["parameters"] = [params, *trace["parameters"]]
+        return result
 
     def get_wet_end_performance(self, shift):
-        return self._query(shift, """SELECT wet_end_id, grade, max(target) AS target_fpm,
+        """Each wet-end run's elapsed speed against its grade target, and its running speed (stops out, by
+        interval overlap) against its grade's sustained speed over the trailing year (issue #101; the record
+        store's `grade_speed_baselines`; a fixture day has no store, so no baseline). A run under its grade's
+        baseline has a speed gap: the feet it would have made at the baseline in its running minutes, less
+        the feet it made."""
+        result = self._query(shift, """WITH timed AS (SELECT s.*, coalesce((SELECT sum(epoch(least(s.ended, d.ended) - greatest(s.started, d.started)))
+            FROM stops d WHERE d.shift = s.shift AND d.started < s.ended AND d.ended > s.started), 0) AS stopped_seconds
+            FROM setups s WHERE s.shift = ?)
+        SELECT wet_end_id, grade, max(target) AS target_fpm,
         sum(feet)/(sum(seconds)/60) AS actual_fpm, sum(feet) AS lineal_ft,
-        sum(seconds)/60 AS elapsed_minutes,
+        sum(seconds)/60 AS elapsed_minutes, (sum(seconds) - sum(stopped_seconds))/60 AS running_minutes,
+        sum(feet)/nullif((sum(seconds) - sum(stopped_seconds))/60, 0) AS running_fpm,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct, list(id ORDER BY id) AS source_ids
-        FROM setups WHERE shift = ? GROUP BY wet_end_id, grade ORDER BY wet_end_id""", [shift])
+        FROM timed GROUP BY wet_end_id, grade ORDER BY wet_end_id""", [shift])
+        baselines = self.store.grade_speed_baselines(self.day) if self.store is not None else None
+        under = 0
+        for row in result["rows"]:
+            base = baselines["grades"].get(row["grade"]) if baselines else None
+            row["baseline_fpm"] = base["baseline_fpm"] if base else None
+            if base and row["running_fpm"] is not None:
+                row["baseline_gap_fpm"] = row["baseline_fpm"] - row["running_fpm"]
+                row["baseline_gap_ft"] = max(0.0, row["baseline_fpm"] * row["running_minutes"] - row["lineal_ft"])
+                row["under_baseline"] = row["running_fpm"] < row["baseline_fpm"]
+                under += row["under_baseline"]
+            else:
+                row["baseline_gap_fpm"] = row["baseline_gap_ft"] = row["under_baseline"] = None
+        if baselines:
+            result["trace"]["sql"] += ";\n" + baselines["sql"]
+            result["trace"]["parameters"] = [result["trace"]["parameters"], baselines["parameters"]]
+            result.update(runs_under_baseline=under, baseline_since=baselines["since"], baseline_through=baselines["through"],
+                          baseline_note=("A run's baseline is its grade's sustained speed over the trailing year: lineal ft over running "
+                                         "minutes of the grade's setups in the record store up to this day, never the maximum speed."))
+        else:
+            result.update(runs_under_baseline=None, baseline_note="No grade baseline: this day is not from the record store.")
+        return result
 
     def get_quality_breakdown(self, shift):
         """Rejected area by family (the chart), with the reported sub-reasons beside as `details`."""

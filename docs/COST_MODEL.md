@@ -9,14 +9,14 @@ The records hold no costs. `cost_model.py` prices the tools' quantities at assum
 ([Where the money hides in a corrugator's numbers](https://justfetz.github.io/posts/corrugator-dashboard.html)).
 Every dollar is synthetic data at an assumed rate, never a real plant's figure, and every answer that
 carries dollars names its rates in a provenance line ("paper $55/MSF (post), machine time $1,200/hr
-(post), contribution margin not set (assumption: owner to set), trim target 3.25% (process rule)").
+(post), contribution margin not set (assumption: owner to set), trim target 3% (owner, 2026-11-10)").
 
 | Rate or assumption | Default | Source | `rates=` key |
 | --- | --- | --- | --- |
-| Paper cost | $55 / MSF | post | `paper` |
+| Paper cost, per MSF of combined board (the paper in all its plies, the medium's take-up included; not one grade's price) | $55 / MSF | post; owner confirmed 2026-11-12 | `paper` |
 | Machine time (bottleneck shadow price) | $1,200 / hr | post ("more than $1,200 an hour") | `hour` |
 | Board contribution margin | not set | not in the post; owner to set | `margin` |
-| Side-trim target | 3.25 % of gross | the process rule (setup trim flag) | `trim` |
+| Side-trim target | 3 % of gross (3.25 % is the flag, 2.75 % a home run) | owner, 2026-11-10 (`targets.json`, issue #101) | `trim` |
 | Volume | 7,000,000 sq ft / day / machine; 3 shifts; 5 days a week | post | fixed |
 | Annual volume | 1.8M MSF a year per machine (the post's 3.6M across two machines), so 257 production days | post | fixed |
 | Net width | 96 in on a 110 in machine | post | fixed |
@@ -50,25 +50,47 @@ Three components per priced row, kept apart so that changing one rate changes on
 The fields are flat on the row, beside the quantity, so the live narrative cites them like any other
 field and the narrative validator substitutes every dollar from the tool result. They ride on
 `get_quality_breakdown`, `get_downtime_breakdown`, `get_waste_breakdown`, `get_downtime_pareto` and
-`get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each bucket's lineal feet / the
-reference speed; a bucket that ran better is not priced; [speed variance](METRICS.md#speed-variance-issue-92)), and on the two money tools:
+`get_speed_opportunity` (opportunity hours x 60 minutes), `get_speed_variance` (each controllable bucket's lineal feet / the
+reference speed; a bucket that ran better is not priced, and the grade mix and planned maintenance are schedule-driven and external
+stops (a power outage) external, none of them priced, so the envelope's
+`controllable_usd` is the priced buckets and the gap as a whole is not priced; [speed variance](METRICS.md#speed-variance-issue-92)), and on the two money tools:
 
 - `get_shift_dollars(shift)`: where the money went in one shift, ranked by dollars. Gaps: each downtime
   reason (minutes), the speed gap to the required 675 ft/min over the running minutes (480 minus
   downtime; the lineal feet not made / 675 = machine minutes), side trim, shear, the changeover rejects,
   the cutoff-knife and stacker waste boards (each its own gap, priced once: owner, 2026-11-12) and each dry-end reason.
-  Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`, `total_usd_per_year`,
-  `total_contribution_usd` (null while the margin is not set). Asked as "where did the money go this shift".
-- `get_opportunities(window, shift)`: where to look, the levers ranked in $/yr: the speed gap to each
-  cell's best-fifth speed (`get_speed_opportunity`'s total hours), side-trim points over the trim target
-  (points / 100 x gross, priced as paper: per year this is the post's trim formula), each downtime reason
-  (Order change is labelled setup time), and all recorded shear, the changeover rejects counted with it, and
-  each dry-end family: bond, warp, misalignment, moisture, other (no benchmark for those, so the whole loss). The
-  cutoff-knife and stacker waste boards and the planning / admin entries are priced on the waste breakdown's
-  own rows but are not levers: the boards are defaults the record carries, and admin entries are not
-  production waste (issue #100). Each lever names the records behind it. It ranks levers and names records; it
-  never prescribes a machine adjustment. Asked as "where is the money this month", "what's costing us",
-  "opportunities"; under the Day control "where is the money" is the shift's own `get_shift_dollars`.
+  Planned maintenance and a power outage are on the card with their dollars, apart from the ranked recorded
+  losses (the owner's ruling on PR #111): each carries `apart` (`schedule-driven` or `external`, with an
+  `apart_note`) and no rank, and the answer lists them under "Schedule-driven, shown apart" and "External, not
+  controllable", as the lenses do. Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`,
+  `total_usd_per_year`, `total_contribution_usd` (null while the margin is not set), the recorded losses only, and
+  the chips and arithmetic of them; `all_in_usd` and `all_in_usd_per_year` add the gaps apart (`apart_gaps` counts
+  them), and the headline and the card's dollar line state both. Asked as "where did the money go this shift".
+- `get_opportunities(window, shift, lens)`: where to look, the levers ranked in $/yr: the speed of each
+  wet-end run under its grade's trailing-year speed (the owner's baseline, [METRICS](METRICS.md#the-owners-targets-and-bands-issue-101);
+  minutes = the run's lineal feet short of the baseline in its running minutes / the baseline), side-trim
+  points over the trim target (points / 100 x gross, priced as paper: per year this is the post's trim
+  formula), each downtime reason (Order change is labelled setup time, Planned maintenance scheduled time,
+  Power outage external), and all recorded shear, the changeover rejects counted with it, and each dry-end
+  family: bond, warp, misalignment, moisture, other (the whole loss). The cutoff-knife and stacker waste boards
+  and the planning / admin entries are priced on the waste breakdown's own rows but are not levers: the boards
+  are defaults the record carries, and admin entries are not production waste (issue #100). Each lever names
+  the records behind it and is marked `control`: `controllable`, `schedule-driven` or `external` (a power
+  outage, outside the plant: the owner on PR #111), with a `control_note` (sequencing, temperatures, the
+  order mix and its web widths). It ranks levers and names records; it never prescribes
+  a machine adjustment. Asked as "where is the money this month", "what's costing us", "opportunities";
+  under the Day control "where is the money" is the shift's own `get_shift_dollars`.
+  `lens` reads the same numbers the owner's two ways (issue #101): `supervisor` ranks the controllable
+  losses and lists side trim and planned maintenance after, unranked, then external downtime, each group by
+  dollars (`cost_model.APART`; "where's my biggest opportunity", "what went wrong yesterday"); `ownership` is
+  the total cost of waste, side trim first (all of it, with its band), then by dollars shear, the changeover
+  rejects, the dry-end waste and the unexplained remainder (`control` `unattributed`) ("what does trim cost",
+  "what's trim costing us"). Bond, warp, misalignment, moisture and other are one group, the tag scrap (the
+  owner, PR #111): the group is ranked by the sum of its rows and carries the rank (`dry_end_rank`, with
+  `dry_end_usd` and `dry_end_usd_per_year` added left to right, and the dry-end waste's `dry_end_pct_of_yield`
+  and band), and each kind is its own row beneath the subtotal line (`group: dry_end`, no rank). `all`, the
+  default, ranks every lever. A dry-end family's share is read against the yield after trim and shear
+  (`pct_of_yield`), as the dry-end band is; shear, the changeover rejects and trim against gross.
 
 ## Money questions
 
@@ -152,7 +174,8 @@ also return the trim line (`trim_over_target`): `trim_pct_of_gross`, `trim_targe
 `trim_over_usd` and `trim_over_usd_per_year` (points / 100 × 1.8M MSF × paper), with `trim_over_terms` to
 re-derive them at another target. Every priced row carries `share_of_window_pct`, its quantity as a share of
 the window's gross or scheduled minutes (the % of Show as). An all-shifts day (or the shifts a question named,
-`shifts=1,3`) reads `get_day_dollars(shifts)`: each gap of `get_shift_dollars` summed over those shifts that are
+`shifts=1,3`) reads `get_day_dollars(shifts)` (its gaps apart and its all-in total as the shift's; the shift that
+lost the most is chosen by the recorded losses, so an outage never decides it): each gap of `get_shift_dollars` summed over those shifts that are
 complete (an incomplete one is named in `excluded_shifts`, not added), rounded as the window tools round (0.1 sq
 ft, 0.01 min) and priced once on their gross (to 0.1) and 480 minutes a complete shift, so its $/yr is the day's
 own and a Day window's tiles price the same quantities as its chips. `shifts` names each shift and its coverage;
@@ -169,13 +192,26 @@ same call with the same products, the same rounding (Python's round half to even
 ranks the money tools' rows and redoes their totals and summary, the trim line and each tile, and rewrites the answer's prose from the re-priced
 rows: each dollar figure becomes the same field re-priced, the rates, formula and contribution lines are
 written again, a ranked money list is put in its new order, and an all-shifts money answer is written
-about the shift that lost the most at the new rates. "What came back, per query" shows each query's result at the
+about the shift that lost the most at the new rates. The levers are ranked the way their lens ranks them (issue
+#101): under the supervisor lens the controllable levers are ranked and the schedule-driven ones (side trim,
+planned maintenance), then the external ones (a power outage), follow them with no rank, however large a rate makes
+them; under the ownership lens all of side trim stays first, however small, and the dry-end subtotal is re-derived
+from its kinds and moves with them (a rate that ranks another lever above it writes the subtotal line and its kinds
+again in that order, renumbered; only the line naming the tag scrap takes the subtotal's figures); the controllable totals the supervisor headline states are re-derived too (a line
+that names controllable losses or buckets takes them, and no other line does, so a window whose controllable total
+reads as its all-lever total keeps each figure its own), and the
+card's panel orders its bars by the lens before the unit. The supervisor card lists every controllable lever (five
+beside the headline, the others under a label), so a lever a rate moves into the top five is written there. The
+speed variance's controllable dollars are re-derived the same way; its grade mix, planned maintenance and external
+stops are never priced. "What came back, per query" shows each query's result at the
 rates in force too (what the page's own address returns from the server), so a re-numbered row citation names the
 row it shows. An analyst's interpretation is not rewritten (a
 model's sentence moved to other figures could claim what no row says, or keep a comparison the new figures
 reverse): at other rates it says which rates it was written at, and the evidence under it is re-priced. So
-the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over nineteen answers at
-six sets of rates (`tests/money_cli.cjs parity`), and the value case
+the page after an edit and the permalink it writes show the same figures, prose included: `tests/test_money_ui.py` checks it over a set of answers
+(the two lenses on a month and on a shift's week, a supervisor week with no planned maintenance and trim under its
+target, a speed variance whose mix is schedule-driven, one with planned maintenance and an external stop each in its
+own bucket, and a supervisor day with a power outage, among them) at six sets of rates (`tests/money_cli.cjs parity`), and the value case
 `value-dollars-shift-0914-shift-2-client` holds the server's `get_shift_dollars` at other rates to the
 client's figures (`evals/client_money.json`, written by `evals/make_client_money.py`). `price_terms`
 never reaches a model (the narrative packet and the OpenAI compaction drop it). A card's money is its

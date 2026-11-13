@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 import time
 from uuid import uuid4
+from . import targets
 from .record_store import FISCAL_START, default_store, fiscal_bounds, fiscal_period, shift_note
 from .records import stop_label
 
@@ -67,7 +68,7 @@ def shift_matrix_row(k):
     n, feet, gross = k['setups'], k['lineal_ft'], k['gross_sqft']
     def ratio(a, b, scale=1):
         return a/b*scale if n and b else None
-    return {'valid_setups': n, 'paper_changes': k['paper_changes'],
+    row = {'valid_setups': n, 'paper_changes': k['paper_changes'],
             'speed_to_target_pct': ratio(feet, k['target_ft'], 100),
             'observed_lineal_ft': feet if n else None, 'observed_shift_fpm': feet/480 if n else None,
             'gross_sqft': gross if n else None,
@@ -79,13 +80,16 @@ def shift_matrix_row(k):
             'waste_board_sqft': k['cutoff_waste_sqft'] + k['stacker_waste_sqft'] if n else None,
             'admin_sqft': k['admin_sqft'] if n else None,
             'trim_pct': ratio(k['trim_sqft'], gross, 100), 'shear_pct': ratio(k['shear_sqft'], gross, 100),
-            'dry_end_pct': ratio(k['reject_sqft'], gross, 100),
+            'dry_end_pct': ratio(k['reject_sqft'], gross-k['trim_sqft']-k['shear_sqft'], 100),   # of the yield after trim and shear (issue #101)
+            'yield_sqft': gross-k['trim_sqft']-k['shear_sqft'] if n else None,
             'maintenance_pct': k['maintenance_seconds']/SHIFT_SECONDS*100,
             'operator_pct': k['operator_seconds']/SHIFT_SECONDS*100,
+            'op_maint_pct': (k['maintenance_seconds']+k['operator_seconds'])/SHIFT_SECONDS*100,
             'pm_pct': k['planned_maintenance_seconds']/SHIFT_SECONDS*100,
             'downtime_pct': k['stop_seconds']/SHIFT_SECONDS*100,
             'lineal_per_setup': ratio(feet, n), 'lineal_per_wet_end': ratio(feet, k['paper_changes']),
             'setups_above_trim_target': k['setups_above_trim_target'], 'source_ids': list(k['source_ids'])}
+    return targets.annotate(row, targets.SHIFT_KPI_BANDS)   # the owner's bands, as the daily KPI tool carries them (issue #101)
 
 
 class PeriodReports:
@@ -156,7 +160,8 @@ class PeriodReports:
                 'maintenance_pct':sum(r['maintenance_pct'] for r in rows)/len(rows),
                 'operator_pct':sum(r['operator_pct'] for r in rows)/len(rows),
                 'downtime_pct':sum(r['downtime_pct'] for r in rows)/len(rows),
-                **{k:sum(r[k]*r['gross_sqft'] for r in rows)/gross for k in ('dry_end_pct','trim_pct','shear_pct')},
+                **{k:sum(r[k]*r['gross_sqft'] for r in rows)/gross for k in ('trim_pct','shear_pct')},
+                'dry_end_pct':sum(r['dry_end_pct']*r['yield_sqft'] for r in rows)/sum(r['yield_sqft'] for r in rows),
                 'throughput_in':gross/feet*12,
                 'lineal_per_setup':feet/sum(r['valid_setups'] for r in rows)}
         totals=aggregate(current); old=aggregate(previous)

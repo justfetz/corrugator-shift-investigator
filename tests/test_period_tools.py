@@ -12,12 +12,17 @@ day are the ones that read unavailable.
 """
 from collections import defaultdict
 from datetime import date, timedelta
+import json
+from pathlib import Path
 import re
 import pytest
 from investigator.agent import Agent, Context, PERIOD_TOOLS, TOOL_SCHEMAS, parse_request
 from investigator.record_store import (KPI_CATALOG, TREND_METRICS, default_store, fiscal_bounds, parse_window, previous_window, window_label)
 from investigator import records as R
 from investigator.synth import generate_months
+
+# The owner's rule (PR #111, targets.json): a power outage counts as External downtime, never as maintenance.
+EXTERNAL = json.loads((Path(__file__).resolve().parent.parent / "src" / "investigator" / "targets.json").read_text())["external"]
 
 
 @pytest.fixture(scope="module")
@@ -54,16 +59,18 @@ def plain_kpis(data, start, end, shift=None):
     boards = sum(lane.cutoff_waste_sqft + lane.stacker_waste_sqft for s in setups for lane in s.lanes)
     accounted = trim + shear + rejects + lines["shear"] + lines["excluded"] + boards
     bale = sum(sh.bale_sqft for sh in shifts)
+    net = gross - trim - shear
     kinds = defaultdict(float)
     for st in stops:
-        kinds[st.kind] += st.duration_sec / 60
+        kinds[EXTERNAL["kind"] if st.reason in EXTERNAL["reasons"] else st.kind] += st.duration_sec / 60
     return {
         "volume_msf": gross / 1000, "lineal_ft": feet, "speed_run_fpm": feet / running, "speed_all_fpm": feet / scheduled,
         "downtime_pct": stop_minutes / scheduled * 100, "downtime_minutes": stop_minutes, "stops": len(stops),
         "minutes_per_stop": stop_minutes / len(stops), "trim_pct": trim / gross * 100, "shear_pct": shear / gross * 100,
-        "dry_end_pct": rejects / gross * 100, "bond_pct": reasons["BOND"] / gross * 100, "warp_pct": reasons["WARP"] / gross * 100,
-        "misalignment_pct": reasons["MISALIGNMENT"] / gross * 100, "moisture_pct": reasons["MOISTURE"] / gross * 100,
-        "other_pct": reasons["OTHER"] / gross * 100, "bale_pct": bale / gross * 100,
+        # dry-end waste is a percent of the yield after trim and shear (issue #101); the rest of the waste is of gross
+        "dry_end_pct": rejects / net * 100, "bond_pct": reasons["BOND"] / net * 100, "warp_pct": reasons["WARP"] / net * 100,
+        "misalignment_pct": reasons["MISALIGNMENT"] / net * 100, "moisture_pct": reasons["MOISTURE"] / net * 100,
+        "other_pct": reasons["OTHER"] / net * 100, "bale_pct": bale / gross * 100,
         "unexplained_pct": (bale - accounted) / gross * 100,
         "maintenance_pm_pct": (kinds["Maintenance"] + kinds["Scheduled"]) / scheduled * 100, "operator_pct": kinds["Operator"] / scheduled * 100,
         "setups": len(setups), "paper_changes": len({s.wet_end_id for s in setups}),
@@ -129,6 +136,8 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
         assert (row["label"], row["unit"], row["better"]) == (label, unit, better)
         if better == "neutral":
             assert row["change"] == "neutral"
+        elif row["delta"] == 0:   # a tile that did not move reads "same" (issue #35)
+            assert row["change"] == "same"
         else:
             improved = (row["delta"] < 0) == (better == "lower")
             assert row["change"] == ("better" if improved else "worse")
@@ -258,10 +267,16 @@ def test_waste_breakdown_matches_sums_and_month_story(store, data):
     assert rows["bale"]["sqft"] == pytest.approx(sum(sh.bale_sqft for sh in between(data["shifts"], date(2026, 9, 1), date(2026, 9, 30))), abs=0.1)
     lines = ("trim", "shear", "changeover", "cutoff_waste", "stacker_waste", "dry_end", "admin")
     assert rows["unexplained"]["sqft"] == pytest.approx(rows["bale"]["sqft"] - sum(rows[k]["sqft"] for k in lines), abs=0.5)
-    for key, metric in (("trim", "trim_pct"), ("shear", "shear_pct"), ("warp", "warp_pct"), ("bale", "bale_pct"), ("unexplained", "unexplained_pct")):
+    for key, metric in (("trim", "trim_pct"), ("shear", "shear_pct"), ("bale", "bale_pct"), ("unexplained", "unexplained_pct")):
         assert rows[key]["pct_of_gross"] == pytest.approx(september[metric], rel=1e-3)
         assert rows[key]["previous_pct_of_gross"] == pytest.approx(august[metric], rel=1e-3)
         assert rows[key]["delta_pct_points"] == pytest.approx(september[metric] - august[metric], abs=1e-3)
+    # dry-end families: of gross on the waste ladder, and of the yield after trim and shear beside it (issue #101)
+    for key, metric in (("warp", "warp_pct"), ("bond", "bond_pct"), ("dry_end", "dry_end_pct")):
+        assert rows[key]["pct_of_yield"] == pytest.approx(september[metric], rel=1e-3)
+        assert rows[key]["previous_pct_of_yield"] == pytest.approx(august[metric], rel=1e-3)
+        assert rows[key]["pct_of_gross"] == pytest.approx(rows[key]["sqft"] / result["gross_sqft"] * 100, rel=1e-3)
+    assert rows["dry_end"]["band"] == "over target" and rows["trim"]["band"] == "over target" and rows["shear"]["band"] == "on target"
     assert result["gross_sqft"] == pytest.approx(september["volume_msf"] * 1000, rel=1e-6)
     assert 0.1 <= rows["unexplained"]["pct_of_gross"] <= 0.4
     assert rows["warp"]["previous_pct_of_gross"] > rows["warp"]["pct_of_gross"]   # August warp above September
@@ -337,7 +352,8 @@ def test_grade_totals_are_ratios_of_sums_within_each_grade(store, data):
         assert row["speed_elapsed_fpm"] <= row["speed_run_fpm"]
         assert row["speed_to_target_pct"] == pytest.approx(row["speed_run_fpm"] / row["target_fpm"] * 100, abs=0.06)
         assert row["trim_pct"] == pytest.approx(sum(s.trim_sqft for s in mine) / gross * 100, abs=1e-3)
-        assert row["dry_end_pct"] == pytest.approx(sum(s.reject_sqft for s in mine) / gross * 100, abs=1e-3)
+        net = gross - sum(s.trim_sqft + s.chop_sqft for s in mine)   # the yield after trim and shear (issue #101)
+        assert row["dry_end_pct"] == pytest.approx(sum(s.reject_sqft for s in mine) / net * 100, abs=1e-3)
         assert row["downtime_pct_of_elapsed"] == pytest.approx(sum(s.stop_time_sec for s in mine) / sum(s.elapsed_seconds for s in mine) * 100, abs=1e-3)
         assert row["lineal_per_setup"] == pytest.approx(feet / len(mine), abs=0.06)
         assert row["lineal_per_wet_end"] == pytest.approx(feet / row["wet_ends"], abs=0.06)
@@ -399,7 +415,8 @@ def test_speed_opportunity_best_fifth_is_a_ratio_of_sums(store, data):
         if run < 2.0:
             short += 1
             continue
-        cells[(s.quality_id, f"{s.web_width_in:g} in")].append((s.lineal_ft / run, s.lineal_ft, run, s.reject_sqft, s.total_produced_sqft))
+        cells[(s.quality_id, f"{s.web_width_in:g} in")].append((s.lineal_ft / run, s.lineal_ft, run, s.reject_sqft,
+                                                               s.total_produced_sqft - s.trim_sqft - s.chop_sqft))   # dry-end over yield (#101)
     thin = {key for key, rows in cells.items() if len(rows) < 10}
     assert result["excluded_short_setups"] == short and len(result["rows"]) == len(cells) - len(thin)
     assert {(c["grade"], c["slice"]) for c in result["thin_cells"]} == thin and all(c["setups"] < 10 for c in result["thin_cells"])
@@ -632,7 +649,7 @@ def test_period_tool_schemas_are_declared():
     assert PERIOD_TOOLS <= names and PERIOD_TOOLS == {"get_period_kpis", "compare_periods", "get_downtime_pareto",
                                                      "get_waste_breakdown", "get_stops_profile", "get_trend",
                                                      "get_grade_totals", "get_overrun", "get_speed_opportunity", "get_rollstock",
-                                                     "get_opportunities", "get_speed_variance"}
+                                                     "get_opportunities", "get_speed_variance", "get_downtime_review"}
     for schema in TOOL_SCHEMAS:
         if schema["name"] in PERIOD_TOOLS:
             assert schema["parameters"]["additionalProperties"] is False and "shift" in schema["parameters"]["properties"]

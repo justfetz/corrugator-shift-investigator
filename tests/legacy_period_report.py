@@ -83,7 +83,9 @@ class LegacyPeriodReports:
                 'maintenance_pct':sum(r['maintenance_pct'] for r in rows)/len(rows),
                 'operator_pct':sum(r['operator_pct'] for r in rows)/len(rows),
                 'downtime_pct':sum(r['downtime_pct'] for r in rows)/len(rows),
-                **{k:sum(r[k]*r['gross_sqft'] for r in rows)/gross for k in ('dry_end_pct','trim_pct','shear_pct')},
+                **{k:sum(r[k]*r['gross_sqft'] for r in rows)/gross for k in ('trim_pct','shear_pct')},
+                # dry-end waste is a percent of the yield after trim and shear (issue #101): weighted by each shift's yield
+                'dry_end_pct':sum(r['dry_end_pct']*r['yield_sqft'] for r in rows)/sum(r['yield_sqft'] for r in rows),
                 'throughput_in':gross/feet*12,
                 'lineal_per_setup':feet/sum(r['valid_setups'] for r in rows)}
         totals=aggregate(current); old=aggregate(previous)

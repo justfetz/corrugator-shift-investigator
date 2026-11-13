@@ -52,12 +52,25 @@ def packet():
     return json.loads((ROOT / 'tests' / 'narrative_packet_2026-08-26.json').read_text())
 
 
+# Fields issue #101 added to these tools' rows, which the frozen day (dataset d9143ff1d150, no longer generated since
+# issue #35) never carried: the owner's bands, the yield after trim and shear, maintenance and operator together, and each
+# downtime reason's stop count, minutes per stop and whether it is scheduled time. The frozen rows' own values stay as
+# they were; only these may be missing from them.
+ADDED_BY_101 = {'get_shift_kpis': {'dry_end_band', 'dry_end_band_text', 'maintenance_band', 'maintenance_band_text', 'op_maint_band',
+                                   'op_maint_band_text', 'op_maint_pct', 'operator_band', 'operator_band_text', 'shear_band',
+                                   'shear_band_text', 'trim_band', 'trim_band_text', 'yield_sqft'},
+                'get_downtime_breakdown': {'minutes_per_stop', 'scheduled', 'stops', 'external'},   # external: the owner on PR #111
+                'get_waste_breakdown': {'band', 'band_text'}}
+
+
 def test_the_frozen_packet_has_the_live_packet_shape(analysis):
-    """The frozen rows stay what build_packet makes today: the same tools, row fields and coverage."""
+    """The frozen rows stay what build_packet makes today: the same tools, row fields and coverage (but the fields
+    issue #101 added, which the frozen day cannot carry)."""
     live, frozen = build_packet(analysis, default_store()), json.loads((ROOT / 'tests' / 'narrative_packet_2026-08-26.json').read_text())
     assert [(p['result_id'], p['tool'], p['coverage']) for p in live] == [(p['result_id'], p['tool'], p['coverage']) for p in frozen]
     for a, b in zip(live, frozen):
-        assert set(a) == set(b) and a['rows'] and b['rows'] and set(a['rows'][0]) == set(b['rows'][0]), a['tool']
+        assert set(a) == set(b) and a['rows'] and b['rows'], a['tool']
+        assert set(b['rows'][0]) <= set(a['rows'][0]) and set(a['rows'][0]) - set(b['rows'][0]) <= ADDED_BY_101.get(a['tool'], set()), a['tool']
 
 
 def stream(packet, *lines, chunk=7):

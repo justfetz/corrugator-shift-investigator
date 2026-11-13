@@ -32,7 +32,9 @@ def test_area_and_speed_independent_calculation(analysis):
     assert row["observed_shift_fpm"] == pytest.approx(feet/480)
     assert row["gross_sqft"] == pytest.approx(area)
     assert row["throughput_in"] == pytest.approx(area/feet*12)
-    assert row["dry_end_pct"] == pytest.approx(sum(float(s.get('reject_sheets'))*float(s[0].get('width_in'))*float(s[0].get('length_in'))/144 for s in setups)/area*100)
+    # dry-end waste is a percent of the yield after trim and shear (issue #101)
+    net = area - sum(float(s.get("trim_sqft")) + float(s.get("shear_sqft")) for s in setups)
+    assert row["dry_end_pct"] == pytest.approx(sum(float(s.get('reject_sheets'))*float(s[0].get('width_in'))*float(s[0].get('length_in'))/144 for s in setups)/net*100)
     assert len(row["source_ids"]) == len(setups)
 
 def test_continuing_order_and_shared_footage():
