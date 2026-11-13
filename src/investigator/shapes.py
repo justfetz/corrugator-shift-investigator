@@ -162,6 +162,13 @@ def argmin(rows, key):
     return min(candidates)[1] if candidates else None
 
 
+def gap_tag(row):
+    """A ranked money-card gap's control tag, from the tool row (cost_model.gap_control): " · schedule-driven" on side
+    trim (targets.json's trim band lever; the owner, issue #135); nothing on a controllable gap or one with no control."""
+    control = row.get('control')
+    return f' · {control}' if control and control != 'controllable' else ''
+
+
 def all_in(data):
     """A money card's all-in total, with the gaps it shows apart (planned maintenance, a power outage; the owner on PR #111);
     nothing when it holds none, since the recorded losses are then all of it."""
@@ -755,7 +762,8 @@ class DailyAnswer:
         head = (f'**{money(data["total_usd"])}** of recorded losses{self.clause(s, low=False)} · {money(data["total_usd_per_year"])} per year at '
                 f'the post\'s volumes{all_in(data)} {ref(d)}')
         yearly = lambda r: f' · {money(r["usd_per_year"])}/yr' if r.get('usd_per_year') is not None else ''
-        bullets = [bullet(f'{r["rank"]}. {r["gap"]}: **{money(r["usd"])}**{yearly(r)}', d, i) for i, r in enumerate(rows) if not r.get('apart')]
+        # a ranked gap the tool marks other than controllable says so (side trim, schedule-driven: the owner, issue #135)
+        bullets = [bullet(f'{r["rank"]}. {r["gap"]}: **{money(r["usd"])}**{yearly(r)}{gap_tag(r)}', d, i) for i, r in enumerate(rows) if not r.get('apart')]
         # planned maintenance and a power outage: on the card with their dollars, apart from the ranked losses (the owner, PR #111)
         for apart, label in (('schedule-driven', 'Schedule-driven, shown apart'), ('external', 'External, not controllable')):
             mine = [(i, r) for i, r in enumerate(rows) if r.get('apart') == apart]

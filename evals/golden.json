@@ -5782,6 +5782,7 @@
    "scope": "shift",
    "shift": 2,
    "question": "Where did the money go this shift?",
+   "note": "Issue #135 (the owner, 2026-11-12): side trim, this shift's first ranked loss, stays ranked and is tagged \" · schedule-driven\" from its row's control (targets.json's trim band lever). The first ranked line's pattern accepted any gap with no tag before; it now names side trim and requires the tag, so the line is held more tightly than it was.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
     "status": "complete",
@@ -5800,7 +5801,7 @@
     "charts": 1,
     "sections_match": [
      "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes \\(query 1\\)$",
-     "^- 1\\. .*: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr \\(query 1 · row 0\\)$",
+     "^- 1\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query 1 · row 0\\)$",
      "^Contribution margin not set"
     ]
    }
