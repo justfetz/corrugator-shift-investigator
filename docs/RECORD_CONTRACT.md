@@ -1,6 +1,6 @@
 # The record contract
 
-The investigator's records describe a **generic corrugator dry-end setup record**: one row per run setup, up to three orders (lanes) across the web, the way corrugators record a setup whatever their make. Nothing here is one vendor's table, and no vendor, product or source-system table name appears in the code, the docs or the goldens (a test in `tests/test_repo_hygiene.py` fails if one does). The field *meanings* are the plant's: run setup, quality ID, scheduled against actual lineal feet, the shear chop, the swing knife, order lanes with outs, cuts, cutoff knife and stacker waste boards, change codes O and S.
+The investigator's records describe a **generic corrugator dry-end setup record**: one row per run setup, up to three orders (lanes) across the web, the way corrugators record a setup whatever their make. Nothing here is one vendor's table, and no vendor, product or source-system table name appears in the code, the docs or the goldens (a test in `tests/test_repo_hygiene.py` fails if one does). The field *meanings* are the plant's, and the **Plant term** column says each one in a corrugated plant's own words, never as one system's field name: run setup, quality ID, scheduled against actual lineal feet, the shear chop, the swing knife, order lanes with outs, cuts, cutoff knife and stacker waste boards, change codes O and S.
 
 This page is contract v2 (`demo-records/v2`, issue #100). The dry-end setup is the fact table; the generator schedules orders into it and every production day regenerates from it. [The record families](RECORDS.md) documents the JSONL records field by field; [metrics](METRICS.md) gives the formulas the tools compute from them.
 
@@ -26,53 +26,53 @@ Every store column carries the contract's name, one name for each meaning (owner
 
 ## The dry-end setup (`setups`)
 
-| Ours | Record field | Typical MES field | Notes |
+| Ours | Record field | Plant term | Notes |
 | --- | --- | --- | --- |
-| `setup_id` | `setup_id` | `RunSetup` | key: machine code + start stamp + sequence in the shift |
-| (the table is one machine's) | `machine_id` | `MachineID` | the corrugator the record belongs to (`CORR-1`) |
-| `production_date`, `shift` | `production_date`, `shift_number` | `ProductionDate`, `ShiftNumber` | a production day starts 07:00 and carries its start date |
-| `started`, `ended` | `start_date` + `start_time`, `end_date` + `end_time` | `StartDate` + `StartTime`, `EndDate` + `EndTime` | the record keeps the MES's date and time pairs; the store joins them |
-| `run_seconds` | `actual_run_sec` | `ActualRunTime` | running time: elapsed minus the stops inside the setup. Elapsed is the store's `seconds` |
-| `lineal_ft` | `lineal_ft` | `LinealFeetProduced` | as run: the longest lane's actual cuts × its length / 12, plus the shear chops |
-| `scheduled_lineal_ft` | `total_nominal_ft` | `TotalScheduledNominalFeet` | the plan: the longest lane's nominal cuts × its length / 12 |
-| `avg_fpm` | `avg_speed_fpm` | `AverageSpeedFPM` | lineal / elapsed minutes, stops included |
-| `web_width_in` | `web_width_in` | `WebWidth` | 90–110 in, 5-in steps: the narrowest paper at least as wide as the used width plus the minimum trim |
-| `quality_id` | `quality_id` | `QualityID` | the board grade key (`fixture.GRADES`: 26-C, 32-C, 55-C, 200-C, 275-BC, 275-EB) |
-| `gross_sqft` | `total_produced_sqft` | `TotalSquareFootageProduced` | web × lineal / 12 |
-| `trim_sqft`, `trim_pct` | `trim_sqft`, `trim_pct` | `TrimSquareFootage`, `TrimPercentage` | trim inches × order travel / 12; trim inches / web × 100. The store adds `trim_in` |
-| `shear_sqft` | `chop_sqft` | `ChopSquareFootage` | the shear chops: full-web, 34 in each, part of gross |
-| `swing_knife_sqft` | `swing_knife_sqft` | `SwingKnifeSquareFootage` | optional: null when the machine has no swing knife (most machines; the demo corrugator has none), **never zero** |
-| `change_code` | `change_code` | `ChangeCode` | a code with a lookup (`records.CHANGE_CODES`): `O` a regular order change, `S` a shift split (the setup continues `split_from` across a shift boundary); others are added as they appear |
-| `stop_seconds`, `stops` | `stop_time_sec`, `number_of_stops` | `StopTimeForThisOrder`, `NumberOfStops` | the setup's summary of the downtime log: the sum and the count of its stop rows |
-| `is_fanfold` | `is_fanfold` | `isFanfold` | the setup ran to a fanfold delivery (one lane; about 1% of orders, single wall only) |
+| `setup_id` | `setup_id` | run setup number | key: machine code + start stamp + sequence in the shift |
+| (the table is one machine's) | `machine_id` | machine | the corrugator the record belongs to (`CORR-1`) |
+| `production_date`, `shift` | `production_date`, `shift_number` | production date, shift number | a production day starts 07:00 and carries its start date |
+| `started`, `ended` | `start_date` + `start_time`, `end_date` + `end_time` | start and end, each a date and a time | the record keeps the date and time pairs a plant's system records; the store joins them |
+| `run_seconds` | `actual_run_sec` | actual run time | running time: elapsed minus the stops inside the setup. Elapsed is the store's `seconds` |
+| `lineal_ft` | `lineal_ft` | lineal feet as run | as run: the longest lane's actual cuts × its length / 12, plus the shear chops |
+| `scheduled_lineal_ft` | `total_nominal_ft` | scheduled (nominal) lineal feet | the plan: the longest lane's nominal cuts × its length / 12 |
+| `avg_fpm` | `avg_speed_fpm` | average speed, ft/min | lineal / elapsed minutes, stops included |
+| `web_width_in` | `web_width_in` | web (paper) width | 90–110 in, 5-in steps: the narrowest paper at least as wide as the used width plus the minimum trim |
+| `quality_id` | `quality_id` | board grade | the board grade key (`fixture.GRADES`: 26-C, 32-C, 55-C, 200-C, 275-BC, 275-EB) |
+| `gross_sqft` | `total_produced_sqft` | gross square feet made | web × lineal / 12 |
+| `trim_sqft`, `trim_pct` | `trim_sqft`, `trim_pct` | side trim, sq ft and % | trim inches × order travel / 12; trim inches / web × 100. The store adds `trim_in` |
+| `shear_sqft` | `chop_sqft` | shear chops, sq ft | the shear chops: full-web, 34 in each, part of gross |
+| `swing_knife_sqft` | `swing_knife_sqft` | swing-knife waste, sq ft | optional: null when the machine has no swing knife (most machines; the demo corrugator has none), **never zero** |
+| `change_code` | `change_code` | change code | a code with a lookup (`records.CHANGE_CODES`): `O` a regular order change, `S` a shift split (the setup continues `split_from` across a shift boundary); others are added as they appear |
+| `stop_seconds`, `stops` | `stop_time_sec`, `number_of_stops` | stop time and stop count of the setup | the setup's summary of the downtime log: the sum and the count of its stop rows |
+| `is_fanfold` | `is_fanfold` | fanfold delivery (yes / no) | the setup ran to a fanfold delivery (one lane; about 1% of orders, single wall only) |
 | `wet_end_id` | `wet_end_id` | (ours) | the paper run the setup belongs to |
 | `sheet_type`, `filler` | `sheet_type`, `filler` | (ours) | `product`, `bottom_sheet`, `cap_sheet` (product when any lane is); `filler` when a pallet-sheet lane was added to fill a tough trim |
 | `lanes` | `len(lanes)` | (ours) | 1–3 |
 | `reject_sqft` | the dry-end families of `rejects` | (ours) | dry-end quality reject sq ft (bond, warp, misalignment, moisture, other) |
 | `changeover_sqft`, `admin_sqft` | the changeover and admin lines of `rejects` | (ours) | changeover rejects (counted with shear) and planning / admin entries |
 | `cutoff_waste_sqft`, `stacker_waste_sqft` | sums over `lanes` | (ours) | the lanes' cutoff-knife and stacker waste boards in sq ft |
-| `split_from` | `split_from_setup_id` | (ours; carried by `ChangeCode` S) | the setup an S record continues |
+| `split_from` | `split_from_setup_id` | (ours; implied by change code S) | the setup an S record continues |
 | `target` | (`fixture.GRADES`) | (ours) | the grade's target speed, a configured table |
 
 ## Order lanes (`setup_orders`)
 
 One row per lane; lane N of the setup record carries one customer's slice of the web. Outs live here, never on the customer.
 
-| Ours | Record field | Typical MES field | Notes |
+| Ours | Record field | Plant term | Notes |
 | --- | --- | --- | --- |
-| `lane` | `lane` | the N of the lane's fields | 1–3 across the web |
-| `order_number`, `part_number` | `order_number`, `part_number` | `OrderNumberN`, `PartNumberN` | `SO-YYMMDDnnnn`: the production day and the order's sequence in it |
-| `customer_id` | `customer_id` | `CustomerNameN` | the customer dimension's key (the MES carries the name) |
+| `lane` | `lane` | lane across the web | 1–3 across the web |
+| `order_number`, `part_number` | `order_number`, `part_number` | order and item number, per lane | `SO-YYMMDDnnnn`: the production day and the order's sequence in it |
+| `customer_id` | `customer_id` | customer, per lane | the customer dimension's key (a plant's setup record often carries the name) |
 | `order_quantity` | `order_quantity` | (ours) | the sheets the order asks for over all its setups; 0 for a filler lane |
-| `outs` | `number_of_outs` | `NumberOfOutsN` | sheets across the web for this lane |
-| `sheet_width_in`, `sheet_length_in` | `sheet_width_in`, `sheet_length_in` | `SheetWidthN`, `SheetLengthN` | widths in eighths of an inch; the length is the cutoff |
-| `nominal_cuts`, `actual_cuts` | `nominal_cuts`, `actual_cuts` | `NominalCutsN`, `ActualCutsN` | scheduled and as run; actual within ±10% (the over/under-run window) |
-| `cutoff_knife` | `cutoff_allocation` | `CutoffAllocationN` | the knife the lane is assigned to: lane 1 → cutoff knife 1 → stacker 1 |
-| `cutoff_waste_boards`, `stacker_waste_boards` | the same | `CutoffKnifeWasteN`, `StackerWasteN` | the default waste-board counts the record carries: boards lost at the lane's cutoff knife and at its stacker at an order change (none on an S split) |
+| `outs` | `number_of_outs` | outs, per lane | sheets across the web for this lane |
+| `sheet_width_in`, `sheet_length_in` | `sheet_width_in`, `sheet_length_in` | sheet width and length, per lane | widths in eighths of an inch; the length is the cutoff |
+| `nominal_cuts`, `actual_cuts` | `nominal_cuts`, `actual_cuts` | scheduled and actual cuts, per lane | scheduled and as run; actual within ±10% (the over/under-run window) |
+| `cutoff_knife` | `cutoff_allocation` | cutoff knife the lane runs on | the knife the lane is assigned to: lane 1 → cutoff knife 1 → stacker 1 |
+| `cutoff_waste_boards`, `stacker_waste_boards` | the same | cutoff-knife and stacker waste boards, per lane | the default waste-board counts the record carries: boards lost at the lane's cutoff knife and at its stacker at an order change (none on an S split) |
 | `cutoff_waste_sqft`, `stacker_waste_sqft` | the same | (ours) | the boards × the lane's sheet size; their own waste lines, never dry-end quality |
 | `sheet_type`, `filler` | the same | (ours) | pallet bottom and cap sheets are the plant's own (customer C000) |
 | `stack_height` | `stack_height_sheets` | (ours) | sheets per stack at the stacker |
-| `folds`, `sheets_per_pallet`, `pallets`, `perforation_length_in` | the same | `FoldsN`, `SheetsPerPalletN`, `PalletsN`, `PerforationLengthN` | fanfold delivery only; null otherwise |
+| `folds`, `sheets_per_pallet`, `pallets`, `perforation_length_in` | the same | folds, sheets per pallet, pallets, perforation length, per lane | fanfold delivery only; null otherwise |
 | `width_share` | (derived) | (ours) | the lane's outs × sheet width / the setup's used width |
 | `allocated_trim_sqft`, `allocated_shear_sqft` | (derived) | (ours) | the setup's side trim and shear chops × `width_share`: each customer's part of the setup's own waste (identity 6); a setup's lanes add up to its trim and shear |
 
@@ -146,7 +146,7 @@ A window's waste breakdown (`get_waste_breakdown`) lists every line the records 
 | `admin` | planning / admin entries, reported apart (not production waste) |
 | `bale`, `unexplained` | the shift bale's scale reading, and the bale minus every line above (0.1–0.4% of gross) |
 
-**Good output** is the saleable board: gross minus every recorded line above but the bale (trim, shear, changeover, the cutoff-knife and stacker boards, dry-end and planning / admin), so the lines and good output add back to gross (owner, 2026-11-12). The waste breakdown carries it as `good_output_sqft` and `good_output_pct`, the daily KPI row as `estimated_good_sqft` beside each line it subtracts, and each loss is priced once, on its own line: the shift's dollars list the changeover rejects and the waste boards as their own gaps.
+**Good output** is the saleable board: gross minus every recorded line above but the bale (trim, shear, changeover, the cutoff-knife and stacker boards, dry-end and planning / admin), so the lines and good output add back to gross (owner, 2026-11-12). The waste breakdown carries it as `good_output_sqft` and `good_output_pct`, the daily KPI row as `estimated_good_sqft` beside each line it subtracts, and each loss is priced once, on its own line: the shift's dollars list the changeover rejects and the waste boards as their own gaps, and the ownership lens prices every line once, so its total is the waste breakdown's.
 
 ## Roll stock (`rolls`)
 

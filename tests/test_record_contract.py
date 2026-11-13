@@ -172,7 +172,7 @@ def test_setup_orders_outs_times_width_fit_the_web_minus_trim_for_every_setup():
 
 def test_the_stop_log_sums_to_each_setups_summary(store):
     """Owner, 2026-11-11: for every setup, the sum of its stop rows' seconds equals its stop seconds and the row
-    count its number of stops ("RunSetup 1234 had 2 stops, down 973 seconds")."""
+    count its number of stops ("run setup 1234 had 2 stops, down 973 seconds")."""
     rows = sql(store, """SELECT s.setup_id, s.stop_seconds, s.stops, coalesce(sum(st.seconds), 0), count(st.stop_id)
                          FROM setups s LEFT JOIN stops st ON st.setup_id = s.setup_id GROUP BY ALL""")
     assert rows and all(seconds == logged and stops == count for _, seconds, stops, logged, count in rows)
@@ -286,8 +286,11 @@ def test_moisture_is_its_own_dry_end_family():
 
 def test_the_contract_document_maps_every_field_and_column():
     """docs/RECORD_CONTRACT.md names every record field of every family and every column of every table, each in
-    backticks, so nothing reaches the store undocumented; it maps to typical MES fields and says what is not
-    modeled (taken from #122's test, adapted to this contract's families)."""
+    backticks, so nothing reaches the store undocumented; it gives each field its generic plant term and says what is
+    not modeled (taken from #122's test, adapted to this contract's families). The plant terms are plain words, never
+    one source system's CamelCase field names (a setup key, a fanfold flag or a lane's numbered fields as an export
+    spells them): the contract describes a generic corrugator, not one system's export (the coordinator's re-review of
+    PR #123, item 6). Only this package's own record classes are CamelCase there."""
     text = (ROOT / "docs" / "RECORD_CONTRACT.md").read_text(encoding="utf-8")
     named = set(re.findall(r"`([a-z_]+)`", text))
     for family in (*R.FAMILIES.values(), *R.DIMENSIONS.values(), R.OrderLane, R.RejectEntry):
@@ -296,7 +299,10 @@ def test_the_contract_document_maps_every_field_and_column():
     for table, columns in TABLES.items():
         missing = {c.split()[0] for c in columns.split(", ")} - named
         assert not missing, (table, missing)
-    assert "not modeled" in text.lower() and "Typical MES field" in text
+    assert "not modeled" in text.lower() and "| Ours | Record field | Plant term | Notes |" in text and "Typical MES" not in text
+    ours = {family.__name__ for family in (*R.FAMILIES.values(), *R.DIMENSIONS.values(), R.OrderLane, R.RejectEntry)}
+    camel = set(re.findall(r"`([A-Za-z]*[a-z][A-Z][A-Za-z0-9]*|[A-Z][a-z]+[A-Z][A-Za-z0-9]*)`", text)) - ours
+    assert not camel, f"source-system field names in the contract: {sorted(camel)}"
     for change in R.CHANGE_CODES:
         assert f"`{change}`" in text
 
