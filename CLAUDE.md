@@ -49,7 +49,7 @@ The facts a session needs; the procedures and decisions are in `docs/DEPLOYMENT.
 | Deploys | Every push to `main` and every weekday at 13:00 UTC (the window moves); each PR gets a no-traffic tagged revision `pr-<n>` (`preview.yml`) |
 | Deploy credential | The stored `GCP_SA_KEY` secret until the keyless cutover (#28: Workload Identity Federation, repository variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_DEPLOYER_SERVICE_ACCOUNT`); #133 tightens it before agents run |
 | Secrets | Secret Manager `anthropic-api-key`, mounted by name as `ANTHROPIC_API_KEY` (repository variable `ANTHROPIC_SECRET_NAME`); OpenAI not mounted |
-| Logs | Cloud Logging, `_Default` bucket, 30 days. From PR #131 (issue #125) the question log prints one JSON line per question there, and an owner-run sink copies it to BigQuery dataset `question_log` (90-day partitions) |
+| Logs | Cloud Logging, `_Default` bucket, 30 days. The question log (issue #125) prints one JSON line per question there, and the sink `question-log` copies it to BigQuery dataset `question_log` (90-day partitions; set up by the owner on 2026-11-13, BigQuery API enabled the same day) |
 | Owner only | IAM, billing and budget alerts, secrets, the domain mapping, the WIF cutover, the question-log sink. Sessions never change these (see Permissions) |
 
 ## Rules
