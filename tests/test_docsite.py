@@ -404,13 +404,24 @@ def test_the_figures_refuse_last_run_and_history_from_different_runs(tmp_path):
     """`evals/run.py --track` writes the two files together; a pair that disagrees is a stale figure, by its
     time, its commit or its dataset (Codex on #120: two runs in one minute at one commit, data regenerated)."""
     root = figure_root(tmp_path)
-    history = root / 'evals' / 'history.jsonl'
-    lines = history.read_text(encoding='utf-8').splitlines()
-    newest = json.loads(lines[-1])
+    history, path = root / 'evals' / 'history.jsonl', root / 'evals' / 'last_run.json'
+    lines, kept = history.read_text(encoding='utf-8').splitlines(), path.read_text(encoding='utf-8')
+    newest, last = json.loads(lines[-1]), json.loads(kept)
+    assert [newest[k] for k in ('ran_at', 'commit', 'dataset')] == [last[k] for k in ('ran_at', 'commit', 'dataset')]
     for key, other in (('commit', 'deadbee'), ('ran_at', '2026-01-01T00:00Z'), ('dataset', '000000000000')):
         history.write_text('\n'.join(lines[:-1] + [json.dumps({**newest, key: other})]) + '\n', encoding='utf-8')
         with pytest.raises(ValueError, match='different runs'):
             docsite.figures(root)
+    history.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    docsite.figures(root)
+    # The coordinator's amended verdict on #120, item 1: the same minute and the same commit on both sides, the
+    # dataset regenerated in between, from either file's side.
+    path.write_text(json.dumps({**last, 'dataset': '000000000000'}), encoding='utf-8')
+    with pytest.raises(ValueError, match='different runs'):
+        docsite.figures(root)
+    path.write_text(json.dumps({key: value for key, value in last.items() if key != 'dataset'}), encoding='utf-8')
+    with pytest.raises(ValueError, match='different runs'):
+        docsite.figures(root)
 
 
 def test_the_score_table_leaves_skips_and_known_defects_unscored(tmp_path):
