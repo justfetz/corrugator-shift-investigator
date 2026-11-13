@@ -48,6 +48,7 @@ SECTIONS = (
     ('Numbers and evals', (('numbers-and-evals', 'docs/EVALS.md', 'Numbers and evals'),
                            ('golden-set', 'evals/README.md', 'The golden set in full'),
                            ('metrics', 'docs/METRICS.md', 'Metrics and formulas'),
+                           ('semantic-model', 'src/investigator/semantic_model.json', 'The semantic model'),
                            ('testing', 'docs/TESTING.md', 'Testing'))),
     ('Cost model', (('cost-model', 'docs/COST_MODEL.md', 'Cost model'),)),
     ('Data', (('data', 'docs/DATA.md', 'Data'),
@@ -61,6 +62,14 @@ UNLISTED = {'docs/FIRST_SLICE.md': 'a historical design snapshot of the first sl
 # the hosted demo runs on the server's Anthropic key, and OpenAI is an optional provider (issue #93).
 PROVIDER_DOCS = ('docs/ANTHROPIC_DEMO.md', 'docs/OPENAI_BYOK.md')
 OPENAI_KEY = re.compile(r"openai(?:'s)?\s+(?:api\s+)?key", re.I)
+
+# Pages generated from a data file when the site is built (issue #117): source -> the function that renders its text.
+def _semantic_page(text):
+    from .semantic import model_markdown
+    return model_markdown(text)
+
+
+GENERATED_PAGES = {'src/investigator/semantic_model.json': _semantic_page}
 
 # ---- Figures (issue #116): pages whose every number is read at build, never typed.
 FIGURE_PAGES = ('docs/CASE_STUDY.md',)
@@ -642,6 +651,8 @@ def build_site(root=ROOT, strict=True):
         if not path.is_file():
             raise FileNotFoundError(f'docs site: {page["source"]} is listed in SECTIONS but does not exist')
         text = path.read_text(encoding='utf-8')
+        if page['source'] in GENERATED_PAGES:
+            text = GENERATED_PAGES[page['source']](text)
         if page['source'] in FIGURE_PAGES:
             try:
                 text, values = _figures_page(page, text, root, values)

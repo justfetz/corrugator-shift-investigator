@@ -51929,6 +51929,945 @@
      }
     }
    }
+  },
+  {
+   "id": "value-semantic-downtime-by-grade-maintenance-week-0914",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "downtime_minutes",
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [
+     "grade"
+    ],
+    "filters": {
+     "kind": "Maintenance"
+    },
+    "shift": null,
+    "compare": null,
+    "order": null,
+    "limit": 25
+   },
+   "note": "Maintenance minutes by the grade of the setup that held each stop: a split no other tool makes.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 6,
+    "values": {
+     "grade=26-C": {
+      "value": [
+       11.15,
+       1.215e-05
+      ],
+      "source_count": [
+       6,
+       null
+      ],
+      "share_pct": [
+       12.692088788,
+       1.3692e-05
+      ]
+     },
+     "grade=32-C": {
+      "value": [
+       14.516666667,
+       1.5517e-05
+      ],
+      "source_count": [
+       7,
+       null
+      ],
+      "share_pct": [
+       16.524378676,
+       1.7524e-05
+      ]
+     },
+     "grade=55-C": {
+      "value": [
+       14.366666667,
+       1.5367e-05
+      ],
+      "source_count": [
+       8,
+       null
+      ],
+      "share_pct": [
+       16.353633087,
+       1.7354e-05
+      ]
+     },
+     "grade=275-EB": {
+      "value": [
+       16.183333333,
+       1.7183e-05
+      ],
+      "source_count": [
+       8,
+       null
+      ],
+      "share_pct": [
+       18.421551888,
+       1.9422e-05
+      ]
+     },
+     "grade=275-BC": {
+      "value": [
+       20.3,
+       2.13e-05
+      ],
+      "source_count": [
+       10,
+       null
+      ],
+      "share_pct": [
+       23.107569721,
+       2.4108e-05
+      ]
+     },
+     "grade=200-C": {
+      "value": [
+       11.333333333,
+       1.2333e-05
+      ],
+      "source_count": [
+       5,
+       null
+      ],
+      "share_pct": [
+       12.900777841,
+       1.3901e-05
+      ]
+     },
+     "$": {
+      "value": [
+       87.85,
+       8.885e-05
+      ],
+      "source_count": [
+       44,
+       null
+      ],
+      "groups": [
+       6,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-rejects-by-order-0914-shift-2",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "reject_sqft",
+    "window": {
+     "period": "day",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [
+     "order"
+    ],
+    "filters": {},
+    "shift": 2,
+    "compare": null,
+    "order": null,
+    "limit": 200
+   },
+   "note": "Rejects by the order on the lane each reject line records: every order of the shift, largest first.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 70,
+    "values": {
+     "order=SO-2609140131": {
+      "value": [
+       1900.3,
+       0.0019013
+      ],
+      "source_count": [
+       16,
+       null
+      ]
+     },
+     "order=SO-2609140092": {
+      "value": [
+       1579.7,
+       0.0015807
+      ],
+      "source_count": [
+       16,
+       null
+      ]
+     },
+     "order=SO-2609140149": {
+      "value": [
+       1565.9,
+       0.0015669
+      ],
+      "source_count": [
+       11,
+       null
+      ]
+     },
+     "order=SO-2609140090": {
+      "value": [
+       1037.9,
+       0.0010389
+      ],
+      "source_count": [
+       4,
+       null
+      ]
+     },
+     "order=SO-2609140114": {
+      "value": [
+       1035.0,
+       0.001036
+      ],
+      "source_count": [
+       4,
+       null
+      ]
+     },
+     "#0": {
+      "order": [
+       "SO-2609140131",
+       null
+      ]
+     },
+     "$": {
+      "value": [
+       28092.9,
+       0.0280939
+      ],
+      "source_count": [
+       347,
+       null
+      ],
+      "groups": [
+       70,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-dry-end-pct-by-flute-september",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "dry_end_pct",
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [
+     "flute"
+    ],
+    "filters": {},
+    "shift": null,
+    "compare": null,
+    "order": null,
+    "limit": 25
+   },
+   "note": "Dry-end rejects as a percent of the yield after trim and shear, single wall (C) against double wall (BC, EB).",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 3,
+    "values": {
+     "flute=C": {
+      "value": [
+       1.062922224,
+       2.063e-06
+      ],
+      "numerator": [
+       1063400.299999999,
+       1.0634013
+      ],
+      "denominator": [
+       100044977.50000015,
+       100.0449785
+      ],
+      "band": [
+       "over target",
+       null
+      ]
+     },
+     "flute=BC": {
+      "value": [
+       1.061333058,
+       2.061e-06
+      ],
+      "numerator": [
+       262605.7,
+       0.2626067
+      ],
+      "denominator": [
+       24743005.79999998,
+       24.7430068
+      ],
+      "band": [
+       "over target",
+       null
+      ]
+     },
+     "flute=EB": {
+      "value": [
+       1.078828448,
+       2.079e-06
+      ],
+      "numerator": [
+       278156.3,
+       0.2781573
+      ],
+      "denominator": [
+       25783181.799999993,
+       25.7831828
+      ],
+      "band": [
+       "over target",
+       null
+      ]
+     },
+     "$": {
+      "value": [
+       1.065384796,
+       2.065e-06
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-operator-downtime-pct-by-day-week-0914",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "downtime_pct",
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [
+     "day"
+    ],
+    "filters": {
+     "kind": "Operator"
+    },
+    "shift": null,
+    "compare": null,
+    "order": null,
+    "limit": 25
+   },
+   "note": "Each day's operator minutes over its own scheduled minutes, against the owner's operator band.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 5,
+    "values": {
+     "day=2026-09-14": {
+      "value": [
+       1.331018519,
+       2.331e-06
+      ],
+      "denominator": [
+       1440.0,
+       null
+      ],
+      "band": [
+       "on target",
+       null
+      ]
+     },
+     "day=2026-09-15": {
+      "value": [
+       2.615740741,
+       3.616e-06
+      ],
+      "denominator": [
+       1440.0,
+       null
+      ],
+      "band": [
+       "flag",
+       null
+      ]
+     },
+     "day=2026-09-16": {
+      "value": [
+       1.599537037,
+       2.6e-06
+      ],
+      "denominator": [
+       1440.0,
+       null
+      ],
+      "band": [
+       "on target",
+       null
+      ]
+     },
+     "day=2026-09-17": {
+      "value": [
+       1.931712963,
+       2.932e-06
+      ],
+      "denominator": [
+       1440.0,
+       null
+      ],
+      "band": [
+       "on target",
+       null
+      ]
+     },
+     "day=2026-09-18": {
+      "value": [
+       1.99537037,
+       2.995e-06
+      ],
+      "denominator": [
+       1440.0,
+       null
+      ],
+      "band": [
+       "on target",
+       null
+      ]
+     },
+     "$": {
+      "value": [
+       1.894675926,
+       2.895e-06
+      ],
+      "band": [
+       "on target",
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-lineal-per-setup-by-crew-september",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "lineal_per_setup",
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [
+     "crew"
+    ],
+    "filters": {},
+    "shift": null,
+    "compare": null,
+    "order": null,
+    "limit": 25
+   },
+   "note": "Run length per setup by crew: the crew comes from the shift record each setup belongs to.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 3,
+    "values": {
+     "crew=Crew B": {
+      "value": [
+       7290.708665105,
+       0.007291709
+      ],
+      "numerator": [
+       6226265.199999997,
+       6.2262662
+      ],
+      "denominator": [
+       854,
+       null
+      ]
+     },
+     "crew=Crew C": {
+      "value": [
+       7388.712142857,
+       0.007389712
+      ],
+      "numerator": [
+       6206518.199999996,
+       6.2065192
+      ],
+      "denominator": [
+       840,
+       null
+      ]
+     },
+     "crew=Crew A": {
+      "value": [
+       7314.973946785,
+       0.007315974
+      ],
+      "numerator": [
+       6598106.500000003,
+       6.5981075
+      ],
+      "denominator": [
+       902,
+       null
+      ]
+     },
+     "$": {
+      "value": [
+       7330.851271186,
+       0.007331851
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-downtime-usd-by-place-week-0907-shift-2",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "downtime_usd",
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-09"
+    },
+    "group_by": [
+     "place"
+    ],
+    "filters": {},
+    "shift": 2,
+    "compare": null,
+    "order": null,
+    "limit": 25
+   },
+   "note": "Downtime priced as machine time by machine place: each place's minutes times the post's machine rate.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 14,
+    "values": {
+     "place=Shear knife": {
+      "quantity": [
+       5.666666667,
+       6.667e-06
+      ],
+      "value": [
+       113.333333,
+       0.011
+      ],
+      "usd": [
+       113.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       17485.714,
+       2.707
+      ]
+     },
+     "place=Splicer 3": {
+      "quantity": [
+       38.55,
+       3.955e-05
+      ],
+      "value": [
+       771.0,
+       0.011
+      ],
+      "usd": [
+       771.0,
+       0.011
+      ],
+      "usd_per_year": [
+       118954.286,
+       2.707
+      ]
+     },
+     "place=Splicer 4": {
+      "quantity": [
+       6.466666667,
+       7.467e-06
+      ],
+      "value": [
+       129.333333,
+       0.011
+      ],
+      "usd": [
+       129.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       19954.286,
+       2.707
+      ]
+     },
+     "place=Lower knife": {
+      "quantity": [
+       3.016666667,
+       4.017e-06
+      ],
+      "value": [
+       60.333333,
+       0.011
+      ],
+      "usd": [
+       60.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       9308.571,
+       2.707
+      ]
+     },
+     "place=Stacker": {
+      "quantity": [
+       12.066666667,
+       1.3067e-05
+      ],
+      "value": [
+       241.333333,
+       0.011
+      ],
+      "usd": [
+       241.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       37234.286,
+       2.707
+      ]
+     },
+     "place=Slitter/scorer": {
+      "quantity": [
+       2.033333333,
+       3.033e-06
+      ],
+      "value": [
+       40.666667,
+       0.011
+      ],
+      "usd": [
+       40.666667,
+       0.011
+      ],
+      "usd_per_year": [
+       6274.286,
+       2.707
+      ]
+     },
+     "place=Splicer 5": {
+      "quantity": [
+       1.233333333,
+       2.233e-06
+      ],
+      "value": [
+       24.666667,
+       0.011
+      ],
+      "usd": [
+       24.666667,
+       0.011
+      ],
+      "usd_per_year": [
+       3805.714,
+       2.707
+      ]
+     },
+     "place=Upper knife": {
+      "quantity": [
+       2.583333333,
+       3.583e-06
+      ],
+      "value": [
+       51.666667,
+       0.011
+      ],
+      "usd": [
+       51.666667,
+       0.011
+      ],
+      "usd_per_year": [
+       7971.429,
+       2.707
+      ]
+     },
+     "place=Glue dams": {
+      "quantity": [
+       8.333333333,
+       9.333e-06
+      ],
+      "value": [
+       166.666667,
+       0.011
+      ],
+      "usd": [
+       166.666667,
+       0.011
+      ],
+      "usd_per_year": [
+       25714.286,
+       2.707
+      ]
+     },
+     "place=Double backer": {
+      "quantity": [
+       2.5,
+       3.5e-06
+      ],
+      "value": [
+       50.0,
+       0.011
+      ],
+      "usd": [
+       50.0,
+       0.011
+      ],
+      "usd_per_year": [
+       7714.286,
+       2.707
+      ]
+     },
+     "place=Splicer 2": {
+      "quantity": [
+       5.966666667,
+       6.967e-06
+      ],
+      "value": [
+       119.333333,
+       0.011
+      ],
+      "usd": [
+       119.333333,
+       0.011
+      ],
+      "usd_per_year": [
+       18411.429,
+       2.707
+      ]
+     },
+     "place=Single facer": {
+      "quantity": [
+       2.0,
+       3e-06
+      ],
+      "value": [
+       40.0,
+       0.011
+      ],
+      "usd": [
+       40.0,
+       0.011
+      ],
+      "usd_per_year": [
+       6171.429,
+       2.707
+      ]
+     },
+     "place=Splicer 1": {
+      "quantity": [
+       2.5,
+       3.5e-06
+      ],
+      "value": [
+       50.0,
+       0.011
+      ],
+      "usd": [
+       50.0,
+       0.011
+      ],
+      "usd_per_year": [
+       7714.286,
+       2.707
+      ]
+     },
+     "place=Steam system": {
+      "quantity": [
+       1.6,
+       2.6e-06
+      ],
+      "value": [
+       32.0,
+       0.011
+      ],
+      "usd": [
+       32.0,
+       0.011
+      ],
+      "usd_per_year": [
+       4937.143,
+       2.707
+      ]
+     },
+     "$": {
+      "quantity": [
+       94.516666667,
+       9.5517e-05
+      ],
+      "value": [
+       1890.333333,
+       0.011
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-paper-changes-by-period-september",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "paper_changes",
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [
+     "period"
+    ],
+    "filters": {},
+    "shift": null,
+    "compare": null,
+    "order": null,
+    "limit": 25
+   },
+   "note": "September 2026 holds the end of 4-4-5 P2 and the start of P3: paper changes by period, by the generator's own calendar arithmetic.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 2,
+    "values": {
+     "period=2026-08-31": {
+      "value": [
+       781,
+       null
+      ],
+      "source_count": [
+       2252,
+       null
+      ]
+     },
+     "period=2026-09-28": {
+      "value": [
+       117,
+       null
+      ],
+      "source_count": [
+       344,
+       null
+      ]
+     },
+     "$": {
+      "value": [
+       898,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-order-changes-week-0914-vs-previous",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "order_changes",
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [],
+    "filters": {},
+    "shift": null,
+    "compare": "previous",
+    "order": null,
+    "limit": 25
+   },
+   "note": "Order changes are the setups whose change code is O; the week before beside it.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 0,
+    "values": {
+     "$": {
+      "value": [
+       318,
+       null
+      ],
+      "previous_value": [
+       327,
+       null
+      ],
+      "delta": [
+       -9,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-maintenance-pct-zero-0917-shift-1",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-17",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "downtime_pct",
+    "window": {
+     "period": "day",
+     "anchor": "2026-09-17"
+    },
+    "group_by": [],
+    "filters": {
+     "kind": "Maintenance"
+    },
+    "shift": 1,
+    "compare": null,
+    "order": null,
+    "limit": 25
+   },
+   "note": "No maintenance stop on this shift: 0% of its scheduled minutes, on target, never unavailable.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 0,
+    "values": {
+     "$": {
+      "value": [
+       0.0,
+       1e-06
+      ],
+      "numerator": [
+       0,
+       1e-06
+      ],
+      "denominator": [
+       480,
+       null
+      ],
+      "band": [
+       "on target",
+       null
+      ]
+     }
+    }
+   }
   }
  ]
 }

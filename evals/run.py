@@ -64,7 +64,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
-from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
+from investigator.agent import PERIOD_TOOLS, STORE_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
+from investigator import semantic  # noqa: E402
 from investigator.urls import resolve_url  # noqa: E402
 from investigator import judge as judging  # noqa: E402
 from investigator.cost_model import parse_rates  # noqa: E402
@@ -89,7 +90,8 @@ THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 
 # The clock covers the agent's turns only: dataset build, fixture I/O and the checks are outside it.
 DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
-TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
+# the tools a case may run: the planner's, and the semantic model's compiler, which its URL reaches (issue #117)
+TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS} | {semantic.TOOL}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
 # The stated rules an answer may print beside its figures: 480 scheduled minutes a shift, the 12 minutes a downtime flag
 # takes of them, and the downtime and per-setup trim flags, read from the owner's targets.json (issue #101) so a changed
@@ -573,8 +575,8 @@ def invariants(mode, result, analysis, allowed_shifts):
         if paragraph['kind'] != 'limitation' and not paragraph['citations']:
             failures.append(f'{paragraph["kind"]} paragraph cites nothing')
     for table in result['tables']:
-        if table['title'] in PERIOD_TOOLS:
-            continue  # period tables are the whole store result; chart-row equality covers them above
+        if table['title'] in STORE_TOOLS:
+            continue  # period and semantic tables are the whole store result; chart-row equality covers them above
         shift = table['shift']
         full = getattr(analysis, table['title'])(shift, **({'metric': table['metric']} if 'metric' in table else {}))
         if len(table['rows']) != len(full['rows']):

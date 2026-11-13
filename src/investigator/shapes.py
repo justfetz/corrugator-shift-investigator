@@ -22,6 +22,7 @@ Any other line is a plain sentence: a caveat, the window and its coverage, a rep
 import re
 
 from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
+from .semantic import TOOL as SEMANTIC_TOOL
 
 LOOK = 'Where to look'
 # `(query 2 · row 0)`, `(query 3)`: the evidence a bullet or headline cites.
@@ -185,9 +186,11 @@ def argmax(rows, key):
 def answer_sections(intent, evidence, context, period_tools):
     """The sections of an offline answer: headline, bullets, caveats and where to look."""
     intent = ALIASES.get(intent, intent)
+    semantic = [r for r in evidence if r['tool'] == SEMANTIC_TOOL]   # the semantic model's own shape (issue #117)
+    evidence = [r for r in evidence if r['tool'] != SEMANTIC_TOOL]
     period = [r for r in evidence if r['tool'] in period_tools]
     daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] != 'get_day_dollars']   # the day's total is the card's (#31b)
-    lines = []
+    lines = SemanticAnswer(semantic, context).sections() if semantic else []
     if period:
         own = intent.startswith('period_')
         lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own).sections()
@@ -1440,3 +1443,114 @@ class PeriodAnswer:
                               'rollstock': ('The paper each grade and width consumed', f'How much paper did we consume{wp}{sfx}?')}[kind]
             lines.append(look(text, question))
         return lines[:3]
+
+
+# ------------------------------------------------------------------ the semantic model (issue #117)
+
+SEMANTIC_COUNTS = ('setups', 'order changes', 'paper changes', 'stops', 'sheets', 'cuts')
+SEMANTIC_ONE_PLACE = ('MSF', 'ft', 'sq ft', 'ft/min', 'ft/setup', 'ft/paper change')
+SEMANTIC_FIRST = 5   # the card shows five findings (web/app.js BULLETS_SHOWN); the rest follow under a label
+SEMANTIC_LOOKS = {'stop': ('pareto', 'stops'), 'reject': ('waste', 'grade'), 'lane': ('overrun', 'grade'),
+                  'shift': ('waste', 'stops'), 'setup': ('grade', 'speed'), 'setup waste': ('waste', 'grade')}
+
+
+def semantic_figure(value, unit):
+    """(bold part, the rest) of a semantic value in its unit: `587 setups`, `408.72 min`, `1.07%` + ` of yield`, `$59,994`."""
+    if value is None:
+        return 'none recorded', ''
+    if unit == '$':
+        return money(value), ''
+    if unit.startswith('%'):
+        return f'{f2(value)}%', unit[1:]
+    if isinstance(value, int):
+        word = unit[:-1] if value == 1 and unit in SEMANTIC_COUNTS else unit
+        return f'{n(value)} {word}', ''
+    return f'{f1(value) if unit in SEMANTIC_ONE_PLACE else f2(value)} {unit}', ''
+
+
+class SemanticAnswer:
+    """The generic answer of a semantic query (issue #117): the asked measure first, as the bold figure over the whole
+    window, then one finding per row of the group-by in the result's order, each citing its row; the window, the
+    measure's definition and, for a priced measure, how a dollar is priced; where to look in the flagship answers."""
+
+    def __init__(self, evidence, context):
+        self.evidence, self.context = evidence, context
+
+    def wp(self, data):
+        return PeriodAnswer.wp(self, data)
+
+    def sfx(self, data):
+        return PeriodAnswer.sfx(self, data)
+
+    def sections(self):
+        out = []
+        for result in self.evidence:
+            out += self.one(result)
+        return out
+
+    def one(self, result):
+        data = result['data']
+        unit = data['unit']
+        bold, rest = semantic_figure(data.get('value'), unit)
+        where = (f', {data["filter_text"]}' if data.get('filter_text') else '') + (f', shift {data["shift"]}' if data.get('shift') else '')
+        wp = self.wp(data) or ''
+        head = f'{data["label"]}{where}{wp}: **{bold}**{rest}'
+        if data.get('previous_window') is not None:
+            words = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before',
+                     'fiscal': 'the period before'}[data['window']['period']]
+            before, before_rest = semantic_figure(data.get('previous_value'), unit)
+            if data.get('delta') is not None:
+                delta = data['delta']
+                change = (('+' if delta >= 0 else '-') + money(abs(delta))) if unit == '$' else signed(delta, unit)
+                head += f' · {change} vs {before}{before_rest} {words}'
+            else:
+                head += f' · {words}: {before}{before_rest}'
+        head += band(data.get('band_text')) + f' {ref(result)}'
+        bullets = [self.row_line(result, i, row) for i, row in enumerate(data['rows'])]
+        if len(bullets) > SEMANTIC_FIRST:
+            bullets = bullets[:SEMANTIC_FIRST] + ['The rest, in the same order'] + bullets[SEMANTIC_FIRST:]
+        notes = []
+        if data['group_by'] and not data['rows']:
+            notes.append('No records in this window for this split.')
+        if data['groups'] > data['rows_shown']:
+            notes.append(f'The first {n(data["rows_shown"])} of {n(data["groups"])} rows are listed; the total is over every row.')
+        notes.append(window_head(data))
+        notes.append(f'{data["label"]}: {data["definition"]}')
+        if data['agg'] == 'ratio':
+            notes.append('A ratio of sums over the window, never an average of ratios.')
+        if data['agg'] == 'priced':
+            total = (data.get('totals') or [{}])[0]
+            if total.get('usd_basis'):
+                notes.append(f'How a dollar is priced, for the total: {total["usd_basis"]}.')
+            notes.append(f'{data["provenance"]} {data["cost_note"]}')
+        notes.append('Each row lists the records it sums (source_ids) and their count; the query holds the SQL and its parameters.')
+        looks = self.looks(data)
+        return [head, *bullets, *notes] + ([LOOK, *looks] if looks else [])
+
+    def row_line(self, result, i, row):
+        data = result['data']
+        bold, rest = semantic_figure(row.get('value'), data['unit'])
+        text = f'{row["label"]}: **{bold}**{rest}'
+        if data['agg'] == 'priced' and row.get('quantity') is not None:
+            q_bold, q_rest = semantic_figure(row['quantity'], data.get('quantity_unit') or 'sq ft')
+            text += f' · {q_bold}{q_rest}'
+        if row.get('share_pct') is not None:
+            text += f' · {f2(row["share_pct"])}% of the total'
+        if data.get('previous_window') is not None:
+            before, before_rest = semantic_figure(row.get('previous_value'), data['unit'])
+            text += f' · previous {before}{before_rest}' if row.get('previous_value') is not None else ' · previous none recorded'
+        text += band(row.get('band_text'))
+        return bullet(text, result, i)
+
+    def looks(self, data):
+        wp, sfx = self.wp(data), self.sfx(data)
+        if wp is None:
+            return []
+        kinds = SEMANTIC_LOOKS[data['entity'] + (' waste' if data['entity'] == 'setup' and data['unit'] in ('sq ft', '% of gross', '$') else '')]
+        questions = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}?'),
+                     'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}'),
+                     'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}'),
+                     'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}'),
+                     'speed': ('Each grade against its speed target', f'Which grade is slowest against target{wp}{sfx}?'),
+                     'overrun': ('Actual against nominal cuts, by knife', f'Over/under-run by knife{wp}{sfx}')}
+        return [look(*questions[kind]) for kind in kinds]

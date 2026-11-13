@@ -13,7 +13,7 @@ import time
 from typing import Protocol
 from uuid import uuid4
 
-from . import cost_model, targets
+from . import cost_model, semantic, targets
 from .shapes import answer_sections   # each intent's answer shape (issue #75)
 
 TOOL_SCHEMAS = [
@@ -98,6 +98,9 @@ PERIOD_TOOL_SCHEMAS = [
     ]
 ]
 PERIOD_TOOLS = {schema["name"] for schema in PERIOD_TOOL_SCHEMAS}
+# The tools that read the whole record store: the period tools and the semantic model's compiler (issue #117). The
+# compiler is reached by its URL (measure=semantic) and is not in TOOL_SCHEMAS, so the analyst cannot plan it yet.
+STORE_TOOLS = PERIOD_TOOLS | {semantic.TOOL}
 TOOL_SCHEMAS.extend(PERIOD_TOOL_SCHEMAS)
 TOOL_SCHEMAS.append({"name": "render_chart", "description": "Chart a result from this investigation; never supply invented rows.",
     "parameters": {"type": "object", "properties": {"result_id": {"type": "string"}},
@@ -134,6 +137,8 @@ CHARTABLE = {
     # a waterfall: from the reference speed down (or up) through each bucket to this window's speed with stops
     'get_speed_variance': ('label', 'gap_fpm', 'ft/min', 'waterfall', None),
     'get_downtime_review': ('category', 'pct_of_scheduled', '% of scheduled minutes', 'bar', None),
+    # the semantic model's rows (issue #117): one bar per group, in the measure's own unit, the previous window beside when asked
+    semantic.TOOL: ('label', 'value', lambda d: d['unit'], 'bar', lambda d: 'previous_value' if d.get('previous_window') else None),
 }
 
 # The owner's bands are read from targets.json (issue #101), never typed here.
@@ -930,6 +935,12 @@ def chart_for(rid, result):
                      end_label=f"Shift {data['shift']}" if data['against'] == 'shift' else 'Actual speed', against=data['against'])
         chart['title'] = (f"{CHART_TITLES['get_speed_variance']}: {data['window']['label']} against {data['reference_label']}"
                           + (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)'))
+    elif result['tool'] == semantic.TOOL:
+        chart['title'] = (f"{data['label']} by {' and '.join(data['group_by'])}: {data['window']['label']}" +
+                          (f" vs {data['previous_window']['label']}" if data.get('previous_window') else '') +
+                          (f" (shift {data['shift']})" if data['shift'] else ' (all shifts)'))
+        if y2:
+            chart['y2'] = y2
     elif result['tool'] in PERIOD_TOOLS:
         name = 'Speed by grade vs target (ft/min without stops)' if data.get('measure') == 'speed' else \
             CHART_TITLES.get(result['tool'], result['tool'].replace('_', ' '))
@@ -966,9 +977,9 @@ def scope_violation(tool, arguments, allowed_shifts, scope, period, production_d
         return 'Tool shift is outside the selected scope'   # a speed variance against another shift reads that shift
     if tool == 'get_day_dollars' and any(s not in allowed_shifts for s in (arguments.get('shifts') or [1, 2, 3])):
         return 'Tool shift is outside the selected scope'   # the day total reads every shift it lists (all three when none)
-    if tool in PERIOD_TOOLS and scope == 'shift' and arguments.get('shift') is None:
+    if tool in STORE_TOOLS and scope == 'shift' and arguments.get('shift') is None:
         return 'Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts'
-    if period != 'day' and tool not in PERIOD_TOOLS and tool != 'render_chart':
+    if period != 'day' and tool not in STORE_TOOLS and tool != 'render_chart':
         window = {"period": period, "anchor": production_day}
         return (f'Daily tools read one production day; the selected period is the {PERIOD_WORDS[period]} containing '
                 f'{production_day}. Use the period tools with window {json.dumps(window)}, or switch Period to Day')
@@ -1049,10 +1060,10 @@ class Agent:
         if not isinstance(arguments, dict):
             raise ValueError('Tool arguments must be an object')
         known = {s['name']: s for s in TOOL_SCHEMAS}
-        if name not in known:
+        if name not in known and name != semantic.TOOL:
             raise ValueError('Tool is not permitted')
-        schema = known[name]['parameters']
-        if set(arguments) - set(schema['properties']) or any(k not in arguments for k in schema['required']):
+        schema = known[name]['parameters'] if name in known else None
+        if schema and (set(arguments) - set(schema['properties']) or any(k not in arguments for k in schema['required'])):
             raise ValueError('Missing or unexpected arguments')
         if name == 'render_chart':
             rid = arguments['result_id']
@@ -1063,6 +1074,12 @@ class Agent:
                 raise ValueError('Result cannot be charted')
             return chart_for(rid, result)
         rates = rates or cost_model.effective()
+        if name == semantic.TOOL:
+            # the semantic model's compiler (issue #117): reached by its URL, never planned by a model in phase 1
+            shift = arguments.get('shift')
+            if shift is not None and (type(shift) is not int or shift not in (1, 2, 3)):
+                raise ValueError('Shift must be 1, 2, 3 or null')
+            return semantic.execute(self.store, arguments, rates)
         if name in PERIOD_TOOLS:
             if self.store is None:
                 raise ValueError('Period tools need the record store; this dataset is a single-day fixture')
@@ -1283,12 +1300,14 @@ class Agent:
         if not final_ids:
             final_ids = [r for r, v in store.items() if v['ok'] and v['tool'] != 'render_chart']
         evidence = [store[r] for r in final_ids]
-        sections = answer_sections(request['intent'], evidence, context, PERIOD_TOOLS)
+        sections = answer_sections(request['intent'], evidence, context, PERIOD_TOOLS)   # semantic results have their own shape
         charts=[v['data'] for v in store.values() if v['ok'] and v['tool']=='render_chart']
         charted={c['source_result_id'] for c in charts}
         # Charts are application output: every chartable piece of evidence the answer rests on is
         # drawn, whether or not the model asked for it, so the interpretation is never shown alone.
         for result in evidence:
+            if result['tool'] == semantic.TOOL and not result['data']['rows']:
+                continue   # a semantic total with no group-by is one figure: the answer states it, nothing to draw
             if result['tool'] in CHARTABLE and result['result_id'] not in charted:
                 charts.append(chart_for(result['result_id'],result))
                 charted.add(result['result_id'])
@@ -1354,7 +1373,7 @@ class Agent:
                 'sections': sections, 'evidence_ids': final_ids,
                 'narrative':narrative,'narrative_status':narrative_status,
                 'charts': charts,
-                'tables': [dict(title=v['tool'], source_result_id=v['result_id'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings',*PERIOD_TOOLS)],
+                'tables': [dict(title=v['tool'], source_result_id=v['result_id'], **deepcopy(v['data'])) for v in store.values() if v['ok'] and v['tool'] in ('get_setup_matrix','get_order_matrix','get_shift_notes','get_rankings',*STORE_TOOLS)],
                 'trace': traces, 'context': context_out,
                 'usage': {'tool_calls': len(traces), **getattr(self.planner, 'usage', {'model_calls': 0, 'cost_usd': 0}), **getattr(self.planner, 'timings', {}),
                           **({'comparisons_withdrawn': withdrawn} if withdrawn is not None else {})},

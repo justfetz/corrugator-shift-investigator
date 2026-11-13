@@ -46,6 +46,14 @@ outside the clock). Failures are prefixed `URL:`; the table's note carries `URL 
 summary prints the server p50 and p95 over GET. Value cases have no question and are not sent; a
 live row checks only that its question resolves to its `expect.url`.
 
+A case may ask by its address instead of a question (issue #117: the `measure=semantic` cases, which no question
+routes to until phase 2 wires the router to the semantic model). Its `url` is the input: in process the runner
+resolves it with `urls.resolve_url` against the golden year and answers it with the agent, exactly as the server
+answers `GET /corr/…`; over GET it fetches the address itself, which must answer, or, when it is a hand-typed spelling,
+redirect to `expect.url` and answer there. Everything else (the invariants, the expectations, the shape, a refusal's
+text) is scored as for a question. The value cases include the semantic model's new combinations of measure, split
+and filter (`value-semantic-*`), computed by hand from the record families like every other value case.
+
 A question that names its own shift or a relative window (issue #105: "How much donwtime on 1st shift last
 week?" on the shift 2 / Day controls) runs in the scope it names on both paths: `/q` moves it, and in-process
 the runner reads it with `agent.question_scope` and answers on that day's records. The tools-inside-the-scope
