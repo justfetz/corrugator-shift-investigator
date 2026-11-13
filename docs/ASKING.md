@@ -8,7 +8,7 @@ The rail's three controls are part of every question:
 
 | Control | Values | What it means |
 | --- | --- | --- |
-| Production day | Monday to Friday, the rolling year the page footer names (about 262 days, ending the day before the site was last deployed) | the anchor; a day runs 07:00 to 07:00 and is labeled by its starting date |
+| Production day | Monday to Friday, the window the page footer names (from 1 January 2025 to the day before the site was last deployed) | the anchor; a day runs 07:00 to 07:00 and is labeled by its starting date |
 | Shift | 1 (07–15), 2 (15–23), 3 (23–07), All | one 480-minute shift, or All for the whole production day and comparisons between shifts |
 | Window | Day, Week, Month, 4-4-5 | the window a question that names none is asked over: the day, its Monday-to-Friday week, its calendar month, or its 4-4-5 accounting period |
 
@@ -47,7 +47,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "Where did the money go this shift?" | the shift's losses priced and ranked by dollars; planned maintenance and a power outage apart, with the all-in total beside | `?measure=dollars` |
 | "Where is the money this month?" | the levers ranked in dollars a year, each controllable or schedule-driven | `?measure=money&window=month` |
 | "Where's my biggest opportunity?", "What went wrong yesterday?" | the supervisor lens: the controllable losses ranked, side trim and planned maintenance apart | `?measure=money&lens=supervisor` |
-| "What does trim cost?", "What's trim costing us this month?" | the ownership lens: the total cost of waste, side trim first, with its band; the dry-end waste (tag scrap) as one subtotal with bond, warp, misalignment and moisture beneath it | `?measure=money&lens=ownership`, `?measure=money&window=month&lens=ownership` |
+| "What does trim cost?", "What's trim costing us this month?" | the ownership lens: the total cost of waste, side trim first, with its band, then every other waste line priced once (the boards and planning / admin included, so the total is the waste breakdown's); the dry-end waste (tag scrap) as one subtotal with bond, warp, misalignment, moisture and other beneath it, each with its own cause | `?measure=money&lens=ownership`, `?measure=money&window=month&lens=ownership` |
 | "Show setup matrix", "Show orders and quantities", "Show shift and downtime notes", "Show rankings" | the per-shift matrices, notes and rankings (Day only) | `?measure=setups`, `orders`, `notes`, `rank` |
 
 With All selected, "Compare all shifts" runs KPIs, downtime and speed for each shift. The example chips under *Ask in one click* are these questions; under Week, Month or 4-4-5 they say "this week", "this month" or "this period".

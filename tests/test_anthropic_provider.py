@@ -162,7 +162,7 @@ def test_only_tool_call_refused_ends_unavailable_with_the_tool_reason(tmp_path, 
         assert result['status'] == 'unavailable' and result['usage']['model_calls'] == 2
         [step] = result['trace']
         assert step['tool'] == 'get_period_kpis' and not step['ok']
-        assert step['error']['message'] in result['sections'] and 'outside the dataset range 2025-09-30 to 2026-09-30' in step['error']['message']
+        assert step['error']['message'] in result['sections'] and 'outside the dataset range 2025-01-01 to 2026-09-30' in step['error']['message']
         assert result['charts'] == [] and result['tables'] == [] and result['evidence_ids'] == [] and result['narrative_status'] == 'unavailable'
     finally:
         planner.close()
@@ -299,7 +299,7 @@ def test_mapped_tool_schemas_use_anyof_for_nullable_filters():
     tools = anthropic_tools(TOOL_SCHEMAS)
     walk(tools)
     kind = next(t for t in tools if t['name'] == 'get_downtime_breakdown')['input_schema']['properties']['kind']
-    assert kind == {'anyOf': [{'type': 'string', 'enum': ['Maintenance', 'Operator', 'PM']}, {'type': 'null'}]}
+    assert kind == {'anyOf': [{'type': 'string', 'enum': ['Maintenance', 'Operator', 'Scheduled', 'PM']}, {'type': 'null'}]}
     shift = next(t for t in tools if t['name'] == 'get_period_kpis')['input_schema']['properties']['shift']
     assert shift['anyOf'][0] == {'type': 'integer', 'enum': [1, 2, 3]} and shift['anyOf'][-1] == {'type': 'null'}
     assert 'description' in shift

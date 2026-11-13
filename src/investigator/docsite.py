@@ -53,6 +53,7 @@ SECTIONS = (
                            ('testing', 'docs/TESTING.md', 'Testing'))),
     ('Cost model', (('cost-model', 'docs/COST_MODEL.md', 'Cost model'),)),
     ('Data', (('data', 'docs/DATA.md', 'Data'),
+              ('record-contract', 'docs/RECORD_CONTRACT.md', 'The record contract'),
               ('records', 'docs/RECORDS.md', 'The record families'))),
     ('Deployment', (('deployment', 'docs/DEPLOYMENT.md', 'Deployment'),)),
     ('Changelog', (('changelog', 'docs/CHANGELOG.md', 'Changelog'),)),

@@ -35,21 +35,22 @@ def day_records(data, day):
 
 
 def test_store_is_the_rolling_year_built_once(store, data):
-    """The year ending INVESTIGATOR_AS_OF (2026-09-30 in tests): every weekday from 30 September 2025.
+    """1 January 2025 (the fixed start, issue #100) to INVESTIGATOR_AS_OF (2026-09-30 in tests): every weekday.
     Its hash is the one the value goldens were generated for (from synth.generate_window), and its rows
     for August and September 2026 are exactly the two months generated on their own."""
     assert store.content_hash == json.loads(GOLDEN_VALUES.read_text())["content_hash"]
-    assert store.window == (date(2025, 9, 30), date(2026, 9, 30)) and store.as_of == date(2026, 9, 30)
+    assert store.window == (date(2025, 1, 1), date(2026, 9, 30)) and store.as_of == date(2026, 9, 30)
     assert store.production_days == [d.isoformat() for d in window_days(date(2026, 9, 30))]
-    assert (store.first_day, store.last_day) == ("2025-09-30", "2026-09-30")
-    assert len(store.production_days) == 262 and all(date.fromisoformat(d).weekday() < 5 for d in store.production_days)
+    assert (store.first_day, store.last_day) == ("2025-01-01", "2026-09-30")
+    assert len(store.production_days) == 456 and all(date.fromisoformat(d).weekday() < 5 for d in store.production_days)
     two_months = {"setups": len(data["dry_end_setups"]), "wet_ends": len(data["wet_ends"]), "shifts": len(data["shifts"]),
-                  "stops": len(data["stops"]), "customers": sum(len(s.customers) for s in data["dry_end_setups"]),
-                  "rejects": sum(len(s.rejects) for s in data["dry_end_setups"])}
+                  "stops": len(data["stops"]), "setup_orders": sum(len(s.lanes) for s in data["dry_end_setups"]),
+                  "rejects": sum(len(s.rejects) for s in data["dry_end_setups"]), "rolls": len(data["rolls"])}
     for table, count in two_months.items():
         sql = f"SELECT count(*) AS n FROM {table} WHERE production_date BETWEEN DATE '2026-08-01' AND DATE '2026-09-30'"
         assert store._fetch(sql, [])[0]["n"] == count, table
-    assert store.counts["shifts"] == 3 * 262 and store.counts["setups"] > 5 * two_months["setups"]
+    assert store.counts["shifts"] == 3 * 456 and store.counts["setups"] > 9 * two_months["setups"]
+    assert store.counts["customers"] == 41 and store.counts["reject_reasons"] == 81
     assert default_store() is store
     assert store.boot_seconds < 60
 
@@ -73,7 +74,7 @@ def test_shift_kpis_reconcile_to_summed_setup_records(store, data):
             assert row["trim_pct"] == pytest.approx(sum(s.trim_sqft for s in mine) / gross * 100)
             assert row["shear_pct"] == pytest.approx(sum(s.chop_sqft for s in mine) / gross * 100)
             net = gross - sum(s.trim_sqft + s.chop_sqft for s in mine)   # dry-end waste over the yield after trim and shear (issue #101)
-            assert row["dry_end_pct"] == pytest.approx(sum(s.kqf_sqft for s in mine) / net * 100)
+            assert row["dry_end_pct"] == pytest.approx(sum(s.reject_sqft for s in mine) / net * 100)
             assert row["speed_to_target_pct"] == pytest.approx(
                 feet / sum(GRADES[s.quality_id] * s.elapsed_seconds / 60 for s in mine) * 100)
             by_kind = defaultdict(float)
@@ -82,7 +83,7 @@ def test_shift_kpis_reconcile_to_summed_setup_records(store, data):
                     by_kind[st.kind] += st.duration_sec
             assert row["maintenance_pct"] == pytest.approx(by_kind["Maintenance"] / 28800 * 100)
             assert row["operator_pct"] == pytest.approx(by_kind["Operator"] / 28800 * 100)
-            assert row["pm_pct"] == pytest.approx(by_kind["PM"] / 28800 * 100)
+            assert row["pm_pct"] == pytest.approx(by_kind["Scheduled"] / 28800 * 100)
             assert row["downtime_pct"] == pytest.approx(sum(by_kind.values()) / 28800 * 100)
             assert sorted(row["source_ids"]) == sorted(s.setup_id for s in mine)
     finally:
@@ -133,14 +134,15 @@ def test_stops_orders_and_rejects_map_field_by_field(store, data):
             assert notes[0]["record_type"] == "Shift" and crew in notes[0]["notes"]
             assert [n["record_id"] for n in notes[1:]] == [st.stop_id for st in sorted(mine, key=lambda st: st.start)]
             quality = {r["reason"]: r["rejected_sqft"] for r in analysis.get_quality_breakdown(shift)["rows"]}
-            expected = defaultdict(float)
+            expected = defaultdict(float)   # the dry-end families only (record contract v2): changeover and admin are not quality
             for s in setups:
                 if s.shift_number == shift:
                     for r in s.rejects:
-                        expected[r.reason] += r.sqft
+                        if r.family in ("BOND", "WARP", "MISALIGNMENT", "MOISTURE", "OTHER"):
+                            expected[r.family] += r.sqft
             assert quality == pytest.approx(dict(expected))
             orders = analysis.get_order_matrix(shift)["rows"]
-            customers = [(s, c) for s in setups if s.shift_number == shift for c in s.customers]
+            customers = [(s, c) for s in setups if s.shift_number == shift for c in s.lanes]
             assert len(orders) == len(customers)
             for row, (s, c) in zip(sorted(orders, key=lambda r: (r["record_id"], r["knife"])),
                                    sorted(customers, key=lambda sc: (sc[0].setup_id, sc[1].cutoff_allocation))):
@@ -175,7 +177,7 @@ def test_corrupt_flag_injects_the_bad_trim_record(store, data):
 
 
 @pytest.mark.parametrize("day, message", [
-    ("2026-09-12", "Saturday"), ("2026-09-13", "Sunday"), ("2025-09-29", "outside the dataset"),
+    ("2026-09-12", "Saturday"), ("2026-09-13", "Sunday"), ("2024-12-31", "outside the dataset"),
     ("2026-10-01", "outside the dataset"), ("14-09-2026", "YYYY-MM-DD"), (20260914, "YYYY-MM-DD")])
 def test_weekend_and_out_of_range_days_are_refused(store, day, message):
     with pytest.raises(ValueError, match=message):

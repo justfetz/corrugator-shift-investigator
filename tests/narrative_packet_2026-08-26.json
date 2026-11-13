@@ -22,7 +22,13 @@
     "speed_to_target_pct": 86.92975046842933,
     "throughput_in": 99.03146221875375,
     "trim_pct": 2.8492623777081345,
-    "valid_setups": 44
+    "valid_setups": 44,
+    "trim_sqft": null,
+    "shear_sqft": null,
+    "reject_sqft": null,
+    "changeover_sqft": null,
+    "waste_board_sqft": null,
+    "admin_sqft": null
    }
   ],
   "shift": 1,
@@ -52,7 +58,13 @@
     "speed_to_target_pct": 87.00454961496031,
     "throughput_in": 101.31639563837324,
     "trim_pct": 2.831883512735752,
-    "valid_setups": 38
+    "valid_setups": 38,
+    "trim_sqft": null,
+    "shear_sqft": null,
+    "reject_sqft": null,
+    "changeover_sqft": null,
+    "waste_board_sqft": null,
+    "admin_sqft": null
    }
   ],
   "shift": 2,
@@ -82,7 +94,13 @@
     "speed_to_target_pct": 82.5332387951708,
     "throughput_in": 98.4013941563233,
     "trim_pct": 2.7399696008985153,
-    "valid_setups": 38
+    "valid_setups": 38,
+    "trim_sqft": null,
+    "shear_sqft": null,
+    "reject_sqft": null,
+    "changeover_sqft": null,
+    "waste_board_sqft": null,
+    "admin_sqft": null
    }
   ],
   "shift": 3,
