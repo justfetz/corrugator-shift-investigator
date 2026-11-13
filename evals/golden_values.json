@@ -55696,6 +55696,18 @@
       "source_count": [
        7,
        null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091415291105:1:BOND:Blow out",
+        "CORR2026091415291105:1:WARP:Twist warp",
+        "CORR2026091415513406:1:BOND:Delamination",
+        "CORR2026091415513406:1:MISALIGNMENT:Web walking",
+        "CORR2026091415513406:1:MOISTURE:Wet board",
+        "CORR2026091415513406:1:OTHER:Cracking board",
+        "CORR2026091415513406:1:WARP:S warp"
+       ],
+       null
       ]
      },
      "order=SO-2609140113": {
@@ -55705,6 +55717,15 @@
       ],
       "source_count": [
        4,
+       null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091421334230:2:BOND:Delamination",
+        "CORR2026091421334230:2:MISALIGNMENT:Bad slit cut",
+        "CORR2026091421334230:2:OTHER:Cracking board",
+        "CORR2026091421334230:2:WARP:Up warp"
+       ],
        null
       ]
      },
@@ -55716,6 +55737,25 @@
       "source_count": [
        14,
        null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091415513406:2:BOND:Delamination",
+        "CORR2026091415513406:2:MISALIGNMENT:Wrong slat cuts",
+        "CORR2026091415513406:2:MOISTURE:Wet edges",
+        "CORR2026091415513406:2:WARP:Up warp",
+        "CORR2026091415560007:2:BOND:Delamination",
+        "CORR2026091415560007:2:MISALIGNMENT:Light scores",
+        "CORR2026091415560007:2:WARP:Twist warp",
+        "CORR2026091416120608:2:MOISTURE:Wet board",
+        "CORR2026091416120608:2:OTHER:Forklift damage",
+        "CORR2026091416120608:2:WARP:Twist warp",
+        "CORR2026091416183909:2:BOND:Glue dam",
+        "CORR2026091416183909:2:MISALIGNMENT:Web walking",
+        "CORR2026091416183909:2:MOISTURE:Wet board",
+        "CORR2026091416183909:2:WARP:Up warp"
+       ],
+       null
       ]
      },
      "order=SO-2609140021": {
@@ -55726,6 +55766,17 @@
       "source_count": [
        6,
        null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091418130620:2:BOND:Blow out",
+        "CORR2026091418130620:2:OTHER:Wrong medium",
+        "CORR2026091418130620:2:WARP:Twist warp",
+        "CORR2026091418522921:2:BOND:Between flutes (DW)",
+        "CORR2026091418522921:2:OTHER:Cracking board",
+        "CORR2026091418522921:2:WARP:Up warp"
+       ],
+       null
       ]
      },
      "order=SO-2609140097": {
@@ -55735,6 +55786,16 @@
       ],
       "source_count": [
        5,
+       null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091417281417:1:BOND:Blow out",
+        "CORR2026091417281417:1:OTHER:Streaks in print",
+        "CORR2026091417281417:1:WARP:Down warp",
+        "CORR2026091417410618:1:BOND:Blisters",
+        "CORR2026091417410618:1:WARP:Up warp"
+       ],
        null
       ]
      },
@@ -55751,6 +55812,138 @@
       ],
       "source_count": [
        186,
+       null
+      ],
+      "groups": [
+       43,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-semantic-sheets-by-order-0914-shift-2",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "semantic_query",
+   "arguments": {
+    "measure": "sheets",
+    "window": {
+     "period": "day",
+     "anchor": "2026-09-14"
+    },
+    "group_by": [
+     "order"
+    ],
+    "filters": {},
+    "shift": 2,
+    "compare": null,
+    "order": null,
+    "limit": 200
+   },
+   "note": "Sheets by order on one shift; the orders that ran on more than one setup list one receipt id per lane.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 43,
+    "values": {
+     "order=SO-2609140007": {
+      "value": [
+       14438,
+       null
+      ],
+      "source_count": [
+       4,
+       null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091415513406:2",
+        "CORR2026091415560007:2",
+        "CORR2026091416120608:2",
+        "CORR2026091416183909:2"
+       ],
+       null
+      ]
+     },
+     "order=SO-2609140005": {
+      "value": [
+       6103,
+       null
+      ],
+      "source_count": [
+       3,
+       null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091415021302:1",
+        "CORR2026091415183603:1",
+        "CORR2026091415242504:1"
+       ],
+       null
+      ]
+     },
+     "order=SO-2609140042": {
+      "value": [
+       24396,
+       null
+      ],
+      "source_count": [
+       3,
+       null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091416251210:1",
+        "CORR2026091416300511:1",
+        "CORR2026091416341312:1"
+       ],
+       null
+      ]
+     },
+     "order=SO-2609140003": {
+      "value": [
+       10100,
+       null
+      ],
+      "source_count": [
+       2,
+       null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091415242504:2",
+        "CORR2026091415291105:2"
+       ],
+       null
+      ]
+     },
+     "order=SO-2609140021": {
+      "value": [
+       5084,
+       null
+      ],
+      "source_count": [
+       2,
+       null
+      ],
+      "source_ids": [
+       [
+        "CORR2026091418130620:2",
+        "CORR2026091418522921:2"
+       ],
+       null
+      ]
+     },
+     "$": {
+      "value": [
+       337278,
+       null
+      ],
+      "source_count": [
+       66,
        null
       ],
       "groups": [

@@ -8824,6 +8824,215 @@
     "charts": 0
    },
    "period": "week"
+  },
+  {
+   "id": "semantic-compare-never-splits-by-paper-run",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=lineal_ft&by=wet_end&compare=prev",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's check of the fix round for the coordinator's review of a5af68d, item 1: a paper run belongs to one production day (WE + its date), so the week before holds none of this week's: split by paper run, every row read \"previous 0.0 ft\" and the chart \"X vs 0\". Refused, as a split by day is.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^A comparison with the previous window cannot split by wet_end: "
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-compare-never-splits-by-order",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=sheets&by=order&compare=prev",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's check of the fix round for the coordinator's review of a5af68d, item 1: an order belongs to one production day (SO- and its date), so the week before holds none of this week's orders: every row read \"previous 0 sheets\". Refused.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^A comparison with the previous window cannot split by order: "
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-compare-never-filters-one-paper-run",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/day/2026-09-16?measure=semantic&m=lineal_ft&wet_end=WE20260916010&compare=prev",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's check of the fix round for the coordinator's review of a5af68d, item 1: one paper run against the day before, which cannot hold it, would read \"+X vs 0\": refused, as the split is.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^A comparison with the previous window cannot filter by wet_end: "
+   },
+   "period": "day"
+  },
+  {
+   "id": "semantic-lever-of-each-maintenance-reason",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=maintenance_pm_minutes&by=reason",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's check of the fix round for the coordinator's review of a5af68d, item 6: maintenance and planned maintenance together is schedule-driven, but each unplanned maintenance reason is a breakdown the crew controls (the owner's maintenance band is controllable): each of those rows names controllable, and the planned row, schedule-driven like the total, names nothing extra. A row's lever is the lever of the stop kinds it sums.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=maintenance_pm_minutes&by=reason",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "maintenance_pm_minutes",
+       "group_by": [
+        "reason"
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Maintenance and planned maintenance this week: \\*\\*[0-9.,]+ min\\*\\* \\(query 1\\)$",
+     "bullets": [
+      5,
+      5
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "charts": 1,
+    "sections_match": [
+     "^- Planned maintenance \\(scheduled\\): \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total \\(query 1 · row \\d+\\)$",
+     "^- Knife / slitter jam: \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total · controllable \\(query 1 · row \\d+\\)$",
+     "^Lever: schedule-driven; a row with another lever names it\\.$"
+    ]
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-lever-of-the-maintenance-kind",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=maintenance_pm_minutes&kind=Maintenance",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's check of the fix round for the coordinator's review of a5af68d, item 6: filtered to the unplanned Maintenance kind, maintenance and planned maintenance is unplanned breakdowns only: controllable, the kind's lever, not the measure's schedule-driven.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=maintenance_pm_minutes&kind=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "maintenance_pm_minutes",
+       "filters": {
+        "kind": "Maintenance"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Maintenance and planned maintenance, stop kind Maintenance this week: \\*\\*[0-9.,]+ min\\*\\* \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "charts": 0,
+    "sections_match": [
+     "^Lever: controllable\\.$"
+    ]
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-lever-of-the-power-place",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_minutes&place=Power",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's check of the fix round for the coordinator's review of a5af68d, item 6: every stop at the place Power is a power outage, External whatever kind the record gives it (targets.json): the lever is external.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_minutes&place=Power",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "filters": {
+        "place": "Power"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime, stop place Power this week: \\*\\*[0-9.,]+ min\\*\\* \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "charts": 0,
+    "sections_match": [
+     "^Lever: external\\.$"
+    ]
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-refusal-lists-every-reject-reason",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=reject_sqft&reject_reason=zzz",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's check of the fix round for the coordinator's review of a5af68d, item 4: all fifty-six dry-end reject reasons of the taxonomy, every one listed: \"and N more\" pointed to a split, which lists twenty-five rows.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^No reject reason 'zzz' in the records; the values are: Bad slit cut, Bander crush, (?:[^,]+, ){53}Zipper board$"
+   },
+   "period": "week"
   }
  ]
 }

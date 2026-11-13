@@ -1650,15 +1650,18 @@ def semantic_rejects_by_order_case(plain):
     """Dry-end rejected area by the order of the lane each reject line fell on, one shift of one day, every order listed: the
     dry-end lines only (the taxonomy's dry-end line; changeover rejects count with shear, admin entries apart)."""
     day = date(2026, 9, 14)
-    sqft, lines = defaultdict(float), defaultdict(int)
+    sqft, lines, ids = defaultdict(float), defaultdict(int), defaultdict(list)
     for s in plain.between("dry_end_setups", day, day, 2):
         order_of = {lane.lane: lane.order_number for lane in s.lanes}
         for r in s.rejects:
             if LINE[r.category] == "dry_end":
                 sqft[order_of[r.lane]] += r.sqft
                 lines[order_of[r.lane]] += 1
+                # a reject line's own identity, its receipt id: setup, lane, family and reason (record contract v2's key)
+                ids[order_of[r.lane]].append(f"{s.setup_id}:{r.lane}:{FAMILY[r.category]}:{r.reason}")
     top = sorted(sqft, key=lambda o: (-sqft[o], o))
-    values = {f"order={o}": {"value": approx(sqft[o]), "source_count": exact(lines[o])} for o in top[:5]}
+    values = {f"order={o}": {"value": approx(sqft[o]), "source_count": exact(lines[o]), "source_ids": exact(sorted(ids[o])[:50])}
+              for o in top[:5]}
     values["#0"] = {"order": exact(top[0])}
     values["$"] = {"value": approx(sum(sqft.values())), "source_count": exact(sum(lines.values())), "groups": exact(len(sqft))}
     return semantic_case("value-semantic-rejects-by-order-0914-shift-2",
@@ -1666,6 +1669,25 @@ def semantic_rejects_by_order_case(plain):
                           "shift": 2, "limit": 200},
                          {"coverage": "complete", "row_count": len(sqft), "values": values},
                          note="Rejects by the order on the lane each reject line records: every order of the shift, largest first.")
+
+
+def semantic_sheets_by_order_case(plain):
+    """Sheets cut (actual cuts x outs) by order over the order lanes of one shift: an order that continues across setups
+    has a lane on each, and the receipt lists each lane by its own identity (setup and lane), never the setup alone."""
+    day = date(2026, 9, 14)
+    sheets, ids = defaultdict(int), defaultdict(list)
+    for s in plain.between("dry_end_setups", day, day, 2):
+        for lane in s.lanes:
+            sheets[lane.order_number] += lane.actual_cuts * lane.number_of_outs
+            ids[lane.order_number].append(f"{s.setup_id}:{lane.lane}")
+    many = sorted((o for o in sheets if len(ids[o]) > 1), key=lambda o: (-len(ids[o]), o))[:5]
+    values = {f"order={o}": {"value": exact(sheets[o]), "source_count": exact(len(ids[o])), "source_ids": exact(sorted(ids[o])[:50])} for o in many}
+    values["$"] = {"value": exact(sum(sheets.values())), "source_count": exact(sum(len(v) for v in ids.values())), "groups": exact(len(sheets))}
+    return semantic_case("value-semantic-sheets-by-order-0914-shift-2",
+                         {"measure": "sheets", "window": {"period": "day", "anchor": "2026-09-14"}, "group_by": ["order"], "shift": 2,
+                          "limit": 200},
+                         {"coverage": "complete", "row_count": len(sheets), "values": values},
+                         note="Sheets by order on one shift; the orders that ran on more than one setup list one receipt id per lane.")
 
 
 def semantic_dry_end_by_flute_case(plain):
@@ -1800,7 +1822,8 @@ BANDS = {b["id"]: b for b in json.loads((ROOT / "src" / "investigator" / "target
 
 
 def semantic_cases(plain):
-    return [semantic_downtime_by_grade_case(plain), semantic_rejects_by_order_case(plain), semantic_dry_end_by_flute_case(plain),
+    return [semantic_downtime_by_grade_case(plain), semantic_rejects_by_order_case(plain), semantic_sheets_by_order_case(plain),
+            semantic_dry_end_by_flute_case(plain),
             semantic_operator_pct_by_day_case(plain), semantic_lineal_per_setup_by_crew_case(plain),
             semantic_downtime_usd_by_place_case(plain), semantic_paper_changes_by_period_case(plain), semantic_order_changes_case(plain),
             semantic_zero_case(plain)]

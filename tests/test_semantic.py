@@ -808,6 +808,23 @@ def test_a_comparison_never_splits_by_time(dim):
         resolve_url('/corr/1/week/2026-09-14?measure=semantic&m=stops&by=day&compare=prev', default_store())
 
 
+@pytest.mark.parametrize('dim', ['wet_end', 'order'])
+def test_a_comparison_never_splits_or_filters_by_a_one_day_id(store, dim):
+    """Item 1, the reviewer's check: a paper run and an order belong to one production day (their ids carry it), so the
+    window before holds none of this window's, and a comparison split by one read "previous 0" on every row. Refused, as a
+    split by time is, and so is a filter on one."""
+    measure = 'lineal_ft' if dim == 'wet_end' else 'sheets'
+    assert S.model().dimensions[dim].get('recurs') is False
+    with pytest.raises(S.SemanticError, match=f'^A comparison with the previous window cannot split by {dim}: '):
+        S.validate(S.SemanticQuery(measure, window=WEEK, group_by=[dim], compare='previous'), store)
+    value = run(store, measure, window_of('2026-09-16'), group_by=[dim])['rows'][0][dim]
+    with pytest.raises(S.SemanticError, match=f'^A comparison with the previous window cannot filter by {dim}: '):
+        S.validate(S.SemanticQuery(measure, window=window_of('2026-09-16'), filters={dim: value}, compare='previous'), store)
+    assert run(store, measure, window_of('2026-09-16'), filters={dim: value})['value'] > 0   # without compare, it answers
+    for recurring in ('crew', 'grade', 'lane', 'customer', 'kind', 'reject_family'):   # their values come back every window
+        assert S.model().dimensions[recurring].get('recurs', True) is True
+
+
 def _with_where(entity, where):
     spec = json.loads(S.MODEL_PATH.read_text())
     spec['physical']['entities'][entity]['where'] = where
@@ -881,20 +898,20 @@ def test_a_band_from_a_filter_never_marks_a_slice_of_the_whole(store):
     assert grade['band'] == targets.band('dry_end', grade['value'])
 
 
-def test_a_refusal_lists_every_value_or_says_how_many_more(monkeypatch):
-    """Item 4: "the values are" lists every value the records hold; past VALUES_SHOWN it says how many more and how to list them."""
+def test_a_refusal_lists_every_value(monkeypatch):
+    """Item 4: "the values are" lists every value the records hold, however many (a split would list only DEFAULT_LIMIT
+    rows of one window, so the refusal is the one place that names them all)."""
     store = default_store()
     places = S.store_values('place', store)
     with pytest.raises(S.SemanticError) as refused:
         S.validate(S.SemanticQuery('stops', window=WEEK, filters={'place': 'zzz'}), store)
     assert str(refused.value) == "No stop place 'zzz' in the records; the values are: " + ', '.join(places)
     assert refused.value.choices == places
-    many = [f'Q{i:02}' for i in range(S.VALUES_SHOWN + 7)]
+    many = [f'Q{i:02}' for i in range(S.DEFAULT_LIMIT + 31)]
     monkeypatch.setattr(S, 'store_values', lambda dim, store, mdl=None: many)
     with pytest.raises(S.SemanticError) as refused:
         S.validate(S.SemanticQuery('stops', window=WEEK, filters={'place': 'zzz'}), store)
-    assert str(refused.value) == ("No stop place 'zzz' in the records; the values are: " + ', '.join(many[:S.VALUES_SHOWN]) +
-                                  ', and 7 more; by=place lists every value a window recorded')
+    assert str(refused.value) == "No stop place 'zzz' in the records; the values are: " + ', '.join(many)
     assert refused.value.choices == many
 
 
@@ -941,19 +958,29 @@ def test_the_lever_is_the_slices(store):
         want = 'external' if row['reason'] in targets.EXTERNAL_REASONS else 'schedule-driven' if row['reason'] == 'Planned maintenance' else 'controllable'
         assert row['lever'] == want, row['reason']
     assert run(store, 'downtime_minutes', WEEK, filters={'kind': 'planned'})['lever'] == 'schedule-driven'
-    assert run(store, 'downtime_pct', WEEK, filters={'reason': 'Power outage'})['lever'] == 'external'
+    assert run(store, 'downtime_pct', week, filters={'reason': 'Power outage'})['lever'] == 'external'
     assert run(store, 'stops', WEEK, filters={'kind': 'Operator'})['lever'] == 'controllable'
     assert run(store, 'trim_pct', WEEK)['lever'] == 'schedule-driven'
-    # the model's value levers are the owner's: the External kind and its reasons are external (targets.json)
+    # the reviewer's check: a row's lever is the lever of the stop kinds it sums, whatever dimension slices it
+    assert run(store, 'maintenance_pm_minutes', week, filters={'kind': 'Maintenance'})['lever'] == 'controllable'
+    assert run(store, 'maintenance_pm_minutes', week)['lever'] == 'schedule-driven'   # breakdowns and the plan together: the model's
+    for row in run(store, 'maintenance_pm_minutes', week, group_by=['reason'], limit=200)['rows']:
+        assert row['lever'] == ('schedule-driven' if row['reason'] == 'Planned maintenance' else 'controllable'), row['reason']
+    assert run(store, 'downtime_minutes', week, filters={'place': 'Power'})['lever'] == 'external'
+    places = rows_by(run(store, 'downtime_minutes', week, group_by=['place'], limit=200), 'place')
+    assert places['Power']['lever'] == 'external' and places['Stacker']['lever'] == 'controllable'
+    zero = run(store, 'downtime_pct', WEEK, group_by=['day'], filters={'kind': 'External'})   # a day with no External stop
+    assert zero['rows'] and all(r['lever'] == 'external' for r in zero['rows'])
+    # the model's kind levers are the owner's (targets.json): Maintenance and Operator controllable, External external
     kind_levers = mdl.dimensions['kind']['value_levers']
     assert kind_levers[targets.EXTERNAL_KIND] == targets.EXTERNAL['lever'] == 'external'
-    assert all(mdl.dimensions['reason']['value_levers'][r] == 'external' for r in targets.EXTERNAL_REASONS)
+    assert kind_levers['Maintenance'] == targets.BANDS['maintenance']['lever'] and kind_levers['Operator'] == targets.BANDS['operator']['lever']
 
 
 def test_a_scale_is_a_positive_number():
     """Item 7: a ratio's scale is checked when the model loads, as every other field is."""
     spec = json.loads(S.MODEL_PATH.read_text())
-    for scale in ('100', 0, -100, True, None):
+    for scale in ('100', 0, -100, True, None, float('inf'), float('nan')):
         bad = copy.deepcopy(spec)
         next(m for m in bad['measures'] if m['name'] == 'trim_pct')['scale'] = scale
         with pytest.raises(ValueError, match='semantic model: ratio trim_pct'):
