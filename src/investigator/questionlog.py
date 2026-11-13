@@ -61,9 +61,10 @@ H4 = r'[0-9A-Fa-f]{1,4}'
 IPV6 = re.compile(rf'(?<![\w:.])(?=[:\w]*[0-9A-Fa-f])(?:(?:{H4}:){{7}}{H4}|(?:{H4}(?::{H4}){{0,6}})?::(?:{H4}(?::{H4}){{0,6}})?'
                   rf'(?::\d{{1,3}}(?:\.\d{{1,3}}){{3}})?)(?:%[\w.]+)?(?![\w:]|\.\d)')
 # Nine or more digits in one run, spaces, dots, dashes, slashes or brackets between them (phone, card, account and
-# social-security numbers), or a 3-4 local number. A run holding an ISO date (2026-09-14 15:00) is a date, kept.
+# social-security numbers), or a 3-4 local number. An ISO date in a run (2026-09-14 15:00) is kept, and the digits
+# on either side of it are read again on their own (`_number`).
 NUMBER = re.compile(r'(?<![\w.])\+?\(?\d(?:[ .()/-]{0,3}\d){8,}\)?(?!\w)|(?<![\w-])\d{3}-\d{4}(?![\w-])')
-ISO_DATE = re.compile(r'\d{4}-\d{2}-\d{2}')
+ISO_DATE = re.compile(r'((?<!\d)\d{4}-\d{2}-\d{2}(?!\d))')
 TOKEN = re.compile(r'[A-Za-z0-9_\-]{20,}')
 SLASHED_KEY = re.compile(r'[A-Za-z0-9+/=_\-]{20,}')   # base64-shaped secrets (an AWS secret key has / and +)
 # Markup a comment may not carry: tags, entities, Markdown links, images and code. A question is logged as typed.
@@ -92,7 +93,13 @@ def _slashed_key(token):
 
 
 def _number(match):
-    return match.group(0) if ISO_DATE.search(match.group(0)) else '[number]'
+    """A personal number becomes [number]. A run that holds an ISO date keeps the date, and each stretch beside it is
+    read again on its own, so 'on 2026-09-14 020 7946 0958' keeps the date and loses the phone number while
+    '2026-09-14 15:00' is kept whole (the coordinator's re-review of PR 131)."""
+    parts = ISO_DATE.split(match.group(0))   # the dates at the odd indexes, what lies beside them at the even ones
+    if len(parts) == 1:
+        return '[number]'
+    return ''.join(part if n % 2 else NUMBER.sub('[number]', part) for n, part in enumerate(parts))
 
 
 def invisible(ch):

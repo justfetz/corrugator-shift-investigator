@@ -258,6 +258,21 @@ def test_a_key_email_phone_or_ip_typed_into_a_question_is_replaced():
     assert 'sk-ant' not in redact('y ' * 243 + 'sk-ant-api03-AbC123def456GhI789', 500)
 
 
+def test_a_phone_number_beside_a_date_is_replaced_and_the_date_kept():
+    # the coordinator's re-review of PR 131: a run holding an ISO date was kept whole, phone number and all
+    assert redact('on 2026-09-14 020 7946 0958', 500) == 'on 2026-09-14 [number]'
+    assert redact('call 020 7946 0958 about 2026-09-14 please', 500) == 'call [number] about 2026-09-14 please'
+    assert redact('on 2026-09-14 (555) 123-4567 or 2026-09-15 555-1234', 500) == 'on 2026-09-14 [number] or 2026-09-15 [number]'
+    assert redact('on 2026-09-14 +44 20 7946 0958 shift 2', 500) == 'on 2026-09-14 [number] shift 2'
+    assert redact('card 4111 1111 1111 1111 2026-09-14', 500) == 'card [number] 2026-09-14'
+    # a date glued to more digits is not a date: the whole run is a number
+    assert redact('ref 2026-09-140207946', 500) == 'ref [number]'
+    # what is beside a date and is not a number stays: a time, a shift, a second date
+    for kept in ('what happened 2026-09-14 15:00 on shift 2', 'from 2026-09-14 2026-09-15', '2026-09-14 15 30 shift 2',
+                 'week of 2026-09-07 / 2026-09-13'):
+        assert redact(kept, 500) == kept, kept
+
+
 # The default-ignorable code points, as Unicode lists them (DerivedCoreProperties.txt, Default_Ignorable_Code_Point),
 # copied here rather than imported so the test checks the module's set against Unicode's.
 DEFAULT_IGNORABLE = ((0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5),
