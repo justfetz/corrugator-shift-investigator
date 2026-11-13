@@ -9033,6 +9033,55 @@
     "raises": "^No reject reason 'zzz' in the records; the values are: Bad slit cut, Bander crush, (?:[^,]+, ){53}Zipper board$"
    },
    "period": "week"
+  },
+  {
+   "id": "semantic-lever-of-an-empty-outage-slice",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&reason=Power+outage",
+   "day": "2026-09-07",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the reviewer's re-check of the lever fix (item 6): a week without a power outage still reads the outage's lever, external, never the measure's controllable: a slice with no records in its window takes the lever of the stops that value holds in the records.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=downtime_minutes&reason=Power+outage",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "filters": {
+        "reason": "Power outage"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 0,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime, stop reason Power outage this week: \\*\\*0\\.00 min\\*\\* \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^Lever: external\\.$"
+    ]
+   },
+   "period": "week"
   }
  ]
 }

@@ -959,6 +959,13 @@ def test_the_lever_is_the_slices(store):
         assert row['lever'] == want, row['reason']
     assert run(store, 'downtime_minutes', WEEK, filters={'kind': 'planned'})['lever'] == 'schedule-driven'
     assert run(store, 'downtime_pct', week, filters={'reason': 'Power outage'})['lever'] == 'external'
+    # a slice with no records in its window takes the lever of the stops its value holds in the records (WEEK has no outage)
+    for filters in ({'reason': 'Power outage'}, {'place': 'Power'}, {'reason': 'Planned maintenance', 'shift': 1}):
+        empty = run(store, 'downtime_minutes', WEEK if 'shift' not in filters else window_of('2026-09-14'), filters=filters)
+        assert empty['source_count'] == 0 and empty['lever'] == ('schedule-driven' if 'shift' in filters else 'external'), filters
+    for by, filters in ((['day'], {'reason': 'Power outage'}), (['shift'], {'place': 'Power'})):   # the denominator's zero rows
+        rows = run(store, 'downtime_pct', week, group_by=by, filters=filters)['rows']
+        assert any(r['source_count'] == 0 for r in rows) and all(r['lever'] == 'external' for r in rows), (by, filters)
     assert run(store, 'stops', WEEK, filters={'kind': 'Operator'})['lever'] == 'controllable'
     assert run(store, 'trim_pct', WEEK)['lever'] == 'schedule-driven'
     # the reviewer's check: a row's lever is the lever of the stop kinds it sums, whatever dimension slices it
