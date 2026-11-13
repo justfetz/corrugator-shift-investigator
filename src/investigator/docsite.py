@@ -4,15 +4,22 @@ The pages are the repository's own `docs/*.md` (and the golden set's `evals/READ
 of `SECTIONS`, each with a left table of contents. The image renders them once at build time
 (`python -m investigator.docsite build /app/docs-site --root /app`, the folder `INVESTIGATOR_DOCS`
 names); the loopback workbench renders the checkout's files in memory at start-up. Nothing here
-runs per request, and nothing here imports beyond the standard library, so the deploy workflow can
-run `python -m investigator.docsite changelog` before installing anything.
+runs per request, and the module imports nothing beyond the standard library, so the deploy workflow
+can run `python -m investigator.docsite changelog` before installing anything (the case study's figures
+also read `cost_model`, itself standard library only, and only when a site is built).
 
 The Markdown is the subset these files use: ATX headings, paragraphs, `-` and `1.` lists, fenced
 and indented code, pipe tables, block quotes, rules, and inline code, emphasis, links and autolinks. Every
 character of the source is escaped; no HTML in a document reaches the page. A relative link to a
 page of the site becomes its `/docs` address; a link to any other file goes to the file on GitHub.
+
+A page in `FIGURE_PAGES` (the case study, issue #116) types no number: each `{{name}}` in it is filled
+at build from the eval runner's files, the changelog and the cost model (`figures`), and the build
+refuses the page when a digit or a number word is typed into its text (`typed_numbers`). The image build
+is strict; the workbench renders such a page as a short notice instead of failing to start.
 """
 import html
+import json
 import os
 import posixpath
 import re
@@ -26,6 +33,7 @@ REPO = 'https://github.com/justfetz/corrugator-shift-investigator'
 # The table of contents: (section, ((slug, source, label), ...)). The first page of a section is the
 # one its heading links to; slug '' is /docs itself. Every source must exist (tests/test_docsite.py).
 SECTIONS = (
+    ('Case study', (('case-study', 'docs/CASE_STUDY.md', 'Case study'),)),
     ('Overview', (('', 'docs/OVERVIEW.md', 'Overview'),
                   ('how-this-is-built', 'docs/HOW_THIS_IS_BUILT.md', 'How this is built'))),
     ('Asking questions', (('asking-questions', 'docs/ASKING.md', 'Asking questions'),
@@ -53,6 +61,227 @@ UNLISTED = {'docs/FIRST_SLICE.md': 'a historical design snapshot of the first sl
 # the hosted demo runs on the server's Anthropic key, and OpenAI is an optional provider (issue #93).
 PROVIDER_DOCS = ('docs/ANTHROPIC_DEMO.md', 'docs/OPENAI_BYOK.md')
 OPENAI_KEY = re.compile(r"openai(?:'s)?\s+(?:api\s+)?key", re.I)
+
+# ---- Figures (issue #116): pages whose every number is read at build, never typed.
+FIGURE_PAGES = ('docs/CASE_STUDY.md',)
+# The files `figures` reads from the root. They exist in the checkout and in the image (COPY evals, docs/*.md);
+# the rates come from the installed `cost_model`.
+FIGURE_SOURCES = ('evals/last_run.json', 'evals/history.jsonl', 'docs/CHANGELOG.md')
+FIGURE = re.compile(r'\{\{\s*([a-z][a-z0-9_.]*)\s*\}\}')
+# An issue or pull request cited by its own link, [#104](<REPO>/issues/104): a name, not a figure. The number must
+# be the one the link points at, so "[#289](anything)" stays typed.
+CITED_REFERENCE = re.compile(r'\[#(\d+)\]\(\s*' + re.escape(REPO) + r'/(?:issues|pull)/\1\s*\)')
+# Other names that are not figures: a percentile's name (p50, p95) and the unit MSF spells out.
+NAMED = re.compile(r'\bp\d{2}\b|\bthousand square feet\b', re.I)
+# A number word: counts and their plurals, fractions, ordinals from third up and multiples. "one" is left alone,
+# as an article ("one issue, one session, one pull request"); "first" and "second" as order ("a second way").
+TYPED_NUMBER = re.compile(
+    r'\d|[\u00b2\u00b3\u00b9\u00bc-\u00be\u2070-\u209f\u2150-\u218b]'
+    r'|\b(?:zero(?:e?s)?|twos|threes|fours|fives|sixes|sevens|eights|nines|tens|twelves|twenties|thirties|forties'
+    r'|fifties|sixties|seventies|eighties|nineties|hundreds|thousands|millions|billions|trillions?|dozens?'
+    r'|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen'
+    r'|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion'
+    r'|half|halves|quarters?|thirds?|fourths?|fifths?|sixths?|sevenths?|eighths?|ninths?|tenths?|elevenths?'
+    r'|twelfths?|thirteenths?|fourteenths?|fifteenths?|sixteenths?|seventeenths?|eighteenths?|nineteenths?'
+    r'|twentieths?|thirtieths?|fortieths?|fiftieths?|hundredths?|thousandths?|millionths?'
+    r'|twice|thrice|single|double|triple|quadruple|quintuple|tenfold|hundredfold|thousandfold)\b', re.I)
+
+
+def typed_numbers(text):
+    """Every line of a figures page that types a number into its own text, as 'line N: text'.
+
+    Each line is read without its `{{figures}}`, its `CITED_REFERENCE`s, its link addresses, its `NAMED` words
+    and a `1.` list marker; what is left is what the writer typed, and none of it may be a figure. Only `1.` is a
+    marker: an ordered list on such a page numbers every item `1.` (the renderer counts), so "289. runs" is typed."""
+    out = []
+    for n, line in enumerate(text.split('\n'), 1):
+        bare = FIGURE.sub(' ', line)
+        bare = CITED_REFERENCE.sub(' ', bare)
+        bare = re.sub(r'\]\(\s*[^)\s]*(?:\s+"[^"]*")?\s*\)', '] ', bare)
+        bare = re.sub(r'<https?://[^>\s]+>', ' ', bare)
+        bare = re.sub(r'^\s*1[.)](?=\s)', ' ', bare)
+        bare = NAMED.sub(' ', bare)
+        if TYPED_NUMBER.search(bare):
+            out.append(f'line {n}: {line.strip()}')
+    return out
+
+
+def expand_figures(text, values, source):
+    """`text` with each `{{name}}` replaced by values[name]; an unknown name fails the build."""
+    def fill(m):
+        if m.group(1) not in values:
+            raise KeyError(f'{source}: no figure named {m.group(1)!r}; figures() has {sorted(values)}')
+        return values[m.group(1)]
+    return FIGURE.sub(fill, text)
+
+
+def _count(n):
+    return f'{n:,}'
+
+
+def _ms(value):
+    return f'{value:.0f} ms' if isinstance(value, (int, float)) else 'not recorded yet'
+
+
+def _usd(value, places=0):
+    return f'${value:,.{places}f}'
+
+
+def _code(text):
+    return '`' + str(text).replace('`', '') + '`'
+
+
+def figures(root=ROOT):
+    """{name: Markdown} for a figures page, read from generated files at build:
+
+    - `evals/last_run.json` and the newest line of `evals/history.jsonl`, which `evals/run.py --track` writes
+      together (a pair from different runs fails the build): the golden runs by type, the offline latency,
+      the replayed live rounds and their recorded cost;
+    - every line of `evals/history.jsonl`: the tracked runs, and each model's newest line for the comparison;
+    - `docs/CHANGELOG.md`, generated from the merged pull requests;
+    - `cost_model` at its default rates (`rates.json`, the configuration the tools price with), for the dollars
+      a loss is priced at: its own `price` and `trim_points_usd_per_year`, so the page moves when they do.
+
+    A live provider's recorded cost is summed over the live rows whose recording exists (`evals/run.py`'s
+    `history_line`), whatever their outcome, so the cost per recorded case divides by those rows, found here the
+    same way: `evals/fixtures/<provider>/<case>.json` for each of the newest run's rows. A model whose newest line
+    is an older run has no rows here; its cost divides by that line's live rows, every one of which had a recording
+    when it was written."""
+    from . import cost_model   # standard library only; imported here so the changelog path never needs it
+    root = Path(root)
+    last = json.loads((root / 'evals/last_run.json').read_text(encoding='utf-8'))
+    history = [json.loads(line) for line in (root / 'evals/history.jsonl').read_text(encoding='utf-8').splitlines()
+               if line.strip()]
+    newest = history[-1]
+    pair = ('ran_at', 'commit', 'dataset')
+    if [newest.get(k) for k in pair] != [last.get(k) for k in pair]:
+        raise ValueError('evals/last_run.json and the newest line of evals/history.jsonl are from different runs; '
+                         '`python3 evals/run.py --track` writes both')
+    rows = last['rows']
+    out = {
+        'evals.ran': last['ran_at'][:10],
+        'evals.commit': f'[{_code(last["commit"])}]({REPO}/commit/{last["commit"]})',
+        'evals.dataset': _code(last['dataset']),
+        'evals.runs': _count(len(rows)),
+        'evals.passed': _count(sum(r['outcome'] == 'pass' for r in rows)),
+        'evals.scored': _count(sum(r['outcome'] in ('pass', 'fail') for r in rows)),
+        'evals.failed': _count(sum(r['outcome'] == 'fail' for r in rows)),
+        'evals.types': _count(len({r['type'] for r in rows})),
+        'evals.value': _count(sum(r['type'] == 'value' for r in rows)),
+        'evals.over_url': _count(sum(bool(re.search(r'\bURL \d+(?:\.\d+)? ms', r.get('note') or '')) for r in rows)),
+    }
+    # The golden runs by type, most cases first: offline and replayed live, passed over scored. A skip and a known
+    # defect (xfail) are not scored, as in the runner's own table and history_line; each is named as the runner
+    # names it, so a known defect never reads as a skip.
+    types = sorted({r['type'] for r in rows}, key=lambda t: (-sum(r['type'] == t for r in rows), t))
+
+    def known_defects(n):
+        return f'{n} known defect' + ('' if n == 1 else 's')
+
+    def score(subset):
+        if not subset:
+            return '–'
+        ran = [r for r in subset if r['outcome'] in ('pass', 'fail')]
+        skips = sum(r['outcome'] == 'skip' for r in subset)
+        known = len(subset) - len(ran) - skips   # xfail: run.py's only other outcome
+        return ' · '.join(([f'{sum(r["outcome"] == "pass" for r in ran)}/{len(ran)}'] if ran else [])
+                          + ([f'{skips} skipped'] if skips else []) + ([known_defects(known)] if known else []))
+    offline, live = [r for r in rows if not r['provider']], [r for r in rows if r['provider']]
+    skipped = [r for r in rows if r['outcome'] == 'skip']
+    known = [r for r in rows if r['outcome'] not in ('pass', 'fail', 'skip')]
+    stale = [r for r in skipped if str(r.get('note') or '').startswith('stale recording')]
+    unscored = len(skipped) + len(known)
+    if not unscored:
+        out['evals.skipped'] = ''
+    elif not known and len(stale) == len(skipped):
+        out['evals.skipped'] = (f' The other {unscored} runs are live recordings that skip, never scored, until they '
+                                f'are re-recorded against the current data.')
+    else:
+        parts = ([f'{len(stale)} live recordings that skip until they are re-recorded against the current data']
+                 if stale else []) + ([f'{len(skipped) - len(stale)} skipped'] if len(skipped) > len(stale) else []) \
+            + ([f'{known_defects(len(known))}, left out of the score as the runner leaves them '
+                f'([known defects](../evals/README.md#known-defects))'] if known else [])
+        out['evals.skipped'] = (f' The other {unscored} runs are not scored: '
+                                + (', '.join(parts[:-1]) + ' and ' + parts[-1] if len(parts) > 1 else parts[0]) + '.')
+    out['evals.table'] = '\n'.join([
+        '| Run | ' + ' | '.join(types) + ' | All |',
+        '| --- |' + ' ---: |' * (len(types) + 1),
+        '| Offline | ' + ' | '.join(score([r for r in offline if r['type'] == t]) for t in types) + f' | **{score(offline)}** |',
+        '| Replayed live | ' + ' | '.join(score([r for r in live if r['type'] == t]) for t in types) + f' | **{score(live)}** |'])
+    latency = newest.get('latency_ms') or {}
+    out['latency.p50'], out['latency.p95'] = _ms(latency.get('p50')), _ms(latency.get('p95'))
+    # The recordings behind the newest run's live rows, as history_line finds them.
+    recordings = {}
+    for r in live:
+        path = root / 'evals' / 'fixtures' / r['provider'] / f'{r["case"]}.json'
+        if path.is_file():
+            recordings.setdefault(r['provider'], []).append(json.loads(path.read_text(encoding='utf-8')))
+
+    def recorded_cases(provider, line, entry):
+        if line is newest:
+            return len(recordings.get(provider, []))
+        return sum(c.get('pass', 0) + c.get('fail', 0) + c.get('skip', 0) for c in (entry.get('types') or {}).values())
+
+    def passed_cell(entry):
+        counts = (entry.get('types') or {}).values()
+        ran = sum(c.get('pass', 0) + c.get('fail', 0) for c in counts)
+        unscored = sum(c.get('skip', 0) for c in counts)
+        return ' · '.join(([f'{sum(c.get("pass", 0) for c in counts)}/{ran}'] if ran or not unscored else [])
+                          + ([f'{unscored} skipped'] if unscored else []))
+    # Each model's newest tracked line: its live cases passed, the recorded cost per case, the first words.
+    by_model = {}
+    for line in history:
+        for provider, entry in (line.get('live') or {}).items():
+            by_model[(provider, entry.get('model') or 'unknown')] = (line, entry)
+    table = ['| Provider | Model | Live cases passed | Recorded cost per case | First words, p50 | Tracked |',
+             '| --- | --- | ---: | ---: | ---: | --- |']
+    for (provider, model), (line, entry) in sorted(by_model.items()):
+        cases, cost = recorded_cases(provider, line, entry), entry.get('recorded_cost_usd')
+        first = (line.get('live_ms') or {}).get('first_token_p50')
+        table.append(f'| {provider} | {_code(model)} | {passed_cell(entry)} | '
+                     f'{_usd(cost / cases, 4) if cases and cost is not None else "–"} | {_ms(first)} | {line["ran_at"][:10]} |')
+    out['models.table'] = '\n'.join(table)
+    out['models.count'] = _count(len(by_model))
+    current = newest.get('live') or {}
+    live_cases = sum(recorded_cases(p, newest, e) for p, e in current.items())
+    live_cost = sum(e.get('recorded_cost_usd') or 0 for e in current.values())
+    out['live.model'] = ', '.join(_code(e.get('model') or 'unknown') for _, e in sorted(current.items())) or 'none'
+    out['live.cases'] = _count(live_cases)
+    out['live.cost_per_case'] = _usd(live_cost / live_cases, 4) if live_cases else 'not recorded yet'
+    # What the recordings are: the analyst's shape when they were made, and whether they still score.
+    every = [rec for found in recordings.values() for rec in found]
+    planned = sum(rec.get('shape') == 'plan' for rec in every)
+    stale_live = [r for r in live if str(r.get('note') or '').startswith('stale recording')]
+    out['live.recordings'] = (
+        'No live round is recorded yet.' if not every else
+        f'The {len(every)} live recordings were made with '
+        + ('the one-plan analyst' if planned == len(every) else
+           "the analyst's earlier tool loop, before it became a checked plan and a streamed narrative"
+           if not planned else f'two shapes of the analyst ({planned} as a checked plan, the rest as its earlier tool loop)')
+        + ('; they were made against an earlier dataset, so they skip until they are re-recorded '
+           f'([#71]({REPO}/issues/71)), which also writes the first-words time.' if stale_live and len(stale_live) == len(live) else
+           f'; {len(stale_live)} were made against an earlier dataset and skip until re-recorded ([#71]({REPO}/issues/71)).'
+           if stale_live else ', and they are replayed and scored on every run.'))
+    out['live.first_words'] = _ms((newest.get('live_ms') or {}).get('first_token_p50'))
+    out['history.runs'] = _count(len(history))
+    out['history.first'] = history[0]['ran_at'][:10]
+    out['history.first_cases'] = _count(history[0]['cases'])
+    log = (root / 'docs/CHANGELOG.md').read_text(encoding='utf-8')
+    days = re.findall(r'^## (\d{4}-\d{2}-\d{2})\s*$', log, re.M)
+    out['changelog.pulls'] = _count(len(re.findall(r'^- \[#\d+\]', log, re.M)))
+    out['changelog.first'], out['changelog.last'] = (min(days), max(days)) if days else ('–', '–')
+    defaults = {'values': {rid: spec['default'] for rid, spec in cost_model.RATE_SPECS.items()},
+                'sources': {rid: spec['source'] for rid, spec in cost_model.RATE_SPECS.items()}}
+    rate, minute = defaults['values'], cost_model.price('downtime', 1, defaults)
+    out['rates.paper'] = f'{_usd(rate["paper_usd_msf"])}/MSF'
+    out['rates.hour'] = f'{_usd(rate["machine_usd_hour"])}/hr'
+    out['rates.machine_minute'] = _usd(minute['machine_time_usd'])
+    out['rates.msf_per_minute'] = f'{minute["msf_not_made"]:g} MSF'
+    out['rates.margin'] = ('unset in the demo' if rate['margin_usd_msf'] is None
+                           else f'{_usd(rate["margin_usd_msf"])}/MSF in the demo')
+    out['rates.trim_target'] = f'{rate["trim_target_pct"]:g}%'
+    out['rates.trim_point_year'] = _usd(cost_model.trim_points_usd_per_year(1, defaults))
+    return out
 
 
 def pages():
@@ -375,7 +604,7 @@ def _toc(all_pages, current, headings):
 
 TEMPLATE = """<!doctype html>
 <html lang="en"><head><script src="/theme.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{title} · Shift Investigator docs</title><link rel="stylesheet" href="/style.css"></head>
-<body><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>docs</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/evals">Golden evals</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
+<body class="docs-body"><header class="app"><div class="wrap"><div class="brand"><a class="home" href="https://justfetz.github.io/">← jason fetzer</a><b>Shift Investigator</b><span>docs</span></div><a class="nav-btn" href="/">Back to the investigator</a><a class="nav-btn" href="/evals">Golden evals</a><span class="badge">Synthetic data / read-only tools</span><button type="button" id="theme" class="theme-toggle" aria-pressed="false" title="Switch between light and dark theme">Dark</button></div></header>
 <div class="wrap docs-layout">
 {toc}
 <main class="docs-page"><article>
@@ -383,21 +612,46 @@ TEMPLATE = """<!doctype html>
 </article>
 <nav class="docs-pager" aria-label="Previous and next page">{pager}</nav>
 <p class="docs-source">Rendered from <a href="{source_url}">{source}</a> in the repository.</p>
+<p class="docs-source">Questions asked on the hosted demo are logged anonymously to improve the answers; the question log keeps no IP address, browser details or cookies (<a href="/docs/data#the-question-log">what is kept</a>).</p>
 </main></div></body></html>
 """
 
 
-def build_site(root=ROOT):
-    """{url path: html bytes} for every page; raises when a listed source is missing."""
+def _figures_page(page, text, root, values):
+    """A figures page's Markdown with its figures filled, and the values for the next one; raises when the page
+    types a number, names a figure the build does not know, or its files cannot be read or disagree."""
+    typed = typed_numbers(text)
+    if typed:
+        raise ValueError(f'docs site: {page["source"]} reads every figure from a generated file, '
+                         f'but these lines type one; use a {{{{figure}}}}: {typed}')
+    values = figures(root) if values is None else values
+    return expand_figures(text, values, page['source']), values
+
+
+def build_site(root=ROOT, strict=True):
+    """{url path: html bytes} for every page; raises when a listed source is missing.
+
+    A figures page that cannot be built raises too, unless `strict` is False (the workbench, `load_site`): then
+    the page says why in one line and the rest of the site, and the server, carry on."""
     root = Path(root)
     all_pages = pages()
     by_source = {p['source']: p['url'] for p in all_pages}
-    site = {}
+    site, values = {}, None
     for n, page in enumerate(all_pages):
         path = root / page['source']
         if not path.is_file():
             raise FileNotFoundError(f'docs site: {page["source"]} is listed in SECTIONS but does not exist')
-        title, body, headings = render_page(page, path.read_text(encoding='utf-8'), by_source)
+        text = path.read_text(encoding='utf-8')
+        if page['source'] in FIGURE_PAGES:
+            try:
+                text, values = _figures_page(page, text, root, values)
+            except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:   # JSONDecodeError is a ValueError
+                if strict:
+                    raise
+                print(f'docs site: {page["source"]} not built: {exc}', file=sys.stderr)
+                text = (f'# {page["label"]}\n\nThis page reads every figure from the eval history, the changelog and the '
+                        f'cost model when the docs are built, and could not be built here: {exc}\n')
+        title, body, headings = render_page(page, text, by_source)
         if page['slug'] == '':
             body += '\n' + _contents(all_pages)
         prev = all_pages[n - 1] if n else None
@@ -435,9 +689,11 @@ def load_site():
     sources = [ROOT / p['source'] for p in pages()]
     if not all(path.is_file() for path in sources):
         return None
-    stamp = tuple(path.stat().st_mtime_ns for path in sources)   # one render per process until a source changes
+    # A missing figure source is the lenient build's to report on its page; it does not take the site down.
+    inputs = sources + [ROOT / s for s in FIGURE_SOURCES]
+    stamp = tuple(path.stat().st_mtime_ns if path.is_file() else None for path in inputs)   # one render until one changes
     if _RENDERED.get('stamp') != stamp:
-        _RENDERED.update(stamp=stamp, site=build_site(ROOT))
+        _RENDERED.update(stamp=stamp, site=build_site(ROOT, strict=False))
     return _RENDERED['site']
 
 
