@@ -13,7 +13,7 @@ carries dollars names its rates in a provenance line ("paper $55/MSF (post), mac
 
 | Rate or assumption | Default | Source | `rates=` key |
 | --- | --- | --- | --- |
-| Paper cost | $55 / MSF | post | `paper` |
+| Paper cost, per MSF of combined board (the paper in all its plies, the medium's take-up included; not one grade's price) | $55 / MSF | post; owner confirmed 2026-11-12 | `paper` |
 | Machine time (bottleneck shadow price) | $1,200 / hr | post ("more than $1,200 an hour") | `hour` |
 | Board contribution margin | not set | not in the post; owner to set | `margin` |
 | Side-trim target | 3 % of gross (3.25 % is the flag, 2.75 % a home run) | owner, 2026-11-10 (`targets.json`, issue #101) | `trim` |
