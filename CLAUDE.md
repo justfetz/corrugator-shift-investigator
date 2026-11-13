@@ -37,6 +37,21 @@ python -m investigator.server --port 7860            # local workbench at http:/
 - `docs/`: every page of `/docs` (a new file goes into `docsite.SECTIONS`); `OVERVIEW.md`, `ASKING.md`, `ANALYST.md`, `EVALS.md`, `COST_MODEL.md`, `DATA.md` (the section landing pages), `RECORDS.md` (the record contract), `CHANGELOG.md` (generated), `AGENT_CONTRACT.md` (the agent's tools, bounds and scope), `AGENT_EXECUTION.md`, `ANTHROPIC_DEMO.md`, `DEPLOYMENT.md` (keyless deploy, decisions on record), `TESTING.md`, `METRICS.md`, `URLS.md` (the public URL grammar; keep `urls.py` and it in step) · `archive/` (historical reviews, not current)
 - `.github/workflows/`: `tests.yml` (push and PR), `deploy-cloudrun.yml` (main deploys to Cloud Run on push and every weekday night, moving the window), `preview.yml` (each PR gets a no-traffic tagged revision; its URL is a PR comment); `.github/scripts/` holds their helpers
 
+## Google Cloud
+
+The facts a session needs; the procedures and decisions are in `docs/DEPLOYMENT.md`.
+
+| Setting | Value |
+| --- | --- |
+| Project and region | `felix-august`, `us-central1` (repository variables `GCP_PROJECT_ID`, `GCP_REGION`) |
+| Service | Cloud Run `corrugator-shift-investigator`, deployed from source by Cloud Build: min 0, max 2 instances, 1 vCPU, 1 GiB, concurrency 20, timeout 180 s, public mode |
+| Addresses | <https://shift.talktomymachine.ai> (Cloud Run domain mapping, a Preview feature; DNS at GoDaddy) and the two `run.app` URLs |
+| Deploys | Every push to `main` and every weekday at 13:00 UTC (the window moves); each PR gets a no-traffic tagged revision `pr-<n>` (`preview.yml`) |
+| Deploy credential | The stored `GCP_SA_KEY` secret until the keyless cutover (#28: Workload Identity Federation, repository variables `GCP_WORKLOAD_IDENTITY_PROVIDER` and `GCP_DEPLOYER_SERVICE_ACCOUNT`); #133 tightens it before agents run |
+| Secrets | Secret Manager `anthropic-api-key`, mounted by name as `ANTHROPIC_API_KEY` (repository variable `ANTHROPIC_SECRET_NAME`); OpenAI not mounted |
+| Logs | Cloud Logging, `_Default` bucket, 30 days. From PR #131 (issue #125) the question log prints one JSON line per question there, and an owner-run sink copies it to BigQuery dataset `question_log` (90-day partitions) |
+| Owner only | IAM, billing and budget alerts, secrets, the domain mapping, the WIF cutover, the question-log sink. Sessions never change these (see Permissions) |
+
 ## Rules
 
 - Numbers come from tool results, never from prose. A narrative that states a number no tool returned is a bug, and the bug becomes a golden case.
