@@ -33,11 +33,16 @@ function shown(v){
  return {text:String(v)};
 }
 const valueText=v=>String(v);
-// The address of this table page with one filter set (or removed, value null), back on its first page; the order
-// is the server's canonical one, so a link built here is the one the server would write.
-function withFilter(name,value){
- const filters={...state.filters}; if(value===null)delete filters[name]; else filters[name]=value;
- const parts=state.filterable.filter(k=>k in filters).map(k=>`${k}=${encodeURIComponent(valueText(filters[k]))}`);
+const valuesOf=v=>Array.isArray(v)?v:[v];   // a filter given more than once is a list: any of its values matches
+// The address of this table page with one filter set (or removed, value null; or one value of a list removed, `drop`),
+// back on its first page. A day replaces a span and a span a day. The order is the server's canonical one, so a link
+// built here is the one the server would write.
+function withFilter(name,value,drop){
+ const filters={...state.filters};
+ if(drop!==undefined){ const left=valuesOf(filters[name]).filter(v=>v!==drop); if(left.length)filters[name]=left.length===1?left[0]:left; else delete filters[name]; }
+ else if(value===null)delete filters[name];
+ else{ filters[name]=value; if(name==='day'){delete filters.from;delete filters.to;} if(name==='from'||name==='to')delete filters.day; }
+ const parts=state.filterable.filter(k=>k in filters).flatMap(k=>[...valuesOf(filters[k])].sort((a,b)=>valueText(a)<valueText(b)?-1:valueText(a)>valueText(b)?1:0).map(v=>`${k}=${encodeURIComponent(valueText(v))}`));
  return `/data/${state.table}`+(parts.length?'?'+parts.join('&'):'');
 }
 
@@ -69,7 +74,8 @@ function filterBar(page){
  const chips=el('div',undefined,'data-chips');
  const applied=Object.entries(page.filters);
  if(!applied.length)chips.append(el('span','No filter: every row of the window, newest first.','muted'));
- for(const [k,v] of applied){ const chip=el('span',undefined,'chip'); chip.append(el('code',`${k} = ${valueText(v)}`),link('×',withFilter(k,null),'chip-x')); chip.children[1].setAttribute('aria-label',`Remove the ${k} filter`); chips.append(chip); }
+ for(const [k,v] of applied)for(const one of valuesOf(v)){ const chip=el('span',undefined,'chip'), x=link('×',Array.isArray(v)?withFilter(k,null,one):withFilter(k,null),'chip-x'); x.setAttribute('aria-label',`Remove the ${k} filter ${valueText(one)}`); chip.append(el('code',`${k} = ${valueText(one)}`),x); chips.append(chip); }
+ if(applied.some(([,v])=>Array.isArray(v)))chips.append(el('span','A filter given more than once matches any of its values.','muted'));
  const form=el('form',undefined,'data-add'), pick=el('select'), input=el('input'), go=el('button','Filter');
  pick.setAttribute('aria-label','Column to filter'); input.setAttribute('aria-label','Value'); input.type='text'; input.maxLength=120; input.placeholder='value'; go.type='submit';
  for(const name of page.filterable){ const o=el('option',name); o.value=name; pick.append(o); }
@@ -146,7 +152,7 @@ function renderTable(page){
  const crumbs=$('crumbs'); crumbs.replaceChildren(link('data','/data'),el('span',` / ${page.table}`));
  $('data-lede').textContent=page.meaning;
  $('data-status').textContent=`${page.table} · production days ${page.window.first_day} to ${page.window.last_day}`;
- $('data-body').replaceChildren(rowsCard(page),schemaCard(page),sqlCard(page));
+ $('data-body').replaceChildren(schemaCard(page),rowsCard(page),sqlCard(page));   // the schema, then the rows below it (the issue's order)
  try{ const here=location.pathname+(location.search||''); if(page.url&&page.url!==here&&history&&history.replaceState)history.replaceState(null,'',page.url); }catch(e){}   // the canonical spelling in the address bar
 }
 function renderError(message){

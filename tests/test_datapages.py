@@ -115,11 +115,41 @@ def test_a_table_page_is_the_schema_and_fifty_rows_newest_first(store):
     assert dp.page(store, 'customers', '')['count'] == 41 and dp.page(store, 'reject_reasons', 'family=warp')['count'] >= 5
     with pytest.raises(ValueError, match='not a filter'):
         dp.page(store, 'customers', 'day=2026-09-14')   # a dimension has no production day
-    for bad, message in (('day=2026-13-01', 'date'), ('shift=4', 'shift'), ('page=0', 'page'), ('page=2001', 'page'),
+    # a column filter given more than once matches any of its values; crew and grade reach a table through its shift and setup
+    either = dp.page(store, 'stops', 'day=2026-09-14&reason=Stacker&reason=Missed%20splice&reason=Stacker')
+    assert either['filters']['reason'] == ['Missed splice', 'Stacker'] and either['url'].endswith('reason=Missed%20splice&reason=Stacker')
+    assert {r['reason'] for r in either['rows']} == {'Missed splice', 'Stacker'} and either['count'] == store._db.execute(
+        "SELECT count(*) FROM stops WHERE production_date = '2026-09-14' AND reason IN ('Missed splice', 'Stacker')").fetchone()[0]
+    crew = dp.page(store, 'stops', 'from=2026-09-01&to=2026-09-30&crew=crew%20b&grade=275-BC')
+    want = store._db.execute("SELECT count(*) FROM stops t JOIN shifts c USING (production_date, shift) JOIN setups g USING (setup_id) "
+                             "WHERE t.production_date BETWEEN '2026-09-01' AND '2026-09-30' AND c.crew = 'Crew B' AND g.quality_id = '275-BC'").fetchone()[0]
+    assert crew['count'] == want > 0 and crew['url'] == '/data/stops?from=2026-09-01&to=2026-09-30&crew=crew%20b&quality_id=275-BC'
+    assert dp.page(store, 'stops', 'day=2026-09-14&format=json')['url'] == '/data/stops?day=2026-09-14'   # the JSON asked for by parameter
+    for bad, message in (('day=2026-13-01', 'date'), ('shift=4', 'shift'), ('page=0', 'page'), ('page=201', 'narrow the filter'),
+                         ('limit=5', 'not a filter'), ('page=2&page=3', 'twice'), ('reason=' + '&reason='.join(map(str, range(21))), 'at most'),
                          ('nope=1', 'not a filter'), ('shift=1&shift=2', 'twice'), ('day=2026-09-14&from=2026-09-01', 'not both'),
                          ('from=2026-09-30&to=2026-09-01', 'on or before'), ('lane=one', 'whole number'), ('weekday=Sat', 'weekday')):
         with pytest.raises(ValueError, match=message):
             dp.page(store, 'setup_orders' if 'lane' in bad else 'stops', bad)
+
+
+def test_a_csv_holds_the_lock_no_longer_than_a_page(store, monkeypatch):
+    """The store's lock is the tools' lock: a CSV reads its rows a chunk at a time, each read its own short hold, so a
+    download never keeps a tool waiting (the #142 review measured 120-185 ms in one read before)."""
+    holds, fetch = [], store._fetch
+
+    def timed(sql, params, limit=1000):
+        started = time.perf_counter()
+        try:
+            return fetch(sql, params, limit)
+        finally:
+            holds.append((time.perf_counter() - started) * 1000)
+    monkeypatch.setattr(store, '_fetch', timed)
+    for table in ('setups', 'setup_orders', 'rejects'):
+        holds.clear()
+        body, truncated = dp.csv_rows(store, table, '')
+        assert truncated and len(holds) == dp.CSV_LIMIT // dp.CSV_CHUNK + 1, (table, len(holds))
+        assert sorted(holds)[len(holds) // 2] < 60, (table, holds)   # each read a few tens of milliseconds at most on a slow runner
 
 
 def test_the_csv_is_the_filtered_rows_bounded(store):
@@ -168,7 +198,11 @@ def test_fuzzed_filters_never_reach_the_sql(store):
                 assert value not in out['sql'] and value not in out['count_sql'], (table, query)
                 assert value in out['parameters'] or value.lower() in {str(p).lower() for p in out['parameters']}, (table, query)
                 bound += value in NASTY
-        shapes.add(re.sub(r'"?\w+"? (=|>=|<=) \?|lower\("\w+"\) = lower\(\?\)|dayofweek\(production_date\) = \?', 'C', out['sql']))
+        shape = re.sub(r'EXISTS \(SELECT 1 FROM shifts c WHERE c\.production_date = \w+\.production_date AND c\.shift = \w+\.shift '
+                       r'AND lower\(c\.crew\) IN \((?:lower\(\?\)(?:, )?)+\)\)'
+                       r'|EXISTS \(SELECT 1 FROM setups g WHERE g\.setup_id = \w+\.setup_id AND lower\(g\.quality_id\) IN \((?:lower\(\?\)(?:, )?)+\)\)'
+                       r'|lower\("\w+"\) IN \((?:lower\(\?\)(?:, )?)+\)|"\w+" IN \((?:\?(?:, )?)+\)', 'C', out['sql'])
+        shapes.add(re.sub(r'"?\w+"? (=|>=|<=) \?|lower\("\w+"\) = lower\(\?\)|dayofweek\(production_date\) = \?', 'C', shape))
     assert refused > 100 and tried - refused > 60 and bound > 20, (tried, refused, bound)   # hostile values were bound, not refused only
     assert all(re.fullmatch(r'SELECT [\w", ]+ FROM \w+( WHERE C( AND C)*)? ORDER BY [\w, ]+ LIMIT \? OFFSET \?', s) for s in shapes), shapes
     assert counts == {t: store._db.execute(f'SELECT count(*) FROM {t}').fetchone()[0] for t in dp.TABLES}
@@ -180,8 +214,10 @@ def test_fuzzed_filters_never_reach_the_sql(store):
 
 def test_a_page_answers_in_tens_of_milliseconds(store):
     """The budget the issue sets, loose enough for a shared CI runner: the median of five reads of each table's first
-    page, and of a filtered page, under 100 ms (on the prebuilt store a page takes a few milliseconds)."""
-    for table, query in [(t, '') for t in dp.TABLES] + [('rejects', 'from=2026-09-01&to=2026-09-30&family=warp'), ('stops', 'reason=Missed%20splice')]:
+    page, its deepest page and a filtered page, under 100 ms (on the prebuilt store a page takes a few milliseconds)."""
+    deepest = [(t, f'page={dp.MAX_PAGE}') for t in ('setups', 'setup_orders', 'rejects', 'rolls')]
+    for table, query in [(t, '') for t in dp.TABLES] + deepest + [('rejects', 'from=2026-09-01&to=2026-09-30&family=warp'),
+                                                                 ('stops', 'reason=Missed%20splice&crew=Crew%20A&grade=55-C')]:
         times = []
         for _ in range(5):
             started = time.perf_counter()
@@ -226,137 +262,168 @@ def stop_minutes(rows):
     return sum(r['seconds'] for r in rows) / 60
 
 
-def line_quantity(table, label, rows):
-    """A priced line's quantity over its rows: minutes of stops, square feet of reject lines, trim or shear of setups,
-    waste boards of lanes; None for a modeled line (speed, the bale's remainder), whose rows are only listed."""
+def unexplained(rows):
+    """The bale minus every recorded waste line, over shift rows (record_store.accounted_sqft)."""
+    lines = ('trim_sqft', 'shear_sqft', 'reject_sqft', 'changeover_sqft', 'admin_sqft', 'cutoff_waste_sqft', 'stacker_waste_sqft')
+    return sum(r['bale_sqft'] - sum(r[c] for c in lines) for r in rows)
+
+
+def speed_gap_ft(rows, required):
+    """cost_model's speed gap to the required speed, shift by shift: required × running minutes − lineal feet."""
+    shifts = {}
+    for r in rows:
+        shifts.setdefault((r['production_date'], r['shift']), []).append(r)
+    return sum(max(0.0, required * (480 - sum(r['stop_seconds'] for r in rs) / 60) - sum(r['lineal_ft'] for r in rs)) for rs in shifts.values())
+
+
+def line_checks(table, row, rows, data):
+    """A priced line's quantity over its rows, each line by what it prices: minutes of stops, square feet of reject
+    lines, waste boards of lanes, side trim and shear of setups, the points over the trim target, the speed gap, the runs
+    under their baseline, the bale's unexplained remainder."""
+    label, quantity = row.get('lever') or row.get('gap'), row['quantity']
     if table == 'stops':
-        return stop_minutes(rows), 2
+        return [('minutes', stop_minutes(rows), quantity, 2)]
     if table == 'rejects':
-        return sum(r['sqft'] for r in rows), 1
+        return [('sq ft', sum(r['sqft'] for r in rows), quantity, 1)]
     if table == 'setup_orders':
         cutoff, stacker = sums(rows, 'cutoff_waste_sqft', 'stacker_waste_sqft')
-        return (cutoff if label.startswith('Cutoff-knife waste boards') else stacker if label.startswith('Stacker waste boards') else cutoff + stacker), 1
-    if table == 'setups' and label.startswith('Side trim') and 'over' not in label:
-        return sum(r['trim_sqft'] for r in rows), 1
-    if table == 'setups' and label.startswith('Shear'):
-        return sum(r['shear_sqft'] for r in rows), 1
-    return None, None
+        got = cutoff if label.startswith('Cutoff-knife waste') else stacker if label.startswith('Stacker waste') else cutoff + stacker   # or both: 'Cutoff-knife and stacker waste boards'
+        return [('waste boards sq ft', got, quantity, 1)]
+    if table == 'shifts':
+        return [('unexplained sq ft', unexplained(rows), quantity, 1)]
+    over = re.match(r'Side trim over the ([\d.]+)% target', label)
+    if over:
+        trim, gross = sums(rows, 'trim_sqft', 'gross_sqft')
+        return [('points over the trim target', max(0.0, trim / gross * 100 - float(over.group(1))), quantity, 4)]
+    if label.startswith('Side trim'):
+        return [('side trim sq ft', sum(r['trim_sqft'] for r in rows), quantity, 1)]
+    if label.startswith('Shear'):
+        return [('shear sq ft', sum(r['shear_sqft'] for r in rows), quantity, 1)]
+    required = re.match(r'Speed gap to ([\d.]+) ft/min', label)
+    if required:
+        return [('speed gap ft', speed_gap_ft(rows, float(required.group(1))), quantity, 1)]
+    if label.startswith('Speed under'):
+        return [('wet-end runs', len({r['wet_end_id'] for r in rows}), data['source_rows']['runs'], None)]
+    return []
+
+
+def speedvar_checks(part, row, rows, data, url):
+    """A speed-variance receipt: the explained side's stops or setups (the minutes and stops the tool reports for it);
+    a bucket or item that lost nothing there opens the reference's rows, which must then hold what it names."""
+    if part == 'row' and dp._reference(row) or part == 'detail' and dp._reference(row):
+        item = row.get('item')
+        if row['bucket'] in ('below_baseline', 'mix'):
+            return [('the grade on the reference side', all(r['quality_id'] == item for r in rows) if item else bool(rows), True, None)]
+        return [('rows on the reference side', bool(rows), True, None)]
+    if part is None or row['bucket'] in ('below_baseline', 'mix') and part == 'row':
+        return [('setups of the window', len(rows), data['source_rows']['current']['setups'], None)]
+    if part == 'detail' and row['bucket'] in ('below_baseline', 'mix'):
+        return [('setups of the grade', all(r['quality_id'] == row['item'] for r in rows) and bool(rows), True, None)]
+    items = [d for d in data['details'] if d['bucket'] == row['bucket']] if part == 'row' else [row]
+    # a bucket's minutes are its items' minutes, each rounded to two places: their sum is within half a cent per item
+    return [('stops', len(rows), sum(d['stops'] for d in items), None),
+            ('minutes', stop_minutes(rows), sum(d['minutes'] for d in items), ('abs', 0.005 * len(items) + 1e-6))]
 
 
 def figure_failure(entry, part, index, url, rows):
     """None when the rows behind a receipt hold the cited row's quantity, else what differs. The bold figure itself is a
-    field of that row (evals/run.py's faithfulness and grounding checks), so the rows hold the figure."""
+    field of that row (evals/run.py's faithfulness and grounding checks), so the rows hold the figure. Every receipt
+    must have a check here: one without is a failure, never counted as verified."""
     if not rows:
         return f'{url} holds no rows'
     tool, data = entry['tool'], entry['data']
     row = data[dp.PARTS[part]][index] if part else None
     table = url.split('?')[0].removeprefix('/data/')
-    fail = lambda what, got, want: f'{tool} {part} {index}: {what} {got!r} over {url}, the tool says {want!r}'
+    checks = []   # (what, got over the rows, what the tool says, decimals it rounded to or None)
     if tool in ('get_downtime_pareto', 'get_downtime_breakdown') and part == 'row':
         minutes = row.get('minutes', row.get('down_minutes'))
-        if len(rows) != row['stops'] or not near(stop_minutes(rows), minutes, 2 if 'minutes' in row else None):
-            return fail('stops, minutes', (len(rows), stop_minutes(rows)), (row['stops'], minutes))
+        checks = [('stops', len(rows), row['stops'], None), ('minutes', stop_minutes(rows), minutes, 2 if 'minutes' in row else None)]
     elif tool in ('get_downtime_review', 'get_downtime_breakdown') and part in ('row', 'flag'):
-        if len(rows) != row['stops'] or not near(stop_minutes(rows), row['minutes'], 2):
-            return fail('stops, minutes', (len(rows), stop_minutes(rows)), (row['stops'], row['minutes']))
+        checks = [('stops', len(rows), row['stops'], None), ('minutes', stop_minutes(rows), row['minutes'], 2)]
     elif tool == 'get_downtime_review':
-        t = tile_sums(rows)
-        got = (t['maintenance_pm_seconds'] - sum(r['planned_maintenance_seconds'] for r in rows) + t['operator_seconds']) / 60
-        if not near(got, data['op_maint_minutes'], 2) or not near(sum(r['scheduled_seconds'] for r in rows) / 60, data['scheduled_minutes'], 0):
-            return fail('maintenance + operator minutes', got, data['op_maint_minutes'])
+        maint_op = sum(r['maintenance_seconds'] + r['operator_seconds'] for r in rows) / 60
+        checks = [('maintenance + operator minutes', maint_op, data['op_maint_minutes'], 2),
+                  ('scheduled minutes', sum(r['scheduled_seconds'] for r in rows) / 60, data['scheduled_minutes'], 0)]
     elif tool == 'get_grade_totals' and part == 'row':
-        if len(rows) != row['setups'] or not near(sum(r['gross_sqft'] for r in rows) / 1000, row['volume_msf'], 1):
-            return fail('setups, MSF', (len(rows), sum(r['gross_sqft'] for r in rows) / 1000), (row['setups'], row['volume_msf']))
+        checks = [('setups', len(rows), row['setups'], None), ('MSF', sum(r['gross_sqft'] for r in rows) / 1000, row['volume_msf'], 1)]
     elif tool == 'get_grade_totals':
-        if not near(sum(r['gross_sqft'] for r in rows) / 1000, data['total_volume_msf'], 1):
-            return fail('MSF', sum(r['gross_sqft'] for r in rows) / 1000, data['total_volume_msf'])
+        checks = [('MSF', sum(r['gross_sqft'] for r in rows) / 1000, data['total_volume_msf'], 1)]
     elif tool in ('get_opportunities', 'get_shift_dollars', 'get_day_dollars') and part == 'row':
-        label = row.get('lever') or row.get('gap')
-        got, places = line_quantity(table, label, rows)
-        if got is not None and row.get('unit') in ('sq ft', 'min') and not near(got, row['quantity'], places):
-            return fail(label, got, row['quantity'])
+        checks = line_checks(table, row, rows, data)
     elif tool in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities', 'get_waste_breakdown') and part is None:
-        if not near(sum(r['gross_sqft'] for r in rows), data['gross_sqft'], 1):
-            return fail('gross sq ft', sum(r['gross_sqft'] for r in rows), data['gross_sqft'])
+        checks = [('gross sq ft', sum(r['gross_sqft'] for r in rows), data['gross_sqft'], 1)]
     elif tool == 'get_overrun':
         nominal, actual = sums(rows, 'nominal_cuts', 'actual_cuts')
-        if (len(rows), nominal, actual) != (row['lines'], row['nominal_cuts'], row['actual_cuts']):
-            return fail('lines, cuts', (len(rows), nominal, actual), (row['lines'], row['nominal_cuts'], row['actual_cuts']))
+        checks = [('lines', len(rows), row['lines'], None), ('nominal cuts', nominal, row['nominal_cuts'], None), ('actual cuts', actual, row['actual_cuts'], None)]
     elif tool in ('get_period_kpis', 'compare_periods'):
-        got = RecordStore._kpis(tile_sums(rows))[row['metric']]
-        if not near(got, row['current']):
-            return fail(row['metric'], got, row['current'])
+        checks = [(row['metric'], RecordStore._kpis(tile_sums(rows))[row['metric']], row['current'], None)]
     elif tool == 'get_trend':
-        got = RecordStore._kpis(tile_sums(rows))[data['metric']]
-        if not near(got, row['value']):
-            return fail(data['metric'], got, row['value'])
+        checks = [(data['metric'], RecordStore._kpis(tile_sums(rows))[data['metric']], row['value'], None)]
     elif tool == 'get_quality_breakdown':
-        if not near(sum(r['sqft'] for r in rows), row['rejected_sqft']):
-            return fail('sq ft', sum(r['sqft'] for r in rows), row['rejected_sqft'])
+        checks = [('sq ft', sum(r['sqft'] for r in rows), row['rejected_sqft'], None)]
     elif tool == 'get_rankings':
         if data['metric'] == 'speed':
             got = sum(r['lineal_ft'] for r in rows) / sum(r['target'] * r['seconds'] / 60 for r in rows) * 100
         else:
             got = stop_minutes(rows) if data['metric'] == 'downtime' else sum(r['sqft'] for r in rows)
-        if not near(got, row['value']):
-            return fail(data['metric'], got, row['value'])
+        checks = [(data['metric'], got, row['value'], None)]
     elif tool == 'get_rollstock' and part == 'row':
-        if not near(sum(r['lineal_ft'] for r in rows), row['lineal_ft'], 1) or (table == 'wet_ends' and len(rows) != row['paper_runs']):
-            return fail('feet, runs', (sum(r['lineal_ft'] for r in rows), len(rows)), (row['lineal_ft'], row['paper_runs']))
+        checks = [('feet', sum(r['lineal_ft'] for r in rows), row['lineal_ft'], 1)] + ([('paper runs', len(rows), row['paper_runs'], None)] if table == 'wet_ends' else [])
     elif tool == 'get_rollstock':
-        if not near(sum(r['lineal_ft'] for r in rows), data['total_lineal_ft'], 1):
-            return fail('feet', sum(r['lineal_ft'] for r in rows), data['total_lineal_ft'])
+        checks = [('feet', sum(r['lineal_ft'] for r in rows), data['total_lineal_ft'], 1)]
     elif tool == 'get_setup_matrix':
-        if len(rows) != 1 or not near(rows[0]['lineal_ft'], row['lineal_ft']):
-            return fail('the setup', [r['setup_id'] for r in rows], row['setup_id'])
+        checks = [('the setup', [r['setup_id'] for r in rows], [row['setup_id']], None), ('feet', rows[0]['lineal_ft'], row['lineal_ft'], None)]
     elif tool in ('get_shift_kpis', 'get_shift_overview'):
         r = data['rows'][0]
-        if len(rows) != 1 or not near(rows[0]['gross_sqft'], r['gross_sqft']) or not near(rows[0]['lineal_ft'], r['observed_lineal_ft']) \
-                or rows[0]['setups'] != r['valid_setups']:
-            return fail('the shift row', rows, r)
+        checks = [('one shift row', len(rows), 1, None), ('gross sq ft', rows[0]['gross_sqft'], r['gross_sqft'], None),
+                  ('lineal ft', rows[0]['lineal_ft'], r['observed_lineal_ft'], None), ('setups', rows[0]['setups'], r['valid_setups'], None)]
     elif tool == 'get_shift_notes':
-        if len(rows) != len(data['rows']) - 1:   # every stop of the shift is a note, after the shift's own
-            return fail('stops', len(rows), len(data['rows']) - 1)
+        checks = [('stops, each a note after the shift\'s own', len(rows), len(data['rows']) - 1, None)]
     elif tool == 'get_speed_opportunity':
         target = row['setups'] if part == 'row' else data['source_rows']['setups_included']
-        running = [r for r in rows if r['run_seconds'] >= dp_min_run(data) * 60]
-        if (part != 'row' or row['slice_by'] == 'width') and len(running) != target:
-            return fail('setups past the minimum run time', len(running), target)
-    elif tool == 'get_speed_variance' and part == 'detail' and row.get('minutes') is not None and row['bucket'] != 'setups':
-        if len(rows) != row['stops'] or not near(stop_minutes(rows), row['minutes'], 2):
-            return fail('stops, minutes', (len(rows), stop_minutes(rows)), (row['stops'], row['minutes']))
+        checks = [('setups past the minimum run time', len([r for r in rows if r['run_seconds'] >= data['min_run_minutes'] * 60]), target, None)]
+    elif tool == 'get_speed_variance':
+        checks = speedvar_checks(part, row, rows, data, url)
     elif tool == 'get_stops_profile':
-        if len(rows) != row['stops'] or (part == 'row' and not near(stop_minutes(rows), row['minutes'], 2)):
-            return fail('stops', len(rows), row['stops'])
+        checks = [('stops', len(rows), row['stops'], None)] + ([('minutes', stop_minutes(rows), row['minutes'], 2)] if part == 'row' else [])
     elif tool == 'get_waste_breakdown' and part == 'detail':
-        if not near(sum(r['sqft'] for r in rows), row['sqft'], 1) or sum(r['sheets'] for r in rows) != row['sheets']:
-            return fail('sq ft', sum(r['sqft'] for r in rows), row['sqft'])
+        checks = [('sq ft', sum(r['sqft'] for r in rows), row['sqft'], 1), ('sheets', sum(r['sheets'] for r in rows), row['sheets'], None)]
     elif tool == 'get_waste_breakdown' and part == 'row':
-        column = {'setups': f'{row["category"]}_sqft', 'rejects': 'sqft', 'setup_orders': f'{row["category"]}_sqft', 'shifts': 'bale_sqft'}[table]
-        if row['category'] != 'unexplained' and not near(sum(r[column] for r in rows), row['sqft'], 1):
-            return fail(row['category'], sum(r[column] for r in rows), row['sqft'])
+        if row['category'] == 'unexplained':
+            checks = [('unexplained sq ft', unexplained(rows), row['sqft'], 1)]
+        else:
+            column = {'setups': f'{row["category"]}_sqft', 'rejects': 'sqft', 'setup_orders': f'{row["category"]}_sqft', 'shifts': 'bale_sqft'}[table]
+            checks = [(row['category'], sum(r[column] for r in rows), row['sqft'], 1)]
     elif tool == 'get_wet_end_performance' and part == 'row':
-        if len(rows) != len(row['source_ids']) or not near(sum(r['lineal_ft'] for r in rows), row['lineal_ft']):
-            return fail('setups, feet', (len(rows), sum(r['lineal_ft'] for r in rows)), (len(row['source_ids']), row['lineal_ft']))
+        checks = [('setups', len(rows), len(row['source_ids']), None), ('feet', sum(r['lineal_ft'] for r in rows), row['lineal_ft'], None)]
     elif tool == 'get_wet_end_performance':
-        if len({r['wet_end_id'] for r in rows}) != len(data['rows']):
-            return fail('paper runs', len({r['wet_end_id'] for r in rows}), len(data['rows']))
+        checks = [('paper runs', len({r['wet_end_id'] for r in rows}), len(data['rows']), None)]
     elif tool == 'get_order_matrix' and part is None:
-        if len(rows) != len(data['rows']):
-            return fail('lanes', len(rows), len(data['rows']))
+        checks = [('lanes', len(rows), len(data['rows']), None)]
     elif tool == 'get_order_matrix':
-        if len(rows) != 1 or rows[0]['actual_cuts'] != row['cuts']:
-            return fail('the lane', rows, row)
+        checks = [('one lane', len(rows), 1, None), ('actual cuts', rows[0]['actual_cuts'], row['cuts'], None)]
+    if not checks:
+        return f'{tool} {part} {index}: no check of its rows ({url})'
+    for what, got, want, places in checks:
+        if isinstance(places, tuple):   # ('abs', tolerance): a sum of values the tool rounded one by one
+            same = abs(got - want) <= places[1]
+        else:
+            same = got == want if isinstance(want, (list, bool)) or places is None and isinstance(want, int) else near(got, want, places)
+        if not same:
+            return f'{tool} {part} {index}: {what} {got!r} over {url}, the tool says {want!r}'
     return None
 
 
-def dp_min_run(data):
-    return data['min_run_minutes']
+# The data-quality demo's day (an excluded record in shift 2): a daily tool links the corrupt variant of shift_kpis, a
+# period tool the records as generated (the #142 review). The golden set's own corrupt cases ask by POST, not by URL.
+CORRUPT_URLS = ('/corr/1/day/2026-09-14/shift/2?measure=overview&corrupt=1', '/corr/1/day/2026-09-14/shift/2?measure=kpis&corrupt=1',
+                '/corr/1/day/2026-09-14/shift/2?measure=waste&corrupt=1', '/corr/1/day/2026-09-14/shift/2?measure=dollars&corrupt=1',
+                '/corr/1/day/2026-09-14?measure=dollars&corrupt=1', '/corr/1/day/2026-09-14/shift/2?measure=downtime&corrupt=1')
 
 
 def golden_urls():
     cases = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
-    return sorted({c['expect']['url'] for c in cases if c.get('mode', 'offline') == 'offline' and (c.get('expect') or {}).get('url')})
+    return sorted({c['expect']['url'] for c in cases if c.get('mode', 'offline') == 'offline' and (c.get('expect') or {}).get('url')}) + list(CORRUPT_URLS)
 
 
 def test_receipts_on_golden_answers_link_to_rows_that_hold_the_cited_figure(store):
@@ -448,6 +515,9 @@ def test_the_routes_are_get_only_read_only_and_keep_the_origin_rules(served):
     status, _, body = request(local, 'GET', "/data/stops.json?reason=x'%20OR%201=1")
     assert status == 200 and json.loads(body)['count'] == 0   # a value is a value
     assert request(local, 'GET', '/data/stops.json?shift=9')[0] == 400
+    status, _, body = request(local, 'GET', '/data/stops.json?limit=5')   # a visitor's word "limit" is a 400 like any other, not the store's cap
+    assert status == 400 and 'not a filter' in json.loads(body)['error']
+    assert request(local, 'GET', '/data/stops?day=2026-09-14&format=json')[0] == 200
     assert request(local, 'GET', '/data/stops.xml')[0] == 404
     assert request(local, 'GET', '/data.json', headers={'Host': 'evil.example'})[0] == 403   # the workbench's own host only
     for method in ('POST', 'PUT', 'DELETE'):
@@ -461,12 +531,23 @@ def test_the_routes_are_get_only_read_only_and_keep_the_origin_rules(served):
     assert status == 403
 
 
-def test_the_data_reads_have_their_own_window(served):
+def test_the_data_reads_have_their_own_windows(served):
+    """Container-wide, per client address, and for CSVs: one visitor cannot take the container's window, nor hold the
+    store with downloads; the page itself is a static file, never counted."""
+    from investigator.server import DATA_CSV_PER_MIN, DATA_READS_PER_IP, DATA_READS_PER_MIN
     server = served()
-    server.app.data_requests.extend([time.monotonic()] * 600)
+    now = time.monotonic()
+    server.app.csv_requests.extend([now] * DATA_CSV_PER_MIN)
+    assert request(server, 'GET', '/data/stops.csv?day=2026-09-14')[0] == 429
+    assert request(server, 'GET', '/data/stops.json?day=2026-09-14')[0] == 200   # a page is not a download
+    server.app.data_windows['127.0.0.1'] = __import__('collections').deque([now] * DATA_READS_PER_IP)
     status, headers, _ = request(server, 'GET', '/data/stops.json')
     assert status == 429 and int(headers['Retry-After']) >= 1
-    assert request(server, 'GET', '/data')[0] == 200   # the page itself is a static file
+    server.app.data_windows.clear()
+    server.app.data_requests.extend([now] * DATA_READS_PER_MIN)
+    assert request(server, 'GET', '/data/stops.json')[0] == 429
+    assert request(server, 'GET', '/data')[0] == 200 and request(server, 'GET', '/data/stops')[0] == 200
+    assert DATA_READS_PER_IP < DATA_READS_PER_MIN
 
 
 # ------------------------------------------------------------------ the UI test's payloads and the contract anchors

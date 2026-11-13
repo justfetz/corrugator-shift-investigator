@@ -62,6 +62,8 @@ LIVE_MODES = ('openai', 'anthropic')
 EVAL_RUNS_PER_MIN = 120   # POST /api/evals/run, container-wide: a case is 10-100 ms offline, the whole set about 3 s once a minute
 FEEDBACK_PER_MIN = 60     # POST /api/feedback, container-wide, as the question window; per IP it is DEMO_RATE_LIMIT_PER_MIN, as /api/ask
 DATA_READS_PER_MIN = 600 # GET /data/<table>.json and .csv, container-wide: a page is a few milliseconds of the store's lock
+DATA_READS_PER_IP = 120  # the same reads for one client address, so one visitor cannot take the container's whole window
+DATA_CSV_PER_MIN = 30    # CSV downloads, container-wide: each is up to ten short reads of the store
 LIVE_CONCURRENCY = 2      # live rounds in flight per container; a third is answered 429 `busy` instead of queueing
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
 
@@ -158,6 +160,8 @@ class Workbench:
         self.request_limit = 60       # investigations per process per minute (POST and URL answers); the eval harness raises it
         self.eval_requests = deque()  # /api/evals/run has its own window, so browsing the golden set never spends the question limits
         self.data_requests = deque()  # the data browser's reads (issue #142) have theirs: browsing rows never spends a question
+        self.data_windows = {}        # client ip -> deque of its data reads (DATA_READS_PER_IP); the ip is only counted
+        self.csv_requests = deque()   # CSV downloads (DATA_CSV_PER_MIN)
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
         self.feedback_requests = deque()   # POST /api/feedback has windows of its own: a thumbs up never spends a question
         self.feedback_windows = {}         # client ip -> deque of feedback timestamps, limited like rate_windows
@@ -917,13 +921,20 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 if name and name not in datapages.TABLES:
                     return self._send(404, {'error': f'No table {name!r}; the tables are {", ".join(datapages.TABLES)}'})
                 return self._static((WEB/'data.html').read_bytes(), 'text/html; charset=utf-8')
-            now = time.monotonic()
-            window = app.data_requests
-            while window and window[0] < now-60:
-                window.popleft()
-            if len(window) >= DATA_READS_PER_MIN:
-                return self._send(429, {'error': 'Data browser limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
-            window.append(now)
+            now, ip = time.monotonic(), self._client_ip()
+            with app.rate_lock:
+                for stale in [k for k, w in app.data_windows.items() if not w or w[-1] < now-60]:
+                    del app.data_windows[stale]
+                windows = [(app.data_requests, DATA_READS_PER_MIN), (app.data_windows.setdefault(ip, deque()), DATA_READS_PER_IP)]
+                if name.endswith('.csv'):
+                    windows.append((app.csv_requests, DATA_CSV_PER_MIN))
+                for window, limit in windows:
+                    while window and window[0] < now-60:
+                        window.popleft()
+                    if len(window) >= limit:
+                        return self._send(429, {'error': 'Data browser limit reached; retry in a minute'}, extra={'Retry-After': str(max(1, math.ceil(window[0]+60-now)))})
+                for window, _ in windows:
+                    window.append(now)
             started = time.perf_counter()
             timing = lambda: {'Server-Timing': f'app;dur={(time.perf_counter()-started)*1000:.1f}'}
             try:
@@ -941,7 +952,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                                        'X-Rows-Truncated': 'true' if truncated else 'false'})
                 return self._send(200, datapages.page(app.store, table, url.query), extra=timing())
             except ValueError as exc:
-                if 'limit' in str(exc):   # the store's time or row cap
+                if str(exc) in ('Query exceeded two-second limit', 'Result exceeds row limit'):   # the store's own caps (RecordStore._fetch)
                     return self._send(503, {'error': str(exc)})
                 return self._send(400, {'error': str(exc)})
             except Exception:

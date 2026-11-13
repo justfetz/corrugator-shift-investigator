@@ -1727,13 +1727,13 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(stops.children[2].textContent,index.tables.find(t=>t.name==='stops').rows.toLocaleString('en-US'));
  assert.deepEqual([stops.children[3].textContent,stops.children[4].textContent],['2025-01-01','2026-09-30']);
  assert.equal(p.doc.title,'Data · Shift Investigator');
- // /data/stops?day=…&shift=…: the rows first (newest first), the schema with its contract links, the query that ran
+ // /data/stops?day=…&shift=…: the schema with its contract links, the rows below it (newest first), the query that ran
  const page=JSON.parse(fs.readFileSync('tests/ui_fixtures/data_stops.json','utf8'));
  p=await load('/data/stops','?shift=2&day=2026-09-14',page);
  assert.deepEqual(p.fetched,[['/data/stops.json?shift=2&day=2026-09-14','application/json']]);
  assert.deepEqual(p.replaced,['/data/stops?day=2026-09-14&shift=2']);   // the canonical spelling replaces the typed one
  assert.equal(p.els['data-title'].textContent,'The downtime log');assert.equal(p.els['data-lede'].textContent,page.meaning);
- const [rowsCard,schemaCard,sqlCard]=p.els['data-body'].children;
+ const [schemaCard,rowsCard,sqlCard]=p.els['data-body'].children;
  const chips=walkAll(rowsCard).filter(e=>e.className==='chip');
  assert.deepEqual(chips.map(c=>c.children[0].textContent),['day = 2026-09-14','shift = 2']);
  assert.equal(chips[1].children[1].href,'/data/stops?day=2026-09-14');   // × drops that filter, back on page 1
@@ -1760,6 +1760,14 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(kind.children[4].children[0].href,'/docs/record-contract#col-stops-kind');
  assert.equal(walkAll(schemaCard).find(e=>e.textContent==='the record contract ↗').href,'/docs/record-contract#col-stops');
  assert.ok(textOf(sqlCard).includes(page.sql)&&textOf(sqlCard).includes('-- bound: ["2026-09-14",2,50,0]'));
+ // a span page (where a period receipt lands): a day's cell opens that day alone, never a day inside the span (#142 review)
+ p=await load('/data/stops','?from=2026-09-01&to=2026-09-30&shift=2',{...page,filters:{from:'2026-09-01',to:'2026-09-30',shift:2},url:'/data/stops?from=2026-09-01&to=2026-09-30&shift=2'});
+ const spanGrid=walkAll(p.els['data-body'].children[1]).find(e=>e.tag==='table');
+ assert.equal(spanGrid.children[1].children[0].children[col('production_date')].children[0].href,'/data/stops?day=2026-09-14&shift=2');
+ // a filter given more than once matches any of its values: a chip per value, and × drops that value alone
+ p=await load('/data/stops','?reason=Stacker&reason=Missed%20splice',{...page,filters:{reason:['Missed splice','Stacker']},url:'/data/stops?reason=Missed%20splice&reason=Stacker'});
+ const listChips=walkAll(p.els['data-body'].children[1]).filter(e=>e.className==='chip');
+ assert.deepEqual(listChips.map(c=>[c.children[0].textContent,c.children[1].href]),[['reason = Missed splice','/data/stops?reason=Stacker'],['reason = Stacker','/data/stops?reason=Missed%20splice']]);
  // a refused address shows the server's reason
  p=await load('/data/stops','?shift=9',{error:'shift is 1, 2 or 3'},400);
  assert.equal(walkAll(p.els['data-body']).find(e=>e.className==='warning-note').textContent,'shift is 1, 2 or 3');
@@ -1786,5 +1794,5 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  vm.runInContext('renderQueries(__rec.result)',ctx);
  const foot=els.queries.children.find(e=>e.id==='query-1').children.find(e=>e.className==='query-foot');
  assert.deepEqual(foot.children.filter(e=>/rows-step/.test(e.className)).map(a=>[a.textContent,a.href]),[['Rows: stops ↗','/data/stops?day=2026-09-14&shift=2']]);
- console.log('UI issue-142 checks passed: /data lists the tables, a table page shows its rows newest first with filters from the address, its schema with contract links and its query, and a receipt links to the rows behind its figure.');
+ console.log('UI issue-142 checks passed: /data lists the tables, a table page shows its schema with contract links, then its rows newest first with filters from the address (a day replaces a span, a repeated filter is any of its values), and its query, and a receipt links to the rows behind its figure.');
 })().catch(error=>{console.error(error);process.exit(1);});

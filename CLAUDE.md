@@ -58,7 +58,7 @@ The facts a session needs; the procedures and decisions are in `docs/DEPLOYMENT.
 - Every bug becomes a golden case in `evals/golden.json` before the fix.
 - The offline path never calls a model. Live calls are bounded in calls, seconds and bytes, and go only through the provider adapters.
 - Public mode never accepts a visitor key.
-- Contracts move with their code in the same PR: `docs/RECORDS.md` and `docs/RECORD_CONTRACT.md` with `records.py` and `synth.py`, `docs/AGENT_CONTRACT.md` with the tool schemas, bounds and scope checks, `docs/URLS.md` with `urls.py` and the `/data` grammar of `datapages.py`.
+- Contracts move with their code in the same PR: `docs/RECORDS.md` and `docs/RECORD_CONTRACT.md` with `records.py` and `synth.py`, `docs/AGENT_CONTRACT.md` with the tool schemas, bounds and scope checks, `docs/URLS.md` with `urls.py`.
 - No doc states a current count of tests, cases, runs or recordings. Counts drift, and every PR conflicts on them; the test run's own output, `evals/last_run.json` and `/evals` are the counts. A dated past result ("the first slice passed 106 tests") is history and may stay.
 - Keep this file short. Procedures live in `.claude/skills/`.
 

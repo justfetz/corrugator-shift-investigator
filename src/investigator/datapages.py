@@ -30,14 +30,19 @@ from .record_store import SHIFT_KPIS, TABLES as STORE_TABLES
 from .records import PLANNED_STOP_REASON, SCHEDULED_STOP_LABEL
 
 PER_PAGE = 50
-MAX_PAGE = 2000            # deepest page: 100,000 rows in, enough for the largest filter; a narrower filter is the way further
+MAX_PAGE = 200             # deepest page: 10,000 rows in, as deep as the CSV; past it a narrower filter is the way further
 CSV_LIMIT = 10_000         # rows in one CSV download of a filter
+CSV_CHUNK = 1_000          # rows per read of a CSV: the store's lock is let go between reads, so a download never holds it long
 MAX_VALUE = 120            # characters in one filter value
+MAX_VALUES = 20            # values of one column filter given more than once (any of them matches)
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri')
 CONTRACT = '/docs/record-contract'
 METRICS = '/docs/metrics'
-# The parameters every dated table takes, before its column filters: the production day, a span, a weekday, a shift.
-SCOPE_PARAMS = ('day', 'from', 'to', 'weekday', 'shift')
+# The parameters every dated table takes, before its column filters: the production day, a span, a weekday, a shift,
+# and the crew on that shift (a table without a crew column of its own reads it from `shifts`). A table that names a
+# setup but not its grade (lanes, stops, reject lines) also takes `quality_id` (`grade`), the board grade of that setup.
+SCOPE_PARAMS = ('day', 'from', 'to', 'weekday', 'shift', 'crew')
+SINGLE = ('day', 'from', 'to', 'weekday', 'shift')   # given once; a column filter (and crew) may be given again, meaning any of them
 # A word the issue and a plant use for a column: ?order=SO-... is the lane's order number, ?grade=32-C the board grade.
 ALIASES = {'order': 'order_number', 'grade': 'quality_id'}
 # The stop kinds as the store spells them; the contract's rule: a filter that names the planned kind `pm` answers as Scheduled.
@@ -313,8 +318,10 @@ def columns(table):
 def filter_names(table):
     """The URL parameters a table page takes, in canonical order."""
     kinds = dict(TYPES[table])
-    scope = [p for p in SCOPE_PARAMS if TABLES[table].dated and (p != 'shift' or 'shift' in kinds)]
-    return scope + [name for name, kind in TYPES[table] if kind in FILTERABLE and name not in ('shift', 'production_date')]
+    scope = [p for p in SCOPE_PARAMS if TABLES[table].dated and (p not in ('shift', 'crew') or 'shift' in kinds)
+             and not (p == 'crew' and 'crew' in kinds)]
+    grade = ['quality_id'] if 'setup_id' in kinds and 'quality_id' not in kinds else []   # the grade of the row's setup
+    return scope + grade + [name for name, kind in TYPES[table] if kind in FILTERABLE and name not in ('shift', 'production_date')]
 
 
 # ---------------------------------------------------------------- the URL grammar
@@ -340,69 +347,82 @@ def parse_filters(table, query):
     if table not in TABLES:
         raise ValueError(f'No table {table!r}; the tables are {", ".join(TABLES)}')
     allowed, kinds = filter_names(table), dict(TYPES[table])
-    raw, page = {}, 1
-    for key, value in parse_qsl(query or '', keep_blank_values=True, max_num_fields=32):
+    raw, page, seen = {}, 1, set()
+    for key, value in parse_qsl(query or '', keep_blank_values=True, max_num_fields=64):
         if key == 'page':
+            if 'page' in seen:
+                raise ValueError("'page' is given twice")
+            seen.add('page')
             if not re.fullmatch(r'[1-9]\d{0,4}', value) or int(value) > MAX_PAGE:
-                raise ValueError(f'page is a whole number from 1 to {MAX_PAGE}')
+                raise ValueError(f'page is a whole number from 1 to {MAX_PAGE}; past it, narrow the filter')
             page = int(value)
+            continue
+        if key == 'format' and value == 'json':   # the JSON representation asked for by parameter (the server already chose it)
             continue
         name = ALIASES.get(key, key)
         if name == 'production_date':
             name = 'day'
         if name not in allowed:
-            raise ValueError(f'{key!r} is not a filter of {table}; its filters are {", ".join(allowed)}')
-        if name in raw:
-            raise ValueError(f'{key!r} is given twice')
+            raise ValueError(f'{key[:40]!r} is not a filter of {table}; its filters are {", ".join(allowed)}')
+        if name in SINGLE and name in seen:
+            raise ValueError(f'{name!r} is given twice')
+        seen.add(name)
         if value == '':
             continue
-        raw[name] = _check_text(value, key)
+        values = raw.setdefault(name, [])
+        if len(values) >= MAX_VALUES:
+            raise ValueError(f'{name!r} takes at most {MAX_VALUES} values')
+        values.append(_check_text(value, name))
     out = {}
     for name in allowed:
         if name not in raw:
             continue
-        value = raw[name]
-        if name in ('day', 'from', 'to'):
-            parsed = _date(value)
-            if parsed is None:
-                raise ValueError(f'{name} is a date, YYYY-MM-DD')
-            out[name] = parsed
-        elif name == 'weekday':
-            match = [w for w in WEEKDAYS if w.lower() == value.lower()[:3] and len(value) >= 3]
-            if not match:
-                raise ValueError('weekday is one of Mon, Tue, Wed, Thu, Fri')
-            out[name] = match[0]
-        elif name == 'shift':
-            if value not in ('1', '2', '3'):
-                raise ValueError('shift is 1, 2 or 3')
-            out[name] = int(value)
-        else:
-            kind = kinds[name]
-            if kind == 'INTEGER':
-                if not re.fullmatch(r'-?\d{1,9}', value):
-                    raise ValueError(f'{name} is a whole number')
-                out[name] = int(value)
-            elif kind == 'DOUBLE':
-                try:
-                    number = float(value)
-                except ValueError:
-                    number = math.nan
-                if not math.isfinite(number) or not re.fullmatch(r'-?\d{1,9}(\.\d{1,6})?', value):
-                    raise ValueError(f'{name} is a number')
-                out[name] = number
-            elif kind == 'BOOLEAN':
-                if value.lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
-                    raise ValueError(f'{name} is true or false')
-                out[name] = value.lower() in ('true', '1', 'yes')
-            elif table == 'stops' and name == 'kind':
-                out[name] = STOP_KINDS.get(value.lower(), value)
-            else:
-                out[name] = value
+        typed = [_typed(table, name, kinds, value) for value in raw[name]]
+        typed = list(dict.fromkeys(typed))   # a repeated value once
+        out[name] = typed[0] if len(typed) == 1 else sorted(typed, key=_value_text)
     if 'day' in out and ('from' in out or 'to' in out):
         raise ValueError('Give a day, or a span from and to, not both')
     if 'from' in out and 'to' in out and out['from'] > out['to']:
         raise ValueError('from is on or before to')
     return out, page
+
+
+def _typed(table, name, kinds, value):
+    """One filter value as its column's type, or a ValueError that names the parameter."""
+    if name in ('day', 'from', 'to'):
+        parsed = _date(value)
+        if parsed is None:
+            raise ValueError(f'{name} is a date, YYYY-MM-DD')
+        return parsed
+    if name == 'weekday':
+        match = [w for w in WEEKDAYS if w.lower() == value.lower()[:3] and len(value) >= 3]
+        if not match:
+            raise ValueError('weekday is one of Mon, Tue, Wed, Thu, Fri')
+        return match[0]
+    if name == 'shift':
+        if value not in ('1', '2', '3'):
+            raise ValueError('shift is 1, 2 or 3')
+        return int(value)
+    kind = kinds.get(name, 'VARCHAR')   # crew or grade without a column of their own are the shift's or the setup's: text
+    if kind == 'INTEGER':
+        if not re.fullmatch(r'-?\d{1,9}', value):
+            raise ValueError(f'{name} is a whole number')
+        return int(value)
+    if kind == 'DOUBLE':
+        try:
+            number = float(value)
+        except ValueError:
+            number = math.nan
+        if not math.isfinite(number) or not re.fullmatch(r'-?\d{1,9}(\.\d{1,6})?', value):
+            raise ValueError(f'{name} is a number')
+        return number
+    if kind == 'BOOLEAN':
+        if value.lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
+            raise ValueError(f'{name} is true or false')
+        return value.lower() in ('true', '1', 'yes')
+    if table == 'stops' and name == 'kind':
+        return STOP_KINDS.get(value.lower(), value)
+    return value
 
 
 def _value_text(value):
@@ -420,7 +440,8 @@ def table_url(table, filters=None, page=1, suffix=''):
     unknown = set(filters) - set(order)
     if unknown:
         raise ValueError(f'not a filter of {table}: {sorted(unknown)}')
-    parts = [f'{k}={quote(_value_text(filters[k]), safe="-_.~:")}' for k in order if k in filters]
+    parts = [f'{k}={quote(_value_text(v), safe="-_.~:")}' for k in order if k in filters
+             for v in (sorted(dict.fromkeys(filters[k]), key=_value_text) if isinstance(filters[k], (list, tuple)) else [filters[k]])]
     if page > 1:
         parts.append(f'page={page}')
     return f'/data/{table}{suffix}' + ('?' + '&'.join(parts) if parts else '')
@@ -431,6 +452,9 @@ def _where(table, filters):
     clauses, params = [], []
     kinds = dict(TYPES[table])
     for name, value in filters.items():
+        values = list(value) if isinstance(value, (list, tuple)) else [value]
+        if name in SINGLE and len(values) != 1:
+            raise ValueError(f'{name} takes one value')
         if name == 'day':
             clauses.append('production_date = ?')
         elif name == 'from':
@@ -439,14 +463,21 @@ def _where(table, filters):
             clauses.append('production_date <= ?')
         elif name == 'weekday':
             clauses.append('dayofweek(production_date) = ?')   # DuckDB: Sunday 0, Monday 1 ... Friday 5
-            value = WEEKDAYS.index(value) + 1
+            values = [WEEKDAYS.index(values[0]) + 1]
+        elif name == 'crew' and 'crew' not in kinds and 'shift' in kinds:   # the crew on the row's shift, from the shift record
+            marks = ', '.join('lower(?)' for _ in values)
+            clauses.append(f'EXISTS (SELECT 1 FROM shifts c WHERE c.production_date = {table}.production_date '
+                           f'AND c.shift = {table}.shift AND lower(c.crew) IN ({marks}))')
+        elif name == 'quality_id' and 'quality_id' not in kinds and 'setup_id' in kinds:   # the board grade of the row's setup
+            marks = ', '.join('lower(?)' for _ in values)
+            clauses.append(f'EXISTS (SELECT 1 FROM setups g WHERE g.setup_id = {table}.setup_id AND lower(g.quality_id) IN ({marks}))')
         elif kinds.get(name) == 'VARCHAR':
-            clauses.append(f'lower("{name}") = lower(?)')
+            clauses.append(f'lower("{name}") = lower(?)' if len(values) == 1 else f'lower("{name}") IN ({", ".join("lower(?)" for _ in values)})')
         elif name in kinds:
-            clauses.append(f'"{name}" = ?')
+            clauses.append(f'"{name}" = ?' if len(values) == 1 else f'"{name}" IN ({", ".join("?" for _ in values)})')
         else:   # parse_filters never yields one; a guard all the same
             raise ValueError(f'not a column of {table}: {name}')
-        params.append(value)
+        params.extend(values)
     return (' WHERE ' + ' AND '.join(clauses)) if clauses else '', params
 
 
@@ -525,10 +556,17 @@ def page(store, table, query):
 
 
 def csv_rows(store, table, query):
-    """GET /data/<table>.csv?<filters>: the filtered rows, newest first, at most CSV_LIMIT. Returns (bytes, truncated)."""
+    """GET /data/<table>.csv?<filters>: the filtered rows, newest first, at most CSV_LIMIT. Returns (bytes, truncated).
+    Read CSV_CHUNK rows at a time, each read its own short hold of the store's lock, so a download never keeps the
+    tools waiting longer than a page does."""
     filters, _ = parse_filters(table, query)
-    sql, params = _select(table, filters, CSV_LIMIT + 1)
-    rows = store._fetch(sql, params, limit=CSV_LIMIT + 1)
+    rows = []
+    while len(rows) <= CSV_LIMIT:
+        sql, params = _select(table, filters, CSV_CHUNK, len(rows))
+        chunk = store._fetch(sql, params, limit=CSV_CHUNK)
+        rows.extend(chunk)
+        if len(chunk) < CSV_CHUNK:
+            break
     truncated = len(rows) > CSV_LIMIT
     out = io.StringIO()
     writer = csv.writer(out, lineterminator='\n')
@@ -631,7 +669,9 @@ WASTE_LINES = {'trim': ('setups', {}), 'shear': ('setups', {}), 'changeover': ('
                'misalignment': ('rejects', {'family': 'MISALIGNMENT'}), 'moisture': ('rejects', {'family': 'MOISTURE'}),
                'other': ('rejects', {'family': 'OTHER'}), 'dry_end': ('rejects', {'counted_in': 'dry_end'}),
                'admin': ('rejects', {'family': 'ADMIN'}), 'bale': ('shifts', {}), 'unexplained': ('shifts', {})}
-SPEEDVAR_STOPS = {'stops': {}, 'setups': {'reason': 'Order change'}, 'planned': {'kind': 'Scheduled'}, 'external': {'kind': 'External'}}
+# The stop buckets of a speed variance (record_store.SPEEDVAR_BUCKETS): setups are the order-change stops, planned and
+# external stops their kinds; the stops bucket is every other stop reason, the reasons its details list.
+SPEEDVAR_STOPS = {'setups': {'reason': 'Order change'}, 'planned': {'kind': 'Scheduled'}, 'external': {'kind': 'External'}}
 
 
 def _knife(row):
@@ -644,11 +684,19 @@ def _place_reason(item):
     return {'place': place, 'reason': _stop_value('reason', reason)} if sep else {'reason': _stop_value('reason', item)}
 
 
+def _reference(row):
+    """True when a speed-variance bucket or item lost nothing on the explained side and something on the reference's
+    (a planned stop on the shift it is held against, a grade only the previous window ran)."""
+    if 'current_loss_fpm' in row:
+        return not row.get('current_loss_fpm') and bool(row.get('reference_loss_fpm'))
+    return not row.get('time_share_pct') and bool(row.get('reference_time_share_pct'))   # a grade-mix item
+
+
 def _speedvar_side(row, entry):
-    """A speed-variance bucket whose loss is the reference's (a planned stop on the shift it is held against, or in the
-    previous window) links to the reference's rows; the rest to the explained shift and window's."""
+    """The side whose rows a speed-variance receipt opens: the explained shift and window's, whose minutes and stops
+    the details carry, unless the bucket or item lost nothing there, when the reference's rows are what it is about."""
     data = entry.get('data') or {}
-    if (row.get('reference_loss_fpm') or 0) <= (row.get('current_loss_fpm') or 0):
+    if not _reference(row):
         return {}
     if data.get('against') == 'shift' and data.get('against_shift') in (1, 2, 3):
         return {'shift': data['against_shift']}
@@ -659,6 +707,10 @@ def _speedvar_side(row, entry):
 
 
 def _speedvar_row(row, entry):
+    if row.get('bucket') == 'stops':   # the unplanned stops: the reasons the bucket's details list, any of them
+        reasons = sorted({_stop_value('reason', d.get('item')) for d in (entry.get('data') or {}).get('details') or []
+                          if d.get('bucket') == 'stops' and d.get('item')})
+        return 'stops', {'reason': reasons or None, **_speedvar_side(row, entry)}
     if row.get('bucket') in SPEEDVAR_STOPS:
         return 'stops', {**SPEEDVAR_STOPS[row['bucket']], **_speedvar_side(row, entry)}
     return 'setups', _speedvar_side(row, entry)
@@ -666,10 +718,10 @@ def _speedvar_row(row, entry):
 
 def _speedvar_detail(row, entry):
     side = _speedvar_side(row, entry)
-    if row.get('bucket') == 'setups':
-        return 'stops', {'reason': 'Order change', **side}
-    if row.get('bucket') in SPEEDVAR_STOPS:
-        return 'stops', {**SPEEDVAR_STOPS[row['bucket']], 'reason': _stop_value('reason', row.get('item')), **side}
+    if row.get('bucket') == 'setups':   # the order-change stops on the setups of one grade
+        return 'stops', {'reason': 'Order change', 'quality_id': row.get('item'), **side}
+    if row.get('bucket') == 'stops' or row.get('bucket') in SPEEDVAR_STOPS:
+        return 'stops', {**SPEEDVAR_STOPS.get(row['bucket'], {}), 'reason': _stop_value('reason', row.get('item')), **side}
     return 'setups', {'quality_id': row.get('item'), **side}
 
 
@@ -687,6 +739,8 @@ def _speed_cell(row, entry):
     width = re.fullmatch(r'(\d+) in', str(row.get('slice', '')))
     if row.get('slice_by') == 'width' and width:
         out['web_width_in'] = float(width.group(1))
+    elif row.get('slice_by') == 'crew' and row.get('slice'):
+        out['crew'] = row['slice']   # the crew on each setup's shift
     return 'setups', out
 
 
@@ -759,6 +813,8 @@ def source(entry, production_day, corrupt=False):
     if not entry.get('ok') or entry.get('tool') not in SOURCES or not isinstance(entry.get('data'), dict):
         return None
     scope = _scope(entry, production_day)
+    # The data-quality demo's variant is a daily tool's: a period tool reads the records as generated (corrupt=false).
+    corrupt = bool(corrupt) and not isinstance(entry['data'].get('window'), dict)
     table, parts = SOURCES[entry['tool']]
     if entry['tool'] in ALL_SHIFT_TABLE and 'shift' not in scope:
         table, parts = ALL_SHIFT_TABLE[entry['tool']]
