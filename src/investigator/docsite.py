@@ -171,24 +171,38 @@ def figures(root=ROOT):
         'evals.over_url': _count(sum(bool(re.search(r'\bURL \d+(?:\.\d+)? ms', r.get('note') or '')) for r in rows)),
     }
     # The golden runs by type, most cases first: offline and replayed live, passed over scored. A skip and a known
-    # defect (xfail) are not scored, as in the runner's own table and history_line.
+    # defect (xfail) are not scored, as in the runner's own table and history_line; each is named as the runner
+    # names it, so a known defect never reads as a skip.
     types = sorted({r['type'] for r in rows}, key=lambda t: (-sum(r['type'] == t for r in rows), t))
 
+    def known_defects(n):
+        return f'{n} known defect' + ('' if n == 1 else 's')
+
     def score(subset):
-        ran = [r for r in subset if r['outcome'] in ('pass', 'fail')]
-        unscored = len(subset) - len(ran)
         if not subset:
             return '–'
+        ran = [r for r in subset if r['outcome'] in ('pass', 'fail')]
+        skips = sum(r['outcome'] == 'skip' for r in subset)
+        known = len(subset) - len(ran) - skips   # xfail: run.py's only other outcome
         return ' · '.join(([f'{sum(r["outcome"] == "pass" for r in ran)}/{len(ran)}'] if ran else [])
-                          + ([f'{unscored} skipped'] if unscored else []))
+                          + ([f'{skips} skipped'] if skips else []) + ([known_defects(known)] if known else []))
     offline, live = [r for r in rows if not r['provider']], [r for r in rows if r['provider']]
-    skipped = [r for r in rows if r['outcome'] not in ('pass', 'fail')]
+    skipped = [r for r in rows if r['outcome'] == 'skip']
+    known = [r for r in rows if r['outcome'] not in ('pass', 'fail', 'skip')]
     stale = [r for r in skipped if str(r.get('note') or '').startswith('stale recording')]
-    out['evals.skipped'] = (
-        '' if not skipped else
-        f' The other {len(skipped)} runs are live recordings that skip, never scored, until they are re-recorded '
-        f'against the current data.' if len(stale) == len(skipped) else
-        f' The other {len(skipped)} were skipped, never scored ({len(stale)} of them stale live recordings).')
+    unscored = len(skipped) + len(known)
+    if not unscored:
+        out['evals.skipped'] = ''
+    elif not known and len(stale) == len(skipped):
+        out['evals.skipped'] = (f' The other {unscored} runs are live recordings that skip, never scored, until they '
+                                f'are re-recorded against the current data.')
+    else:
+        parts = ([f'{len(stale)} live recordings that skip until they are re-recorded against the current data']
+                 if stale else []) + ([f'{len(skipped) - len(stale)} skipped'] if len(skipped) > len(stale) else []) \
+            + ([f'{known_defects(len(known))}, left out of the score as the runner leaves them '
+                f'([known defects](../evals/README.md#known-defects))'] if known else [])
+        out['evals.skipped'] = (f' The other {unscored} runs are not scored: '
+                                + (', '.join(parts[:-1]) + ' and ' + parts[-1] if len(parts) > 1 else parts[0]) + '.')
     out['evals.table'] = '\n'.join([
         '| Run | ' + ' | '.join(types) + ' | All |',
         '| --- |' + ' ---: |' * (len(types) + 1),

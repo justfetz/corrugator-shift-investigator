@@ -425,22 +425,36 @@ def test_the_figures_refuse_last_run_and_history_from_different_runs(tmp_path):
 
 
 def test_the_score_table_leaves_skips_and_known_defects_unscored(tmp_path):
-    """Codex on #120: the runner and history_line score neither a skip nor a known defect (xfail)."""
+    """Codex on #120 and the amended verdict's item 2: the runner and history_line score neither a skip nor a known
+    defect (xfail), so neither is in a denominator here; each is named as the runner names it."""
     root = figure_root(tmp_path)
     path = root / 'evals' / 'last_run.json'
     last = json.loads(path.read_text(encoding='utf-8'))
     offline = [r for r in last['rows'] if not r['provider']]
-    marked = {offline[0]['id']: 'xfail', offline[1]['id']: 'skip'}
+    marked = {offline[0]['id']: 'xfail', offline[1]['id']: 'skip', offline[2]['id']: 'fail'}
     last['rows'] = [{**r, 'outcome': marked.get(r['id'], r['outcome'])} for r in last['rows']]
     path.write_text(json.dumps(last), encoding='utf-8')
     values = docsite.figures(root)
     scored = len(offline) - 2
-    assert f'| **{scored}/{scored} · 2 skipped** |' in values['evals.table'].splitlines()[2]
+    assert f'| **{scored - 1}/{scored} · 1 skipped · 1 known defect** |' in values['evals.table'].splitlines()[2]
     rows = last['rows']
     assert values['evals.passed'] == f'{sum(r["outcome"] == "pass" for r in rows):,}'
     assert values['evals.scored'] == f'{sum(r["outcome"] in ("pass", "fail") for r in rows):,}', \
-        'the headline is passed over scored runs; the skipped ones are said beside it'
+        'the headline is passed over scored runs; the unscored ones are said beside it'
     assert values['evals.runs'] == f'{len(rows):,}'
+    # The xfail's own type: its known defect is out of the cell's denominator, as in run.py's per-type summary.
+    kind = offline[0]['type']
+    of_kind = [r for r in rows if not r['provider'] and r['type'] == kind]
+    ran = [r for r in of_kind if r['outcome'] in ('pass', 'fail')]
+    cell = values['evals.table'].splitlines()[2].split(' | ')[1 + sorted(
+        {r['type'] for r in rows}, key=lambda t: (-sum(r['type'] == t for r in rows), t)).index(kind)]
+    assert cell.startswith(f'{sum(r["outcome"] == "pass" for r in ran)}/{len(ran)}') and '1 known defect' in cell, cell
+    unscored = len(rows) - sum(r['outcome'] in ('pass', 'fail') for r in rows)
+    assert values['evals.skipped'].startswith(f' The other {unscored} runs are not scored: ')
+    assert '1 known defect, left out of the score as the runner leaves them' in values['evals.skipped']
+    page = text_of(docsite.build_site(root)['/docs/case-study'].decode())
+    assert f'The other {unscored} runs are not scored' in page and '1 known defect' in page
+    assert '<a href="/docs/golden-set#known-defects">known defects</a>' in docsite.build_site(root)['/docs/case-study'].decode()
 
 
 def test_the_model_comparison_grows_a_row_per_model(tmp_path):
