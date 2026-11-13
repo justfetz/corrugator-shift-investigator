@@ -217,8 +217,9 @@ jobs:
     # `deterministic` check lands on the head commit) and the review of the pull request, which GitHub would
     # not start from the agent's GITHUB_TOKEN push. Main's script, from a fresh checkout, with plan's outputs:
     # nothing the agent wrote decides what is dispatched. The only job with `actions: write`.
+    # Not after a cancelled build: removing the label (the stop job) cancels the build job, not the run.
     needs: [gate, build]
-    if: ${{ !cancelled() && needs.build.outputs.go == 'true' }}
+    if: ${{ !cancelled() && needs.build.result != 'cancelled' && needs.build.outputs.go == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

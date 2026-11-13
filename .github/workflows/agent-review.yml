@@ -53,6 +53,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      statuses: write   # the head's agent-review status goes back to pending: an edit keeps the sha
     outputs:
       sha: ${{ steps.head.outputs.sha }}
       draft: ${{ steps.head.outputs.draft }}

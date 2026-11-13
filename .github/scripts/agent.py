@@ -249,7 +249,7 @@ def protection_state(branch: dict, rules: list) -> tuple[bool, str]:
         # A classic rule that only blocks force pushes and deletions still takes a direct push; one that requires
         # a status check does not. (A read token sees the required checks, not whether reviews are required.)
         checks = ((branch.get('protection') or {}).get('required_status_checks') or {})
-        if 'protection' not in branch or checks.get('enforcement_level') not in (None, 'off') or checks.get('contexts') or checks.get('checks'):
+        if checks.get('enforcement_level') not in (None, 'off') or checks.get('contexts') or checks.get('checks'):
             return True, 'branch protection requires a status check'
     kinds = sorted({r.get('type') for r in rules or [] if isinstance(r, dict) and r.get('type')})
     blocking = [k for k in kinds if k in ('pull_request', 'required_status_checks', 'update')]
@@ -784,7 +784,9 @@ def cmd_verify(args) -> int:
         return start_ci_and_review(args.branch, pr['number'])
     head = api(f'repos/{REPO}/branches/{args.branch}')['commit']['sha']
     if head == args.before:
-        comment(args.pr, f'The agent fix run pushed nothing to `{args.branch}`. [Run]({run_url()})' + FOOTER)
+        comment(args.pr, f'The agent fix run pushed nothing to `{args.branch}`. If the gaps left are a deleted file or fewer tests '
+                         'that the issue asks for, the owner merges with `/approve-pr` and "approve anyway"; otherwise comment '
+                         f'`@claude` with what to do. [Run]({run_url()})' + FOOTER)
         print('::error::the fix round pushed no commit')
         return 1
     print(f'{args.branch}: {args.before[:7]} -> {head[:7]}')
@@ -819,7 +821,13 @@ def cmd_reset(args) -> int:
     for name, color in LABEL_COLORS.items():
         gh('label', 'create', name, '--color', color, '--description', LABEL_TEXT[name], '--repo', REPO, check=False)
     set_review_label(args.pr, None)
-    if (api(f'repos/{REPO}/pulls/{args.pr}') or {}).get('auto_merge'):
+    pr = api(f'repos/{REPO}/pulls/{args.pr}') or {}
+    # An edit of the body or the base keeps the sha, and with it the old `agent-review: success` that a required
+    # check would still accept; the head waits for its new verdict instead.
+    if (pr.get('head') or {}).get('sha'):
+        api(f'repos/{REPO}/statuses/{pr["head"]["sha"]}', 'state=pending', f'context={REVIEW_CONTEXT}',
+            'description=reviewing: the head, the body or the base changed', f'target_url={run_url()}', method='POST')
+    if pr.get('auto_merge'):
         off = subprocess.run(['gh', 'pr', 'merge', str(args.pr), '--disable-auto', '--repo', REPO], capture_output=True, text=True)
         if off.returncode:
             print(f'::error::auto-merge is on for PR #{args.pr} and could not be turned off: {off.stderr.strip()[:300]}')

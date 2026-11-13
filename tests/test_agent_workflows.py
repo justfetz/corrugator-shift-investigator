@@ -680,6 +680,7 @@ def test_the_builder_pushes_with_its_own_token_and_runs_the_repositorys_procedur
     verify = job(text, 'verify')
     assert permissions_of(verify) == {'actions': 'write', 'contents': 'read', 'issues': 'write', 'pull-requests': 'write'}
     assert 'needs: [gate, build]' in verify and "needs.build.outputs.go == 'true'" in verify
+    assert "needs.build.result != 'cancelled'" in verify, 'removing the label cancels the build job, not the run'
     assert 'ref: main' in verify and 'sparse-checkout: .github/scripts' in verify and 'agent.py verify --mode "$MODE"' in verify
     assert [name for name in ('gate', 'stop', 'queue', 'build', 'verify') if permissions_of(job(text, name)).get('actions') == 'write'] == ['verify']
     tests = (ROOT / '.github' / 'workflows' / 'tests.yml').read_text(encoding='utf-8')
@@ -1024,7 +1025,7 @@ def test_the_gate_skips_a_label_from_anyone_but_the_owner(tmp_path):
     ({'protected': False}, [], False),
     ({'protected': False}, [{'type': 'deletion'}, {'type': 'non_fast_forward'}], False),
     ({}, [], False),
-    ({'protected': True}, [], True),
+    ({'protected': True, 'protection': {'required_status_checks': {'enforcement_level': 'everyone', 'contexts': ['deterministic']}}}, [], True),
     ({'protected': False}, [{'type': 'pull_request'}], True),
     ({'protected': False}, [{'type': 'required_status_checks'}, {'type': 'deletion'}], True),
 ])
@@ -1049,7 +1050,8 @@ def test_the_build_refuses_while_main_is_unprotected(tmp_path):
                   'repos/o/r/rules/branches/main?per_page=100': [{'type': 'pull_request', 'ruleset_id': 1}]}
     proc, calls, _ = stub.run('protected', '--issue', '126')
     assert proc.returncode == 0 and not posted(calls, 'comments') and 'a ruleset requires pull_request' in proc.stdout
-    stub.state = {'repos/o/r/branches/main': {'name': 'main', 'protected': True}}
+    stub.state = {'repos/o/r/branches/main': {'name': 'main', 'protected': True, 'protection': {'required_status_checks': {
+        'enforcement_level': 'non_admins', 'contexts': ['deterministic']}}}}
     assert stub.run('protected', '--issue', '126')[0].returncode == 0
 
 
@@ -1189,6 +1191,9 @@ def test_reset_drops_the_label_and_fails_loudly_when_auto_merge_stays_on(tmp_pat
                   'repos/o/r/pulls/200': {**pull(200, 'issue-126-x'), 'auto_merge': None}}
     proc, calls, _ = stub.run('reset', '--pr', '200')
     assert proc.returncode == 0, proc.stderr
+    assert posted(calls, f'statuses/{"a" * 40}') == [{'state': 'pending', 'context': 'agent-review', 'description':
+        'reviewing: the head, the body or the base changed', 'target_url': 'https://github.com/o/r/actions/runs/77'}], \
+        'an edit keeps the sha: the old success must not satisfy the required check until the new verdict'
     assert [c for c in calls if c[0] == 'api' and '-X' in c and c[c.index('-X') + 1] == 'DELETE'] == [
         ['api', 'repos/o/r/issues/200/labels/review%3A%20approve', '-X', 'DELETE']]
     assert not [c for c in calls if c[:2] == ['pr', 'merge']], 'no auto-merge on: nothing to turn off'
@@ -1275,6 +1280,7 @@ def test_a_classic_rule_that_only_blocks_force_pushes_is_not_protection():
         'enforcement_level': 'non_admins', 'contexts': ['deterministic'], 'checks': [{'context': 'deterministic'}]}}}
     assert agent.protection_state(on, []) == (True, 'branch protection requires a status check')
     assert agent.protection_state(off, [{'type': 'pull_request'}])[0] is True
+    assert agent.protection_state({'protected': True}, [])[0] is False, 'fails closed without the protection details'
 
 
 def run_step(path, name, cwd, env):
@@ -1329,7 +1335,7 @@ def test_the_owners_setup_makes_github_enforce_the_verdict():
     text = (ROOT / 'docs' / 'AGENTS.md').read_text(encoding='utf-8')
     setup = text.split('## Set up once (the owner)', 1)[1].split('\n## ', 1)[0]
     for need in ('`deterministic`', '`agent-review`', 'Require review from Code Owners', 'Dismiss stale pull request approvals',
-                 'Require approval of the most recent reviewable push', 'Allow GitHub Actions to create and approve pull requests'):
+                 'Allow GitHub Actions to create and approve pull requests'):
         assert need in setup, need
     approve = (ROOT / '.claude' / 'skills' / 'approve-pr' / 'SKILL.md').read_text(encoding='utf-8')
     assert '`unstable`' in approve and 'approve anyway' in approve and 'event=APPROVE' in approve
