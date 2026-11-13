@@ -14,6 +14,10 @@ resolves a typed question and redirects to its canonical URL, `/corr/<machine>/<
 ?measure=...`, which serves the page, the answer as `.json` (or with `Accept: application/json`), or the
 PDF with `format=pdf`. That path never calls a model and never waits on the lock a live round holds.
 Live analysis stays on `POST /api/ask`.
+
+The question log (issue #125, questionlog.py): in the hosted demo each question the page asks, its answer, an analyst
+round on it and a thumbs up or down on its card (`POST /api/feedback`) are one JSON line each on stdout, written
+after the response; no IP, user agent, cookie, key or other header value is in a line.
 """
 from collections import Counter, OrderedDict, deque
 from datetime import datetime, timedelta, timezone
@@ -41,6 +45,7 @@ from .anthropic_provider import resolve_model
 from .cost_model import client_config, effective as effective_rates, parse_rates
 from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
+from .questionlog import LINES_PER_MIN, QuestionLog, check_comment, ids as log_ids, scope_of, valid_id
 from .record_store import default_store
 from . import targets
 from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
@@ -49,6 +54,7 @@ WEB = Path(__file__).with_name('web')
 LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
 LIVE_MODES = ('openai', 'anthropic')
 EVAL_RUNS_PER_MIN = 120   # POST /api/evals/run, container-wide: a case is 10-100 ms offline, the whole set about 3 s once a minute
+FEEDBACK_PER_MIN = 60     # POST /api/feedback, container-wide, as the question window; per IP it is DEMO_RATE_LIMIT_PER_MIN, as /api/ask
 LIVE_CONCURRENCY = 2      # live rounds in flight per container; a third is answered 429 `busy` instead of queueing
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
 
@@ -145,6 +151,10 @@ class Workbench:
         self.request_limit = 60       # investigations per process per minute (POST and URL answers); the eval harness raises it
         self.eval_requests = deque()  # /api/evals/run has its own window, so browsing the golden set never spends the question limits
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
+        self.feedback_requests = deque()   # POST /api/feedback has windows of its own: a thumbs up never spends a question
+        self.feedback_windows = {}         # client ip -> deque of feedback timestamps, limited like rate_windows
+        self.feedback_seen = OrderedDict() # (line, 'vote' | 'comment') already logged here: one of each per card
+        self.log_windows = {}              # client ip -> deque of question-log lines written (LINES_PER_MIN); the ip is never logged
         self.rate_lock = threading.Lock()
         self.reports = OrderedDict()
         # The rolling year of synthetic production, built once per process; the eval harness passes the golden window's store.
@@ -159,6 +169,8 @@ class Workbench:
         # The docs site at /docs (issue #93): {path: html}, prebuilt in the image or rendered from the checkout;
         # None when neither is there, and /docs is then a 404 like any unknown path.
         self.docs = load_docs()
+        # The question log (issue #125): on in the hosted demo, QUESTION_LOG=1 or 0 to choose; an invalid value fails at boot.
+        self.qlog = QuestionLog.from_env(public, dataset=self.store.content_hash[:12])
 
     @staticmethod
     def _workbench_token(public):
@@ -192,20 +204,22 @@ class Workbench:
     def live_models(self):
         return {'openai': LIVE_MODEL, 'anthropic': self.anthropic_model}
 
-    def client_round(self, ip):
-        """Per-IP fixed window over /api/ask rounds. Off unless DEMO_RATE_LIMIT_PER_MIN is set."""
+    def client_round(self, ip, windows=None):
+        """Per-IP fixed window over /api/ask rounds (or, with `windows`, another route's own). Off unless
+        DEMO_RATE_LIMIT_PER_MIN is set."""
         limit = self.guards.rate_limit_per_min
         if not limit:
             return
+        windows = self.rate_windows if windows is None else windows
         now = time.monotonic()
         with self.rate_lock:
-            for stale in [k for k, window in self.rate_windows.items() if not window or window[0] < now-60]:
-                window = self.rate_windows[stale]
+            for stale in [k for k, window in windows.items() if not window or window[0] < now-60]:
+                window = windows[stale]
                 while window and window[0] < now-60:
                     window.popleft()
                 if not window:
-                    del self.rate_windows[stale]
-            window = self.rate_windows.setdefault(ip, deque())
+                    del windows[stale]
+            window = windows.setdefault(ip, deque())
             if len(window) >= limit:
                 raise DemoLimit('too many questions, slow down', 'rate_limited', math.ceil(window[0]+60-now))
             window.append(now)
@@ -252,9 +266,12 @@ class Workbench:
             result['mode'] + '. No email delivery.',
             *result['sections'], result['limitations']])
 
-    def question_url(self, query):
+    def question_url(self, query, seen=None):
         """`/q?day=&shift=&scope=&period=&corrupt=&q=&after=`: the same validation as /api/ask for an
-        offline question, then the canonical URL the question resolves to (the redirect target)."""
+        offline question, then the canonical URL the question resolves to (the redirect target). `seen`, when
+        given, is filled with what the question log keeps (the text, the rail's scope, whether the scope moved),
+        as far as the request got before a refusal."""
+        seen = {} if seen is None else seen
         fields, after = {}, []
         for key, value in parse_qsl(query, keep_blank_values=True):
             if key == 'after':
@@ -263,6 +280,7 @@ class Workbench:
                 raise ValueError('Invalid request fields')
             else:
                 fields[key] = value
+        seen.update(question=fields.get('q', ''), scope=scope_of(fields), follow_ups=len(after))
         scope = fields.get('scope', 'shift')
         if scope not in ('shift', 'day'):
             raise ValueError('Choose selected shift or production-day comparison')
@@ -284,6 +302,7 @@ class Workbench:
         context.rates = parse_rates(fields.get('rates'))
         # The refusals of the offline router, verbatim; the scope is the question's own when it names one (issue #105)
         request, context = route(question, context, self.store.production_days)
+        seen['moved'] = bool(getattr(context, 'read', None))
         # Follow-ups share the production day: a prior view of another day (the conversation before the question
         # moved to last week, or a view that did) is not this question's context, as a changed control starts afresh.
         # A malformed prior is kept, so the canonical address refuses it with the grammar's reason.
@@ -497,6 +516,57 @@ class Workbench:
         from .reports import report_pdf
         return report_pdf(result)
 
+    def log_allowed(self, ip):
+        """Whether one more question-log line may be written for this client in the last minute (LINES_PER_MIN):
+        the answers are never throttled by it, only the lines, so a script with well-formed ids cannot flood the log
+        or the weekly review. Called after the response; the address only counts."""
+        now = time.monotonic()
+        with self.rate_lock:
+            for stale in [k for k, window in self.log_windows.items() if not window or window[-1] < now-60]:
+                del self.log_windows[stale]
+            window = self.log_windows.setdefault(ip, deque())
+            while window and window[0] < now-60:
+                window.popleft()
+            if len(window) >= LINES_PER_MIN:
+                return False
+            window.append(now)
+            return True
+
+    def feedback(self, payload, ip):
+        """A thumbs up or down on a card (issue #125), and its optional comment: limited like /api/ask, on windows of
+        its own (FEEDBACK_PER_MIN for the container, DEMO_RATE_LIMIT_PER_MIN per IP), so feedback never spends a
+        question. At most one vote and one comment per line id here. Returns the arguments of the feedback event."""
+        if not self.qlog.enabled:
+            raise LookupError('Feedback is not collected on this server')
+        now = time.monotonic()
+        with self.rate_lock:
+            window = self.feedback_requests
+            while window and window[0] < now-60:
+                window.popleft()
+            if len(window) >= FEEDBACK_PER_MIN:
+                raise DemoLimit('Feedback limit reached; retry in a minute', 'rate_limited', math.ceil(window[0]+60-now))
+            window.append(now)
+        self.client_round(ip, self.feedback_windows)
+        if not isinstance(payload, dict) or set(payload)-{'line', 'session', 'card', 'vote', 'comment'} or not {'line', 'vote'} <= set(payload):
+            raise ValueError('Send {"line": <id>, "vote": "up" or "down"}, with an optional "session", "card" and "comment"')
+        line, session = valid_id(payload['line']), payload.get('session')
+        if line is None or (session is not None and valid_id(session) is None):
+            raise ValueError('Invalid line or session id')
+        if payload['vote'] not in ('up', 'down'):
+            raise ValueError('The vote is "up" or "down"')
+        card = payload.get('card', 'answer')   # the offline answer's card, or the analyst's card asked from it (one line id)
+        if card not in ('answer', 'analyst'):
+            raise ValueError('The card is "answer" or "analyst"')
+        comment = check_comment(payload.get('comment'))
+        key = (line, card, 'comment' if comment else 'vote')
+        with self.rate_lock:   # two identical posts at once: one is logged
+            if key in self.feedback_seen:
+                raise ValueError("This answer's feedback is already recorded")
+            self.feedback_seen[key] = True
+            if len(self.feedback_seen) > 4096:
+                self.feedback_seen.popitem(last=False)
+        return line, session, card, payload['vote'], comment
+
 
 def make_server(port=8765, public=None, host=None, guards=None, store=None):
     app = Workbench(public, guards, store)
@@ -504,6 +574,21 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass  # Do not retain visitor prompts or session identifiers in access logs.
+
+        def _log_later(self, event, line, *args, **kwargs):
+            """Queue this request's question-log line (issue #125). It is built and printed after the response is
+            written, in do_GET/do_POST's finally: one print, outside the answer's time. Nothing without a line id."""
+            if app.qlog.enabled and line:
+                self.pending_log = lambda: event(line, *args, **kwargs)
+
+        def _write_log(self):
+            pending, self.pending_log = getattr(self, 'pending_log', None), None
+            if pending:
+                try:
+                    if app.log_allowed(self._client_ip()):
+                        app.qlog.write(pending())
+                except Exception:
+                    pass   # the log never fails a request
 
         def _accepts_gzip(self):
             """True when Accept-Encoding lists gzip with a non-zero q (RFC 9110 12.5.3)."""
@@ -593,8 +678,14 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
 
         def _live(self, payload, api_key, anthropic_key):
             """A live round as a stream: start, plan, a step per tool, narrative deltas, done.
-            Runs outside the shared lock under its own semaphore; a visitor who leaves cancels the model call."""
+            Runs outside the shared lock under its own semaphore; a visitor who leaves cancels the model call.
+            Its question-log line (the analyst event) is written once the stream is closed."""
+            line, session = log_ids(self.headers)
+            started = time.perf_counter()
+            def log(asked, status, result=None, refusal=None):
+                self._log_later(app.qlog.analyst, line, session, asked, status, result, refusal, round((time.perf_counter()-started)*1000, 1))
             if not app.live_slots.acquire(blocking=False):
+                log(payload, 'limited', refusal='busy')
                 raise DemoLimit('the analyst is busy with other questions; retry in a few seconds', 'busy', 3)
             try:
                 with app.lock:
@@ -604,13 +695,50 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 try:
                     result = app.run_live(job, emit=self._stream_event, cancelled=self._client_gone)
                     self._stream_event({'type': 'done', 'result': result})
+                    log(job, result['status'], result)
                 except (ValueError, UnicodeError, TypeError, KeyError) as exc:
                     self._stream_event({'type': 'error', 'error': str(exc)})
+                    log(job, 'error', refusal=str(exc))
                 except Exception:
                     self._stream_event({'type': 'error', 'error': 'Investigation failed; no answer was fabricated'})
+                    log(job, 'error')
                 self._stream_close()
+            except DemoLimit as exc:
+                log(payload, 'limited', refusal=str(exc))
+                raise
+            except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                log(payload, 'refused', refusal=str(exc))
+                raise
             finally:
                 app.live_slots.release()
+
+        def _log_unrun_round(self, raw_body, status, refusal):
+            """An "Ask the analyst" click refused before its round began (the request window, the per-IP limit):
+            its analyst line, as `_live` writes one for a refusal inside the round. Nothing for any other request."""
+            if self.path != '/api/ask' or self.pending_log is not None:
+                return
+            try:
+                payload = json.loads(raw_body)
+            except ValueError:
+                return
+            if isinstance(payload, dict) and payload.get('mode') in LIVE_MODES and payload.get('report') is not True:
+                line, session = log_ids(self.headers)
+                self._log_later(app.qlog.analyst, line, session, payload, status, None, refusal, None)
+
+        def _feedback(self, raw_body):
+            """POST /api/feedback (issue #125): a thumbs up or down, and the optional comment, for one answer's line id."""
+            try:
+                if len(raw_body) > 2000:
+                    return self._send(413, {'error': 'Feedback is a vote and at most 300 characters'})
+                event = app.feedback(json.loads(raw_body), self._client_ip())
+            except LookupError as exc:
+                return self._send(404, {'error': str(exc)})
+            except DemoLimit as exc:
+                return self._send(429, {'error': str(exc), 'code': exc.code}, extra={'Retry-After': str(exc.retry_after)})
+            except (ValueError, UnicodeError, TypeError) as exc:
+                return self._send(400, {'error': str(exc)})
+            self._log_later(app.qlog.feedback, *event)
+            self._send(200, {'ok': True})
 
         def _host_ok(self):
             if public is not None:
@@ -668,15 +796,34 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             self._send(200, data, content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
 
         def do_GET(self):
+            self.pending_log = None
+            try:
+                self._get()
+            finally:
+                self._write_log()
+
+        def do_POST(self):
+            self.pending_log = None
+            try:
+                self._post()
+            finally:
+                self._write_log()
+
+        def _get(self):
             if not self._host_ok():
                 return self._send(403, {'error': 'Local host only'})
             url = urlsplit(self.path)
             if url.path == '/q':
-                # A typed question is a shortcut: resolve it and redirect to the one URL for it.
+                # A typed question is a shortcut: resolve it and redirect to the one URL for it. The page's own asks
+                # carry a line id, and their question is logged after the redirect is sent (issue #125).
+                line, session = log_ids(self.headers)
+                started, seen = time.perf_counter(), {}
                 try:
-                    target = app.question_url(url.query)
+                    target = app.question_url(url.query, seen)
                 except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                    self._log_later(app.qlog.question, line, session, seen, refusal=str(exc), ms=round((time.perf_counter()-started)*1000, 1))
                     return self._send(400, {'error': str(exc)})
+                self._log_later(app.qlog.question, line, session, seen, url=target, ms=round((time.perf_counter()-started)*1000, 1))
                 return self._send(302, {'url': target}, extra={'Location': target, 'Cache-Control': 'no-store'})
             if url.path.startswith('/corr/'):
                 return self._answer_url(url)
@@ -698,7 +845,8 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
                                        'demo_guards': app.guards.summary, 'cost_model': client_config(),
                                        'targets': targets.client_config(),   # the owner's bands (issue #101) for a tile without one
-                                       'evals': app.evals.summary if app.evals else None})
+                                       'evals': app.evals.summary if app.evals else None,
+                                       'question_log': app.qlog.enabled})   # issue #125: the page sends line ids and offers feedback
             if self.path == '/evals.json':
                 # The scoreboard as data, Datasette-style: public, read-only, and readable from another
                 # origin (the blog embeds it), so this one response carries Access-Control-Allow-Origin.
@@ -760,8 +908,14 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 return self._send(302, {'url': target}, extra={'Location': target, 'Cache-Control': 'no-store'})
             if page:
                 return self._page()   # a refused address still gets the page, which shows the refusal of its .json
+            # A question the page asked through /q arrives here by the redirect with its line id: the answer event (#125).
+            line, session = log_ids(self.headers) if not pdf else (None, None)
+            started = time.perf_counter()
+            def log(status, url=None, refusal=None):
+                self._log_later(app.qlog.answer, line, session, url=url, status=status, refusal=refusal, ms=round((time.perf_counter()-started)*1000, 1))
             try:
                 if not self._count_request():
+                    log('limited', refusal='request window')
                     return self._send(429, {'error': 'Local request limit reached; retry in a minute'})
                 app.client_round(self._client_ip())   # a round is counted even if the URL is later refused
                 started = time.perf_counter()
@@ -772,15 +926,19 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                     from .reports import report_pdf
                     headers['Content-Disposition'] = f'attachment; filename="synthetic-report-{result["production_day"]}.pdf"'
                     return self._send(200, report_pdf(result), 'application/pdf', headers)
+                log(result.get('status'), result.get('url'))
                 self._send(200, result, extra=headers)
             except DemoLimit as exc:
+                log('limited', refusal=str(exc))
                 self._send(429, {'error': str(exc), 'code': exc.code}, extra={'Retry-After': str(exc.retry_after)})
             except (ValueError, UnicodeError, TypeError, KeyError) as exc:
+                log('refused', refusal=str(exc))
                 self._send(404 if str(exc).startswith('No machine') else 400, {'error': str(exc)})
             except Exception:
+                log('failed')
                 self._send(500, {'error': 'Investigation failed; no answer was fabricated'})
 
-        def do_POST(self):
+        def _post(self):
             # Consume bounded bodies before a rejection so Windows clients receive
             # the HTTP error instead of a reset from closing over unread bytes.
             try:
@@ -795,7 +953,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                     return self._send(400, {'error': 'Incomplete request body'})
             except (ValueError, TimeoutError):
                 return self._send(400, {'error': 'Invalid or timed-out request body'})
-            if not self._host_ok() or self.path not in ('/api/ask', '/api/report', '/api/evals/run', '/api/evals/grade'):
+            if not self._host_ok() or self.path not in ('/api/ask', '/api/report', '/api/evals/run', '/api/evals/grade', '/api/feedback'):
                 return self._send(403, {'error': 'Request not allowed'})
             if not self._origin_ok():
                 return self._send(403, {'error': 'Origin not allowed'})
@@ -807,6 +965,8 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 16000:
                     return self._send(413, {'error': 'Request too large or empty'})
+                if self.path == '/api/feedback':
+                    return self._feedback(raw_body)
                 # Eval runs are counted apart from questions (EVAL_RUNS_PER_MIN for everyone together): a visitor
                 # opening cases on /evals must not use up the question window or their own per-IP rounds.
                 if self.path in ('/api/evals/run', '/api/evals/grade'):
@@ -818,6 +978,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                         return self._send(429, {'error': 'Golden-case run limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
                     window.append(now)
                 elif not self._count_request():
+                    self._log_unrun_round(raw_body, 'limited', 'request window')
                     return self._send(429, {'error': 'Local request limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(app.requests[0]+60-time.monotonic()))})
                 if self.path == '/api/ask':
                     app.client_round(self._client_ip())  # a round is counted even if the question is later rejected
@@ -850,6 +1011,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                         body = app.ask(payload, api_key=api_key, anthropic_key=anthropic_key)
                 self._send(200, body, 'application/pdf' if self.path == '/api/report' else 'application/json; charset=utf-8')
             except DemoLimit as exc:
+                self._log_unrun_round(raw_body, 'limited', str(exc))   # a round refused inside _live is logged there already
                 self._send(429, {'error': str(exc), 'code': exc.code}, extra={'Retry-After': str(exc.retry_after)})
             except (ValueError, UnicodeError, TypeError, KeyError) as exc:
                 self._send(400, {'error': str(exc)})
