@@ -149,9 +149,9 @@ def test_a_comparison_base_or_another_window_keeps_the_controls(question):
 
 
 def test_a_window_before_the_records_is_refused_with_the_calendar_reason():
-    # the golden year's first production week (issue #35): it opens on Tuesday 2025-09-30
-    for question, day in (('downtime last week', '2025-10-01'), ('downtime yesterday', '2025-09-30'), ('downtime last month', '2025-09-30')):
-        with pytest.raises(ValueError, match='before the records, which hold production days from 2025-09-30 to 2026-09-30'):
+    # the data's first production week (issue #100): it opens on Wednesday 2025-01-01
+    for question, day in (('downtime last week', '2025-01-02'), ('downtime yesterday', '2025-01-01'), ('downtime last month', '2025-01-01')):
+        with pytest.raises(ValueError, match='before the records, which hold production days from 2025-01-01 to 2026-09-30'):
             question_scope(question, rail(day=day), DAYS)
 
 

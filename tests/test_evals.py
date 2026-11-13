@@ -230,7 +230,7 @@ def test_percentiles_are_nearest_rank():
 
 
 HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-per-stop', 'period-trim-trend',
-               'period-trend-warp-weekly', 'period-control-compare-shifts', 'period-moisture-trend',
+               'period-trend-warp-weekly', 'period-control-compare-shifts', 'period-moisture-trend', 'period-other-dry-end-trend',
                'period-run-length-trend', 'value-trend-trim-8w', 'value-trend-warp-8w', 'value-trend-stops-9w-missing-weeks',
                'money-day-ranks-shifts-without-the-outage'}   # the three shifts' and the day's dollars: 210 ms uncontended (PR #111)
 
@@ -300,7 +300,7 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c and 'url' not in c]   # an analyst-plan case is a scripted live round: no URL
     asked_by_address = [c for c in CASES if c.get('url')]   # issue #117: a case that asks by its address, which must answer at expect.url
     assert asked_by_address and all('question' not in c and (c['type'] == 'refusal' or c['expect']['url'].startswith('/corr/1/')) for c in asked_by_address)
-    assert len(routing) == 174 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + 27 issue #101 cases (eight from the review of #111, ten from the owner's decisions and rulings on it)
+    assert len(routing) == 188 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + issue #100's 14 + issue #101's 27
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

@@ -493,7 +493,7 @@ def resolve_value(dim, value, store, mdl=None):
     if not isinstance(value, (str, int, float)) or isinstance(value, bool) or (isinstance(value, str) and not value.strip()):
         raise SemanticError(f'{dim} takes one value')
     spec = mdl.dimensions[dim]
-    # a word may stand for several values (planned maintenance is PM in this store, Scheduled in record contract v2):
+    # a word may stand for several values (planned maintenance is Scheduled in record contract v2, PM in v1):
     # it resolves to the one the store holds
     synonyms = {}
     for canonical, words in (spec.get('value_synonyms') or {}).items():
@@ -1058,6 +1058,8 @@ def model_markdown(text=None):
     out += ['', '## The physical mapping', '', physical['about'], '', f'Record contract: `{physical["contract"]}`.', '',
             '| Entity | Table | Logical column | Store column |', '| --- | --- | --- | --- |']
     for name, entity in physical['entities'].items():
+        if entity.get('where'):
+            out.append(f'| {name} | `{entity["table"]}` | (rows kept) | `{_cell(entity["where"])}` |')
         for logical, column in entity['columns'].items():
             out.append(f'| {name} | `{entity["table"]}` | `{logical}` | ' + (f'`{_cell(column)}`' if column is not None else 'not carried yet') + ' |')
     return '\n'.join(out) + '\n'

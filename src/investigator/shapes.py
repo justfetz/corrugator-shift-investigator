@@ -22,6 +22,7 @@ Any other line is a plain sentence: a caveat, the window and its coverage, a rep
 import re
 
 from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
+from .records import stop_label
 from .semantic import TOOL as SEMANTIC_TOOL
 
 LOOK = 'Where to look'
@@ -35,7 +36,7 @@ ALIASES = {'period_downtime': 'period_pareto', 'period_quality': 'period_waste',
 MARGIN_NOT_SET = 'margin not set'   # cost_model.MARGIN_NOT_SET: no owner margin, so no contribution is priced
 WORDS = {2: 'two', 3: 'three'}
 TREND_NAMES = {'trim_pct': 'side trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry-end rejects', 'warp_pct': 'warp', 'bond_pct': 'bond',
-               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'speed_run_fpm': 'speed without stops',
+               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'other_pct': 'other dry-end rejects', 'speed_run_fpm': 'speed without stops',
                'speed_all_fpm': 'speed with stops', 'downtime_pct': 'downtime', 'stops': 'stops', 'minutes_per_stop': 'minutes per stop',
                'msf_per_day': 'MSF per production day', 'lineal_per_setup': 'lineal per setup', 'lineal_per_paper_change': 'lineal per paper change'}
 RANK_LABELS = {'speed': 'Lowest speed attainment', 'downtime': 'Most downtime', 'quality': 'Most rejected area'}
@@ -93,7 +94,7 @@ def money_notes(result, row=None, label=None, formula=True):
     data = result['data']
     if 'provenance' not in data:
         return []
-    notes = [f'How a dollar is priced, for {row[label]}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
+    notes = [f'How a dollar is priced, for {stop_label(row[label])}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
     return notes + [f'{data["provenance"]} {data["cost_note"]}']
 
 
@@ -131,7 +132,7 @@ def flag_lines(result, flags):
     return out
 
 
-PLANNED = ('Planned maintenance', 'PM')   # the Pareto's planned-maintenance category, by reason and by kind: scheduled time
+PLANNED = ('Planned maintenance', 'Scheduled', 'PM')   # the Pareto's planned-maintenance category, by reason and by kind: scheduled time
 # the Pareto's external categories, by reason and by kind (a power outage; the owner on PR #111): outside the plant
 EXTERNAL = (*sorted(targets.EXTERNAL_REASONS), targets.EXTERNAL_KIND)
 FIRST_REASONS = 3   # the card shows five findings (web/app.js BULLETS_SHOWN): three reasons, then a flag and its recurrence
@@ -323,7 +324,7 @@ class DailyAnswer:
     def kind_pct(self, tools):
         dt = tools.get('get_downtime_breakdown')
         kind = dt['arguments'].get('kind') if dt else None
-        return {'Maintenance': 'maintenance_pct', 'Operator': 'operator_pct', 'PM': 'pm_pct'}.get(kind, 'op_maint_pct')
+        return {'Maintenance': 'maintenance_pct', 'Operator': 'operator_pct', 'Scheduled': 'pm_pct', 'PM': 'pm_pct'}.get(kind, 'op_maint_pct')
 
     def focus(self):
         if self.intent == 'dollars' and len(self.complete) > 1:
@@ -456,7 +457,7 @@ class DailyAnswer:
         if i is None:
             return None
         mark = 'scheduled time, not an unplanned loss' if rows[i].get('scheduled') else 'external, not controllable'
-        return bullet(f'{prefix}{rows[i]["category"]}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, the only downtime · {mark}', dt, i)
+        return bullet(f'{prefix}{stop_label(rows[i]["category"])}: **{f2(rows[i]["down_minutes"])} min** of recorded downtime, the only downtime · {mark}', dt, i)
 
     @staticmethod
     def slowest_run(we, prefix=''):
@@ -574,16 +575,16 @@ class DailyAnswer:
         if kind in ('Maintenance', 'Operator'):
             key = kind.lower()
             head = f'**{f2(row[key + "_pct"])}%** of the shift in {key} downtime{self.clause(s, low=False)}{band(row[key + "_band_text"])} {ref(k, 0)}'
-        elif kind == 'PM':
-            head = f'**{f2(row["pm_pct"])}%** of the shift in planned maintenance{self.clause(s, low=False)} {ref(k, 0)}'
+        elif kind in ('Scheduled', 'PM'):
+            head = f'**{f2(row["pm_pct"])}%** of the shift in planned maintenance (scheduled){self.clause(s, low=False)} {ref(k, 0)}'
         else:
             # The owner's rule (issue #101): maintenance and operator downtime lead, each against its band;
             # planned maintenance is scheduled time and stays out of the figure.
             head = (f'**{f2(row["op_maint_pct"])}%** of the shift in maintenance and operator downtime{self.clause(s, low=False)}{band(row["op_maint_band_text"])} · '
                     f'maintenance {f2(row["maintenance_pct"])}%, {row["maintenance_band_text"]} · operator {f2(row["operator_pct"])}%, {row["operator_band_text"]} {ref(k, 0)}')
         rows = dt['data']['rows']
-        # Ranked by downtime % of the shift (the tool's order), stop count and minutes per stop beside; PM last.
-        bullets = [bullet(f'{r["category"]}: **{f2(r["shift_percent"])}%** of the shift · {f2(r["down_minutes"])} min over {stops_text(r["stops"])}, '
+        # Ranked by downtime % of the shift (the tool's order), stop count and minutes per stop beside; planned maintenance last.
+        bullets = [bullet(f'{stop_label(r["category"])}: **{f2(r["shift_percent"])}%** of the shift · {f2(r["down_minutes"])} min over {stops_text(r["stops"])}, '
                           f'{f2(r["minutes_per_stop"])} min per stop' + (' · scheduled time, not ranked' if r.get('scheduled') else
                                                                           ' · external, not controllable' if r.get('external') else '') + priced(r), dt, i)
                    for i, r in enumerate(rows)]
@@ -697,13 +698,20 @@ class DailyAnswer:
         bullets = []
         if row['largest_downtime_minutes']:
             kind = 'scheduled time, the only downtime' if row.get('largest_downtime_scheduled') else 'the largest unplanned downtime reason'
-            bullets.append(bullet(f'{row["largest_downtime_reason"]}: **{f2(row["largest_downtime_minutes"])} min**, {kind}', o, 0))
+            bullets.append(bullet(f'{stop_label(row["largest_downtime_reason"])}: **{f2(row["largest_downtime_minutes"])} min**, {kind}', o, 0))
         if row['largest_reject_sqft']:
             bullets.append(bullet(f'{row["largest_reject_reason"]}: **{f1(row["largest_reject_sqft"])} sq ft**, the largest dry-end reject reason', o, 0))
         if row['wet_end_runs_observed']:
             bullets.append(bullet(f'Wet-end runs below their grade target: **{row["wet_end_runs_below_target"]}** of {row["wet_end_runs_observed"]}', o, 0))
         bullets.append(bullet(f'Downtime: **{f2(row["downtime_pct"])}%** of the shift · maintenance {f2(row["maintenance_pct"])}% · operator {f2(row["operator_pct"])}%', o, 0))
         bullets.append(bullet(f'Dry-end waste: **{f2(row["dry_end_pct"])}%** of the yield after trim and shear{band(row["dry_end_band_text"])}', o, 0))
+        if row.get('estimated_good_sqft') is not None and row.get('changeover_sqft') is not None:
+            # Good output is the saleable board: gross minus every recorded waste line, the subtraction on its own line
+            # (owner, 2026-11-12); each loss is priced once, on its line in the shift's dollars.
+            bullets.append(bullet(f'Good output: **{f0(row["estimated_good_sqft"])} sq ft** of {f0(row["gross_sqft"])} gross, after trim '
+                                  f'{f0(row["trim_sqft"])}, shear {f0(row["shear_sqft"])}, dry-end {f0(row["reject_sqft"])}, changeover '
+                                  f'rejects {f0(row["changeover_sqft"])}, waste boards {f0(row["waste_board_sqft"])} and planning / admin '
+                                  f'{f0(row["admin_sqft"])} sq ft', o, 0))
         looks = [look('Each setup with its speed, stops and rejects', f'Show the setup matrix{self.suffix(s)}'),
                  look('The shift and downtime notes (synthetic, unverified)', f'Show the shift notes{self.suffix(s)}')]
         return head, bullets, [], looks
@@ -774,7 +782,7 @@ class DailyAnswer:
             return [bullet(f'Speed: **{f1(row["observed_shift_fpm"])} ft/min** including downtime · {f1(row["speed_to_target_pct"])}% of grade target', result, 0)], []
         if tool == 'get_downtime_breakdown':
             by = {'reason': '', 'place': ' at ', 'kind': ' of kind '}.get(result['arguments'].get('group_by', 'reason'), '')
-            return [bullet(f'{by.strip().capitalize() + " " if by else ""}{r["category"]}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift{priced(r)}', result, i)
+            return [bullet(f'{by.strip().capitalize() + " " if by else ""}{stop_label(r["category"])}: **{f2(r["down_minutes"])} min** of recorded downtime, {f2(r["shift_percent"])}% of the shift{priced(r)}', result, i)
                     for i, r in enumerate(data['rows'])], self.priced_notes(result, 'down_minutes', 'category')
         if tool == 'get_wet_end_performance':
             return [b for b in (self.slowest_run(result)[0], self.below(result)) if b], []
@@ -930,7 +938,11 @@ class PeriodAnswer:
                     if line and line not in others:
                         bullets = [*bullets, line]
         if not self.whole(lead['data']):
-            notes = [f'The window is incomplete (coverage {lead["data"]["coverage"]}): observed values only, and rankings are withheld.', *notes]
+            # the downtime review ranks on its own window's coverage, the previous window beside it (period_review): a complete
+            # window whose previous one is outside the records is ranked, so it is not called incomplete
+            own = lead['data'].get('window', {}).get('coverage') if lead['data'].get('tool') == 'get_downtime_review' else None
+            if own != 'complete':
+                notes = [f'The window is incomplete (coverage {own or lead["data"]["coverage"]}): observed values only, and rankings are withheld.', *notes]
         notes = list(dict.fromkeys(notes))
         out = [head, *others, *[b for b in bullets if b], *dict.fromkeys(windows), *notes]
         looks = [x for x in looks if x]
@@ -1017,7 +1029,7 @@ class PeriodAnswer:
             rows = pareto['data']['rows']
             i = pareto_lead(rows)
             r = rows[i]
-            bullets.append(bullet(f'{r["category"]}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, i))
+            bullets.append(bullet(f'{stop_label(r["category"])}: **{pval(r["minutes"])} min** of downtime, {pval(r["share_pct"])}% of the window\'s minutes{priced(r)}', pareto, i))
         if waste:
             i, r = self.largest_waste(waste)
             if r:
@@ -1102,7 +1114,10 @@ class PeriodAnswer:
             r = rows[lead]
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
             rank = (', the largest unplanned reason' if lead else f', the largest of {len(rows)} {noun}') if self.whole(data) else ''
-            head = f'**{fig}** at {r["category"]}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"}{priced(r)} {ref(p, lead)}'
+            # the lead row is not repeated as a bullet, so its previous window rides on the headline as the bullets carry theirs
+            before = f' · previous {pval(r["previous_minutes"])} min' if minutes and r.get('previous_minutes') is not None else ''
+            head = (f'**{fig}** at {stop_label(r["category"])}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s '
+                    f'{"minutes" if minutes else "stops"}{before}{priced(r)} {ref(p, lead)}')
         else:
             head = f'No recorded stops in this window{self.where(data)} {ref(p)}'
         bullets = []
@@ -1114,7 +1129,7 @@ class PeriodAnswer:
             previous = f'previous {pval(r["previous_minutes"])} min' if r.get('previous_minutes') is not None else 'previous unavailable'
             planned = (' · scheduled time, not an unplanned loss' if r['category'] in PLANNED else
                        ' · external, not controllable' if r['category'] in EXTERNAL else '')
-            bullets.append(bullet(f'{r["category"]}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{planned}{priced(r)}', p, i))
+            bullets.append(bullet(f'{stop_label(r["category"])}: **{fig}** {other} · {pval(r["share_pct"])}%, cumulative {pval(r["cumulative_pct"])}% · {previous}{planned}{priced(r)}', p, i))
         notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[lead], 'category') if rows else [])
         return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'waste'))
 
@@ -1130,12 +1145,16 @@ class PeriodAnswer:
                           f'{f1(x["sqft"])} sq ft{priced(x)}{band(x.get("band_text"))}', w, j) if x['category'] == 'dry_end' else
                    bullet(f'{x["label"]}: **{pval(x["pct_of_gross"])}%** of gross · {f1(x["sqft"])} sq ft · {self.points(x)}{priced(x)}{band(x.get("band_text"))}', w, j)
                    for j, x in enumerate(rows) if j != i]
+        if data.get('good_output_sqft') is not None:
+            # Good output, the saleable board: gross minus every recorded waste line but the bale (owner, 2026-11-12)
+            bullets.append(bullet(f'Good output: **{f1(data["good_output_sqft"])} sq ft**, {pval(data["good_output_pct"])}% of '
+                                  f'{f1(data["gross_sqft"])} sq ft gross, after every recorded waste line above but the bale', w))
         details = data.get('details') or []
         if details:
             bullets += ['Dry-end by reported sub-reason'] + [
                 bullet(f'{d["detail"]} ({d["reason"].lower()}): **{pval(d["share_of_dry_end_pct"])}%** of dry-end rejects · {f1(d["sqft"])} sq ft', w, j, 'detail')
                 for j, d in enumerate(details)]
-        notes = ['Bale is a scale reading; unexplained is bale minus trim, shear and rejects.']
+        notes = ['Bale is a scale reading; unexplained is bale minus every recorded waste line.']
         if details:
             notes.append('Sub-reasons are reported observations, not proven causes.')
         notes += money_notes(w, r, 'label') if r else []
@@ -1264,14 +1283,17 @@ class PeriodAnswer:
 
     @staticmethod
     def dry_end_line(o):
-        """The ownership lens's dry-end subtotal: bond, warp, misalignment and moisture are dry-end waste, the tag scrap
-        (the owner, PR #111); its dollars are the lines beneath it added up, its share and band the dry-end waste's."""
+        """The ownership lens's dry-end subtotal: bond, warp, misalignment, moisture and other are dry-end waste, the tag scrap
+        (the owner, PR #111); its dollars are the lines beneath it added up, its share and band the dry-end waste's. Each kind
+        names its own cause on its line (reject_reasons.json; the coordinator's re-review of PR #123), so the subtotal names none."""
         d = o['data']
+        kinds = [r for r in d['rows'] if r.get('group') == 'dry_end']
+        control = 'controllable' if all(r['control'] == 'controllable' for r in kinds) else 'partly controllable'
         figure = (f'**{money(d["dry_end_usd_per_year"])}/yr**' if d.get('dry_end_usd_per_year') is not None else
                   f'**{money(d["dry_end_usd"])}** in the window')
         return bullet(f'{d["dry_end_rank"]}. {d["dry_end_label"]}, the {n(d["dry_end_kinds"])} kinds below: {figure} · '
                       f'{money(d["dry_end_usd"])} in this window · {pval(d["dry_end_pct_of_yield"])}% of the yield after trim and shear'
-                      f'{band(d.get("dry_end_band_text"))} · controllable, temperatures', o)
+                      f'{band(d.get("dry_end_band_text"))} · {control}, each kind\'s cause on its line', o)
 
     def money_supervisor(self, o):
         """The supervisor lens: the controllable losses ranked by dollars a year; side trim and planned maintenance after, schedule-driven;
@@ -1349,7 +1371,7 @@ class PeriodAnswer:
         planned = [(i, x) for i, x in enumerate(rows) if x['scheduled']]
         if planned:
             bullets += ['Scheduled time, not ranked'] + [
-                bullet(f'{x["reason"]}: **{pval(x["minutes"])} min** over {stops_text(x["stops"])} · {pval(x["pct_of_scheduled"])}% of scheduled minutes', r, i)
+                bullet(f'{stop_label(x["reason"])}: **{pval(x["minutes"])} min** over {stops_text(x["stops"])} · {pval(x["pct_of_scheduled"])}% of scheduled minutes', r, i)
                 for i, x in planned]
         notes = sentences(data.get('method_note'))
         if data['flag_count'] > FIRST_FLAGS:
@@ -1393,7 +1415,7 @@ class PeriodAnswer:
             r = rows[i]
             toward = r['gap_fpm'] * sign >= 0
             share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
-            top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'
+            top = (f' · largest {stop_label(r["top_item"])} at {f1(abs(r["top_item_fpm"]))} ft/min'
                    if whole and r.get('top_item') and r.get('top_item_fpm') is not None else '')
             # every bucket is marked (issue #101; PR #111): the grade mix and planned maintenance are schedule-driven, a power
             # outage is external; neither is ever priced

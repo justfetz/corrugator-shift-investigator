@@ -13,6 +13,7 @@ import time
 from uuid import uuid4
 from . import targets
 from .record_store import FISCAL_START, default_store, fiscal_bounds, fiscal_period, shift_note
+from .records import stop_label
 
 ACCOUNTING_445_START = FISCAL_START  # shared with the period tools: one 4-4-5 calendar in the app
 
@@ -54,7 +55,7 @@ SHIFT_SECONDS = 28800   # the daily KPI tool's fixed eight-hour denominator (ana
 KPI_SQL = ("SELECT * FROM shift_kpis WHERE corrupt = ? AND production_date BETWEEN ? AND ? "
            "AND list_contains(?, shift) ORDER BY production_date, shift")
 # The stop records of both windows, in the order the per-day notes tool lists them.
-STOP_SQL = ("SELECT production_date, shift, stop_id, kind, place, reason, seconds, note, "
+STOP_SQL = ("SELECT production_date, shift, stop_id, kind, place, reason, seconds, comment AS note, "
             "strftime(started, '%Y-%m-%d %H:%M:%S') AS start, strftime(ended, '%Y-%m-%d %H:%M:%S') AS \"end\" "
             "FROM stops WHERE production_date BETWEEN ? AND ? AND list_contains(?, shift) "
             "ORDER BY production_date, shift, start, stop_id")
@@ -71,15 +72,20 @@ def shift_matrix_row(k):
             'speed_to_target_pct': ratio(feet, k['target_ft'], 100),
             'observed_lineal_ft': feet if n else None, 'observed_shift_fpm': feet/480 if n else None,
             'gross_sqft': gross if n else None,
-            'estimated_good_sqft': gross-k['trim_sqft']-k['shear_sqft']-k['reject_sqft'] if n else None,
+            'estimated_good_sqft': (gross-k['trim_sqft']-k['shear_sqft']-k['reject_sqft']-k['changeover_sqft']-k['cutoff_waste_sqft']
+                                    -k['stacker_waste_sqft']-k['admin_sqft']) if n else None,
             'throughput_in': ratio(gross, feet, 12),
+            'trim_sqft': k['trim_sqft'] if n else None, 'shear_sqft': k['shear_sqft'] if n else None,
+            'reject_sqft': k['reject_sqft'] if n else None, 'changeover_sqft': k['changeover_sqft'] if n else None,
+            'waste_board_sqft': k['cutoff_waste_sqft'] + k['stacker_waste_sqft'] if n else None,
+            'admin_sqft': k['admin_sqft'] if n else None,
             'trim_pct': ratio(k['trim_sqft'], gross, 100), 'shear_pct': ratio(k['shear_sqft'], gross, 100),
             'dry_end_pct': ratio(k['reject_sqft'], gross-k['trim_sqft']-k['shear_sqft'], 100),   # of the yield after trim and shear (issue #101)
             'yield_sqft': gross-k['trim_sqft']-k['shear_sqft'] if n else None,
             'maintenance_pct': k['maintenance_seconds']/SHIFT_SECONDS*100,
             'operator_pct': k['operator_seconds']/SHIFT_SECONDS*100,
             'op_maint_pct': (k['maintenance_seconds']+k['operator_seconds'])/SHIFT_SECONDS*100,
-            'pm_pct': k['pm_seconds']/SHIFT_SECONDS*100,
+            'pm_pct': k['planned_maintenance_seconds']/SHIFT_SECONDS*100,
             'downtime_pct': k['stop_seconds']/SHIFT_SECONDS*100,
             'lineal_per_setup': ratio(feet, n), 'lineal_per_wet_end': ratio(feet, k['paper_changes']),
             'setups_above_trim_target': k['setups_above_trim_target'], 'source_ids': list(k['source_ids'])}
@@ -163,7 +169,7 @@ class PeriodReports:
         rid=uuid4().hex
         sections=[f'Synthetic {period_name} report: {label}. '+('Selected shift '+str(shift)+'.' if scope=='shift' else 'All three shifts.'),
             f'{len(current)} available shift records. {totals["valid_setups"]} valid dry-end setups; {totals["paper_changes"]} paper changes (wet-end runs).',
-            f'Estimated good output {totals["estimated_good_sqft"]:,.0f} sq ft after recorded trim, shear and dry-end rejects. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
+            f'Estimated good output {totals["estimated_good_sqft"]:,.0f} sq ft after every recorded waste line (trim, shear, dry-end and changeover rejects, the cutoff-knife and stacker waste boards, planning / admin). Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
         if not complete: sections.append('Current period is incomplete: missing days or excluded records. Observed totals only; rankings withheld.')
         if complete and old_complete:
             sections.append(f'Previous period {old_start} to {old_end}: speed change {totals["observed_shift_fpm"]-old["observed_shift_fpm"]:+.1f} ft/min; maintenance change {totals["maintenance_pct"]-old["maintenance_pct"]:+.2f} percentage points.')
@@ -178,7 +184,7 @@ class PeriodReports:
                 row['previous_minutes'] = None
         if recurring and complete:
             top=recurring[0]
-            sections.append(f'Most recorded downtime: {top["place"]} / {top["reason"]}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
+            sections.append(f'Most recorded downtime: {top["place"]} / {stop_label(top["reason"])}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
         rankings=[]
         if complete:
             for s in shifts:
@@ -225,4 +231,4 @@ class PeriodReports:
             'production_day':day,'period_label':label,'selected_shifts':shifts,'sections':sections,'tables':tables,'charts':charts,'trace':[trace],
             'evidence_ids':[rid],'context':{'production_day':day,'shift':shift,'scope':scope,'history':[]},
             'usage':{'tool_calls':1,'model_calls':0,'cost_usd':0},
-            'limitations':f'Synthetic records. {period_name} uses the displayed dates. Estimated good square feet subtracts recorded trim, shear and dry-end rejects from gross area; it is not a customer-acceptance claim. The demo 4-4-5 year starts {ACCOUNTING_445_START} pending plant confirmation. Notes are observations, not causal proof. Missing periods are not ranked.'}
+            'limitations':f'Synthetic records. {period_name} uses the displayed dates. Estimated good square feet subtracts every recorded waste line (trim, shear, dry-end and changeover rejects, the cutoff-knife and stacker waste boards, planning / admin) from gross area; it is not a customer-acceptance claim. The demo 4-4-5 year starts {ACCOUNTING_445_START} pending plant confirmation. Notes are observations, not causal proof. Missing periods are not ranked.'}

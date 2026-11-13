@@ -1,6 +1,7 @@
 """Trusted SVG renderer using the analysis rows directly."""
 import math
 import xml.etree.ElementTree as ET
+from .records import stop_label
 
 
 def downtime_svg(result):
@@ -18,7 +19,7 @@ def downtime_svg(result):
     maximum = max((r['down_minutes'] for r in rows), default=1) or 1
     for index, row in enumerate(rows):
         y = 65+index*55
-        ET.SubElement(svg, 'text', x='20', y=str(y+18), fill='#0f172a').text = str(row['category'])[:60]
+        ET.SubElement(svg, 'text', x='20', y=str(y+18), fill='#0f172a').text = stop_label(str(row['category']))[:60]
         ET.SubElement(svg, 'rect', x='220', y=str(y), width=str(450*row['down_minutes']/maximum), height='25', fill='#2563eb')
         ET.SubElement(svg, 'text', x='685', y=str(y+18), fill='#0f172a').text = f"{row['down_minutes']:g} min"
     return ET.tostring(svg, encoding='unicode')

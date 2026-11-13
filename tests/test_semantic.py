@@ -327,7 +327,7 @@ def check_maintenance_pm_minutes(store):
         assert abs(got - tool['maintenance_minutes'] - tool['pm_minutes']) <= 0.011, (window, shift)
 
 
-FAMILIES = {'bond': 'BOND', 'warp': 'WARP', 'misalignment': 'MISALIGNMENT', 'moisture': 'MOISTURE'}
+FAMILIES = {'bond': 'BOND', 'warp': 'WARP', 'misalignment': 'MISALIGNMENT', 'moisture': 'MOISTURE', 'other': 'OTHER'}
 
 CHECKS = {
     'setups': [check_shift_kpis('setups', 'valid_setups'), check_period_kpis('setups', 'setups', 0), check_grade_totals('setups', 'setups', 0)],
@@ -405,6 +405,10 @@ CHECKS = {
     'unexplained_sqft': [check_waste('unexplained_sqft', 'unexplained')],
     'unexplained_pct': [check_period_kpis('unexplained_pct', 'unexplained_pct', 4), check_waste('unexplained_pct', 'unexplained', 'pct_of_gross', 4)],
     'bale_usd': [check_waste('bale_usd', 'bale', 'usd', 2)],
+    'changeover_sqft': [check_waste('changeover_sqft', 'changeover')],
+    'cutoff_waste_sqft': [check_waste('cutoff_waste_sqft', 'cutoff_waste')],
+    'stacker_waste_sqft': [check_waste('stacker_waste_sqft', 'stacker_waste')],
+    'admin_sqft': [check_waste('admin_sqft', 'admin')],
     'unexplained_usd': [check_waste('unexplained_usd', 'unexplained', 'usd', 2)],
 }
 
@@ -463,7 +467,8 @@ def test_physical_names_live_in_the_one_mapping_block():
     physical block maps, so a renamed store column changes that block and nothing else."""
     spec = json.loads(S.MODEL_PATH.read_text())
     physical = spec['physical']['entities']
-    mapped = {e['table']: {w for col in e['columns'].values() if col for w in re.findall(r'[A-Za-z_]\w*', col)} for e in physical.values()}
+    mapped = {e['table']: {w for col in [*e['columns'].values(), e.get('where')] if col for w in re.findall(r'[A-Za-z_]\w*', re.sub(r"'[^']*'", '', col))}
+              for e in physical.values()}
     for block in ('dimensions', 'measures'):
         for item in spec[block]:
             for key in ('expr',):
@@ -503,7 +508,7 @@ def test_a_broken_model_file_is_refused():
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_pct').update(scale=-100))   # a scale that is not a positive number
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_sqft').update(scale=100))   # a scale on a measure that is no ratio
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'stops').update(lever='maybe'))   # a lever the owner has not named
-    for where in ("reason = 'BOND'; DROP TABLE stops", "category = 'dry_end'", "reason = 'BOND' OR (sqft > 0", "sqft > 0)", "upper(reason) = 'BOND'"):
+    for where in ("family = 'BOND'; DROP TABLE stops", "kategory = 'dry_end'", "family = 'BOND' OR (sqft > 0", "sqft > 0)", "upper(family) = 'BOND'"):
         broken(lambda s, w=where: s['physical']['entities']['reject'].update(where=w))   # a where outside its small grammar
 
 
@@ -520,7 +525,8 @@ def test_a_broken_model_file_is_refused():
     (dict(measure='stops', group_by=['day'], compare='previous'), r'^compare=prev puts the previous window beside each row of the same slice; a split by day', None),
     (dict(measure='msf', group_by=['grade', 'week'], compare='previous'), r'a split by week has no row in common', None),
     (dict(measure='stops', filters={'day': '2026-09-14'}), r'day is a time dimension: the window sets the time', None),
-    (dict(measure='sheets', group_by=['customer']), r'carry no customer yet', None),
+    (dict(measure='sheets', filters={'customer': 'C9999'}), r"^No customer 'C9999' in the records; the values are: C000, C001, .*, C039 and 1 more$", None),
+    (dict(measure='lineal_ft', group_by=['customer']), r'recorded per run setup, which carries no customer', None),
     (dict(measure='stops', group_by=['place', 'reason', 'kind']), r'group_by lists at most two dimensions', None),
     (dict(measure='stops', limit=0), r'limit is a whole number of rows from 1 to', None),
     (dict(measure='stops', compare='yesterday'), r'compare is previous', None),
@@ -545,9 +551,9 @@ def test_synonyms_resolve_to_the_models_names_and_the_stores_values():
     query = S.validate(S.SemanticQuery('scrap', group_by=['defect'], filters={'paper run': 'we20260914016', 'flute': 'single wall'}, window=WEEK), store)
     assert (query.measure, query.group_by, query.filters) == ('reject_sqft', ['reject_reason'], {'wet_end': 'WE20260914016', 'flute': 'C'})
     query = S.validate(S.SemanticQuery('downtime', filters={'place': 'DB', 'kind': 'pm', 'reason': 'starch'}, window=WEEK), store)
-    assert query.filters == {'place': 'Double backer', 'kind': 'PM', 'reason': 'Glue / starch'}
+    assert query.filters == {'place': 'Double backer', 'kind': 'Scheduled', 'reason': 'Glue / starch'}
     for word in ('planned', 'planned maintenance', 'Scheduled', 'PM'):   # the planned kind under either contract's name, never Maintenance
-        assert S.validate(S.SemanticQuery('downtime', filters={'kind': word}, window=WEEK), store).filters == {'kind': 'PM'}, word
+        assert S.validate(S.SemanticQuery('downtime', filters={'kind': word}, window=WEEK), store).filters == {'kind': 'Scheduled'}, word
     query = S.validate(S.SemanticQuery('lineal_ft', filters={'web_width': '100', 'shift': '2'}, window=WEEK), store)
     assert query.filters == {'web_width': 100.0} and query.shift == 2
     assert S.validate(S.SemanticQuery('sheets', filters={'lane': '2'}, window=WEEK), store).filters == {'lane': 2}
@@ -613,9 +619,9 @@ def test_time_grains_and_the_previous_window(store):
     for row in compared['rows']:   # a slice the previous window recorded nothing for is a recorded zero, as in the current one
         assert row['previous_value'] == (before[row['kind']]['value'] if row['kind'] in before else 0)
     assert compared['delta'] == compared['value'] - compared['previous_value'] and compared['comparison'] == 'complete'
-    partial = run(store, 'stops', {'period': 'month', 'anchor': '2025-10-06'}, compare='previous')   # September 2025: one production day
+    partial = run(store, 'stops', {'period': 'week', 'anchor': '2025-01-06'}, compare='previous')   # the records' first week: three production days
     assert partial['previous_value'] is not None and partial['delta'] is None and partial['comparison'].startswith('withheld')
-    outside = run(store, 'stops', {'period': 'day', 'anchor': '2025-09-30'}, group_by=['kind'], compare='previous')
+    outside = run(store, 'stops', {'period': 'day', 'anchor': store.first_day}, group_by=['kind'], compare='previous')
     assert outside['previous_window']['coverage'] == 'unavailable' and outside['previous_value'] is None and outside['delta'] is None
     assert all(r['previous_value'] is None for r in outside['rows'])   # outside the records: never the zero an empty sum reads
 
@@ -684,7 +690,7 @@ def test_the_answer_leads_with_the_asked_measure_and_every_figure_cites_its_row(
         assert line.startswith(f'- {row["label"]}: **{row["value"]:.2f}%** of scheduled minutes') and line.endswith(f'(query 1 · row {i})')
     maintenance = next(i for i, r in enumerate(data['rows']) if r['kind'] == 'Maintenance')
     assert data['rows'][maintenance]['band_text'] in answer['sections'][1 + maintenance]   # the owner's maintenance band, from targets.json
-    assert 'PM' not in [r['label'] for r in data['rows']] and 'Planned maintenance (scheduled)' in [r['label'] for r in data['rows']]
+    assert 'Scheduled' not in [r['label'] for r in data['rows']] and 'Planned maintenance (scheduled)' in [r['label'] for r in data['rows']]
     assert answer['tables'][0]['title'] == S.TOOL and answer['charts'][0]['rows'] == data['rows']
     looks = answer['sections'][answer['sections'].index('Where to look') + 1:]
     assert [line.rsplit('“', 1)[1] for line in looks] == ['Which downtime reason cost the most minutes this week?”', 'Stops per day this week”']
@@ -705,7 +711,8 @@ def test_the_docs_page_is_rendered_from_the_model_file():
     assert 'home run 2.75% / target 3% / flag 3.25% of gross' in text   # the trim band, read from targets.json
     assert 'Maintenance: target 2.5% / flag 2.5% of scheduled minutes' in text
     assert '| db, double-backer, hot plates | place Double backer |' in text
-    assert '| customer | `customers` | `customer_id` | not carried yet |' not in text and '| lane | `customers` | `customer_id` | not carried yet |' in text
+    assert '| lane | `setup_orders` | `customer_id` | `customer_id` |' in text and 'not carried yet' not in text   # contract v2 carries the customer
+    assert "| reject | `rejects` | `line_id` |" in text and "counted_in = 'dry_end'" in text
     html = docsite.build_site()['/docs/semantic-model'].decode()
     assert '<h1' in html and 'The semantic model' in html and 'downtime_minutes' in html
 
@@ -725,8 +732,8 @@ def test_a_slice_with_a_lever_of_its_own_says_it(store):
     """Planned maintenance is schedule-driven and a power outage external (the owner on PR #111), as a slice or a filter."""
     outage_week = {'period': 'week', 'anchor': '2026-09-14'}   # the week of September's power outage
     kinds = rows_by(run(store, 'downtime_minutes', outage_week, group_by=['kind']), 'kind')
-    assert {k: r['lever'] for k, r in kinds.items()} == {'Maintenance': 'controllable', 'Operator': 'controllable', 'PM': 'schedule-driven', 'External': 'external'}
-    assert run(store, 'downtime_minutes', WEEK, filters={'kind': 'PM'})['lever'] == 'schedule-driven'
+    assert {k: r['lever'] for k, r in kinds.items()} == {'Maintenance': 'controllable', 'Operator': 'controllable', 'Scheduled': 'schedule-driven', 'External': 'external'}
+    assert run(store, 'downtime_minutes', WEEK, filters={'kind': 'Scheduled'})['lever'] == 'schedule-driven'
     assert run(store, 'downtime_pct', WEEK, filters={'reason': 'Power outage'})['lever'] == 'external'
     assert run(store, 'maintenance_pm_pct', WEEK)['lever'] == 'schedule-driven' and run(store, 'stops', WEEK)['lever'] == 'controllable'
 
@@ -735,11 +742,11 @@ def test_an_entity_where_is_a_small_checked_grammar_and_its_literals_are_bound(s
     """The physical block can keep an entity to some of its rows (record contract v2 keeps the rejects to the dry-end lines):
     columns of its table, comparisons, literals, AND, OR, IN, NOT, IS NULL. The literals are bound, and the condition holds."""
     spec = json.loads(S.MODEL_PATH.read_text())
-    spec['physical']['entities']['reject']['where'] = "reason IN ('BOND', 'WARP') AND sqft > 0 AND NOT detail IS NULL"
+    spec['physical']['entities']['reject']['where'] = "family IN ('BOND', 'WARP') AND sqft > 0 AND NOT reason IS NULL"
     model = S.Model(spec)
     query = S.validate(S.SemanticQuery('reject_sqft', group_by=['reject_family'], window=WEEK), store, model)
     statement = S.compile_query(query, model).statements[0]
-    assert "'BOND'" not in statement.sql and 'b.reason IN (?, ?) AND b.sqft > ? AND NOT b.detail IS NULL' in statement.sql
+    assert "'BOND'" not in statement.sql and 'b.family IN (?, ?) AND b.sqft > ? AND NOT b.reason IS NULL' in statement.sql
     assert statement.params[2:5] == ['BOND', 'WARP', 0] and statement.sql.count('?') == len(statement.params)
     kept = S.run(query, store, mdl=model)
     whole = rows_by(run(store, 'reject_sqft', WEEK, group_by=['reject_family']), 'reject_family')

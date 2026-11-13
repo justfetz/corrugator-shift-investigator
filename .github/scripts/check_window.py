@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""The deploy smoke test's window check (issue #35): the image built by this run serves the year ending
-yesterday. A cached image layer that froze an older window would otherwise pass the smoke test silently.
+"""The deploy smoke test's window check (issues #35, #100): the image built by this run serves the data from
+its fixed first day, 1 January 2025, to yesterday. A cached image layer that froze an older window would
+otherwise pass the smoke test silently.
 
     python3 .github/scripts/check_window.py <health.json> <run day> [<today>]
 
@@ -10,11 +11,14 @@ accepted, so a build that crosses midnight UTC passes, and a window a day older 
 
 `store.window.as_of` must be that yesterday, and `store.window.last_day` the last production day
 (Mon-Fri) on or before it: yesterday itself on a Tuesday-to-Saturday run, the Friday before on a
-Sunday or Monday run. Prints the window and exits 0, or names what is wrong and exits 1.
+Sunday or Monday run. `store.window.first_day` must be FIRST_DAY. Prints the window and exits 0, or names
+what is wrong and exits 1.
 """
 import json
 import sys
 from datetime import date, datetime, timedelta, timezone
+
+FIRST_DAY = "2025-01-01"   # synth.DATASET_FIRST_DAY, the data's fixed start (tests/test_repo_hygiene.py checks they agree)
 
 
 def last_production_day(day):
@@ -30,6 +34,8 @@ def check(health, run_day, today):
     as_of, last_day = window.get("as_of"), window.get("last_day")
     if not as_of or not last_day:
         return [f"/api/health has no store.window.as_of and last_day: {json.dumps(health)[:300]}"]
+    if window.get("first_day") != FIRST_DAY:
+        return [f"store.window.first_day is {window.get('first_day')}, expected {FIRST_DAY}, the data's fixed start"]
     accepted = sorted({run_day - timedelta(days=1), today - timedelta(days=1)})
     for yesterday in accepted:
         if as_of == yesterday.isoformat():

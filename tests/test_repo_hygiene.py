@@ -16,6 +16,10 @@ from pathlib import Path
 
 import pytest
 
+# The vendor, its products, record codes and source tables, and the other corrugator makers, spelled in pieces in
+# tests/vendor_names.py, which says what each pattern matches (issue #100).
+from vendor_names import LONG_MAKER_NAMES, MAKER_NAMES, MAKER_PATTERN, PROSE_PATTERN, SHORT_MAKER_NAMES, VENDOR_PATTERN
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / '.github' / 'workflows'
 DEPLOY = WORKFLOWS / 'deploy-cloudrun.yml'
@@ -148,7 +152,7 @@ up = base in os.environ.get('STUB_UP', '').split()
 if url.endswith('/api/health'):
     # the image's health body: its window ends the day before the build (issue #35), or STUB_AS_OF when a test freezes it
     as_of = os.environ['STUB_AS_OF']
-    window = {'as_of': as_of, 'first_day': '2025-11-10', 'last_day': as_of, 'production_days': 262}
+    window = {'as_of': as_of, 'first_day': '2025-01-01', 'last_day': as_of, 'production_days': 485}
     open(args[args.index('-o') + 1], 'w').write(json.dumps({'ok': True, 'store': {'window': window}}) if up else 'down')
     if '-w' in args:
         sys.stdout.write('200' if up else '503')
@@ -215,7 +219,7 @@ def test_smoke_test_fails_a_frozen_window_on_mains_own_url(tmp_path):
     """Issue #35 with #110: the window check reads main's own URL, the one the smoke test reports, and fails the deploy
     when its window does not end the day before the build."""
     code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN])
-    assert code == 0 and 'window 2025-11-10 to 2026-11-10 (as of 2026-11-10, 262 production days): ends yesterday' in log, log
+    assert code == 0 and 'window 2025-01-01 to 2026-11-10 (as of 2026-11-10, 485 production days): ends yesterday' in log, log
     assert requested.count(f'{MAIN}/api/health') == 2 and not any('---' in url for url in requested)
     code, log, _ = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN], as_of='2026-10-01')
     assert code != 0 and '::error::store.window ends 2026-10-01' in log and 'Live at' not in log, log
@@ -336,10 +340,10 @@ def test_the_deploy_smoke_test_fails_a_window_that_does_not_end_yesterday(tmp_pa
     assert smoke.index('check_window.py') < smoke.index('echo "Live at')
     script = ROOT / '.github' / 'scripts' / 'check_window.py'
 
-    def run(as_of, last_day, run_day, today):
+    def run(as_of, last_day, run_day, today, first_day='2025-01-01'):
         health = tmp_path / 'health.json'
         health.write_text(json.dumps({'ok': True, 'store': {'source': 'prebuilt', 'window': {
-            'as_of': as_of, 'first_day': '2025-11-11', 'last_day': last_day, 'production_days': 261}}}))
+            'as_of': as_of, 'first_day': first_day, 'last_day': last_day, 'production_days': 485}}}))
         proc = subprocess.run(['python3', str(script), str(health), run_day, today], capture_output=True, text=True)
         return proc.returncode, proc.stdout + proc.stderr
 
@@ -351,6 +355,10 @@ def test_the_deploy_smoke_test_fails_a_window_that_does_not_end_yesterday(tmp_pa
     assert code == 1 and '::error::store.window ends 2026-11-09' in out and 'expected yesterday, 2026-11-10' in out, out
     code, out = run('2026-11-08', '2026-11-08', '2026-11-09', '2026-11-09')                   # Sunday reported as a production day
     assert code == 1 and 'last_day is 2026-11-08, expected 2026-11-06' in out, out
+    code, out = run('2026-11-10', '2026-11-10', '2026-11-11', '2026-11-11', '2025-11-11')     # the old rolling year's start (issue #100)
+    assert code == 1 and 'first_day is 2025-11-11, expected 2025-01-01' in out, out
+    from investigator.synth import DATASET_FIRST_DAY
+    assert DATASET_FIRST_DAY.isoformat() == '2025-01-01' in script.read_text()
     health = tmp_path / 'health.json'
     health.write_text(json.dumps({'ok': True, 'store': {'source': 'generated'}}))           # an image without the window
     proc = subprocess.run(['python3', str(script), str(health), '2026-11-11'], capture_output=True, text=True)
@@ -366,6 +374,66 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
             '/app/prebuilt-golden') in dockerfile
     assert 'INVESTIGATOR_PREBUILT=/app/prebuilt ' in dockerfile and 'INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden' in dockerfile
     assert not any('INVESTIGATOR_AS_OF' in line for line in dockerfile.splitlines() if line.startswith(('ENV', 'ARG')))   # never pinned
+
+
+def test_the_vendor_pattern_catches_the_names_the_owner_gave_and_not_a_base64_blob():
+    for text in ("Production" + "_Center1", "the production" + "_center1 table", "B" + "HS-2", "B" + "HS2", "a b" + "hs line",
+                 "BQMES" + "PAHT", "P0" + "4P-shaped", "Modul" + "eFacer", "H" + "QM1", "a" + "sm2", "K" + "QFSquareFootage",
+                 "k" + "qf_sqft", "b" + "hs_line", "h" + "qm_total", "P0" + "4P_x", "col_a" + "sm", "Modul" + "e-Facer", "Modul" + "e_Facer"):
+        assert VENDOR_PATTERN.search(text), text
+    for text in ("x9B" + "HSq", "+B" + "HS/", "aB" + "HS", "CORR-2", "LINE-2", "wa" + "sm", "cutoff_knife", "stacker_waste_boards"):
+        assert not VENDOR_PATTERN.search(text), text
+    assert VENDOR_PATTERN.search("P0" + "4X-shaped") and VENDOR_PATTERN.search("p0" + "4a_code"), 'any record code of the family'
+
+
+def test_the_maker_pattern_catches_every_maker_and_not_a_base64_blob_or_a_longer_word():
+    """#120's case-study check listed the other corrugator makers literally; they are spelled in pieces now, and the
+    repo-wide guard below reads them too (coordinator re-review of #123, item 2). A long name beside a '+' or '/' is still
+    the name, as #120's word boundaries had it; only the two three-letter names keep the base64 rule."""
+    for name in MAKER_NAMES:
+        for text in (f"a {name} line", f"the {name.lower()} corrugator", f"{name.upper()}-2", f"{name}2", f"{name.lower()}_dryend"):
+            assert MAKER_PATTERN.search(text), text
+        for text in (f"x9{name}q", f"a{name}", f"{name}s"):
+            assert not MAKER_PATTERN.search(text), text
+    for name in LONG_MAKER_NAMES:
+        for text in (f"+{name}/", f"see /{name}", f"https://x.com/{name}", f"{name}+X", f"A/{name}"):
+            assert MAKER_PATTERN.search(text), text
+    for name in SHORT_MAKER_NAMES:
+        assert not MAKER_PATTERN.search(f"+{name}/"), name   # a blob's run of characters, not the name
+    for text in ("CORR-2", "efficient", "simonize", "petersburg", "cutoff_knife", "stacker_waste_boards"):
+        assert not MAKER_PATTERN.search(text), text
+
+
+def test_the_case_study_pattern_keeps_120s_word_boundaries():
+    """The case study is prose with no blob in it: #120 checked it between word boundaries, so a vendor's short name or
+    a maker beside a '/' or '+' was caught there; PROSE_PATTERN keeps that (the reviewer of the #123 fix round)."""
+    pairs = ("B" + "HS/" + "Fos" + "ber", "Kiwi" + "plan/" + "Am" + "tech", "see /" + "Fos" + "ber", "Fos" + "ber+" + "Ag" + "nati",
+             "+B" + "HS/", "a P0" + "4X code", "T" + "CY/x", "x/E" + "FI")
+    for text in pairs:
+        assert PROSE_PATTERN.search(text), text
+    for text in ("efficient", "simonize", "CORR-2", "the shear chops", "P04"):
+        assert not PROSE_PATTERN.search(text), text
+
+
+def test_no_tracked_file_names_the_vendor_or_its_source_tables():
+    """A test greps the repo for the vendor name and fails if it appears (owner, 2026-11-11): code, docs, column
+    names, comments and goldens, every tracked text file. No other corrugator maker's name appears either."""
+    try:
+        tracked = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, capture_output=True, timeout=30, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip('git unavailable')
+    hits = []
+    for name in tracked.decode('utf-8').split('\0'):
+        path = ROOT / name
+        if not name or not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding='utf-8')
+        except (UnicodeDecodeError, OSError):
+            continue          # binary files (fonts, images) carry no prose
+        for pattern in (VENDOR_PATTERN, MAKER_PATTERN):
+            hits += [f'{name}:{text.count(chr(10), 0, m.start()) + 1}: {m.group(0)}' for m in pattern.finditer(text)]
+    assert hits == []
 
 
 def test_the_deploy_fails_a_live_changelog_without_the_merged_pull_request(tmp_path):

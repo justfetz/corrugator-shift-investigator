@@ -8,7 +8,8 @@ from threading import Timer
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 import duckdb
-from .records import WEB_WIDTHS
+
+from . import records as R
 from . import targets
 
 MAX_BYTES = 1_000_000
@@ -70,9 +71,11 @@ def load_rows(db, table, rows):
 
 # The per-day tables every tool reads. The XML fixture path and the record-store
 # path (record_store.py) both load exactly these; the tool queries never fork.
+# The one-day XML fixture's paper widths (the v1 record widths); the record store validates its own (records.WEB_WIDTHS).
+WEB_WIDTHS = (106, 103, 100, 98, 95, 92, 87)
 TABLES = {
     "shifts": "shift INTEGER, scheduled_seconds DOUBLE, notes VARCHAR",
-    "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE",
+    "setups": "id VARCHAR, shift INTEGER, wet_end_id VARCHAR, grade VARCHAR, target DOUBLE, seconds DOUBLE, feet DOUBLE, gross DOUBLE, trim DOUBLE, shear DOUBLE, rejects DOUBLE, started TIMESTAMP, ended TIMESTAMP, width_in DOUBLE, changeover DOUBLE, waste_boards DOUBLE, admin DOUBLE",
     "stops": "id VARCHAR, shift INTEGER, kind VARCHAR, place VARCHAR, reason VARCHAR, seconds DOUBLE, started TIMESTAMP, ended TIMESTAMP, notes VARCHAR",
     "orders": "record_id VARCHAR, shift INTEGER, setup_id VARCHAR, order_id VARCHAR, grade VARCHAR, knife VARCHAR, width_in DOUBLE, length_in DOUBLE, outs INTEGER, cuts INTEGER, requested_sheets INTEGER, planned_sheets INTEGER, produced_sheets INTEGER, remaining_before INTEGER, remaining_after INTEGER",
     # One line per (setup, reject reason): the fixture writes one line per setup,
@@ -80,7 +83,7 @@ TABLES = {
     "rejects": "id VARCHAR, shift INTEGER, reason VARCHAR, detail VARCHAR, sheets DOUBLE, sqft DOUBLE",
 }
 # The kinds the tables carry: the records' three, and External, which the owner's rule (targets.json) gives a power outage.
-STOP_KINDS = ("Maintenance", "Operator", "PM", targets.EXTERNAL_KIND)
+STOP_KINDS = (*R.STOP_KINDS, targets.EXTERNAL_KIND)
 
 
 class Analysis:
@@ -274,8 +277,11 @@ class Analysis:
         result = self._query(shift, f"""SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
         sum(feet) AS observed_lineal_ft, sum(feet)/480 AS observed_shift_fpm,
-        sum(gross) AS gross_sqft, sum(gross-trim-shear-rejects) AS estimated_good_sqft,
+        sum(gross) AS gross_sqft,
+        sum(gross-trim-shear-rejects-coalesce(changeover,0)-coalesce(waste_boards,0)-coalesce(admin,0)) AS estimated_good_sqft,
         sum(gross-trim-shear) AS yield_sqft,
+        sum(trim) AS trim_sqft, sum(shear) AS shear_sqft, sum(rejects) AS reject_sqft, coalesce(sum(changeover),0) AS changeover_sqft,
+        coalesce(sum(waste_boards),0) AS waste_board_sqft, coalesce(sum(admin),0) AS admin_sqft,
         sum(gross)/nullif(sum(feet),0)*12 AS throughput_in,
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
         sum(shear)/nullif(sum(gross),0)*100 AS shear_pct,
@@ -283,7 +289,7 @@ class Analysis:
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Maintenance') AS maintenance_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Operator') AS operator_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind IN ('Maintenance', 'Operator')) AS op_maint_pct,
-        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'PM') AS pm_pct,
+        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Scheduled') AS pm_pct,
         (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ?) AS downtime_pct,
         sum(feet)/nullif(count(*),0) AS lineal_per_setup,
         sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
@@ -317,23 +323,24 @@ class Analysis:
         [record_id] AS source_ids FROM orders WHERE shift = ? ORDER BY record_id, knife""", [shift])
 
     def get_downtime_breakdown(self, shift, kind=None, group_by="reason"):
+        kind = R.stop_kind(kind)   # the v1 code PM is the Scheduled kind
         if group_by not in ("reason", "kind", "place") or kind not in (None, *STOP_KINDS):
             raise ValueError("Unsupported filter or grouping")
         """Recorded stops grouped by reason, place or kind, each with its stop count and minutes per stop; planned
-        maintenance (PM) is scheduled time and sorts last (issue #101), after external downtime (a power outage,
+        maintenance (the Scheduled kind) is scheduled time and sorts last (issue #101), after external downtime (a power outage,
         outside the plant; the owner on PR #111). On a record-store day the result also
         carries `flags`: the shift's maintenance or operator downtime over its band, with the supervisor slot and
         the leading reason's recurrence over the trailing year (RecordStore.downtime_flags)."""
         # group_by is strictly allowlisted; all visitor values are bound.
         sql = f"""SELECT {group_by} AS category, sum(seconds)/60 AS down_minutes,
         sum(seconds)/28800*100 AS shift_percent, count(*) AS stops, sum(seconds)/60/count(*) AS minutes_per_stop,
-        bool_and(kind = 'PM') AS scheduled, bool_and(kind = '{targets.EXTERNAL_KIND}') AS external, list(id ORDER BY id) AS source_ids
+        bool_and(kind = 'Scheduled') AS scheduled, bool_and(kind = '{targets.EXTERNAL_KIND}') AS external, list(id ORDER BY id) AS source_ids
         FROM stops WHERE shift = ?"""
         params = [shift]
         if kind:
             sql += " AND kind = ?"
             params.append(kind)
-        # unplanned maintenance and operator reasons first; then external downtime (a power outage); then PM
+        # unplanned maintenance and operator reasons first; then external downtime (a power outage); then planned maintenance
         sql += f" GROUP BY {group_by} ORDER BY scheduled OR external, scheduled, down_minutes DESC, category"
         result = self._query(shift, sql, params)
         if self.store is not None:

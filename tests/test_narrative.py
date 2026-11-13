@@ -210,9 +210,9 @@ def test_period_findings_rest_on_the_rows_that_exist():
             {'kind':'finding','text':'Speed reached {{0}} ft/min in the week of {{1}}.','facts':[{'result_id':'t:1','row':5,'field':'value'},{'result_id':'t:1','row':5,'field':'week_start'}]},
             {'kind':'finding','text':'August volume was {{0}} MSF.','facts':[{'result_id':'a:1','row':0,'field':'current'}]}]},packet)
         assert rendered[0]['text'].startswith('Speed reached ') and 'ft/min in the week of 2026-09-07' in rendered[0]['text']
-        # the year's own early trend: a row is a four-day week, so the packet is partial and bars findings
-        early=default_store().get_trend('speed_all_fpm',weeks=8,anchor='2025-11-12',shift=2)
-        assert early['missing_weeks']==['2025-09-22'] and early['rows'][0]['partial'] is True
+        # the data's own early trend: a row is a three-day week, so the packet is partial and bars findings
+        early=default_store().get_trend('speed_all_fpm',weeks=8,anchor='2025-02-12',shift=2)
+        assert early['missing_weeks']==['2024-12-23'] and early['rows'][0]['partial'] is True
         assert evidence_packet([{'result_id':'e:1','tool':'get_trend','ok':True,'data':early}])[0]['coverage']=='partial'
         # a daily result with an excluded record stays partial and still bars findings
         corrupt=store.day_analysis('2026-09-14',corrupt=True)

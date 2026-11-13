@@ -1,0 +1,17 @@
+# Code owners (issue #126, H2). With "Require review from Code Owners" on main (docs/AGENTS.md, "Set up
+# once"), GitHub itself makes every pull request outside the auto-merge tier wait for the owner's review,
+# whatever token or script tries to merge it. The auto-merge tier, agent.py's AUTO_MERGE_DIRS and
+# AUTO_MERGE_FILES, is left unowned below; tests/test_agent_workflows.py keeps the two lists equal.
+# The last matching line wins.
+*                     @justfetz
+
+# The auto-merge tier: documentation and tests only.
+/docs/
+/tests/
+/README.md
+/evals/README.md
+
+# Instructions to every Claude session stay the owner's at any depth, inside docs/ and tests/ too.
+**/CLAUDE.md          @justfetz
+**/CLAUDE.local.md    @justfetz
+**/.claude/           @justfetz
