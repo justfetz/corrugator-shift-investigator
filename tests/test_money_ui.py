@@ -160,6 +160,11 @@ def test_the_client_formula_gives_the_servers_answer_at_any_rates(bench, tmp_pat
     for url in PARITY_URLS:
         before, _ = bench.answer_url(url)
         cases += [{'url': url, 'rates': rates, 'before': before, 'after': bench.answer_url(at(url, rates))[0]} for rates in PARITY_RATES]
+    # every kind of priced row is in the set with real dollars, the speed gap too (since issue #100's records the
+    # client money golden's own shift runs above 675 ft/min, so its speed gap is $0; the all-shifts day is not)
+    speed = [row['usd'] for c in cases for e in c['before']['trace'] if e['tool'] == 'get_shift_dollars'
+             for row in e['data']['rows'] if row['gap'].startswith('Speed gap') and row['usd']]
+    assert speed, 'no parity case prices a non-zero speed gap'
     file = tmp_path / 'cases.json'
     file.write_text(json.dumps({'cfg': cost_model.client_config(), 'cases': cases}))
     run = subprocess.run([NODE, str(ROOT / 'tests' / 'money_cli.cjs'), 'parity', str(file)], capture_output=True, text=True)

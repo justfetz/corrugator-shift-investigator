@@ -79,6 +79,22 @@ def lines(server, count, timeout=5):
         time.sleep(0.01)
 
 
+def lines_by_id(server, *line_ids, timeout=60):
+    """The log lines with these line ids, in that order, once each of them is written, and no other line. Each line is
+    written after its own response, so the lines of two requests sent one after the other can land in either order (an
+    analyst round's line after a quick refusal's, on a loaded machine: 2 of 9 runs of the trial merge of PR #123). This
+    waits on the lines it checks and reads each by its id, never on a count in arrival order; the deadline only ends a
+    run whose line never comes."""
+    deadline = time.monotonic() + timeout
+    while True:
+        out = [json.loads(line) for line in server.app.qlog.stream.getvalue().splitlines()]
+        found = {entry['line']: entry for entry in out}
+        if all(i in found for i in line_ids) or time.monotonic() > deadline:
+            assert sorted(entry['line'] for entry in out) == sorted(line_ids), out
+            return [found[i] for i in line_ids]
+        time.sleep(0.01)
+
+
 def ask(server, question, headers, **controls):
     """The page's ask: GET /q with the ids, then the redirect target with the same headers (fetch keeps them)."""
     query = urlencode({'day': '2026-09-14', 'shift': '2', 'scope': 'shift', 'period': 'day', **controls, 'q': question})
@@ -377,7 +393,7 @@ def test_an_analyst_round_is_a_line_with_its_plan_status(monkeypatch, tmp_path):
         assert status == 200 and b'"type": "done"' in stream
         refused = json.dumps({'day': '2026-09-13', 'shift': 2, 'question': 'Why was this shift slow?', 'mode': 'anthropic'})
         assert request(server, 'POST', '/api/ask', refused, {**headers, **ids(line='00000000000000bb')})[0] == 400
-        round_, refusal = lines(server, 2)
+        round_, refusal = lines_by_id(server, LINE, '00000000000000bb')
     finally:
         stop(server, thread)
     assert set(round_) == ANALYST_KEYS and round_['event'] == 'analyst' and round_['line'] == LINE
@@ -404,7 +420,7 @@ def test_analyst_clicks_refused_by_a_window_are_lines_and_fuzzed_headers_never_r
             status = request(server, 'POST', '/api/ask', body, {**headers, 'Content-Type': 'application/json', 'X-Workbench-Token': token,
                                                                **ids(line=f'{i:016x}')})[0]
             assert status == (200 if i < 6 else 429)
-        logged = lines(server, 7)
+        logged = lines_by_id(server, *(f'{i:016x}' for i in range(7)))
     finally:
         stop(server, thread)
     # a fuzzed X-Anthropic-Key that is not shaped like a key is the loopback key field's own refusal, named without the value

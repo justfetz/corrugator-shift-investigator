@@ -408,9 +408,9 @@ def _request(measure, fields, context, window):
                 raise ValueError('by is reason, place or kind')
             kind = fields.get('kind')
             if kind is not None:
-                if kind not in ('maintenance', 'operator'):
-                    raise ValueError('kind is maintenance or operator')
-                kind = kind.capitalize()
+                if kind not in ('maintenance', 'operator', 'scheduled', 'pm'):
+                    raise ValueError('kind is maintenance, operator or scheduled')
+                kind = 'Scheduled' if kind == 'pm' else kind.capitalize()   # pm, the v1 code, is the scheduled kind
         metrics = list(RANK_METRICS)
         if measure == 'rank' and 'rank' in fields:
             metrics = fields['rank'].split(',')

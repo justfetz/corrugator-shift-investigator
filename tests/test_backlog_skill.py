@@ -22,7 +22,7 @@ ISSUES = [
     issue(21, '05 · Drill-down by clicking', '**Order 5 of 13.** Depends on #04.'),
     issue(34, '08c · Precompute per-shift KPIs', '**Order: after 08b.**'),              # 08b is closed: not blocked
     issue(35, '13b · Extend the synthetic dataset', '**Order: after 08c (needs the precomputed KPIs).**'),
-    issue(38, 'Production record contract', '**Owner-specified contract.**\n## Open definitions (owner)\n1. HQM?', labels=('documentation', 'waiting-on-owner')),
+    issue(38, 'Production record contract', '**Owner-specified contract.**\n## Open definitions (owner)\n1. Waste-board counts?', labels=('documentation', 'waiting-on-owner')),
     issue(41, 'Preview URL per pull request', 'Order: whenever; small.'),
     issue(46, 'Claude Code operating loop', 'a status column: `waiting on owner` when ... what the owner owes'),
 ]

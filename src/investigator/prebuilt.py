@@ -1,8 +1,8 @@
 """Write the prebuilt store folder: `python -m investigator.prebuilt [--as-of YYYY-MM-DD] <folder>`.
 
-Run once at image build time (see Dockerfile). The folder holds the rolling window that
-ends on `--as-of`, else on INVESTIGATOR_AS_OF, else yesterday (issue #35): the window is
-fixed when the image is built, and the nightly deploy builds the next one. At boot, a
+Run once at image build time (see Dockerfile). The folder holds the data from 1 January 2025
+(issue #100) to `--as-of`, else to INVESTIGATOR_AS_OF, else to yesterday (issue #35): the window
+is fixed when the image is built, and the nightly deploy builds the next one. At boot, a
 RecordStore pointed at the folder (INVESTIGATOR_PREBUILT) takes that window and loads it in
 a fraction of the time generating takes; a folder that does not match the code or the
 inputs is ignored.

@@ -11,6 +11,7 @@ import time
 from uuid import uuid4
 from investigator.periods import ACCOUNTING_445_START, weekdays, window
 from investigator.record_store import default_store
+from investigator.records import stop_label   # how the planned stop reads (owner ruling (c), 2026-11-12)
 
 
 class LegacyPeriodReports:
@@ -92,7 +93,7 @@ class LegacyPeriodReports:
         rid=uuid4().hex
         sections=[f'Synthetic {period_name} report: {label}. '+('Selected shift '+str(shift)+'.' if scope=='shift' else 'All three shifts.'),
             f'{len(current)} available shift records. {totals["valid_setups"]} valid dry-end setups; {totals["paper_changes"]} paper changes (wet-end runs).',
-            f'Estimated good output {totals["estimated_good_sqft"]:,.0f} sq ft after recorded trim, shear and dry-end rejects. Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
+            f'Estimated good output {totals["estimated_good_sqft"]:,.0f} sq ft after every recorded waste line (trim, shear, dry-end and changeover rejects, the cutoff-knife and stacker waste boards, planning / admin). Speed {totals["observed_shift_fpm"]:.1f} ft/min; {totals["speed_to_target_pct"]:.1f}% of grade-weighted target. Maintenance {totals["maintenance_pct"]:.2f}%; Operator {totals["operator_pct"]:.2f}%; dry-end waste {totals["dry_end_pct"]:.2f}%.']
         if not complete: sections.append('Current period is incomplete: missing days or excluded records. Observed totals only; rankings withheld.')
         if complete and old_complete:
             sections.append(f'Previous period {old_start} to {old_end}: speed change {totals["observed_shift_fpm"]-old["observed_shift_fpm"]:+.1f} ft/min; maintenance change {totals["maintenance_pct"]-old["maintenance_pct"]:+.2f} percentage points.')
@@ -107,7 +108,7 @@ class LegacyPeriodReports:
                 row['previous_minutes'] = None
         if recurring and complete:
             top=recurring[0]
-            sections.append(f'Most recorded downtime: {top["place"]} / {top["reason"]}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
+            sections.append(f'Most recorded downtime: {top["place"]} / {stop_label(top["reason"])}, {top["current_count"]} stops, {top["current_minutes"]:g} min. Repeated symptoms do not establish a root cause.')
         rankings=[]
         if complete:
             for s in shifts:
@@ -155,7 +156,7 @@ class LegacyPeriodReports:
             'production_day':day,'period_label':label,'selected_shifts':shifts,'sections':sections,'tables':tables,'charts':charts,'trace':[trace],
             'evidence_ids':[rid],'context':{'production_day':day,'shift':shift,'scope':scope,'history':[]},
             'usage':{'tool_calls':1,'model_calls':0,'cost_usd':0},
-            'limitations':f'Synthetic records. {period_name} uses the displayed dates. Estimated good square feet subtracts recorded trim, shear and dry-end rejects from gross area; it is not a customer-acceptance claim. The demo 4-4-5 year starts {ACCOUNTING_445_START} pending plant confirmation. Notes are observations, not causal proof. Missing periods are not ranked.'}
+            'limitations':f'Synthetic records. {period_name} uses the displayed dates. Estimated good square feet subtracts every recorded waste line (trim, shear, dry-end and changeover rejects, the cutoff-knife and stacker waste boards, planning / admin) from gross area; it is not a customer-acceptance claim. The demo 4-4-5 year starts {ACCOUNTING_445_START} pending plant confirmation. Notes are observations, not causal proof. Missing periods are not ranked.'}
 
 
 # The period tools' sums as they were before issue #34: every window re-aggregated from the raw
@@ -166,16 +167,20 @@ def legacy_sums(self, window, shift, trace):
     params = [window["start"], window["end"], *extra]
     queries = {
         "setups": "SELECT count(*) AS setup_records, count(DISTINCT wet_end_id) AS paper_changes, "
-                  "coalesce(sum(feet),0) AS lineal_ft, coalesce(sum(gross),0) AS gross_sqft, "
-                  "coalesce(sum(trim),0) AS trim_sqft, coalesce(sum(shear),0) AS shear_sqft, "
-                  "coalesce(sum(rejects),0) AS reject_sqft, coalesce(sum(seconds),0) AS elapsed_seconds, "
-                  "coalesce(sum(stop_seconds),0) AS setup_stop_seconds, count(DISTINCT production_date) AS production_days "
+                  "coalesce(sum(lineal_ft),0) AS lineal_ft, coalesce(sum(gross_sqft),0) AS gross_sqft, "
+                  "coalesce(sum(trim_sqft),0) AS trim_sqft, coalesce(sum(shear_sqft),0) AS shear_sqft, "
+                  "coalesce(sum(reject_sqft),0) AS reject_sqft, coalesce(sum(seconds),0) AS elapsed_seconds, "
+                  "coalesce(sum(stop_seconds),0) AS setup_stop_seconds, count(DISTINCT production_date) AS production_days, "
+                  "coalesce(sum(changeover_sqft),0) AS changeover_sqft, coalesce(sum(admin_sqft),0) AS admin_sqft, "
+                  "coalesce(sum(cutoff_waste_sqft),0) AS cutoff_waste_sqft, coalesce(sum(stacker_waste_sqft),0) AS stacker_waste_sqft "
                   f"FROM setups WHERE production_date BETWEEN ? AND ?{clause}",
         "shifts": "SELECT count(*) AS shift_records, coalesce(sum(scheduled_minutes),0)*60 AS scheduled_seconds, "
-                  f"coalesce(sum(bale),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
+                  f"coalesce(sum(bale_sqft),0) AS bale_sqft FROM shifts WHERE production_date BETWEEN ? AND ?{clause}",
         "stops": f"SELECT kind, count(*) AS stops, sum(seconds) AS seconds FROM stops WHERE production_date BETWEEN ? AND ?{clause} GROUP BY kind",
-        "rejects": f"SELECT reason, sum(sqft) AS sqft FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason",
-        "details": f"SELECT reason, detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects WHERE production_date BETWEEN ? AND ?{clause} GROUP BY reason, detail ORDER BY sum(sqft) DESC, reason, detail",
+        # record contract v2 (issue #100): the dry-end families of the reject lines, by family and reported reason
+        "rejects": f"SELECT family AS reason, sum(sqft) AS sqft FROM rejects WHERE counted_in = 'dry_end' AND production_date BETWEEN ? AND ?{clause} GROUP BY family",
+        "details": ("SELECT family AS reason, reason AS detail, sum(sqft) AS sqft, sum(sheets) AS sheets FROM rejects "
+                    f"WHERE counted_in = 'dry_end' AND production_date BETWEEN ? AND ?{clause} GROUP BY family, reason ORDER BY 3 DESC, 1, 2"),
     }
     sums = {}
     for name, sql in queries.items():
@@ -189,10 +194,11 @@ def legacy_sums(self, window, shift, trace):
     total = {**setup, **shifts,
              "stop_count": sum(r["stops"] for r in sums["stops"]),
              "stop_seconds": sum(r["seconds"] for r in sums["stops"]),
-             "maintenance_pm_seconds": sum(r["seconds"] for k, r in by_kind.items() if k in ("Maintenance", "PM")),
+             "maintenance_pm_seconds": sum(r["seconds"] for k, r in by_kind.items() if k in ("Maintenance", "Scheduled")),
              "operator_seconds": by_kind.get("Operator", {}).get("seconds", 0) or 0,
              "bond_sqft": by_reason.get("BOND", 0.0), "warp_sqft": by_reason.get("WARP", 0.0),
              "misalignment_sqft": by_reason.get("MISALIGNMENT", 0.0), "moisture_sqft": by_reason.get("MOISTURE", 0.0),
+             "other_sqft": by_reason.get("OTHER", 0.0),
              "details": sums["details"],
              "source_rows": {"setups": setup["setup_records"], "shifts": shifts["shift_records"],
                              "stops": sum(r["stops"] for r in sums["stops"]), "rejects": len(sums["rejects"])}}

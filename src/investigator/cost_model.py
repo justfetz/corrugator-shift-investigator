@@ -30,6 +30,9 @@ import re
 from pathlib import Path
 from . import targets
 
+from . import records as R
+from .records import stop_label
+
 DEFINITION = json.loads((Path(__file__).with_name('rates.json')).read_text())
 RATE_SPECS = {r['id']: r for r in DEFINITION['rates']}
 SHORT = {r['short']: r['id'] for r in DEFINITION['rates']}
@@ -224,8 +227,9 @@ def _envelope(data, rates):
 
 
 # Waste breakdown categories and how each is priced; bale is the scale's total, priced as paper.
-WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste',
-               'moisture': 'waste', 'dry_end': 'waste', 'bale': 'paper', 'unexplained': 'paper'}
+WASTE_KINDS = {'trim': 'trim', 'shear': 'waste', 'changeover': 'waste', 'cutoff_waste': 'waste', 'stacker_waste': 'waste',
+               'bond': 'waste', 'warp': 'waste', 'misalignment': 'waste', 'moisture': 'waste', 'other': 'waste', 'dry_end': 'waste', 'admin': 'waste',
+               'bale': 'paper', 'unexplained': 'paper'}
 PRICED_TOOLS = ('get_quality_breakdown', 'get_downtime_breakdown', 'get_waste_breakdown',
                 'get_downtime_pareto', 'get_speed_opportunity', 'get_speed_variance')
 GAIN = 'not priced: this bucket ran better than the reference (a gain, not a loss)'
@@ -418,7 +422,7 @@ def shift_tiles(analysis, shift, k, rates):
 # The window tiles priced like get_waste_breakdown's rows (sq ft to 0.1, the gross to 0.1) and the Pareto's (minutes to
 # 0.01 per reason), so a tile agrees with those rows on the same page to the cent.
 WASTE_TILES = {'trim_pct': 'trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry_end', 'bond_pct': 'bond', 'warp_pct': 'warp',
-               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'bale_pct': 'bale', 'unexplained_pct': 'unexplained'}
+               'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'other_pct': 'other', 'bale_pct': 'bale', 'unexplained_pct': 'unexplained'}
 
 
 def period_tiles(data, reasons, rates):
@@ -428,13 +432,13 @@ def period_tiles(data, reasons, rates):
     if not sums.get('gross_sqft'):
         return []
     gross, minutes = round(sums['gross_sqft'], 1), window_minutes(data)
-    reasons_of = {'dry_end': ('bond', 'warp', 'misalignment', 'moisture')}   # the dry-end tile is its reasons' rows, as the chip is
+    reasons_of = {'dry_end': ('bond', 'warp', 'misalignment', 'moisture', 'other')}   # the dry-end tile is its families' rows, as the chip is
     out = [tile(metric, [_part(WASTE_KINDS[k], round(sums[k], 1), gross, minutes) for k in reasons_of.get(key, (key,))], rates,
                 key.replace('_', '-') if key != 'dry_end' else 'dry-end rejects')
            for metric, key in WASTE_TILES.items()]
     stops = [_part('downtime', r['minutes'], gross, minutes) for r in reasons]
     out.append(tile('downtime_pct', stops, rates, 'all stops', ('downtime_pct', 'downtime_minutes', 'stops')))   # one entry, three tiles
-    out.append(tile('maintenance_pm_pct', [_part('downtime', round(sums['maintenance_pm_seconds'] / 60, 2), gross, minutes)], rates, 'maintenance and PM stops'))
+    out.append(tile('maintenance_pm_pct', [_part('downtime', round(sums['maintenance_pm_seconds'] / 60, 2), gross, minutes)], rates, 'maintenance and planned maintenance (scheduled) stops'))
     out.append(tile('operator_pct', [_part('downtime', round(sums['operator_seconds'] / 60, 2), gross, minutes)], rates, 'operator stops'))
     return out
 
@@ -482,8 +486,9 @@ def gap_totals(rows):
 def shift_dollars(analysis, shift, rates):
     """`get_shift_dollars`: where the money went in one shift, every gap priced, the recorded losses ranked by dollars.
     Gaps: each downtime reason (minutes), the speed gap to the required 675 ft/min (running time
-    only), side trim, shear and each dry-end reason (square feet). Planned maintenance and a power outage are apart,
-    unranked and outside the recorded-losses total (`apart`; the owner, PR #111)."""
+    only), side trim, shear, the changeover rejects, the cutoff-knife and stacker waste boards and each
+    dry-end reason (square feet). Each loss is priced once, on its own line (owner, 2026-11-12). Planned maintenance
+    and a power outage are apart, unranked and outside the recorded-losses total (`apart`; the owner, PR #111)."""
     kpis = analysis.get_shift_kpis(shift)
     stops = analysis.get_downtime_breakdown(shift)
     rejects = analysis.get_quality_breakdown(shift)
@@ -492,7 +497,9 @@ def shift_dollars(analysis, shift, rates):
     rows = []
     for r in stops['rows']:
         apart = apart_of(r)
-        rows.append({'gap': f'Downtime: {r["category"]}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
+        # a planned stop's gap reads "Downtime: Planned maintenance (scheduled)", its reason and its kind both, wherever it
+        # shows (owner ruling (c) on PR #123), with its apart note "planned maintenance is scheduled time" (PR #111)
+        rows.append({'gap': f'Downtime: {stop_label(r["category"])}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
                      'quantity': round(r['down_minutes'], 2), 'unit': 'min', 'source_ids': r['source_ids'],
                      'apart': apart, **({'apart_note': GAP_APART_NOTE[apart]} if apart else {}),
                      **price('downtime', r['down_minutes'], rates, gross, SHIFT_MINUTES)})
@@ -506,6 +513,10 @@ def shift_dollars(analysis, shift, rates):
                      'source_ids': k['source_ids'], 'apart': None, **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
         rows.append({'gap': 'Shear chops', 'kind': 'waste', 'quantity': round(k['shear_pct'] * gross / 100, 1), 'unit': 'sq ft',
                      'source_ids': k['source_ids'], 'apart': None, **price('waste', k['shear_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
+        for gap, key in (('Changeover rejects (counted with shear)', 'changeover_sqft'), ('Cutoff-knife and stacker waste boards', 'waste_board_sqft')):
+            if k.get(key):
+                rows.append({'gap': gap, 'kind': 'waste', 'quantity': round(k[key], 1), 'unit': 'sq ft', 'source_ids': k['source_ids'],
+                             'apart': None, **price('waste', k[key], rates, gross, SHIFT_MINUTES)})
     for r in rejects['rows']:
         rows.append({'gap': f'Dry-end: {r["reason"]}', 'kind': 'waste', 'quantity': round(r['rejected_sqft'], 1), 'unit': 'sq ft',
                      'source_ids': r['source_ids'], 'apart': None, **price('waste', r['rejected_sqft'], rates, gross, SHIFT_MINUTES)})
@@ -568,18 +579,38 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
 
 
 LENSES = ('all', 'supervisor', 'ownership')
-# The owner's two lenses (issue #101, targets.json): which levers a supervisor controls, and why.
+
+
+def family_control(family):
+    """A reject family's control label from the taxonomy (reject_reasons.json): its categories' drivers in the file's
+    order, a category that is only partly controllable saying so with its own note. A family none of whose categories is
+    controllable is not production waste (planning / admin). The coordinator's re-review of PR #123: every dry-end family
+    read "temperatures" before, the slitter and knife, the board surface, handling, paper and print included."""
+    found = [c for c in R.categories().values() if c['family'] == family]
+    if all(c['controllable'] == 'no' for c in found):
+        return 'not production waste', '; '.join(c['driver'] for c in found)
+    return 'controllable', '; '.join(c['driver'] + (f', partly controllable ({c["control_note"]})' if c['controllable'] == 'partly' else
+                                                    ' (not controllable)' if c['controllable'] == 'no' else '') for c in found)
+
+
+# The owner's two lenses (issue #101, targets.json): which levers a supervisor controls, and why. Each reject family (the
+# five dry-end families, the changeover rejects, planning / admin) takes its label from the taxonomy; the cutoff-knife and
+# stacker boards are lost at each order change, so sequencing, as the changeover rejects are.
 CONTROL = {'speed': ('controllable', 'speed under the grade baseline'), 'trim': ('schedule-driven', 'the order mix and its web widths'),
            'downtime': ('controllable', 'maintenance and operator downtime'), 'setup': ('controllable', 'operator downtime at order changes'),
            'scheduled': ('schedule-driven', 'planned maintenance is scheduled time'), 'shear': ('controllable', 'sequencing'),
-           'dry_end': ('controllable', 'temperatures'), 'unexplained': ('unattributed', 'the scale reading less the recorded waste'),
+           **{R.families()[code]['key']: family_control(code) for code in R.families()},
+           'cutoff_waste': ('controllable', 'sequencing: the boards each order change loses at the cutoff knife'),
+           'stacker_waste': ('controllable', 'sequencing: the boards each order change loses at the stacker'),
+           'unexplained': ('unattributed', 'the scale reading less the recorded waste'),
            'external': ('external', 'outside the plant, not controllable')}   # a power outage (targets.json; the owner on PR #111)
 # The supervisor lens lists what it does not rank by control, each group by dollars a year: schedule-driven, then external.
 APART = {'schedule-driven': 0, 'external': 1}
 TOTAL_TRIM = 'Side trim (all recorded)'
-# The ownership lens's dry-end subtotal (the owner, PR #111): bond, warp, misalignment and moisture are dry-end waste,
+# The ownership lens's dry-end subtotal (the owner, PR #111): bond, warp, misalignment, moisture and other are dry-end waste,
 # the tag scrap, priced and ranked as one line with each kind kept beneath it, since the detail is what supervisors go after.
 DRY_END_GROUP, DRY_END_LABEL = 'dry_end', 'Dry-end waste (tag scrap)'
+DRY_END_KINDS = tuple(R.families()[code]['key'] for code in R.DRY_END_FAMILIES)   # bond, warp, misalignment, moisture, other
 
 
 def _by_year(r):
@@ -631,7 +662,9 @@ def opportunities(store, window, shift, rates, lens='all'):
     `lens` picks the owner's view of the same numbers: `all` ranks every lever; `supervisor` ranks the
     controllable losses and lists the schedule-driven ones after, unranked; `ownership` is the total cost of
     waste, side trim first (all of it, not only the points over target), then shear, each dry-end reason and
-    the unexplained remainder by dollars."""
+    the unexplained remainder by dollars. Every line of the waste breakdown is an ownership lever, each priced once
+    (owner ruling (d) on PR #123): the changeover rejects, the cutoff-knife and stacker boards and planning / admin too,
+    so the lens's total is the waste breakdown's for the same window."""
     if lens not in LENSES:
         raise ValueError('lens is all, supervisor or ownership')
     waste = store.get_waste_breakdown(window, shift)
@@ -656,14 +689,15 @@ def opportunities(store, window, shift, rates, lens='all'):
                               'band': trim.get('band'), 'band_text': trim.get('band_text'),
                               'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross',
                               **price('trim', trim['sqft'], rates, gross, minutes)}, 'trim'))
-        for key, control in (('shear', 'shear'), ('bond', 'dry_end'), ('warp', 'dry_end'), ('misalignment', 'dry_end'), ('moisture', 'dry_end'),
-                             ('unexplained', 'unexplained')):
+        # every line of the waste breakdown, each priced once (owner ruling (d) on PR #123): the lens's total is the
+        # breakdown's, but the dry-end total (its five families are lines here) and the bale (the scale reading)
+        for key in ('shear', 'changeover', 'cutoff_waste', 'stacker_waste', 'admin', *DRY_END_KINDS, 'unexplained'):
             r = by[key]
             if r['sqft'] and r['sqft'] > 0:
                 pct, records = share(r)
                 rows.append(_control({'lever': r['label'] + (' (all recorded)' if key != 'unexplained' else ''), 'kind': 'waste' if key != 'unexplained' else 'paper',
-                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct, **({'group': DRY_END_GROUP} if control == 'dry_end' else {}),
-                                      'records': records, **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, control))
+                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct, **({'group': DRY_END_GROUP} if key in DRY_END_KINDS else {}),
+                                      'records': records, **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, key))
     else:
         rows.append(_control({'lever': "Speed under each grade's trailing-year speed", 'kind': 'speed', 'quantity': speed['gap_minutes'], 'unit': 'min',
                               'records': f'{speed["runs_under"]} of {len(speed["runs"])} wet-end runs under their grade baseline',
@@ -682,15 +716,15 @@ def opportunities(store, window, shift, rates, lens='all'):
             rows.append(_control({'lever': f'Downtime: {r["category"]}' + (' (setup time)' if setup else ' (scheduled time)' if planned else
                                                                             ' (external)' if external else ''),
                                   'kind': 'setup' if setup else 'downtime', 'quantity': r['minutes'], 'unit': 'min',
-                                  'records': f'{r["stops"]} stops recorded as {r["category"]}', **price('downtime', r['minutes'], rates, gross, minutes)},
+                                  'records': f'{r["stops"]} stops recorded as {stop_label(r["category"])}',
+                                  **price('downtime', r['minutes'], rates, gross, minutes)},
                                  'scheduled' if planned else 'setup' if setup else 'external' if external else 'downtime'))
-        for key in ('shear', 'bond', 'warp', 'misalignment', 'moisture'):
+        for key in ('shear', 'changeover', 'bond', 'warp', 'misalignment', 'moisture', 'other'):
             r = by[key]
             if r['sqft']:
                 pct, records = share(r)
                 rows.append(_control({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft', **pct,
-                                      'records': records, **price('waste', r['sqft'], rates, gross, minutes)},
-                                     'shear' if key == 'shear' else 'dry_end'))
+                                      'records': records, **price('waste', r['sqft'], rates, gross, minutes)}, key))
     group = {}
     if lens == 'ownership':   # trim first, always: every owner asks what trim costs; then the rest by dollars, tag scrap as one
         rows[0]['rank'] = 1
@@ -719,11 +753,13 @@ def opportunities(store, window, shift, rates, lens='all'):
              'supervisor': ('The supervisor lens: the controllable losses ranked, maintenance and operator downtime, the speed of each '
                             'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste. Side trim and planned maintenance '
                             'are schedule-driven and listed after, then external downtime (a power outage), which is not controllable. Shear and dry-end waste are priced in full, all recorded, not over their '
-                            'targets. Peel and core are controllable too, but the records carry no peel or core quantity. Per year at the '
+                            'targets. Peel and core are controllable too; the roll records carry them, but no lever prices them yet. Per year at the '
                             'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
-             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
-                           'waste, shear and the unexplained remainder (the scale reading less the recorded waste). The dry-end waste is the '
-                           'tag scrap: bond, warp, misalignment and moisture, one subtotal with each kind beneath it. Per year at the post\'s volumes.')}[lens]
+             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars. The rest are '
+                           'the dry-end waste, shear, the changeover rejects, the cutoff-knife and stacker waste boards, planning / admin (not '
+                           'production waste) and the unexplained remainder (the scale reading less the recorded waste). Each line of the waste breakdown is priced '
+                           'once, so the total is the waste breakdown\'s. The dry-end waste is the tag scrap: bond, warp, misalignment, moisture '
+                           'and other, one subtotal with each kind beneath it. Per year at the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': waste['dataset_version'], 'rows': rows,
             'coverage': 'complete' if coverage == 'complete' else coverage, 'excluded_records': [],
