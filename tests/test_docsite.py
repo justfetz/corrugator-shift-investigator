@@ -598,3 +598,43 @@ def test_a_missing_figure_source_leaves_the_rest_of_the_docs_up(tmp_path, monkey
         server.app.close()
     (root / 'docs' / 'URLS.md').unlink()
     assert docsite.load_site() is None
+
+
+# ---- The front door (issue #145): a one-screen README, the long text moved into /docs, the site linking to the repo.
+README = ROOT / 'README.md'
+LIVE = 'https://shift.talktomymachine.ai'
+
+
+def test_every_docs_page_links_to_the_repository(site):
+    """The /docs header carries a GitHub link beside its own navigation, as the main page and /evals do (tests/test_ui.cjs)."""
+    link = f'<a class="nav-btn" href="{docsite.REPO}" title="The source on GitHub">GitHub</a>'
+    for url, page in site.items():
+        header = page.decode().split('</header>', 1)[0]
+        assert header.count(link) == 1, url
+        assert header.index('href="/evals">Golden evals</a>') < header.index(link), f'{url}: beside the docs navigation'
+
+
+def test_the_readme_is_a_one_screen_front_door():
+    """What it is and who it is for, a picture, three live questions, a diagram, three trust rules and the links;
+    the long text it replaced is a page of /docs (docs/BUILD_GUIDE.md), linked from the last line."""
+    from investigator.record_store import default_store
+    from investigator.urls import page_url, resolve_url
+    text = README.read_text(encoding='utf-8')
+    assert len(text.splitlines()) <= 50, 'one screen'
+    picture = re.findall(r'!\[[^\]]+\]\((docs/img/[\w.-]+\.(?:gif|png))\)', text)
+    assert len(picture) == 1 and (ROOT / picture[0]).stat().st_size < 1_500_000, picture
+    # Three live questions, each the canonical address of its answer on the hosted demo (and in the golden window).
+    live = re.findall(r'\]\(' + re.escape(LIVE) + r'(/corr/[^)\s]+)\)', text)
+    assert len(live) == 3, live
+    store = default_store()
+    for path in live:
+        assert page_url(resolve_url(path, store)) == path, path
+    assert '```mermaid\nflowchart' in text, 'the architecture diagram, rendered by GitHub'
+    rules = text.split('## Trust rules', 1)[1].split('\n## ', 1)[0]
+    assert len([line for line in rules.splitlines() if line.startswith('- **')]) == 3, 'the trust rules in three bullets'
+    for href in (f'{LIVE}/docs/case-study', f'{LIVE}/evals', f'{LIVE}/docs', '#run-it-locally', 'docs/BUILD_GUIDE.md'):
+        assert f']({href})' in text, href
+    assert '## Run it locally' in text and 'python -m investigator.server' in text
+    for vendors in (VENDOR_PATTERN, MAKER_PATTERN, PROSE_PATTERN):     # spelled in pieces in tests/vendor_names.py
+        assert not vendors.search(text), vendors.findall(text)
+

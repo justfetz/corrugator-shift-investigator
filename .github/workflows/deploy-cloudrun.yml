@@ -213,8 +213,8 @@ jobs:
         # this service and is in ORIGINS for the allow-list, but it runs a pull request's image: it must not
         # pass this test, answer the live-mode check, or be reported as where main is live.
         # Of the URLs that answer, "Live at" names (and the live-mode check reads) the one ranked first, whatever
-        # ORIGINS' sorted order: the deterministic <service>-<project number>.<region>.run.app URL (the README
-        # publishes it), then a custom domain (CUSTOM_ORIGINS), then the legacy <service>-<hash>-<region code>.a.run.app.
+        # ORIGINS' sorted order: the deterministic <service>-<project number>.<region>.run.app URL (stable across
+        # deploys), then a custom domain (CUSTOM_ORIGINS), then the legacy <service>-<hash>-<region code>.a.run.app.
         run: |
           set -euo pipefail
           LIVE=""; LIVE_RANK=9

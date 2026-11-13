@@ -1674,3 +1674,23 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(off.row(),undefined);assert.equal(off.sent.some(r=>r.path==='/api/feedback'),false);
  console.log('UI issue-125 checks passed: two random ids and nothing else on an asked question, the analyst from a card reuses its line id, a thumbs up or down once per card, an optional comment after a thumbs down, the footer disclosure, all of it off without the question log.');
 })().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #145: the site links to the repository. The main page's header carries a GitHub link between Docs and the
+// eval badge, and the /evals page and every /docs page carry one beside their own navigation (the docs template lives
+// in docsite.py; tests/test_docsite.py checks the built pages).
+{
+ const repo='https://github.com/justfetz/corrugator-shift-investigator';
+ const github=new RegExp(`<a class="(top-link|nav-btn)" href="${repo.replace(/[./]/g,'\\$&')}"[^>]*>GitHub</a>`);
+ const header=page=>page.split('</header>')[0];
+ const main=header(html);
+ assert.match(main,github,'the main page header links to the repository');
+ const at=s=>main.indexOf(s);
+ assert.ok(at('href="/docs">Docs</a>')<at(`href="${repo}"`)&&at(`href="${repo}"`)<at('id="evals-badge"'),'GitHub sits between Docs and the eval badge');
+ const evals=header(fs.readFileSync('src/investigator/web/evals.html','utf8'));
+ assert.match(evals,github,'the /evals header links to the repository');
+ assert.ok(evals.indexOf('href="/docs">Docs</a>')<evals.indexOf(`href="${repo}"`),'beside Docs on /evals');
+ const template=fs.readFileSync('src/investigator/docsite.py','utf8').split('TEMPLATE = """')[1].split('"""')[0];
+ assert.match(header(template),/<a class="nav-btn" href="\{repo\}"[^>]*>GitHub<\/a>/,'the /docs header links to the repository');
+ assert.match(fs.readFileSync('src/investigator/docsite.py','utf8'),new RegExp(`^REPO = '${repo.replace(/[./]/g,'\\$&')}'$`,'m'));
+ console.log('UI issue-145 checks passed: a GitHub link in the header of the main page (between Docs and the eval badge), /evals and /docs.');
+}
