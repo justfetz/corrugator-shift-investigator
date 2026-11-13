@@ -572,7 +572,8 @@ function showTable(data){
  if(data.coverage!=='complete')box.append(node('p','Incomplete evidence. Rankings are withheld; any other rows are observed records only.','warning-note'));
  if(!data.rows.length){box.append(node('p','No eligible rows.'));const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);return;}   // an empty table still names its query (#40)
  const omitted=new Set(['source_ids','gross_sqft','observed_lineal_ft','throughput_in','lineal_per_setup','lineal_per_wet_end','setups_above_trim_target','price_terms','usd_basis']);
- const columns=TABLE_COLUMNS[data.title]||Object.keys(data.rows[0]).filter(k=>!omitted.has(k)&&(!Array.isArray(data.rows[0][k])||(data.title==='semantic_query'&&k==='source_ids')));   // a semantic row shows the ids of its records (#117)
+ const receipt=k=>data.title==='semantic_query'&&k==='source_ids';   // a semantic row shows the ids of its records (#117)
+ const columns=TABLE_COLUMNS[data.title]||Object.keys(data.rows[0]).filter(k=>receipt(k)||!omitted.has(k)&&!Array.isArray(data.rows[0][k]));
  const wrap=node('div',undefined,'table-scroll');wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',titles[data.title]||data.title);const table=node('table'),head=node('thead'),tr=node('tr');
  for(const key of columns){const th=node('th',labels[key]||key.replaceAll('_',' '));th.scope='col';tr.append(th);}head.append(tr);table.append(head);const body=node('tbody');
  for(const row of data.rows){const tr=node('tr');for(const key of columns){const value=row[key];tr.append(node('td',value===null?'Unavailable':Array.isArray(value)?value.join(', '):typeof value==='number'?Number.isInteger(value)?String(value):value.toFixed(2):String(value??'')));}body.append(tr);}table.append(body);wrap.append(table);box.append(wrap);const link=queryLink(data.source_result_id);if(link)box.append(link);$('tables').append(box);
