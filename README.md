@@ -1,6 +1,6 @@
 # Corrugator Shift Investigator
 
-A bounded agent that tells corrugated production staff why a shift went bad (the downtime, the speed against each grade, the waste) from synthetic corrugator records, with a receipt for every number.
+A bounded agent that helps corrugated production staff investigate why a shift went bad (where it lost time, speed against each grade, and paper) from synthetic corrugator records, with a receipt for every number. It points to leads, not proven causes.
 
 **Live: <https://shift.talktomymachine.ai>** · [Case study](https://shift.talktomymachine.ai/docs/case-study) · [Golden evals](https://shift.talktomymachine.ai/evals) · [Docs](https://shift.talktomymachine.ai/docs) · [Run it locally](#run-it-locally)
 
