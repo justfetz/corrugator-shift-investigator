@@ -1381,14 +1381,18 @@ def test_the_owners_setup_makes_github_enforce_the_verdict():
 
 STARTS = ['@claude please start', 'Thanks.\n\n@claude fix the typo in docs/AGENTS.md', 'notes\r\n@claude go', '@Claude go',
           '```\ncode\n```\n@claude after the fence', '> quoted\n\n@claude after a blank line', 'x `y` z\n@claude go',
-          '@claude, rename the helper', '`a`\n@claude go']
+          '@claude, rename the helper', '`a`\n@claude go', '\\`not code\n@claude go', 'see <http://example.com/a>\n@claude go']
 QUOTED = ['`@claude` in backticks', 'Reviews quote `@claude` in backticks, as this one does', '``@claude fix it``',
           '```\n@claude inside a fence\n```', '~~~\n@claude inside a tilde fence\n~~~', '```python\nx = 1\n@claude\n```',
           '````\n```\n@claude still fenced\n````', '```\n@claude in a fence never closed', '> @claude quoted',
           '> a quote\n@claude lazy continuation of the quote', '  > @claude an indented quote', '>@claude',
           'please @claude do it', ' @claude after a space', '    @claude indented code', '<!-- @claude -->',
           '<!--\n@claude\n-->', '`a\n@claude b`', '@claude-bot hello', '@claude.ai is a site', 'mail me@claude.ai', '',
-          '**Fix in one round:** a mention inside `@claude` quotes\n\n- `@claude` on an issue adds the label']
+          '**Fix in one round:** a mention inside `@claude` quotes\n\n- `@claude` on an issue adds the label',
+          # the reviewer's cases (CommonMark shows each mention inside a quote or code)
+          '> quoted\n`code`\n@claude go', '- > quoted line\n@claude fix it', '1. > quoted\n@claude go',
+          '\\`x`\n@claude`', '<http://x/`>`\n@claude`', '<a title="`">`\n@claude`',
+          'notes\r@claude go']   # a bare carriage return breaks no line, here or in agent.yml's condition
 
 
 @pytest.mark.parametrize('body', STARTS)
@@ -1422,7 +1426,7 @@ def test_the_gate_condition_lets_through_every_comment_the_rules_accept():
     gate = job(BUILDER.read_text(encoding='utf-8'), 'gate')
     assert GATE_MENTION in gate and "contains(github.event.comment.body, '@claude')" not in gate
     assert json.loads('"\\n@claude"') == '\n@claude', 'the string fromJSON reads'
-    assert all(gate_prefilter(body) for body in STARTS)
+    assert all(gate_prefilter(body) for body in STARTS + QUOTED if agent.mentions_claude(body))
     for body in ('`@claude` in backticks', 'please @claude do it', '> @claude quoted', ' @claude after a space'):
         assert not gate_prefilter(body), body
 
@@ -1463,9 +1467,10 @@ def test_a_fix_round_reads_only_the_verdict_comment_its_dispatch_names(tmp_path)
     (lambda c, s: ({**c, 'body': c['body'].replace('round=1', 'round=2')}, s), True, 'as fix round 2, not 1'),
     (lambda c, s: ({**c, 'body': c['body'].replace('fix-first', 'approve')}, s), True, 'not a fix-first verdict'),
     (lambda c, s: ({'message': 'Not Found'}, s), True, 'could not be read'),
-    (lambda c, s: (c, [{**s[0], 'creator': {'login': 'claude[bot]'}}]), False, 'is not fix-first'),
-    (lambda c, s: (c, [{**s[0], 'state': 'pending', 'description': 'reviewing: the head, the body or the base changed'}] + s), False,
-     'is not fix-first'),
+    (lambda c, s: (c, [{**s[0], 'creator': {'login': 'claude[bot]'}}]), True, 'could be read on head'),
+    (lambda c, s: (c, []), True, 'could be read on head'),
+    (lambda c, s: (c, [commit_status(agent.decide(issue=126, ci='success', evals='pass', collected=10, baseline=10, files=['src/a.py']))] + s),
+     False, 'is not fix-first'),
     (lambda c, s: ({**c, 'body': c['body'].replace('b' * 40, 'c' * 40)}, s), False, 'not the current head'),
 ])
 def test_a_forged_edited_or_stale_verdict_starts_no_fix_round(change, loud, why):
@@ -1494,21 +1499,31 @@ def test_a_refused_fix_round_says_so_unless_it_is_stale(tmp_path):
     assert out == {'go': 'false'} and "carries this comment's gaps" in posted(calls, 'issues/200/comments')[0]['body']
     proc, calls, out = stub.run(*args)
     assert out == {'go': 'false'} and 'names none' in posted(calls, 'issues/200/comments')[0]['body']
-    fix_round_state(stub, sha, body, statuses=[])   # the review in flight reset the status: the next verdict decides
-    proc, calls, out = stub.run(*args, '--verdict', '555')
+    approve = commit_status(agent.decide(issue=126, ci='success', evals='pass', collected=10, baseline=10, files=['src/a.py']))
+    fix_round_state(stub, sha, body, statuses=[approve, commit_status(FIX_FIRST, gaps=agent.gaps_of(body))])
+    proc, calls, out = stub.run(*args, '--verdict', '555')   # a newer verdict approved the head: nothing to fix, said quietly
     assert out == {'go': 'false'} and not posted(calls, 'comments') and 'refuse: the head' in proc.stdout
+    fix_round_state(stub, sha, body, statuses=[])   # the statuses call failed (or answered nothing): said on the pull request
+    proc, calls, out = stub.run(*args, '--verdict', '555')
+    assert out == {'go': 'false'} and 'could be read on head' in posted(calls, 'issues/200/comments')[0]['body']
 
 
 def test_a_second_review_of_the_head_keeps_the_round_it_sent(tmp_path):
-    """A re-review of the same head (an edit of the body while the round waited in the queue) posts a new fix-first status
-    with its own gaps; the round already dispatched still finds its comment's digest among the head's statuses."""
+    """A re-review of the same head (an edit of the body while the round waited in the queue) dispatches nothing, since
+    the head was already sent back; so the round already dispatched runs whether that review is still going (its `reset`
+    status is the newest) or done (its own fix-first status, with its own gaps, is the newest)."""
     stub = Stub(tmp_path)
     sha = 'b' * 40
     body = f'<!-- agent-review sha={sha} verdict=fix-first round=1 -->\n**Review: fix first**\n\n1. a.py:1: the gap\n'
+    mine = commit_status(FIX_FIRST, gaps=agent.gaps_of(body))
+    reset = {**mine, 'state': 'pending', 'description': agent.REVIEWING}
     newer = commit_status(FIX_FIRST, gaps='1. a.py:1: worded another way')
-    fix_round_state(stub, sha, body, statuses=[newer, commit_status(FIX_FIRST, gaps=agent.gaps_of(body))])
-    proc, calls, out = stub.run('plan', '--mode', 'fix', '--issue', '126', '--pr', '200', '--round', '1', '--verdict', '555', '--needs-label', 'true')
-    assert out['go'] == 'true' and '1. a.py:1: the gap' in out['prompt'], (proc.stdout, out)
+    for statuses in ([reset, mine], [newer, reset, mine]):
+        fix_round_state(stub, sha, body, statuses=statuses)
+        proc, calls, out = stub.run('plan', '--mode', 'fix', '--issue', '126', '--pr', '200', '--round', '1', '--verdict', '555', '--needs-label', 'true')
+        assert out['go'] == 'true' and '1. a.py:1: the gap' in out['prompt'], (statuses, proc.stdout, out)
+        subprocess.run([*stub.git, 'checkout', '-q', 'main'], check=True)
+        subprocess.run([*stub.git, 'branch', '-q', '-D', 'issue-126-x'], check=True)
 
 
 def test_no_fix_round_without_the_verdict_comments_id(tmp_path):

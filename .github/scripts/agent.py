@@ -49,6 +49,7 @@ REVIEW_BOT = 'github-actions[bot]'   # the author of verdict comments and of the
 REVIEW_CONTEXT = 'agent-review'
 REVIEW_STATE = {'approve': 'success', 'fix-first': 'failure', 'needs-owner': 'pending'}
 STALE = 'stale: '                # a fix round's refusal that is expected (a newer head or review): logged, not commented
+REVIEWING = 'reviewing: the head, the body or the base changed'   # the `reset` job's pending status, before a new verdict
 BASE = 'main'                    # the only base a pull request is reviewed and merged against
 # The ruleset rules that refuse a direct push to BASE (N2), as `protection_state` names them.
 PUSH_BLOCKING = {'pull_request': 'requires a pull request', 'update': 'restricts updates'}
@@ -72,9 +73,16 @@ CLOSES = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)', re.
 # A comment asks for the agent only with a line that starts with the mention (N1): see `mentions_claude`.
 MENTION = re.compile(r'@claude(?![\w-]|\.\w)', re.I)
 FENCE = re.compile(r' {0,3}(`{3,}|~{3,})')
-CODE_SPAN = re.compile(r'(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)', re.S)
-HTML_COMMENT = re.compile(r'<!--.*?(?:-->|\Z)', re.S)
-QUOTE = re.compile(r' {0,3}>')
+# What a `>` quote looks like at a line's start, inside list items too (`- > quoted`, `1. > quoted`).
+QUOTE = re.compile(r' {0,3}(?:(?:[-+*]|\d{1,9}[.)])[ \t]+)*>')
+# Inline constructs that outrank a code span (CommonMark): an HTML comment, an autolink (URI or email), an HTML tag.
+INLINE_HTML = re.compile(r'<!--.*?(?:-->|\Z)'
+                         r'|<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*>'
+                         r"|<[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*>"
+                         r'|</?[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s"' "'" r'=<>`]+|' "'[^']*'" r'|"[^"]*"))?)*\s*/?>',
+                         re.S)
+BLANK_LINE = re.compile(r'\n[ \t]*\n')
+HIDDEN = '\0'   # what code and inline HTML become: not a space, so a line that held only code is not blank
 ORDER = re.compile(r'^\s*(\d{1,2})([a-z]?)\s*·')
 # Keys and tokens a model or a pull request's output could echo; scrubbed from everything the verdict posts. A PEM
 # block goes whole, from its BEGIN line to its END line (or to the end of the text when it has none), and an AWS
@@ -119,27 +127,61 @@ def linked_issue(body: str | None) -> int | None:
     return found[0] if found else None
 
 
+def hide_code(text: str) -> str:
+    """`text` (its fenced blocks already gone) with every code span, HTML comment, autolink and HTML tag replaced by
+    HIDDEN, scanned left to right the way CommonMark reads them: a backslash-escaped character never opens a code
+    span; an HTML comment, an autolink or a tag outranks a code span; a run of backticks opens a span only when a run
+    of the same length closes it before the paragraph ends (a blank line), and is plain text otherwise."""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '\\' and i + 1 < n and not text[i + 1].isalnum() and not text[i + 1].isspace():
+            out.append(text[i:i + 2])
+            i += 2
+            continue
+        m = INLINE_HTML.match(text, i) if c == '<' else None
+        if m:
+            out.append(HIDDEN)
+            i = m.end()
+            continue
+        if c != '`':
+            out.append(c)
+            i += 1
+            continue
+        j = i
+        while j < n and text[j] == '`':
+            j += 1
+        close = re.compile(f'(?<!`){"`" * (j - i)}(?!`)').search(text, j)
+        if close and not BLANK_LINE.search(text, j, close.start()):
+            out.append(HIDDEN)
+            i = close.end()
+        else:
+            out.append(text[i:j])
+            i = j
+    return ''.join(out)
+
+
 def mentions_claude(body: str | None) -> bool:
-    """Whether a comment asks for the agent (N1): a line that starts with `@claude`, in column one, outside
-    fenced code, inline code, an HTML comment and a `>` quote (a line right after a quoted one, with no blank line
-    between, is still the quote). The coordinator's reviews and the sessions' replies are posted as the owner and
-    quote the mention in backticks; quoting it in code, in a quote or mid-sentence starts nothing."""
+    """Whether a comment asks for the agent (N1): a line that starts with `@claude`, in column one, outside fenced
+    code, inline code, an HTML comment and a `>` quote: a quote inside a list item too, and a line right after a
+    quoted one with no blank line between, which Markdown shows inside the quote. Only a newline breaks a line, as
+    in agent.yml's condition. The coordinator's reviews and the sessions' replies are posted as the owner and quote
+    the mention in backticks; quoting it in code, in a quote or mid-sentence starts nothing. In doubt it starts
+    nothing: a missed start costs the owner a rephrased comment, an unwanted one costs an agent run."""
     kept, fence = [], ''
-    for line in (body or '').replace('\r\n', '\n').replace('\r', '\n').split('\n'):
+    for line in (body or '').replace('\r\n', '\n').split('\n'):
         m = FENCE.match(line)
         if fence:   # inside a fenced block until a fence of the same character, at least as long, alone on its line
             if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and not line[m.end():].strip():
                 fence = ''
-            kept.append('')
+            kept.append(HIDDEN)
         elif m:
             fence = m.group(1)
-            kept.append('')
+            kept.append(HIDDEN)
         else:
             kept.append(line)
-    # A code span or an HTML comment becomes a space, so the text after it no longer starts its line.
-    text = HTML_COMMENT.sub(' ', CODE_SPAN.sub(' ', '\n'.join(kept)))
     quoted = False
-    for line in text.split('\n'):
+    for line in hide_code('\n'.join(kept)).split('\n'):
         if not line.strip():
             quoted = False
         elif QUOTE.match(line):
@@ -539,9 +581,10 @@ def verdict_for_round(comment, statuses: list, *, number: int, sha: str, rnd: in
     """The verdict comment a fix round was dispatched for, or why it does not send this head back (N3). Only the
     comment whose id the review workflow put in the dispatch is read, never the newest marker on the pull request
     (any token with `issues: write` can post one as REVIEW_BOT). It must be REVIEW_BOT's, on this pull request, a
-    fix-first marker for the current head and this round; the head's newest `agent-review` status must say fix-first,
-    and one of the review workflow's fix-first statuses on the head must carry the digest of this comment's gaps, so
-    an edited or a forged comment sends nothing."""
+    fix-first marker for the current head and this round; the head's newest `agent-review` verdict status (a `reset`'s
+    pending one skipped) must say fix-first, and one of the review workflow's fix-first statuses on the head must carry
+    the digest of this comment's gaps, so an edited or a forged comment sends nothing. A reason that starts with STALE
+    is expected (a newer head or verdict) and said quietly; any other is said on the pull request."""
     if not isinstance(comment, dict) or not isinstance(comment.get('body'), str):
         return None, 'the verdict comment the dispatch names could not be read'
     if (comment.get('user') or {}).get('login') != REVIEW_BOT:
@@ -557,11 +600,16 @@ def verdict_for_round(comment, statuses: list, *, number: int, sha: str, rnd: in
     # A new push, or a review in flight or done since, makes the round moot: the next verdict decides (said quietly).
     if mark['sha'] != sha:
         return None, f'{STALE}the verdict comment is for head {mark["sha"][:7]}, not the current head {sha[:7]}'
+    # The review workflow's verdict statuses on the head, newest first. A `reset` (a review in flight: an edit of the
+    # body while the round waited in the queue) is skipped, since that review finds the head already sent back and
+    # dispatches nothing itself; refusing here would lose the round.
     mine = [s for s in statuses or [] if isinstance(s, dict) and s.get('context') == REVIEW_CONTEXT
-            and (s.get('creator') or {}).get('login') == REVIEW_BOT]
-    newest = mine[0] if mine else {}
+            and (s.get('creator') or {}).get('login') == REVIEW_BOT and not (s.get('description') or '').startswith(REVIEWING)]
+    if not mine:   # the verdict job sets its status before it dispatches: none means the statuses could not be read
+        return None, f'no `{REVIEW_CONTEXT}` verdict status of the review workflow could be read on head {sha[:7]}'
+    newest = mine[0]
     if newest.get('state') != REVIEW_STATE['fix-first'] or (newest.get('description') or '').split(' ', 1)[0] != 'fix-first':
-        return None, f'{STALE}the head\'s newest `{REVIEW_CONTEXT}` status ({newest.get("description") or "none"}) is not fix-first'
+        return None, f'{STALE}the head\'s newest `{REVIEW_CONTEXT}` verdict ({newest.get("description") or "none"}) is not fix-first'
     digest = f'gaps {gaps_digest(gaps_of(mark["body"]))}'
     if not any(s.get('state') == REVIEW_STATE['fix-first'] and (s.get('description') or '').endswith(digest) for s in mine):
         return None, f'no `{REVIEW_CONTEXT}` status of the review workflow carries this comment\'s gaps (edited after it was posted?)'
@@ -939,7 +987,7 @@ def cmd_reset(args) -> int:
     # check would still accept; the head waits for its new verdict instead.
     if (pr.get('head') or {}).get('sha'):
         api(f'repos/{REPO}/statuses/{pr["head"]["sha"]}', 'state=pending', f'context={REVIEW_CONTEXT}',
-            'description=reviewing: the head, the body or the base changed', f'target_url={run_url()}', method='POST')
+            f'description={REVIEWING}', f'target_url={run_url()}', method='POST')
     if pr.get('auto_merge'):
         off = subprocess.run(['gh', 'pr', 'merge', str(args.pr), '--disable-auto', '--repo', REPO], capture_output=True, text=True)
         if off.returncode:
