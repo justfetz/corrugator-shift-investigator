@@ -107,14 +107,18 @@ COMPARISON_WITHDRAWN_LINE = 'A comparison was withdrawn because it contradicted 
 # Exact over summary (issue #113), stated here independently of the router. The KPI summary (`measure=kpis`) answers
 # "how did we do": a question that names a countable noun or asks for a unit never lands on it. And a count or unit
 # question's headline carries the unit it asked for (first match wins: a ratio before the count of its parts).
-QUANTITY_NOUN = re.compile(r'\b(set-?ups?|paper changes?|order changes?|changeovers?|wet[- ]ends?|stops|stoppages?|splices?|'
-                           r'step[- ]?ups?|rolls?|sheets?|boards?|orders?|customers?)\b|\bper (set-?up|paper change|stop|wet[- ]end)\b', re.I)
-ASKED_UNIT = re.compile(r'\b(minutes|hours?|feet|ft|footage|msf|sq ft|square feet|tons?|percent)\b|%', re.I)
+# A specific thing named counts too: a stop reason or place, a board grade, a customer, dollars (the owner's audit list).
+QUANTITY_NOUN = re.compile(r'\b(set-?ups?|paper changes?|order changes?|changeovers?|change (the )?paper|wet[- ]ends?|stops|stoppages?|'
+                           r'splices?|step[- ]?ups?|rolls?|sheets?|boards?|boxes|chops?|(grade|flute) changes?|orders?|customers?|jams?|'
+                           r'glue|starch|steam|stacker|splicers?|'
+                           r'knife|knives|slitter|outages?|raw material|double backer|single facer|double ?wall|\d{2,3}-?(c|bc|eb))\b'
+                           r'|\bper (set-?up|paper change|stop|wet[- ]end)\b', re.I)
+ASKED_UNIT = re.compile(r'\b(minutes|mins|hours?|hrs?|feet|ft|footage|msf|sq ft|square feet|tons?|percent|costs?|dollars?|money)\b|[%$]', re.I)
 COUNT_ASKED = r'\b(?:how many|number of|count of|total)\b.*'
 ASKED_UNITS = ((r'\bminutes per stop\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
                (r'\b(?:lineal|feet|ft) per (?:paper change|wet[- ]end)\b|\bper paper change\b', r'\bft(?: per |/)paper change\b'),
                (r'\b(?:lineal|feet|ft) per set-?up\b|\bper set-?up\b', r'\bft(?: per |/)setup\b'),
-               (r'\bhow many minutes\b|\bminutes (?:of|did|were|was|lost)\b|\bin minutes\b|\btotal (?:downtime )?minutes\b', r'\bmin(?:utes)?\b'),
+               (r'\bhow many (?:minutes|mins)\b|\b(?:minutes|mins) (?:of|did|were|was|lost)\b|\bin minutes\b|\btotal (?:downtime )?minutes\b', r'\bmin(?:utes)?\b'),
                (COUNT_ASKED + r'\b(?:order changes?|changeovers?)\b', r'\border changes\b'),
                (COUNT_ASKED + r'\b(?:paper changes?|wet[- ]ends?)\b', r'\bpaper changes\b'),
                (COUNT_ASKED + r'\bset-?ups?\b', r'\bsetups\b'),

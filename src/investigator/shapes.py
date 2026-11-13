@@ -875,7 +875,7 @@ class PeriodAnswer:
             'period_stops': ('get_stops_profile',), 'period_trend': ('get_trend',), 'period_rollstock': ('get_rollstock',),
             'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',),
             'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',),
-            'period_quantity': ('get_period_kpis', 'get_downtime_review', 'get_downtime_pareto', 'get_overrun')}
+            'period_quantity': ('get_period_kpis', 'get_downtime_review', 'get_downtime_pareto', 'get_overrun', 'get_grade_totals')}
 
     KPI_TOOLS = ('get_period_kpis', 'compare_periods')
     USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
@@ -1473,6 +1473,8 @@ class PeriodAnswer:
             return self.quantity_of_kind(q)
         if q['tool'] == 'get_overrun':
             return self.quantity_of_sheets(q)
+        if q['tool'] == 'get_grade_totals':
+            return self.quantity_of_grade(q)
         return self.quantity_of_tiles(q)
 
     def quantity_of_tiles(self, k):
@@ -1560,6 +1562,23 @@ class PeriodAnswer:
                    for j, x in enumerate(rows) if j != i][:3]
         notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[i], 'category') if i is not None else [])
         return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'pareto'))
+
+    def quantity_of_grade(self, g):
+        """The setups, paper changes or lineal feet of one board grade (its row of the totals by grade), the other grades after."""
+        data, rows, metric, grade = g['data'], g['data']['rows'], self.lead['metric'], self.lead.get('grade')
+        where = self.where(data)
+        parts = {'setups': lambda r: f'{n(r["setups"])} setups', 'paper_changes': lambda r: f'{n(r["wet_ends"])} paper changes',
+                 'lineal_ft': lambda r: f'{f0(r["lineal_ft"])} lineal ft'}
+        i = next((j for j, r in enumerate(rows) if r['grade'] == grade), None)
+        if i is None:
+            head = f'No {grade} setups in this window{where} {ref(g)}'
+        else:
+            beside = ' · '.join(parts[m](rows[i]) for m in parts if m != metric)
+            head = f'**{parts[metric](rows[i])}** of {grade}{where} · {beside} {ref(g, i)}'
+        bullets = [bullet(f'{r["grade"]}: **{parts[metric](r)}** · {f1(r["volume_msf"])} MSF', g, j) for j, r in enumerate(rows) if j != i][:3]
+        notes = ['A grade counts the setups that ran it and the distinct wet-end runs they ran on; a setup that runs on across a '
+                 'shift change is counted in both shifts.']
+        return head, bullets, notes, self.window_looks(data, ('grade', 'speed', 'rollstock'))
 
     def quantity_of_sheets(self, o):
         """Sheets cut across all knives (get_overrun), each knife after them."""

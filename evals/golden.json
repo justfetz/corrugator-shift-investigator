@@ -8592,23 +8592,202 @@
    }
   },
   {
-   "id": "guard-setups-summary-refused",
-   "type": "refusal",
+   "id": "summary-phrasing-on-setups-is-the-setup-count",
+   "type": "routing",
    "mode": "offline",
    "question": "How did we do on setups this month?",
-   "note": "Issue #113 (exact over summary): the catch-all guard. A \"how did we do\" question that names a countable noun would have landed on the KPI summary; until the model reads such questions (#104) it is refused with what can be counted.",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. A \"how did we do\" phrasing that names a countable noun is answered on that count, the month before beside.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=month&metric=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* · [+-][0-9,]+ vs [0-9,]+ the month before "
+    }
+   }
+  },
+  {
+   "id": "compare-stops-is-the-stop-count",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Compare stops this week to last week",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. This week against last is what the stop count carries beside it: the quantity, not the KPI summary.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before, (better|worse) "
+    }
+   }
+  },
+  {
+   "id": "summary-phrasing-on-knife-jams-is-their-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How did we do on knife jams this month?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Found by the review of this PR: a reason whose own word counts its stops (jams) is answered on them.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=month&metric=stops&reason=knife-slitter-jam",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "count",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Knife / slitter jam · "
+    }
+   }
+  },
+  {
+   "id": "guard-reason-summary-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How did we do on glue this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Found by the review of this PR: a stop reason named with no count or unit (stops? minutes?) is refused with what can be asked, never the KPI summary; the model reads such questions once #104 lands.",
    "expect": {
     "raises": "Offline mode answers one quantity at a time"
    }
   },
   {
-   "id": "guard-compare-stops-refused",
+   "id": "guard-place-summary-refused",
    "type": "refusal",
    "mode": "offline",
-   "question": "Compare stops this week to last week",
-   "note": "Issue #113 (exact over summary): the catch-all guard: the KPI tiles this week against last would answer stops with volume first.",
+   "question": "How did we do on the stacker this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Found by the review of this PR: a place named with no count or unit is refused the same way.",
    "expect": {
     "raises": "Offline mode answers one quantity at a time"
+   }
+  },
+  {
+   "id": "guard-cost-summary-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How did we do on cost this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Found by the review of this PR: dollars named on a summary phrasing are refused with the money question.",
+   "expect": {
+    "raises": "where is the money this week"
+   }
+  },
+  {
+   "id": "setup-speed-over-a-window-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How fast did we change paper this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Found by the review of this PR. How fast a paper change or setup went is the setup matrix, per shift and per day; over a window the KPI tiles answered it with MSF first. Refused with where it is answered.",
+   "expect": {
+    "raises": "per setup and per production day"
+   }
+  },
+  {
+   "id": "count-setups-of-a-grade-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many setups did we run on 32-C last week?",
+   "note": "Issue #113 (exact over summary): found by the review of this PR: a count that names a grade opened with the MSF of every grade. It opens with that grade's setups, read from the totals by grade.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups&grade=32-c",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_grade_totals",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_grade_totals",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* of 32-C · [0-9,]+ paper changes · [0-9,]+ lineal ft \\(query 1 · row [0-9]+\\)$"
+    }
+   }
+  },
+  {
+   "id": "count-stops-of-a-grade-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops on 55-C this week?",
+   "note": "Issue #113 (exact over summary): found by the review of this PR: stops and downtime are recorded by shift, reason and place, not by grade; refused rather than answered with the MSF of every grade.",
+   "expect": {
+    "raises": "not by grade"
+   }
+  },
+  {
+   "id": "count-setups-each-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "scope": "day",
+   "question": "How many setups did each shift run last week?",
+   "note": "Issue #113 (exact over summary): found by the review of this PR: under all shifts the count of each shift is not one quantity; it was answered as the total.",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   }
+  },
+  {
+   "id": "count-setups-on-a-place-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups on the single facer this week?",
+   "note": "Issue #113 (exact over summary): found by the review of this PR: setups are counted for the line, not by stop place; it was answered as every setup.",
+   "expect": {
+    "raises": "counted for the line"
    }
   }
  ]

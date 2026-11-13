@@ -14,6 +14,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from . import cost_model, targets
+from .fixture import GRADES
 from .records import STOP_PLACES, STOP_REASONS
 from .shapes import answer_sections   # each intent's answer shape (issue #75)
 
@@ -439,7 +440,7 @@ QUANTITY_METRICS = tuple(QUANTITY_TOOLS)
 DOWNTIME_QUANTITIES = ('stops', 'downtime_minutes', 'minutes_per_stop', 'maintenance_minutes', 'operator_minutes',
                        'maintenance_stops', 'operator_stops')
 COUNT_ASK = r"\bhow many\b|\bnumber of\b|\bcount (of|the)\b|\btotal\b|\bhow often\b"
-MINUTES_ASK = r"\bhow many minutes\b|\bminutes (of|did|were|was|lost|down|we)\b|\bin minutes\b|\b(downtime|total|stop) minutes\b"
+MINUTES_ASK = r"\bhow many (minutes|mins)\b|\b(minutes|mins) (of|did|were|was|lost|down|we)\b|\bin minutes\b|\b(downtime|total|stop) (minutes|mins)\b"
 FEET_ASK = r"\bhow (many|much) (lineal )?(feet|ft|footage)\b|\blineal (feet|ft|footage)\b|\bfootage\b"
 # A ratio named is the quantity asked, whatever the verb ("what was our lineal per setup last week"); first match wins.
 RATIO_WORDS = ((r"\bminutes per stop\b", 'minutes_per_stop'),
@@ -465,7 +466,11 @@ PLACE_WORDS = ((r"\bsplicer ?([1-5])\b", 'Splicer {}'), (r"\bupper knife\b", 'Up
                (r"\bsingle facer\b", 'Single facer'), (r"\bglue dams?\b", 'Glue dams'), (r"\bsteam system\b", 'Steam system'),
                (r"\b(at|on) the stacker\b", 'Stacker'))
 # Counts and units the records do not hold (until a later record contract adds them): refused with what can be counted.
-NOT_COUNTED = ((r"\bstep[- ]?ups?\b", "The records hold no step-ups: no wet-end width change is recorded yet."),
+NOT_COUNTED = ((r"\b(grade|flute) changes?\b", "The records do not count grade or flute changes: a paper change (a wet-end run) is "
+                                             "counted ('how many paper changes this week')."),
+               (r"\bstep[- ]?ups?\b", "The records hold no step-ups: no wet-end width change is recorded yet."),
+               (r"\bboxes\b", "The records do not count boxes: sheets are counted at the knife ('how many sheets did we make this week')."),
+               (r"\bchops?\b", "The records keep shear chops as square feet, not a count ('waste breakdown this week')."),
                (r"\brolls?\b", "The records do not count rolls: paper is recorded as lineal feet, MSF and paper runs "
                                 "('how much paper did we consume this week')."),
                (r"\bboards?\b", "The records do not count boards: rejects are recorded as square feet by reason ('waste breakdown this week')."),
@@ -475,15 +480,34 @@ NOT_COUNTED = ((r"\bstep[- ]?ups?\b", "The records hold no step-ups: no wet-end 
                (r"\bcustomers?\b", "The records do not count customers: a customer's lines repeat across setups and shifts."),
                (r"\b(tons?|tonnes?|pounds?|lbs?|weight)\b", "The records hold no weights: no basis weight is recorded."),
                (r"\b(pallets?|loads?|shipments?|shipped|trucks?|units?)\b", "The records hold no shipping."),
-               (r"\bhours?\b", "The records keep downtime in minutes, not hours ('how many minutes of downtime this month')."))
+               (r"\b(hours?|hrs?)\b", "The records keep downtime in minutes, not hours ('how many minutes of downtime this month')."))
 QUANTITY_HELP = ("Offline mode answers one quantity at a time: how many setups, order changes, paper changes, stops or sheets; "
-                 "minutes of downtime, of maintenance or operator downtime, or of one stop reason or place ('how many minutes of "
-                 "missed splices this week'); lineal feet, feet per setup or per paper change, minutes per stop. Try an example question.")
-# A countable noun or an asked unit: a question carrying one is not a "how did we do" question, so it is never answered
-# with the KPI summary (catch_all_guard); evals/run.py states the same rule on its own.
+                 "minutes of downtime, of maintenance or operator downtime, or the stops or minutes of one stop reason or place "
+                 "('how many minutes of missed splices this week', 'how many stops at the stacker'); lineal feet, feet per setup or per "
+                 "paper change, minutes per stop; the setups of one grade. Dollars: 'where is the money this week'. Try an example question.")
+# A countable noun, an asked unit, a stop reason or place, a grade or a money word: a question carrying one is not a "how
+# did we do" question, so it is never answered with the KPI summary (catch_all_guard); evals/run.py states the same rule.
 QUANTITY_WORDS = (r"\b(set-?ups?|paper changes?|order changes?|changeovers?|wet[- ]ends?|stops|stoppages?|splices?|step[- ]?ups?|"
-                  r"rolls?|sheets?|boards?|orders?|customers?|minutes|hours?|feet|ft|footage|msf|sq ft|square feet|tons?|percent)\b"
-                  r"|\bper (set-?up|paper change|stop|wet[- ]end)\b|%")
+                  r"rolls?|sheets?|boards?|boxes|chops?|(grade|flute) changes?|orders?|customers?|minutes|mins|hours?|hrs?|feet|ft|"
+                  r"footage|msf|sq ft|square feet|tons?|percent|"
+                  r"jams?|glue|starch|steam|stacker|splicers?|knife|knives|slitter|outages?|raw material|double backer|single facer|"
+                  r"double ?wall|\d{2,3}-?(c|bc|eb)|costs?|dollars?|money)\b|\bper (set-?up|paper change|stop|wet[- ]end)\b|[%$]")
+# The counts a grade carries in its totals (get_grade_totals): its setups, its wet ends and its lineal feet. Stops and
+# downtime are recorded by shift, reason and place, order changes and sheets by setup and knife, none of them by grade.
+GRADE_QUANTITIES = ('setups', 'paper_changes', 'lineal_ft')
+GRADE_CODE = r"\b(\d{2,3})-?(c|bc|eb)\b"
+LINE_COUNTS = ("Setups, paper changes, order changes and sheets are counted for the line, not by stop place or reason: a place "
+               "or reason counts its stops or minutes ('how many stops at the stacker this week'). ")
+EACH_SHIFT = r"\b(each|every|by|per) shift\b|\bbetween (the )?shifts\b|\bshift by shift\b"
+SETUP_SPEED = ("How fast a setup or paper change went is per setup and per production day: ask it with Day selected and no window "
+               "('how fast did we change paper'), which is the setup matrix, or ask for the order change stops ('how many minutes "
+               "of order change stops this week').")
+
+
+def named_grade(lower):
+    """The one board grade a question names by its code ("32-C", "275-bc"), or None (none, or more than one)."""
+    codes = {f'{m[1]}-{m[2].upper()}' for m in re.finditer(GRADE_CODE, lower)}
+    return next(iter(codes)) if len(codes) == 1 and next(iter(codes)) in GRADES else None
 
 
 def slug(name):
@@ -492,28 +516,33 @@ def slug(name):
 
 
 def unslug(value, key):
-    """The stop reason (key 'reason') or place (key 'place') a slug names, or a ValueError listing them."""
-    names = STOP_REASONS if key == 'reason' else STOP_PLACES
+    """The stop reason (key 'reason'), place ('place') or board grade ('grade') a slug names, or a ValueError listing them."""
+    names = {'reason': STOP_REASONS, 'place': STOP_PLACES, 'grade': tuple(GRADES)}[key]
     found = next((name for name in names if slug(name) == value), None)
     if found is None:
         raise ValueError(f'{key} is one of ' + ', '.join(slug(name) for name in names))
     return found
 
 
-def quantity_lead(lower):
+def quantity_lead(lower, assume_count=False):
     """The one quantity a count or unit question asks for, as a lead {'metric'} (with 'reason' or 'place' for one stop
     reason or place), or None when it asks for none. A count of something the records do not hold, or a unit they do
-    not keep, is a ValueError saying what can be counted: never a summary that looks like an answer."""
+    not keep, is a ValueError saying what can be counted: never a summary that looks like an answer. `assume_count`
+    reads a countable noun as the count asked ("how did we do on setups this month", "compare stops this week to last"):
+    the router's last resort before the KPI summary, which those questions would otherwise get."""
     count, minutes, feet = (bool(re.search(p, lower)) for p in (COUNT_ASK, MINUTES_ASK, FEET_ASK))
+    count = count or assume_count
     ratio = next((m for pattern, m in RATIO_WORDS if re.search(pattern, lower)), None)
     if ratio:
         return {'metric': ratio}
     if not (count or minutes or feet):
         return None   # "how much downtime", "how much did we make": the downtime review and volume by grade answer those
     noun = next((m for pattern, m in COUNT_NOUNS if re.search(pattern, lower)), None) if count else None
-    if noun and noun != 'stops':
-        return {'metric': noun}   # setups, order changes, paper changes, sheets: a place beside them is not what is counted
     place = next((name.format(*m.groups()) for pattern, name in PLACE_WORDS for m in [re.search(pattern, lower)] if m), None)
+    if noun and noun != 'stops':
+        if place:   # "how many setups on the single facer": setups are the line's, a place counts its stops
+            raise ValueError(LINE_COUNTS + QUANTITY_HELP)
+        return {'metric': noun}
     reason = None if place else next((name for pattern, name in REASON_WORDS if re.search(pattern, lower)), None)
     named = {'place': place} if place else {'reason': reason} if reason else {}
     kind = ('maintenance' if 'maintenance' in lower and 'operator' not in lower else
@@ -540,7 +569,11 @@ def quantity_request(lead, window, shift):
     if metric not in QUANTITY_TOOLS:
         raise ValueError('metric is one of ' + ', '.join(QUANTITY_METRICS) + ' for measure=quantity')
     named = [key for key in ('reason', 'place') if key in lead]
-    if named:
+    if 'grade' in lead:
+        if metric not in GRADE_QUANTITIES or named:
+            raise ValueError('A grade takes metric=setups, paper_changes or lineal_ft (its totals by grade), and no reason= or place=')
+        step = ('get_grade_totals', {'window': window, 'shift': shift})
+    elif named:
         if metric not in ('stops', 'downtime_minutes') or len(named) > 1:
             raise ValueError('A stop reason or place takes metric=stops or metric=downtime_minutes, one of reason= or place=')
         group_by = named[0]
@@ -620,10 +653,17 @@ def parse_period_request(lower, current, shifts):
         return None   # a money question about the day: get_shift_dollars, routed by the day router
     # One quantity asked (issue #113), unless the question asks for a trend, a ranking, a profile, a breakdown by grade,
     # the speed variance or opportunity, the over/under-run or dollars: those answers carry it in their own shape.
-    lead = None if (trend or pareto or profile or speedvar or speed_opp or money or grade or overrun or baseline) else quantity_lead(lower)
+    # A count of one named grade ("how many setups on 32-C last week") is that grade's row; a breakdown by grade, or a grade
+    # named with no count, stays the totals by grade.
+    grade_code = named_grade(lower)
+    by_grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b", lower))
+    lead = None if (trend or pareto or profile or speedvar or speed_opp or money or overrun or baseline or by_grade
+                    or (grade and not grade_code)) else quantity_lead(lower)
     if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock or baseline or money
             or speedvar or review or lead):
         return None
+    if re.search(CHANGE_SPEED, lower) and not lead:
+        raise ValueError(SETUP_SPEED)   # over a window the KPI tiles would answer how fast a setup went with MSF (issue #113)
     if re.search(r"\b(compare|comparison)\s+(last|previous|prior)\s+(week|month|day|shift|period)\b", lower):
         raise ValueError("Ambiguous window: say which window to compare, for example 'this week compared with last week'")
     anchor = current.production_day
@@ -638,13 +678,25 @@ def parse_period_request(lower, current, shifts):
     selected = getattr(current, 'period', 'day')
     selected = None if selected == 'day' else selected
     window = {"period": period or selected or 'day', "anchor": anchor}
-    if lead:
+    def answer_quantity(lead):
+        """One quantity over the question's window (a named month, else the window words or the Period control's), for
+        the selected shift, the one named, or all shifts; never split by shift."""
         if len(set(months)) >= 2:
             raise ValueError("A count is answered for one window with the window before it beside: ask one window at a time, "
                              "for example 'how many setups in September'")
-        if len(shifts) > 1 and current.scope == 'day':
-            raise ValueError("A count is answered for one shift or all shifts together: ask one shift at a time, or leave the shift out")
+        if (len(shifts) > 1 and current.scope == 'day') or re.search(EACH_SHIFT, lower):
+            raise ValueError("A count is answered for one shift or all shifts together: ask one shift at a time ('how many setups "
+                             "on shift 1 last week'), or leave the shift out")
+        if current.scope == 'shift' and re.search(r"\ball (three )?shifts\b|\bacross (the )?shifts\b", lower):
+            raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
+        if grade_code:
+            if lead['metric'] not in GRADE_QUANTITIES or set(lead) - {'metric'}:
+                raise ValueError(f"Stops, downtime, order changes and sheets are recorded by shift, reason, place and knife, not by grade: "
+                                 f"ask 'how many setups on {grade_code} this week', or 'volume by grade this week'. " + QUANTITY_HELP)
+            lead = {**lead, 'grade': grade_code}
         return quantity_request(lead, {"period": "month", "anchor": month_start(months[0])} if months else window, shift)
+    if lead:
+        return answer_quantity(lead)
     if money:
         plan = [("get_opportunities", {"window": window, "shift": shift, **({"lens": lens} if lens else {})})]
         intent = 'period_money'
@@ -726,6 +778,10 @@ def parse_period_request(lower, current, shifts):
         # "what was our throughput this week", "how much did we make in August": volume by grade over the window
         plan = [("get_grade_totals", {"window": {"period": "month", "anchor": month_start(months[0])} if months else window, "shift": shift})]
         intent = 'period_grade'
+    elif not (speed or volume or diagnose) and quantity_lead(lower, assume_count=True):
+        # the KPI summary's last resort (issue #113): a countable noun names the count asked ("how did we do on setups this
+        # month", "compare stops this week to last"); anything else that names a quantity is refused by catch_all_guard
+        return answer_quantity(quantity_lead(lower, assume_count=True))
     elif len(set(months)) >= 2:
         first, second = months[0], months[1]
         plan = [("compare_periods", {"current_window": {"period": "month", "anchor": month_start(first)},

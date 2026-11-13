@@ -11,8 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from investigator.agent import (QUANTITY_HELP, QUANTITY_METRICS, Agent, Context, catch_all_guard, parse_request, question_scope,
-                                quantity_request, route, slug)
+from investigator.agent import (GRADE_QUANTITIES, QUANTITY_HELP, QUANTITY_METRICS, SETUP_SPEED, Agent, Context, catch_all_guard,
+                                parse_request, question_scope, quantity_request, route, slug)
+from investigator.fixture import GRADES
 from investigator.records import STOP_PLACES, STOP_REASONS
 from investigator.record_store import default_store
 from investigator.urls import canonical_url, page_url, redirect_for, resolve_url
@@ -43,7 +44,18 @@ AUDIT = [
     'how much downtime in minutes yesterday', 'total downtime minutes this week', 'how many lineal feet did we run this week',
     'how many minutes of steam / moisture this month', ('How did shift 1 go compared with last week on lineal per paper change?', 1),
     'How did we do on setups this month?', 'Compare stops this week to last week', 'How many tons did we ship?',
+    # the review of this PR: a reason, a place, a grade, dollars and a setup speed named, each as the audit's owner listed them
+    'How did we do on glue this week?', 'how did we do on knife jams this month', 'how did we do on the stacker this week',
+    'how did we do on cost this week', 'how fast did we change paper this week', 'how quick were the changeovers this week',
+    'how many setups did we run on 32-C last week', 'how many stops on 55-C this week', 'how many minutes of downtime on 26-C last week',
+    ('how many setups did each shift run last week', 2, 'day'), 'how many setups by shift last week', 'how many stops per shift this week',
+    'how many setups on the single facer this week', 'compare setups this week to last week', 'paper changes last week',
+    # the question log's countable words (issue #125's catch-all flag): each one lands on a quantity or is refused
+    'how many boxes did we make this week', 'how many grade changes this week', 'how many flute changes this week',
+    'how many chops this week', 'how many mins of downtime this week', 'how many hrs of downtime this week', "what's the stop count this week",
 ]
+# What a refusal of an audited question says: what can be asked instead.
+REFUSALS = (QUANTITY_HELP, 'Offline mode supports', SETUP_SPEED, 'one shift or all shifts together', 'Selected shift only')
 
 
 def landing(question, scope='shift', shift=2, period='day', day=DAY):
@@ -75,10 +87,10 @@ def test_no_audited_question_lands_on_the_kpi_summary_and_each_opens_with_its_un
     """Every audited question lands on a measure that answers it, or is refused with what can be counted; an answer's
     headline carries the unit asked (run.py's rule), and its address answers the same. A question asked with another
     shift selected names it beside the question (the golden case's controls)."""
-    question, shift = (question, 2) if isinstance(question, str) else question
-    url, request, asked = landing(question, shift=shift)
+    question, shift, scope = (question, 2, 'shift') if isinstance(question, str) else (*question, 'shift')[:3]
+    url, request, asked = landing(question, scope=scope, shift=shift)
     if url is None:
-        assert QUANTITY_HELP in request or 'Offline mode supports' in request, (question, request)
+        assert any(r in request for r in REFUSALS), (question, request)
         return
     assert not catch_all_failures(question, url), (question, url)
     store = default_store()
@@ -116,9 +128,15 @@ def test_the_router_refuses_a_quantity_it_cannot_place_rather_than_summarize():
     catch_all_guard('how did we do this month', summary)   # the summary is what that question asks for
     catch_all_guard('how many setups this month', {**summary, 'intent': 'period_quantity'})
     context = Context(DAY, 2, scope='shift', period='day')
-    for question in ('How did we do on setups this month?', 'Compare stops this week to last week', 'How did August go on paper changes?'):
+    for question in ('How did we do on glue this week?', 'How did we do on the stacker this week?', 'How did this month go on steam?'):
         with pytest.raises(ValueError, match='one quantity at a time'):
             parse_request(question, context)
+    with pytest.raises(ValueError, match="where is the money this week"):
+        parse_request('How did we do on cost this week?', context)
+    # a countable noun on a summary phrasing is the count it names (the review of this PR), never the KPI summary
+    for question, metric in (('How did we do on setups this month?', 'setups'), ('Compare stops this week to last week', 'stops'),
+                             ('How did August go on paper changes?', 'paper_changes'), ('How did we do on missed splices this week?', 'stops')):
+        assert parse_request(question, context)['lead']['metric'] == metric, question
     assert parse_request('How did August go?', context)['plan'][0]['tool'] == 'get_period_kpis'
 
 
@@ -127,11 +145,30 @@ def test_the_router_refuses_a_quantity_it_cannot_place_rather_than_summarize():
     ('How many boards did we lose at the stacker?', 'do not count boards'), ('How many splices did we run?', 'not every splice'),
     ('How many orders did we run?', 'distinct orders'), ('How many customers did we run this week?', 'do not count customers'),
     ('How many hours of downtime this month?', 'in minutes, not hours'), ('How many pallets did we ship?', 'no shipping'),
+    ('How many stops on 55-C this week?', 'not by grade'), ('How many order changes on 275-BC this week?', 'not by grade'),
+    ('How many setups on the single facer this week?', 'counted for the line'), ('How many sheets at the stacker this week?', 'counted for the line'),
 ])
 def test_a_count_the_records_do_not_hold_is_refused_with_what_can_be_counted(question, refusal):
     with pytest.raises(ValueError, match=refusal) as caught:
         parse_request(question, Context(DAY, 2, scope='shift', period='day'))
     assert QUANTITY_HELP in str(caught.value)
+
+
+@pytest.mark.parametrize('question, scope, refusal', [
+    ('How many setups did each shift run this week?', 'day', 'one shift or all shifts together'),
+    ('How many stops per shift this week?', 'shift', 'one shift or all shifts together'),
+    ('How many setups between shifts this week?', 'day', 'one shift or all shifts together'),
+    ('How many setups did shift 1 and shift 3 run this week?', 'day', 'one shift or all shifts together'),
+    ('How many setups across all shifts this week?', 'shift', 'Selected shift only'),
+    ('How fast did we change paper this week?', 'shift', 'per setup and per production day'),
+    ('How quick were the changeovers this month?', 'day', 'per setup and per production day'),
+])
+def test_a_count_split_by_shift_or_a_setup_speed_over_a_window_is_refused(question, scope, refusal):
+    """A quantity is one shift or all shifts together, never each shift's total read as the answer; how fast a setup went
+    is the setup matrix, per shift and per day, never the window's KPI tiles."""
+    with pytest.raises(ValueError, match=refusal):
+        parse_request(question, Context(DAY, 2, scope=scope, period='day'))
+    assert parse_request('How many setups across all shifts this week?', Context(DAY, 2, scope='day', period='day'))['plan'][0]['arguments']['shift'] is None
 
 
 def test_every_quantity_has_one_canonical_address_in_every_grain():
@@ -143,7 +180,8 @@ def test_every_quantity_has_one_canonical_address_in_every_grain():
         for scope, shift in (('day', None), ('shift', 2)):
             context = Context(DAY, shift or 2, scope=scope, period=period)
             leads = [{'metric': m} for m in QUANTITY_METRICS] + [{'metric': 'stops', 'reason': r} for r in STOP_REASONS] + \
-                    [{'metric': 'downtime_minutes', 'place': p} for p in STOP_PLACES]
+                    [{'metric': 'downtime_minutes', 'place': p} for p in STOP_PLACES] + \
+                    [{'metric': m, 'grade': g} for m in GRADE_QUANTITIES for g in GRADES]
             for lead in leads:
                 request = quantity_request(lead, {'period': period, 'anchor': anchor}, shift)
                 url = canonical_url(request, context)
@@ -156,6 +194,9 @@ def test_every_quantity_has_one_canonical_address_in_every_grain():
                         (f'/corr/1/week/{DAY}?measure=quantity&metric=setups&reason=missed-splice', 'takes metric=stops'),
                         (f'/corr/1/week/{DAY}?measure=quantity&metric=stops&reason=stacker&place=stacker', 'one of reason= or place='),
                         (f'/corr/1/week/{DAY}?measure=quantity&metric=setups&shifts=1,3', 'not split by shift'),
+                        (f'/corr/1/week/{DAY}?measure=quantity&metric=stops&grade=32-c', 'A grade takes metric=setups'),
+                        (f'/corr/1/week/{DAY}?measure=quantity&metric=setups&grade=99-c', 'grade is one of'),
+                        (f'/corr/1/week/{DAY}?measure=grade&grade=32-c', 'grade= does not apply'),
                         (f'/corr/1/week/{DAY}?measure=kpis&reason=missed-splice', 'reason= does not apply'),
                         (f'/corr/1/week/{DAY}?measure=pareto&place=stacker', 'place= does not apply')]:
         with pytest.raises(ValueError, match=reason):

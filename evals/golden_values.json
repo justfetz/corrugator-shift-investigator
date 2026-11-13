@@ -16293,7 +16293,7 @@
     "compare": true,
     "shift": null
    },
-   "note": "The production day before Mon 14 Sep, all shifts: what 'how many setups yesterday' counts across the shifts.",
+   "note": "Fri 11 Sep, the production day before Mon 14 Sep, all shifts: the day the issue's 'yesterday' rows read.",
    "expect": {
     "coverage": "complete",
     "row_count": 25,

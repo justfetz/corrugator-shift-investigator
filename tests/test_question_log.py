@@ -95,7 +95,7 @@ def ids(line=LINE, session=SESSION):
 
 def test_a_question_and_its_answer_are_two_lines_with_these_fields(public):
     status, result = ask(public, 'how many setups did we run last week', ids())
-    assert status == 200 and result['url'] == '/corr/1/week/2026-09-07/shift/2?measure=kpis'
+    assert status == 200 and result['url'] == '/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups'   # issue #113
     question, answer = lines(public, 2)
     assert set(question) == QUESTION_KEYS and set(answer) == ANSWER_KEYS
     assert question['log'] == answer['log'] == 'question_log' and question['v'] == 1
@@ -103,10 +103,10 @@ def test_a_question_and_its_answer_are_two_lines_with_these_fields(public):
     assert question['line'] == answer['line'] == LINE and question['session'] == answer['session'] == SESSION
     assert question['question'] == 'how many setups did we run last week' and question['truncated'] is False
     assert question['scope'] == {'day': '2026-09-14', 'shift': 2, 'scope': 'shift', 'period': 'day', 'corrupt': False}
-    assert question['url'] == answer['url'] == '/corr/1/week/2026-09-07/shift/2?measure=kpis'
-    assert question['measure'] == answer['measure'] == 'kpis'
+    assert question['url'] == answer['url'] == '/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups'
+    assert question['measure'] == answer['measure'] == 'quantity'
     assert question['status'] == 'routed' and answer['status'] == 'complete' and question['refusal'] is None
-    assert question['flags'] == ['catch_all', 'scope_moved']   # the #113 example, asked with a day on the rail
+    assert question['flags'] == ['scope_moved']   # the #113 example, asked with a day on the rail: its count since #113, no catch-all
     assert isinstance(question['server_ms'], float) and isinstance(answer['server_ms'], float)
     assert question['dataset'] == public.app.store.content_hash[:12] and question['version'] == '0.1.0'
     assert question['ts'].endswith('Z') and question['severity'] == 'INFO'
@@ -321,13 +321,22 @@ def logged(app, question, period='day'):
         return app.qlog.question(LINE, None, seen, refusal=str(exc), ms=1.0)
 
 
-@pytest.mark.parametrize('question,period', [
-    ('how many setups did we run last week', 'day'), ('how many setups did we run last week', 'week'),
-    ('how many paper changes last week', 'day'), ('how many order changes this week', 'day'),
-    ('what was our lineal per setup last week', 'day'), ('how many orders this week', 'week')])
-def test_the_113_examples_are_catch_all(app, question, period):
+THE_113_EXAMPLES = [('how many setups did we run last week', 'day'), ('how many setups did we run last week', 'week'),
+                    ('how many paper changes last week', 'day'), ('how many order changes this week', 'day'),
+                    ('what was our lineal per setup last week', 'day'), ('how many orders this week', 'week')]
+
+
+@pytest.mark.parametrize('question,period', THE_113_EXAMPLES)
+def test_the_113_examples_would_be_flagged_catch_all_on_the_kpi_summary(question, period):
+    # the flag the weekly review reads: each of the issue's examples, had it landed on measure=kpis, is a catch-all
+    assert 'catch_all' in flags_of(question, measure='kpis', status='routed')
+
+
+@pytest.mark.parametrize('question,period', THE_113_EXAMPLES)
+def test_the_113_examples_land_on_their_quantity_or_are_refused_and_are_not_catch_all(app, question, period):
+    # since issue #113 each opens with its count (measure=quantity) or, for a count the records do not hold, is refused
     line = logged(app, question, period)
-    assert line['measure'] == 'kpis' and 'catch_all' in line['flags'], line
+    assert (line['measure'] == 'quantity' or line['status'] == 'refused') and 'catch_all' not in line['flags'], line
 
 
 @pytest.mark.parametrize('question,period', [

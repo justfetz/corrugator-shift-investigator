@@ -1368,7 +1368,7 @@ def build(data=None):
     cases.append(quantity_case(plain, "value-quantity-week-0907-shift-2", "week", "2026-09-07", 2,
                                note="The same week on shift 2: paper changes as the distinct runs its setups ran on (a run that spans a shift change counts in both)."))
     cases.append(quantity_case(plain, "value-quantity-day-0911-all", "day", "2026-09-11",
-                               note="The production day before Mon 14 Sep, all shifts: what 'how many setups yesterday' counts across the shifts."))
+                               note="Fri 11 Sep, the production day before Mon 14 Sep, all shifts: the day the issue's 'yesterday' rows read."))
     cases.append(compare_case(plain, "value-compare-september-vs-august", ("month", "2026-09-01"), ("month", "2026-08-01")))
     cases.append(compare_case(plain, "value-compare-day-0914-vs-0803-shift-1", ("day", "2026-09-14"), ("day", "2026-08-03"), 1))
     # The downtime Pareto for the story week (7-11 September), by reason and by place, minutes and count.
