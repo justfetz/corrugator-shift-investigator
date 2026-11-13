@@ -36,6 +36,10 @@ GOLDEN_DAY = '2026-09-14'   # the golden set's default day (evals/golden.json `a
 # What makes a question worth a golden case, and how much: the misses first.
 WEIGHT = {'refused': 3, 'catch_all': 3, 'thumbs_down': 2, 'analyst_plan_rejected': 2, 'typo_corrected': 1, 'scope_moved': 1}
 PREVIEW = re.compile(r'-pr-\d+-')   # a pull request's preview revision (preview.yml tags it pr-<n>): the owner's own clicks
+# The default-ignorable code points outside category Cf, the same set as questionlog.IGNORABLE (a test holds the two
+# equal over every code point).
+IGNORABLE = re.compile('[\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u2065\u3164\ufe00-\ufe0f\uffa0\ufff0-\ufff8'
+                       '\U000e0000-\U000e0fff]')
 UNIT = re.compile(r"\b((?:lineal|feet|ft) per (?:setup|wet end)|setups?|paper changes?|order changes?|wet ends?|stops?|splices?|step-?ups?|rolls?|orders?|sheets?|"
                   r"boards?|minutes?|hours?|feet|ft per setup|msf|sq ft|percent|dollars?)\b", re.I)
 
@@ -59,10 +63,18 @@ def live(events):
     return [e for e in events if not PREVIEW.search(str(e.get('revision') or ''))]
 
 
+def invisible(ch):
+    """A character a reader cannot see, as the server's questionlog.invisible reads it (the skill runs without the
+    package): a format character (category Cf) or another default-ignorable code point, the variation selectors,
+    the Hangul fillers and the whole tag block U+E0000-E0FFF among them. Text hidden there would reach Claude, who
+    reads this report, and not the owner."""
+    return unicodedata.category(ch) == 'Cf' or IGNORABLE.match(ch) is not None
+
+
 def clean(text):
-    """A visitor's text as the report shows it: format characters gone, whitespace collapsed to single spaces and
+    """A visitor's text as the report shows it: invisible characters gone, whitespace collapsed to single spaces and
     backticks turned into quotes, so it cannot leave the code span or the JSON fence it is printed in."""
-    text = ''.join(ch for ch in str(text or '') if unicodedata.category(ch) != 'Cf')
+    text = ''.join(ch for ch in str(text or '') if not invisible(ch))
     return ' '.join(text.split()).replace('`', "'")
 
 
@@ -125,7 +137,8 @@ def questions(events):
             flags.add('thumbs_down')
         out.append({'line': line, 'session': asked.get('session'), 'ts': asked.get('ts'), 'question': clean(asked.get('question')),
                     'scope': asked.get('scope') or {}, 'url': asked.get('url'), 'measure': asked.get('measure'),
-                    'status': (parts['answer'] or {}).get('status') or asked.get('status'), 'refusal': asked.get('refusal'),
+                    'status': (parts['answer'] or {}).get('status') or asked.get('status'),
+                    'refusal': clean(asked.get('refusal')) or None,   # the server's text today; cleaned all the same
                     'flags': flags, 'analyst': (parts['analyst'] or {}).get('status'),
                     'up': sum(vote == 'up' for _, vote in votes), 'down': sum(vote == 'down' for _, vote in votes),
                     'comments': [clean(f['comment']) for f in parts['feedback'] if f.get('comment')]})

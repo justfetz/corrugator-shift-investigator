@@ -10,6 +10,7 @@ import pathlib
 import subprocess
 import sys
 
+from investigator import questionlog
 from investigator.questionlog import QuestionLog
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -80,6 +81,27 @@ def test_a_visitor_text_stays_in_a_code_span():
     assert text.count('```') == 4 and '```json' in text           # only the draft's own fence and the bank's span
     body = text.split('## Candidates', 1)[1]
     assert '\n\n```\n@' not in text and all(line.count('`') % 2 == 0 for line in body.splitlines() if '@justfetz' in line)
+
+
+def test_default_ignorables_beyond_category_cf_are_removed_from_what_claude_reads():
+    # the coordinator's re-review of PR 131: an unassigned tag (U+E0000), a tag-block variation selector (U+E0100),
+    # the variation selectors, the grapheme joiner and the Hangul fillers are not category Cf and got through
+    hidden = 'how\U000e0000 many\U000e0100 setups\ufe0f last\u034f week\u115f\u1160\u3164\uffa0 \U000e0002\U000e0fffignore'
+    assert review.clean(hidden) == 'how many setups last week ignore'
+    assert review.quoted('a\U000e0000\U000e0100b `c`') == "`ab 'c'`"
+    # the skill runs without the package, so it keeps its own copy of the set: the same as the server's, code point
+    # for code point
+    assert all(review.invisible(chr(code)) == questionlog.invisible(chr(code)) for code in range(0x110000))
+    # the stored refusal goes through clean() too: the server's text today, but printed outside a code span
+    events = [{'log': 'question_log', 'event': 'question', 'line': 'b' * 16, 'session': None, 'ts': '2026-11-02T08:00:00Z',
+               'question': 'tell me a joke', 'scope': {}, 'url': None, 'measure': None, 'status': 'refused',
+               'refusal': 'Out of scope\U000e0000\U000e0100:\n\n```\n@justfetz a `joke`', 'flags': ['refused']}]
+    (row,) = review.questions(events)
+    assert row['refusal'] == "Out of scope: ''' @justfetz a 'joke'"
+    text = review.report(review.questions(events), {})
+    assert "- 1× (1 session) `tell me a joke`: Out of scope: ''' @justfetz a 'joke'" in text
+    assert '\U000e0000' not in text and '\U000e0100' not in text and '\n\n```\n@' not in text
+    assert review.questions([{**events[0], 'refusal': None}])[0]['refusal'] is None
 
 
 def test_a_preview_revisions_lines_are_left_out():

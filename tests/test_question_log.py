@@ -13,11 +13,12 @@ import string
 import threading
 import time
 from threading import Thread
+import unicodedata
 from urllib.parse import urlencode
 
 import pytest
 
-from investigator.questionlog import QuestionLog, check_comment, flags_of, redact, valid_id
+from investigator.questionlog import QuestionLog, check_comment, flags_of, invisible, redact, valid_id
 from investigator.server import DemoGuards, PublicDemo, Workbench, make_server
 
 ORIGIN = 'https://demo.example'
@@ -257,6 +258,30 @@ def test_a_key_email_phone_or_ip_typed_into_a_question_is_replaced():
     assert 'sk-ant' not in redact('y ' * 243 + 'sk-ant-api03-AbC123def456GhI789', 500)
 
 
+# The default-ignorable code points, as Unicode lists them (DerivedCoreProperties.txt, Default_Ignorable_Code_Point),
+# copied here rather than imported so the test checks the module's set against Unicode's.
+DEFAULT_IGNORABLE = ((0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C), (0x115F, 0x1160), (0x17B4, 0x17B5),
+                     (0x180B, 0x180F), (0x200B, 0x200F), (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
+                     (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF), (0xFFA0, 0xFFA0), (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3),
+                     (0x1D173, 0x1D17A), (0xE0000, 0xE0FFF))
+
+
+def test_default_ignorable_characters_beyond_category_cf_are_removed():
+    # the coordinator's re-review of PR 131: an unassigned tag (U+E0000) and a variation selector of the tag block
+    # (U+E0100) are not category Cf, nor are the variation selectors, the grapheme joiner or the Hangul fillers
+    for ch in ('\U000e0000', '\U000e0100', '\ufe0f', '\u034f', '\u3164'):
+        assert unicodedata.category(ch) != 'Cf' and invisible(ch), ascii(ch)
+    typed = ('why\U000e0000 slow\U000e0100 on\ufe00 shift\ufe0f 2 cgj\u034f fill\u115f\u1160 er\u3164 hw\uffa0 '
+             'tags\U000e0002\U000e001f\U000e0080\U000e01ef\U000e0fff')
+    assert redact(typed, 500) == 'why slow on shift 2 cgj fill er hw tags'
+    for first, last in DEFAULT_IGNORABLE:
+        for code in range(first, last + 1):
+            assert invisible(chr(code)) and redact(f'a{chr(code)}b', 500) == 'ab', hex(code)
+    # what a reader does see stays: letters of any script, an emoji, a figure
+    for kept in ('\ud55c\uad6d\uc5b4 \u2764 \U0001f44d', 'Stra\u00dfe caf\u00e9 \u00bd', '13,233.4 MSF'):
+        assert redact(kept, 500) == kept, ascii(kept)
+
+
 # ---- flags ------------------------------------------------------------------------------------------------
 
 @pytest.fixture(scope='module')
@@ -392,7 +417,8 @@ def test_feedback_is_a_line_and_accepts_no_markup(public):
     assert said['comment'] == 'the number of setups, not the MSF' and said['card'] == 'answer'
     assert analyst['card'] == 'analyst' and analyst['session'] is None
     for bad in ('<b>more</b>', 'see `code`', '&lt;x&gt;', '[link](https://x.example)', '![x](y)', 'two\nlines', 'tab\there',
-                'x' * 301, 42, 'rev\u202ebad', 'zero\u200bwidth', 'bom\ufeff', 'tag\U000e0041', 'iso\u2066x\u2069', 'rlm\u200f'):
+                'x' * 301, 42, 'rev\u202ebad', 'zero\u200bwidth', 'bom\ufeff', 'tag\U000e0041', 'iso\u2066x\u2069', 'rlm\u200f',
+                'tag\U000e0000', 'selector\U000e0100', 'unassigned\U000e0fff'):
         status, _, body = feedback(public, {'line': '00000000000000cc', 'vote': 'down', 'comment': bad}, token)
         assert status == 400 and 'plain text' in body['error'], bad
     for bad in ({'line': LINE, 'vote': 'meh'}, {'line': 'not-an-id', 'vote': 'up'}, {'line': LINE, 'vote': 'up', 'session': 'x'},
@@ -403,6 +429,20 @@ def test_feedback_is_a_line_and_accepts_no_markup(public):
     assert feedback(public, {'line': LINE, 'vote': 'up'}, 'wrong-token')[0] == 403
     assert len(lines(public, 3)) == 3   # nothing refused was logged
     assert check_comment(None) is None and check_comment('   ') is None and check_comment('Tom & Jerry') == 'Tom & Jerry'
+
+
+def test_a_comment_keeps_its_emoji_and_loses_the_other_ignorables(public):
+    # the coordinator's re-review of PR 131: the tag block is refused (above), while an emoji's variation selector
+    # U+FE0F is removed rather than refused, as are the grapheme joiner and the Hangul fillers
+    token = json.loads(request(public, 'GET', '/api/config')[2])['token']
+    said = {'line': LINE, 'vote': 'up', 'comment': 'clear \u2764\ufe0f answer\u034f and\u3164 thanks \U0001f44d\ufe0f'}
+    assert feedback(public, said, token)[0] == 200
+    (line,) = lines(public, 1)
+    assert line['comment'] == 'clear \u2764 answer and thanks \U0001f44d'
+    assert check_comment('\ufe0f') is None and check_comment(' \u3164 ') is None and check_comment('ok\ufe0f') == 'ok'
+    for ch in ('\U000e0000', '\U000e0100', '\U000e0001', '\u200b'):
+        with pytest.raises(ValueError):
+            check_comment(f'fine{ch}')
 
 
 def test_feedback_is_rate_limited_like_ask_on_its_own_windows(tmp_path, monkeypatch):
@@ -454,6 +494,11 @@ def test_a_format_character_in_a_question_is_removed_from_its_line(public):
     assert status == 200
     question = lines(public, 2)[0]
     assert question['question'] == 'why was shift slow?'
+    # and the default-ignorables outside category Cf (the coordinator's re-review of PR 131)
+    status, _ = ask(public, 'why\U000e0000 was\U000e0100 shift\ufe0f slow\u3164?', ids(line='00000000000000ab'))
+    assert status == 200
+    question = lines(public, 4)[2]
+    assert question['line'] == '00000000000000ab' and question['question'] == 'why was shift slow?'
 
 
 # ---- after the response ---------------------------------------------------------------------------------------

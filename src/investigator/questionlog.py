@@ -68,6 +68,13 @@ TOKEN = re.compile(r'[A-Za-z0-9_\-]{20,}')
 SLASHED_KEY = re.compile(r'[A-Za-z0-9+/=_\-]{20,}')   # base64-shaped secrets (an AWS secret key has / and +)
 # Markup a comment may not carry: tags, entities, Markdown links, images and code. A question is logged as typed.
 MARKUP = re.compile(r'[<>`]|&#?\w+;|\]\(|!\[')
+# The default-ignorable code points outside category Cf (Unicode's Default_Ignorable_Code_Point): the combining
+# grapheme joiner, the Hangul fillers, the Khmer inherent vowels, the Mongolian and the other variation selectors,
+# the reserved U+2065 and U+FFF0-FFF8, and the whole tag block U+E0000-E0FFF (its unassigned code points and the
+# variation selectors 17-256 among them). A reader sees nothing there while a model reading the text still does, so
+# a line, and the skill Claude reads the lines with, would hold text no person can see.
+IGNORABLE = re.compile('[\u034f\u115f\u1160\u17b4\u17b5\u180b-\u180f\u2065\u3164\ufe00-\ufe0f\uffa0\ufff0-\ufff8'
+                       '\U000e0000-\U000e0fff]')
 CONTROL = re.compile(r'[\x00-\x1f\x7f-\x9f  ]')
 
 
@@ -89,12 +96,19 @@ def _number(match):
 
 
 def invisible(ch):
-    """A format character (Unicode category Cf): bidi controls, zero-width characters, the BOM, the tag characters."""
-    return unicodedata.category(ch) == 'Cf'
+    """A character a reader cannot see: a format character (Unicode category Cf: bidi controls, zero-width characters,
+    the BOM, the tag characters) or another default-ignorable code point (`IGNORABLE`). Removed from a line."""
+    return unicodedata.category(ch) == 'Cf' or IGNORABLE.match(ch) is not None
+
+
+def refused_in_comment(ch):
+    """What a comment may not carry at all: a format character, or anything in the tag block U+E0000-E0FFF. The other
+    default-ignorables are removed instead, so an emoji's variation selector (U+FE0F) does not cost the comment."""
+    return unicodedata.category(ch) == 'Cf' or '\U000e0000' <= ch <= '\U000e0fff'
 
 
 def redact(text, limit):
-    """`text` with format characters removed and emails, IP addresses, personal numbers and key-like tokens
+    """`text` with invisible characters removed and emails, IP addresses, personal numbers and key-like tokens
     replaced, then cut to `limit` characters (replaced first, so nothing straddling the cut survives as a fragment)."""
     text = ''.join(ch for ch in text if not invisible(ch))
     text = EMAIL.sub('[email]', text)
@@ -152,10 +166,10 @@ def check_comment(comment):
     if comment is None:
         return None
     if (not isinstance(comment, str) or len(comment) > COMMENT_MAX or CONTROL.search(comment) or MARKUP.search(comment)
-            or any(invisible(ch) for ch in comment)):
+            or any(refused_in_comment(ch) for ch in comment)):
         raise ValueError(f'The comment is plain text of at most {COMMENT_MAX} characters: no markup (< > ` & links), '
                          'no line breaks and no invisible characters')
-    comment = ' '.join(comment.split())
+    comment = ' '.join(''.join(ch for ch in comment if not invisible(ch)).split())
     return comment or None
 
 
