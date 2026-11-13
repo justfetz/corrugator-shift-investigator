@@ -117,6 +117,88 @@ The demo also answers at `https://shift.talktomymachine.ai` through a [Cloud Run
 
 The same container runs on Fly.io or Render with `PORT` injected; set `PUBLIC_DEMO_ORIGIN` to the service's https origin.
 
+## The question log
+
+The hosted demo writes one anonymous JSON line per question event to stdout (issue #125; the fields are on [the Data page](DATA.md#the-question-log)): the question and where it routed, its answer, an analyst round on it, and a thumbs up or down on its card (`POST /api/feedback`, limited like `/api/ask` on windows of its own: 60 a minute for the container and `DEMO_RATE_LIMIT_PER_MIN` per IP, plain text only). It is on by default when `PUBLIC_DEMO_ORIGIN` is set; `QUESTION_LOG=0` turns it off and `QUESTION_LOG=1` turns it on for the loopback workbench. Cloud Run ships stdout to Cloud Logging, which keeps it 30 days in the `_Default` bucket, with no new service. A line is printed after its response is written, so an answer's time does not change.
+
+**The copy in BigQuery: the owner runs this, once.** It is a GCP configuration change (the BigQuery API, a dataset, a log sink and one writer entry on the dataset), so sessions do not run it. **Done on `felix-august` on 2026-11-13.** Each day's partition expires after 90 days (7,776,000 s). Run it in Cloud Shell:
+
+```bash
+PROJECT_ID=<project>
+gcloud services enable bigquery.googleapis.com --project "$PROJECT_ID"      # a new project has the BigQuery API off
+bq --location=US mk --dataset --default_partition_expiration=7776000 "$PROJECT_ID:question_log"
+gcloud logging sinks create question-log "bigquery.googleapis.com/projects/$PROJECT_ID/datasets/question_log" \
+  --project "$PROJECT_ID" --use-partitioned-tables \
+  --log-filter='resource.type="cloud_run_revision" AND resource.labels.service_name="corrugator-shift-investigator" AND jsonPayload.log="question_log"'
+WRITER=$(gcloud logging sinks describe question-log --project "$PROJECT_ID" --format='value(writerIdentity)')   # serviceAccount:service-<number>@gcp-sa-logging...
+# Give the sink's account WRITER (BigQuery Data Editor) on this dataset only. `bq add-iam-policy-binding --dataset=true`
+# answers "This feature requires allowlisting" on most projects, so add it to the dataset's access list instead:
+bq show --format=prettyjson "$PROJECT_ID:question_log" > /tmp/ds.json
+python3 -c "import json,sys; d=json.load(open('/tmp/ds.json')); d['access'].append({'role':'WRITER','userByEmail':sys.argv[1].split(':',1)[1]}); json.dump(d,open('/tmp/ds.json','w'))" "$WRITER"
+bq update --source /tmp/ds.json "$PROJECT_ID:question_log"
+```
+
+The same writer entry can be added in the console: BigQuery → the `question_log` dataset → Sharing → Permissions → Add principal (the sink's account) → BigQuery Data Editor. The table `run_googleapis_com_stdout` appears only after the first line arrives; check with `bq ls "$PROJECT_ID:question_log"` a few minutes after asking a question.
+
+**Cloud Run's request log (optional, the owner's call).** Separately from the question log, Cloud Run's own request log records every request's URL with the visitor's IP address and user agent, as any web server's access log does, and the URL of `/q` holds the question. It stays in Cloud Logging for 30 days and is not copied to BigQuery. To keep those `/q` entries out of it altogether, exclude them from the `_Default` sink:
+
+```bash
+gcloud logging sinks update _Default --project "$PROJECT_ID" \
+  --add-exclusion=name=question-urls,filter='resource.type="cloud_run_revision" AND resource.labels.service_name="corrugator-shift-investigator" AND log_id("run.googleapis.com/requests") AND httpRequest.requestUrl:"/q?"'
+```
+
+The cost: a failing `/q` no longer shows in the request log (its status still shows in the question log's `refused` lines). `--remove-exclusions=question-urls` undoes it.
+
+The sink writes the lines to the partitioned table `question_log.run_googleapis_com_stdout`, with each line under `jsonPayload`. BigQuery adds a column only once a line has carried a value for it (no comment, no column `comment`), so one view reads every field through the line's JSON and works from the first line on. A pull request's preview revision (`…-pr-<n>-…`, the owner's own clicks while reviewing) is left out, here and in `/review-questions`. It joins a question's lines into the one row per question the review reads:
+
+```sql
+CREATE OR REPLACE VIEW `PROJECT_ID.question_log.question_lines` AS
+WITH lines AS (
+  SELECT timestamp, JSON_VALUE(j, '$.event') AS event, JSON_VALUE(j, '$.line') AS line, j
+  FROM (SELECT timestamp, TO_JSON_STRING(jsonPayload) AS j FROM `PROJECT_ID.question_log.run_googleapis_com_stdout`
+        WHERE jsonPayload.log = 'question_log'
+          AND NOT REGEXP_CONTAINS(IFNULL(JSON_VALUE(TO_JSON_STRING(jsonPayload), '$.revision'), ''), r'-pr-[0-9]+-'))),
+answers AS (SELECT line, ANY_VALUE(JSON_VALUE(j, '$.status')) AS status,
+                   MAX(SAFE_CAST(JSON_VALUE(j, '$.server_ms') AS FLOAT64)) AS server_ms
+            FROM lines WHERE event = 'answer' GROUP BY line),
+rounds AS (SELECT line, ANY_VALUE(JSON_VALUE(j, '$.status')) AS status FROM lines WHERE event = 'analyst' GROUP BY line),
+votes AS (SELECT line, ANY_VALUE(JSON_VALUE(j, '$.vote')) AS vote, STRING_AGG(JSON_VALUE(j, '$.comment'), ' | ') AS comment
+          FROM lines WHERE event = 'feedback' AND JSON_VALUE(j, '$.card') = 'answer' GROUP BY line)
+SELECT q.line AS line, JSON_VALUE(q.j, '$.session') AS session, q.timestamp AS asked_at,
+       JSON_VALUE(q.j, '$.question') AS question, JSON_VALUE(q.j, '$.scope.day') AS day,
+       SAFE_CAST(JSON_VALUE(q.j, '$.scope.shift') AS INT64) AS shift, JSON_VALUE(q.j, '$.scope.scope') AS scope,
+       JSON_VALUE(q.j, '$.scope.period') AS period, JSON_VALUE(q.j, '$.url') AS url, JSON_VALUE(q.j, '$.measure') AS measure,
+       COALESCE(answers.status, JSON_VALUE(q.j, '$.status')) AS status, JSON_VALUE(q.j, '$.refusal') AS refusal,
+       SAFE_CAST(JSON_VALUE(q.j, '$.server_ms') AS FLOAT64) + IFNULL(answers.server_ms, 0) AS server_ms,
+       JSON_VALUE_ARRAY(q.j, '$.flags') AS flags, rounds.line IS NOT NULL AS analyst_clicked, rounds.status AS analyst_status,
+       votes.vote AS vote, votes.comment AS comment, JSON_VALUE(q.j, '$.version') AS version, JSON_VALUE(q.j, '$.dataset') AS dataset
+FROM lines AS q
+LEFT JOIN answers ON answers.line = q.line
+LEFT JOIN rounds ON rounds.line = q.line
+LEFT JOIN votes ON votes.line = q.line
+WHERE q.event = 'question';
+```
+
+**The weekly review.** The `/review-questions` skill reads the last seven days (`python3 .claude/skills/review-questions/review.py --bq "$PROJECT_ID"`, one `bq query` over the raw lines) and proposes golden cases and question-bank entries in batches of ten. The same lists by hand, in the console:
+
+```sql
+-- the top refused and catch-all questions
+SELECT LOWER(TRIM(question)) AS question, COUNT(*) AS asks, COUNT(DISTINCT session) AS sessions,
+       LOGICAL_OR('refused' IN UNNEST(flags)) AS refused, LOGICAL_OR('catch_all' IN UNNEST(flags)) AS catch_all,
+       ANY_VALUE(COALESCE(refusal, url)) AS example
+FROM `PROJECT_ID.question_log.question_lines`
+WHERE asked_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+  AND ('refused' IN UNNEST(flags) OR 'catch_all' IN UNNEST(flags))
+GROUP BY 1 ORDER BY asks DESC LIMIT 50;
+-- thumbs down, with the comments
+SELECT asked_at, question, url, comment FROM `PROJECT_ID.question_log.question_lines`
+WHERE vote = 'down' AND asked_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY) ORDER BY asked_at DESC;
+-- the most-asked phrasings
+SELECT LOWER(TRIM(question)) AS question, COUNT(*) AS asks, COUNT(DISTINCT session) AS sessions
+FROM `PROJECT_ID.question_log.question_lines`
+WHERE asked_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY) GROUP BY 1 ORDER BY asks DESC LIMIT 50;
+```
+
 ## Decisions on record
 
 Each of these was a choice, made with a measurement where there was one. Revisit them when the traffic or the backlog changes, not before.
@@ -131,6 +213,7 @@ Each of these was a choice, made with a measurement where there was one. Revisit
 | Docs in the image (issue #93) | `COPY docs/*.md ./docs/`, rendered once by `python -m investigator.docsite build /app/docs-site --root /app`, `INVESTIGATOR_DOCS=/app/docs-site` | `/docs` serves the prebuilt pages with an ETag like the other static files; nothing is rendered per request and the renderer is the standard library. The changelog page is `docs/CHANGELOG.md`, which the deploy of `main` regenerates before the build, so it lists the pull request being deployed. That step can never fail the deploy: it fetches the full history itself (the checkout is unchanged), it is `continue-on-error` with a three-minute timeout, and the generator replaces the committed file only with a list at least as long, written by rename; anything else ships the committed file. Once the revision is live, the step *Changelog lists the merged pull request* reads `/docs/changelog` from it and fails the run when the merge being deployed is missing (`.github/scripts/check_changelog.py`; the owner's rule of 2026-11-12, every merge is on the changelog): visitors keep the revision, and a stale page turns the run red instead of shipping silently. A preview builds the committed file. `/guide`, the old page, is a 301 to `/docs`. |
 | Container size: `--cpu 1 --memory 1Gi --concurrency 20 --timeout 180` | One small container | The whole dataset is in-memory DuckDB and an answer takes tens of milliseconds offline. Concurrency 20 is fine because static files and `/api/health` never wait on the investigation lock; investigations and PDFs serialize per container. 180 s covers a live-model investigation with its ten tool calls. |
 | Deploy credential | Keyless, Workload Identity Federation (issue #28) | A pasted service-account key was the one long-lived secret in GitHub and the one thing a repository leak would have handed over. The pool trusts one repository and the job's OIDC token lives for one run. The key stays as a fallback, announced by a warning on every run that uses it, only until the two variables exist; the cutover ends with its deletion. See "Keyless deploy" above. |
+| Question log (issue #125) | One JSON line per question event on stdout; a Cloud Logging sink copies them to a BigQuery dataset with 90-day partitions, set up by the owner | Every question a visitor asks is a free test case, and the misses (a count landing on the KPI summary, #113) are what the golden set lacks. Stdout costs no new service, credential or dependency: Cloud Run already ships it to Cloud Logging, and the sink is configuration. Questions only, never the visitor: no IP, user agent, cookie, key or header value, and the ids are random per question and per tab. A question's events are separate lines joined on its line id (the `question_lines` view), because the answer, the analyst round and the vote happen after `/q` has redirected, maybe on the other instance. Printed after the response, so offline latency is unchanged. The page offers a thumbs up or down on every card and says in its footer that questions are logged. |
 | Where keys live | Secret Manager, mounted by **name** | The workflow passes secret names through repository variables; Cloud Run reads the value at start. No value of the demo's keys ever passes through GitHub. |
 | Agents' credentials (issue #126) | The Anthropic credential: a repository secret used only by `agent.yml` and `agent-review.yml`. GitHub: each job's own `GITHUB_TOKEN`, no `id-token: write` in the job the agent runs in | The Claude Code GitHub Action reads its Anthropic credential from the workflow, so the agents' key (its own, with its own spend limit, never the demo's) is a GitHub secret; only the two Claude Code steps receive it. The action's workload identity federation would remove it, as #28 removed the deploy key, but it needs `id-token: write`, and so does the Claude GitHub App's token: a job holding that permission can mint an OIDC token the Workload Identity pool above would accept from any workflow of this repository (the coordinator's H5). So the agent pushes with its job's own token, and the workflow starts CI and the review on its pushes ([AGENTS.md](AGENTS.md)). Revisit once the pool trusts named workflows only (#133). |
 

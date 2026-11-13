@@ -191,6 +191,10 @@ resolves each question through the server and fails the case when it lands elsew
 | `GET /corr/….json?measure=…`, `…&format=json`, or `Accept: application/json` | the JSON `/api/ask` returns for the same state, plus `url` (the page address, with the `after=` chain) and no `session_id`; the bare scope address is a 400 asking for `measure=`. `Server-Timing: app;dur=<ms>` is the server's own time. |
 | `GET /corr/…?measure=…&format=pdf` | the PDF of that answer, rendered on request from the same state. No report cache, so any instance serves any PDF; `POST /api/report` remains for live answers, which have no address. |
 
+While the hosted demo keeps its question log (issue #125, [the fields](DATA.md#the-question-log)), the page sends `/q` two
+random ids as headers, `X-Question-Line` and `X-Question-Session`, which ride its redirect to the `.json` answer. They
+change nothing in the answer or the address; the server only logs the question and its answer under them.
+
 The URL path is offline only: no model, no key, no token (a GET changes nothing and carries nothing
 secret). It has the other guards of `/api/ask`: the loopback `Host` rule or the public mode's proxy,
 the per-process request window and the per-IP round limit when `DEMO_RATE_LIMIT_PER_MIN` is set (a
