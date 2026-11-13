@@ -20,11 +20,12 @@ removed (`invisible`: Unicode category Cf, such as bidi overrides, zero-width ch
 the other default-ignorable code points, such as the variation selectors, the Hangul fillers and the whole tag block
 U+E0000-E0FFF), and these are replaced (`redact`): email addresses; IPv4 and IPv6 addresses; phone and other personal
 numbers (nine or more digits in one run with spaces, dots, dashes, slashes or brackets between them, and a 3-4 local
-number such as 123-4567; an ISO date in such a run is kept, and the digits beside it are read on their own); and
-key-like tokens (a run of 20 or more letters, digits, _ and - that holds both a letter and a digit, or a run of 20 or
-more that holds / or + together with a lower-case letter, an upper-case letter and a digit). A comment with a format
-character or a tag-block character is refused, not cleaned; the other default-ignorables (an emoji's U+FE0F) are
-removed from it.
+number such as 123-4567; an ISO date in such a run is kept, and the digits beside it are read on their own, whatever
+separator touches the date); and key-like tokens (a run of 20 or more letters, digits, _ and - that holds both a
+letter and a digit, or a run of 20 or more that holds / or + together with a lower-case letter, an upper-case letter
+and a digit). A comment with a format character or a tag-block character is refused, not cleaned; the other
+default-ignorables (an emoji's U+FE0F) are removed from it before its markup and line-break checks, so none can hide
+markup from them.
 
 At most LINES_PER_MIN lines a minute are written for one client address (the address only counts; it is never written).
 
@@ -70,6 +71,7 @@ IPV6 = re.compile(rf'(?<![\w:.])(?=[:\w]*[0-9A-Fa-f])(?:(?:{H4}:){{7}}{H4}|(?:{H
 # on either side of it are read again on their own (`_number`).
 NUMBER = re.compile(r'(?<![\w.])\+?\(?\d(?:[ .()/-]{0,3}\d){8,}\)?(?!\w)|(?<![\w-])\d{3}-\d{4}(?![\w-])')
 ISO_DATE = re.compile(r'((?<!\d)\d{4}-\d{2}-\d{2}(?!\d))')
+BESIDE = re.compile(r'([ ./-]*)(.*?)([ ./(-]*)')   # a stretch beside a date: its separators at either end, the rest
 TOKEN = re.compile(r'[A-Za-z0-9_\-]{20,}')
 SLASHED_KEY = re.compile(r'[A-Za-z0-9+/=_\-]{20,}')   # base64-shaped secrets (an AWS secret key has / and +)
 # Markup a comment may not carry: tags, entities, Markdown links, images and code. A question is logged as typed.
@@ -104,7 +106,14 @@ def _number(match):
     parts = ISO_DATE.split(match.group(0))   # the dates at the odd indexes, what lies beside them at the even ones
     if len(parts) == 1:
         return '[number]'
-    return ''.join(part if n % 2 else NUMBER.sub('[number]', part) for n, part in enumerate(parts))
+    return ''.join(part if n % 2 else _beside(part) for n, part in enumerate(parts))
+
+
+def _beside(part):
+    """A stretch beside a date, read as if the date were not there: the separators that touch the date stay as they
+    are and do not count against the number, so '2026-09-14.020.7946.0958' and '2026-09-14-555-1234' lose it too."""
+    lead, body, tail = BESIDE.fullmatch(part).groups()
+    return lead + NUMBER.sub('[number]', body) + tail
 
 
 def invisible(ch):
@@ -174,14 +183,17 @@ def flags_of(question, measure=None, status=None, moved=False, corrected=False):
 
 
 def check_comment(comment):
-    """The optional comment of a feedback post: plain text of at most 300 characters, or a ValueError."""
+    """The optional comment of a feedback post: plain text of at most 300 characters, or a ValueError. The markup and
+    line-break checks read the comment as it will be logged, with the invisible characters removed, so a variation
+    selector inside `](` or `&#60;` cannot hide markup from the check and leave it whole in the line."""
     if comment is None:
         return None
-    if (not isinstance(comment, str) or len(comment) > COMMENT_MAX or CONTROL.search(comment) or MARKUP.search(comment)
-            or any(refused_in_comment(ch) for ch in comment)):
+    seen = ''.join(ch for ch in comment if not invisible(ch)) if isinstance(comment, str) else None
+    if (seen is None or len(comment) > COMMENT_MAX or any(refused_in_comment(ch) for ch in comment)
+            or CONTROL.search(seen) or MARKUP.search(seen)):
         raise ValueError(f'The comment is plain text of at most {COMMENT_MAX} characters: no markup (< > ` & links), '
-                         'no line breaks and no invisible characters')
-    comment = ' '.join(''.join(ch for ch in comment if not invisible(ch)).split())
+                         'no line breaks and no hidden format or tag characters')
+    comment = ' '.join(seen.split())
     return comment or None
 
 

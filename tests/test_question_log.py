@@ -265,6 +265,10 @@ def test_a_phone_number_beside_a_date_is_replaced_and_the_date_kept():
     assert redact('on 2026-09-14 (555) 123-4567 or 2026-09-15 555-1234', 500) == 'on 2026-09-14 [number] or 2026-09-15 [number]'
     assert redact('on 2026-09-14 +44 20 7946 0958 shift 2', 500) == 'on 2026-09-14 [number] shift 2'
     assert redact('card 4111 1111 1111 1111 2026-09-14', 500) == 'card [number] 2026-09-14'
+    # the separator that touches the date does not shelter the number (the reviewer on this push)
+    assert redact('on 2026-09-14.020.7946.0958', 500) == 'on 2026-09-14.[number]'
+    assert redact('on 2026-09-14-555-1234', 500) == 'on 2026-09-14-[number]'
+    assert redact('555-1234-2026-09-14 x', 500) == '[number]-2026-09-14 x'
     # a date glued to more digits is not a date: the whole run is a number
     assert redact('ref 2026-09-140207946', 500) == 'ref [number]'
     # what is beside a date and is not a number stays: a time, a shift, a second date
@@ -458,6 +462,13 @@ def test_a_comment_keeps_its_emoji_and_loses_the_other_ignorables(public):
     for ch in ('\U000e0000', '\U000e0100', '\U000e0001', '\u200b'):
         with pytest.raises(ValueError):
             check_comment(f'fine{ch}')
+    # a removed character cannot hide markup from the check and leave it whole in the line (the reviewer on this push)
+    for hidden in ('[a]\u034f(b)', 'see ]\ufe0f(https://x.example)', '&#\u034f60;', '!\u3164[x](y)', 'two\u3164\nlines'):
+        with pytest.raises(ValueError):
+            check_comment(hidden)
+        status, _, body = feedback(public, {'line': '00000000000000cd', 'vote': 'down', 'comment': hidden}, token)
+        assert status == 400 and 'plain text' in body['error'], ascii(hidden)
+    assert len(lines(public, 1)) == 1   # nothing refused was logged
 
 
 def test_feedback_is_rate_limited_like_ask_on_its_own_windows(tmp_path, monkeypatch):
