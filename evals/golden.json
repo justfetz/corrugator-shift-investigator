@@ -4567,7 +4567,7 @@
    "mode": "offline",
    "day": "2025-02-14",
    "question": "How much downtime last month?",
-   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-02-14 it is January 2025, the data's first month (it opens on 1 January 2025, issue #100); its previous month, December 2024, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 2025-10-15 (September 2025, whose previous month was before the old rolling year's first day) when issue #100 fixed the first day. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags); the scope this question moves to is unchanged, and the review keeps the previous window beside, unavailable here (the owner, review of #111).",
+   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-02-14 it is January 2025, the data's first month (it opens on 1 January 2025, issue #100); its previous month, December 2024, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 2025-10-15 (September 2025, whose previous month was before the old rolling year's first day) when issue #100 fixed the first day. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags); the scope this question moves to is unchanged, and the review keeps the previous window beside, unavailable here (the owner, review of #111). Merged with #111: on the v2 records the first month, January 2025, is complete, so the review ranks its reasons (each with previous unavailable, never zero) and must not call the window incomplete because the previous one is outside the records (a bug the merge surfaced: the card ranked the reasons and said rankings were withheld). The partial window listed in the tool's order is downtime-first-week-partial-unranked.",
    "expect": {
     "url": "/corr/1/month/2025-01-01/shift/2?measure=review",
     "status": "complete",
@@ -4592,8 +4592,46 @@
     ],
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
+     "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous unavailable \\(query 1 · row 0\\)$",
+     "^January 2025 \\(2025-01-01 to 2025-01-31\\), shift 2, versus December 2024 \\(2024-12-01 to 2024-12-31\\)\\. Window coverage: complete; previous unavailable\\.$"
+    ],
+    "sections_not_match": "^The window is incomplete"
+   }
+  },
+  {
+   "id": "downtime-first-week-partial-unranked",
+   "type": "routing",
+   "mode": "offline",
+   "day": "2025-01-06",
+   "question": "How much downtime last week?",
+   "note": "Issue #105 with issue #101's review, on the v2 records (issue #100): 'last week' asked on Monday 2025-01-06 is the data's first week, 30 December 2024 to 3 January 2025, which holds three production days. The window is partial and the previous one is before the records: the review lists its reasons in the tool's order, never ranked, each with previous unavailable, never zero, and says the window is incomplete. It keeps the partial-window path downtime-last-month held before the records started on 1 January 2025.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-01/shift/2?measure=review",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2025-01-01"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
      "^- .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous unavailable \\(query 1 · row 0\\)$",
-     "^January 2025 \\(2025-01-01 to 2025-01-31\\), shift 2, versus December 2024 \\(2024-12-01 to 2024-12-31\\)\\. Window coverage: partial; previous unavailable\\.$"
+     "^Week 2024-12-30 to 2025-01-03 \\(Mon-Fri\\), shift 2, versus Week 2024-12-23 to 2024-12-27 \\(Mon-Fri\\)\\. Window coverage: partial; previous unavailable\\.$",
+     "^The window is incomplete \\(coverage partial\\): observed values only, and rankings are withheld\\.$"
     ],
     "sections_not_match": "^- [0-9]+\\. "
    }
@@ -6312,10 +6350,11 @@
    "id": "speedvar-top-three-contributors",
    "type": "routing",
    "mode": "offline",
+   "day": "2026-09-15",
    "question": "What were the top 3 contributors to speed variations?",
-   "note": "Issue #92, the owner's question (2026-11-10): it used to route to the generic speed card. The speed gap of the shift against target, split into stops, setups, below-target running and grade mix that add up to it; three bullets for the three largest buckets, a waterfall chart, where to look. Issue #101 (the owner's speed standard, review of #111): the reference is each grade's trailing-year sustained speed (its baseline) at the usual grade mix, not its target; the grade mix is schedule-driven and unpriced, the other buckets controllable.",
+   "note": "Issue #92, the owner's question (2026-11-10): it used to route to the generic speed card. The speed gap of the shift against target, split into stops, setups, below-target running and grade mix that add up to it; three bullets for the three largest buckets, a waterfall chart, where to look. Issue #101 (the owner's speed standard, review of #111): the reference is each grade's trailing-year sustained speed (its baseline) at the usual grade mix, not its target; the grade mix is schedule-driven and unpriced, the other buckets controllable. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): on 14 September shift 2 now runs above its baseline (its mix ran fast grades), so the case is asked on Tuesday 15 September, shift 2, where it runs below and three buckets add to the gap with none pulling against it (the plain three-bullet card; the branch's four-bullet note for 14 September no longer applies).",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=speedvar",
+    "url": "/corr/1/day/2026-09-15/shift/2?measure=speedvar",
     "status": "complete",
     "shifts": [
      2
@@ -6326,7 +6365,7 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-14"
+        "anchor": "2026-09-15"
        },
        "shift": 2,
        "against": "baseline"
@@ -6367,10 +6406,11 @@
    "id": "speedvar-top-three-contributors-no-offset",
    "type": "routing",
    "mode": "offline",
+   "day": "2026-09-07",
    "question": "What were the top 3 contributors to speed variations on shift 1?",
-   "note": "Coordinator review of PR #123, item 5: the plain three-bullet speed-variance card, pinned again now that speedvar-top-three-contributors (14 September, shift 2) carries the offset line. On 15 September shift 1 no bucket pulls against the gap, so the card is three bullets for the three largest buckets and no offset.",
+   "note": "Coordinator review of PR #123, item 5: the plain three-bullet speed-variance card, pinned again now that speedvar-top-three-contributors (14 September, shift 2) carries the offset line. On 15 September shift 1 no bucket pulls against the gap, so the card is three bullets for the three largest buckets and no offset. Merged with #111 (issue #101, the owner's speed standard): the reference is each grade's trailing-year baseline, not its target, so the case reads the baseline card (below baseline, each controllable bucket marked, the buckets add up to the gap). On the merged records the plain three-bullet card with no offset line is first shift on Monday 2026-09-07.",
    "expect": {
-    "url": "/corr/1/day/2026-09-15/shift/1?measure=speedvar",
+    "url": "/corr/1/day/2026-09-07/shift/1?measure=speedvar",
     "status": "complete",
     "shifts": [
      1
@@ -6381,10 +6421,10 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-15"
+        "anchor": "2026-09-07"
        },
        "shift": 1,
-       "against": "target"
+       "against": "baseline"
       }
      }
     ],
@@ -6400,7 +6440,7 @@
      "get_speed_variance"
     ],
     "shape": {
-     "headline_match": "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* below target: (stops|setups|below-target running|mix) [0-9.-]+%, .* \\(query 1\\)$",
+     "headline_match": "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* below baseline: (stops|setups|running under baseline|mix) [0-9.-]+%, .* \\(query 1\\)$",
      "bullets": [
       3,
       3
@@ -6411,24 +6451,24 @@
      ]
     },
     "sections_match": [
-     "^- (Stops|Setups|Below target|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row 0\\)$",
-     "^Against target, the reference is each grade's target weighted by its share of the setup clock",
-     "^The four buckets add up to the gap, and each bucket's details add up to it\\.$",
+     "^- (Stops|Setups|Below baseline|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) · controllable \\(query 1 · row 0\\)$",
+     "^Against the baseline, the reference is each grade's baseline weighted by its share of the setup clock over the same trailing year",
+     "^The buckets add up to the gap, and each bucket's details add up to it\\.$",
      "^How a dollar is priced, for .*: [0-9,.]+ lineal ft / [0-9.,]+ ft/min reference speed = [0-9,.]+ min x \\$1,200/hr machine time"
     ],
     "sections_not_match": "the other way, an offset"
-   },
-   "day": "2026-09-15"
+   }
   },
   {
    "id": "speedvar-grade-mix-is-schedule-driven",
    "type": "routing",
    "mode": "offline",
+   "day": "2026-03-09",
    "scope": "day",
    "question": "Why did speed differ on shift 3 versus shift 1 this week?",
-   "note": "Review of #111 (fix 1): the speed variance still held each grade at its target and priced the grade mix as machine time. The owner's speed standard is each grade's sustained average over the trailing year (targets.json, speed), never its target or maximum, and the grade mix is decided by the order book, so it is schedule-driven: marked so and never priced. The controllable buckets (stops, setups, running under baseline) carry the dollars. Re-picked on the rolling year (issue #91): September 2026's mix is the fourth bucket and gets no line, so the case asks the week of 26 January 2026, where shift 3's heavier grade mix is 82% of its gap to shift 1.",
+   "note": "Review of #111 (fix 1): the speed variance still held each grade at its target and priced the grade mix as machine time. The owner's speed standard is each grade's sustained average over the trailing year (targets.json, speed), never its target or maximum, and the grade mix is decided by the order book, so it is schedule-driven: marked so and never priced. The controllable buckets (stops, setups, running under baseline) carry the dollars. Re-picked on the rolling year (issue #91): September 2026's mix is the fourth bucket and gets no line, so the case asks the week of 26 January 2026, where shift 3's heavier grade mix is 82% of its gap to shift 1. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 9 March 2026, where shift 3 runs 8.4 ft/min below shift 1 and the grade mix is one of the three lines (an offset, the other way), marked schedule-driven and not priced.",
    "expect": {
-    "url": "/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=3,1",
+    "url": "/corr/1/day/2026-03-09?measure=speedvar&window=week&against=shift&shifts=3,1",
     "status": "complete",
     "tools": [
      {
@@ -6436,7 +6476,7 @@
       "arguments": {
        "window": {
         "period": "week",
-        "anchor": "2026-01-26"
+        "anchor": "2026-03-09"
        },
        "shift": 3,
        "against": "shift",
@@ -6459,8 +6499,7 @@
     "shifts": [
      3
     ]
-   },
-   "day": "2026-01-26"
+   }
   },
   {
    "id": "speedvar-why-speed-varied-week",
@@ -6791,11 +6830,12 @@
    "id": "speedvar-numbers-faithful",
    "type": "faithfulness",
    "mode": "offline",
+   "day": "2026-08-31",
    "period": "month",
    "question": "Why was speed below target?",
-   "note": "Issue #92: every figure on the speed-variance card is a tool value: the gap and the shares are the envelope's, each bullet's figures its bucket row's, the reference speeds in the notes the envelope's speeds, the dollars the priced rows'.",
+   "note": "Issue #92: every figure on the speed-variance card is a tool value: the gap and the shares are the envelope's, each bullet's figures its bucket row's, the reference speeds in the notes the envelope's speeds, the dollars the priced rows'. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): September's shift 2 now runs above its baseline at its month mix, so the month asked about is August 2026 (anchored on Monday 31 August), where it runs below.",
    "expect": {
-    "url": "/corr/1/month/2026-09-14/shift/2?measure=speedvar",
+    "url": "/corr/1/month/2026-08-31/shift/2?measure=speedvar",
     "status": "complete",
     "tools": [
      {
@@ -6803,7 +6843,7 @@
       "arguments": {
        "window": {
         "period": "month",
-        "anchor": "2026-09-14"
+        "anchor": "2026-08-31"
        },
        "shift": 2,
        "against": "baseline"
@@ -6915,12 +6955,12 @@
    "id": "speedvar-faster-than-reference-offsets",
    "type": "routing",
    "mode": "offline",
-   "day": "2026-09-07",
+   "day": "2026-01-26",
    "scope": "day",
    "question": "Why did speed differ on shift 2 versus shift 1 this week?",
-   "note": "Review of #92: when a window is faster than its reference the gap is a gain. Its buckets that ran worse pull the other way: offsets, priced as machine time when they are controllable losses; the gain itself is not priced, and the contribution note stays. In the week of 7 September 2026 shift 2 runs 65.3 ft/min above shift 1, mostly shift 1's planned maintenance (schedule-driven, not priced); its unplanned stops, led by missed splices, ran worse than shift 1's and pull the other way, priced. Re-anchored from the week of 26 January 2026, whose only listed offset became the planned-maintenance bucket when the owner split it out of stops (PR #111).",
+   "note": "Review of #92: when a window is faster than its reference the gap is a gain. Its buckets that ran worse pull the other way: offsets, priced as machine time when they are controllable losses; the gain itself is not priced, and the contribution note stays. In the week of 7 September 2026 shift 2 runs 65.3 ft/min above shift 1, mostly shift 1's planned maintenance (schedule-driven, not priced); its unplanned stops, led by missed splices, ran worse than shift 1's and pull the other way, priced. Re-anchored from the week of 26 January 2026, whose only listed offset became the planned-maintenance bucket when the owner split it out of stops (PR #111). Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 26 January 2026, where shift 2 runs 83.6 ft/min above shift 1, mostly its faster grade mix and shift 1's planned maintenance (both schedule-driven, not priced); its running under baseline and its unplanned stops, led by missed splices, ran worse than shift 1's and pull the other way, priced.",
    "expect": {
-    "url": "/corr/1/day/2026-09-07?measure=speedvar&window=week&against=shift&shifts=2,1",
+    "url": "/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=2,1",
     "status": "complete",
     "shifts": [
      2
@@ -6940,10 +6980,11 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
+   "day": "2026-09-09",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101, the owner's downtime rules (2026-11-10): a downtime question with no scope answers the previous production day, all shifts, whatever the shift control says; shift detail only when a shift is named or a flag pulls one in. Asked with the default controls (Monday 2026-09-14, shift 2), yesterday is Friday 2026-09-11, all shifts. Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 3's operator downtime is over its band, led by missed splices, which were over the band on their own once more in the trailing year. Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in.",
+   "note": "Issue #101, the owner's downtime rules (2026-11-10): a downtime question with no scope answers the previous production day, all shifts, whatever the shift control says; shift detail only when a shift is named or a flag pulls one in. Asked with the default controls (Monday 2026-09-14, shift 2), yesterday is Friday 2026-09-11, all shifts. Maintenance and operator downtime lead, each and together against its band; reasons are ranked by downtime % (minutes over scheduled minutes) with the stop count and minutes per stop beside; planned maintenance is scheduled time and is not ranked; a flag pulls in the shift with its supervisor slot and the leading reason's recurrence. That day shift 3's operator downtime is over its band, led by missed splices, which were over the band on their own once more in the trailing year. Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Wednesday 2026-09-09 (shift 2), yesterday is Tuesday 2026-09-08, all shifts, the day whose leading flag is shift 3's operator downtime led by missed splices that were over the band on their own once more in the trailing year (on the new records that pattern sits in the week of 7 September, the knife-jam story's week). The expectations are the owner's, unchanged but for the dates; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/day/2026-09-11?measure=review",
+    "url": "/corr/1/day/2026-09-08?measure=review",
     "status": "complete",
     "tools": [
      {
@@ -6951,7 +6992,7 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-11"
+        "anchor": "2026-09-08"
        },
        "shift": null
       }
@@ -6976,9 +7017,9 @@
     "sections_match": [
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous ([0-9.]+%|unavailable) \\(query 1 · row 0\\)$",
      "^Flags and who to ask$",
-     "^- Shift 3, 2026-09-11: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 3, 2026-09-08: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
      "^- Shift 3, Missed splice led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
-     "^2026-09-11 \\(Fri\\), all shifts, versus 2026-09-10 \\(Thu\\)\\. Window coverage: complete; previous complete\\.$",
+     "^2026-09-08 \\(Tue\\), all shifts, versus 2026-09-07 \\(Mon\\)\\. Window coverage: complete; previous complete\\.$",
      "Show the shift notes for shift 3"
     ],
     "sections_not_match": "^- [0-9]+\\. Planned maintenance"
@@ -6988,12 +7029,12 @@
    "id": "yesterday-review-from-tuesday",
    "type": "routing",
    "mode": "offline",
-   "day": "2026-09-29",
+   "day": "2026-09-08",
    "scope": "day",
    "question": "What were the top downtime reasons yesterday?",
-   "note": "Issue #101: asked on Tuesday 2026-09-29 with the production-day scope, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). That day two shifts are flagged for operator downtime, shift 2 the larger; missed splices led it and were over the band on their own once more in the trailing year (value-review-day-0928 computes it a second way). Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in.",
+   "note": "Issue #101: asked on Tuesday 2026-09-29 with the production-day scope, yesterday is Monday 2026-09-28 (the question moves the controls there, issue #105). That day two shifts are flagged for operator downtime, shift 2 the larger; missed splices led it and were over the band on their own once more in the trailing year (value-review-day-0928 computes it a second way). Re-picked on the rolling year (issue #91; the golden year ends 2026-09-30) after main merged in. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Tuesday 2026-09-08, yesterday is Monday 2026-09-07; that day shifts 1 and 3 are flagged for operator downtime, shift 1 the larger, led by missed splices that were over the band on their own once more in the trailing year (value-review-day-0907 computes the day a second way).",
    "expect": {
-    "url": "/corr/1/day/2026-09-28?measure=review",
+    "url": "/corr/1/day/2026-09-07?measure=review",
     "status": "complete",
     "tools": [
      {
@@ -7001,7 +7042,7 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-28"
+        "anchor": "2026-09-07"
        },
        "shift": null
       }
@@ -7026,10 +7067,10 @@
     "sections_match": [
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous ([0-9.]+%|unavailable) \\(query 1 · row 0\\)$",
      "^Flags and who to ask$",
-     "^- Shift 2, 2026-09-28: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
-     "^- Shift 2, Missed splice led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
-     "^2026-09-28 \\(Mon\\), all shifts, versus 2026-09-25 \\(Fri\\)\\. Window coverage: complete; previous complete\\.$",
-     "Show the shift notes for shift 2"
+     "^- Shift 1, 2026-09-07: \\*\\*[0-9.]+%\\*\\* of the shift in operator downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 1 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
+     "^- Shift 1, Missed splice led it with [0-9.]+ min: over the band on its own on \\*\\*[1-9][0-9]*\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [0-9]+ of [0-9]+ weeks \\(query 1 · flag 0\\)$",
+     "^2026-09-07 \\(Mon\\), all shifts, versus 2026-09-04 \\(Fri\\)\\. Window coverage: complete; previous complete\\.$",
+     "Show the shift notes for shift 1"
     ],
     "sections_not_match": "^- [0-9]+\\. Planned maintenance"
    }
@@ -7090,7 +7131,7 @@
    "reviewed_by": "owner",
    "scope": "day",
    "question": "What's trim costing us this month?",
-   "note": "Issue #101, the ownership lens: the total cost of waste in dollars, side trim first (always the largest percentage; every owner asks what trim costs), with trim's band beside its figure, then the rest by dollars and the total. Bond, warp and misalignment (and moisture, the fourth dry-end family the records hold) are dry-end waste, the tag scrap: one subtotal line ranked by its dollars, read against the yield after trim and shear with the dry-end band, and each kind kept as its own line beneath it, since the detail is what supervisors go after (the owner, PR #111, 2026-11-12). In September the tag scrap is second, ahead of shear.",
+   "note": "Issue #101, the ownership lens: the total cost of waste in dollars, side trim first (always the largest percentage; every owner asks what trim costs), with trim's band beside its figure, then the rest by dollars and the total. Bond, warp and misalignment (and moisture, the fourth dry-end family the records hold) are dry-end waste, the tag scrap: one subtotal line ranked by its dollars, read against the yield after trim and shear with the dry-end band, and each kind kept as its own line beneath it, since the detail is what supervisors go after (the owner, PR #111, 2026-11-12). In September the tag scrap is second, ahead of shear. Issue #100 (record contract v2): the owner-approved taxonomy (2026-11-11) has a fifth dry-end family, other (cracking, handling, paper, print), so the tag scrap holds five kinds, and the changeover rejects are a line of their own, priced once (owner ruling (d) on PR #123, 2026-11-12). Shear moves to row 6 and the card to ten bullets. Those three changes follow from the owner's rulings, not from a choice here; the tag scrap is still second, ahead of shear. For the owner to confirm.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership",
     "status": "complete",
@@ -7116,7 +7157,7 @@
      "headline_match": "^Side trim costs \\*\\*\\$[0-9,]+ a year\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of gross · (home run \\(2\\.75% or under\\)|on target \\(3% or under\\)|over the 3% target, under the 3\\.25% flag|flag: over 3\\.25%, the target is 3%) \\(query 1 · row 0\\)$",
      "bullets": [
       3,
-      8
+      10
      ],
      "look": [
       2,
@@ -7124,11 +7165,11 @@
      ]
     },
     "sections_match": [
-     "^- 2\\. Dry-end waste \\(tag scrap\\), the 4 kinds below: \\*\\*\\$[0-9,]+/yr\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of the yield after trim and shear · (home run \\(0\\.75% or under\\)|on target \\(1% or under\\)|over the 1% target, under the 1\\.25% flag|flag: over 1\\.25%, the target is 1%) · controllable, temperatures \\(query 1\\)$",
+     "^- 2\\. Dry-end waste \\(tag scrap\\), the 5 kinds below: \\*\\*\\$[0-9,]+/yr\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of the yield after trim and shear · (home run \\(0\\.75% or under\\)|on target \\(1% or under\\)|over the 1% target, under the 1\\.25% flag|flag: over 1\\.25%, the target is 1%) · controllable, temperatures \\(query 1\\)$",
      "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: bond: [0-9.]+% of the yield after trim and shear · controllable, temperatures \\(query 1 · row [1-4]\\)$",
      "^- Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: warp: [0-9.]+% of the yield after trim and shear · controllable, temperatures \\(query 1 · row [1-4]\\)$",
      "^- Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: misalignment: [0-9.]+% of the yield after trim and shear · controllable, temperatures \\(query 1 · row [1-4]\\)$",
-     "^- 3\\. Shear chops \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, sequencing \\(query 1 · row 5\\)$",
+     "^- 3\\. Shear chops \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, sequencing \\(query 1 · row 6\\)$",
      "^- All the waste recorded: \\*\\*\\$[0-9,]+ a year\\*\\* across [0-9]+ kinds · \\$[0-9,]+ in this window \\(query 1\\)$",
      "The ownership lens: the total cost of the waste recorded, side trim first"
     ],
@@ -7140,11 +7181,12 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-09-21",
+   "day": "2025-01-22",
+   "shift": 3,
    "question": "Show maintenance downtime by reason",
-   "note": "Issue #101, a flagged maintenance shift: the owner's example is 60 maintenance minutes on first shift (12.5% of 480, five times target). The records hold no such shift until one is planted (a follow-up on top of the rolling year). A power outage is external, not maintenance (the owner on PR #111, 2026-11-12), so the case sits on a real maintenance fault: the year's largest maintenance-fault shift is third shift on 2026-09-21 (Monday), 14.65 min over 7 stops (3.05%), over the 2.5% band, led by knife / slitter jams. The flag names the shift and its supervisor slot, and the recurrence of the reason that led it: over the trailing year, the shifts on which knife jams were over the band on their own (none on shift 3: they never cross it alone) and the weeks they were among the five reasons with the most unplanned minutes (23 of 52, a chronic contributor). Re-picked from 2026-05-04 shift 1, which a 15-minute power outage put over the band.",
+   "note": "Issue #101, a flagged maintenance shift: the owner's example is 60 maintenance minutes on first shift (12.5% of 480, five times target). The records hold no such shift until one is planted (a follow-up on top of the rolling year). A power outage is external, not maintenance (the owner on PR #111, 2026-11-12), so the case sits on a real maintenance fault: the year's largest maintenance-fault shift is third shift on 2026-09-21 (Monday), 14.65 min over 7 stops (3.05%), over the 2.5% band, led by knife / slitter jams. The flag names the shift and its supervisor slot, and the recurrence of the reason that led it: over the trailing year, the shifts on which knife jams were over the band on their own (none on shift 3: they never cross it alone) and the weeks they were among the five reasons with the most unplanned minutes (23 of 52, a chronic contributor). Re-picked from 2026-05-04 shift 1, which a 15-minute power outage put over the band. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): maintenance-fault flags are rare there, and the only one on third shift led by knife / slitter jams is Wednesday 2025-01-22, 13.08 min over 6 stops (2.73%), never over the band alone on shift 3 (0 of 16 shifts since the records begin) and in the weekly top five 1 of 4 weeks. The expectations are the owner's, unchanged but for the dates and the shift the day moved to; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/day/2026-09-21/shift/3?measure=downtime&kind=maintenance",
+    "url": "/corr/1/day/2025-01-22/shift/3?measure=downtime&kind=maintenance",
     "status": "complete",
     "tools": [
      {
@@ -7182,24 +7224,23 @@
     "sections_match": [
      "^- Knife / slitter jam: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$",
      "^Flags and who to ask$",
-     "^- Shift 3, 2026-09-21: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 2 · flag 0\\)$",
+     "^- Shift 3, 2025-01-22: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 2 · flag 0\\)$",
      "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*0\\*\\* of [0-9]+ shifts since [0-9-]+, shift 3 · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 2 · flag 0\\)$"
     ],
     "sections_not_match": "Power outage"
-   },
-   "shift": 3
+   }
   },
   {
    "id": "owner-maintenance-flag-day-review",
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-09-22",
+   "day": "2025-01-23",
    "scope": "day",
    "question": "Show downtime by reason",
-   "note": "Issue #101: the same flagged maintenance-fault shift on the owner's default. Asked on Tuesday 2026-09-22 with no scope, the answer is the previous production day, Monday 2026-09-21, all shifts. The flag still pulls in shift 3 with its supervisor slot, and the recurrence of its leading reason, knife / slitter jams, across all shifts; operator flags on shifts 2 and 1 follow it. Re-picked from 2026-05-04 (asked on 05-05), whose maintenance flag was a power outage, external since the owner's decision on PR #111 (2026-11-12).",
+   "note": "Issue #101: the same flagged maintenance-fault shift on the owner's default. Asked on Tuesday 2026-09-22 with no scope, the answer is the previous production day, Monday 2026-09-21, all shifts. The flag still pulls in shift 3 with its supervisor slot, and the recurrence of its leading reason, knife / slitter jams, across all shifts; operator flags on shifts 2 and 1 follow it. Re-picked from 2026-05-04 (asked on 05-05), whose maintenance flag was a power outage, external since the owner's decision on PR #111 (2026-11-12). Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the same flagged maintenance-fault shift, third shift on Wednesday 2025-01-22, asked on Thursday 2025-01-23 with no scope. That day shift 1's operator flag (2.80%) is larger than shift 3's maintenance flag (2.73%), so the maintenance flag is the second (flag 1) and the shift-1 flag leads; on the new records no day has a knife-jam maintenance flag on third shift that leads its day. The flag index is the one change to the owner's expectations beyond the dates; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/day/2026-09-21?measure=review",
+    "url": "/corr/1/day/2025-01-22?measure=review",
     "status": "complete",
     "tools": [
      {
@@ -7207,7 +7248,7 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-09-21"
+        "anchor": "2025-01-22"
        },
        "shift": null
       }
@@ -7219,9 +7260,9 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^- Shift 3, 2026-09-21: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 0\\)$",
-     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*0\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 1 · flag 0\\)$",
-     "^2026-09-21 \\(Mon\\), all shifts, versus 2026-09-18 \\(Fri\\)\\. Window coverage: complete; previous complete\\.$"
+     "^- Shift 3, 2025-01-22: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 3 supervisor \\(Crew [ABC] on duty\\) \\(query 1 · flag 1\\)$",
+     "^- Shift 3, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*0\\*\\* of [0-9]+ shifts since [0-9-]+, all shifts · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 1 · flag 1\\)$",
+     "^2025-01-22 \\(Wed\\), all shifts, versus 2025-01-21 \\(Tue\\)\\. Window coverage: complete; previous complete\\.$"
     ]
    }
   },
@@ -7230,24 +7271,24 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-05-04",
-   "shift": 1,
+   "day": "2025-02-14",
+   "shift": 3,
    "question": "Show maintenance downtime by reason",
-   "note": "The owner, PR #111 (2026-11-12): a power outage is external, not maintenance. It shows in downtime but does not count against the maintenance band or trip its flag. First shift on 2026-05-04 had a 15-minute power outage beside 6.67 maintenance minutes: with the outage counted it was 4.51% of the shift and flagged; as external, maintenance is 1.39%, on target, the outage is not a maintenance reason and no maintenance flag fires.",
+   "note": "The owner, PR #111 (2026-11-12): a power outage is external, not maintenance. It shows in downtime but does not count against the maintenance band or trip its flag. First shift on 2026-05-04 had a 15-minute power outage beside 6.67 maintenance minutes: with the outage counted it was 4.51% of the shift and flagged; as external, maintenance is 1.39%, on target, the outage is not a maintenance reason and no maintenance flag fires. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): third shift on Friday 2025-02-14 had a 10-minute power outage beside 6.69 maintenance minutes; counted as maintenance it would be 3.48% of the shift and flagged, as external maintenance is 1.39%, on target, and no maintenance flag fires. The expectations are the owner's, unchanged but for the dates and the shift the day moved to; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/day/2026-05-04/shift/1?measure=downtime&kind=maintenance",
+    "url": "/corr/1/day/2025-02-14/shift/3?measure=downtime&kind=maintenance",
     "status": "complete",
     "tools": [
      {
       "tool": "get_shift_kpis",
       "arguments": {
-       "shift": 1
+       "shift": 3
       }
      },
      {
       "tool": "get_downtime_breakdown",
       "arguments": {
-       "shift": 1,
+       "shift": 3,
        "group_by": "reason",
        "kind": "Maintenance"
       }
@@ -7278,12 +7319,12 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-05-05",
+   "day": "2026-01-06",
    "scope": "day",
    "question": "Show downtime by reason",
-   "note": "The owner, PR #111 (2026-11-12): the same day on the default (asked on Tuesday 2026-05-05, the previous production day, all shifts). The power outage shows in the downtime, as external and not controllable, apart from the ranked maintenance and operator reasons; it is not in the maintenance figure and no shift is flagged for it.",
+   "note": "The owner, PR #111 (2026-11-12): the same day on the default (asked on Tuesday 2026-05-05, the previous production day, all shifts). The power outage shows in the downtime, as external and not controllable, apart from the ranked maintenance and operator reasons; it is not in the maintenance figure and no shift is flagged for it. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Tuesday 2026-01-06, the previous production day is Monday 2026-01-05, whose third shift had a 15-minute power outage (1.04% of the day's 1,440 scheduled minutes); the 15-minute outage the owner's expectation names is on another day than power-outage-shift-not-flagged-as-maintenance's now. The expectations are the owner's, unchanged but for the dates and the shift the day moved to; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/day/2026-05-04?measure=review",
+    "url": "/corr/1/day/2026-01-05?measure=review",
     "status": "complete",
     "tools": [
      {
@@ -7291,7 +7332,7 @@
       "arguments": {
        "window": {
         "period": "day",
-        "anchor": "2026-05-04"
+        "anchor": "2026-01-05"
        },
        "shift": null
       }
@@ -7307,7 +7348,7 @@
      "^External, not controllable$",
      "^- Power outage: \\*\\*15\\.00 min\\*\\* over 1 stop · 1\\.04% of scheduled minutes · external, outside the plant \\(query 1 · row [0-9]+\\)$"
     ],
-    "sections_not_match": "^- [0-9]+\\. Power outage|^- Shift 1, 2026-05-04: .*maintenance downtime"
+    "sections_not_match": "^- [0-9]+\\. Power outage|^- Shift 3, 2026-01-05: .*maintenance downtime"
    }
   },
   {
@@ -7315,13 +7356,13 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-05-04",
+   "day": "2025-07-14",
    "shift": 1,
    "period": "week",
    "question": "Why was this week bad?",
-   "note": "Review of the owner's decisions on PR #111: a power outage is external, outside the plant, so like planned maintenance it never leads the period overview's downtime finding. In the week of 4 May 2026 shift 1's largest stop reason by minutes after planned maintenance was the 15-minute outage; the finding names the largest unplanned reason instead. The note on how a dollar is priced is for the row the finding names, Order change, never the Pareto's first row (planned maintenance) (coordinator re-review of the decisions).",
+   "note": "Review of the owner's decisions on PR #111: a power outage is external, outside the plant, so like planned maintenance it never leads the period overview's downtime finding. In the week of 4 May 2026 shift 1's largest stop reason by minutes after planned maintenance was the 15-minute outage; the finding names the largest unplanned reason instead. The note on how a dollar is priced is for the row the finding names, Order change, never the Pareto's first row (planned maintenance) (coordinator re-review of the decisions). Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 14 July 2025, whose Tuesday first shift had an 11-minute power outage, longer than any unplanned reason of shift 1's week; the finding names Order change (10.67 min), and the dollar note prices it. The expectations are the owner's, unchanged but for the dates and the shift the day moved to; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/week/2026-05-04/shift/1?measure=overview",
+    "url": "/corr/1/week/2025-07-14/shift/1?measure=overview",
     "status": "complete",
     "shifts": [
      1
@@ -7416,12 +7457,12 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-09-17",
+   "day": "2025-08-21",
    "shift": 1,
    "question": "Where did the money go this shift?",
-   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes, $2,580 at the post's rates: it was the shift's second-ranked loss.",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes, $2,580 at the post's rates: it was the shift's second-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): first shift on Thursday 2025-08-21 holds a 129-minute planned maintenance window, $2,580 at the post's rates, apart from the ranked losses; shear chops are second. The card also carries the changeover rejects and the cutoff-knife and stacker waste boards as their own gaps (owner ruling (d) on PR #123). The expectations are the owner's, unchanged but for the dates and the shift the day moved to; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/day/2026-09-17/shift/1?measure=dollars",
+    "url": "/corr/1/day/2025-08-21/shift/1?measure=dollars",
     "status": "complete",
     "shifts": [
      1
@@ -7450,12 +7491,12 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-09-16",
+   "day": "2025-11-21",
    "shift": 3,
    "question": "Where did the money go this shift?",
-   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Third shift on 2026-09-16 had the September power outage, 11 minutes, $220: it was the shift's seventh-ranked loss.",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Third shift on 2026-09-16 had the September power outage, 11 minutes, $220: it was the shift's seventh-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): third shift on Friday 2025-11-21 had an 11-minute power outage, $220, apart from the ranked losses (ranked, it would have been ninth). The expectations are the owner's, unchanged but for the dates and the shift the day moved to; for the owner to confirm.",
    "expect": {
-    "url": "/corr/1/day/2026-09-16/shift/3?measure=dollars",
+    "url": "/corr/1/day/2025-11-21/shift/3?measure=dollars",
     "status": "complete",
     "shifts": [
      3
@@ -7541,7 +7582,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Which downtime reason cost the most minutes this week?",
-   "note": "Issue #101 review: the week's Pareto opened with planned maintenance, which the owner counts as scheduled time. The tool's rows are unchanged; the answer leads with the largest unplanned reason and lists planned maintenance last, marked.",
+   "note": "Issue #101 review: the week's Pareto opened with planned maintenance, which the owner counts as scheduled time. The tool's rows are unchanged; the answer leads with the largest unplanned reason and lists planned maintenance last, marked. Issue #100, the owner's ruling (c) on PR #123 (2026-11-12): a planned stop reads as its reason and its kind, \"Planned maintenance (scheduled)\", wherever it shows as a reason; the line is otherwise unchanged.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=pareto&window=week",
     "status": "complete",
@@ -7562,7 +7603,7 @@
     "charts": 1,
     "sections_match": [
      "^\\*\\*[0-9.,]+ min\\*\\* at .+, the largest unplanned reason · ",
-     "^- Planned maintenance: \\*\\*[0-9.,]+ min\\*\\* .* · scheduled time, not an unplanned loss"
+     "^- Planned maintenance \\(scheduled\\): \\*\\*[0-9.,]+ min\\*\\* .* · scheduled time, not an unplanned loss"
     ],
     "sections_not_match": "^\\*\\*[0-9.,]+ min\\*\\* at Planned maintenance"
    }
@@ -7662,11 +7703,12 @@
    "id": "speedvar-offset-larger-than-the-third-contributor-gets-a-line",
    "type": "routing",
    "mode": "offline",
+   "day": "2025-10-13",
    "scope": "day",
    "question": "Why did speed differ on shift 3 versus shift 1 this week?",
-   "note": "Owner, PR #91: the card lists the three buckets adding to the gap; a bucket working against it gets a line too when it is larger than the third of them. On the golden year's week of 14 September shift 3 runs 41.8 ft/min below shift 1: below-baseline running, grade mix and unplanned stops (4.7 ft/min) add to the gap, and planned maintenance (-94%, 39.5 ft/min, shift 1's Thursday PM; its own bucket and schedule-driven since the owner's decision on PR #111) pulls against it, so it gets a line.",
+   "note": "Owner, PR #91: the card lists the three buckets adding to the gap; a bucket working against it gets a line too when it is larger than the third of them. On the golden year's week of 14 September shift 3 runs 41.8 ft/min below shift 1: below-baseline running, grade mix and unplanned stops (4.7 ft/min) add to the gap, and planned maintenance (-94%, 39.5 ft/min, shift 1's Thursday PM; its own bucket and schedule-driven since the owner's decision on PR #111) pulls against it, so it gets a line. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 13 October 2025, where shift 3 runs 69.8 ft/min below shift 1: below-baseline running, grade mix and unplanned stops (2.6 ft/min) add to the gap, and shift 1's planned maintenance (-33%, 23.3 ft/min) pulls against it by more than the third contributor, so it gets a line.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1",
+    "url": "/corr/1/day/2025-10-13?measure=speedvar&window=week&against=shift&shifts=3,1",
     "status": "complete",
     "shifts": [
      3

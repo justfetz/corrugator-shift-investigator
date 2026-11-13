@@ -56,7 +56,7 @@ PERIOD_TOOL_SCHEMAS = [
     {"name": name, "description": description, "parameters": {"type": "object", "properties": properties,
                                                               "required": required, "additionalProperties": False}}
     for name, description, properties, required in [
-        ("get_period_kpis", "Dashboard tiles for one window with the previous window of the same kind: volume MSF, lineal ft, speed with and without stops, downtime, stops, minutes per stop, trim, shear, dry-end (bond/warp/misalignment/moisture/other: cracking, handling, paper, print), bale, unexplained (bale minus every recorded waste line), maintenance+PM, operator, setups, paper changes, lineal per setup, lineal per paper change, baled MSF; each with delta and the better direction. Ratios of sums.",
+        ("get_period_kpis", "Dashboard tiles for one window with the previous window of the same kind: volume MSF, lineal ft, speed with and without stops, downtime, stops, minutes per stop, trim, shear, dry-end (bond/warp/misalignment/moisture/other: cracking, handling, paper, print), bale, unexplained (bale minus every recorded waste line), maintenance + planned maintenance (scheduled), operator, setups, paper changes, lineal per setup, lineal per paper change, baled MSF; each with delta and the better direction. Ratios of sums.",
          {"window": WINDOW_SCHEMA, "compare": {"type": "boolean"}, "shift": SHIFT_FILTER}, ["window"]),
         ("compare_periods", "The same KPI table for two arbitrary windows (month vs month, week vs week, day vs day); the second window is the comparison base.",
          {"current_window": WINDOW_SCHEMA, "previous_window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["current_window", "previous_window"]),

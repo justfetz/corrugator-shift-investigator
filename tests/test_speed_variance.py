@@ -16,14 +16,14 @@ from investigator.urls import canonical_url, redirect_for, resolve_url
 
 DAY = "2026-09-14"
 # A week whose stops offset (shift 1's Thursday planned maintenance) is the third of the tool's rows for shift 3 against
-# shift 1 (issue #35). In the week of 14 September it comes after three contributors and gets its line by size instead
+# shift 1 (issue #35). In the week of 13 October 2025 (issue #100's records) it comes after three contributors and gets its line by size instead
 # (test_an_offset_larger_than_the_third_contributor_gets_a_line).
 OFFSET_WEEK = "2026-01-26"
 BUCKETS = [key for key, _ in SPEEDVAR_BUCKETS]
 CORE = ["stops", "setups", "below_baseline", "mix"]   # always there; planned maintenance and external stops when held
-# The week of 7 September 2026: shift 2 runs above shift 1, and its unplanned stops (missed splices) ran worse, an offset
+# The week of 26 January 2026 (issue #100's records; 7 September before): shift 2 runs above shift 1, and its unplanned stops (missed splices) ran worse, an offset
 # that is a controllable loss and gets a line (test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain).
-GAIN_WEEK = "2026-09-07"
+GAIN_WEEK = "2026-01-26"
 
 
 @pytest.fixture(scope="module")
@@ -76,7 +76,7 @@ def test_speed_with_stops_is_the_kpi_tile_and_the_baseline_reference_is_the_usua
     for window, shift in (({"period": "month", "anchor": DAY}, None), ({"period": "day", "anchor": DAY}, 2), ({"period": "day", "anchor": DAY}, 3)):
         data = store.get_speed_variance(window, shift)
         baselines = store.grade_speed_baselines(data["window"]["end"])
-        clock = store._fetch("SELECT grade, sum(seconds) AS seconds FROM setups WHERE production_date BETWEEN ? AND ? GROUP BY grade",
+        clock = store._fetch("SELECT quality_id AS grade, sum(seconds) AS seconds FROM setups WHERE production_date BETWEEN ? AND ? GROUP BY quality_id",
                              [baselines["since"], baselines["through"]])
         standard = sum(baselines["grades"][r["grade"]]["baseline_fpm"] * r["seconds"] for r in clock) / sum(r["seconds"] for r in clock)
         assert (data["baseline_since"], data["baseline_through"], data["baseline_fallback"]) == (baselines["since"], baselines["through"], [])
@@ -96,7 +96,7 @@ def test_every_grade_is_held_at_its_baseline_not_its_target(store):
     # speed_run_fpm is shown to 0.1 ft/min, so its share of the baseline is within that step of the tool's
     assert all(abs(d["speed_to_baseline_pct"] - d["speed_run_fpm"] / d["baseline_fpm"] * 100) <= 0.06 + 5 / d["baseline_fpm"] for d in running if d["speed_run_fpm"])
     # a stop reason's loss is its minutes at the stopped setup's baseline per scheduled minute
-    stops = store._fetch("SELECT st.reason AS reason, s.grade AS grade, sum(st.seconds) / 60 AS minutes FROM stops st "
+    stops = store._fetch("SELECT st.reason AS reason, s.quality_id AS grade, sum(st.seconds) / 60 AS minutes FROM stops st "
                          "JOIN setups s ON s.setup_id = st.setup_id WHERE s.production_date BETWEEN ? AND ? AND s.shift = 2 "
                          "AND st.reason <> 'Order change' GROUP BY ALL", [data["window"]["start"], data["window"]["end"]])
     lost = {}
@@ -243,17 +243,17 @@ def test_a_second_shift_is_outside_the_selected_shift_scope():
 
 
 def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(store):
-    agent = Agent(store.day_analysis(DAY))
-    result = agent.ask("What were the top 3 contributors to speed variations?", Context(DAY, 2, scope="shift"))
+    # Tuesday 15 September (speedvar-top-three-contributors): on issue #100's records 14 September's shift 2 runs above its
+    # baseline, its mix of fast grades; the 15th runs below with three contributing buckets and no offset line
+    day = "2026-09-15"
+    agent = Agent(store.day_analysis(day))
+    result = agent.ask("What were the top 3 contributors to speed variations?", Context(day, 2, scope="shift"))
     data = next(s["data"] for s in result["trace"] if s["tool"] == "get_speed_variance")
     sections = result["sections"]
     assert sections[0].startswith(f"Speed gap **{abs(data['gap_fpm']):,.1f} ft/min** below baseline: ") and sections[0].endswith("(query 1)")
     bullets = [s for s in sections[1:4]]
-    assert all(b.startswith("- ") and b.endswith(f"(query 1 · row {i})") for i, b in enumerate(bullets))
+    assert all(b.startswith("- ") and b.endswith(f"(query 1 · row {i})") for i, b in enumerate(bullets)) and not sections[4].startswith("- ")
     assert [b[2:].split(":")[0] for b in bullets] == [r["label"] for r in data["rows"][:3]]
-    # since issue #100's records the shift's grade mix works against the gap by more than the third bucket, so the owner's
-    # rule (PR #91) gives it a fourth line, the offset; nothing else follows the three findings
-    assert sections[4].startswith("- Grade mix: ") and "the other way, an offset" in sections[4] and not sections[5].startswith("- ")
     looks = sections[sections.index("Where to look") + 1:]
     assert 2 <= len(looks) <= 3 and all("→ “" in x for x in looks)
     [chart] = result["charts"]
@@ -263,8 +263,9 @@ def test_the_answer_is_a_headline_three_bullets_a_waterfall_and_where_to_look(st
 
 
 def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(store):
-    """Review of #92: "offset" pulls against the gap. Shift 2 against shift 1 in the week of 7 September is a gain (above);
-    its unplanned stops ran worse (missed splices), so stops is an offset on the card and is priced as machine time, while
+    """Review of #92: "offset" pulls against the gap. Shift 2 against shift 1 in the week of 26 January 2026 (re-picked from
+    7 September on issue #100's records) is a gain (above); its unplanned stops ran worse (missed splices), so stops is an
+    offset on the card and is priced as machine time, while
     the gain buckets, the schedule-driven ones (shift 1's planned maintenance, the mix) and the gap itself are not; the
     contribution status is the rates', not the gap's."""
     data = cost_model.attach("get_speed_variance", variance(store, "week", 2, "shift", 1, anchor=GAIN_WEEK), cost_model.effective())
@@ -290,15 +291,19 @@ def test_a_faster_window_prices_the_buckets_that_ran_worse_and_not_the_gain(stor
 
 def test_an_offset_larger_than_the_third_contributor_gets_a_line(store):
     """Owner, PR #91: the card lists the three buckets adding to the gap, and a bucket pulling against it gets a line
-    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 14 September: below-baseline
-    running, grade mix and unplanned stops (4.7 ft/min) add to the gap; shift 1's planned maintenance (39.5 ft/min, -94%,
-    its own bucket since the owner's decision on PR #111) pulls against it."""
-    agent = Agent(store.day_analysis(DAY))
-    sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(DAY, 2, scope="day"))["sections"]
+    too when it is larger than the third of them. Shift 3 against shift 1 in the week of 13 October 2025 (re-picked from
+    14 September on issue #100's records): below-baseline running, grade mix and unplanned stops (2.6 ft/min) add to the
+    gap; shift 1's planned maintenance (23.3 ft/min, -33%, its own bucket since the owner's decision on PR #111) pulls
+    against it."""
+    week = "2025-10-13"
+    agent = Agent(store.day_analysis(week))
+    sections = agent.ask("Why did speed differ on shift 3 versus shift 1 this week?", Context(week, 2, scope="day"))["sections"]
     lines = [s for s in sections if s.startswith("- ")][:4]
     assert [s.split(":")[0] for s in lines] == ["- Below baseline", "- Grade mix", "- Stops", "- Planned maintenance"]
     assert all("of the gap" in s for s in lines[:3]) and "the other way, an offset" in lines[3]
-    assert lines[3].endswith("(query 1 · row 5)") and "largest Planned maintenance" in lines[3]   # its own row of the tool, the last
+    data = variance(store, "week", 3, "shift", 1, anchor=week)
+    planned = next(i for i, r in enumerate(data["rows"]) if r["label"] == "Planned maintenance")
+    assert lines[3].endswith(f"(query 1 · row {planned})") and "largest Planned maintenance" in lines[3]   # its own row of the tool
     assert "schedule-driven, the maintenance plan sets planned stops" in lines[3] and " · $" not in lines[3]
     # an offset smaller than the third contributor stays off: shift 2 against shift 1 in the week of 4 May 2026
     agent = Agent(store.day_analysis("2026-05-04"))

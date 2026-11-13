@@ -131,7 +131,7 @@ These are demo choices, not plant standards (the simulation constants are at the
 
 Three effects are planted in the records by `src/investigator/stories.py`:
 
-1. A slitter/scorer rebuild in the Thursday 20 August PM window. Afterwards side trim creeps about 0.1 percentage point a week until 31 October, then returns to its pre-story level, and knife / slitter jam stops rise, concentrating on the slitter/scorer.
+1. A slitter/scorer rebuild in the Thursday 20 August planned maintenance window. Afterwards side trim creeps about 0.1 percentage point a week until 31 October, then returns to its pre-story level, and knife / slitter jam stops rise, concentrating on the slitter/scorer.
 2. A missed-splice problem on Splicer 3 in the week of 7 September: missed-splice minutes roughly triple, and the shear chop follows because every missed splice is a web break and a run of full-width chops.
 3. Warp rejects run 1.5× on the first production day after a weekend and higher in August than in September; bond and misalignment stay flat.
 

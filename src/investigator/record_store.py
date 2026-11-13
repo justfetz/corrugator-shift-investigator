@@ -1573,7 +1573,7 @@ class RecordStore:
         stop_sql = (f"SELECT production_date, shift, kind, reason, count(*) AS stops, sum(seconds) / 60 AS minutes FROM stops "
                     f"WHERE production_date BETWEEN ? AND ?{clause} AND kind IN ('{kinds}') GROUP BY ALL")
         params = [start, end, *extra]
-        shifts = self._fetch(shift_sql, params)
+        shifts = self._fetch(shift_sql, params, limit=20000)   # the records' whole span (from 1 January 2025) holds over 1,000 shifts
         stops = self._fetch(stop_sql, params, limit=20000)
         for sql in (shift_sql, stop_sql):
             if trace is not None:

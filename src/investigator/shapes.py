@@ -935,7 +935,11 @@ class PeriodAnswer:
                     if line and line not in others:
                         bullets = [*bullets, line]
         if not self.whole(lead['data']):
-            notes = [f'The window is incomplete (coverage {lead["data"]["coverage"]}): observed values only, and rankings are withheld.', *notes]
+            # the downtime review ranks on its own window's coverage, the previous window beside it (period_review): a complete
+            # window whose previous one is outside the records is ranked, so it is not called incomplete
+            own = lead['data'].get('window', {}).get('coverage') if lead['data'].get('tool') == 'get_downtime_review' else None
+            if own != 'complete':
+                notes = [f'The window is incomplete (coverage {own or lead["data"]["coverage"]}): observed values only, and rankings are withheld.', *notes]
         notes = list(dict.fromkeys(notes))
         out = [head, *others, *[b for b in bullets if b], *dict.fromkeys(windows), *notes]
         looks = [x for x in looks if x]
@@ -1107,7 +1111,10 @@ class PeriodAnswer:
             r = rows[lead]
             fig = f'{pval(r["minutes"])} min' if minutes else f'{n(r["stops"])} stops'
             rank = (', the largest unplanned reason' if lead else f', the largest of {len(rows)} {noun}') if self.whole(data) else ''
-            head = f'**{fig}** at {stop_label(r["category"])}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s {"minutes" if minutes else "stops"}{priced(r)} {ref(p, lead)}'
+            # the lead row is not repeated as a bullet, so its previous window rides on the headline as the bullets carry theirs
+            before = f' · previous {pval(r["previous_minutes"])} min' if minutes and r.get('previous_minutes') is not None else ''
+            head = (f'**{fig}** at {stop_label(r["category"])}{self.where(data)}{rank} · {pval(r["share_pct"])}% of the window\'s '
+                    f'{"minutes" if minutes else "stops"}{before}{priced(r)} {ref(p, lead)}')
         else:
             head = f'No recorded stops in this window{self.where(data)} {ref(p)}'
         bullets = []
@@ -1273,7 +1280,7 @@ class PeriodAnswer:
 
     @staticmethod
     def dry_end_line(o):
-        """The ownership lens's dry-end subtotal: bond, warp, misalignment and moisture are dry-end waste, the tag scrap
+        """The ownership lens's dry-end subtotal: bond, warp, misalignment, moisture and other are dry-end waste, the tag scrap
         (the owner, PR #111); its dollars are the lines beneath it added up, its share and band the dry-end waste's."""
         d = o['data']
         figure = (f'**{money(d["dry_end_usd_per_year"])}/yr**' if d.get('dry_end_usd_per_year') is not None else
@@ -1402,7 +1409,7 @@ class PeriodAnswer:
             r = rows[i]
             toward = r['gap_fpm'] * sign >= 0
             share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
-            top = (f' · largest {stop_label(r["top_item"])} at {f1(abs(r["top_item_fpm"]))} ft/min'
+            top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'
                    if whole and r.get('top_item') and r.get('top_item_fpm') is not None else '')
             # every bucket is marked (issue #101; PR #111): the grade mix and planned maintenance are schedule-driven, a power
             # outage is external; neither is ever priced

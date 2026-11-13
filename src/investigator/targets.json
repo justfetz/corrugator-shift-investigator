@@ -15,15 +15,15 @@
   {"id": "shear", "label": "Shear (chop)", "unit": "% of gross", "home_run": 0.5, "target": 0.75, "flag": 1.0,
    "denominator": "gross sq ft (full-web cuts, about 34 in a piece, at order and grade changes)", "lever": "controllable", "source": "owner, 2026-11-10",
    "note": "Controllable through sequencing."},
-  {"id": "dry_end", "label": "Dry-end waste (bond, warp, misalignment, moisture)", "unit": "% of yield", "home_run": 0.75, "target": 1.0, "flag": 1.25,
+  {"id": "dry_end", "label": "Dry-end waste (bond, warp, misalignment, moisture, other)", "unit": "% of yield", "home_run": 0.75, "target": 1.0, "flag": 1.25,
    "denominator": "yield after trim and shear (gross minus side trim minus shear)", "lever": "controllable", "source": "owner, 2026-11-10",
    "note": "Controllable through temperatures."},
   {"id": "peel", "label": "Peel (roll prep)", "unit": "% of roll stock consumed", "home_run": null, "target": 0.5, "flag": null,
    "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10",
-   "note": "Target about 0.5%; the flag is the owner's to set. The records carry no peel quantity yet."},
+   "note": "Target about 0.5%; the flag is the owner's to set. The roll records carry peel (rolls.peel_sqft, issue #100); no tool reads it against this band yet."},
   {"id": "core", "label": "Core (at splice)", "unit": "% of roll stock consumed", "home_run": null, "target": 0.1, "flag": null,
    "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10",
-   "note": "Target about 0.1%; the flag is the owner's to set. The records carry no core quantity yet."}
+   "note": "Target about 0.1%; the flag is the owner's to set. The roll records carry core (rolls.core_sqft, issue #100); no tool reads it against this band yet."}
  ],
  "external": {
   "kind": "External",

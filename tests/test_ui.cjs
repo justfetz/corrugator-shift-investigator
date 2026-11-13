@@ -1312,10 +1312,10 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  walk(panel).find(e=>e.tag==='button'&&e.textContent==='Bars').events.click();
  // the arithmetic: four short lines with this card's numbers, then the rates and their sources
  const ledger=all(els.ledger);
- assert.match(ledger,/Paper 121,107 sq ft of trim, shear and rejects = 121\.1 MSF × \$55\/MSF = \$6,661/);
- assert.match(ledger,/Machine time 55\.1 min \(stops 12\.8 · speed gap 34\.6 · waste run time 7\.7\) = 297\.3 MSF not made at 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$1,101/);
- assert.match(ledger,/Side trim 3\.30% of gross − 3% target = 0\.30 points over → \$297,452\/yr/);   // the owner's 3% target (issue #101)
- assert.match(ledger,/Total = \$7,762 this shift · \$5,810,233\/yr at this rate · contribution: margin not set/);
+ assert.match(ledger,/Paper 129,860 sq ft of trim, shear, rejects and waste boards = 129\.9 MSF × \$55\/MSF = \$7,142/);
+ assert.match(ledger,/Machine time 27\.8 min \(stops 19\.0 · speed gap 0\.0 · waste run time 8\.8\) = 150\.2 MSF not made at 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$556/);
+ assert.match(ledger,/Side trim 3\.05% of gross − 3% target = 0\.05 points over → \$50,103\/yr/);   // the owner's 3% target (issue #101)
+ assert.match(ledger,/Total = \$7,699 this shift · \$5,182,306\/yr at this rate · contribution: margin not set/);
  assert.match(ledger,/Rates: paper \$55\/MSF \(post\), machine time \$1,200\/hr \(post\), contribution margin not set \(assumption: owner to set\)/);
  assert.match(ledger,/they are not a real plant's figures/);
  // tiles: every tile that measures a loss shows $/shift and $/yr; in dollars its value is the dollars
@@ -1366,7 +1366,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const valsOf=el=>walk(el).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);   // an svg value's own text, not its hover title
  assert.deepEqual(valsOf(els.money).slice(0,2),['3.05% of gross','1.20% of time']);   // side trim's share of the shift's gross, the largest downtime reason's of its minutes
  assert.equal(fetched.length,t4,'the units toggle makes no request');
- assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['608.4ft/min','1.24%','1.42%','1.21%','3.30%']);   // in % the tiles read as the tools report them (dry-end over the yield after trim and shear, issue #101)
+ assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['657.6ft/min','1.80%','2.15%','1.15%','3.05%']);   // in % the tiles read as the tools report them (dry-end over the yield after trim and shear, issue #101)
  // reset: the post's rates, and the address without rates=
  els['units-seg'].children[2].events.click(); els['rates-reset'].events.click();
  assert.equal(location.search.includes('rates='),false);assert.match(all(els.ledger),/× \$1,200\/hr = \$556/);
@@ -1379,7 +1379,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const m40=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,{margin_usd_msf:40,trim_target_pct:3.1}),cfg);
  const lineNow=()=>textOf(els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line').children[0]);
  assert.ok(lineNow().endsWith('contribution '+Money.money(m40.total_contribution_usd)+' at $40/MSF, not added'),lineNow());
- assert.match(all(els.ledger),/Side trim 3\.30% of gross − 3\.1% target = 0\.20 points over → \$/);
+ assert.match(all(els.ledger),/Side trim 3\.05% of gross, at or under the 3\.1% target: no trim lever/);   // the shift's 3.05% under a 3.1% target (it is over the owner's 3%, above)
  els['rates-reset'].events.click(); assert.match(lineNow(),/contribution: margin not set$/);
 
  // all three shifts (tests/ui_fixtures/money_day.json, the server's answer on corrupt data): the card reads the day's own
@@ -1424,14 +1424,14 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(els.charts.children.length,0,'the money tool\'s own chart is the panel');
  const wvals=walk(els.money.children[0]).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);
  assert.deepEqual(wvals.slice(0,2),[`${Money.short(levers.rows[0].usd_per_year)}/yr`,`${Money.short(levers.rows[1].usd_per_year)}/yr`]);
- // the owner's 3% trim target (issue #101): the week's 3.21% of gross is a trim lever at the post's rates
+ // the owner's 3% trim target (issue #101): the week's 3.53% of gross is a trim lever at the post's rates
  const atThree=levers.rows.find(r=>r.kind==='trim');
- assert.ok(all(els.ledger).includes('Side trim 3.21% of gross − 3% target = 0.21 points over → '+Money.money(atThree.usd_per_year)+'/yr'),'the levers trim line at the owner\'s target');
+ assert.ok(all(els.ledger).includes('Side trim 3.53% of gross − 3% target = 0.53 points over → '+Money.money(atThree.usd_per_year)+'/yr'),'the levers trim line at the owner\'s target');
  assert.ok(all(els.messages).includes(`Side trim over the 3% target: ${Money.money(atThree.usd_per_year)}/yr`),'the trim lever in the prose names the target and its dollars');
  // the prose of the money answer re-prices with its levers re-ranked, as the server would write it at those rates
  els['rates-change'].events.click(); const wf=els['rates-fields'].children.map(f=>f.children[1]); wf[3].value='3.25'; wf[3].events.input();
  const lever=Money.reprice('get_opportunities',levers,Money.effective(cfg,{trim_target_pct:3.25}),cfg).rows.find(r=>r.kind==='trim');
- assert.match(all(els.ledger),/Side trim 3\.21% of gross, at or under the 3\.25% target: no trim lever this window/);
+ assert.ok(all(els.ledger).includes('Side trim 3.53% of gross − 3.25% target = 0.28 points over → '+Money.money(lever.usd_per_year)+'/yr'),'the levers trim line at the new target');   // the week ran over 3.25% too (issue #100's records)
  assert.ok(all(els.messages).includes(`Side trim over the 3.25% target: ${Money.money(lever.usd_per_year)}/yr`),'the trim lever in the prose names the new target and its dollars');
  els['rates-reset'].events.click();
 
@@ -1467,13 +1467,13 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    assert.ok(rows[0].usd_per_year<rows[1].usd_per_year,'side trim is no longer the largest at these rates, and stays first');
    // the rest by dollars a year, the dry-end kinds as one group (the tag scrap, the owner on PR #111) with no rank of their own
    const dry=rows.filter(r=>r.group==='dry_end'), first=rows.indexOf(dry[0]), sum=Money.round(dry.reduce((s,r)=>s+r.usd_per_year,0),0);
-   assert.ok(dry.length===4&&rows.slice(first,first+4).every(r=>r.group==='dry_end')&&dry.every(r=>r.rank===null),'the dry-end kinds together, unranked');
+   assert.ok(dry.length===5&&rows.slice(first,first+5).every(r=>r.group==='dry_end')&&dry.every(r=>r.rank===null),'the dry-end kinds together, unranked');   // the taxonomy's five dry-end families (issue #100)
    assert.ok(dry.every((r,i)=>!i||dry[i-1].usd_per_year>=r.usd_per_year),'the kinds by dollars a year beneath the subtotal');
    assert.equal(now.dry_end_usd_per_year,sum); assert.equal(now.dry_end_rank,first+1);
-   const sizes=[...rows.slice(1,first).map(r=>r.usd_per_year),sum,...rows.slice(first+4).map(r=>r.usd_per_year)];
+   const sizes=[...rows.slice(1,first).map(r=>r.usd_per_year),sum,...rows.slice(first+5).map(r=>r.usd_per_year)];
    assert.ok(sizes.every((v,i)=>!i||sizes[i-1]>=v),'the groups by dollars a year: '+sizes.join(', '));
    assert.ok(prose.includes(`Side trim costs ${Money.money(rows[0].usd_per_year)} a year`),'the headline is side trim at the new rates');
-   const sub=prose.indexOf(`${now.dry_end_rank}. Dry-end waste (tag scrap), the 4 kinds below: ${Money.money(sum)}/yr`);
+   const sub=prose.indexOf(`${now.dry_end_rank}. Dry-end waste (tag scrap), the 5 kinds below: ${Money.money(sum)}/yr`);
    const kinds=dry.map(r=>prose.indexOf(`${r.lever}: ${Money.money(r.usd_per_year)}/yr`));
    assert.ok(sub>=0&&kinds.every((x,i)=>x>(i?kinds[i-1]:sub)),'the subtotal at the new rates, each kind beneath it in order');
    assert.ok(!/\d+\. Dry-end: /.test(prose),'the kinds are not numbered on their own');
@@ -1486,8 +1486,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    const lines=Money.repriceSections(lensed.sections,lensed.trace.map((e,i)=>i===q?step:null),heavy,cfg);
    const u=lines.findIndex(l=>l.startsWith('- 2. Unexplained')), d=lines.findIndex(l=>l.startsWith('- 3. Dry-end waste (tag scrap)'));
    assert.ok(u>=0&&d===u+1,'the remainder is second, the tag scrap third: '+lines.join(' | '));
-   assert.ok(lines.slice(d+1,d+5).every(l=>l.startsWith('- Dry-end: ')),'its four kinds beneath it');
-   assert.ok(lines[d+5].startsWith('- 4. Shear chops'),'then shear, fourth');
+   assert.ok(lines.slice(d+1,d+6).every(l=>l.startsWith('- Dry-end: ')),'its five kinds beneath it');
+   assert.ok(lines[d+6].startsWith('- 4. Shear chops'),'then shear, fourth');
   }
   els['rates-reset'].events.click();
  }

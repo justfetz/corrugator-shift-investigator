@@ -38,8 +38,6 @@ sys.path.insert(0, str(ROOT / 'src'))
 from investigator.fixture import GRADES  # noqa: E402  grade targets: a configured table, not a computation
 from investigator.synth import DATASET_FIRST_DAY, generate_window  # noqa: E402  the dataset's configured first day
 
-# How the planned stop reads wherever it is shown (owner, 2026-11-12): its reason and its kind as both.
-SHOWN = {"Planned maintenance": "Planned maintenance (scheduled)"}
 
 OUT = ROOT / 'evals' / 'golden_values.json'
 # The owner's rule (PR #111, 2026-11-12), read from targets.json itself and not from the module the tools use: a stop
@@ -838,7 +836,7 @@ def shift_gaps(plain, day, shift):
         for r in s.rejects:
             if LINE[r.category] == "dry_end":
                 rejects[FAMILY[r.category]] += r.sqft
-    gaps = {f"Downtime: {SHOWN.get(r, r)}": ("downtime", m) for r, m in reasons.items()}
+    gaps = {f"Downtime: {r}": ("downtime", m) for r, m in reasons.items()}
     running = 480 - sum(st.duration_sec for st in stops) / 60
     gaps["Speed gap to 675 ft/min"] = ("speed", max(0.0, 675 * running - feet) / 675)
     gaps["Side trim"] = ("trim", sum(s.trim_sqft for s in setups))
@@ -895,7 +893,7 @@ def money_summary(gaps, priced, gross, minutes, rates, trim_sqft=None):
 
 # The owner's ruling on the money cards (PR #111): planned maintenance (the reason every PM stop carries) is schedule-driven
 # and an external reason (a power outage, targets.json) external; both are on the card, apart from the ranked losses.
-GAP_APART = {f"Downtime: {SHOWN['Planned maintenance']}": "schedule-driven", **{f"Downtime: {r}": "external" for r in EXTERNAL_REASONS}}
+GAP_APART = {"Downtime: Planned maintenance": "schedule-driven", **{f"Downtime: {r}": "external" for r in EXTERNAL_REASONS}}
 
 
 def apart_values(values, priced):
@@ -1501,8 +1499,8 @@ def build(data=None):
                                     note="Where the money went in shift 2: every gap priced at the post's rates; contribution reads 'margin not set', never $0."))
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0930-shift-1", "2026-09-30", 1))
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0917-shift-1-planned-apart", "2026-09-17", 1,
-                                    note="Thursday's first shift holds the planned maintenance window: on the card, apart from the ranked losses, "
-                                         "and in the all-in total only (the owner, PR #111)."))
+                                    note="Thursday's first shift holds the planned maintenance window (133 minutes on the v2 records): on the card, apart from "
+                                         "the ranked losses, and in the all-in total only (the owner, PR #111)."))
     cases.append(day_dollars_case(plain, "value-dollars-day-0916-outage-apart", "2026-09-16",
                                   note="The day of September's power outage (third shift): the outage is apart, unranked, in the all-in total only."))
     cases.append(shift_dollars_case(plain, "value-dollars-shift-0914-shift-2-rates", "2026-09-14", 2, "paper:66,hour:1500,margin:40",
@@ -1525,15 +1523,17 @@ def build(data=None):
                                     note="A $40/MSF margin and a 3% trim target: contribution is priced beside, never added, and trim points over 3% become a lever."))
     # the owner's downtime answer (issue #101): a day of all shifts, the flagged maintenance shift, a month with many flags
     cases.append(review_case(plain, "value-review-day-0930", "day", "2026-09-30", day="2026-09-30",
-                             note="The golden year's last production day, all shifts: a flagged operator shift and its recurrence over the year."))
+                             note="The golden year's last production day, all shifts: a flagged operator shift (third shift, glue / starch) and its recurrence over the year."))
     cases.append(review_case(plain, "value-review-day-0504-shift-1", "day", "2026-05-04", 1, day="2026-05-04",
-                             note="First shift on the day of a 15-minute power outage: the outage is external (the owner, PR #111), so the shift's maintenance (jams and a stacker stop) is on target and no flag fires; the outage is listed apart."))
+                             note="First shift on the day of a power outage (14 minutes on the v2 records): the outage is external (the owner, PR #111), so it is listed apart and never in the shift's maintenance, which is on target; the flag that fires is the shift's operator downtime."))
     cases.append(review_case(plain, "value-review-september", "month", "2026-09-14",
                              note="A month: every one of its many flags, each with its own trailing year."))
     cases.append(review_case(plain, "value-review-day-0928", "day", "2026-09-28", day="2026-09-28",
-                             note="Two operator flags (shifts 2 and 1); each leading reason was over its band on its own once more in the year, so recurrence is not zero."))
-    cases.append(review_case(plain, "value-review-first-month-shift-2", "month", "2025-09-30", 2, day="2025-09-30",
-                             note="The golden year's first month (September 2025, one production day): the previous month is outside the records, so every previous figure is None, never zero."))
+                             note="One operator flag on the v2 records (first shift, led by order changes), whose leading reason was over its band on its own once more in the year, so recurrence is not zero."))
+    cases.append(review_case(plain, "value-review-day-0907", "day", "2026-09-07", day="2026-09-07",
+                             note="Two operator flags (shifts 1 and 3), each led by missed splices that were over the band on their own once more in the year (yesterday-review-from-tuesday asks for this day; issue #100's records)."))
+    cases.append(review_case(plain, "value-review-first-month-shift-2", "month", "2025-01-15", 2, day="2025-01-15",
+                             note="The data's first month, January 2025 (issue #100: the records start on 1 January 2025; anchored on September 2025, the old rolling year's first month, before): the previous month is outside the records, so every previous figure is None, never zero."))
     # the owner's two lenses on the same levers (issue #101), totals recomputed here, not with the cost model
     cases.append(opportunities_case(plain, "value-dollars-supervisor-september", "month", "2026-09-14", lens="supervisor",
                                     note="The supervisor lens: the controllable losses ranked, schedule-driven trim and planned maintenance unranked."))

@@ -496,7 +496,9 @@ def shift_dollars(analysis, shift, rates):
     rows = []
     for r in stops['rows']:
         apart = apart_of(r)
-        rows.append({'gap': f'Downtime: {stop_label(r["category"])}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
+        # a planned stop's gap reads "Downtime: Planned maintenance" with its apart note, "planned maintenance is scheduled
+        # time": the reason and the kind both, as the owner approved the card (PR #111; ruling (c) on PR #123)
+        rows.append({'gap': f'Downtime: {r["category"]}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
                      'quantity': round(r['down_minutes'], 2), 'unit': 'min', 'source_ids': r['source_ids'],
                      'apart': apart, **({'apart_note': GAP_APART_NOTE[apart]} if apart else {}),
                      **price('downtime', r['down_minutes'], rates, gross, SHIFT_MINUTES)})
@@ -728,11 +730,12 @@ def opportunities(store, window, shift, rates, lens='all'):
              'supervisor': ('The supervisor lens: the controllable losses ranked, maintenance and operator downtime, the speed of each '
                             'wet-end run under its grade\'s trailing-year speed, shear and dry-end waste. Side trim and planned maintenance '
                             'are schedule-driven and listed after, then external downtime (a power outage), which is not controllable. Shear and dry-end waste are priced in full, all recorded, not over their '
-                            'targets. Peel and core are controllable too, but the records carry no peel or core quantity. Per year at the '
+                            'targets. Peel and core are controllable too; the roll records carry them, but no lever prices them yet. Per year at the '
                             'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
              'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
-                           'waste, shear and the unexplained remainder (the scale reading less the recorded waste). The dry-end waste is the '
-                           'tag scrap: bond, warp, misalignment and moisture, one subtotal with each kind beneath it. Per year at the post\'s volumes.')}[lens]
+                           'waste, shear, the changeover rejects and the unexplained remainder (the scale reading less the recorded waste). The dry-end '
+                           'waste is the tag scrap: bond, warp, misalignment, moisture and other, one subtotal with each kind beneath it. Per year at '
+                           'the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': waste['dataset_version'], 'rows': rows,
             'coverage': 'complete' if coverage == 'complete' else coverage, 'excluded_records': [],

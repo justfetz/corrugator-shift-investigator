@@ -100,8 +100,10 @@ def test_dry_end_waste_is_a_percent_of_the_yield_after_trim_and_shear(store):
         analysis.close()
     yield_sqft = row['gross_sqft'] * (1 - (row['trim_pct'] + row['shear_pct']) / 100)
     assert row['yield_sqft'] == pytest.approx(yield_sqft)
-    rejects = row['gross_sqft'] - row['estimated_good_sqft'] - row['gross_sqft'] * (row['trim_pct'] + row['shear_pct']) / 100
-    assert row['dry_end_pct'] == pytest.approx(rejects / yield_sqft * 100)
+    # good output is gross minus every recorded waste line (owner ruling (d) on PR #123), so the dry-end rejects are their own column
+    lines = row['trim_sqft'] + row['shear_sqft'] + row['reject_sqft'] + row['changeover_sqft'] + row['waste_board_sqft'] + row['admin_sqft']
+    assert row['estimated_good_sqft'] == pytest.approx(row['gross_sqft'] - lines)
+    assert row['dry_end_pct'] == pytest.approx(row['reject_sqft'] / yield_sqft * 100)
     waste = store.get_waste_breakdown({'period': 'month', 'anchor': DAY})
     dry = next(r for r in waste['rows'] if r['category'] == 'dry_end')
     assert dry['pct_of_yield'] == pytest.approx(dry['sqft'] / waste['yield_sqft'] * 100, abs=1e-4)
@@ -115,8 +117,8 @@ def test_dry_end_waste_is_a_percent_of_the_yield_after_trim_and_shear(store):
 def test_each_grades_baseline_is_its_sustained_speed_over_the_trailing_year(store):
     base = store.grade_speed_baselines(DAY)
     first, last = store.trailing_year(DAY)
-    assert (base['since'], base['through']) == (first.isoformat(), last.isoformat()) == (store.first_day, DAY)
-    rows = store._fetch('SELECT grade, feet, seconds, stop_seconds FROM setups WHERE production_date BETWEEN ? AND ?', [first, last], limit=50000)
+    assert (base['since'], base['through']) == (first.isoformat(), last.isoformat()) == ('2025-09-15', DAY)   # the 365 days ending on DAY (issue #100: the records start before them)
+    rows = store._fetch('SELECT quality_id AS grade, lineal_ft AS feet, seconds, stop_seconds FROM setups WHERE production_date BETWEEN ? AND ?', [first, last], limit=50000)
     feet, run = defaultdict(float), defaultdict(float)
     for r in rows:
         minutes = (r['seconds'] - r['stop_seconds']) / 60
@@ -146,12 +148,12 @@ def test_the_review_ranks_every_reason_by_its_share_of_scheduled_minutes_and_put
     ranked = [r for r in rows if not (r['scheduled'] or r['external'])]
     external = [r for r in rows if r['external']]   # a power outage (the owner, PR #111): apart, before planned maintenance
     planned = [r for r in rows if r['scheduled']]
-    assert rows == ranked + external + planned and all(r['kind'] == 'PM' and r['rank'] is None for r in planned)
+    assert rows == ranked + external + planned and all(r['kind'] == 'Scheduled' and r['rank'] is None for r in planned)
     assert all(r['kind'] == targets.EXTERNAL_KIND and r['rank'] is None and r['band'] is None and r['control'] == 'external' for r in external)
     assert all(r['control'] == 'controllable' for r in ranked) and all(r['control'] == 'schedule-driven' for r in planned)
     assert [r['rank'] for r in ranked] == list(range(1, len(ranked) + 1))
     assert [r['pct_of_scheduled'] for r in ranked] == sorted((r['pct_of_scheduled'] for r in ranked), reverse=True)
-    for key, kinds in (('maintenance', {'Maintenance'}), ('operator', {'Operator'}), ('op_maint', {'Maintenance', 'Operator'}), ('pm', {'PM'}),
+    for key, kinds in (('maintenance', {'Maintenance'}), ('operator', {'Operator'}), ('op_maint', {'Maintenance', 'Operator'}), ('pm', {'Scheduled'}),
                        ('external', {targets.EXTERNAL_KIND})):
         assert data[f'{key}_minutes'] == pytest.approx(sum(r['minutes'] for r in rows if r['kind'] in kinds), abs=0.05)
     for r in rows:
@@ -175,8 +177,8 @@ def test_the_review_keeps_the_previous_window_beside(store):
     for key in ('maintenance', 'operator', 'op_maint', 'pm'):
         assert (week[f'previous_{key}_minutes'], week[f'previous_{key}_pct']) == (before[f'{key}_minutes'], before[f'{key}_pct'])
     assert week['previous_scheduled_minutes'] == before['scheduled_minutes']
-    first = store.get_downtime_review({'period': 'month', 'anchor': '2025-09-30'}, 2)   # the golden year's first month (issue #91)
-    assert first['previous_window']['coverage'] == 'unavailable' and first['window']['coverage'] == 'partial'
+    first = store.get_downtime_review({'period': 'month', 'anchor': '2025-01-15'}, 2)   # the data's first month (issue #100: from 1 January 2025)
+    assert first['previous_window']['coverage'] == 'unavailable' and first['window']['coverage'] == 'complete'
     assert all(r['previous_minutes'] is None and r['previous_pct_of_scheduled'] is None for r in first['rows'])
     assert first['previous_op_maint_pct'] is None and first['previous_scheduled_minutes'] is None
     answer = ask(store, 'Show downtime by reason', scope='day', period='week')
@@ -199,7 +201,7 @@ def test_a_flag_fires_exactly_when_a_shift_is_over_its_band_and_names_who_to_ask
             assert f['band'] == 'flag' and f['pct_of_shift'] > 2.5 and f['supervisor'].startswith(f'the shift {f["shift"]} supervisor ({f["crew"]}')
             assert 0 <= f['times_over_band'] <= f['shifts_counted'] and 0 <= f['weeks_in_top_five'] <= f['weeks_counted']
             assert f['recurrence_through'] == day and f['recurrence_scope'] == 'all shifts'
-    assert seen == over and ('2026-09-18', 2, 'Maintenance') in seen
+    assert seen == over and ('2025-01-22', 3, 'Maintenance') in seen   # owner-maintenance-flag-recurrence's shift (issue #100's records)
 
 
 def test_every_flag_of_a_month_carries_its_recurrence_and_is_listed(store):
@@ -229,24 +231,24 @@ def test_the_prompt_reads_the_bands_from_targets_json(monkeypatch):
 
 
 def test_a_shift_scoped_flag_counts_that_shifts_own_year(store):
-    # the golden year's largest maintenance fault on any shift: third shift on 2026-09-21, led by knife / slitter jams
-    # (a power outage is external, never maintenance: the owner on PR #111)
-    plant, _ = store.downtime_flags('2026-09-21', '2026-09-21')
-    own, _ = store.downtime_flags('2026-09-21', '2026-09-21', 3)
-    mine = next(f for f in plant if f['shift'] == 3 and f['kind'] == 'Maintenance')
+    # the largest maintenance fault on any shift of issue #100's records: second shift on 2026-09-07, led by knife / slitter
+    # jams (the knife-jam story's week; a power outage is external, never maintenance: the owner on PR #111)
+    plant, _ = store.downtime_flags('2026-09-07', '2026-09-07')
+    own, _ = store.downtime_flags('2026-09-07', '2026-09-07', 2)
+    mine = next(f for f in plant if f['shift'] == 2 and f['kind'] == 'Maintenance')
     assert own[0]['reason'] == mine['reason'] == 'Knife / slitter jam'
-    assert own[0]['shifts_counted'] * 3 == mine['shifts_counted'] and own[0]['recurrence_scope'] == 'shift 3'
+    assert own[0]['shifts_counted'] * 3 == mine['shifts_counted'] and own[0]['recurrence_scope'] == 'shift 2'
     assert own[0]['times_over_band'] <= mine['times_over_band']   # shift 3's own history is part of the plant's
     assert own[0]['weeks_in_top_five'] > 0
-    analysis = store.day_analysis('2026-09-21')
+    analysis = store.day_analysis('2026-09-07')
     try:
-        daily = analysis.get_downtime_breakdown(3, kind='Maintenance')
+        daily = analysis.get_downtime_breakdown(2, kind='Maintenance')
     finally:
         analysis.close()
     assert daily['flags'] == own and daily['rows'][0]['category'] == 'Knife / slitter jam'
     largest = store._fetch("SELECT production_date, shift, sum(seconds) / 60 AS minutes FROM stops WHERE kind = 'Maintenance' "
                            "GROUP BY ALL ORDER BY minutes DESC LIMIT 1", [])[0]
-    assert (str(largest['production_date']), largest['shift']) == ('2026-09-21', 3) and round(largest['minutes'], 2) == 14.65
+    assert (str(largest['production_date']), largest['shift']) == ('2026-09-07', 2) and round(largest['minutes'], 2) == 15.73
 
 
 # ------------------------------------------------------------------ "yesterday" and the all-shift default
@@ -391,12 +393,12 @@ def test_neighbouring_money_questions_keep_their_answers(store):
 
 def test_recurrence_counts_a_reason_that_crossed_its_band_on_its_own(store):
     """Every shift of the trailing year on which the reason alone was over its band counts (12 of a 480-minute shift's
-    minutes for operator and maintenance alike). On the golden year's 2026-09-28 missed splices led shift 2's operator
-    flag and order changes shift 1's, each over the band on its own that day; the knife / slitter jams that led
-    2026-09-21 shift 3's maintenance flag never crossed it alone (a power outage did, but it is external since the owner's
-    decision on PR #111, so it leads no flag). The value golden value-review-day-0928 pins the first a second way."""
-    for day, kind, reason, least in (('2026-09-28', 'Operator', 'Missed splice', 1), ('2026-09-28', 'Operator', 'Order change', 1),
-                                     ('2026-09-21', 'Maintenance', 'Knife / slitter jam', 0)):
+    minutes for operator and maintenance alike). On issue #100's records 2026-09-07's missed splices led shift 1's operator
+    flag and 2026-09-28's order changes shift 1's, each over the band on its own once more in the year; the knife / slitter
+    jams that led 2025-01-22 shift 3's maintenance flag never crossed it alone. The value goldens value-review-day-0907 and
+    value-review-day-0928 pin the first two a second way."""
+    for day, kind, reason, least in (('2026-09-07', 'Operator', 'Missed splice', 1), ('2026-09-28', 'Operator', 'Order change', 1),
+                                     ('2025-01-22', 'Maintenance', 'Knife / slitter jam', 0)):
         flags, _ = store.downtime_flags(day, day)
         flag = next(f for f in flags if f['reason'] == reason and f['kind'] == kind)
         over = store._fetch("SELECT production_date, shift, sum(seconds) / 60 AS minutes FROM stops WHERE kind = ? AND reason = ? "
@@ -427,29 +429,29 @@ def test_a_power_outage_is_external_downtime_not_maintenance(store):
     assert definition['reasons'] == ['Power outage'] and definition['kind'] == 'External' and definition['source'] == 'owner, 2026-11-12'
     assert targets.stop_kind('Maintenance', 'Power outage') == 'External' and targets.stop_kind('Maintenance', 'Stacker') == 'Maintenance'
     kinds = store._fetch("SELECT kind, count(*) AS n FROM stops WHERE reason = 'Power outage' GROUP BY kind", [])
-    assert kinds == [{'kind': 'External', 'n': 12}]   # one a month, every one External in the tables
-    assert store.content_hash.startswith('041692146c7f')   # the records themselves are unchanged
-    # first shift on 2026-05-04: a 15-minute outage beside 6.67 maintenance minutes, 4.51% and flagged before the rule
-    analysis = store.day_analysis('2026-05-04')
+    assert kinds == [{'kind': 'External', 'n': 21}]   # one a month on issue #100's records (21 months), every one External in the tables
+    assert store.content_hash.startswith('c9754a00c4e2')   # the records themselves are unchanged
+    # third shift on 2025-02-14: a 10-minute outage beside 6.69 maintenance minutes, 3.48% and flagged were it maintenance
+    analysis = store.day_analysis('2025-02-14')
     try:
-        kpis = analysis.get_shift_kpis(1)['rows'][0]
-        breakdown = analysis.get_downtime_breakdown(1)
-        maintenance = analysis.get_downtime_breakdown(1, kind='Maintenance')
-        external = analysis.get_downtime_breakdown(1, kind='External')
+        kpis = analysis.get_shift_kpis(3)['rows'][0]
+        breakdown = analysis.get_downtime_breakdown(3)
+        maintenance = analysis.get_downtime_breakdown(3, kind='Maintenance')
+        external = analysis.get_downtime_breakdown(3, kind='External')
     finally:
         analysis.close()
-    assert kpis['maintenance_pct'] == pytest.approx(6.67 / 480 * 100, abs=0.01) and kpis['maintenance_band'] == 'on target'
-    assert kpis['downtime_pct'] - kpis['op_maint_pct'] - kpis['pm_pct'] == pytest.approx(15 / 480 * 100, abs=1e-6)   # still downtime
+    assert kpis['maintenance_pct'] == pytest.approx(6.69 / 480 * 100, abs=0.01) and kpis['maintenance_band'] == 'on target'
+    assert kpis['downtime_pct'] - kpis['op_maint_pct'] - kpis['pm_pct'] == pytest.approx(10 / 480 * 100, abs=1e-6)   # still downtime
     assert not maintenance['flags'] and 'Power outage' not in {r['category'] for r in maintenance['rows']}
-    assert [(r['category'], r['down_minutes']) for r in external['rows']] == [('Power outage', 15.0)]
+    assert [(r['category'], r['down_minutes']) for r in external['rows']] == [('Power outage', 10.0)]
     outage = next(r for r in breakdown['rows'] if r['category'] == 'Power outage')
     assert outage['external'] and not outage['scheduled'] and breakdown['rows'][-1]['category'] == 'Power outage'   # unplanned reasons first
-    kpi = store._fetch("SELECT maintenance_seconds FROM shift_kpis WHERE production_date = '2026-05-04' AND shift = 1", [])[0]
-    assert kpi['maintenance_seconds'] / 60 == pytest.approx(6.67, abs=0.01)
+    kpi = store._fetch("SELECT maintenance_seconds FROM shift_kpis WHERE production_date = '2025-02-14' AND shift = 3 AND NOT corrupt", [])[0]
+    assert kpi['maintenance_seconds'] / 60 == pytest.approx(6.69, abs=0.01)
     flags, _ = store.downtime_flags(store.first_day, store.last_day)
     assert flags and not any(f['reason'] == 'Power outage' for f in flags)   # no flag in the year is led by an outage
-    review = store.get_downtime_review({'period': 'day', 'anchor': '2026-05-04'})
-    assert review['external_minutes'] == 15.0 and 'external_band' not in review and not any(f['shift'] == 1 for f in review['flags'])
+    review = store.get_downtime_review({'period': 'day', 'anchor': '2025-02-14'})
+    assert review['external_minutes'] == 10.0 and 'external_band' not in review and not any(f['shift'] == 3 for f in review['flags'])
 
 
 def test_planned_maintenance_and_an_outage_are_their_own_speed_buckets_and_never_priced(store):
@@ -470,29 +472,32 @@ def test_planned_maintenance_and_an_outage_are_their_own_speed_buckets_and_never
 def test_the_ownership_lens_shows_the_dry_end_waste_as_one_tag_scrap_subtotal_with_each_kind_beneath(store):
     """The owner on PR #111: bond, warp and misalignment are dry-end waste, the tag scrap. A subtotal line, ranked by its
     dollars among the other levers, with each kind kept as its own line beneath it (the detail is what supervisors go
-    after). Moisture is the fourth dry-end kind the records hold and sits under it too."""
+    after). Moisture and other (cracking, handling, paper, print) are the taxonomy's other dry-end families (issue #100) and
+    sit under it too."""
     window, rates = {'period': 'month', 'anchor': DAY}, cost_model.effective()
     data = cost_model.opportunities(store, window, None, rates, 'ownership')
     rows = data['rows']
     dry = [r for r in rows if r.get('group') == 'dry_end']
     first = rows.index(dry[0])
     assert [r['lever'] for r in dry] == ['Dry-end: bond (all recorded)', 'Dry-end: warp (all recorded)',
-                                         'Dry-end: misalignment (all recorded)', 'Dry-end: moisture (all recorded)']
+                                         'Dry-end: misalignment (all recorded)', 'Dry-end: moisture (all recorded)',
+                                         'Dry-end: other (cracking, handling, paper, print) (all recorded)']
     assert rows[first:first + len(dry)] == dry and all(r['rank'] is None for r in dry)
-    assert data['dry_end_usd_per_year'] == round(sum(r['usd_per_year'] for r in dry)) and data['dry_end_kinds'] == 4
+    assert data['dry_end_usd_per_year'] == round(sum(r['usd_per_year'] for r in dry)) and data['dry_end_kinds'] == 5
     assert data['dry_end_usd'] == pytest.approx(sum(r['usd'] for r in dry), abs=0.005)
     waste = next(r for r in store.get_waste_breakdown(window)['rows'] if r['category'] == 'dry_end')
     assert data['dry_end_pct_of_yield'] == waste['pct_of_yield'] and data['dry_end_band'] == targets.band('dry_end', waste['pct_of_yield'])
-    # ranked by dollars among the other levers: September's tag scrap ($1.08M/yr) outranks shear ($549k/yr)
+    # ranked by dollars among the other levers: September's tag scrap ($1.08M/yr) outranks shear ($600k/yr), the unexplained
+    # remainder and the changeover rejects (their own line, priced once: owner ruling (d) on PR #123)
     others = [r for r in rows[1:] if not r.get('group')]
     groups = sorted([(data['dry_end_usd_per_year'], 'dry_end')] + [(r['usd_per_year'], r['lever']) for r in others], reverse=True)
     assert data['dry_end_rank'] == 2 + [g for _, g in groups].index('dry_end') == 2
-    assert [r['rank'] for r in others] == [2 + [g for _, g in groups].index(r['lever']) for r in others] == [3, 4]
+    assert [r['rank'] for r in others] == [2 + [g for _, g in groups].index(r['lever']) for r in others] == [3, 4, 5]
     assert data['total_usd_per_year'] == round(sum(r['usd_per_year'] for r in rows))   # the subtotal adds nothing to the total
     sections = Agent(store.day_analysis(DAY)).ask("What's trim costing us this month?", Context(DAY, 2, scope='day'))['sections']
-    at = next(i for i, s in enumerate(sections) if s.startswith('- 2. Dry-end waste (tag scrap), the 4 kinds below: '))
-    assert [s.split(' (all recorded)')[0] for s in sections[at + 1:at + 5]] == ['- ' + r['lever'].split(' (all recorded)')[0] for r in dry]
-    assert sections[at + 5].startswith('- 3. Shear chops')
+    at = next(i for i, s in enumerate(sections) if s.startswith('- 2. Dry-end waste (tag scrap), the 5 kinds below: '))
+    assert [s.split(' (all recorded)')[0] for s in sections[at + 1:at + 6]] == ['- ' + r['lever'].split(' (all recorded)')[0] for r in dry]
+    assert sections[at + 6].startswith('- 3. Shear chops')
 
 
 def test_the_supervisor_lens_lists_a_power_outage_apart_as_external(store):

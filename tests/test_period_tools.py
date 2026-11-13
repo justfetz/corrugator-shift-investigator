@@ -148,10 +148,12 @@ def test_month_kpis_match_plain_sums_and_pinned_goldens(store, data):
     assert rows["lineal_ft"]["current"] == pytest.approx(18959016.3)
     assert rows["stops"]["current"] == 665 and rows["stops"]["previous"] == 533
     assert rows["trim_pct"]["current"] == pytest.approx(3.4945, abs=1e-4) and rows["trim_pct"]["previous"] == pytest.approx(3.1246, abs=1e-4)
-    assert rows["warp_pct"]["current"] == pytest.approx(0.3257, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4718, abs=1e-4)
-    assert rows["moisture_pct"]["current"] == pytest.approx(0.0585, abs=1e-4)   # its own family again (owner, 2026-11-12)
+    # warp and moisture over the yield after trim and shear (issue #101); of gross warp is 0.3257 and 0.4718, moisture 0.0585
+    assert rows["warp_pct"]["current"] == pytest.approx(0.3394, abs=1e-4) and rows["warp_pct"]["previous"] == pytest.approx(0.4899, abs=1e-4)
+    assert rows["moisture_pct"]["current"] == pytest.approx(0.0610, abs=1e-4)   # its own family again (owner, 2026-11-12)
     assert rows["downtime_pct"]["current"] == pytest.approx(4.8681, abs=1e-4)
-    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.6160, abs=1e-4)
+    # 2.6160 before the owner's rule of PR #111: 09-16's 13-minute power outage is external, 13 / 31,680 scheduled minutes = 0.0410 points
+    assert rows["maintenance_pm_pct"]["current"] == pytest.approx(2.5750, abs=1e-4)
     assert rows["setups"]["current"] == 2614 and rows["paper_changes"]["current"] == 799
     assert result["source_rows"]["current"]["setups"] == 2614 and result["source_rows"]["previous"]["setups"] == 2619
     # downtime_pct is a ratio of sums: it is NOT the mean of the 66 shift percentages
@@ -276,7 +278,7 @@ def test_waste_breakdown_matches_sums_and_month_story(store, data):
         assert rows[key]["pct_of_yield"] == pytest.approx(september[metric], rel=1e-3)
         assert rows[key]["previous_pct_of_yield"] == pytest.approx(august[metric], rel=1e-3)
         assert rows[key]["pct_of_gross"] == pytest.approx(rows[key]["sqft"] / result["gross_sqft"] * 100, rel=1e-3)
-    assert rows["dry_end"]["band"] == "over target" and rows["trim"]["band"] == "over target" and rows["shear"]["band"] == "on target"
+    assert rows["dry_end"]["band"] == "over target" and rows["trim"]["band"] == "flag" and rows["shear"]["band"] == "on target"   # trim 3.49% of gross, over the 3.25% flag
     assert result["gross_sqft"] == pytest.approx(september["volume_msf"] * 1000, rel=1e-6)
     assert 0.1 <= rows["unexplained"]["pct_of_gross"] <= 0.4
     assert rows["warp"]["previous_pct_of_gross"] > rows["warp"]["pct_of_gross"]   # August warp above September

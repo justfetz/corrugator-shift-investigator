@@ -42,7 +42,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "Where did the money go this shift?" | the shift's losses priced and ranked by dollars; planned maintenance and a power outage apart, with the all-in total beside | `?measure=dollars` |
 | "Where is the money this month?" | the levers ranked in dollars a year, each controllable or schedule-driven | `?measure=money&window=month` |
 | "Where's my biggest opportunity?", "What went wrong yesterday?" | the supervisor lens: the controllable losses ranked, side trim and planned maintenance apart | `?measure=money&lens=supervisor` |
-| "What does trim cost?", "What's trim costing us this month?" | the ownership lens: the total cost of waste, side trim first, with its band; the dry-end waste (tag scrap) as one subtotal with bond, warp, misalignment and moisture beneath it | `?measure=money&lens=ownership`, `?measure=money&window=month&lens=ownership` |
+| "What does trim cost?", "What's trim costing us this month?" | the ownership lens: the total cost of waste, side trim first, with its band; the dry-end waste (tag scrap) as one subtotal with bond, warp, misalignment, moisture and other beneath it | `?measure=money&lens=ownership`, `?measure=money&window=month&lens=ownership` |
 | "Show setup matrix", "Show orders and quantities", "Show shift and downtime notes", "Show rankings" | the per-shift matrices, notes and rankings (Day only) | `?measure=setups`, `orders`, `notes`, `rank` |
 
 With All selected, "Compare all shifts" runs KPIs, downtime and speed for each shift. The example chips under *Ask in one click* are these questions; under Week, Month or 4-4-5 they say "this week", "this month" or "this period".
