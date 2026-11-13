@@ -4,10 +4,12 @@
 # closes the issue. docs/AGENTS.md is the owner's guide; .github/scripts/agent.py holds every rule called here.
 #
 # What starts a run, and only from the repository owner (H3): the `agent-ready` label put on an issue by
-# the owner; `@claude` in a comment by the owner (on an issue: the same as the label; on a pull request: a
-# fix run with the comment as the request); workflow_dispatch by the owner with `issue` (a build) or
-# `issue` and `pr` (a fix run). The review workflow, agent-review.yml, dispatches `issue`, `pr` and a
-# `round` of 1 or more when its verdict is `review: fix-first`; that is all github-actions[bot] may start.
+# the owner; a comment by the owner with a line that starts with `@claude`, outside code and quotes (on an
+# issue: the same as the label; on a pull request: a fix run with the comment as the request);
+# workflow_dispatch by the owner with `issue` (a build) or `issue` and `pr` (a fix run). The review
+# workflow, agent-review.yml, dispatches `issue`, `pr`, a `round` of 1 or more and `verdict`, the id of its
+# fix-first comment, which is the only comment the fix round reads (N3); that is all github-actions[bot]
+# may start.
 # What stops one: removing the label (by anyone who can). The `stop` job joins the issue's concurrency group with
 # cancel-in-progress, which cancels a build or fix round running for that issue; a run still queued
 # finds the label gone when it starts and does nothing.
@@ -47,17 +49,24 @@ on:
         description: The fix round (set by the review workflow; 0 for a fix run by hand)
         required: false
         default: '0'
+      verdict:
+        description: The id of the fix-first verdict comment a fix round works from (set by the review workflow)
+        required: false
+        default: ''
 permissions:
   contents: read
 jobs:
   gate:
     # Most issue comments are not for the agent; a skipped job costs nothing and never queues.
-    # Only the owner starts a run (H3); agent.py's event_plan checks the same and more.
+    # Only the owner starts a run (H3); agent.py's event_plan checks the same and more. A comment passes here
+    # only when a line starts with @claude (the comment's start, or right after a line break: fromJSON turns
+    # the JSON string into a real newline); event_plan then reads the Markdown, so a mention in fenced or
+    # inline code or in a `>` quote starts nothing (N1).
     if: >-
       (github.event_name == 'issues' && github.event.label.name == 'agent-ready' &&
        (github.event.action == 'unlabeled' || github.event.sender.login == github.repository_owner)) ||
       (github.event_name == 'issue_comment' && github.event.comment.user.login == github.repository_owner &&
-       contains(github.event.comment.body, '@claude')) ||
+       (startsWith(github.event.comment.body, '@claude') || contains(github.event.comment.body, fromJSON('"\n@claude"')))) ||
       (github.event_name == 'workflow_dispatch' &&
        (github.event.sender.login == github.repository_owner || github.event.sender.login == 'github-actions[bot]'))
     runs-on: ubuntu-latest
@@ -71,6 +80,7 @@ jobs:
       issue: ${{ steps.gate.outputs.issue }}
       pr: ${{ steps.gate.outputs.pr }}
       round: ${{ steps.gate.outputs.round }}
+      verdict: ${{ steps.gate.outputs.verdict }}
       key: ${{ steps.gate.outputs.key }}
       needs_label: ${{ steps.gate.outputs.needs_label }}
       request: ${{ steps.gate.outputs.request }}
@@ -180,11 +190,12 @@ jobs:
           ISSUE: ${{ needs.gate.outputs.issue }}
           PR: ${{ needs.gate.outputs.pr }}
           ROUND: ${{ needs.gate.outputs.round }}
+          VERDICT: ${{ needs.gate.outputs.verdict }}
           NEEDS_LABEL: ${{ needs.gate.outputs.needs_label }}
           REQUEST: ${{ needs.gate.outputs.request }}
         run: >-
           python3 .github/scripts/agent.py plan --mode "$MODE" --issue "$ISSUE" --pr "$PR" --round "$ROUND"
-          --needs-label "$NEEDS_LABEL" --request "$REQUEST"
+          --verdict "$VERDICT" --needs-label "$NEEDS_LABEL" --request "$REQUEST"
       - name: Run Claude Code
         id: claude
         if: steps.plan.outputs.go == 'true'
