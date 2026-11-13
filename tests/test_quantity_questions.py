@@ -56,6 +56,9 @@ AUDIT = [
     # the re-review: a grade the records do not hold, two grades, double wall, and a count of something unknown
     'how many setups on 44-C last week', 'how many setups did we run on 32-C and 26-C last week', 'how many setups of double wall this week',
     'how many widgets this week',
+    # the Codex review of PR 143: order change stops and their minutes are a stop reason; a kind's stop count
+    'how many order change stops this week', 'how many minutes of order change stops this week',
+    'how many minutes did order changes take this week', 'how many maintenance stops did we have yesterday',
 ]
 # What a refusal of an audited question says: what can be asked instead.
 REFUSALS = (QUANTITY_HELP, 'Offline mode supports', SETUP_SPEED, 'one shift or all shifts together', 'Selected shift only')

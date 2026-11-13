@@ -1672,6 +1672,7 @@ class RecordStore:
             totals.update({f"{key}_minutes": round(minutes, 2), f"{key}_stops": sum(r["stops"] for r in mine),
                            f"{key}_pct": _ratio(minutes, scheduled, 100),
                            f"previous_{key}_minutes": round(before, 2) if available else None,
+                           f"previous_{key}_stops": sum(r["stops"] for r in prior_grouped if r["kind"] in kinds) if available else None,
                            f"previous_{key}_pct": _ratio(before, prior_scheduled, 100) if available else None})
             if key not in ("pm", "external"):
                 targets.annotate(totals, {f"{key}_pct": (key, key)})

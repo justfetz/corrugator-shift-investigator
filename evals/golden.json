@@ -8819,6 +8819,103 @@
    "expect": {
     "raises": "Offline mode answers one quantity at a time"
    }
+  },
+  {
+   "id": "count-order-change-stops-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many order change stops this week?",
+   "note": "Issue #113 (exact over summary): found by the Codex review of PR 143: \"order change stops\" read as the order changes (change code O setups), a different count. The stops recorded with the reason Order change open the answer.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=stops&reason=order-change",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "count",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Order change · [0-9.]+ minutes · "
+    }
+   }
+  },
+  {
+   "id": "unit-minutes-of-order-change-stops-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes of order change stops this week?",
+   "note": "Issue #113 (exact over summary): found by the Codex review of PR 143: the minutes asked opened with the order change count. The setup-speed refusal points here, so it must answer.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=downtime_minutes&reason=order-change",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* for Order change · [0-9]+ stops? · "
+    }
+   }
+  },
+  {
+   "id": "count-maintenance-stops-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many maintenance stops did we have yesterday?",
+   "note": "Issue #113 (exact over summary): found by the Codex review of PR 143: a kind's stop count showed no previous window while its minutes did. No shift named: the owner's downtime default.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=quantity&metric=maintenance_stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ maintenance stops\\*\\* · [0-9.]+ minutes, [0-9.]+% of scheduled minutes · (on target|over target|flag)[^·]* · [0-9,]+ stops the production day before \\(query 1\\)$"
+    }
+   }
   }
  ]
 }

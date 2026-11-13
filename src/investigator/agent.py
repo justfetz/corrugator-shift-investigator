@@ -446,7 +446,8 @@ FEET_ASK = r"\bhow (many|much) (lineal )?(feet|ft|footage)\b|\blineal (feet|ft|f
 RATIO_WORDS = ((r"\bminutes per stop\b", 'minutes_per_stop'),
                (r"\b(lineal|feet|ft|footage) per (paper change|wet[- ]end)\b|\bper paper change\b|\bper wet[- ]end\b", 'lineal_per_paper_change'),
                (r"\b(lineal|feet|ft|footage) per set-?up\b|\bper set-?up\b|\brun length\b", 'lineal_per_setup'))
-COUNT_NOUNS = ((r"\border change(over)?s?\b|\bchangeovers?\b", 'order_changes'),
+# "order change stops", "order change downtime" are the stop reason Order change, not the setups an order change started
+COUNT_NOUNS = ((r"\border change(over)?s?\b(?!\s+(stops?|stoppages?|downtime|minutes|mins)\b)|\bchangeovers?\b", 'order_changes'),
                (r"\bpaper changes?\b|\bwet[- ]?ends?\b|\bwet[- ]end (changes|runs)\b|\bpaper runs?\b", 'paper_changes'),
                (r"\bset-?ups?\b", 'setups'), (r"\bsheets?\b", 'sheets'), (r"\bstops?\b|\bstoppages?\b", 'stops'))
 # A stop reason or place a count or minutes question names (records.STOP_REASONS, STOP_PLACES): "how many missed
@@ -539,6 +540,8 @@ def quantity_lead(lower, assume_count=False):
         return None   # "how much downtime", "how much did we make": the downtime review and volume by grade answer those
     noun = next((m for pattern, m in COUNT_NOUNS if re.search(pattern, lower)), None) if count else None
     place = next((name.format(*m.groups()) for pattern, name in PLACE_WORDS for m in [re.search(pattern, lower)] if m), None)
+    if minutes and not place and re.search(dict((n, p) for p, n in REASON_WORDS)['Order change'], lower):
+        return {'metric': 'downtime_minutes', 'reason': 'Order change'}   # "how many minutes did order changes take": its stop reason
     if noun and noun != 'stops':
         if place:   # "how many setups on the single facer": setups are the line's, a place counts its stops
             raise ValueError(LINE_COUNTS + QUANTITY_HELP)

@@ -1522,7 +1522,9 @@ class PeriodAnswer:
             head = (f'**{f2(minutes)} minutes** of {kind} downtime{where} over {stops_text(stops)} · {share} · ' +
                     (f'{f2(previous)} minutes {before}' if previous is not None else 'previous unavailable') + f' {ref(r)}')
         else:
-            head = f'**{n(stops)} {kind} stops**{where} · {f2(minutes)} minutes, {share} {ref(r)}'
+            previous_stops = data.get(f'previous_{kind}_stops')
+            head = (f'**{n(stops)} {kind} stops**{where} · {f2(minutes)} minutes, {share} · ' +
+                    (f'{n(previous_stops)} stops {before}' if previous_stops is not None else 'previous unavailable') + f' {ref(r)}')
         # its reasons ranked as the review ranks them, the top five (the chart and the table hold every one)
         mine = [(i, x) for i, x in enumerate(rows) if x['kind'] == kind.capitalize() and not (x['scheduled'] or x.get('external'))][:5]
         bullets = [bullet(f'{x["reason"]}: **' + (f'{pval(x["minutes"])} minutes** over {stops_text(x["stops"])}' if unit == 'minutes' else

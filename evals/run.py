@@ -119,7 +119,7 @@ ASKED_UNITS = ((r'\bminutes per stop\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
                (r'\b(?:lineal|feet|ft) per (?:paper change|wet[- ]end)\b|\bper paper change\b', r'\bft(?: per |/)paper change\b'),
                (r'\b(?:lineal|feet|ft) per set-?up\b|\bper set-?up\b', r'\bft(?: per |/)setup\b'),
                (r'\bhow many (?:minutes|mins)\b|\b(?:minutes|mins) (?:of|did|were|was|lost)\b|\bin minutes\b|\btotal (?:downtime )?minutes\b', r'\bmin(?:utes)?\b'),
-               (COUNT_ASKED + r'\b(?:order changes?|changeovers?)\b', r'\border changes\b'),
+               (COUNT_ASKED + r'\b(?:order changes?(?!\s+(?:stops?|downtime|minutes)\b)|changeovers?)\b', r'\border changes\b'),   # order change stops are stops
                (COUNT_ASKED + r'\b(?:paper changes?|wet[- ]ends?)\b', r'\bpaper changes\b'),
                (COUNT_ASKED + r'\bset-?ups?\b', r'\bsetups\b'),
                (COUNT_ASKED + r'\b(?:stops|stoppages|missed splices?|splices (?:did )?we miss)\b', r'\bstops\b'),
