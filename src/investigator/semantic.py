@@ -46,7 +46,7 @@ PRICE_KINDS = ('trim', 'waste', 'paper', 'downtime', 'speed')
 # scheduled minutes, both measures of the model.
 PRICE_BASIS = ('gross_sqft', 'scheduled_minutes')
 # SQL words a model expression may use outside its {placeholders}: function names, nothing else.
-FUNCTIONS = {'split_part'}
+FUNCTIONS = {'split_part', 'concat_ws'}
 PREVIOUS_WORDS = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before',
                   'fiscal': 'the period before'}
 
@@ -128,9 +128,14 @@ class Model:
                     raise ValueError(f'semantic model: measure {name} names an unknown entity')
                 if m['agg'] != 'count':
                     self._template(m['expr'], m['entity'], f'measure {name}')
-                for column in m.get('filter', {}):
-                    if column not in self.entities[m['entity']]['columns']:
-                        raise ValueError(f'semantic model: measure {name} filters on an unmapped column')
+                for column, value in m.get('filter', {}).items():
+                    if column not in self.entities[m['entity']]['columns'] or not all(isinstance(v, str) for v in (value if isinstance(value, list) else [value])):
+                        raise ValueError(f'semantic model: measure {name} filters on an unmapped column or a value that is not text')
+                if m.get('above_band'):
+                    rule = m['above_band']
+                    self._template(rule['expr'], m['entity'], f'measure {name} above_band')
+                    if rule['band'] not in targets.BANDS or targets.BANDS[rule['band']].get(rule['line']) is None:
+                        raise ValueError(f'semantic model: measure {name} reads a band line targets.json does not hold')
             elif m['agg'] == 'ratio':
                 for part in (m['numerator'], m['denominator']):
                     if self.measures.get(part, {}).get('agg') not in SIMPLE:
@@ -431,14 +436,18 @@ def resolve_value(dim, value, store, mdl=None):
     if not isinstance(value, (str, int, float)) or isinstance(value, bool) or (isinstance(value, str) and not value.strip()):
         raise SemanticError(f'{dim} takes one value')
     spec = mdl.dimensions[dim]
-    synonyms = {s.lower(): canonical for canonical, words in (spec.get('value_synonyms') or {}).items() for s in words}
+    # a word may stand for several values (planned maintenance is PM in this store, Scheduled in record contract v2):
+    # it resolves to the one the store holds
+    synonyms = {}
+    for canonical, words in (spec.get('value_synonyms') or {}).items():
+        for word in words:
+            synonyms.setdefault(word.lower(), []).append(canonical)
     values = store_values(dim, store, mdl)
     if values is not None:
         for candidate in values:
             if _same(value, candidate):
                 return candidate
-        canonical = synonyms.get(str(value).strip().lower())
-        if canonical is not None:
+        for canonical in synonyms.get(str(value).strip().lower(), []):
             for candidate in values:
                 if _same(canonical, candidate):
                     return candidate
@@ -523,7 +532,7 @@ class Statement:
 class _Part:
     """One aggregate over one entity: its FROM, joins and WHERE for a window, a shift and the filters that reach it."""
 
-    def __init__(self, mdl, entity_name, dims, filters, shift, measure_filter=None):
+    def __init__(self, mdl, entity_name, dims, filters, shift, measure=None):
         self.mdl, self.entity_name, self.entity = mdl, entity_name, mdl.entities[entity_name]
         self.aliases, self.joins = {entity_name: 'b'}, []
         self.dims = [(d, self._dimension(d)) for d in dims]
@@ -541,9 +550,15 @@ class _Part:
                 continue   # a slice of the numerator only (denominator_total): the denominator stays the whole
             self.where.append(f'{self._dimension(dim)} = ?')
             self.filter_params.append(value)
-        for column, value in (measure_filter or {}).items():
-            self.where.append(f"{_column(mdl, entity_name, column, 'b')} = ?")
-            self.filter_params.append(value)
+        measure = measure or {}
+        for column, value in measure.get('filter', {}).items():   # the measure's own rows: one value, or any of a list
+            values = value if isinstance(value, list) else [value]
+            self.where.append(f"{_column(mdl, entity_name, column, 'b')} IN ({', '.join('?' for _ in values)})")
+            self.filter_params.extend(values)
+        if measure.get('above_band'):   # the records over one of the owner's lines (targets.json), the line a bound value
+            rule = measure['above_band']
+            self.where.append(f"{_render(mdl, rule['expr'], entity_name, 'b')} > ?")
+            self.filter_params.append(targets.BANDS[rule['band']][rule['line']])
 
     def _dimension(self, dim):
         owner = self.mdl.reach(self.entity_name, dim)
@@ -609,7 +624,7 @@ class Compiled:
 
     def _simple(self, name, dims, span, grouped):
         m = self.mdl.measures[name]
-        part = _Part(self.mdl, m['entity'], dims, self.query.filters, self.query.shift, m.get('filter'))
+        part = _Part(self.mdl, m['entity'], dims, self.query.filters, self.query.shift, m)
         cols = [f'{sql} AS d{i}' for i, (_, sql) in enumerate(part.dims)]
         share = ', value / nullif(sum(value) OVER (), 0) * 100 AS share_pct' if grouped and m['agg'] in ADDITIVE else ''
         inner = (f"SELECT {', '.join(cols + [f'{_aggregate(self.mdl, name)} AS value', 'count(*) AS source_count', f'{part.ids()} AS source_ids'])} "
@@ -637,7 +652,10 @@ class Compiled:
         before, before_params = self._body(dims, self.previous, grouped)
         on = ' AND '.join(f'cur.{k} IS NOT DISTINCT FROM prev.{k}' for k in keys) or 'true'
         change = '' if grouped else ', cur.value - prev.value AS delta'
-        sql = (f'SELECT cur.*, prev.value AS previous_value{change} FROM ({sql}) cur LEFT JOIN ({before}) prev ON {on}'
+        # a slice the previous window recorded nothing for is a recorded zero for a sum or a count (an unavailable previous
+        # window reads null in `run`); a ratio of nothing has no value
+        before_value = 'prev.value' if self.measure['agg'] == 'ratio' else 'coalesce(prev.value, 0)'
+        sql = (f'SELECT cur.*, {before_value} AS previous_value{change} FROM ({sql}) cur LEFT JOIN ({before}) prev ON {on}'
                + self._order(keys) + ' LIMIT ?')
         return sql, params + before_params + [limit]
 
@@ -645,20 +663,21 @@ class Compiled:
         q, m, mdl = self.query, self.measure, self.mdl
         num, den = mdl.measures[m['numerator']], mdl.measures[m['denominator']]
         scale = m.get('scale', 1)
-        n_part = _Part(mdl, num['entity'], dims, q.filters, q.shift, num.get('filter'))
+        n_part = _Part(mdl, num['entity'], dims, q.filters, q.shift, num)
         keys = [f'd{i}' for i in range(len(dims))]
         n_cols = [f'{sql} AS d{i}' for i, (_, sql) in enumerate(n_part.dims)]
         group = ' GROUP BY ALL' if n_cols else ''
         numerator, denominator = _aggregate(mdl, m['numerator']), _aggregate(mdl, m['denominator'])
         where = ' AND '.join(n_part.where)
-        if num['entity'] == den['entity'] and not num.get('filter') and not den.get('filter'):
+        restricted = any(part.get(k) for part in (num, den) for k in ('filter', 'above_band'))
+        if num['entity'] == den['entity'] and not restricted:
             select = ', '.join(n_cols + [f'{numerator} AS numerator', f'{denominator} AS denominator',
                                          'count(*) AS source_count', f'{n_part.ids()} AS source_ids'])
             sql = (f'SELECT *, numerator / nullif(denominator, 0) * {scale} AS value, count(*) OVER () AS groups FROM ('
                    f'SELECT {select} FROM {n_part.source()} WHERE {where}{group}) t')
             return sql, n_part.bind(*span)
         shared = [d for d in dims if mdl.reach(den['entity'], d) is not None]
-        d_part = _Part(mdl, den['entity'], shared, q.filters, q.shift, den.get('filter'))
+        d_part = _Part(mdl, den['entity'], shared, q.filters, q.shift, den)
         d_cols = [f'{sql} AS d{dims.index(d)}' for d, sql in d_part.dims]
         n_select = ', '.join(n_cols + [f'{numerator} AS numerator', 'count(*) AS source_count', f'{n_part.ids()} AS source_ids'])
         n_sql = f'SELECT {n_select} FROM {n_part.source()} WHERE {where}{group}'
@@ -810,8 +829,11 @@ def run(query, store, rates=None, mdl=None):
             data[key] = total[key]
     if query.compare:
         data['previous_value'] = _previous(mdl, query, total_row, rates, basis) if available and total_row else None
-        # the change is DuckDB's (cur.value - prev.value); a priced measure states both windows' dollars and no change
-        data['delta'] = total_row.get('delta') if available and total_row and m['agg'] != 'priced' else None
+        # the change is DuckDB's (cur.value - prev.value), stated only when both windows are complete, as the tools do (a
+        # partial window against a whole one is not like for like); a priced measure states both windows' dollars and no change
+        comparable = window['coverage'] == 'complete' and previous['coverage'] == 'complete'
+        data['comparison'] = 'complete' if comparable else 'withheld: a window is incomplete or unavailable'
+        data['delta'] = total_row.get('delta') if comparable and total_row and m['agg'] != 'priced' else None
     data['source_rows'] = {'records': data['source_count'], 'groups': groups}
     trace['sql'] = ';\n'.join(trace['sql'])
     trace['elapsed_ms'] = (time.perf_counter() - started) * 1000
@@ -837,6 +859,13 @@ def _reading(mdl, query, r, rates, basis, dims_values):
     if 'share_pct' in r and m['agg'] != 'priced':
         out['share_pct'] = r['share_pct']
     band = _band_of(mdl, query.measure, dims_values, query.filters)
+    if band and m.get('band') and dims_values:
+        # the owner's band is for the measure's own ratio: a slice read against the whole window's denominator (a reject
+        # family against all the yield) is a share of that ratio, not the ratio, and carries no band (the waste breakdown's
+        # family rows carry none either); band_by names the band of each value of its dimension, as the review does
+        denominator = mdl.measures[m['denominator']]['entity'] if m['agg'] == 'ratio' else None
+        if denominator and any(mdl.reach(denominator, d) is None for d in dims_values):
+            band = None
     if band:
         targets.mark(out, band, out['value'])
     return out
@@ -903,10 +932,13 @@ def model_markdown(text=None):
             agg = f'ratio: `{m["numerator"]}` / `{m["denominator"]}`' + (f' x {m["scale"]}' if m.get('scale', 1) != 1 else '')
         elif m['agg'] == 'priced':
             agg = f'priced: `{m["quantity"]}` as {m["price_kind"]}'
-        elif m['agg'] == 'count':
-            agg = f'count of {m["entity"]} rows' + (''.join(f' where {k} = {v}' for k, v in m.get('filter', {}).items()))
         else:
-            agg = f'{m["agg"].replace("_", " ")} of `{m["expr"]}` over {m["entity"]} rows'
+            agg = f'count of {m["entity"]} rows' if m['agg'] == 'count' else f'{m["agg"].replace("_", " ")} of `{m["expr"]}` over {m["entity"]} rows'
+            conditions = [f'{k} is {" or ".join(v) if isinstance(v, list) else v}' for k, v in m.get('filter', {}).items()]
+            if m.get('above_band'):
+                rule = m['above_band']
+                conditions.append(f'`{rule["expr"]}` over the {rule["band"]} {rule["line"]} ({targets.BANDS[rule["band"]][rule["line"]]:g}%)')
+            agg += ''.join(f' where {c}' for c in conditions[:1]) + ''.join(f' and {c}' for c in conditions[1:])
         band = _band_words(m['band']) if m.get('band') else ''
         if m.get('band_by'):
             band = '; '.join(f'{value}: {_band_words(b)}' for value, b in m['band_by']['bands'].items())

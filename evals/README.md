@@ -51,7 +51,7 @@ routes to until phase 2 wires the router to the semantic model). Its `url` is th
 resolves it with `urls.resolve_url` against the golden year and answers it with the agent, exactly as the server
 answers `GET /corr/…`; over GET it fetches the address itself, which must answer, or, when it is a hand-typed spelling,
 redirect to `expect.url` and answer there. Everything else (the invariants, the expectations, the shape, a refusal's
-text) is scored as for a question. The value cases include the semantic model's new combinations of measure, split
+text) is scored as for a question; only these cases and the value cases that call it may run `semantic_query`, so a model that names the compiler anywhere else still fails the unknown-tool invariant. The value cases include the semantic model's new combinations of measure, split
 and filter (`value-semantic-*`), computed by hand from the record families like every other value case.
 
 A question that names its own shift or a relative window (issue #105: "How much donwtime on 1st shift last

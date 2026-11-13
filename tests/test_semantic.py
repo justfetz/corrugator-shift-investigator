@@ -14,10 +14,13 @@ from datetime import date, timedelta
 import pytest
 
 from investigator import cost_model, semantic as S, targets
-from investigator.agent import Agent
+from pathlib import Path
+
+from investigator.agent import PLAN_TOOLS, TOOL_SCHEMAS, Agent, Context, route, scope_violation
 from investigator.record_store import TABLES, default_store, fiscal_period
 from investigator.urls import canonical_url, page_url, redirect_for, resolve_url
 
+ROOT = Path(__file__).resolve().parents[1]
 DAYS = ('2026-09-14', '2026-09-16', '2026-09-17')   # a Monday; the September outage day (shift 3); a planned-maintenance Thursday
 WEEK = {'period': 'week', 'anchor': '2026-09-09'}
 MONTH = {'period': 'month', 'anchor': '2026-09-14'}
@@ -298,6 +301,32 @@ def check_running(measure):
     return check
 
 
+def check_production_days(store):
+    """Production days with a setup record = the days the KPI tiles divide MSF by (their day basis)."""
+    for window, shift in PERIOD_CASES:
+        assert run(store, 'production_days', window, shift=shift)['value'] == store.get_period_kpis(window, compare=False, shift=shift)['production_days_current']
+
+
+def check_review_total(measure, key, places):
+    """get_downtime_review's envelope: the operator-and-maintenance minutes and percent, and its band."""
+    def check(store):
+        for window, shift in PERIOD_CASES:
+            tool = store.get_downtime_review(window, shift)
+            got = run(store, measure, window, shift=shift)
+            assert close(got['value'], tool[key], places), (measure, window, shift, got['value'], tool[key])
+            if measure == 'op_maint_pct':
+                assert got['band'] == tool['op_maint_band']
+    return check
+
+
+def check_maintenance_pm_minutes(store):
+    """Maintenance and planned-maintenance minutes = the review's maintenance minutes plus its PM minutes (each rounded)."""
+    for window, shift in PERIOD_CASES:
+        tool = store.get_downtime_review(window, shift)
+        got = run(store, 'maintenance_pm_minutes', window, shift=shift)['value']
+        assert abs(got - tool['maintenance_minutes'] - tool['pm_minutes']) <= 0.011, (window, shift)
+
+
 FAMILIES = {'bond': 'BOND', 'warp': 'WARP', 'misalignment': 'MISALIGNMENT', 'moisture': 'MOISTURE'}
 
 CHECKS = {
@@ -364,6 +393,19 @@ CHECKS = {
     'dry_end_usd': [check_quality('dry_end_usd', 'usd'), check_waste('dry_end_usd', 'dry_end', 'usd', 2),
                     *[check_waste('dry_end_usd', family, 'usd', 2, {'reject_family': code}) for family, code in FAMILIES.items()]],
     'downtime_usd': [check_breakdown('downtime_usd', 'usd'), check_pareto('downtime_usd', 'usd', 2)],
+    'production_days': [check_production_days],
+    'msf_per_day': [check_period_kpis('msf_per_day', 'msf_per_day', 1), check_trend('msf_per_day', 'msf_per_day', 1)],
+    'setups_above_trim_target': [check_shift_kpis('setups_above_trim_target', 'setups_above_trim_target')],
+    'maintenance_pm_minutes': [check_maintenance_pm_minutes],
+    'maintenance_pm_pct': [check_period_kpis('maintenance_pm_pct', 'maintenance_pm_pct', 4)],
+    'op_maint_minutes': [check_review_total('op_maint_minutes', 'op_maint_minutes', 2)],
+    'op_maint_pct': [check_shift_kpis('op_maint_pct', 'op_maint_pct'), check_review_total('op_maint_pct', 'op_maint_pct', 4)],
+    'bale_msf': [check_period_kpis('bale_msf', 'bale_msf', 1)],
+    'bale_pct': [check_period_kpis('bale_pct', 'bale_pct', 4), check_waste('bale_pct', 'bale', 'pct_of_gross', 4)],
+    'unexplained_sqft': [check_waste('unexplained_sqft', 'unexplained')],
+    'unexplained_pct': [check_period_kpis('unexplained_pct', 'unexplained_pct', 4), check_waste('unexplained_pct', 'unexplained', 'pct_of_gross', 4)],
+    'bale_usd': [check_waste('bale_usd', 'bale', 'usd', 2)],
+    'unexplained_usd': [check_waste('unexplained_usd', 'unexplained', 'usd', 2)],
 }
 
 
@@ -497,6 +539,8 @@ def test_synonyms_resolve_to_the_models_names_and_the_stores_values():
     assert (query.measure, query.group_by, query.filters) == ('reject_sqft', ['reject_reason'], {'wet_end': 'WE20260914016', 'flute': 'C'})
     query = S.validate(S.SemanticQuery('downtime', filters={'place': 'DB', 'kind': 'pm', 'reason': 'starch'}, window=WEEK), store)
     assert query.filters == {'place': 'Double backer', 'kind': 'PM', 'reason': 'Glue / starch'}
+    for word in ('planned', 'planned maintenance', 'Scheduled', 'PM'):   # the planned kind under either contract's name, never Maintenance
+        assert S.validate(S.SemanticQuery('downtime', filters={'kind': word}, window=WEEK), store).filters == {'kind': 'PM'}, word
     query = S.validate(S.SemanticQuery('lineal_ft', filters={'web_width': '100', 'shift': '2'}, window=WEEK), store)
     assert query.filters == {'web_width': 100.0} and query.shift == 2
     assert S.validate(S.SemanticQuery('sheets', filters={'lane': '2'}, window=WEEK), store).filters == {'lane': 2}
@@ -512,7 +556,7 @@ def test_every_value_is_a_bound_parameter_and_every_statement_has_a_limit():
                                        compare='previous'))
     compiled = S.compile_query(query)
     assert [s.name for s in compiled.statements] == ['groups', 'total', 'basis gross_sqft', 'basis scheduled_minutes']
-    assert 'LEFT JOIN' in compiled.statements[0].sql and 'prev.value AS previous_value' in compiled.statements[0].sql
+    assert 'LEFT JOIN' in compiled.statements[0].sql and 'coalesce(prev.value, 0) AS previous_value' in compiled.statements[0].sql
     for statement in compiled.statements:
         assert hostile not in statement.sql and 'Operator' not in statement.sql and '2026-09' not in statement.sql
         assert statement.sql.rstrip().endswith('LIMIT ?') or statement.sql.rstrip().endswith('LIMIT 1')
@@ -554,9 +598,14 @@ def test_time_grains_and_the_previous_window(store):
     compared = run(store, 'stops', WEEK, group_by=['kind'], compare='previous')
     before = rows_by(run(store, 'stops', {'period': 'week', 'anchor': '2026-09-02'}, group_by=['kind']), 'kind')
     assert compared['previous_window']['start'] == '2026-08-31'
-    for row in compared['rows']:
-        assert row['previous_value'] == (before[row['kind']]['value'] if row['kind'] in before else None)
-    assert compared['delta'] == compared['value'] - compared['previous_value']
+    for row in compared['rows']:   # a slice the previous window recorded nothing for is a recorded zero, as in the current one
+        assert row['previous_value'] == (before[row['kind']]['value'] if row['kind'] in before else 0)
+    assert compared['delta'] == compared['value'] - compared['previous_value'] and compared['comparison'] == 'complete'
+    partial = run(store, 'stops', {'period': 'month', 'anchor': '2025-10-06'}, compare='previous')   # September 2025: one production day
+    assert partial['previous_value'] is not None and partial['delta'] is None and partial['comparison'].startswith('withheld')
+    outside = run(store, 'stops', {'period': 'day', 'anchor': '2025-09-30'}, group_by=['kind'], compare='previous')
+    assert outside['previous_window']['coverage'] == 'unavailable' and outside['previous_value'] is None and outside['delta'] is None
+    assert all(r['previous_value'] is None for r in outside['rows'])   # outside the records: never the zero an empty sum reads
 
 
 def test_a_slice_with_no_records_is_a_recorded_zero_where_the_denominator_says_so(store):
@@ -647,3 +696,77 @@ def test_the_docs_page_is_rendered_from_the_model_file():
     assert '| customer | `customers` | `customer_id` | not carried yet |' not in text and '| lane | `customers` | `customer_id` | not carried yet |' in text
     html = docsite.build_site()['/docs/semantic-model'].decode()
     assert '<h1' in html and 'The semantic model' in html and 'downtime_minutes' in html
+
+
+# ------------------------------------------------------------------ the review of the branch (issue #117)
+
+def test_a_slice_read_against_the_whole_denominator_carries_no_band(store):
+    """The owner's dry-end band is the total's: a reject family read against all the yield is a share of it, unbanded (as
+    the waste breakdown's family rows are); a grade, whose yield splits the same way, is its own ratio and carries it."""
+    families = run(store, 'dry_end_pct', WEEK, group_by=['reject_family'])
+    assert families['band'] and all('band' not in r for r in families['rows'])
+    grades = run(store, 'dry_end_pct', WEEK, group_by=['grade'])
+    assert all(r['band'] == targets.band('dry_end', r['value']) for r in grades['rows'])
+    kinds = run(store, 'downtime_pct', WEEK, group_by=['kind'])   # band_by: each kind its own band, as the review reads it
+    assert {r['kind']: r.get('band') for r in kinds['rows'] if r['kind'] in ('Maintenance', 'Operator')} == \
+        {r['kind']: targets.band(r['kind'].lower(), r['value']) for r in kinds['rows'] if r['kind'] in ('Maintenance', 'Operator')}
+
+
+def test_no_model_planner_can_run_the_semantic_model(store):
+    """Phase 1 offers the compiler to no model: a model that writes its name is refused like any unknown tool, in every
+    scope; its address and a scripted value case may run it."""
+    class Model:
+        mode = 'a model planner'
+        usage = {'model_calls': 1, 'cost_usd': 0}
+
+        def next_step(self, context):
+            if not context['results']:
+                return {'tool': S.TOOL, 'arguments': {'measure': 'stops', 'window': WEEK, 'shift': 2}}
+            return {'final': [r['result_id'] for r in context['results'] if r['ok']]} if any(r['ok'] for r in context['results']) else {'unavailable': 'no'}
+    analysis = store.day_analysis('2026-09-14')
+    try:
+        context = Context('2026-09-14', 2)
+        result = Agent(analysis, planner=Model()).ask('stops this week', context)
+        assert result['trace'][0]['ok'] is False and result['trace'][0]['error']['message'] == 'Tool is not permitted'
+        with pytest.raises(ValueError, match='Tool is not permitted'):
+            Agent(analysis)._execute(S.TOOL, {'measure': 'stops', 'window': WEEK}, {})
+        assert S.TOOL not in {s['name'] for s in TOOL_SCHEMAS} and S.TOOL not in PLAN_TOOLS
+    finally:
+        analysis.close()
+
+
+def test_the_selected_shift_scope_holds_for_the_semantic_model(store):
+    """Under one shift the compiler reads that shift only: all shifts or another shift is refused before it runs."""
+    for arguments in ({'measure': 'stops', 'window': WEEK, 'shift': None}, {'measure': 'stops', 'window': WEEK, 'shift': 3}):
+        assert scope_violation(S.TOOL, arguments, [2], 'shift', 'day', '2026-09-14')
+    assert scope_violation(S.TOOL, {'measure': 'stops', 'window': WEEK, 'shift': 2}, [2], 'shift', 'week', '2026-09-14') is None
+    with pytest.raises(S.SemanticError, match='contradicts'):
+        S.validate(S.SemanticQuery('stops', window=WEEK, shift=2, filters={'shift': 3}))
+
+
+URL_CASES = [c for c in json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases'] if c.get('url') and c['type'] == 'routing']
+
+
+@pytest.mark.parametrize('case', URL_CASES, ids=lambda c: c['id'])
+def test_every_semantic_answer_reads_short_and_its_looks_route_in_scope(store, case):
+    """The answer-shape rules test_answer_shapes.py holds every golden question to, for the cases that ask by address: no
+    section over about forty words or three semicolon clauses, and every where-to-look link a question the offline router
+    answers in the card's own scope."""
+    from test_answer_shapes import MAX_CLAUSES, MAX_WORDS, tool_text
+    resolved = resolve_url(case['url'], store)
+    analysis = store.day_analysis(resolved['day'])
+    try:
+        answer = Agent(analysis).ask(resolved['text'], resolved['context'], request=resolved['request'])
+    finally:
+        analysis.close()
+    quoted = sorted(tool_text(answer['trace']), key=len, reverse=True)
+    for section in answer['sections']:
+        text = section[2:] if section.startswith('- ') else section
+        for string in quoted:
+            text = text.replace(string, ' ')
+        assert len(text.split()) <= MAX_WORDS and len(text.split(';')) <= MAX_CLAUSES, section
+        look = re.search(r' → “([^”]+)”$', section)
+        if look:
+            context = resolved['context']
+            _, asked = route(look[1], context, store.production_days)
+            assert asked is context, (look[1], asked.read)

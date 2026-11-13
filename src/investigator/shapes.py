@@ -1447,7 +1447,7 @@ class PeriodAnswer:
 
 # ------------------------------------------------------------------ the semantic model (issue #117)
 
-SEMANTIC_COUNTS = ('setups', 'order changes', 'paper changes', 'stops', 'sheets', 'cuts')
+SEMANTIC_COUNTS = ('setups', 'order changes', 'paper changes', 'stops', 'sheets', 'cuts', 'days')
 SEMANTIC_ONE_PLACE = ('MSF', 'ft', 'sq ft', 'ft/min', 'ft/setup', 'ft/paper change')
 SEMANTIC_FIRST = 5   # the card shows five findings (web/app.js BULLETS_SHOWN); the rest follow under a label
 SEMANTIC_LOOKS = {'stop': ('pareto', 'stops'), 'reject': ('waste', 'grade'), 'lane': ('overrun', 'grade'),
@@ -1499,7 +1499,9 @@ class SemanticAnswer:
             words = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before',
                      'fiscal': 'the period before'}[data['window']['period']]
             before, before_rest = semantic_figure(data.get('previous_value'), unit)
-            if data.get('delta') is not None:
+            if data['previous_window']['coverage'] == 'unavailable':
+                head += f' · {words}: outside the records'   # never "none recorded", which is a window with no records
+            elif data.get('delta') is not None:
                 delta = data['delta']
                 change = (('+' if delta >= 0 else '-') + money(abs(delta))) if unit == '$' else signed(delta, unit)
                 head += f' · {change} vs {before}{before_rest} {words}'
@@ -1510,6 +1512,10 @@ class SemanticAnswer:
         if len(bullets) > SEMANTIC_FIRST:
             bullets = bullets[:SEMANTIC_FIRST] + ['The rest, in the same order'] + bullets[SEMANTIC_FIRST:]
         notes = []
+        if data['window']['coverage'] != 'complete':
+            notes.append(f'The window is incomplete (coverage {data["window"]["coverage"]}): observed values only, and rankings are withheld.')
+        if data.get('comparison', 'complete') != 'complete':
+            notes.append('Deltas are withheld: a window is incomplete or unavailable. Missing days are not zero production.')
         if data['group_by'] and not data['rows']:
             notes.append('No records in this window for this split.')
         if data['groups'] > data['rows_shown']:
@@ -1536,9 +1542,9 @@ class SemanticAnswer:
             text += f' · {q_bold}{q_rest}'
         if row.get('share_pct') is not None:
             text += f' · {f2(row["share_pct"])}% of the total'
-        if data.get('previous_window') is not None:
+        if data.get('previous_window') is not None and data['previous_window']['coverage'] != 'unavailable':
             before, before_rest = semantic_figure(row.get('previous_value'), data['unit'])
-            text += f' · previous {before}{before_rest}' if row.get('previous_value') is not None else ' · previous none recorded'
+            text += f' · previous {before}{before_rest}'
         text += band(row.get('band_text'))
         return bullet(text, result, i)
 

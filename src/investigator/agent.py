@@ -1056,11 +1056,14 @@ class Agent:
         # other visitors wait (issue #23). Offline callers hold that lock themselves and pass nothing.
         self.guard = guard if guard is not None else nullcontext()
 
-    def _execute(self, name, arguments, store, rates=None):
+    def _execute(self, name, arguments, store, rates=None, semantic_ok=False):
+        """Run one tool. `semantic_ok`: the semantic model's compiler may run (issue #117), only for a request whose plan
+        names it (its address, measure=semantic) or a planner that is no model; a model is never offered it in phase 1,
+        and a tool name it writes for it is refused here like any other unknown tool."""
         if not isinstance(arguments, dict):
             raise ValueError('Tool arguments must be an object')
         known = {s['name']: s for s in TOOL_SCHEMAS}
-        if name not in known and name != semantic.TOOL:
+        if name not in known and not (name == semantic.TOOL and semantic_ok):
             raise ValueError('Tool is not permitted')
         schema = known[name]['parameters'] if name in known else None
         if schema and (set(arguments) - set(schema['properties']) or any(k not in arguments for k in schema['required'])):
@@ -1134,6 +1137,8 @@ class Agent:
             allowed_shifts, period = self._enter(context)
             history = deepcopy(context.history[-self.max_turns:])
         rates = cost_model.effective(getattr(context, 'rates', None))
+        # the semantic model's compiler runs for its own address's plan, or a scripted planner that is no model (issue #117)
+        semantic_ok = any(step.get('tool') == semantic.TOOL for step in request.get('plan') or []) or getattr(self.planner, 'semantic', False) is True
         run_id = uuid4().hex
         store = OrderedDict()
         traces = []
@@ -1181,7 +1186,7 @@ class Agent:
                         if problem:
                             raise ValueError(problem)
                     with self.guard:
-                        data = self._execute(action['tool'], action['arguments'], store, rates)
+                        data = self._execute(action['tool'], action['arguments'], store, rates, semantic_ok)
                     result = {'result_id': rid, **action, 'ok': True, 'data': data}
                 except (ValueError, TypeError, KeyError) as exc:
                     result = {'result_id': rid, **action, 'ok': False, 'error': {'code': 'invalid_tool_call', 'message': str(exc)}}

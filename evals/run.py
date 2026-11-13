@@ -90,8 +90,10 @@ THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 
 # The clock covers the agent's turns only: dataset build, fixture I/O and the checks are outside it.
 DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
-# the tools a case may run: the planner's, and the semantic model's compiler, which its URL reaches (issue #117)
-TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS} | {semantic.TOOL}
+TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
+# the semantic model's compiler (issue #117) is no planner's tool: only a case that asks by its address, or a value case
+# that calls it, may run it, so a model that names it anywhere else still fails the unknown-tool invariant
+SEMANTIC_TOOL_NAMES = TOOL_NAMES | {semantic.TOOL}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
 # The stated rules an answer may print beside its figures: 480 scheduled minutes a shift, the 12 minutes a downtime flag
 # takes of them, and the downtime and per-setup trim flags, read from the owner's targets.json (issue #101) so a changed
@@ -311,6 +313,7 @@ class ScriptedPlanner:
     """Issues exactly one tool call and finishes on it: the value cases go through
     the real agent loop (validation, trace, summary) without a language model."""
     mode = 'scripted single tool call (value golden); no language model'
+    semantic = True   # no model: a value case may call the semantic model's compiler (issue #117), which no model planner may
 
     def __init__(self, tool, arguments):
         self.tool, self.arguments = tool, arguments
@@ -524,14 +527,14 @@ def shape_failures(spec, sections):
     return failures
 
 
-def invariants(mode, result, analysis, allowed_shifts):
-    """Checks every case must pass, whatever its category."""
+def invariants(mode, result, analysis, allowed_shifts, tools=TOOL_NAMES):
+    """Checks every case must pass, whatever its category. `tools`: the tools the case may run."""
     failures = []
     trace = result['trace']
     if mode == 'offline' and (result['usage']['model_calls'] or result['usage']['cost_usd']):
         failures.append('offline run reported model usage')
     for step in trace:
-        if step['ok'] and step['tool'] not in TOOL_NAMES:
+        if step['ok'] and step['tool'] not in tools:
             failures.append(f'executed unknown tool {step["tool"]}')
         if step['ok'] and step['arguments'].get('shift') is not None and step['arguments']['shift'] not in allowed_shifts:
             failures.append(f'{step["tool"]} ran for shift {step["arguments"]["shift"]} outside scope {allowed_shifts}')
@@ -1167,8 +1170,9 @@ def score(case, expect, results, analysis, allowed, mode):
     """The invariants over every turn and the case's own expectations over the last (or, for an
     investigation, over all of them): the same scoring for the in-process and the URL answers."""
     failures = []
+    tools = SEMANTIC_TOOL_NAMES if case.get('url') or case.get('tool') == semantic.TOOL else TOOL_NAMES
     for index, result in enumerate(results):
-        failures.extend(invariants(mode, result, *answered_scope(case, expect, result, analysis, allowed, index == len(results) - 1)))
+        failures.extend(invariants(mode, result, *answered_scope(case, expect, result, analysis, allowed, index == len(results) - 1), tools=tools))
     if case['type'] == 'investigation':
         failures.extend(investigation_failures(expect, results))
     else:
