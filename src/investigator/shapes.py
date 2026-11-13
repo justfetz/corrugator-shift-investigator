@@ -1365,7 +1365,7 @@ class PeriodAnswer:
         planned = [(i, x) for i, x in enumerate(rows) if x['scheduled']]
         if planned:
             bullets += ['Scheduled time, not ranked'] + [
-                bullet(f'{x["reason"]}: **{pval(x["minutes"])} min** over {stops_text(x["stops"])} · {pval(x["pct_of_scheduled"])}% of scheduled minutes', r, i)
+                bullet(f'{stop_label(x["reason"])}: **{pval(x["minutes"])} min** over {stops_text(x["stops"])} · {pval(x["pct_of_scheduled"])}% of scheduled minutes', r, i)
                 for i, x in planned]
         notes = sentences(data.get('method_note'))
         if data['flag_count'] > FIRST_FLAGS:
@@ -1409,7 +1409,7 @@ class PeriodAnswer:
             r = rows[i]
             toward = r['gap_fpm'] * sign >= 0
             share = f' · {pct(r["share_of_gap_pct"])}%' if r.get('share_of_gap_pct') is not None else ''
-            top = (f' · largest {r["top_item"]} at {f1(abs(r["top_item_fpm"]))} ft/min'
+            top = (f' · largest {stop_label(r["top_item"])} at {f1(abs(r["top_item_fpm"]))} ft/min'
                    if whole and r.get('top_item') and r.get('top_item_fpm') is not None else '')
             # every bucket is marked (issue #101; PR #111): the grade mix and planned maintenance are schedule-driven, a power
             # outage is external; neither is ever priced

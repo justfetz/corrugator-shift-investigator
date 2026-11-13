@@ -734,7 +734,8 @@ def opportunities(store, window, shift, rates, lens='all'):
                             'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
              'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
                            'waste, shear, the changeover rejects and the unexplained remainder (the scale reading less the recorded waste). The dry-end '
-                           'waste is the tag scrap: bond, warp, misalignment, moisture and other, one subtotal with each kind beneath it. Per year at '
+                           'waste is the tag scrap: bond, warp, misalignment, moisture and other, one subtotal with each kind beneath it. The cutoff-knife '
+                           'and stacker waste boards are priced on each shift\'s card and the waste breakdown, not as a lever here. Per year at '
                            'the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': waste['dataset_version'], 'rows': rows,

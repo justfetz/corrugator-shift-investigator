@@ -1508,7 +1508,7 @@ class RecordStore:
 
     def trailing_year(self, through):
         """(first, last) production dates of the trailing year ending on `through`: the 365 days ending on it,
-        inside the record store (which holds two months until the rolling year of issue #35 lands)."""
+        inside the record store (which starts on 1 January 2025, issue #100: a day in 2025 has a shorter trailing year)."""
         last = min(date.fromisoformat(str(through)[:10]), self._last)
         return max(last - timedelta(days=364), self._first), last
 

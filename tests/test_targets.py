@@ -201,7 +201,7 @@ def test_a_flag_fires_exactly_when_a_shift_is_over_its_band_and_names_who_to_ask
             assert f['band'] == 'flag' and f['pct_of_shift'] > 2.5 and f['supervisor'].startswith(f'the shift {f["shift"]} supervisor ({f["crew"]}')
             assert 0 <= f['times_over_band'] <= f['shifts_counted'] and 0 <= f['weeks_in_top_five'] <= f['weeks_counted']
             assert f['recurrence_through'] == day and f['recurrence_scope'] == 'all shifts'
-    assert seen == over and ('2025-01-22', 3, 'Maintenance') in seen   # owner-maintenance-flag-recurrence's shift (issue #100's records)
+    assert seen == over and ('2026-09-07', 2, 'Maintenance') in seen   # owner-maintenance-flag-recurrence's shift (issue #100's records)
 
 
 def test_every_flag_of_a_month_carries_its_recurrence_and_is_listed(store):
@@ -395,10 +395,10 @@ def test_recurrence_counts_a_reason_that_crossed_its_band_on_its_own(store):
     """Every shift of the trailing year on which the reason alone was over its band counts (12 of a 480-minute shift's
     minutes for operator and maintenance alike). On issue #100's records 2026-09-07's missed splices led shift 1's operator
     flag and 2026-09-28's order changes shift 1's, each over the band on its own once more in the year; the knife / slitter
-    jams that led 2025-01-22 shift 3's maintenance flag never crossed it alone. The value goldens value-review-day-0907 and
+    jams that led 2026-09-07 shift 2's maintenance flag never crossed it alone. The value goldens value-review-day-0907 and
     value-review-day-0928 pin the first two a second way."""
     for day, kind, reason, least in (('2026-09-07', 'Operator', 'Missed splice', 1), ('2026-09-28', 'Operator', 'Order change', 1),
-                                     ('2025-01-22', 'Maintenance', 'Knife / slitter jam', 0)):
+                                     ('2026-09-07', 'Maintenance', 'Knife / slitter jam', 0)):
         flags, _ = store.downtime_flags(day, day)
         flag = next(f for f in flags if f['reason'] == reason and f['kind'] == kind)
         over = store._fetch("SELECT production_date, shift, sum(seconds) / 60 AS minutes FROM stops WHERE kind = ? AND reason = ? "
