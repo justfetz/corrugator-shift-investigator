@@ -3,6 +3,7 @@
 `canonical_url(parse_request(q))` is the address of a question; `resolve_url` is its inverse. The
 round trip is proved on every question the golden set asks (the answers compare equal step by step),
 and the grammar refuses what it cannot name instead of guessing."""
+from datetime import date
 import http.client
 import json
 import re
@@ -87,6 +88,23 @@ def test_every_golden_question_round_trips_through_its_url(case):
         assert resolve_url(url, store)['text'] == case['expect']['url']
 
 
+def test_an_old_pm_kind_answers_as_the_scheduled_kind():
+    """Owner ruling (c), 2026-11-12: a planned stop's kind is Scheduled; v1 recorded it as PM, and an old `kind=pm`
+    address or a tool's PM filter keeps answering, as the Scheduled kind."""
+    from investigator import records as R
+    store = default_store()
+    new = resolve_url('/corr/1/day/2026-09-14/shift/1?measure=overview&kind=scheduled', store)
+    old = resolve_url('/corr/1/day/2026-09-14/shift/1?measure=overview&kind=pm', store)
+    assert new['request']['kind'] == old['request']['kind'] == 'Scheduled'
+    assert R.stop_kind('PM') == 'Scheduled' and R.stop_label('Scheduled') == R.stop_label('Planned maintenance') == 'Planned maintenance (scheduled)'
+    analysis = store.day_analysis('2026-09-17')   # a Thursday: shift 1 holds the planned window
+    try:
+        scheduled = analysis.get_downtime_breakdown(1, kind='Scheduled')['rows']
+        assert scheduled and analysis.get_downtime_breakdown(1, kind='PM')['rows'] == scheduled
+    finally:
+        analysis.close()
+
+
 def test_the_owner_examples_resolve():
     """The four shapes from the issue, in this grammar: the path is the controls, the query the plan."""
     store = default_store()
@@ -104,7 +122,7 @@ def test_the_owner_examples_resolve():
     report = resolve_url('/corr/1/month/2026-09-14/shift/2.json?measure=report&corrupt=1', store)
     assert report['report'] and report['request'] is None and report['corrupt'] and report['json'] and report['text'] == '/corr/1/month/2026-09-14/shift/2?measure=report&corrupt=1'
     assert resolve_url('/corr/1/day/2026-09-14/shift/2.json?measure=notes&want=chart', store)['request']['asked'] == ['chart']
-    assert machine_slug('CORR-1') == '1' and machine_slug('BHS-2') == 'bhs-2'
+    assert machine_slug('CORR-1') == '1' and machine_slug('LINE-2') == 'line-2'
     assert scope_url('2026-09-14', 'accounting', 'day', 2) == '/corr/1/period/2026-09-14'
     assert question_url('2026-09-14', 2, 'shift', 'day', question='Why was this shift slow?') == '/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Why%20was%20this%20shift%20slow%3F'
     assert PATH.match('/corr/1/day/2026-09-14/shift/2.json') and not PATH.match('/corr/1/day/2026-09-14/shift/4')
@@ -200,7 +218,7 @@ def test_every_measure_has_a_meaning_under_every_grain():
     ('/corr/1/day/2026-09-14?measure=kpis&measure=waste', 'Repeated query field'),
     ('/corr/1/day/2026-09-14?measure=tons', 'Unknown measure'),
     ('/corr/1/day/2026-09-14?measure=downtime&by=crew', 'by is reason, place or kind'),
-    ('/corr/1/day/2026-09-14?measure=downtime&kind=pm', 'kind is maintenance or operator'),
+    ('/corr/1/day/2026-09-14?measure=overview&kind=planned', 'kind is maintenance, operator or scheduled'),
     ('/corr/1/day/2026-09-14?measure=trend', 'metric is one of'),
     ('/corr/1/day/2026-09-14?measure=trend&metric=trim_pct&weeks=30', '1 to 26'),
     ('/corr/1/day/2026-09-14?measure=waste&metric=trim_pct', 'metric= does not apply'),
@@ -236,6 +254,8 @@ def test_what_the_grammar_refuses(url, reason):
 D, W, M, P = '/corr/1/day/2026-09-14', '/corr/1/week/2026-09-14', '/corr/1/month/2026-09-14', '/corr/1/period/2026-09-14'
 ALIASES = [
     (f'{D}/shift/2?measure=downtime&by=reason&compare=prev', f'{D}/shift/2?measure=pareto'),
+    # owner ruling (c), 2026-11-12: the planned stop's kind is Scheduled; v1's code PM keeps answering as it
+    (f'{D}/shift/1?measure=overview&kind=pm', f'{D}/shift/1?measure=overview&kind=scheduled'),
     (f'{P}/shift/3?measure=waste&by=grade', f'{P}/shift/3?measure=grade'),
     (f'{M}?measure=rollstock&compare=prev', f'{M}?measure=rollstock'),
     # compare=prev where the answer carries the previous window already: prev is its default

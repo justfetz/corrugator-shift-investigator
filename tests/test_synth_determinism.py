@@ -8,16 +8,17 @@ import pytest
 from investigator import records as R
 from investigator.analysis import Analysis
 from investigator.fixture import generate
-from investigator.record_store import TABLES, RecordStore
+from investigator.record_store import DIMENSION_TABLES, TABLES, RecordStore
 from investigator.synth import (content_hash, generate_day, generate_days, generate_months, generate_window, jsonl_bytes,
                                 production_days, read_jsonl, window_days, write_jsonl)
 
 REPO = Path(__file__).resolve().parents[1]
 # Pinned hash of August and September 2026 at seed 2026: byte-identical output
 # is the determinism claim. Change this constant only with an intended
-# generator change, and say so in the commit. (Issue #35, per-day seeding:
-# was d9143ff1d15029b5992069d664eb8430d3e0aaed617b82a953f84e0a4964e6c5.)
-PINNED_HASH = "b07c2a7933dbb0339b843d9e1a78f36f3c1b544c3c37135f94da3092aecb38c7"
+# generator change, and say so in the commit. (Issue #100, record contract v2, orders scheduled into setups:
+# was b07c2a7933dbb0339b843d9e1a78f36f3c1b544c3c37135f94da3092aecb38c7; issue #35, per-day seeding, before it:
+# d9143ff1d15029b5992069d664eb8430d3e0aaed617b82a953f84e0a4964e6c5.)
+PINNED_HASH = "68b0f21ade92b42115e693b4f4b646cb046454ad56c80bd8070857b6f5459b7e"
 
 
 def day_bytes(data, day):
@@ -37,7 +38,7 @@ def test_same_seed_is_byte_identical_and_fast(tmp_path):
     for name in R.FAMILIES:
         assert (tmp_path / "a" / f"{name}.jsonl").read_bytes() == (tmp_path / "b" / f"{name}.jsonl").read_bytes()
         assert (tmp_path / "a" / f"{name}.jsonl").read_bytes() == jsonl_bytes(first[name])
-    assert first["manifest"]["counts"] == {name: len(first[name]) for name in R.FAMILIES}
+    assert first["manifest"]["counts"] == {name: len(first[name]) for name in (*R.FAMILIES, *R.DIMENSIONS)}
     assert first["manifest"]["schema"] == R.SCHEMA
 
 
@@ -63,15 +64,16 @@ def test_two_ranges_that_share_a_day_produce_identical_records_for_it():
 
 
 def test_a_window_shift_keeps_every_shared_day_byte_identical():
-    """The nightly deploy moves the window by a day: the days the two windows share must not move.
-    A 30-day span keeps the test fast; the year is the same rule with DATASET_SPAN_DAYS."""
-    today, tomorrow = generate_window(date(2026, 9, 29), span_days=30), generate_window(date(2026, 9, 30), span_days=30)
-    shared = sorted({d.strftime("%Y%m%d") for d in window_days(date(2026, 9, 29), 30)} & {d.strftime("%Y%m%d") for d in window_days(date(2026, 9, 30), 30)})
+    """The nightly deploy moves the window's end by a day: the days the two windows share must not move.
+    30-day spans keep the test fast; the dataset is the same rule from its fixed first day (1 January 2025)."""
+    first_a, first_b = date(2026, 8, 30), date(2026, 8, 31)
+    today, tomorrow = generate_window(date(2026, 9, 29), first_day=first_a), generate_window(date(2026, 9, 30), first_day=first_b)
+    shared = sorted({d.strftime("%Y%m%d") for d in window_days(date(2026, 9, 29), first_a)} & {d.strftime("%Y%m%d") for d in window_days(date(2026, 9, 30), first_b)})
     assert len(shared) >= 20 and today["content_hash"] != tomorrow["content_hash"]
     for day in shared:
         assert day_bytes(today, day) == day_bytes(tomorrow, day), day
-    assert window_days(date(2026, 9, 30))[0] == date(2025, 9, 30) and window_days(date(2026, 9, 30))[-1] == date(2026, 9, 30)
-    assert len(window_days(date(2026, 9, 30))) == 262
+    assert window_days(date(2026, 9, 30))[0] == date(2025, 1, 1) and window_days(date(2026, 9, 30))[-1] == date(2026, 9, 30)
+    assert len(window_days(date(2026, 9, 30))) == 456
 
 
 def test_two_store_windows_hold_identical_rows_for_a_shared_day():
@@ -82,7 +84,8 @@ def test_two_store_windows_hold_identical_rows_for_a_shared_day():
     try:
         for table in (*TABLES, "shift_kpis"):
             columns = [c[0] for c in a._db.execute(f"DESCRIBE {table}").fetchall()]
-            sql = f"SELECT * FROM {table} WHERE production_date = DATE '2026-09-14' ORDER BY {', '.join(columns)}"
+            day = "" if table in DIMENSION_TABLES else "WHERE production_date = DATE '2026-09-14' "
+            sql = f"SELECT * FROM {table} {day}ORDER BY {', '.join(columns)}"
             rows = a._db.execute(sql).fetchall()
             assert rows and rows == b._db.execute(sql).fetchall(), table
         x, y = a.day_analysis("2026-09-14"), b.day_analysis("2026-09-14")
@@ -101,7 +104,7 @@ def test_order_numbers_are_unique_across_days():
     data = generate_months(months=(("2026", 9),))
     days_of = {}
     for setup in data["dry_end_setups"]:
-        for c in setup.customers:
+        for c in setup.lanes:
             assert c.order_number.startswith("SO-" + setup.production_date[2:]), (c.order_number, setup.production_date)
             days_of.setdefault(c.order_number, set()).add(setup.production_date)
     assert all(len(days) == 1 for days in days_of.values()) and len(days_of) > 22 * 100
@@ -124,7 +127,8 @@ def test_jsonl_round_trip_restores_equal_records(tmp_path):
         assert all(isinstance(r, R.FAMILIES[name]) for r in loaded[name])
     line = json.loads((tmp_path / "dry_end_setups.jsonl").read_text().splitlines()[0])
     assert set(line) == {f.name for f in R.DryEndSetupRecord.__dataclass_fields__.values()}
-    assert isinstance(line["customers"][0], dict) and isinstance(line["rejects"], list)
+    assert isinstance(line["lanes"][0], dict) and isinstance(line["rejects"], list)
+    assert loaded["customers"] == data["customers"]
     manifest = json.loads((tmp_path / "manifest.json").read_text())
     assert manifest["content_hash"] == data["content_hash"]
 

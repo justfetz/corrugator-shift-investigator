@@ -4,7 +4,7 @@ description: Test a pull request before approving it - pull its head, run the te
 ---
 Review pull request #$ARGUMENTS on justfetz/corrugator-shift-investigator. Read-only: edit nothing on the branch, push nothing, comment nothing unless asked.
 
-1. `gh api repos/justfetz/corrugator-shift-investigator/pulls/$ARGUMENTS` → head sha, branch, body, `mergeable_state`. The issue is the `Closes #n` in the body; `gh api repos/justfetz/corrugator-shift-investigator/issues/<n>` for its acceptance criteria (REST: `gh issue view` uses GraphQL, which sessions cannot reach). No issue → the verdict cannot be `approve`; say so.
+1. `gh api repos/justfetz/corrugator-shift-investigator/pulls/$ARGUMENTS` → head sha, branch, body, `mergeable_state`. The issue is the `Closes #n` in the body; `gh api repos/justfetz/corrugator-shift-investigator/issues/<n>` for its acceptance criteria (REST: `gh issue view` uses GraphQL, which sessions cannot reach). No issue → the verdict cannot be `approve`; say so. Then `python3 .github/scripts/agent.py status $ARGUMENTS`: the `review:` label the review workflow left, read the way the workflow reads it (`review: approve` only when the label, the newest verdict comment and the head's `agent-review` commit status agree on the current head; a label from an older head, or a comment no status confirms, reads `review: stale`; `review: needs-owner` carries its kind, `eyes` or `unresolved`). Quote it in the report.
 2. Fetch and test the head in a worktree, so `main` stays untouched:
    ```bash
    git fetch origin pull/$ARGUMENTS/head:pr-$ARGUMENTS && git worktree add /tmp/pr-$ARGUMENTS pr-$ARGUMENTS
@@ -16,8 +16,9 @@ Review pull request #$ARGUMENTS on justfetz/corrugator-shift-investigator. Read-
 5. Bot review threads: `gh api repos/justfetz/corrugator-shift-investigator/pulls/$ARGUMENTS/comments` and `.../pulls/$ARGUMENTS/reviews` (the Codex connector reviews every PR). Every thread, outdated or not, is either fixed (name the commit, and check the code really changed) or answered on the thread with the reason; an unanswered one is `fix first`. Outdated only means the lines moved.
 6. The reviewer's three rules on the diff: no number reaches the narrative except from a tool result; the offline path makes no model call; public mode accepts no visitor key.
 7. Report a table: *criterion · shown / not shown · evidence*, where evidence is a quoted line from the PR description or from your own run. Then: tests, evals, CI, golden diff, preview URL.
-8. Verdict, one line:
-   - `approve` — every criterion shown, CI green, no golden weakened, nothing a visitor would see changed (or the owner already looked).
-   - `fix first: <what>` — a criterion not shown, a failing check or a weakened case.
-   - `needs the owner's eyes at <preview URL>: <what to click>` — the diff touches `src/investigator/web/`, `server.py` or the `Dockerfile`; name the walkthrough step from `docs/TESTING.md` that exercises the change.
+8. Verdict, one line, by the review workflow's rules (`decide` in `.github/scripts/agent.py`; the three verdicts are its three labels):
+   - `approve` (`review: approve`) — every criterion shown, CI green, the evals pass, no golden weakened, and nothing in `agent.py`'s `OWNER_EYES` changed (or the owner already looked).
+   - `fix first: <what>` (`review: fix-first`) — a criterion not shown, a failing check or evals, a weakened case, a deleted file, fewer tests collected than on the merge base (`python -m pytest --collect-only -q` on both), or a branch that conflicts with `main`.
+   - `needs the owner's eyes at <preview URL>: <what to click>` (`review: needs-owner`) — *eyes*: the diff touches `src/investigator/web/`, `server.py`, the `Dockerfile`, `deploy/`, `.github/`, or a `CLAUDE.md` or `.claude/` at any depth (renames count by both paths), a symlink pointing outside the repository (a symlink counts by its target), or the issue is `waiting-on-owner`; for `web/`, name the walkthrough step from `docs/TESTING.md` that exercises the change. *unresolved*: a base other than `main`, no linked issue, no reviewer verdict, CI, evals or the test count that did not finish, or two fix rounds that left gaps.
+   If your verdict differs from the label, say which and why; you never change the label (read-only).
 9. `git worktree remove /tmp/pr-$ARGUMENTS --force && git branch -D pr-$ARGUMENTS`.

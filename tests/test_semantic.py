@@ -463,7 +463,9 @@ def test_physical_names_live_in_the_one_mapping_block():
     physical block maps, so a renamed store column changes that block and nothing else."""
     spec = json.loads(S.MODEL_PATH.read_text())
     physical = spec['physical']['entities']
-    mapped = {e['table']: {w for col in e['columns'].values() if col for w in re.findall(r'[A-Za-z_]\w*', col)} for e in physical.values()}
+    # the columns the block names: its column mappings and its entities' row restrictions (`where`, quoted literals aside)
+    mapped = {e['table']: {w for col in [*e['columns'].values(), re.sub(r"'[^']*'", '', e.get('where') or '')] if col
+                           for w in re.findall(r'[A-Za-z_]\w*', col)} - {'AND', 'IN'} for e in physical.values()}
     for block in ('dimensions', 'measures'):
         for item in spec[block]:
             for key in ('expr',):
@@ -513,7 +515,6 @@ def test_a_broken_model_file_is_refused():
     (dict(measure='stops', filters={'place': 'dbl backer'}), r"^No stop place 'dbl backer' in the records; the nearest: Double backer$", ['Double backer']),
     (dict(measure='stops', filters={'reason': 'zzz'}), r"^No stop reason 'zzz' in the records; the values are: ", None),
     (dict(measure='stops', filters={'day': '2026-09-14'}), r'day is a time dimension: the window sets the time', None),
-    (dict(measure='sheets', group_by=['customer']), r'carry no customer yet', None),
     (dict(measure='stops', group_by=['place', 'reason', 'kind']), r'group_by lists at most two dimensions', None),
     (dict(measure='stops', limit=0), r'limit is a whole number of rows from 1 to', None),
     (dict(measure='stops', compare='yesterday'), r'compare is previous', None),
@@ -533,14 +534,30 @@ def test_validate_refuses_with_the_nearest_choices(query, message, choices):
         assert refused.value.choices[:len(choices)] == choices
 
 
+def test_a_column_the_store_does_not_carry_is_refused_with_that_reason():
+    """A null in the physical block: the store does not carry the column (v1 carried no customer), and a dimension that reads
+    it is refused with that reason, as a split and as a filter. Record contract v2 carries the customer: sheets split by it."""
+    spec = json.loads(S.MODEL_PATH.read_text())
+    spec['physical']['entities']['lane']['columns']['customer_id'] = None
+    mdl = S.Model(spec)
+    for query in (S.SemanticQuery('sheets', window=WEEK, group_by=['customer']), S.SemanticQuery('sheets', window=WEEK, filters={'customer': 'C001'})):
+        with pytest.raises(S.SemanticError, match='carry no customer yet'):
+            S.validate(query, mdl=mdl)
+    store = default_store()
+    result = S.run(S.SemanticQuery('sheets', window=WEEK, group_by=['customer'], limit=200), store)
+    want = store._fetch('SELECT customer_id, sum(actual_cuts * outs) AS v FROM setup_orders WHERE production_date BETWEEN ? AND ? GROUP BY ALL',
+                        [date(2026, 9, 7), date(2026, 9, 11)], limit=200)
+    assert {r['customer']: r['value'] for r in result['rows']} == {r['customer_id']: r['v'] for r in want}
+
+
 def test_synonyms_resolve_to_the_models_names_and_the_stores_values():
     store = default_store()
     query = S.validate(S.SemanticQuery('scrap', group_by=['defect'], filters={'paper run': 'we20260914016', 'flute': 'single wall'}, window=WEEK), store)
     assert (query.measure, query.group_by, query.filters) == ('reject_sqft', ['reject_reason'], {'wet_end': 'WE20260914016', 'flute': 'C'})
     query = S.validate(S.SemanticQuery('downtime', filters={'place': 'DB', 'kind': 'pm', 'reason': 'starch'}, window=WEEK), store)
-    assert query.filters == {'place': 'Double backer', 'kind': 'PM', 'reason': 'Glue / starch'}
-    for word in ('planned', 'planned maintenance', 'Scheduled', 'PM'):   # the planned kind under either contract's name, never Maintenance
-        assert S.validate(S.SemanticQuery('downtime', filters={'kind': word}, window=WEEK), store).filters == {'kind': 'PM'}, word
+    assert query.filters == {'place': 'Double backer', 'kind': 'Scheduled', 'reason': 'Glue / starch'}
+    for word in ('planned', 'planned maintenance', 'Scheduled', 'PM'):   # the planned kind (v1 named it PM), never Maintenance
+        assert S.validate(S.SemanticQuery('downtime', filters={'kind': word}, window=WEEK), store).filters == {'kind': 'Scheduled'}, word
     query = S.validate(S.SemanticQuery('lineal_ft', filters={'web_width': '100', 'shift': '2'}, window=WEEK), store)
     assert query.filters == {'web_width': 100.0} and query.shift == 2
     assert S.validate(S.SemanticQuery('sheets', filters={'lane': '2'}, window=WEEK), store).filters == {'lane': 2}
@@ -601,9 +618,10 @@ def test_time_grains_and_the_previous_window(store):
     for row in compared['rows']:   # a slice the previous window recorded nothing for is a recorded zero, as in the current one
         assert row['previous_value'] == (before[row['kind']]['value'] if row['kind'] in before else 0)
     assert compared['delta'] == compared['value'] - compared['previous_value'] and compared['comparison'] == 'complete'
-    partial = run(store, 'stops', {'period': 'month', 'anchor': '2025-10-06'}, compare='previous')   # September 2025: one production day
+    partial = run(store, 'stops', {'period': 'week', 'anchor': '2025-01-06'}, compare='previous')   # the records start Wednesday 1 January 2025
+    assert partial['previous_window']['coverage'] == 'partial'
     assert partial['previous_value'] is not None and partial['delta'] is None and partial['comparison'].startswith('withheld')
-    outside = run(store, 'stops', {'period': 'day', 'anchor': '2025-09-30'}, group_by=['kind'], compare='previous')
+    outside = run(store, 'stops', {'period': 'day', 'anchor': '2025-01-01'}, group_by=['kind'], compare='previous')
     assert outside['previous_window']['coverage'] == 'unavailable' and outside['previous_value'] is None and outside['delta'] is None
     assert all(r['previous_value'] is None for r in outside['rows'])   # outside the records: never the zero an empty sum reads
 
@@ -693,7 +711,8 @@ def test_the_docs_page_is_rendered_from_the_model_file():
     assert 'home run 2.75% / target 3% / flag 3.25% of gross' in text   # the trim band, read from targets.json
     assert 'Maintenance: target 2.5% / flag 2.5% of scheduled minutes' in text
     assert '| db, double-backer, hot plates | place Double backer |' in text
-    assert '| customer | `customers` | `customer_id` | not carried yet |' not in text and '| lane | `customers` | `customer_id` | not carried yet |' in text
+    assert '| lane | `setup_orders` | `customer_id` | `customer_id` |' in text and 'not carried yet' not in text   # record contract v2 carries it
+    assert "| reject | `line_id` | where `counted_in = 'dry_end'` |" in text   # the dry-end reject lines only
     html = docsite.build_site()['/docs/semantic-model'].decode()
     assert '<h1' in html and 'The semantic model' in html and 'downtime_minutes' in html
 

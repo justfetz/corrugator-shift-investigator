@@ -1,5 +1,7 @@
 name: Tests
-on: [push, pull_request]
+# workflow_dispatch: the agent workflow starts Tests on an agent's branch, since its GITHUB_TOKEN pushes start
+# no workflow (agent.yml, issue #126); the run's `deterministic` check lands on the branch's head commit.
+on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 jobs:
