@@ -24,6 +24,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "Summarize performance, downtime and waste. Show supporting charts." | the shift overview with three charts | `?measure=summary` |
 | "Show speed to target" | KPIs and each wet-end run against its grade target | `?measure=fpm` |
 | "fpm by grade", "Average speed this week" | speed by grade against target; the week's speed | `?measure=fpm&by=grade`, `?measure=fpm&window=week` |
+| "What were the top downtime reasons yesterday?", "Show downtime by reason" | the owner's default: a downtime question with no shift and no window is the previous production day, all shifts, whatever the shift control says. Maintenance and operator downtime against their bands, reasons ranked by % of scheduled minutes with stops, minutes per stop and the previous production day's share, planned maintenance last, and each flagged shift with its supervisor slot and the leading reason's recurrence. Name a shift ("for this shift") for that shift's breakdown | `/corr/1/day/<previous day>?measure=review` |
 | "Which equipment caused the most downtime?" | downtime grouped by place | `?measure=downtime&by=place` |
 | "Which downtime reason cost the most minutes this week?" | the downtime Pareto with share and the previous window | `?measure=pareto&window=week` |
 | "Where did we stop most often this week?" | the Pareto by place, counted | `?measure=pareto&window=week&by=place&unit=count` |
@@ -36,10 +37,12 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "Volume by grade this month" | totals by board grade with speed and allocated downtime | `?measure=grade&window=month` |
 | "How much paper did we consume this month?" | rollstock consumed per grade and web width | `?measure=rollstock&window=month` |
 | "Over/under-run by knife this week" | nominal against actual cuts per knife | `?measure=overrun&window=week` |
-| "What were the top 3 contributors to speed variations?", "What drove speed this week?" | the speed gap against target split into stops, setups, below-target running and grade mix | `?measure=speedvar`, `?measure=speedvar&window=week` |
+| "What were the top 3 contributors to speed variations?", "What drove speed this week?" | the speed gap against each grade's trailing-year baseline split into stops, setups, running under baseline and grade mix (schedule-driven, not priced), with planned maintenance (schedule-driven) and external stops (a power outage) as buckets of their own | `?measure=speedvar`, `?measure=speedvar&window=week` |
 | "Where is the speed opportunity this month?" | typical against best-fifth speed by grade and width | `?measure=opportunity&window=month` |
-| "Where did the money go this shift?" | the shift's losses priced and ranked by dollars | `?measure=dollars` |
-| "Where is the money this month?" | the levers ranked in dollars a year | `?measure=money&window=month` |
+| "Where did the money go this shift?" | the shift's losses priced and ranked by dollars; planned maintenance and a power outage apart, with the all-in total beside | `?measure=dollars` |
+| "Where is the money this month?" | the levers ranked in dollars a year, each controllable or schedule-driven | `?measure=money&window=month` |
+| "Where's my biggest opportunity?", "What went wrong yesterday?" | the supervisor lens: the controllable losses ranked, side trim and planned maintenance apart | `?measure=money&lens=supervisor` |
+| "What does trim cost?", "What's trim costing us this month?" | the ownership lens: the total cost of waste, side trim first, with its band; the dry-end waste (tag scrap) as one subtotal with bond, warp, misalignment and moisture beneath it | `?measure=money&lens=ownership`, `?measure=money&window=month&lens=ownership` |
 | "Show setup matrix", "Show orders and quantities", "Show shift and downtime notes", "Show rankings" | the per-shift matrices, notes and rankings (Day only) | `?measure=setups`, `orders`, `notes`, `rank` |
 
 With All selected, "Compare all shifts" runs KPIs, downtime and speed for each shift. The example chips under *Ask in one click* are these questions; under Week, Month or 4-4-5 they say "this week", "this month" or "this period".

@@ -182,7 +182,7 @@ def smoke(tmp_path, up, live=(), live_model='0', origins=(MAIN_HASH, MAIN, *PREV
     log.write_text('')
     env = {**os.environ, 'PATH': f'{stub}:{os.environ["PATH"]}', 'ORIGINS': ','.join(origins), 'LIVE_MODEL': live_model,
            'STUB_UP': ' '.join(up), 'STUB_LIVE': ' '.join(live), 'STUB_NXDOMAIN': ' '.join(nxdomain), 'STUB_LOG': str(log),
-           'RUN_DAY': '2026-11-11', 'STUB_AS_OF': as_of}
+           'RUN_DAY': '2026-11-11', 'STUB_AS_OF': as_of, 'GITHUB_ENV': str(tmp_path / 'github_env')}   # never CI's own env file
     proc = subprocess.run(['bash', '-c', step_script(DEPLOY.read_text(encoding='utf-8'), 'Smoke test')],
                           env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)   # interleaved, as in the run log
     return proc.returncode, proc.stdout, log.read_text().split()
@@ -366,3 +366,44 @@ def test_the_image_prebuilds_the_demo_year_and_the_golden_year():
             '/app/prebuilt-golden') in dockerfile
     assert 'INVESTIGATOR_PREBUILT=/app/prebuilt ' in dockerfile and 'INVESTIGATOR_GOLDEN_PREBUILT=/app/prebuilt-golden' in dockerfile
     assert not any('INVESTIGATOR_AS_OF' in line for line in dockerfile.splitlines() if line.startswith(('ENV', 'ARG')))   # never pinned
+
+
+def test_the_deploy_fails_a_live_changelog_without_the_merged_pull_request(tmp_path):
+    """Owner, 2026-11-12: the changelog is updated on every merge. The Changelog step before the build may not fail
+    the deploy, so a step after the smoke test reads /docs/changelog from the live revision and fails the run when
+    the merged pull request is missing. The check matches the link the docs renderer actually writes."""
+    import sys
+    from investigator.docsite import Renderer, changelog
+    text = DEPLOY.read_text(encoding='utf-8')
+    name = '- name: Changelog lists the merged pull request'
+    assert text.index('- name: Smoke test') < text.index(name)
+    step = text.split(name, 1)[1].split('- name:', 1)[0]
+    assert 'continue-on-error' not in step and 'set -euo pipefail' in step
+    assert 'curl -sS --max-time 30 -o /tmp/changelog.html "$LIVE/docs/changelog"' in step
+    assert 'python3 .github/scripts/check_changelog.py /tmp/changelog.html "$(git log -1 --format=%s)"' in step
+    smoke_step = text.split('- name: Smoke test', 1)[1].split('- name:', 1)[0]
+    assert 'echo "LIVE=$LIVE" >> "${GITHUB_ENV:-/dev/null}"' in smoke_step
+    assert smoke_step.index('GITHUB_ENV:-/dev/null') < smoke_step.index('echo "Live at')
+    code, log, _ = smoke(tmp_path, up=[MAIN_HASH, MAIN])
+    assert code == 0 and (tmp_path / 'github_env').read_text() == f'LIVE={MAIN}\n', 'the check reads the URL the smoke test reported'
+    page = tmp_path / 'changelog.html'
+    page.write_text(Renderer().render(changelog([('2026-11-12', 128, 'CLAUDE.md aligned with how the project runs (#101)')])))
+    script = ROOT / '.github' / 'scripts' / 'check_changelog.py'
+
+    def run(subject):
+        proc = subprocess.run([sys.executable, str(script), str(page), subject], capture_output=True, text=True)
+        return proc.returncode, proc.stdout
+
+    assert run('Merge pull request #128 from justfetz/docs-claude-md-alignment') == (0, 'changelog lists #128\n')
+    assert run('Merge pull request #128') == (0, 'changelog lists #128\n')        # a title edited at merge (#119 was)
+    code, out = run('Merge pull request #12 from justfetz/x')                      # #128 on the page is not #12
+    assert code == 1 and '#12' in out
+    assert run('CLAUDE.md aligned (#128)')[0] == 0                                   # a squash merge
+    code, out = run('Merge pull request #129 from justfetz/issue-129-x')
+    assert code == 1 and '::error::' in out and '#129' in out
+    code, out = run('Merge pull request #101 from justfetz/x')                     # #101 is only an issue link on the page
+    assert code == 1, 'an issue link is not the pull request entry'
+    assert run('Fix a typo on main')[0] == 0                                         # a direct push merges no pull request
+    code, out = subprocess.run([sys.executable, str(script), str(tmp_path / 'missing.html'), 'Merge pull request #128 from a/b'],
+                               capture_output=True, text=True).returncode, ''
+    assert code == 1

@@ -35,7 +35,7 @@ MEASURE_INTENTS = {v: k for k, v in INTENT_MEASURES.items()}
 STORE_MEASURES = {'kpis': 'get_period_kpis', 'pareto': 'get_downtime_pareto', 'waste': 'get_waste_breakdown',
                   'stops': 'get_stops_profile', 'grade': 'get_grade_totals', 'overrun': 'get_overrun',
                   'opportunity': 'get_speed_opportunity', 'trend': 'get_trend', 'rollstock': 'get_rollstock',
-                  'money': 'get_opportunities', 'speedvar': 'get_speed_variance'}
+                  'money': 'get_opportunities', 'speedvar': 'get_speed_variance', 'review': 'get_downtime_review'}
 TOOL_MEASURES = {v: k for k, v in STORE_MEASURES.items()}
 # Plans the period form of a day-shaped intent runs that are more than one store tool (agent.period_plan),
 # by their tools in order. Under a ranged grain `downtime` is the Pareto alone, `quality` the waste breakdown
@@ -45,10 +45,13 @@ PERIOD_SHAPES = {('get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown
 UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothing: `want=chart` changes their status
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
-QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'want',
+QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'lens', 'want',
                 'rates', 'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'against', 'shifts', 'rank', 'want', 'rates', 'corrupt', 'after')
-AGAINST = ('target', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; target is the default
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'against', 'shifts', 'rank', 'lens', 'want', 'rates',
+               'corrupt', 'after')
+AGAINST = ('baseline', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; baseline is the default
+AGAINST_ALIASES = {'target': 'baseline'}   # before the owner's speed baseline (issue #101) the default was each grade's target
+LENSES = ('supervisor', 'ownership')   # get_opportunities' owner lenses (issue #101); `all` is the default and is omitted
 MAX_AFTER = 8          # prior views carried as follow-up context; the agent keeps its own max_turns
 MAX_URL = 2000
 PATH = re.compile(r'^/corr/(?P<machine>[A-Za-z0-9_.-]{1,32})/(?P<grain>day|week|month|period)/'
@@ -62,7 +65,7 @@ PREVIOUS_BESIDE = ('pareto', 'waste', 'grade', 'rollstock')   # store answers th
 PERIOD_FORMS = {'downtime': 'pareto', 'quality': 'waste', 'compare': 'kpis'}   # the store form each takes against a previous window
 # Store measures that run once per listed shift (`shifts=1,3`): kpis under every grain, and under a ranged grain the
 # Pareto and the waste breakdown too, since there `downtime` and `quality` split over named shifts are those (issue #90).
-SPLIT_MEASURES = tuple(PERIOD_FORMS.values())
+SPLIT_MEASURES = (*PERIOD_FORMS.values(), 'review')   # downtime by reason over a window is the review (issue #101), split the same way
 KPI_LED = ('overview', 'summary', 'fpm')                  # day measures whose answer leads with the KPI tiles
 
 
@@ -139,11 +142,13 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                     params.append(('unit', first['measure']))
             elif measure == 'opportunity' and first['slice_by'] != 'width':
                 params.append(('by', first['slice_by']))
+            elif measure == 'money' and first.get('lens', 'all') != 'all':
+                params.append(('lens', first['lens']))
             elif measure == 'trend':
                 params.append(('metric', first['metric']))
                 if first.get('weeks', 8) != 8:
                     params.append(('weeks', str(first['weeks'])))
-            elif measure == 'speedvar' and first.get('against', 'target') != 'target':
+            elif measure == 'speedvar' and first.get('against', 'baseline') != 'baseline':
                 params.append(('against', first['against']))
         else:
             raise ValueError(f'No canonical URL for the plan {tools}')
@@ -267,7 +272,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
                 raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
             raise
         request['asked'] = _wants(fields.get('want'))
-    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'rank'):
+    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'rank', 'lens'):
         if key in fields and key not in _used(measure, fields):
             hint = ''
             if key == 'compare':
@@ -315,6 +320,8 @@ def _used(measure, fields):
         return {'window', 'by'}
     if measure == 'trend':
         return {'metric', 'weeks'}
+    if measure == 'money':
+        return {'window', 'lens'}
     if measure == 'speedvar':
         return {'window', 'against'}
     if measure in STORE_MEASURES:
@@ -420,7 +427,8 @@ def _request(measure, fields, context, window):
     if measure not in STORE_MEASURES:
         raise ValueError(f'Unknown measure {measure!r}; ' + MEASURE_HELP)
     if measure == 'speedvar':
-        return _speed_variance(fields.get('against', 'target'), shifts, context, window)
+        against = fields.get('against', 'baseline')
+        return _speed_variance(AGAINST_ALIASES.get(against, against), shifts, context, window)
     if scope == 'shift':
         per_shift = [shift]
     elif measure in SPLIT_MEASURES and (measure == 'kpis' or context.period != 'day'):
@@ -452,6 +460,11 @@ def _request(measure, fields, context, window):
             if slice_by not in ('width', 'crew'):
                 raise ValueError('by is width or crew for the speed opportunity')
             plan.append(('get_speed_opportunity', {'window': window, 'slice_by': slice_by, 'shift': s}))
+        elif measure == 'money':
+            lens = fields.get('lens')
+            if lens is not None and lens not in LENSES:
+                raise ValueError('lens is supervisor (the controllable losses ranked) or ownership (the total cost of waste, side trim first)')
+            plan.append(('get_opportunities', {'window': window, 'shift': s, **({'lens': lens} if lens else {})}))
         elif measure == 'trend':
             metric = fields.get('metric')
             if metric not in TREND_METRICS:
@@ -464,7 +477,7 @@ def _request(measure, fields, context, window):
             plan.append((STORE_MEASURES[measure], {'window': window, 'shift': s}))
     intent = {'kpis': 'period_compare', 'pareto': 'period_pareto', 'waste': 'period_waste', 'stops': 'period_stops',
               'grade': 'period_grade', 'overrun': 'period_overrun', 'opportunity': 'period_speed_opportunity',
-              'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money'}[measure]
+              'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money', 'review': 'period_review'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
 
@@ -485,12 +498,13 @@ def _speed_by_grade(by, shifts, context, window):
 
 
 def _speed_variance(against, shifts, context, window):
-    """`measure=speedvar` (issue #92): the speed gap of the window split into stops, setups, running below
-    target and grade mix. `against=previous` measures it from the previous window of the same kind,
-    `against=shift` from another shift over the same window (`shifts=3,1`: shift 3 explained against shift 1);
-    the default is target. With target or previous, `shifts=` lists one decomposition per shift."""
+    """`measure=speedvar` (issue #92): the speed gap of the window split into stops, setups, running under
+    each grade's baseline and grade mix. `against=previous` measures it from the previous window of the same
+    kind, `against=shift` from another shift over the same window (`shifts=3,1`: shift 3 explained against
+    shift 1); the default is the baseline (issue #101; `against=target`, its old name, redirects to it). With
+    the baseline or previous, `shifts=` lists one decomposition per shift."""
     if against not in AGAINST:
-        raise ValueError('against is target, previous or shift (measure=speedvar)')
+        raise ValueError('against is baseline, previous or shift (measure=speedvar)')
     if against == 'shift':
         if context.scope == 'shift':
             raise ValueError('Selected shift only: against=shift reads another shift; choose Production-day comparison or change the shift control')

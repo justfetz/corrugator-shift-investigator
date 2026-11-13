@@ -65,8 +65,10 @@ def test_the_real_word_list_is_in_step_with_the_rule():
 
 
 def test_the_router_reads_the_reviewers_real_words_as_before():
-    for question, url in (('How much downtime throughout the week?', '/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week'),
-                          ('Show downtime by operation', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+    for question, url in (('How much downtime throughout the week?', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week'),
+                          # downtime with no scope is the owner's default, the previous production day, all shifts (#101)
+                          ('Show downtime by operation', '/corr/1/day/2026-09-11?measure=review'),
+                          ('Show downtime by operation for this shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           ('Which stops qualify as maintenance?', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=maintenance'),
                           ('What is the downside of this shift?', '/corr/1/day/2026-09-14/shift/2?measure=overview')):
         assert address(question, rail()) == url, question
@@ -109,28 +111,30 @@ def test_a_comparison_with_another_shift_keeps_the_selected_shift_and_is_refused
 
 # ---------------------------------------------------------------- relative windows
 
-@pytest.mark.parametrize('question, day, period', [
-    ('how much downtime yesterday', '2026-09-11', 'day'),       # the production day before Monday is Friday
-    ('downtime last week', '2026-09-07', 'week'),               # the first production day of the week before
-    ('downtime previous week', '2026-09-07', 'week'),
-    ('downtime prior week', '2026-09-07', 'week'),
-    ('downtime from maintenance last week', '2026-09-07', 'week'),   # "from" not before the window: no comparison (Codex, #108)
-    ('downtime last month', '2026-08-03', 'month'),             # August, the month before September
-    ('downtime last period', '2026-08-03', 'fiscal'),           # P1 (3-30 Aug) is the 4-4-5 period before P2 (31 Aug-27 Sep)
+@pytest.mark.parametrize('question, day, period, scope', [
+    # the production day before Monday is Friday; downtime with no shift named is all shifts there (the owner, #101)
+    ('how much downtime yesterday', '2026-09-11', 'day', 'day'),
+    ('how much downtime this shift yesterday', '2026-09-11', 'day', 'shift'),
+    ('downtime last week', '2026-09-07', 'week', 'shift'),      # the first production day of the week before
+    ('downtime previous week', '2026-09-07', 'week', 'shift'),
+    ('downtime prior week', '2026-09-07', 'week', 'shift'),
+    ('downtime from maintenance last week', '2026-09-07', 'week', 'shift'),   # "from" not before the window: no comparison (Codex, #108)
+    ('downtime last month', '2026-08-03', 'month', 'shift'),    # August, the month before September
+    ('downtime last period', '2026-08-03', 'fiscal', 'shift'),  # P1 (3-30 Aug) is the 4-4-5 period before P2 (31 Aug-27 Sep)
 ])
-def test_a_relative_window_moves_the_day_and_the_period_control(question, day, period):
+def test_a_relative_window_moves_the_day_and_the_period_control(question, day, period, scope):
     scoped = question_scope(question, rail(), DAYS)
-    assert (scoped.production_day, scoped.period, scoped.shift, scoped.scope) == (day, period, 2, 'shift')
+    assert (scoped.production_day, scoped.period, scoped.shift, scoped.scope) == (day, period, 2, scope)
     assert scoped.read['day'] == day and scoped.read['period'] == period
 
 
 def test_the_issue_questions_resolve_to_the_scope_they_name():
     for question in ('How much donwtime on 1st shift last week?', 'downtime 1st shift last week', 'first shift downtime last week'):
-        assert address(question, rail()) == '/corr/1/week/2026-09-07/shift/1?measure=pareto', question
+        assert address(question, rail()) == '/corr/1/week/2026-09-07/shift/1?measure=review', question   # the owner's review (#101)
     assert address('how much downtime did third shift have yesterday', rail(shift=1, period='week')) == '/corr/1/day/2026-09-11/shift/3?measure=downtime'
-    assert address('How much downtime on 1st shift last week?', rail(scope='day')) == '/corr/1/week/2026-09-07?measure=pareto&shifts=1'
+    assert address('How much downtime on 1st shift last week?', rail(scope='day')) == '/corr/1/week/2026-09-07?measure=review&shifts=1'
     assert address('What grades ran slowest last week?', rail(scope='day')) == '/corr/1/week/2026-09-07?measure=fpm&by=grade'
-    assert address('downtime last week', rail(period='week', day='2026-09-16')) == '/corr/1/week/2026-09-07/shift/2?measure=pareto'
+    assert address('downtime last week', rail(period='week', day='2026-09-16')) == '/corr/1/week/2026-09-07/shift/2?measure=review'
 
 
 @pytest.mark.parametrize('question', [
@@ -167,11 +171,14 @@ def test_the_router_never_reads_last_week_as_the_selected_week():
         parse_request('Compare with yesterday.', rail(scope='day'))
 
 
-def test_downtime_over_a_named_window_is_the_pareto():
+def test_downtime_over_a_named_window_is_the_review():
+    # issue #101: downtime by reason over a window is the owner's review, as under a ranged Period control; by equipment, the Pareto
     for question, window in (('how much downtime this week', {'period': 'week', 'anchor': DAY}),
                              ('how much downtime in August', {'period': 'month', 'anchor': '2026-08-01'})):
         [step] = parse_request(question, rail())['plan']
-        assert step == {'tool': 'get_downtime_pareto', 'arguments': {'window': window, 'group_by': 'reason', 'measure': 'minutes', 'shift': 2}}
+        assert step == {'tool': 'get_downtime_review', 'arguments': {'window': window, 'shift': 2}}
+    [step] = parse_request('how much downtime by equipment this week', rail())['plan']
+    assert step['tool'] == 'get_downtime_pareto' and step['arguments']['group_by'] == 'place'
     assert [s['tool'] for s in parse_request('why were we slow on stops this week', rail())['plan']] == \
         ['get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown']   # a diagnosis stays the overview
 

@@ -14,6 +14,10 @@ python3 evals/run.py --only why-slow              # one case
 python3 evals/make_value_goldens.py               # regenerate golden_values.json after an intended generator change
 ```
 
+A case the owner set carries `reviewed_by`: `owner-pending` until the owner has read
+it on the preview, then `owner`. Issue #101's cases, including the power-outage, planned-maintenance and money-card
+cases added with the owner's decisions on PR #111, are `owner`: the owner read and approved them on 2026-11-12.
+
 `tests/test_evals.py` runs the same offline cases and recorded fixtures in CI,
 so a change that breaks a golden case fails the build; `tests/test_goldens_values.py`
 fails the build when the committed value goldens are not what the generator produces.
@@ -61,7 +65,7 @@ Every case, whatever its type, also checks:
   where-to-look question `→ “…”` state no measurement and are not read as numbers);
 - every number on a cited line is a value of the row it cites (issue #75, `unprovenanced`): a section with a `**figure**`
   carries exactly one, and one evidence reference that resolves to a successful step of the trace and a row of
-  its result (`detail M`, `weekday M`: its sub-reason and weekday lists); every number in the figure renders a
+  its result (`detail M`, `weekday M`, `flag M`: its sub-reason, weekday and flag lists); every number in the figure renders a
   value of that row, or, with no row named, a count of the result's rows, a below-target count or a total of its
   envelope; every other number on the line is one of those, a count of the result's rows or a rule constant. A figure
   moved to the wrong row, changed by a digit, stated beside a row it does not cite, or citing a chart step fails the case.
@@ -109,16 +113,19 @@ tool calls), half the set under 13 ms. That is wider than the 13–60 ms the iss
 quotes for single questions, because the set also holds the refusals and the
 multi-turn stories.
 
-Eleven cases carry an explicit `max_ms: 500`: the two multi-turn stories
+These cases carry an explicit `max_ms: 500`: the two multi-turn stories
 (`story-monday-warp`, `story-trim-creep`), the eight- and nine-week trends
 (`period-trend-minutes-per-stop`, `period-trim-trend`, `period-trend-warp-weekly`,
 `period-moisture-trend`, `period-run-length-trend`, `value-trend-trim-8w`,
 `value-trend-warp-8w`, `value-trend-stops-9w-missing-weeks`) and the three-shift
 compare (`period-control-compare-shifts`). They run 52–116 ms uncontended; no
-other case passes 53 ms. Under about 2x CPU contention (four busy loops on the
+other case passes 53 ms. The three shifts' money with the day's total
+(`money-day-ranks-shifts-without-the-outage`, PR #111: seven tool calls, the day pricing each shift
+again) runs 210 ms in-process and 204 ms over GET in a warm, uncontended run, and 236–294 ms over GET
+run alone, so it carries the same 500. Under about 2x CPU contention (four busy loops on the
 four cores, two runs) four of them crossed the 250 ms default (`story-monday-warp`
 418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,
-`period-trend-minutes-per-stop` 266 ms), all eleven stayed under 500 ms, the next
+`period-trend-minutes-per-stop` 266 ms), all of them stayed under 500 ms, the next
 slowest case reached 156 ms, and the run-level gate held at p50 26 ms, p95 232 ms.
 Raise a budget only with the number that justifies it in the PR; never to make
 a slow change pass.
@@ -157,7 +164,7 @@ window holds.
 The file carries the dataset `content_hash`. `run.py` compares it with the golden
 store before scoring and fails every value case when they differ ("stale
 goldens; run make_value_goldens.py"), so an intended generator change forces a
-deliberate regeneration and an unintended one is caught. The 85 cases cover
+deliberate regeneration and an unintended one is caught. The cases cover
 every KPI tile for September and August (all shifts and per shift), one week
 and one production day per shift, the year's first week and month and 4-4-5
 period (no or a partial previous window) and the last week (partial),
@@ -220,7 +227,7 @@ faithfulness, grounding, refusal, value and data_quality 1.0, investigation ≥
 0.8. Offline cases stay pass / fail one by one. The exit status counts failed
 offline cases plus live (provider, type) pairs under their threshold.
 A live row costs a fraction of a cent with `claude-haiku-5-5` and roughly a
-cent with `gpt-4.1-mini`; the table prints the measured cost per case. Fifteen
+cent with `gpt-4.1-mini`; the table prints the measured cost per case. The
 Anthropic recordings are committed under `fixtures/anthropic/`; none for OpenAI.
 
 ## Tracking runs over time
@@ -266,12 +273,12 @@ writer is the owner's grading page, `/evals/grade`, on the local workbench only
   outcome, failures and the trace of every turn; `{"all": true}` runs every row
   and returns the score (answered from the previous whole-set run for a minute).
   It carries the same token and Origin checks as `/api/ask`.
-- The badge on the main page (`286/301 golden · 12 ms p50` while the 15 recordings are stale) is `evals.badge` of
+- The badge on the main page (`<passed>/<runs> golden · <p50> ms p50`) is `evals.badge` of
   `/api/config`: passed / runs and the offline p50 of the newest history line.
 
 A run id is the case id for the offline run and `<id>@<provider>` for its
-recorded variant: 295 cases make 301 runs because six offline cases also have a
-recording. A live run on the page is always a **replay** of the committed
+recorded variant: a case with a recording makes two runs, so the run count is
+the case count plus the recorded cases. A live run on the page is always a **replay** of the committed
 fixture (`live=False` in `run_case_detail`): the page shows the recording's
 model, its tool choices and its recorded cost, and no request from the page can
 reach a provider, whatever keys the server holds. Latency on the page is this
@@ -396,9 +403,9 @@ text, so a score or a grade always belongs to the words it was given. The judge
 reads `investigator.judge.narrative_cases`: the question and its scope, the
 narrative as a reader sees it (`Finding: ... (cites r1 row 0 trim_pct)`), and the
 tool results it was written from, rows first, floats to four decimals, the
-writer's twelve-row preview, at most 24,000 characters. Four narratives can be
-judged and graded today, all four scripted: since the rolling year (#91) every
-live recording is stale and replays nothing, so the seventeen recorded narratives
+writer's twelve-row preview, at most 24,000 characters. Only the scripted narratives can be
+judged and graded today: since the rolling year (#91) every
+live recording is stale and replays nothing, so the recorded narratives
 come back once the live recordings are re-recorded (#71). Until then the target
 of twenty reads "20 once the live recordings are re-recorded (#71)" wherever it is
 shown.
