@@ -8308,8 +8308,8 @@
     "shape": {
      "headline_match": "^Downtime, stop kind Maintenance this week: \\*\\*[0-9.]+%\\*\\* of scheduled minutes · (home run|on target|over the|flag)",
      "bullets": [
-      6,
-      6
+      5,
+      5
      ],
      "look": [
       2,

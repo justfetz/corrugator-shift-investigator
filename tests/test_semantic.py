@@ -805,7 +805,9 @@ def test_an_entity_where_holds_a_checked_condition(store):
     want = store._fetch("SELECT kind, sum(seconds) / 60 AS value, count(*) AS n FROM stops WHERE production_date BETWEEN ? AND ? "
                         "AND kind IN ('Maintenance', 'Operator') AND seconds >= 60 AND place <> 'Power' GROUP BY kind",
                         [date(2026, 9, 14), date(2026, 9, 18)], limit=10)
-    assert {r['kind']: (r['value'], r['source_count']) for r in result['rows']} == {r['kind']: (r['value'], r['n']) for r in want}
+    got = {r['kind']: r for r in result['rows']}
+    assert set(got) == {r['kind'] for r in want} == {'Maintenance', 'Operator'}
+    assert all(close(got[r['kind']]['value'], r['value']) and got[r['kind']]['source_count'] == r['n'] for r in want)
     assert close(result['value'], sum(r['value'] for r in want))
     for sql, params in zip(result['trace']['sql'].split(';\n'), result['trace']['parameters']):
         assert "'Maintenance'" not in sql and "'Power'" not in sql and '>= 60' not in sql
@@ -909,11 +911,13 @@ def test_the_lever_is_the_slices(store):
     mdl = S.model()
     assert mdl.measures['maintenance_pm_minutes']['lever'] == mdl.measures['maintenance_pm_pct']['lever'] == 'schedule-driven'
     planned = S.resolve_value('kind', 'planned', store)
-    kinds = run(store, 'downtime_minutes', WEEK, group_by=['kind'])
+    week = {'period': 'week', 'anchor': '2026-09-14'}   # the September outage and a planned-maintenance Thursday
+    kinds = run(store, 'downtime_minutes', week, group_by=['kind'])
     assert kinds['lever'] == 'controllable'
     assert {r['kind']: r['lever'] for r in kinds['rows']} == {'Maintenance': 'controllable', 'Operator': 'controllable',
                                                               planned: 'schedule-driven', targets.EXTERNAL_KIND: 'external'}
-    reasons = run(store, 'stops', WEEK, group_by=['reason'], limit=200)
+    reasons = run(store, 'stops', week, group_by=['reason'], limit=200)
+    assert {'Planned maintenance', *targets.EXTERNAL_REASONS} <= {r['reason'] for r in reasons['rows']}
     for row in reasons['rows']:
         want = 'external' if row['reason'] in targets.EXTERNAL_REASONS else 'schedule-driven' if row['reason'] == 'Planned maintenance' else 'controllable'
         assert row['lever'] == want, row['reason']

@@ -1503,7 +1503,8 @@ class SemanticAnswer:
                 head += f' · {words}: outside the records'   # never "none recorded", which is a window with no records
             elif data.get('delta') is not None:
                 delta = data['delta']
-                change = (('+' if delta >= 0 else '-') + money(abs(delta))) if unit == '$' else signed(delta, unit)
+                # a change of a percentage is in points; of dollars, signed dollars; of anything else, its own signed figure
+                change = (('+' if delta >= 0 else '-') + money(abs(delta))) if unit == '$' else f'{delta:+,.2f} points' if unit.startswith('%') else signed(delta, unit)
                 head += f' · {change} vs {before}{before_rest} {words}'
             else:
                 head += f' · {words}: {before}{before_rest}'
@@ -1522,6 +1523,9 @@ class SemanticAnswer:
             notes.append(f'The first {n(data["rows_shown"])} of {n(data["groups"])} rows are listed; the total is over every row.')
         notes.append(window_head(data))
         notes.append(f'{data["label"]}: {data["definition"]}')
+        if data.get('lever'):   # a row whose stop kind or reason has a lever of its own names it (the owner on PR #111)
+            others = any(row.get('lever') not in (None, data['lever']) for row in data['rows'])
+            notes.append(f'Lever: {data["lever"]}' + ('; a row with another lever names it.' if others else '.'))
         if data['agg'] == 'ratio':
             notes.append('A ratio of sums over the window, never an average of ratios.')
         if data['agg'] == 'priced':
@@ -1546,6 +1550,8 @@ class SemanticAnswer:
             before, before_rest = semantic_figure(row.get('previous_value'), data['unit'])
             text += f' · previous {before}{before_rest}'
         text += band(row.get('band_text'))
+        if row.get('lever') not in (None, data.get('lever')):
+            text += f' · {row["lever"]}'
         return bullet(text, result, i)
 
     def looks(self, data):
