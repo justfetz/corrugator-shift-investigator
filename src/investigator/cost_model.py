@@ -755,9 +755,9 @@ def opportunities(store, window, shift, rates, lens='all'):
                             'are schedule-driven and listed after, then external downtime (a power outage), which is not controllable. Shear and dry-end waste are priced in full, all recorded, not over their '
                             'targets. Peel and core are controllable too; the roll records carry them, but no lever prices them yet. Per year at the '
                             'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
-             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
-                           'waste, shear, the changeover rejects, the cutoff-knife and stacker waste boards, planning / admin (not production waste) '
-                           'and the unexplained remainder (the scale reading less the recorded waste). Each line of the waste breakdown is priced '
+             'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars. The rest are '
+                           'the dry-end waste, shear, the changeover rejects, the cutoff-knife and stacker waste boards, planning / admin (not '
+                           'production waste) and the unexplained remainder (the scale reading less the recorded waste). Each line of the waste breakdown is priced '
                            'once, so the total is the waste breakdown\'s. The dry-end waste is the tag scrap: bond, warp, misalignment, moisture '
                            'and other, one subtotal with each kind beneath it. Per year at the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
