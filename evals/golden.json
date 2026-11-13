@@ -7125,13 +7125,46 @@
    }
   },
   {
+   "id": "supervisor-lens-each-dry-end-family-names-its-own-cause",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Where's my biggest opportunity this month?",
+   "note": "The coordinator's re-review of PR #123 (2026-11-13), item 4: every dry-end family was filed as 'controllable, temperatures', so the other family (cracking, handling, paper, print) and misalignment read as temperature problems. Each family now carries its own cause from reject_reasons.json: bond and warp temperature, moisture the steam and temperature along the machine, misalignment the slitter, scorer and knife, and other its four causes in the taxonomy's order, cracking the board surface, handling after the knife, paper as received (partly controllable: receiving and roll prep) and print the pre-print. The supervisor lens shows each one beside the lever.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=supervisor",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null,
+       "lens": "supervisor"
+      }
+     }
+    ],
+    "sections_match": [
+     "^- [0-9]+\\. Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, temperature \\(query 1 · row [0-9]+\\)$",
+     "^- [0-9]+\\. Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, temperature \\(query 1 · row [0-9]+\\)$",
+     "^- [0-9]+\\. Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, slitter, scorer and knife \\(query 1 · row [0-9]+\\)$",
+     "^- [0-9]+\\. Dry-end: moisture \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, steam and temperature along the machine \\(query 1 · row [0-9]+\\)$",
+     "^- [0-9]+\\. Dry-end: other \\(cracking, handling, paper, print\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, board surface; handling after the knife; paper as received, partly controllable \\(receiving and roll prep\\); pre-print \\(query 1 · row [0-9]+\\)$"
+    ],
+    "sections_not_match": "controllable, temperatures"
+   }
+  },
+  {
    "id": "owner-what-does-trim-cost-ownership-lens",
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
    "scope": "day",
    "question": "What's trim costing us this month?",
-   "note": "Issue #101, the ownership lens: the total cost of waste in dollars, side trim first (always the largest percentage; every owner asks what trim costs), with trim's band beside its figure, then the rest by dollars and the total. Bond, warp and misalignment (and moisture, the fourth dry-end family the records hold) are dry-end waste, the tag scrap: one subtotal line ranked by its dollars, read against the yield after trim and shear with the dry-end band, and each kind kept as its own line beneath it, since the detail is what supervisors go after (the owner, PR #111, 2026-11-12). In September the tag scrap is second, ahead of shear. Issue #100 (record contract v2): the owner-approved taxonomy (2026-11-11) has a fifth dry-end family, other (cracking, handling, paper, print), so the tag scrap holds five kinds, and the changeover rejects are a line of their own, priced once (owner ruling (d) on PR #123, 2026-11-12). Shear moves to row 6 and the card to ten bullets. Those three changes follow from the owner's rulings, not from a choice here; the tag scrap is still second, ahead of shear. For the owner to confirm.",
+   "note": "Issue #101, the ownership lens: the total cost of waste in dollars, side trim first (always the largest percentage; every owner asks what trim costs), with trim's band beside its figure, then the rest by dollars and the total. Bond, warp and misalignment (and moisture, the fourth dry-end family the records hold) are dry-end waste, the tag scrap: one subtotal line ranked by its dollars, read against the yield after trim and shear with the dry-end band, and each kind kept as its own line beneath it, since the detail is what supervisors go after (the owner, PR #111, 2026-11-12). In September the tag scrap is second, ahead of shear. Issue #100 (record contract v2): the owner-approved taxonomy (2026-11-11) has a fifth dry-end family, other (cracking, handling, paper, print), so the tag scrap holds five kinds, and the changeover rejects are a line of their own, priced once (owner ruling (d) on PR #123, 2026-11-12). Shear moves to row 6 and the card to ten bullets. Those three changes follow from the owner's rulings, not from a choice here; the tag scrap is still second, ahead of shear. For the owner to confirm. The coordinator's re-review of PR #123 (2026-11-13), items 3 and 4: the lens prices every waste line of the waste breakdown once, so the cutoff-knife and stacker waste boards and planning / admin (not production waste) are levers too, which it priced zero times before, and the card lists eleven levers under trim (thirteen bullets); the lens's total is the waste breakdown's (the value golden value-ownership-total-is-the-waste-breakdown-september). Each dry-end kind carries its own cause from reject_reasons.json (bond and warp temperature, misalignment the slitter, scorer and knife, moisture the steam and temperature along the machine, other its four causes with paper partly controllable), where every kind read 'temperatures' before. Trim, the tag scrap and shear keep their places.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership",
     "status": "complete",
@@ -7157,7 +7190,7 @@
      "headline_match": "^Side trim costs \\*\\*\\$[0-9,]+ a year\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of gross · (home run \\(2\\.75% or under\\)|on target \\(3% or under\\)|over the 3% target, under the 3\\.25% flag|flag: over 3\\.25%, the target is 3%) \\(query 1 · row 0\\)$",
      "bullets": [
       3,
-      10
+      13
      ],
      "look": [
       2,
@@ -7165,15 +7198,21 @@
      ]
     },
     "sections_match": [
-     "^- 2\\. Dry-end waste \\(tag scrap\\), the 5 kinds below: \\*\\*\\$[0-9,]+/yr\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of the yield after trim and shear · (home run \\(0\\.75% or under\\)|on target \\(1% or under\\)|over the 1% target, under the 1\\.25% flag|flag: over 1\\.25%, the target is 1%) · controllable, temperatures \\(query 1\\)$",
-     "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: bond: [0-9.]+% of the yield after trim and shear · controllable, temperatures \\(query 1 · row [1-4]\\)$",
-     "^- Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: warp: [0-9.]+% of the yield after trim and shear · controllable, temperatures \\(query 1 · row [1-4]\\)$",
-     "^- Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: misalignment: [0-9.]+% of the yield after trim and shear · controllable, temperatures \\(query 1 · row [1-4]\\)$",
+     "^- 2\\. Dry-end waste \\(tag scrap\\), the 5 kinds below: \\*\\*\\$[0-9,]+/yr\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of the yield after trim and shear · (home run \\(0\\.75% or under\\)|on target \\(1% or under\\)|over the 1% target, under the 1\\.25% flag|flag: over 1\\.25%, the target is 1%) · controllable, each kind's cause on its line \\(query 1\\)$",
+     "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: bond: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-5]\\)$",
+     "^- Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: warp: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-5]\\)$",
+     "^- Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: misalignment: [0-9.]+% of the yield after trim and shear · controllable, slitter, scorer and knife \\(query 1 · row [1-5]\\)$",
+     "^- Dry-end: moisture \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: moisture: [0-9.]+% of the yield after trim and shear · controllable, steam and temperature along the machine \\(query 1 · row [1-5]\\)$",
+     "^- Dry-end: other \\(cracking, handling, paper, print\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: other \\(cracking, handling, paper, print\\): [0-9.]+% of the yield after trim and shear · controllable, board surface; handling after the knife; paper as received, partly controllable \\(receiving and roll prep\\); pre-print \\(query 1 · row [1-5]\\)$",
      "^- 3\\. Shear chops \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, sequencing \\(query 1 · row 6\\)$",
-     "^- All the waste recorded: \\*\\*\\$[0-9,]+ a year\\*\\* across [0-9]+ kinds · \\$[0-9,]+ in this window \\(query 1\\)$",
+     "^- 5\\. Changeover rejects \\(counted with shear\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Changeover rejects \\(counted with shear\\): [0-9.]+% of gross · controllable, sequencing \\(query 1 · row 8\\)$",
+     "^- 6\\. Stacker waste boards \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Stacker waste boards: [0-9.]+% of gross · controllable, sequencing: the boards each order change loses at the stacker \\(query 1 · row 9\\)$",
+     "^- 7\\. Cutoff-knife waste boards \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Cutoff-knife waste boards: [0-9.]+% of gross · controllable, sequencing: the boards each order change loses at the cutoff knife \\(query 1 · row 10\\)$",
+     "^- 8\\. Planning / admin \\(not production waste\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Planning / admin \\(not production waste\\): [0-9.]+% of gross · not production waste, planning and bookkeeping \\(query 1 · row 11\\)$",
+     "^- All the waste recorded: \\*\\*\\$[0-9,]+ a year\\*\\* across 11 kinds · \\$[0-9,]+ in this window \\(query 1\\)$",
      "The ownership lens: the total cost of the waste recorded, side trim first"
     ],
-    "sections_not_match": "^- [0-9]+\\. Dry-end: "
+    "sections_not_match": "^- [0-9]+\\. Dry-end: |controllable, temperatures|not as a lever here"
    }
   },
   {
@@ -7460,7 +7499,7 @@
    "day": "2025-08-21",
    "shift": 1,
    "question": "Where did the money go this shift?",
-   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes, $2,580 at the post's rates: it was the shift's second-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): first shift on Thursday 2025-08-21 holds a 129-minute planned maintenance window, $2,580 at the post's rates, apart from the ranked losses; shear chops are second. The card also carries the changeover rejects and the cutoff-knife and stacker waste boards as their own gaps (owner ruling (d) on PR #123). Changed from the owner's expectations: the date only. The gap reads \"Downtime: Planned maintenance\" as the owner approved it on 2026-11-12, its line saying \"planned maintenance is scheduled time\"; ruling (c) on PR #123 asks for \"Planned maintenance (scheduled)\" wherever the stop shows, so the two are the owner's to reconcile.",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes, $2,580 at the post's rates: it was the shift's second-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): first shift on Thursday 2025-08-21 holds a 129-minute planned maintenance window, $2,580 at the post's rates, apart from the ranked losses; shear chops are second. The card also carries the changeover rejects and the cutoff-knife and stacker waste boards as their own gaps (owner ruling (d) on PR #123). Changed from the owner's expectations: the date only. Owner ruling (c) on PR #123 (2026-11-12): a planned stop reads as its reason and its kind both, \"Planned maintenance (scheduled)\", wherever it shows, never as a bare code, so the gap reads \"Downtime: Planned maintenance (scheduled)\" (the coordinator's re-review, item 5, 2026-11-13); where it read \"Downtime: Planned maintenance\" before, only the label changed. Its line still says \"planned maintenance is scheduled time\".",
    "expect": {
     "url": "/corr/1/day/2025-08-21/shift/1?measure=dollars",
     "status": "complete",
@@ -7480,10 +7519,10 @@
     },
     "sections_match": [
      "^Schedule-driven, shown apart$",
-     "^- Downtime: Planned maintenance: \\*\\*\\$2,580\\*\\* · \\$[0-9,]+/yr · schedule-driven, planned maintenance is scheduled time \\(query 1 · row [0-9]+\\)$",
+     "^- Downtime: Planned maintenance \\(scheduled\\): \\*\\*\\$2,580\\*\\* · \\$[0-9,]+/yr · schedule-driven, planned maintenance is scheduled time \\(query 1 · row [0-9]+\\)$",
      "^- 2\\. Shear chops: \\*\\*\\$[0-9,]+\\*\\*"
     ],
-    "sections_not_match": "^- [0-9]+\\. Downtime: (Planned maintenance|Power outage)|^External, not controllable$"
+    "sections_not_match": "^- [0-9]+\\. Downtime: (Planned maintenance|Power outage)|^External, not controllable$|^- Downtime: Planned maintenance: "
    }
   },
   {

@@ -836,7 +836,7 @@ def shift_gaps(plain, day, shift):
         for r in s.rejects:
             if LINE[r.category] == "dry_end":
                 rejects[FAMILY[r.category]] += r.sqft
-    gaps = {f"Downtime: {r}": ("downtime", m) for r, m in reasons.items()}
+    gaps = {f"Downtime: {PLANNED_GAP if r == 'Planned maintenance' else r}": ("downtime", m) for r, m in reasons.items()}
     running = 480 - sum(st.duration_sec for st in stops) / 60
     gaps["Speed gap to 675 ft/min"] = ("speed", max(0.0, 675 * running - feet) / 675)
     gaps["Side trim"] = ("trim", sum(s.trim_sqft for s in setups))
@@ -891,9 +891,12 @@ def money_summary(gaps, priced, gross, minutes, rates, trim_sqft=None):
     return values
 
 
-# The owner's ruling on the money cards (PR #111): planned maintenance (the reason every PM stop carries) is schedule-driven
-# and an external reason (a power outage, targets.json) external; both are on the card, apart from the ranked losses.
-GAP_APART = {"Downtime: Planned maintenance": "schedule-driven", **{f"Downtime: {r}": "external" for r in EXTERNAL_REASONS}}
+# The owner's ruling on the money cards (PR #111): planned maintenance (the reason every Scheduled stop carries) is
+# schedule-driven and an external reason (a power outage, targets.json) external; both are on the card, apart from the
+# ranked losses. The planned stop reads as its reason and its kind both, "Planned maintenance (scheduled)", wherever it
+# shows (owner ruling (c) on PR #123), the money card's gap included.
+PLANNED_GAP = "Planned maintenance (scheduled)"
+GAP_APART = {f"Downtime: {PLANNED_GAP}": "schedule-driven", **{f"Downtime: {r}": "external" for r in EXTERNAL_REASONS}}
 
 
 def apart_values(values, priced):
@@ -1062,11 +1065,40 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
                 {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note, rates=rates_text)
 
 
+def waste_total(plain, span, shift, rates):
+    """The waste breakdown's total in dollars, by hand: every line it lists priced as the breakdown prices it
+    (waste_dollars_case), added up, but the dry-end total (the sum of its five families, already counted) and the bale
+    (the scale reading the lines and its unexplained remainder add to); the remainder counts when the bale is over the
+    recorded lines. Returns (usd, usd tolerance, usd a year, its tolerance)."""
+    t = plain.sums(*span, shift)
+    minutes = window_minutes(plain, span, shift)
+    lines = {k: a for k, a in waste_areas(t).items() if k not in ("dry_end", "bale") and (k != "unexplained" or round(a, 1) > 0)}
+    priced = [money(WASTE_PRICING.get(k, "waste"), round(a, 1), t["gross"], minutes, rates, 0.1) for k, a in lines.items() if round(a, 1) > 0]
+    return (sum(e["usd"][0] for e in priced), sum(e["usd"][1] for e in priced),
+            sum(e["usd_per_year"][0] for e in priced), sum(e["usd_per_year"][1] for e in priced))
+
+
+def ownership_total_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
+    """The ownership lens's total equals the waste breakdown's total for the same window (the coordinator's re-review of
+    PR #123, owner ruling (d): each loss priced exactly once). The expected total is the breakdown's lines priced by hand;
+    it is written only when it agrees with the ownership lens's levers summed by hand (ownership_case), the second road."""
+    rates = rates_of(None)
+    span = window(period, anchor)
+    usd, usd_tol, year, year_tol = waste_total(plain, span, shift, rates)
+    lens = ownership_case(plain, id, period, anchor, shift, day=day)["expect"]["values"]["$"]
+    if abs(lens["total_usd"][0] - usd) > 0.02 or abs(lens["total_usd_per_year"][0] - year) > 2:
+        raise AssertionError(f"{id}: the ownership levers add to {lens['total_usd'][0]}, the waste breakdown's lines to {usd}")
+    values = {"$": {"total_usd": [round(usd, 6), round(usd_tol, 6)], "total_usd_per_year": [round(year, 3), round(year_tol, 3)]}}
+    return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift, "lens": "ownership"},
+                {"coverage": plain.coverage(*span), "values": values}, day=day, note=note)
+
+
 def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
     """get_opportunities with lens=ownership by hand: the total cost of each waste the records hold, side trim first
-    (all of it, priced as paper), then by dollars a year shear, the dry-end reasons (paper plus the run time they
-    took) as one group, the tag scrap, with its subtotal (the owner, PR #111), and the unexplained remainder (paper);
-    the total of them all."""
+    (all of it, priced as paper), then by dollars a year shear, the changeover rejects, the cutoff-knife and stacker
+    waste boards, planning / admin, the dry-end reasons (paper plus the run time they took) as one group, the tag scrap,
+    with its subtotal (the owner, PR #111), and the unexplained remainder (paper); the total of them all. Every waste
+    line of the waste breakdown is a lever, each priced once (owner ruling (d) on PR #123; the coordinator's re-review)."""
     rates = rates_of(None)
     span = window(period, anchor)
     t = plain.sums(*span, shift)
@@ -1075,11 +1107,14 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
     trim = "Side trim (all recorded)"
     levers = {trim: (money("trim", round(t["trim"], 1), gross, scheduled, rates, 0.1), "schedule-driven")}
     for key, label in (("shear", "Shear chops (all recorded)"), ("changeover", "Changeover rejects (counted with shear) (all recorded)"),
+                       ("cutoff_waste", "Cutoff-knife waste boards (all recorded)"), ("stacker_waste", "Stacker waste boards (all recorded)"),
+                       ("admin", "Planning / admin (not production waste) (all recorded)"),
                        ("bond", "Dry-end: bond (all recorded)"), ("warp", "Dry-end: warp (all recorded)"),
                        ("misalignment", "Dry-end: misalignment (all recorded)"), ("moisture", "Dry-end: moisture (all recorded)"),
                        ("other", "Dry-end: other (cracking, handling, paper, print) (all recorded)")):
-        if round(t[key], 1) > 0:
-            levers[label] = (money("waste", round(t[key], 1), gross, scheduled, rates, 0.1), "controllable")
+        if round(t[key], 1) > 0:   # planning / admin is bookkeeping, not production waste (reject_reasons.json: controllable "no")
+            levers[label] = (money("waste", round(t[key], 1), gross, scheduled, rates, 0.1),
+                             "not production waste" if key == "admin" else "controllable")
     unexplained = round(t["bale"] - Plain.accounted(t), 1)   # the bale minus every recorded waste line (issue #100)
     if unexplained > 0:
         levers["Unexplained (bale minus every recorded waste line)"] = (money("paper", unexplained, gross, scheduled, rates, 0.1), "unattributed")
@@ -1538,7 +1573,17 @@ def build(data=None):
     cases.append(opportunities_case(plain, "value-dollars-supervisor-september", "month", "2026-09-14", lens="supervisor",
                                     note="The supervisor lens: the controllable losses ranked, schedule-driven trim and planned maintenance unranked."))
     cases.append(ownership_case(plain, "value-dollars-ownership-september", "month", "2026-09-14",
-                                note="The ownership lens: the total cost of waste, side trim first."))
+                                note="The ownership lens: the total cost of waste, side trim first. Every line of the waste breakdown is "
+                                     "a lever, each priced once (owner ruling (d) on PR #123): the changeover rejects, the cutoff-knife "
+                                     "and stacker waste boards and planning / admin (not production waste) included."))
+    cases.append(ownership_total_case(plain, "value-ownership-total-is-the-waste-breakdown-september", "month", "2026-09-14",
+                                      note="The coordinator's re-review of PR #123 (owner ruling (d)): the ownership lens's total equals "
+                                           "the waste breakdown's total for September, every line it lists priced once, but the dry-end "
+                                           "total (its five families are lines already) and the bale (the scale reading the lines and the "
+                                           "unexplained remainder add to). The lens priced the cutoff-knife and stacker boards and planning "
+                                           "/ admin zero times before."))
+    cases.append(ownership_total_case(plain, "value-ownership-total-is-the-waste-breakdown-week-0914-shift-2", "week", "2026-09-14", 2,
+                                      note="The same identity for one shift over the story week."))
     # Speed variance (issue #92): the gap split into stops, setups, below-target running and grade mix, by hand,
     # against target (the usual grade mix), against the previous week, and one shift against another.
     cases.append(speedvar_case(plain, "value-speedvar-september-baseline", "month", "2026-09-14",

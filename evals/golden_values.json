@@ -38254,7 +38254,7 @@
        null
       ]
      },
-     "rows:gap=Downtime: Planned maintenance": {
+     "rows:gap=Downtime: Planned maintenance (scheduled)": {
       "paper_usd": [
        null,
        null
@@ -52908,10 +52908,10 @@
     "shift": null,
     "lens": "ownership"
    },
-   "note": "The ownership lens: the total cost of waste, side trim first.",
+   "note": "The ownership lens: the total cost of waste, side trim first. Every line of the waste breakdown is a lever, each priced once (owner ruling (d) on PR #123): the changeover rejects, the cutoff-knife and stacker waste boards and planning / admin (not production waste) included.",
    "expect": {
     "coverage": "complete",
-    "row_count": 9,
+    "row_count": 12,
     "values": {
      "rows:lever=Side trim (all recorded)": {
       "paper_usd": [
@@ -53040,6 +53040,132 @@
       ],
       "rank": [
        5,
+       null
+      ]
+     },
+     "rows:lever=Cutoff-knife waste boards (all recorded)": {
+      "paper_usd": [
+       8212.171,
+       0.016929
+      ],
+      "machine_time_usd": [
+       553.008148,
+       0.016929
+      ],
+      "usd": [
+       8765.179148,
+       0.016929
+      ],
+      "usd_per_year": [
+       97102.595,
+       1.208
+      ],
+      "msf_not_made": [
+       149.3122,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       7,
+       null
+      ]
+     },
+     "rows:lever=Stacker waste boards (all recorded)": {
+      "paper_usd": [
+       9120.2705,
+       0.016929
+      ],
+      "machine_time_usd": [
+       614.15963,
+       0.016929
+      ],
+      "usd": [
+       9734.43013,
+       0.016929
+      ],
+      "usd_per_year": [
+       107840.172,
+       1.208
+      ],
+      "msf_not_made": [
+       165.8231,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       6,
+       null
+      ]
+     },
+     "rows:lever=Planning / admin (not production waste) (all recorded)": {
+      "paper_usd": [
+       3209.4645,
+       0.016929
+      ],
+      "machine_time_usd": [
+       216.125556,
+       0.016929
+      ],
+      "usd": [
+       3425.590056,
+       0.016929
+      ],
+      "usd_per_year": [
+       37949.445,
+       1.208
+      ],
+      "msf_not_made": [
+       58.3539,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "control": [
+       "not production waste",
+       null
+      ],
+      "rank": [
+       8,
        null
       ]
      },
@@ -53373,14 +53499,32 @@
        null
       ]
      },
+     "#9": {
+      "lever": [
+       "Stacker waste boards (all recorded)",
+       null
+      ]
+     },
+     "#10": {
+      "lever": [
+       "Cutoff-knife waste boards (all recorded)",
+       null
+      ]
+     },
+     "#11": {
+      "lever": [
+       "Planning / admin (not production waste) (all recorded)",
+       null
+      ]
+     },
      "$": {
       "total_usd_per_year": [
-       5530750.036,
-       10.863999999999999
+       5773642.248,
+       14.488
       ],
       "total_usd": [
-       499245.308945,
-       0.151613
+       521170.508279,
+       0.2024
       ],
       "dry_end_rank": [
        2,
@@ -53409,6 +53553,68 @@
       "dry_end_pct_of_yield": [
        1.065708,
        5.1e-05
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-ownership-total-is-the-waste-breakdown-september",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_opportunities",
+   "arguments": {
+    "window": {
+     "period": "month",
+     "anchor": "2026-09-14"
+    },
+    "shift": null,
+    "lens": "ownership"
+   },
+   "note": "The coordinator's re-review of PR #123 (owner ruling (d)): the ownership lens's total equals the waste breakdown's total for September, every line it lists priced once, but the dry-end total (its five families are lines already) and the bale (the scale reading the lines and the unexplained remainder add to). The lens priced the cutoff-knife and stacker boards and planning / admin zero times before.",
+   "expect": {
+    "coverage": "complete",
+    "values": {
+     "$": {
+      "total_usd": [
+       521170.508279,
+       0.2024
+      ],
+      "total_usd_per_year": [
+       5773642.248,
+       14.488
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-ownership-total-is-the-waste-breakdown-week-0914-shift-2",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_opportunities",
+   "arguments": {
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-14"
+    },
+    "shift": 2,
+    "lens": "ownership"
+   },
+   "note": "The same identity for one shift over the story week.",
+   "expect": {
+    "coverage": "complete",
+    "values": {
+     "$": {
+      "total_usd": [
+       39326.23226,
+       0.2024
+      ],
+      "total_usd_per_year": [
+       5675554.838,
+       43.348
       ]
      }
     }
