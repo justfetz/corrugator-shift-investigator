@@ -14,7 +14,8 @@ Claude Code sessions) and prints one table sorted by the order prefix in the tit
 Under the table, the merge batch: open pull requests labelled `review: approve` (the review workflow's
 label, issue #126) in merge order, the backlog order of the issue each closes and then the pull request
 number, with the merge tier from `.github/scripts/agent.py` (`auto`: docs and tests only, merges itself
-after CI; `owner`: waits for /approve-pr). The coordinator's daily summary quotes it.
+after CI while the owner has AGENT_AUTO_MERGE on; `owner`: waits for /approve-pr). The coordinator's daily
+summary quotes it.
 
 Read-only. `python3 .claude/skills/issues/backlog.py [--json]`.
 """
@@ -73,14 +74,16 @@ def status_of(issue: dict, open_numbers: set, by_order: dict, closes: dict) -> t
     return 'ready', ''
 
 
-def merge_batch(pulls: list, issues: dict, files: dict, marks: dict) -> list[dict]:
+def merge_batch(pulls: list, issues: dict, files: dict, marks: dict, statuses: dict) -> list[dict]:
     """The approved pull requests in merge order: the backlog order of the issue each closes (an issue that
-    is not open sorts last), then the pull request number. `files` maps a pull request to its changed files
-    and `marks` to the review workflow's verdict comments; a pull request is in the batch only when
-    `agent.status_row` reads `review: approve`, i.e. the approve is for its current head."""
+    is not open sorts last), then the pull request number. `files` maps a pull request to its changed files,
+    `marks` to the review workflow's verdict comments and `statuses` to its head's commit statuses; a pull
+    request is in the batch only when `agent.status_row` reads `review: approve`, i.e. the approve is for its
+    current head and its `agent-review` commit status confirms it."""
     rows = []
     for pr in pulls:
-        if agent.status_row(pr, files.get(pr['number'], []), marks.get(pr['number'], []))['status'] != agent.LABELS['approve']:
+        n = pr['number']
+        if agent.status_row(pr, files.get(n, []), marks.get(n, []), statuses.get(n, []))['status'] != agent.LABELS['approve']:
             continue
         n = agent.linked_issue(pr.get('body'))
         issue = issues.get(n) or {}
@@ -113,7 +116,8 @@ def main(argv):
     approved = [pr for pr in pulls if agent.LABELS['approve'] in [l['name'] for l in pr.get('labels', [])]]
     files = {pr['number']: agent.changed_paths(gh(f'repos/{REPO}/pulls/{pr["number"]}/files?per_page=100')) for pr in approved}
     marks = {pr['number']: agent.review_marks(gh(f'repos/{REPO}/issues/{pr["number"]}/comments?per_page=100')) for pr in approved}
-    batch = merge_batch(approved, {i['number']: i for i in issues}, files, marks)
+    statuses = {pr['number']: gh(f'repos/{REPO}/commits/{pr["head"]["sha"]}/statuses?per_page=100') for pr in approved}
+    batch = merge_batch(approved, {i['number']: i for i in issues}, files, marks, statuses)
     if '--json' in argv:
         print(json.dumps({'issues': rows, 'merge_batch': batch}, indent=1))
         return 0
@@ -130,7 +134,8 @@ def main(argv):
         print(f"  #{r['number']}: {r['ask'] or r['title']}")
     print(f"\nMerge batch ({agent.LABELS['approve']}, in merge order):" if batch else f"\nMerge batch: no pull request is labelled {agent.LABELS['approve']}.")
     for r in batch:
-        tier = 'auto-merges after CI' if r['tier'] == 'auto' else f"owner: /approve-pr {r['number']}"
+        tier = (f"auto tier: merges itself after CI when AGENT_AUTO_MERGE is on, else /approve-pr {r['number']}" if r['tier'] == 'auto'
+                else f"owner: /approve-pr {r['number']}")
         print(f"  #{r['number']}  closes #{r['issue'] or '?'}  {r['title'][:70]}  [{tier}]")
     print(f'\n{len(rows)} open issues, {len(pulls)} open pull requests.')
     return 0

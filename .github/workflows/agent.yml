@@ -3,11 +3,12 @@
 # repository's CLAUDE.md and .claude/ (agents, skills, settings), and Claude opens one pull request that
 # closes the issue. docs/AGENTS.md is the owner's guide; .github/scripts/agent.py holds every rule called here.
 #
-# What starts a run: the `agent-ready` label on an issue; `@claude` in a comment by the repository owner
-# (on an issue: the same as the label; on a pull request: a fix run with the comment as the request);
-# workflow_dispatch with `issue` (a build) or `issue`, `pr` and `round` (a fix round: the review
-# workflow, agent-review.yml, sends these when its verdict is `review: fix-first`).
-# What stops one: removing the label. The `stop` job joins the issue's concurrency group with
+# What starts a run, and only from the repository owner (H3): the `agent-ready` label put on an issue by
+# the owner; `@claude` in a comment by the owner (on an issue: the same as the label; on a pull request: a
+# fix run with the comment as the request); workflow_dispatch by the owner with `issue` (a build) or
+# `issue` and `pr` (a fix run). The review workflow, agent-review.yml, dispatches `issue`, `pr` and a
+# `round` of 1 or more when its verdict is `review: fix-first`; that is all github-actions[bot] may start.
+# What stops one: removing the label (by anyone who can). The `stop` job joins the issue's concurrency group with
 # cancel-in-progress, which cancels a build or fix round running for that issue; a run still queued
 # finds the label gone when it starts and does nothing.
 # One run per issue: the build job's concurrency group is the issue (`agent-issue-<n>`), and `plan`
@@ -18,9 +19,13 @@
 # after 330 minutes gives up with a comment on the issue.
 # Caps: 60 minutes per build, `--max-turns` (AGENT_MAX_TURNS, default 200), the key's spend limit.
 #
-# Pushes and the pull request come from the Claude GitHub App (the action's default credential, not this
-# workflow's GITHUB_TOKEN), because GitHub starts no workflow from a GITHUB_TOKEN push: Tests, Preview and
-# the review workflow would never see the agent's work. That is why the checkout keeps no credential.
+# The agent's credential is the build job's own GITHUB_TOKEN (contents, pull requests and issues), handed to
+# the action as `github_token`. The job has no `id-token: write` (H5): the action's other path, the Claude
+# GitHub App, needs that permission to mint an OIDC token, and any step of a job that holds it can mint one
+# for any audience, which a Workload Identity pool that trusts the whole repository would accept. GitHub
+# starts no workflow from a GITHUB_TOKEN push or pull request, so the `dispatch` job, the only one with
+# `actions: write`, starts Tests on the branch and the review of the pull request after every run.
+# The build refuses to start while `main` takes a direct push (H1).
 name: Agent
 on:
   issues:
@@ -45,11 +50,14 @@ permissions:
 jobs:
   gate:
     # Most issue comments are not for the agent; a skipped job costs nothing and never queues.
+    # Only the owner starts a run (H3); agent.py's event_plan checks the same and more.
     if: >-
-      (github.event_name == 'issues' && github.event.label.name == 'agent-ready') ||
+      (github.event_name == 'issues' && github.event.label.name == 'agent-ready' &&
+       (github.event.action == 'unlabeled' || github.event.sender.login == github.repository_owner)) ||
       (github.event_name == 'issue_comment' && github.event.comment.user.login == github.repository_owner &&
        contains(github.event.comment.body, '@claude')) ||
-      github.event_name == 'workflow_dispatch'
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.sender.login == github.repository_owner || github.event.sender.login == 'github-actions[bot]'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -121,18 +129,30 @@ jobs:
     concurrency:
       group: agent-${{ needs.gate.outputs.key }}
       cancel-in-progress: false
+    # The agent's own token: it pushes its branch and opens its pull request with it. No `id-token: write`
+    # (H5) and no `actions: write` (the dispatch job starts CI and the review), so the agent can mint no
+    # OIDC token and dispatch no workflow. Never `statuses: write`: the review's verdict is a commit status.
     permissions:
       contents: write
       pull-requests: write
       issues: write
-      id-token: write   # the action exchanges the job's OIDC token for the Claude GitHub App's token
-      actions: write    # verify re-dispatches the review when it had to add "Closes #n" to the body
+    outputs:
+      dispatch: ${{ steps.verify.outputs.dispatch }}
+      pr: ${{ steps.verify.outputs.pr }}
+      branch: ${{ steps.verify.outputs.branch }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false   # the agent pushes as the Claude GitHub App, so CI runs on its commits
+          persist-credentials: false   # the action sets the git credential from github_token itself
+      - name: Refuse while main is unprotected
+        # H1: the agent's token can push branches; only protection on main keeps a push from deploying the demo.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.gate.outputs.issue }}
+          PR: ${{ needs.gate.outputs.pr }}
+        run: python3 .github/scripts/agent.py protected --issue "$ISSUE" --pr "$PR"
       - name: Check that an Anthropic credential is configured
         # Learns whether each exists, never a value. One is enough: an API key or a subscription token.
         # docs/AGENTS.md, "Set up once".
@@ -170,6 +190,8 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.plan.outputs.prompt }}
+          # The job's own token (H5: no OIDC exchange for the Claude GitHub App); see the header.
+          github_token: ${{ github.token }}
           # A fix round is dispatched by the review workflow's GITHUB_TOKEN, so its actor is github-actions[bot].
           allowed_bots: github-actions,github-actions[bot]
           settings: |
@@ -179,8 +201,9 @@ jobs:
             --max-turns ${{ vars.AGENT_MAX_TURNS || '200' }}
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,Agent,TodoWrite,Bash(python:*),Bash(python3:*),Bash(node:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git fetch:*),Bash(git merge:*),Bash(git checkout:*),Bash(git branch:*),Bash(git rev-parse:*),Bash(git ls-files:*),Bash(gh issue view:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr create:*),Bash(gh pr edit:*),Bash(ls:*),Bash(cat:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(grep:*),Bash(find:*),Bash(sort:*),Bash(diff:*),Bash(mkdir:*)"
-            --disallowedTools "Bash(gh pr merge:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh secret:*),Bash(gh label:*),Bash(git push --force:*),Bash(git push -f:*),Bash(git rebase:*),Bash(git reset --hard:*),Bash(curl:*),Bash(wget:*),Edit(.github/**),Write(.github/**)"
+            --disallowedTools "Bash(gh pr merge:*),Bash(gh api:*),Bash(gh workflow:*),Bash(gh secret:*),Bash(gh label:*),Bash(git push --force:*),Bash(git push -f:*),Bash(git rebase:*),Bash(git reset --hard:*),Bash(curl:*),Bash(wget:*),Edit(.github/**),Write(.github/**),Edit(.claude/**),Write(.claude/**),Edit(CLAUDE.md),Write(CLAUDE.md),Edit(**/CLAUDE.md),Write(**/CLAUDE.md)"
       - name: Check the outcome (one pull request that closes the issue, or a pushed fix)
+        id: verify
         if: steps.plan.outputs.go == 'true' && !cancelled()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -198,3 +221,29 @@ jobs:
           EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
           LABEL: agent ${{ needs.gate.outputs.mode }} of issue ${{ steps.plan.outputs.issue }}
         run: python3 .github/scripts/agent.py cost "$EXECUTION_FILE" --label "$LABEL" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  dispatch:
+    # GitHub starts no workflow from the agent's GITHUB_TOKEN pushes, so this job starts Tests on the branch
+    # (its `deterministic` check lands on the head commit) and the review of the pull request. The only job
+    # with `actions: write`; it runs main's script and nothing the agent wrote.
+    needs: [gate, build]
+    if: ${{ !cancelled() && needs.build.outputs.dispatch == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      issues: write   # says so on the pull request when a dispatch fails
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Start CI and the review on the agent's push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ needs.build.outputs.branch }}
+          PR: ${{ needs.build.outputs.pr }}
+        run: python3 .github/scripts/agent.py dispatch --branch "$BRANCH" --pr "$PR"
