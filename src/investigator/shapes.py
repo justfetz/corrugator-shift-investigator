@@ -1504,7 +1504,8 @@ class SemanticAnswer:
             elif data.get('delta') is not None:
                 delta = data['delta']
                 change = (('+' if delta >= 0 else '-') + money(abs(delta))) if unit == '$' else signed(delta, unit)
-                head += f' · {change} vs {before}{before_rest} {words}'
+                points = ' points' if unit.startswith('%') else ''   # the change of a percentage is in points
+                head += f' · {change}{points} vs {before}{before_rest} {words}'
             else:
                 head += f' · {words}: {before}{before_rest}'
         head += band(data.get('band_text')) + f' {ref(result)}'
@@ -1522,6 +1523,7 @@ class SemanticAnswer:
             notes.append(f'The first {n(data["rows_shown"])} of {n(data["groups"])} rows are listed; the total is over every row.')
         notes.append(window_head(data))
         notes.append(f'{data["label"]}: {data["definition"]}')
+        notes.append(f'Lever: {data["lever"]}.')
         if data['agg'] == 'ratio':
             notes.append('A ratio of sums over the window, never an average of ratios.')
         if data['agg'] == 'priced':
@@ -1545,6 +1547,8 @@ class SemanticAnswer:
         if data.get('previous_window') is not None and data['previous_window']['coverage'] != 'unavailable':
             before, before_rest = semantic_figure(row.get('previous_value'), data['unit'])
             text += f' · previous {before}{before_rest}'
+        if row.get('lever') and row['lever'] != data.get('lever'):
+            text += f' · {row["lever"]}'   # a slice whose lever is not the measure's: planned maintenance, a power outage
         text += band(row.get('band_text'))
         return bullet(text, result, i)
 

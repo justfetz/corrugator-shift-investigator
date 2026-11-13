@@ -47,6 +47,7 @@ PRICE_KINDS = ('trim', 'waste', 'paper', 'downtime', 'speed')
 PRICE_BASIS = ('gross_sqft', 'scheduled_minutes')
 # SQL words a model expression may use outside its {placeholders}: function names, nothing else.
 FUNCTIONS = {'split_part', 'concat_ws'}
+LEVERS = ('controllable', 'schedule-driven', 'external')   # the owner's levers (issue #101): who can move a figure
 PREVIOUS_WORDS = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before',
                   'fiscal': 'the period before'}
 
@@ -62,6 +63,10 @@ class SemanticError(ValueError):
 # ------------------------------------------------------------------ the model file
 
 _TOKEN = re.compile(r"'[^']*'|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|\s+|[-+*/(),]")
+# An entity's `where` (the physical block): columns of its table compared with literals, combined with AND, OR, IN, NOT,
+# IS NULL and parentheses. Its literals are bound as parameters when it compiles, never written into the SQL.
+_WHERE_TOKEN = re.compile(r"'[^']*'|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|\s+|<>|!=|<=|>=|[=<>(),]")
+WHERE_WORDS = {'and', 'or', 'in', 'not', 'is', 'null'}
 _PLACEHOLDER = re.compile(r'\{([a-z_]+)\}')
 
 
@@ -70,6 +75,41 @@ def _physical_columns():
     name a column the store creates."""
     from .record_store import TABLES
     return {table: {part.strip().split()[0] for part in spec.split(',')} for table, spec in TABLES.items()}
+
+
+def _where_tokens(expr, table_columns, where):
+    """The tokens of an entity's `where`, refused unless it is columns of its table, literals, comparisons, AND, OR, IN,
+    NOT, IS NULL and balanced parentheses."""
+    tokens = _WHERE_TOKEN.findall(expr)
+    if ''.join(tokens) != expr or not expr.strip():
+        raise ValueError(f'{where} is not a condition of columns, comparisons and literals')
+    depth = 0
+    for token in tokens:
+        if re.fullmatch(r'[A-Za-z_]\w*', token) and token not in table_columns and token.lower() not in WHERE_WORDS:
+            raise ValueError(f'{where} names {token}, which is neither a column of its table nor AND, OR, IN, NOT, IS or NULL')
+        depth += {'(': 1, ')': -1}.get(token, 0)
+        if depth < 0:
+            raise ValueError(f'{where} closes a parenthesis it never opened')
+    if depth:
+        raise ValueError(f'{where} leaves a parenthesis open')
+    return tokens
+
+
+def _where_sql(expr, alias, table_columns):
+    """(the condition with its columns qualified by `alias` and every literal a `?`, the literals in order)."""
+    sql, params = [], []
+    for token in _where_tokens(expr, table_columns, 'the where'):
+        if token.startswith("'"):
+            sql.append('?')
+            params.append(token[1:-1])
+        elif re.fullmatch(r'\d+(?:\.\d+)?', token):
+            sql.append('?')
+            params.append(float(token) if '.' in token else int(token))
+        elif token in table_columns:
+            sql.append(f'{alias}.{token}')
+        else:
+            sql.append(token)
+    return ''.join(sql), params
 
 
 class Model:
@@ -105,7 +145,7 @@ class Model:
                 if expr is not None:
                     self._physical_tokens(expr, columns[entity['table']], f'{name}.{logical}')
             if entity.get('where'):
-                self._physical_tokens(entity['where'], columns[entity['table']], f'{name} where')
+                _where_tokens(entity['where'], columns[entity['table']], f'semantic model: {name} where')
             if entity['id'] is not None and entity['id'] not in entity['columns']:
                 raise ValueError(f'semantic model: entity {name} names id {entity["id"]}, which it does not map')
         for (src, dst), join in self.joins.items():
@@ -115,6 +155,8 @@ class Model:
                 if left not in self.entities[src]['columns'] or right not in self.entities[dst]['columns']:
                     raise ValueError(f'semantic model: join {src} -> {dst} names a column neither side maps')
         for name, dim in self.dimensions.items():
+            if any(lever not in LEVERS for lever in (dim.get('value_levers') or {}).values()):
+                raise ValueError(f'semantic model: dimension {name} names a lever that is not one of ' + ', '.join(LEVERS))
             if dim['type'] == 'time' and dim['grain'] not in TIME_GRAINS:
                 raise ValueError(f'semantic model: dimension {name} has an unknown grain')
             owners = list(self.entities) if dim['entity'] == '*' else [dim['entity']]
@@ -140,11 +182,18 @@ class Model:
                 for part in (m['numerator'], m['denominator']):
                     if self.measures.get(part, {}).get('agg') not in SIMPLE:
                         raise ValueError(f'semantic model: ratio {name} needs two simple measures, not {part}')
+                scale = m.get('scale', 1)
+                if type(scale) not in (int, float) or not scale > 0:
+                    raise ValueError(f'semantic model: ratio {name} has a scale that is not a positive number')
             else:
                 if self.measures.get(m['quantity'], {}).get('agg') not in SIMPLE or m['price_kind'] not in PRICE_KINDS:
                     raise ValueError(f'semantic model: priced {name} needs a simple quantity and a cost_model kind')
+            if 'scale' in m and m['agg'] != 'ratio':
+                raise ValueError(f'semantic model: measure {name} has a scale, which only a ratio takes')
             if m.get('band') and m['band'] not in targets.BANDS:
                 raise ValueError(f'semantic model: measure {name} names band {m["band"]}, which targets.json does not hold')
+            if m.get('lever') not in LEVERS:
+                raise ValueError(f'semantic model: measure {name} needs a lever: ' + ', '.join(LEVERS))
             for band in (m.get('band_by') or {}).get('bands', {}).values():
                 if band not in targets.BANDS:
                     raise ValueError(f'semantic model: measure {name} names band {band}, which targets.json does not hold')
@@ -363,6 +412,13 @@ def validate(query, store=None, mdl=None):
     compare = {'prev': 'previous'}.get(query.compare, query.compare)
     if compare is not None and compare not in COMPARES:
         raise SemanticError('compare is previous (the previous window of the same kind) or none')
+    timed = next((d for d in by if mdl.dimensions[d]['type'] == 'time'), None)
+    if compare and timed:
+        # this week's Monday is not last week's: no row of a time split lines up with the window before, and a missed
+        # row would read as a zero
+        raise SemanticError(f'compare=prev puts the previous window beside each row of the same slice; a split by {timed} has no row in '
+                            'common with the window before, so the two are not set side by side: ask each window by itself, or split '
+                            'by a dimension that is not time')
     order = query.order
     if order is None:
         first = by[0] if by else None
@@ -396,25 +452,26 @@ def _conflict(shift, value):
 # ---- dimension values: the store's own
 _VALUES = {}
 LOOKUP_ROWS = 500   # a dimension with more distinct values than this is checked value by value, never listed
+LISTED_VALUES = 40  # a refusal lists every value of a dimension up to this many, then says how many more
 
 
 def _value_sql(mdl, dim):
-    """(sql listing the dimension's distinct values over the whole store, its entity) for a categorical dimension."""
+    """(sql listing the dimension's distinct values over the whole store, its parameters) for a categorical dimension."""
     spec = mdl.dimensions[dim]
     owner = list(mdl.entities)[0] if spec['entity'] == '*' else spec['entity']
     entity = mdl.entities[owner]
     expr = _render(mdl, spec['expr'], owner, 'b')
-    where = f" WHERE {_physical(entity['where'], 'b', owner)}" if entity.get('where') else ''
-    return f"SELECT DISTINCT {expr} AS v FROM {entity['table']} b{where}", owner
+    where, params = _where_sql(entity['where'], 'b', _physical_columns()[entity['table']]) if entity.get('where') else ('', [])
+    return f"SELECT DISTINCT {expr} AS v FROM {entity['table']} b" + (f' WHERE {where}' if where else ''), params
 
 
 def store_values(dim, store, mdl=None):
     """The dimension's distinct values in the store (None for a dimension with more than LOOKUP_ROWS)."""
     mdl = mdl or model()
-    key = (id(store), getattr(store, 'content_hash', None), dim)
+    key = (id(store), getattr(store, 'content_hash', None), id(mdl), dim)
     if key not in _VALUES:
-        sql, _ = _value_sql(mdl, dim)
-        rows = store._fetch(f'SELECT v FROM ({sql}) WHERE v IS NOT NULL ORDER BY v LIMIT {LOOKUP_ROWS + 1}', [], limit=LOOKUP_ROWS + 1)
+        sql, params = _value_sql(mdl, dim)
+        rows = store._fetch(f'SELECT v FROM ({sql}) WHERE v IS NOT NULL ORDER BY v LIMIT {LOOKUP_ROWS + 1}', params, limit=LOOKUP_ROWS + 1)
         values = [r['v'] for r in rows]
         _VALUES[key] = None if len(values) > LOOKUP_ROWS else values
     return _VALUES[key]
@@ -452,17 +509,19 @@ def resolve_value(dim, value, store, mdl=None):
                 if _same(canonical, candidate):
                     return candidate
         shown = {str(v).lower(): v for v in values}
-        choices = [shown[w] for w in _nearest(value, shown)]
-        choices = choices or values[:8]
-        raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; ' +
-                            ('the nearest: ' if _nearest(value, shown) else 'the values are: ') + ', '.join(str(c) for c in choices), choices)
+        near = [shown[w] for w in _nearest(value, shown)]
+        if near:
+            raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the nearest: ' + ', '.join(str(c) for c in near), near)
+        listed = values[:LISTED_VALUES]   # nothing near: every value the records hold, or the first of a long list and how many more
+        more = f' and {len(values) - len(listed)} more' if len(values) > len(listed) else ''
+        raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the values are: ' + ', '.join(str(c) for c in listed) + more, listed)
     # a dimension with many values (paper runs, orders): checked one by one, the nearest by similarity
-    sql, _ = _value_sql(mdl, dim)
-    hit = store._fetch(f'SELECT v FROM ({sql}) WHERE lower(CAST(v AS VARCHAR)) = lower(?) LIMIT 1', [str(value).strip()], limit=1)
+    sql, params = _value_sql(mdl, dim)
+    hit = store._fetch(f'SELECT v FROM ({sql}) WHERE lower(CAST(v AS VARCHAR)) = lower(?) LIMIT 1', params + [str(value).strip()], limit=1)
     if hit:
         return hit[0]['v']
     near = store._fetch(f'SELECT v FROM ({sql}) WHERE v IS NOT NULL ORDER BY jaro_winkler_similarity(lower(CAST(v AS VARCHAR)), lower(?)) DESC, v LIMIT 5',
-                        [str(value).strip()], limit=5)
+                        params + [str(value).strip()], limit=5)
     choices = [r['v'] for r in near]
     raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the nearest: ' + ', '.join(str(c) for c in choices), choices)
 
@@ -536,15 +595,18 @@ class _Part:
         self.mdl, self.entity_name, self.entity = mdl, entity_name, mdl.entities[entity_name]
         self.aliases, self.joins = {entity_name: 'b'}, []
         self.dims = [(d, self._dimension(d)) for d in dims]
-        self.where, self.params = [], []
+        self.where = []
         date_col = _column(mdl, entity_name, 'production_date', 'b')
         self.where.append(f'{date_col} BETWEEN ? AND ?')
+        self.filter_params = []   # every value after the window's two dates, in the order of the clauses that read them
         if shift is not None:
             self.where.append(f"{_column(mdl, entity_name, 'shift', 'b')} = ?")
+            self.filter_params.append(shift)
         self.shift = shift
         if self.entity.get('where'):
-            self.where.append(f"({_physical(self.entity['where'], 'b', entity_name, mdl)})")
-        self.filter_params = []
+            where, params = _where_sql(self.entity['where'], 'b', _physical_columns()[self.entity['table']])
+            self.where.append(f'({where})')
+            self.filter_params.extend(params)
         for dim, value in filters.items():
             if mdl.reach(entity_name, dim) is None:
                 continue   # a slice of the numerator only (denominator_total): the denominator stays the whole
@@ -575,7 +637,7 @@ class _Part:
         return f"{self.entity['table']} b" + ''.join(f' {j}' for j in self.joins)
 
     def bind(self, start, end):
-        return [start, end] + ([self.shift] if self.shift is not None else []) + list(self.filter_params)
+        return [start, end] + list(self.filter_params)
 
     def ids(self):
         if self.entity['id'] is None:
@@ -764,6 +826,17 @@ def _band_of(mdl, measure, dims_values, filters):
     return None
 
 
+def _lever(mdl, measure, dims_values, filters):
+    """Who can move a figure (issue #101): the measure's lever, unless the row's slice or the query's filter is a value
+    with a lever of its own (planned maintenance is schedule-driven, a power outage external; the owner on PR #111)."""
+    for values in (dims_values, filters):
+        for dim, value in values.items():
+            lever = (mdl.dimensions[dim].get('value_levers') or {}).get(str(value))
+            if lever:
+                return lever
+    return mdl.measures[measure]['lever']
+
+
 def _scope_text(mdl, query):
     """The filters as words, one top-level string the answer prints: `at Double backer, stop kind Maintenance`."""
     parts = []
@@ -801,6 +874,7 @@ def run(query, store, rates=None, mdl=None):
         row = {dim: _plain(v) for dim, v in values.items()}
         row['label'] = ' · '.join(_label(mdl, dim, v) for dim, v in values.items())
         row.update(_reading(mdl, query, r, rates, basis, values))
+        row['lever'] = _lever(mdl, query.measure, values, query.filters)
         if query.compare:
             row['previous_value'] = _previous(mdl, query, r, rates, basis) if available else None
         row['source_count'] = r['source_count']
@@ -810,6 +884,7 @@ def run(query, store, rates=None, mdl=None):
     total = _reading(mdl, query, total_row, rates, basis, {}) if total_row else {'value': None}
     data = {'tool': TOOL, 'measure': query.measure, 'label': m['label'], 'unit': m['unit'], 'agg': m['agg'],
             'definition': m['description'], 'entity': mdl.measure_entities(query.measure)[0], 'group_by': list(query.group_by),
+            'lever': _lever(mdl, query.measure, {}, query.filters),
             'filters': [{'dimension': d, 'label': mdl.dimensions[d]['label'], 'value': _plain(v), 'text': _label(mdl, d, v)}
                         for d, v in query.filters.items()],
             'filter_text': _scope_text(mdl, query) or None, 'query': query.to_arguments(),
@@ -859,12 +934,15 @@ def _reading(mdl, query, r, rates, basis, dims_values):
     if 'share_pct' in r and m['agg'] != 'priced':
         out['share_pct'] = r['share_pct']
     band = _band_of(mdl, query.measure, dims_values, query.filters)
-    if band and m.get('band') and dims_values:
+    if band and dims_values:
         # the owner's band is for the measure's own ratio: a slice read against the whole window's denominator (a reject
-        # family against all the yield) is a share of that ratio, not the ratio, and carries no band (the waste breakdown's
-        # family rows carry none either); band_by names the band of each value of its dimension, as the review does
+        # family against all the yield, a grade's maintenance minutes against all the scheduled minutes) is a share of that
+        # ratio, not the ratio, and carries no band (the waste breakdown's family rows carry none either). A row of
+        # band_by's own dimension is that ratio (each stop kind against the scheduled minutes) and keeps its band.
         denominator = mdl.measures[m['denominator']]['entity'] if m['agg'] == 'ratio' else None
-        if denominator and any(mdl.reach(denominator, d) is None for d in dims_values):
+        whole = denominator is not None and any(mdl.reach(denominator, d) is None for d in dims_values)
+        own = (m.get('band_by') or {}).get('dimension') in dims_values
+        if whole and not own:
             band = None
     if band:
         targets.mark(out, band, out['value'])
@@ -964,6 +1042,12 @@ def model_markdown(text=None):
             out.append(f'| {_cell(", ".join(d["synonyms"]))} | dimension `{d["name"]}` |')
         for value, words in (d.get('value_synonyms') or {}).items():
             out.append(f'| {_cell(", ".join(words))} | {d["name"]} {_cell(value)} |')
+    out += ['', '## Levers of a slice', '',
+            'A measure has its lever (the Lever column above). A slice or a filter on one of these values takes the value\'s own '
+            'lever instead (the owner\'s rulings on PR #111).', '', '| Dimension | Value | Lever |', '| --- | --- | --- |']
+    for d in dims:
+        for value, lever in (d.get('value_levers') or {}).items():
+            out.append(f'| `{d["name"]}` | {_cell(value)} | {lever} |')
     out += ['', '## Entities and joins', '', '| Entity | Label | Key | Definition |', '| --- | --- | --- | --- |']
     for e in spec['entities']:
         out.append(f'| `{e["name"]}` | {_cell(e["label"])} | {_cell(e["key"])} | {_cell(e["description"])} |')

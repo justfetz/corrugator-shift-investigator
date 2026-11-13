@@ -500,6 +500,11 @@ def test_a_broken_model_file_is_refused():
     broken(lambda s: s['physical']['entities']['setup']['columns'].update(lineal_ft='lineal_feet'))   # a column the store does not create
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_pct').update(numerator='lineal_per_setup'))   # a ratio of a ratio
     broken(lambda s: s['joins'][0].update(relationship='one_to_many'))                      # a join that would fan out
+    broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_pct').update(scale=-100))   # a scale that is not a positive number
+    broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_sqft').update(scale=100))   # a scale on a measure that is no ratio
+    broken(lambda s: next(m for m in s['measures'] if m['name'] == 'stops').update(lever='maybe'))   # a lever the owner has not named
+    for where in ("reason = 'BOND'; DROP TABLE stops", "category = 'dry_end'", "reason = 'BOND' OR (sqft > 0", "sqft > 0)", "upper(reason) = 'BOND'"):
+        broken(lambda s, w=where: s['physical']['entities']['reject'].update(where=w))   # a where outside its small grammar
 
 
 # ------------------------------------------------------------------ validate: refusals name the nearest choices
@@ -511,7 +516,9 @@ def test_a_broken_model_file_is_refused():
     (dict(measure='speed_all_fpm', group_by=['grade']), r'read against scheduled minutes, which carry no grade', ['day']),
     (dict(measure='speed_all_fpm', filters={'place': 'Stacker'}), r'carries no place; it can be filtered by: shift, crew$', ['shift', 'crew']),
     (dict(measure='stops', filters={'place': 'dbl backer'}), r"^No stop place 'dbl backer' in the records; the nearest: Double backer$", ['Double backer']),
-    (dict(measure='stops', filters={'reason': 'zzz'}), r"^No stop reason 'zzz' in the records; the values are: ", None),
+    (dict(measure='stops', filters={'reason': 'zzz'}), r"^No stop reason 'zzz' in the records; the values are: Glue / starch, .*, Steam / moisture$", None),
+    (dict(measure='stops', group_by=['day'], compare='previous'), r'^compare=prev puts the previous window beside each row of the same slice; a split by day', None),
+    (dict(measure='msf', group_by=['grade', 'week'], compare='previous'), r'a split by week has no row in common', None),
     (dict(measure='stops', filters={'day': '2026-09-14'}), r'day is a time dimension: the window sets the time', None),
     (dict(measure='sheets', group_by=['customer']), r'carry no customer yet', None),
     (dict(measure='stops', group_by=['place', 'reason', 'kind']), r'group_by lists at most two dimensions', None),
@@ -578,6 +585,11 @@ def test_the_receipt_reruns_and_names_the_records_behind_each_row(store):
         assert row['source_count'] >= len(row['source_ids'])
         listed = store._fetch('SELECT DISTINCT reason, kind FROM stops WHERE stop_id IN (SELECT unnest(?))', [row['source_ids']])
         assert listed == [{'reason': row['reason'], 'kind': 'Maintenance'}]
+    lines = run(store, 'reject_sqft', window_of('2026-09-14'), group_by=['order'], shift=2, limit=200)   # a reject's id is its line's
+    small = [r for r in lines['rows'] if r['source_count'] <= S.SOURCE_ID_CAP]
+    assert small and all(len(r['source_ids']) == r['source_count'] and all(i.count('|') == 3 for i in r['source_ids']) for r in small)
+    lanes = run(store, 'sheets', window_of('2026-09-14'), group_by=['lane'], shift=2)   # and a lane's: setup id and lane
+    assert all(i.endswith(f"|{r['lane']}") for r in lanes['rows'] for i in r['source_ids'])
     big = run(store, 'setups', MONTH)
     assert big['source_count'] > S.SOURCE_ID_CAP and big['value'] == big['source_count']
 
@@ -699,6 +711,45 @@ def test_the_docs_page_is_rendered_from_the_model_file():
 
 
 # ------------------------------------------------------------------ the review of the branch (issue #117)
+
+def test_a_band_read_from_a_filter_stands_beside_the_total_and_the_slices_that_are_its_ratio(store):
+    """Maintenance by grade: each grade against all the scheduled minutes, so no band beside a grade; by shift, each shift's
+    maintenance minutes against its own scheduled minutes, the ratio the band reads, so each shift carries it."""
+    grades = run(store, 'downtime_pct', WEEK, group_by=['grade'], filters={'kind': 'Maintenance'})
+    assert grades['band'] == targets.band('maintenance', grades['value']) and all('band' not in r for r in grades['rows'])
+    shifts = run(store, 'downtime_pct', WEEK, group_by=['shift'], filters={'kind': 'Maintenance'})
+    assert all(r['band'] == targets.band('maintenance', r['value']) for r in shifts['rows'])
+
+
+def test_a_slice_with_a_lever_of_its_own_says_it(store):
+    """Planned maintenance is schedule-driven and a power outage external (the owner on PR #111), as a slice or a filter."""
+    outage_week = {'period': 'week', 'anchor': '2026-09-14'}   # the week of September's power outage
+    kinds = rows_by(run(store, 'downtime_minutes', outage_week, group_by=['kind']), 'kind')
+    assert {k: r['lever'] for k, r in kinds.items()} == {'Maintenance': 'controllable', 'Operator': 'controllable', 'PM': 'schedule-driven', 'External': 'external'}
+    assert run(store, 'downtime_minutes', WEEK, filters={'kind': 'PM'})['lever'] == 'schedule-driven'
+    assert run(store, 'downtime_pct', WEEK, filters={'reason': 'Power outage'})['lever'] == 'external'
+    assert run(store, 'maintenance_pm_pct', WEEK)['lever'] == 'schedule-driven' and run(store, 'stops', WEEK)['lever'] == 'controllable'
+
+
+def test_an_entity_where_is_a_small_checked_grammar_and_its_literals_are_bound(store):
+    """The physical block can keep an entity to some of its rows (record contract v2 keeps the rejects to the dry-end lines):
+    columns of its table, comparisons, literals, AND, OR, IN, NOT, IS NULL. The literals are bound, and the condition holds."""
+    spec = json.loads(S.MODEL_PATH.read_text())
+    spec['physical']['entities']['reject']['where'] = "reason IN ('BOND', 'WARP') AND sqft > 0 AND NOT detail IS NULL"
+    model = S.Model(spec)
+    query = S.validate(S.SemanticQuery('reject_sqft', group_by=['reject_family'], window=WEEK), store, model)
+    statement = S.compile_query(query, model).statements[0]
+    assert "'BOND'" not in statement.sql and 'b.reason IN (?, ?) AND b.sqft > ? AND NOT b.detail IS NULL' in statement.sql
+    assert statement.params[2:5] == ['BOND', 'WARP', 0] and statement.sql.count('?') == len(statement.params)
+    kept = S.run(query, store, mdl=model)
+    whole = rows_by(run(store, 'reject_sqft', WEEK, group_by=['reject_family']), 'reject_family')
+    assert {r['reject_family'] for r in kept['rows']} == {'BOND', 'WARP'}
+    assert all(close(r['value'], whole[r['reject_family']]['value']) for r in kept['rows'])
+    assert close(kept['value'], whole['BOND']['value'] + whole['WARP']['value'])
+    assert S.store_values('reject_family', store, model) == ['BOND', 'WARP']   # a filter's values are the kept rows' too
+    with pytest.raises(S.SemanticError, match="the values are: BOND, WARP$"):
+        S.validate(S.SemanticQuery('reject_sqft', filters={'reject_family': 'MOISTURE'}, window=WEEK), store, model)
+
 
 def test_a_slice_read_against_the_whole_denominator_carries_no_band(store):
     """The owner's dry-end band is the total's: a reject family read against all the yield is a share of it, unbanded (as

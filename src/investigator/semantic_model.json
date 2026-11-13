@@ -3,7 +3,7 @@
  "standard": "Shaped like dbt MetricFlow's semantic models and Cube's data schema: entities with a primary key and many-to-one joins, dimensions (categorical, and time at a grain), measures with an aggregation (sum, count, count_distinct), and metrics built from them (ratio: a ratio of two summed measures, never an average of ratios; priced: a quantity priced once through cost_model at the named, assumed rates). One list holds both measures and metrics, as Cube's measures do; `agg` says which.",
  "version": 1,
  "physical": {
-  "about": "The one block that names the store's tables and columns (record_store.TABLES). Every other block names logical columns as {placeholders}. A column maps to a physical column or to an expression over its own table's columns; null means the store does not carry it yet, and a dimension or measure that reads it is refused with that reason. `where` restricts an entity's rows.",
+  "about": "The one block that names the store's tables and columns (record_store.TABLES). Every other block names logical columns as {placeholders}. A column maps to a physical column or to an expression over its own table's columns; null means the store does not carry it yet, and a dimension or measure that reads it is refused with that reason. `where` keeps an entity to some of its table's rows: its columns compared with literals (=, <>, <, >, <=, >=, IN, IS NULL), combined with AND, OR, NOT and parentheses; its literals are bound as parameters when it compiles. `id` names each row's record in a receipt: a stop's id, a setup's, a reject or lane line's own identity.",
   "contract": "demo-records/v1",
   "entities": {
    "setup": {"table": "setups", "id": "setup_id", "columns": {
@@ -14,11 +14,11 @@
    "stop": {"table": "stops", "id": "stop_id", "columns": {
     "stop_id": "stop_id", "production_date": "production_date", "shift": "shift", "setup_id": "setup_id",
     "kind": "kind", "place": "place", "reason": "reason", "seconds": "seconds"}},
-   "reject": {"table": "rejects", "id": "setup_id", "columns": {
-    "setup_id": "setup_id", "production_date": "production_date", "shift": "shift", "family": "reason",
+   "reject": {"table": "rejects", "id": "line_id", "columns": {
+    "line_id": "concat_ws('|', setup_id, position, reason, detail)", "setup_id": "setup_id", "production_date": "production_date", "shift": "shift", "family": "reason",
     "reason": "detail", "lane": "position", "sheets": "sheets", "sqft": "sqft"}},
-   "lane": {"table": "customers", "id": "setup_id", "columns": {
-    "setup_id": "setup_id", "production_date": "production_date", "shift": "shift", "lane": "position",
+   "lane": {"table": "customers", "id": "line_id", "columns": {
+    "line_id": "concat_ws('|', setup_id, position)", "setup_id": "setup_id", "production_date": "production_date", "shift": "shift", "lane": "position",
     "order_number": "order_number", "customer_id": null, "outs": "outs", "nominal_cuts": "nominal_cuts",
     "actual_cuts": "actual_cuts"}},
    "shift": {"table": "shifts", "id": "shift_id", "columns": {
@@ -69,7 +69,8 @@
    "description": "The stop's category: Maintenance, Operator, planned maintenance (scheduled time), or External (a power outage, outside the plant, whatever kind the record gives it).", "synonyms": ["stop kind", "category", "type"],
    "value_synonyms": {"PM": ["scheduled", "planned", "planned maintenance", "pm"], "Scheduled": ["pm", "planned", "planned maintenance"],
                       "Maintenance": ["maint", "mechanical", "breakdown"], "Operator": ["op", "operators", "crew"], "External": ["outage", "power"]},
-   "value_labels": {"PM": "Planned maintenance (scheduled)", "Scheduled": "Planned maintenance (scheduled)"}},
+   "value_labels": {"PM": "Planned maintenance (scheduled)", "Scheduled": "Planned maintenance (scheduled)"},
+   "value_levers": {"PM": "schedule-driven", "Scheduled": "schedule-driven", "External": "external"}},
   {"name": "place", "label": "Stop place", "type": "categorical", "entity": "stop", "expr": "{place}",
    "description": "Where on the machine the stop was logged: Splicer 1-5, Single facer, Double backer, Glue dams, Steam system, Slitter/scorer, Upper, Lower and Shear knife, Stacker, Power.", "synonyms": ["where", "machine section", "section", "location"],
    "value_synonyms": {"Double backer": ["db", "double-backer", "hot plates"], "Single facer": ["sf", "single-facer"],
@@ -81,7 +82,8 @@
    "value_synonyms": {"Glue / starch": ["glue", "starch"], "Knife / slitter jam": ["knife", "cut-off", "cutoff", "slitter jam", "knife jam"],
                       "Missed splice": ["splice", "missed splices", "splicer"], "Order change": ["changeover", "order changes", "setup change"],
                       "Raw material (roll)": ["raw material", "roll", "paper"], "Steam / moisture": ["steam", "moisture"],
-                      "Planned maintenance": ["pm", "planned", "scheduled"], "Power outage": ["outage", "power"]}},
+                      "Planned maintenance": ["pm", "planned", "scheduled"], "Power outage": ["outage", "power"]},
+   "value_levers": {"Planned maintenance": "schedule-driven", "Power outage": "external"}},
   {"name": "reject_family", "label": "Reject family", "type": "categorical", "entity": "reject", "expr": "{family}",
    "description": "The dry-end reject family a line is counted in: bond, warp, misalignment, moisture.", "synonyms": ["defect family", "reject category", "scrap family"],
    "value_synonyms": {"BOND": ["delam", "delamination", "glue"], "WARP": ["warped"], "MISALIGNMENT": ["misalign", "scoring", "slitting"], "MOISTURE": ["wet", "steam"]},
@@ -162,11 +164,11 @@
   {"name": "maintenance_pm_minutes", "label": "Maintenance and planned maintenance", "unit": "min", "entity": "stop", "agg": "sum", "expr": "{seconds} / 60",
    "filter": {"kind": ["Maintenance", "PM", "Scheduled"]},
    "description": "Minutes stopped for maintenance, unplanned and planned together (planned maintenance is PM in this store).",
-   "lever": "controllable", "tool": "get_period_kpis maintenance_pm_pct numerator", "synonyms": ["maintenance and pm minutes"]},
+   "lever": "schedule-driven", "tool": "get_period_kpis maintenance_pm_pct numerator", "synonyms": ["maintenance and pm minutes"]},
   {"name": "maintenance_pm_pct", "label": "Maintenance + PM downtime", "unit": "% of scheduled minutes", "agg": "ratio", "numerator": "maintenance_pm_minutes", "denominator": "scheduled_minutes", "scale": 100,
    "denominator_total": true,
    "description": "Maintenance and planned-maintenance minutes as a percent of scheduled minutes.",
-   "lever": "controllable", "tool": "get_period_kpis maintenance_pm_pct", "synonyms": ["maintenance + pm", "maintenance and pm"]},
+   "lever": "schedule-driven", "tool": "get_period_kpis maintenance_pm_pct", "synonyms": ["maintenance + pm", "maintenance and pm"]},
   {"name": "op_maint_minutes", "label": "Operator and maintenance downtime", "unit": "min", "entity": "stop", "agg": "sum", "expr": "{seconds} / 60",
    "filter": {"kind": ["Operator", "Maintenance"]},
    "description": "Minutes stopped by operators and for unplanned maintenance: the controllable downtime the owner's combined band reads.",
