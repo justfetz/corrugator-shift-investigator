@@ -1574,10 +1574,12 @@ class PeriodAnswer:
             head = f'No {grade} setups in this window{where} {ref(g)}'
         else:
             beside = ' · '.join(parts[m](rows[i]) for m in parts if m != metric)
-            head = f'**{parts[metric](rows[i])}** of {grade}{where} · {beside} {ref(g, i)}'
+            # the totals by grade keep the previous window's volume only: its count is unavailable, said so, never zero
+            head = f'**{parts[metric](rows[i])}** of {grade}{where} · {beside} · previous unavailable {ref(g, i)}'
         bullets = [bullet(f'{r["grade"]}: **{parts[metric](r)}** · {f1(r["volume_msf"])} MSF', g, j) for j, r in enumerate(rows) if j != i][:3]
         notes = ['A grade counts the setups that ran it and the distinct wet-end runs they ran on; a setup that runs on across a '
-                 'shift change is counted in both shifts.']
+                 'shift change is counted in both shifts.',
+                 "The totals by grade carry the previous window's volume, not its setups, paper changes or lineal feet."]
         return head, bullets, notes, self.window_looks(data, ('grade', 'speed', 'rollstock'))
 
     def quantity_of_sheets(self, o):

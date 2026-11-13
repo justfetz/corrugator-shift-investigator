@@ -53,6 +53,9 @@ AUDIT = [
     # the question log's countable words (issue #125's catch-all flag): each one lands on a quantity or is refused
     'how many boxes did we make this week', 'how many grade changes this week', 'how many flute changes this week',
     'how many chops this week', 'how many mins of downtime this week', 'how many hrs of downtime this week', "what's the stop count this week",
+    # the re-review: a grade the records do not hold, two grades, double wall, and a count of something unknown
+    'how many setups on 44-C last week', 'how many setups did we run on 32-C and 26-C last week', 'how many setups of double wall this week',
+    'how many widgets this week',
 ]
 # What a refusal of an audited question says: what can be asked instead.
 REFUSALS = (QUANTITY_HELP, 'Offline mode supports', SETUP_SPEED, 'one shift or all shifts together', 'Selected shift only')

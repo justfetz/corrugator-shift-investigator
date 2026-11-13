@@ -8755,7 +8755,7 @@
     ],
     "charts": 1,
     "shape": {
-     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* of 32-C · [0-9,]+ paper changes · [0-9,]+ lineal ft \\(query 1 · row [0-9]+\\)$"
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* of 32-C · [0-9,]+ paper changes · [0-9,]+ lineal ft · previous unavailable \\(query 1 · row [0-9]+\\)$"
     }
    }
   },
@@ -8788,6 +8788,36 @@
    "note": "Issue #113 (exact over summary): found by the review of this PR: setups are counted for the line, not by stop place; it was answered as every setup.",
    "expect": {
     "raises": "counted for the line"
+   }
+  },
+  {
+   "id": "count-setups-of-an-unknown-grade-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups on 44-C last week?",
+   "note": "Issue #113 (exact over summary): found by the re-review of this PR: a grade the records do not hold opened with the MSF of every grade.",
+   "expect": {
+    "raises": "no grade 44-C"
+   }
+  },
+  {
+   "id": "count-setups-of-two-grades-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups did we run on 32-C and 26-C last week?",
+   "note": "Issue #113 (exact over summary): found by the re-review of this PR: two grades are not one quantity; it opened with the MSF of every grade.",
+   "expect": {
+    "raises": "one grade at a time"
+   }
+  },
+  {
+   "id": "count-of-an-unknown-thing-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many widgets this week?",
+   "note": "Issue #113 (exact over summary): a count of something the router does not know landed on the KPI summary: \"how many\" never does.",
+   "expect": {
+    "raises": "Offline mode answers one quantity at a time"
    }
   }
  ]

@@ -27,7 +27,7 @@ def test_the_fixture_has_the_fields_the_server_writes():
             'analyst': set(log.analyst('a' * 16, None, {}, 'complete')),
             'feedback': set(log.feedback('a' * 16, None, 'answer', 'up', None))}
     events = review.from_file(FIXTURE)
-    assert len(events) == 57                       # an export row and a row of the skill's own SQL are read too; since #113 two more answers
+    assert len(events) == 62                       # an export row and a row of the skill's own SQL are read too
     for event in events:
         assert set(event) == live[event['event']], 'rerun python3 tests/make_question_log_fixture.py'
 
@@ -36,7 +36,7 @@ def test_the_skill_proposes_candidates_from_the_fixture():
     rows = review.questions(review.from_file(FIXTURE))
     known = review.goldens()
     picks = review.candidates(rows, known)
-    assert len(rows) == 25 and len(picks) == 8
+    assert len(rows) == 29 and len(picks) == 11
     # since issue #113 the #113 examples open with their count and are goldens: asked most and voted down in the week, they
     # are listed, never flagged catch-all and never proposed again
     assert known[review.normalize('how many setups did we run last week')] == 'count-setups-last-week'
@@ -52,6 +52,9 @@ def test_the_skill_proposes_candidates_from_the_fixture():
     assert by_question['what should we change to run faster']['case']['expect']['url'].startswith('TODO')   # plan rejected
     assert by_question['downtiem on this shift']['case']['expect'] == {'url': '/corr/1/day/2026-09-14/shift/2?measure=downtime', 'status': 'complete'}
     assert by_question['how many setups?']['case']['period'] == 'week'
+    boards = by_question['how many boards did we lose at the knife']                 # refused and voted down: the owner says what it opens
+    assert boards['case']['expect']['url'].startswith('TODO') and 'refused' in boards['case']['note'] and 'thumbs_down' in boards['case']['note']
+    assert 'how many widgets this week' not in by_question                          # a golden refusal since #113
     assert all('day' not in p['case'] for p in picks)                               # the live window's day never rides along
     # a golden already, and a question with no flag, are never proposed
     assert 'how fast did we change paper' not in by_question and 'Why was this shift slow?' not in by_question
@@ -79,13 +82,13 @@ def test_the_report_lists_the_week_and_the_first_batch_of_ten():
     rows = review.questions(review.from_file(FIXTURE))
     text = review.report(rows, review.goldens())
     for heading in ('## Top refused', '## Top catch-all', '## Thumbs down, with comments', '## Analyst plans rejected',
-                    '## Most-asked phrasings', '## Candidates: batch 1 of 1 (8 of 8)'):
+                    '## Most-asked phrasings', '## Candidates: batch 1 of 2 (10 of 11)'):
         assert heading in text
     assert '- 1 down `how many setups did we run last week`\n  - `the number of setups, not the MSF`' in text   # one vote per card
-    assert text.count('\n### ') == 8 and '```json' in text
+    assert text.count('\n### ') == 10 and '```json' in text
     assert '## Top catch-all (landed on measure=kpis, #113)\n- none' in text   # since #113 no question of the week landed there
     second = review.report(rows, review.goldens(), batch=2)
-    assert '## Candidates: batch 2 of 1 (0 of 8)' in second and second.count('\n### ') == 0
+    assert '## Candidates: batch 2 of 2 (1 of 11)' in second and second.count('\n### ') == 1
 
 
 def test_a_visitor_text_stays_in_a_code_span():
@@ -135,10 +138,10 @@ def test_a_preview_revisions_lines_are_left_out():
 def test_the_command_line_and_the_sql():
     out = subprocess.run([sys.executable, str(ROOT / '.claude/skills/review-questions/review.py'), '--file', str(FIXTURE)],
                          capture_output=True, text=True, check=True).stdout
-    assert out.startswith('# Question log review: 25 questions, 16 phrasings, 8 candidates')
+    assert out.startswith('# Question log review: 29 questions, 20 phrasings, 11 candidates')
     picks = json.loads(subprocess.run([sys.executable, str(ROOT / '.claude/skills/review-questions/review.py'), '--file', str(FIXTURE),
                                        '--json'], capture_output=True, text=True, check=True).stdout)
-    assert len(picks) == 8 and set(picks[0]) == {'case', 'bank', 'score'}
+    assert len(picks) == 11 and set(picks[0]) == {'case', 'bank', 'score'}
     sql = review.sql('my-project', 7)
     assert '`my-project.question_log.run_googleapis_com_stdout`' in sql and "jsonPayload.log = 'question_log'" in sql
     assert 'INTERVAL 7 DAY' in sql

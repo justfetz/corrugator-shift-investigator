@@ -128,8 +128,8 @@ ASKED_UNITS = ((r'\bminutes per stop\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
 
 
 def catch_all_failures(question, url):
-    """A question naming a countable noun or a unit that resolved to the KPI summary (issue #113)."""
-    named = QUANTITY_NOUN.search(question) or ASKED_UNIT.search(question)
+    """A question naming a countable noun or a unit, or asking "how many" of anything, that resolved to the KPI summary (issue #113)."""
+    named = QUANTITY_NOUN.search(question) or ASKED_UNIT.search(question) or re.search(r'\b(how many|number of|count of)\b', question, re.I)
     if named and re.search(r'[?&]measure=kpis(&|$)', url or ''):
         return [f'{question[:60]!r} names {named[0]!r} but lands on the KPI summary (measure=kpis): a quantity question '
                 'opens with its quantity or is refused']

@@ -588,12 +588,12 @@ def quantity_request(lead, window, shift):
 
 def catch_all_guard(lower, request):
     """Issue #113: the KPI summary (get_period_kpis or compare_periods alone, measure=kpis) answers "how did we do", never a
-    question that names a countable noun or a unit: that one is refused with what can be counted, rather than answered
-    with tiles that look like an answer."""
+    question that names a countable noun, a unit, a stop reason or place, a grade or dollars, nor one that asks "how many"
+    of anything: that one is refused with what can be counted, rather than answered with tiles that look like an answer."""
     tools = {step['tool'] for step in request.get('plan') or []}
     if tools and tools <= {'get_period_kpis', 'compare_periods'} and request.get('intent') != 'period_quantity' \
-            and re.search(QUANTITY_WORDS, lower):
-        raise ValueError(QUANTITY_HELP)
+            and (re.search(QUANTITY_WORDS, lower) or re.search(r"\b(how many|number of|count of)\b", lower)):
+        raise ValueError(QUANTITY_HELP)   # "how many" of anything is a count, never the summary
 
 
 def parse_period_request(lower, current, shifts):
@@ -657,8 +657,15 @@ def parse_period_request(lower, current, shifts):
     # named with no count, stays the totals by grade.
     grade_code = named_grade(lower)
     by_grade = bool(re.search(r"\bby grade\b|\bgrade totals?\b|\bper grade\b|\beach grade\b|\bwhich grade\b", lower))
-    lead = None if (trend or pareto or profile or speedvar or speed_opp or money or overrun or baseline or by_grade
-                    or (grade and not grade_code)) else quantity_lead(lower)
+    lead = None if (trend or pareto or profile or speedvar or speed_opp or money or overrun or baseline or by_grade) else quantity_lead(lower)
+    if lead and grade and not grade_code:
+        # a count of a grade the records do not hold, of two grades, or of "double wall": not one grade's row, and never the
+        # MSF of every grade it would otherwise open with
+        codes = sorted({f'{m[1]}-{m[2].upper()}' for m in re.finditer(GRADE_CODE, lower)})
+        if len(codes) == 1:
+            raise ValueError(f"The records hold no grade {codes[0]}: the grades are {', '.join(GRADES)}. " + QUANTITY_HELP)
+        raise ValueError("A count is answered for one grade at a time, by its code ('how many setups on 275-BC this week'); every grade "
+                         "together is 'volume by grade this week'. " + QUANTITY_HELP)
     if not (period or trend or pareto or profile or waste or this_shift or grade or overrun or speed_opp or rollstock or baseline or money
             or speedvar or review or lead):
         return None

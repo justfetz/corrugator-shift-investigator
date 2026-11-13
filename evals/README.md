@@ -74,8 +74,8 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
 
 - **the catch-all guard**: a question that names a countable noun (setups, paper changes, order changes, stops,
   splices, step-ups, rolls, sheets, boards, orders, customers, a per-setup or per-paper-change ratio), a stop reason or
-  place, a board grade, or asks for a unit (minutes, hours, feet, MSF, square feet, tons, percent, dollars or cost)
-  never resolves to the KPI summary, `measure=kpis` (checked on
+  place, a board grade, or asks for a unit (minutes, hours, feet, MSF, square feet, tons, percent, dollars or cost),
+  or asks "how many" of anything, never resolves to the KPI summary, `measure=kpis` (checked on
   the `GET /q` redirect of every case, live ones included). The KPI summary is for "how did we do".
 - **the unit asked opens the answer**: a count or unit question ("how many setups", "number of paper changes", "how
   many minutes of …", "minutes per stop", "feet per setup", "how many lineal feet") carries that unit in its headline
