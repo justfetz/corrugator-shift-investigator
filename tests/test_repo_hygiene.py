@@ -193,7 +193,7 @@ def test_smoke_test_reports_main_and_never_a_preview(tmp_path):
     but it runs a pull request's image: run 74 printed `Live at https://pr-91---…` and read pr-91's /api/config."""
     code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN, *PREVIEWS], live=[MAIN, MAIN_HASH], live_model='1')
     assert code == 0, log
-    assert log.rstrip().endswith(f'Live at {MAIN}'), 'the deterministic URL, the one the README publishes'
+    assert log.rstrip().endswith(f'Live at {MAIN}'), 'the deterministic run.app URL (the custom domain is the one the README publishes)'
     assert not any('---' in url for url in requested), 'a preview is neither probed nor asked for its config'
     assert f'{MAIN}/api/config' in requested
     code, log, _ = smoke(tmp_path, up=[MAIN_HASH, *PREVIEWS], live=[MAIN_HASH])   # no deterministic URL on this project
@@ -239,7 +239,7 @@ def health_line(log, url):
 
 def test_smoke_test_prefers_the_deterministic_url_over_the_custom_domain(tmp_path):
     """Run 77: with CUSTOM_ORIGINS appended (PR #112), whichever non-*.a.run.app URL answered last became LIVE, so the
-    custom domain would have beaten the deterministic URL the README publishes. The priority is explicit, not ORIGINS order."""
+    custom domain would have beaten the deterministic run.app URL. The priority is explicit, not ORIGINS order."""
     assert WITH_CUSTOM[-1] == CUSTOM
     for origins in (WITH_CUSTOM, tuple(reversed(WITH_CUSTOM))):
         code, log, requested = smoke(tmp_path, up=[MAIN_HASH, MAIN, CUSTOM], live=[MAIN], live_model='1', origins=origins)

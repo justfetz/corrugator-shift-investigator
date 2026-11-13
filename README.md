@@ -1,181 +1,43 @@
-# How to Build an Agent: Corrugator Shift Investigator
+# Corrugator Shift Investigator
 
-Build a manufacturing investigation agent from process knowledge, reliable tools, and evidence. This project is a worked example for learning how agents are constructed: interview a domain expert, generate consistent synthetic production records, implement calculations, connect a language model to bounded tools, and evaluate its behavior.
+A bounded agent that helps corrugated production staff investigate why a shift went bad (where it lost time, speed against each grade, and paper) from synthetic corrugator records, with a receipt for every number. It points to leads, not proven causes.
 
-## Documentation map
+**Live: <https://shift.talktomymachine.ai>** · [Case study](https://shift.talktomymachine.ai/docs/case-study) · [Golden evals](https://shift.talktomymachine.ai/evals) · [Docs](https://shift.talktomymachine.ai/docs) · [Run it locally](#run-it-locally)
 
-For normal use, stay with the [workbench guide](docs/WORKBENCH.md). The [metrics reference](docs/METRICS.md) now holds the owner calibration review: quantity-driven orders, output/width/time checks, measured setup counts, and the implemented reason categories. The remaining links are supporting engineering references; no new document is needed for each refinement.
+![The workbench answers "Which downtime reason cost the most minutes this week?" with its headline figure, findings and chart, then the receipt beside the figure opens the exact SQL behind it](docs/img/ask-and-answer.gif)
 
-| I want to… | Start here |
-| --- | --- |
-| Read all of it in the app, with a table of contents | `/docs` on the running server, rendered from these files ([overview](docs/OVERVIEW.md)) |
-| Read how the whole thing is built, in pipeline order, in ten minutes | [How this is built](docs/HOW_THIS_IS_BUILT.md) |
-| Install, run, ask questions, and read reports | [Workbench how-to](docs/WORKBENCH.md) |
-| Check a formula, target, calendar boundary, or heatmap color | [Metrics and interpretation](docs/METRICS.md) |
-| Understand the agent, tools, context and data flow | [Execution walkthrough](docs/AGENT_EXECUTION.md) and [agent contract](docs/AGENT_CONTRACT.md) |
-| Link to a question: the URL grammar every offline view has (the Datasette model) | [URLs](docs/URLS.md) |
-| Know what the model may and may not do | [The analyst](docs/ANALYST.md) (Anthropic by default) |
-| Use OpenAI, the optional provider, with your own key | [OpenAI/BYOK](docs/OPENAI_BYOK.md) |
-| Run the hosted demo on Anthropic with the server's key, rate limit and daily cap | [Anthropic demo](docs/ANTHROPIC_DEMO.md) |
-| Recover from an error or unexpected answer | [Troubleshooting](docs/TROUBLESHOOTING.md) |
-| Verify the app or evaluate live question quality | [Testing and evaluation](docs/TESTING.md) |
-| Deploy it, and read why the service is shaped the way it is | [Deployment](docs/DEPLOYMENT.md) (keyless deploy, decisions on record) |
-| Read the September 7 defect review, now historical | [archive](docs/archive/REVIEW_2026-09-07.md) |
+## Ask it yourself
 
-## Run it
+- [Why was third shift slow on 10 September?](https://shift.talktomymachine.ai/corr/1/day/2026-09-10/shift/3?measure=overview): speed against each grade's target, the biggest stop reason and the slowest run.
+- [Which downtime reason cost the most minutes that week?](https://shift.talktomymachine.ai/corr/1/day/2026-09-09/shift/2?measure=pareto&window=week): a planted story, a week of missed splices.
+- [How has side trim moved over eight weeks?](https://shift.talktomymachine.ai/corr/1/day/2026-09-30?measure=trend&metric=trim_pct): another planted story, side trim creeping up week after week.
 
-The public demo is on Google Cloud Run at <https://shift.talktomymachine.ai> (also <https://corrugator-shift-investigator-65612311806.us-central1.run.app>). It is synthetic data, read-only tools, and the offline planner by default. Locally:
+Each link is the answer's own address, answered by the offline router in tens of milliseconds with no model and no key.
 
-```bash
-pip install -e . pytest                              # Python >= 3.11; the dependencies are duckdb and reportlab
-python -m investigator.server --port 7860            # the workbench at http://127.0.0.1:7860
-python -m pytest -q                                  # about 5 minutes; the Anthropic recordings skip while they are stale
-node --check src/investigator/web/app.js && node tests/test_ui.cjs
-python3 evals/run.py                                 # the golden set offline in about 21 s; the regression gate (counts on /evals)
-python3 evals/run.py --live --provider anthropic     # the live cases against a real model; needs ANTHROPIC_API_KEY, costs cents
+## How it works
+
+```mermaid
+flowchart LR
+  Q["Question<br/>or its URL"] --> R["Offline router<br/>no model"]
+  R --> T["Parameterized<br/>DuckDB tools"]
+  T --> S["Answer shape<br/>each figure cites<br/>its query and row"]
+  S -. "opt-in: Ask the analyst" .-> A["Model proposes a plan,<br/>app checks every step,<br/>server fills every number"]
+  A -. "the same tools" .-> T
+  G["Golden evals<br/>gate every PR"] -. "checks" .- S
 ```
 
-**Offline versus live.** Offline is a small router (`parse_request` in `agent.py`) that maps the supported question shapes to the same parameterized DuckDB tools; it makes no model call, costs nothing, and answers in tens of milliseconds. Live hands the tool choice and the one-paragraph interpretation to a model, Anthropic on the hosted demo under the server's key and guards, Anthropic or OpenAI with your own key on the local workbench. In both, every number is computed by a tool and inserted by code; a narrative that states a number no tool returned is a bug and becomes a golden case. The [evals](evals/README.md) folder is how we know: the offline cases and the recorded Anthropic rounds (counts on `/evals`), replayed in CI once recorded on the current dataset (`python3 evals/run.py`; since issue #35 regenerated the days they are stale and skip until re-recorded), value cases generated from the records rather than typed, and one line per run in `evals/history.jsonl`.
+## Trust rules
 
-**Where it runs.** The public demo runs on Google Cloud Run, deployed from `main` by GitHub Actions through Workload Identity Federation, with no stored key once the cutover in [deployment](docs/DEPLOYMENT.md) is done. It answers with the free offline planner by default. Choosing Anthropic in the Agent control runs the planner on the Messages API (`claude-haiku-5-5`) under a key the server holds, a per-visitor rate limit, a daily cap on model rounds and a console spend limit ([Anthropic demo](docs/ANTHROPIC_DEMO.md)); OpenAI is a bring-your-own-key option on the local workbench only. Either model chooses which bounded tools to run and writes a short interpretation whose numbers application code fills from cited evidence; every number is calculated by fixed queries. The live Anthropic recordings are replayed in CI by the golden set ([evals](evals/README.md)) once re-recorded on the current dataset (issue #35 made them stale); visual PDF layout is still checked by hand.
+- **Numbers come only from tools.** Fixed, read-only queries compute every figure; the model may choose the queries and write the narrative, never a number, and a narrative number no tool returned is a bug that becomes a golden case.
+- **Every figure can be checked.** A bold figure cites its query and row, Show SQL opens the exact query with its bound values, and every eval case is browsable on [`/evals`](https://shift.talktomymachine.ai/evals).
+- **Synthetic, vendor-free, honestly priced.** One seeded machine and no real plant data; a dollar is a recorded quantity at a named, assumed rate ([cost model](docs/COST_MODEL.md)), never a plant's own figure.
 
-**Status: local learning workbench and hosted public demo.** Set `PUBLIC_DEMO_ORIGIN` (see [deployment](docs/DEPLOYMENT.md)) to run the synthetic demo in a container with no visitor keys; a `Dockerfile` and deploy workflows for Google Cloud Run (the live demo) and Hugging Face Spaces are included. The left rail selects a production day, a shift (or all three) and a window (Day, Week, Month or 4-4-5) and offers the canned questions; each answer is a card with its queries, summary, charts and KPI tiles; a question is answered over that window by the daily tools (Day) or the period tools (Week, Month, 4-4-5), and the Period report button builds the deterministic heatmap, daily matrix, recurring downtime and notes for the window. A rolling year of selectable production days (Monday to Friday, about 262, ending the day before the image was built; one seed, each day drawn from its own date), tested SQL tools, a bounded offline planner, follow-up context, evidence-linked charts, PDF export. Email delivery is not connected. See [Run the workbench](docs/WORKBENCH.md), the in-app docs at `/docs`, and the [deployment readiness plan](docs/DEPLOYMENT.md).
+## Run it locally
 
-## 1. Start with a job a person actually needs done
+```bash
+pip install -e . pytest                     # Python 3.11+; the dependencies are duckdb and reportlab
+python -m investigator.server --port 7860   # the workbench at http://127.0.0.1:7860
+python3 evals/run.py                        # the golden set offline, the regression gate
+```
 
-A superintendent asks: "Why was this shift bad? Show me the biggest losses and what needs investigation."
-
-The agent should inspect speed, downtime and waste; compare results with explicit targets; chart the evidence; and produce an investigation report. Recorded defects such as warp are observations, not proof of a mechanical root cause.
-
-The learning objective is to understand the complete agent loop, including tool selection, validation, follow-up investigation, stopping conditions and failure handling.
-
-## 2. Interview the domain expert before writing the math
-
-Keep an evidence ledger that distinguishes owner-confirmed rules, proposed simulation choices and unresolved questions. The [project interview and build brief](https://github.com/justfetz/corrugator-shift-investigator/issues/1) is the current source of those decisions.
-
-Confirmed process structure:
-
-- A production day starts at 07:00 and ends at 07:00 the following calendar day, labeled by the starting date.
-- Shift 1 is 07:00-15:00, shift 2 is 15:00-23:00, and shift 3 is 23:00-07:00. Plant timezone and daylight-saving handling remain to be selected.
-- A shift contains wet-end groupings by paper width and board grade, with individual dry-end setups.
-- Changing either knife's order combination starts a new setup. An order on the other knife may continue across that boundary.
-- The two cutoff knives are upper and lower; each spans the machine width. Upper feeds upper stacker, lower feeds lower stacker.
-- Operator is left and drive is right in our diagram orientation. Cross-web placement is independent of knife assignment. The web is centered.
-
-## 3. Define measurements before generating records
-
-Use raw quantities to calculate KPIs; aggregate numerators and denominators before calculating percentages.
-
-| Measure | Definition or guidance |
-| --- | --- |
-| Shift average speed | Lineal feet / all shift minutes, including downtime |
-| Maintenance downtime | Maintenance minutes / shift minutes x 100; target 2.5% |
-| Operator downtime | Operator minutes / shift minutes x 100; separate target 2.5% |
-| Trim | Side-trim square feet / gross square feet x 100; home run 2.75%, target 3%, flag above 3.25% per setup; schedule-driven (the owner's bands, `targets.json`) |
-| Shear waste | Sheared square feet / gross square feet x 100; home run 0.5%, target 0.75%, flag above 1% (the owner's bands, `targets.json`) |
-| Dry-end waste | Rejected square feet / the yield after trim and shear (gross minus side trim minus shear) x 100; target 1%, flag above 1.25% (the owner's bands, `targets.json`) |
-| Throughput | Gross square feet / lineal feet x 12; average gross web width in inches |
-| Run length | Lineal per dry-end setup and per wet-end change; boundary counting to be defined |
-
-Gross square footage includes all material through the shear before waste deductions. Dry-end rejects can be entered in square feet or individual sheets: sheets x width inches x length inches / 144. Do not multiply individual rejected sheets by outs again. Reject reasons are Up warp, Down warp, Bond - delamination, Bond - paper/raw-material issue, and Misalignment. Reason codes describe reported observations, not proven causes.
-
-Downtime uses kind, place and reason/reason group. Examples include Maintenance or Operator kind, a knife or wet-end location, and recorded symptoms such as a jam or missed splice. The final taxonomy is still being defined.
-
-## 4. Generate physically consistent synthetic XML
-
-Create our own documented demo schema. Do not claim OEM protocol compatibility. Separate orders, wet-end runs, setups, knife assignments, downtime events and waste events.
-
-For a simple paired segment, 200 cuts at 45 inches and 300 cuts at 30 inches each correspond to 750 machine lineal feet. Outs multiply sheet counts and occupied width, not machine lineal travel. Exact integer cut alignment is a proposed simplification for the first generator, not a claim about every real transition.
-
-Two 30-inch outs plus one 34-inch out occupy 94 inches of a 98-inch web, leaving 2 inches of trim on each side. A full-width shear chop approximately 34 inches long has area paper width x 34 / 144 square feet.
-
-Use a reproducible seed and explicit scenarios. Keep scenario answer keys outside the agent's accessible evidence so tests measure investigation rather than answer retrieval. Keep paper recipes optional; do not infer strength or furnish from fictional grade labels.
-
-### Synthetic record families
-
-`src/investigator/synth.py` generates a rolling year of one corrugator, one production day at a time from date-keyed draws (a day is the same in every window that holds it), as four record families whose field names and units mirror the machine's own record types: dry-end setups, wet ends, shifts and stops (`src/investigator/records.py`). Same seed, byte-identical JSONL, exposed content hash. The records satisfy the physics and accounting invariants in [docs/RECORDS.md](docs/RECORDS.md) (centered web geometry, shared knife travel, exact wet-end and shift aggregates, gap-free time partition, monthly downtime and waste bands) and carry three seeded stories whose answer keys are read by the generator only. This remains our own documented demo schema: the borrowed names make the data read like plant records, and nothing here claims OEM protocol compatibility. These records are the app's data source: `record_store.py` builds the year once (or loads it prebuilt) into one in-memory DuckDB, derives the per-day tables the daily tools read, and answers the period tools (KPI tiles with the previous window and a better direction, downtime Pareto, waste breakdown, stops profile, weekly trend, arbitrary window comparison) as ratios of sums over the whole dataset ([METRICS](docs/METRICS.md)). The one-day XML fixture remains only for its own tests.
-
-Proposed editable speed table, based on owner guidance rather than external standards:
-
-| Fictional board grade | Construction | Target ft/min |
-| --- | --- | ---: |
-| 26-C | Single wall | 900 |
-| 32-C | Single wall | 900 |
-| 55-C | Single wall | 850 |
-| 200-C | Single wall | 800 |
-| 275-BC | Double wall | 500 |
-| 275-EB | Double wall | 500 |
-
-Owner confirmed: wet-end actual speed uses its full elapsed duration, including downtime. Compare each wet-end ID against its grade target using this basis. Demo paper widths are 98, 95, 92 and 87 inches. Approximate shift scale is 50-75 dry-end records and roughly half as many wet-end records. The quantity-driven generator pairs compatible orders across one to four dry-end setups per paper run, with single-order runs as well. The default month averages 181.1 setup records per day; shift-boundary fragments are counted in both shifts. Counts and sampling assumptions are detailed in METRICS.md. About 200,000 lineal is a bad-shift example; 275,000-300,000 is contextual good-shift guidance, not a universal grade-independent target.
-
-## 5. Build and test tools before connecting the model
-
-Proposed tools include `get_shift_kpis`, `get_run_timeline`, `compare_shifts`, `get_loss_breakdown`, `get_process_rule` and `render_chart`. Each needs a small input schema, validated filters, bounded results and structured evidence with record references, units and data-quality coverage.
-
-Treat XML as untrusted input: disable external entities and DTD processing, enforce size/depth limits, and validate the schema. Check finite numbers, nonnegative quantities, time ordering, geometry and quantity reconciliation. Preserve bad source values with errors; do not silently clamp them. Exclude invalid contributions from affected calculations and clearly mark incomplete results.
-
-## 6. Implement a bounded agent loop
-
-1. Receive a question and scoped conversation context.
-2. Ask the model for a permitted tool call or a final answer.
-3. Validate tool name, arguments and remaining budget in application code.
-4. Execute the tool against the read-only demo dataset.
-5. Return structured evidence to the model.
-6. Continue only while additional evidence is useful and limits allow it.
-7. Return an answer with supporting numbers, charts, uncertainties and a reviewable next action.
-
-The model chooses an investigation path. Application code owns calculations and permissions. It cannot execute arbitrary SQL, Python, shell commands, HTML or JavaScript. Set tool-call, token, time and result-size limits. A failed tool must produce an explicit failure, not fabricated evidence.
-
-## 7. Make the investigation visible
-
-Build chat with example questions, bar/trend/timeline charts and an analysis-steps panel showing tools used, filters and evidence. Render validated chart specifications in trusted UI code. Show grade context when comparing shifts; a double-wall run at 500 ft/min may meet its target while a single-wall run at 725 misses its target.
-
-## 8. Deliver useful reports with controlled actions
-
-Subscribers can select reports for shift 1, 2 and/or 3, a production-day comparison, or both. Daily reports compare shifts and explain grade mix, losses and data-quality exceptions.
-
-Planned delivery controls: verified email, unsubscribe, private recipient storage, rate limits and idempotent delivery records. The agent prepares content; application code selects verified recipients and dispatches it. No email sending is enabled; the public deployment exists and runs the offline planner by default, with the paid provider as an opt-in behind the guards in [ANTHROPIC_DEMO.md](docs/ANTHROPIC_DEMO.md).
-
-## 9. Evaluate correctness and cost
-
-Test known-answer calculations, order continuation, unequal cut lengths, width fit, midnight boundaries, overlapping downtime, corrupt numeric values and waste reconciliation. Test questions that lack evidence, prompt-injection attempts, forbidden tool calls, chart/data agreement and delivery isolation.
-
-Measure tool accuracy, evidence-supported answers, latency and cost per investigation. Enforce server-side usage budgets and keep saved examples available when live usage is exhausted. The hosted demo's optional model is Anthropic (`claude-haiku-5-5`, about $0.002 a round at list prices), chosen per question; OpenAI is the optional bring-your-own-key planner on the local workbench. Each eval run can append one line to `evals/history.jsonl` (commit, dataset hash, model, pass rate per case type, offline p50 and p95 latency, recorded cost), so a change in the planner, the prompt or the data shows up as a change in the score or the clock, not a feeling. Every offline golden case has a latency budget (250 ms by default) and the run fails when the offline p50 passes 100 ms or the p95 passes 250 ms.
-
-The golden set (`evals/`, [how it is scored](evals/README.md)) has seven case types, and the running app shows it: `/evals` lists every case with its expectation in plain words, runs any of them on the spot, and charts the pass rate and latency of each tracked run (`/evals.json` is the same data). Its value cases are generated, not typed: with synthetic data we own the truth, so `evals/make_value_goldens.py` computes every expected number by plain Python sums over the record families and stamps the file with the dataset hash; the runner refuses stale goldens. Investigation cases ask about the three seeded stories as a superintendent would and are scored by application rules: the evidence that covers the story window, its numbers present in the answer, and no cause asserted that the evidence lacks.
-
-## 10. Build in reviewable stages
-
-1. Consolidate the interview into reviewed process definitions and an agent contract.
-2. Implement the XML schema, generator and reconciliation tests.
-3. Implement deterministic analysis tools and known-answer tests.
-4. Implement the bounded model/tool loop and adversarial evaluations.
-5. Build the public-facing chat, charts and report preview.
-6. Add verified subscriptions and controlled report delivery.
-7. Review deployment, costs and limitations before publishing.
-
-Next unresolved definitions include waste-category overlap accounting, plant timezone/daylight-saving behavior and event allocation at boundaries. This project is separate from Talk to My Machine and has no access to live machinery or private production stores.
-
-## Follow a query through the agent
-
-Read [How a question becomes evidence and a chart](docs/AGENT_EXECUTION.md) for tool contracts, parameterized SQL, context management, the execution loop, chart validation and the first milestone's acceptance checks.
-
-
-## Inspect the working agent boundary
-
-Start with [the local interface walkthrough](docs/WORKBENCH.md), then read [the agent contract](docs/AGENT_CONTRACT.md) and [execution guide](docs/AGENT_EXECUTION.md). The offline router makes tool behavior reproducible alongside optional live-model integration. The in-app docs (`/docs`) explain the same boundary.
-
-
-## Connect a live model
-
-### Ask a question the records can answer
-
-A model does not give the investigator missing plant knowledge. Anthropic (the hosted demo) or OpenAI (your key, locally) chooses among the available tools, then writes a short interpretation using referenced facts. Application code calculates the evidence, validates the references and inserts numeric values. Findings, hypotheses, checks and limitations are labeled, with calculated evidence retained below. The selected production day, period and shift scope still apply: under Week, Month or 4-4-5 the daily tools are refused and the period tools answer, and the Period report stays deterministic with no model calls.
-
-“How can we be better?” is a starting point, not a measurable objective. Narrow it to “Which recorded downtime reasons took the most minutes in this shift?”, “Which wet-end runs were furthest below their grade targets?”, or “Which reject reasons contributed the most square feet?” Use the example buttons for these investigations in free offline mode.
-
-Read an answer as **recorded finding → investigation question → human verification**. A large knife-jam total identifies a place to investigate; it does not establish a worn component, an operator mistake, or the correct adjustment. Check the underlying events and notes with the crew before proposing a change. A target gap is not automatically recoverable output, and this dataset cannot establish savings, profitability, or the best plant-wide improvement. It has no measured intervention outcomes or live machine state, and its records hold no costs: the dollars the investigator shows are the synthetic records priced at assumed rates (paper, machine time, margin; [the cost model](docs/COST_MODEL.md)), not the plant's.
-
-If the requested evidence is unavailable, narrow the question or collect the missing information. A completed investigation means the tool run finished, not that a root cause was proved. Tool restrictions and evidence-based summaries limit unsupported claims, but the model can still choose an unhelpful investigation. Live question quality is scored by the golden set's live cases (`python3 evals/run.py --live --provider anthropic`), whose recordings replay in CI; the pattern checks on prose are heuristics, so read a recording when a case first passes.
-
-Read [Anthropic in the hosted demo](docs/ANTHROPIC_DEMO.md) for the server-held key, the guards and the cost per round, and [OpenAI and BYOK mode](docs/OPENAI_BYOK.md) for the local request-scoped key flow. Offline mode remains the default.
+More in [the docs](docs/OVERVIEW.md) (also at `/docs` on the running server); the long-form guide that used to be this page is [the original build guide](docs/BUILD_GUIDE.md).
