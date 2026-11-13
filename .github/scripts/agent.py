@@ -155,7 +155,9 @@ def mentions_claude(body: str | None) -> bool:
 
     The rule is built so that it never starts a run CommonMark shows inside code or a quote; in doubt it starts
     nothing (a missed start costs the owner a rephrased comment, an unwanted one an agent run):
-    - fenced blocks are dropped first (a backtick fence's info string has no backtick);
+    - fenced blocks are dropped first (a backtick fence's info string has no backtick). A fence that opens indented
+      (as inside a list item), below a `<` line of its block (inside an HTML block) or inside raw HTML may belong to a
+      container CommonMark closes on its own, and the tracking would fall out of step: nothing after one counts;
     - a line that opens a quote (inside a list item too) quotes every line after it up to a blank line, as
       Markdown's lazy continuation does;
     - a code span cannot cross a blank line, so it can reach the mention's line only from an earlier line of the
@@ -164,7 +166,7 @@ def mentions_claude(body: str | None) -> bool:
       processing instruction, declaration, CDATA section or `<pre>`-like block left open earlier covers it;
     - a bare carriage return breaks a line for the fences and the quotes, as in Markdown, but the mention counts only
       on a line that opens the comment or follows a newline, as agent.yml's condition reads it."""
-    kept, fence = [], ''
+    kept, fence, openers, lt = [], '', [], False   # openers: (line, opened indented or below a `<` line of its block)
     for line in (body or '').replace('\r\n', '\n').replace('\r', '\n' + AFTER_CR).split('\n'):
         bare = line.lstrip(AFTER_CR)
         m = FENCE.match(bare)
@@ -174,16 +176,20 @@ def mentions_claude(body: str | None) -> bool:
             kept.append(HIDDEN)
         elif m:
             fence = m.group(1)
+            openers.append((len(kept), bare[:1] in ' \t' or lt))
             kept.append(HIDDEN)
         else:
+            lt = bool(bare.strip()) and (lt or '<' in bare)
             kept.append(line)
     text = '\n'.join(kept)
     starts = [0]
     for line in kept[:-1]:
         starts.append(starts[-1] + len(line) + 1)
     regions = [(r.start(), r.end()) for r in HTML_REGION.finditer(text)]
+    # Past the first fence whose container is in doubt, the fences may be out of step with Markdown's: nothing counts.
+    end = next((n for n, doubtful in openers if doubtful or any(s < starts[n] < e for s, e in regions)), len(kept))
     quoted, clean = False, True   # clean: every earlier line of this block closes its spans and has no `<`
-    for line, at in zip(kept, starts):
+    for line, at in zip(kept[:end], starts):
         bare = line.lstrip(AFTER_CR)
         if not bare.strip():
             quoted, clean = False, True

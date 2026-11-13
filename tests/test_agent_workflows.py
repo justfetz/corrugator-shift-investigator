@@ -1399,7 +1399,11 @@ QUOTED = ['`@claude` in backticks', 'Reviews quote `@claude` in backticks, as th
           'x <?x `?>`\n@claude`', 'x <!X `>`\n@claude`', 'x <![CDATA[ ` ]]>`\n@claude`',
           # a bare carriage return breaks a line for fences and quotes, but the mention never starts such a line
           # (agent.yml's condition looks for it after a newline only)
-          'notes\r@claude go', 'x\r```\n@claude\n```', 'x\r> q\n@claude go']
+          'notes\r@claude go', 'x\r```\n@claude\n```', 'x\r> q\n@claude go',
+          # a fence that a list item or an HTML block holds ends with it, and the next fence line opens a real one
+          '- x\n  ```\nfoo\n```\n@claude go\n```', '- x\n  ```\nfoo\n```\n\n@claude go\n```',
+          '1. a\n   ~~~\nfoo\n~~~\n\n@claude go\n~~~', '<div>\n```\n</div>\n\n```\n\n@claude go\n```',
+          '<!--\n```\n-->\n\n```\n\n@claude go\n```']
 
 
 @pytest.mark.parametrize('body', STARTS)
@@ -1424,6 +1428,14 @@ def test_in_doubt_the_mention_starts_nothing_and_a_blank_line_settles_it(body):
     assert not agent.mentions_claude(body), body
     head, _, tail = body.rpartition('\n')
     assert agent.mentions_claude(f'{head}\n\n{tail}'), 'after a blank line the same mention counts'
+
+
+def test_nothing_counts_after_a_fence_whose_container_is_in_doubt():
+    """A fence indented under a list item (or below a `<` line, inside an HTML block) ends with its container, which the
+    rule does not track; so no mention after such a fence counts, blank line or not. A plain fence is tracked exactly."""
+    assert not agent.mentions_claude('- a\n  ```\n  code\n  ```\n\n@claude go')
+    assert agent.mentions_claude('Notes:\n```\n@claude in code\n```\n\n@claude go')
+    assert agent.mentions_claude('@claude go\n- a\n  ```\n  code\n  ```'), 'a mention before the fence still counts'
 
 
 def gate_prefilter(body):
