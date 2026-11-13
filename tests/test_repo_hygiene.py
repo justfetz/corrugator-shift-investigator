@@ -439,6 +439,11 @@ VENDOR_CODE_FAMILIES = frozenset({
 })
 WORD = re.compile(r'[A-Za-z0-9]+')
 RECORD_CODE = re.compile(r'[a-z][0-9]{2}[a-z]')
+# A backslash escape glues its letters to the next word (\nName, “Name), so it is split off first.
+ESCAPE = re.compile(r'\\(?:u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[nrtbfv])')
+# A provider's opaque thinking signature in a recorded fixture: random base64 that nobody wrote, where a
+# listed short name can turn up between two separators by chance.
+OPAQUE_KEYS = frozenset({'signature'})
 
 
 def digest(word):
@@ -458,17 +463,49 @@ def vendor_words(text, words=VENDOR_WORDS, families=VENDOR_CODE_FAMILIES):
     return hits
 
 
+def guarded_text(name, text):
+    """What the guard reads of a file: a JSON file's keys and strings, decoded and without opaque signatures;
+    any other file as written. Backslash escapes are split off the word after them in both."""
+    if name.endswith('.json'):
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+        if data is not None:
+            parts = []
+
+            def walk(node, key=None):
+                if isinstance(node, dict):
+                    for k, v in node.items():
+                        parts.append(k)
+                        walk(v, k)
+                elif isinstance(node, list):
+                    for v in node:
+                        walk(v, key)
+                elif isinstance(node, str) and key not in OPAQUE_KEYS:
+                    parts.append(node)
+            walk(data)
+            text = '\n'.join(parts)
+    return ESCAPE.sub(' ', text)
+
+
 def test_the_vendor_guard_catches_a_listed_name_and_every_record_of_a_listed_code_family():
     assert len(VENDOR_WORDS) >= 16 and len(VENDOR_CODE_FAMILIES) >= 1, 'the lists are never emptied'
     assert all(re.fullmatch(r'[0-9a-f]{64}', entry) for entry in VENDOR_WORDS | VENDOR_CODE_FAMILIES)
     text = 'Line 1 is an ACMECORR double backer; its x12q and X12R records, but not X13Q, X12QQ or acmecorrs.'
     assert vendor_words(text, {digest('acmecorr')}, {digest('x12')}) == ['ACMECORR', 'x12q', 'X12R']
     assert vendor_words(text) == [], 'the made-up names are on neither list'
+    lists = {digest('acmecorr')}, {digest('x12')}
+    recorded = json.dumps({'text': 'Shift 2:\n\u201cAcmecorr\u201d splicer', 'signature': 'Zm9v/x12q+YmFy'})
+    assert vendor_words(recorded, *lists) == ['x12q'], 'read raw, the escapes hide the name and the signature trips'
+    assert vendor_words(guarded_text('case.json', recorded), *lists) == ['Acmecorr'], 'decoded: the name, not the signature'
+    assert vendor_words(guarded_text('module.py', 'note = "done\\nAcmecorr"'), *lists) == ['Acmecorr']
 
 
 def test_no_tracked_file_names_a_vendor_or_carries_a_vendor_record_code():
     """Every tracked text file, its path included: docs, code, tests, goldens and the recorded live fixtures
-    (a model's narrative is held to the rule too). Binary files are skipped."""
+    (a model's narrative is held to the rule too, read decoded; the providers' opaque signatures are left
+    out). Binary files are skipped."""
     names = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, capture_output=True, check=True).stdout.decode().split('\0')
     found, read = {}, 0
     for name in filter(None, names):
@@ -477,7 +514,7 @@ def test_no_tracked_file_names_a_vendor_or_carries_a_vendor_record_code():
         except (UnicodeDecodeError, OSError):
             continue
         read += 1
-        if hits := vendor_words(name + '\n' + text):
+        if hits := vendor_words(name + '\n' + guarded_text(name, text)):
             found[name] = hits
     assert read > 100, 'the scan reads the checkout'
     assert not found, found
