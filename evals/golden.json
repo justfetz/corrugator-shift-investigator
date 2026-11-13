@@ -7482,6 +7482,561 @@
     ],
     "sections_not_match": "the other way, an offset"
    }
+  },
+  {
+   "id": "semantic-downtime-by-grade-maintenance-week",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_minutes&by=grade&kind=maintenance",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): unplanned maintenance minutes by board grade over the week, a combination no tool answers: each stop is held by one setup, so a stop splits by its setup's grade. The answer leads with the asked measure over the week, then one finding per grade; the hand-typed kind=maintenance redirects to the model's own value.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_minutes&by=grade&kind=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": [
+        "grade"
+       ],
+       "filters": {
+        "kind": "Maintenance"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime, stop kind Maintenance this week: \\*\\*[0-9.,]+ min\\*\\* \\(query 1\\)$",
+     "bullets": [
+      5,
+      5
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^- 26-C: \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total \\(query 1 · row [0-9]\\)$",
+     "^The rest, in the same order$"
+    ]
+   }
+  },
+  {
+   "id": "semantic-synonyms-scrap-by-defect",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14/shift/2?measure=semantic&m=scrap&by=defect",
+   "day": "2026-09-14",
+   "scope": "shift",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): the plant's words: scrap is the dry-end rejects measure and a defect is a reject reason; the address redirects to the model's names and answers for the selected shift only.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14/shift/2?measure=semantic&m=reject_sqft&by=reject_reason",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "reject_reason"
+       ],
+       "filters": {},
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Dry-end rejects, shift 2 this week: \\*\\*[0-9.,]+ sq ft\\*\\* \\(query 1\\)$",
+     "bullets": [
+      5,
+      5
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^- Misalignment: \\*\\*[0-9.,]+ sq ft\\*\\* · [0-9.]+% of the total \\(query 1 · row [0-9]\\)$"
+    ]
+   }
+  },
+  {
+   "id": "semantic-dry-end-pct-by-family-day-shift-2",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/day/2026-09-14?measure=semantic&m=dry_end_pct&by=reject_family&shifts=2",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): dry-end rejects as a percent of the yield after trim and shear, by family, for one listed shift under the all-shift scope: each family is read against the whole yield (the families add up to the total), each with the owner's band.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=dry_end_pct&by=reject_family&shifts=2",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "dry_end_pct",
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "group_by": [
+        "reject_family"
+       ],
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Dry-end rejects, shift 2: \\*\\*[0-9.]+%\\*\\* of yield · (home run|on target|over the|flag)[^*]* \\(query 1\\)$",
+     "bullets": [
+      4,
+      4
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^- (Bond|Warp|Misalignment|Moisture): \\*\\*[0-9.]+%\\*\\* of yield · (home run|on target|over the|flag)",
+     "^A ratio of sums over the window, never an average of ratios\\.$"
+    ]
+   }
+  },
+  {
+   "id": "semantic-trim-dollars-by-grade-month",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=trim_usd&by=grade",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): side trim priced by grade over the month: the quantity is DuckDB's, the dollars are the cost model's one pricing call at the assumed paper rate, and the answer says how a dollar is priced.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=semantic&m=trim_usd&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "trim_usd",
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "group_by": [
+        "grade"
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Side trim, priced this month: \\*\\*\\$[0-9,]+\\*\\* \\(query 1\\)$",
+     "bullets": [
+      5,
+      5
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^- [0-9]+-[A-Z]+: \\*\\*\\$[0-9,]+\\*\\* · [0-9.,]+ sq ft \\(query 1 · row [0-9]\\)$",
+     "^How a dollar is priced, for the total: ",
+     "^Rates: paper \\$"
+    ]
+   }
+  },
+  {
+   "id": "semantic-setups-against-the-week-before",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=setups&compare=prev",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): one count with no split: the setups this week against the week before, the asked count first; nothing to chart.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=setups&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "setups",
+       "group_by": [],
+       "compare": "previous"
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 0,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Setups this week: \\*\\*[0-9,]+ setups\\*\\* · [+-][0-9,]+ vs [0-9,]+ setups the week before \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ],
+     "look": [
+      2,
+      2
+     ]
+    }
+   }
+  },
+  {
+   "id": "semantic-glue-is-starch-by-place",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/day/2026-09-14/shift/2?measure=semantic&m=stops&by=place&reason=glue&window=week",
+   "day": "2026-09-14",
+   "scope": "shift",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): glue is the plant's word for the Glue / starch stop reason: the value synonym redirects to the stop reason the records carry, over the week the day falls in, for the selected shift.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=semantic&m=stops&window=week&by=place&reason=Glue+/+starch",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "place"
+       ],
+       "filters": {
+        "reason": "Glue / starch"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Stops, stop reason Glue / starch, shift 2 this week: \\*\\*[0-9,]+ stops?\\*\\* \\(query 1\\)$",
+     "bullets": [
+      1,
+      3
+     ],
+     "look": [
+      2,
+      2
+     ]
+    }
+   }
+  },
+  {
+   "id": "semantic-operator-downtime-pct-by-day",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_pct&by=day&kind=operator",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): operator downtime as a percent of each production day's scheduled minutes, every day of the week listed in order (a day without an operator stop is a recorded zero), each against the owner's operator band.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_pct&by=day&kind=Operator",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_pct",
+       "group_by": [
+        "day"
+       ],
+       "filters": {
+        "kind": "Operator"
+       },
+       "order": "dimension"
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime, stop kind Operator this week: \\*\\*[0-9.]+%\\*\\* of scheduled minutes · (on target|flag)",
+     "bullets": [
+      5,
+      5
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^- 2026-09-14 \\(Mon\\): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · (on target|flag)"
+    ]
+   }
+  },
+  {
+   "id": "semantic-rejects-by-order-shift",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/day/2026-09-14/shift/2?measure=semantic&m=reject_sqft&by=order",
+   "day": "2026-09-14",
+   "scope": "shift",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): dry-end rejects by order, a combination no tool answers: each reject line is one lane's, and a lane is one order. More orders than the answer lists: it says how many rows it shows, and the total is over every order.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=semantic&m=reject_sqft&by=order",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "order"
+       ],
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Dry-end rejects, shift 2: \\*\\*[0-9.,]+ sq ft\\*\\* \\(query 1\\)$",
+     "bullets": [
+      5,
+      5
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^The first [0-9]+ of [0-9]+ rows are listed; the total is over every row\\.$"
+    ]
+   }
+  },
+  {
+   "id": "semantic-speed-with-stops-by-shift",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=speed_all_fpm&by=shift",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): speed with stops by shift: lineal feet over each shift's scheduled minutes, a ratio of sums across two entities.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=speed_all_fpm&by=shift",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_all_fpm",
+       "group_by": [
+        "shift"
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Speed with stops this week: \\*\\*[0-9.,]+ ft/min\\*\\* \\(query 1\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "sections_match": [
+     "^- Shift 1: \\*\\*[0-9.,]+ ft/min\\*\\* \\(query 1 · row 0\\)$"
+    ]
+   }
+  },
+  {
+   "id": "semantic-unknown-measure-names-the-nearest",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=scrapp",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): a measure the model does not hold is refused with the nearest names, never answered with something else.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^No measure 'scrapp' in the semantic model; the nearest: reject_sqft"
+   }
+  },
+  {
+   "id": "semantic-setup-feet-never-split-by-order",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=lineal_ft&by=order",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): a setup carries up to three order lanes: splitting its feet by order would count them more than once, so it is refused with the dimensions that can split it.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^Lineal feet \\(lineal_ft\\) is recorded per run setup, which carries no order; it can be split by: "
+   }
+  },
+  {
+   "id": "semantic-speed-with-stops-never-by-grade",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=speed_all_fpm&by=grade",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): scheduled shift minutes carry no grade, so speed with stops by grade has no denominator: refused, as the grade totals say.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^Speed with stops \\(speed_all_fpm\\) is read against scheduled minutes, which carry no grade; it can be split by: day, week, month, period, shift, crew$"
+   }
+  },
+  {
+   "id": "semantic-unknown-place-names-the-nearest",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=stops&place=dbl+backer",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): a filter value the records do not hold is refused with the nearest values they do.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^No stop place 'dbl backer' in the records; the nearest: Double backer$"
+   }
+  },
+  {
+   "id": "semantic-customer-not-in-these-records",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=sheets&by=customer",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): the customer dimension is in the model but not in this store's records (record contract v2, issue #100, adds it): refused, never answered with an empty split.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^The records in this store carry no customer yet, so sheets cannot be split by it$"
+   }
+  },
+  {
+   "id": "semantic-filter-field-only-on-semantic",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=pareto&place=Stacker",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): a dimension filter belongs to measure=semantic; on another measure it is refused, never ignored.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^place= does not apply to measure=pareto$"
+   }
+  },
+  {
+   "id": "semantic-selected-shift-only",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14/shift/2?measure=semantic&m=stops&shifts=3",
+   "day": "2026-09-14",
+   "scope": "shift",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1): under the selected-shift scope the semantic query reads the selected shift only.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^Selected shift only"
+   }
   }
  ]
 }

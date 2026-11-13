@@ -65,6 +65,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
 from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
+from investigator.urls import resolve_url  # noqa: E402
 from investigator import judge as judging  # noqa: E402
 from investigator.cost_model import parse_rates  # noqa: E402
 from investigator import targets as owner_targets  # noqa: E402  the owner's bands (targets.json), read as data
@@ -234,6 +235,8 @@ def via_url(case, expect, turns, redirect_only=False):
     `redirect_only` checks the resolution alone (a live case that records a URL)."""
     failures, results, after, ms, error, location = [], [], [], 0.0, None, None
     period = case.get('period', 'day')
+    if case.get('url'):
+        return via_address(case, expect)
     for text in turns:
         params = [('day', case.get('day', DEFAULT_DAY)), ('shift', case.get('shift', 2)), ('scope', case.get('scope', 'shift')),
                   ('period', 'accounting' if period == 'fiscal' else period)]
@@ -272,6 +275,31 @@ def via_url(case, expect, turns, redirect_only=False):
         failures.append(f'q= resolves to {bare_url(location) if location else repr(error)}, expected {want}')
     if error is not None:
         results = None
+    return results, error, failures, ms
+
+
+def via_address(case, expect):
+    """A URL case (issue #117) over GET: its address answers as the in-process run did, or a hand-typed spelling
+    redirects to `expect.url` and that address answers. Same return as `via_url`."""
+    failures, results, ms, error, location = [], None, 0.0, None, case['url']
+    status, headers, body = http_get(case['url'])
+    if status == 302 and 'Location' in headers:
+        location = headers['Location']
+        status, headers, body = http_get(location)
+    if status == 400:
+        error = json.loads(body)['error']
+    elif status != 200:
+        failures.append(f'GET {location} answered {status}')
+    else:
+        timing = re.search(r'dur=([0-9.]+)', headers.get('Server-Timing', ''))
+        ms = float(timing[1]) if timing else 0.0
+        result = json.loads(body)
+        if result.get('url') != location:
+            failures.append(f'the answer names {result.get("url")!r} as its address, served at {location!r}')
+        results = [result]
+    want = expect.get('url')
+    if want and error is None and bare_url(location) != want:
+        failures.append(f'{case["url"]} resolves to {bare_url(location)}, expected {want}')
     return results, error, failures, ms
 
 
@@ -1014,7 +1042,8 @@ def _run_case(case, provider, live, record, scratch):
         expect = case['expect_live']
     allowed = [shift] if scope == 'shift' else [1, 2, 3]
     results = []
-    turns = case.get('turns') or [case.get('question') or f'value golden: {case.get("tool")}']
+    # a URL case (issue #117) asks by its address: `url` is the input, answered as the server answers it
+    turns = case.get('turns') or [case.get('question') or case.get('url') or f'value golden: {case.get("tool")}']
     mode = 'live' if provider else 'offline'
     note, warnings, exchanges = '', set(), []
 
@@ -1074,6 +1103,11 @@ def _run_case(case, provider, live, record, scratch):
         started = time.perf_counter()
         try:
             for text in turns:
+                if case.get('url'):
+                    resolved = resolve_url(text, golden_store())   # the server's path: the address, resolved, then the agent
+                    turn, turn.history = resolved['context'], resolved['history']
+                    results.append(make_agent(dataset(resolved['day'], resolved['corrupt'])).ask(resolved['text'], turn, request=resolved['request']))
+                    continue
                 # The question's own shift and window win over the case's controls (issue #105), as on the server:
                 # the turn runs in the scope it names, on that day's records. A turn that stays on the controls' day
                 # carries the follow-up history back; one on another day starts its own, as /q drops the priors.
