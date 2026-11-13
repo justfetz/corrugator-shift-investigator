@@ -23,6 +23,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 import difflib
 import json
+import math
 from pathlib import Path
 import re
 import time
@@ -51,7 +52,6 @@ PREVIOUS_WORDS = {'day': 'the production day before', 'week': 'the week before',
                   'fiscal': 'the period before'}
 TIME_PLURALS = {'day': 'days', 'week': 'weeks', 'month': 'months', 'fiscal': '4-4-5 periods'}
 LEVERS = ('controllable', 'schedule-driven', 'external')
-VALUES_SHOWN = 20            # a refusal lists this many of a dimension's values, then says how many more
 
 
 class SemanticError(ValueError):
@@ -204,6 +204,12 @@ class Model:
                 self._template(dim['expr'], owner, f'dimension {name}')
             if any(lever not in LEVERS for lever in (dim.get('value_levers') or {}).values()):
                 raise ValueError(f'semantic model: dimension {name} names a value lever outside {", ".join(LEVERS)}')
+            if dim.get('recurs', True) not in (True, False):
+                raise ValueError(f'semantic model: dimension {name} recurs is true or false')
+        for name, entity in self.entities.items():
+            lever_by = entity.get('lever_by')
+            if lever_by is not None and (self.dimensions.get(lever_by, {}).get('entity') != name or not self.dimensions[lever_by].get('value_levers')):
+                raise ValueError(f'semantic model: entity {name} takes its lever from {lever_by}, which must be its own dimension with value levers')
         for name, m in self.measures.items():
             if m['agg'] not in AGGREGATIONS or not m.get('unit') or not m.get('description'):
                 raise ValueError(f'semantic model: measure {name} needs a known aggregation, a unit and a definition')
@@ -224,8 +230,8 @@ class Model:
                 for part in (m['numerator'], m['denominator']):
                     if self.measures.get(part, {}).get('agg') not in SIMPLE:
                         raise ValueError(f'semantic model: ratio {name} needs two simple measures, not {part}')
-                scale = m.get('scale', 1)   # compiled into the SQL as a number: a positive int or float, nothing else
-                if type(scale) not in (int, float) or not scale > 0:
+                scale = m.get('scale', 1)   # compiled into the SQL as a number: a positive, finite int or float, nothing else
+                if type(scale) not in (int, float) or not math.isfinite(scale) or not scale > 0:
                     raise ValueError(f'semantic model: ratio {name} needs a positive number as its scale, not {scale!r}')
             else:
                 if self.measures.get(m['quantity'], {}).get('agg') not in SIMPLE or m['price_kind'] not in PRICE_KINDS:
@@ -453,13 +459,22 @@ def validate(query, store=None, mdl=None):
     if compare is not None and compare not in COMPARES:
         raise SemanticError('compare is previous (the previous window of the same kind) or none')
     for dim in by if compare else []:
-        # the window before holds none of this window's days, weeks or months: a row would be set against nothing (the
-        # card once read "previous 0 stops" on every day), so a comparison splits by categories only
-        if mdl.dimensions[dim]['type'] == 'time':
-            plural = TIME_PLURALS[mdl.dimensions[dim]['grain']]
+        # the window before holds none of this window's days, weeks or months, nor its paper runs or orders (each belongs to
+        # one production day): a row would be set against nothing (the card once read "previous 0 stops" on every day), so a
+        # comparison splits by categories that recur only
+        spec = mdl.dimensions[dim]
+        if spec['type'] == 'time':
             raise SemanticError(f"A comparison with the previous window cannot split by {dim}: the window before holds none of this "
-                                f"window's {plural}, so every row would be set against nothing. Split by a category (stop kind, grade, "
-                                f"shift), or ask the previous window at its own address.")
+                                f"window's {TIME_PLURALS[spec['grain']]}, so every row would be set against nothing. Split by a category "
+                                f"(stop kind, grade, shift), or ask the previous window at its own address.")
+        if spec.get('recurs', True) is False:
+            raise SemanticError(f"A comparison with the previous window cannot split by {dim}: each {spec['label'].lower()} belongs to "
+                                f"one production day, so the window before holds none of this window's, and every row would be set "
+                                f"against nothing. Split by a category that recurs (stop kind, grade, shift), or ask without compare.")
+    for dim, value in filters.items() if compare else []:
+        if mdl.dimensions[dim].get('recurs', True) is False:
+            raise SemanticError(f"A comparison with the previous window cannot filter by {dim}: {mdl.dimensions[dim]['label'].lower()} "
+                                f"{value} belongs to one production day, so the window before holds none of it. Ask without compare.")
     order = query.order
     if order is None:
         first = by[0] if by else None
@@ -553,10 +568,9 @@ def resolve_value(dim, value, store, mdl=None):
         nearest = [shown[w] for w in _nearest(value, shown)]
         if nearest:
             raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the nearest: ' + ', '.join(str(c) for c in nearest), nearest)
-        # no near match: every value the records hold, or the first VALUES_SHOWN and how many more (a split lists them all)
-        more = len(values) - VALUES_SHOWN
-        listed = ', '.join(str(c) for c in values[:VALUES_SHOWN]) + (f', and {more} more; by={dim} lists every value a window recorded' if more > 0 else '')
-        raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the values are: {listed}', values)
+        # no near match: every value the records hold, however many (a split lists only a window's first rows, so the refusal
+        # is the one place that names them all)
+        raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the values are: ' + ', '.join(str(c) for c in values), values)
     # a dimension with many values (paper runs, orders): checked one by one, the nearest by similarity
     sql, params = _value_sql(mdl, dim)
     hit = store._fetch(f'SELECT v FROM ({sql}) WHERE lower(CAST(v AS VARCHAR)) = lower(?) LIMIT 1', params + [str(value).strip()], limit=1)
@@ -690,6 +704,11 @@ class _Part:
     def count_ids(self):
         return 'count(*)'
 
+    def levers(self):
+        """SQL listing the distinct values of the dimension this entity takes its lever from (a stop's kind), or None."""
+        dim = self.entity.get('lever_by')
+        return f'list(DISTINCT {_dimension_sql(self.mdl, dim, self.entity_name, "b")})' if dim else None
+
 
 def _aggregate(mdl, name, alias='b', entity_name=None):
     m = mdl.measures[name]
@@ -731,7 +750,8 @@ class Compiled:
         part = _Part(self.mdl, m['entity'], dims, self.query.filters, self.query.shift, m)
         cols = [f'{sql} AS d{i}' for i, (_, sql) in enumerate(part.dims)]
         share = ', value / nullif(sum(value) OVER (), 0) * 100 AS share_pct' if grouped and m['agg'] in ADDITIVE else ''
-        inner = (f"SELECT {', '.join(cols + [f'{_aggregate(self.mdl, name)} AS value', 'count(*) AS source_count', f'{part.ids()} AS source_ids'])} "
+        levers = [f'{part.levers()} AS lever_keys'] if part.levers() else []
+        inner = (f"SELECT {', '.join(cols + [f'{_aggregate(self.mdl, name)} AS value', 'count(*) AS source_count', f'{part.ids()} AS source_ids'] + levers)} "
                  f"FROM {part.source()} WHERE {' AND '.join(part.where)}" + (' GROUP BY ALL' if cols else ''))
         return inner, share, part.bind(*span)
 
@@ -774,16 +794,18 @@ class Compiled:
         numerator, denominator = _aggregate(mdl, m['numerator']), _aggregate(mdl, m['denominator'])
         where = ' AND '.join(n_part.where)
         restricted = any(part.get(k) for part in (num, den) for k in ('filter', 'above_band'))
+        levers = [f'{n_part.levers()} AS lever_keys'] if n_part.levers() else []   # the numerator's records name the lever
         if num['entity'] == den['entity'] and not restricted:
             select = ', '.join(n_cols + [f'{numerator} AS numerator', f'{denominator} AS denominator',
-                                         'count(*) AS source_count', f'{n_part.ids()} AS source_ids'])
+                                         'count(*) AS source_count', f'{n_part.ids()} AS source_ids'] + levers)
             sql = (f'SELECT *, numerator / nullif(denominator, 0) * {scale} AS value, count(*) OVER () AS groups FROM ('
                    f'SELECT {select} FROM {n_part.source()} WHERE {where}{group}) t')
             return sql, n_part.bind(*span)
         shared = [d for d in dims if mdl.reach(den['entity'], d) is not None]
         d_part = _Part(mdl, den['entity'], shared, q.filters, q.shift, den)
         d_cols = [f'{sql} AS d{dims.index(d)}' for d, sql in d_part.dims]
-        n_select = ', '.join(n_cols + [f'{numerator} AS numerator', 'count(*) AS source_count', f'{n_part.ids()} AS source_ids'])
+        n_select = ', '.join(n_cols + [f'{numerator} AS numerator', 'count(*) AS source_count', f'{n_part.ids()} AS source_ids'] + levers)
+        n_levers = ', n.lever_keys AS lever_keys' if levers else ''
         n_sql = f'SELECT {n_select} FROM {n_part.source()} WHERE {where}{group}'
         d_select = ', '.join(d_cols + [f'{denominator} AS denominator'])
         d_sql = f"SELECT {d_select} FROM {d_part.source()} WHERE {' AND '.join(d_part.where)}" + (' GROUP BY ALL' if d_cols else '')
@@ -794,12 +816,12 @@ class Compiled:
             fill = 'coalesce(n.numerator, 0)' if num['agg'] in ADDITIVE else 'n.numerator'
             sql = (f"SELECT {', '.join([f'd.{k} AS {k}' for k in keys])}, {fill} AS numerator, d.denominator, "
                    f"{fill} / nullif(d.denominator, 0) * {scale} AS value, coalesce(n.source_count, 0) AS source_count, "
-                   f"coalesce(n.source_ids, CAST([] AS VARCHAR[])) AS source_ids, count(*) OVER () AS groups "
+                   f"coalesce(n.source_ids, CAST([] AS VARCHAR[])) AS source_ids{n_levers}, count(*) OVER () AS groups "
                    f"FROM ({d_sql}) d LEFT JOIN ({n_sql}) n ON {' AND '.join(on)}")
             return sql, d_part.bind(*span) + n_part.bind(*span)
         join = f"LEFT JOIN ({d_sql}) d ON {' AND '.join(on)}" if on else f'CROSS JOIN ({d_sql}) d'
         sql = (f"SELECT {', '.join([f'n.{k} AS {k}' for k in keys] + ['n.numerator', 'd.denominator'])}, "
-               f"n.numerator / nullif(d.denominator, 0) * {scale} AS value, n.source_count, n.source_ids, count(*) OVER () AS groups "
+               f"n.numerator / nullif(d.denominator, 0) * {scale} AS value, n.source_count, n.source_ids{n_levers}, count(*) OVER () AS groups "
                f"FROM ({n_sql}) n {join}")
         return sql, n_part.bind(*span) + d_part.bind(*span)
 
@@ -877,15 +899,23 @@ def _band_of(mdl, query, dims_values):
     return band
 
 
-def _lever(mdl, query, dims_values):
-    """The lever of a value: the measure's, unless a stop kind or reason it is sliced to has its own (planned
-    maintenance is schedule-driven and a power outage external: the owner on PR #111, targets.json), the row's value
-    before the filter's."""
-    for values in (dims_values, query.filters):
-        for dim, value in values.items():
-            lever = (mdl.dimensions[dim].get('value_levers') or {}).get(value) if isinstance(value, str) else None
-            if lever:
-                return lever
+def _lever(mdl, query, dims_values, keys):
+    """The lever of a value: the one lever every record it sums shares, read from the dimension its entity takes its lever
+    from (a stop's kind: planned maintenance schedule-driven, a power outage external, the owner on PR #111 and
+    targets.json; unplanned maintenance and operator controllable), whatever dimension slices it (a reason, a place). Its
+    records' kinds are `keys`, listed by DuckDB. With records of several levers it is the measure's own; with none, the
+    lever its row's or filter's value names, else the measure's."""
+    rows = mdl.entities[mdl.measure_entities(query.measure)[0]]
+    levers = mdl.dimensions[rows['lever_by']]['value_levers'] if rows.get('lever_by') else {}
+    found = {levers.get(k) for k in keys or []}
+    if len(found) == 1 and None not in found:
+        return found.pop()
+    if not keys:
+        for values in (dims_values, query.filters):
+            for dim, value in values.items():
+                lever = (mdl.dimensions[dim].get('value_levers') or {}).get(value) if isinstance(value, str) else None
+                if lever:
+                    return lever
     return mdl.measures[query.measure]['lever']
 
 
@@ -952,7 +982,7 @@ def run(query, store, rates=None, mdl=None):
     for key in ('band', 'band_text'):
         if key in total:
             data[key] = total[key]
-    data['lever'] = _lever(mdl, query, {})
+    data['lever'] = total.get('lever') or _lever(mdl, query, {}, None)
     if query.compare:
         data['previous_value'] = _previous(mdl, query, total_row, rates, basis) if available and total_row else None
         # the change is DuckDB's (cur.value - prev.value), stated only when both windows are complete, as the tools do (a
@@ -987,7 +1017,7 @@ def _reading(mdl, query, r, rates, basis, dims_values):
     band = _band_of(mdl, query, dims_values)
     if band:
         targets.mark(out, band, out['value'])
-    out['lever'] = _lever(mdl, query, dims_values)
+    out['lever'] = _lever(mdl, query, dims_values, r.get('lever_keys'))
     return out
 
 
@@ -1035,7 +1065,9 @@ def model_markdown(text=None):
            '`semantic.validate` refuses an unknown measure, dimension or filter value with the nearest valid choices; '
            '`semantic.compile_query` writes parameterized DuckDB SQL over the tables and columns the physical block names, '
            'with a LIMIT on every statement; `semantic.run` executes it under the store\'s two-second interrupt and returns '
-           'rows plus a receipt: the SQL with its parameters, and the ids of the records behind each row.', '',
+           'rows plus a receipt: the SQL with its parameters, and the ids of the records behind each row. A comparison with the '
+           'previous window splits by categories that recur: never by a time dimension, a paper run or an order, whose rows the '
+           'window before cannot hold.', '',
            'The address of a request ([the URL grammar](../../docs/URLS.md)):', '',
            '    /corr/1/<grain>/<day>[/shift/<n>]?measure=semantic&m=<measure>&by=<dimension>[,<dimension>]&<dimension>=<value>',
            '',
@@ -1085,9 +1117,10 @@ def model_markdown(text=None):
         for value, words in (d.get('value_synonyms') or {}).items():
             out.append(f'| {_cell(", ".join(words))} | {d["name"]} {_cell(value)} |')
     out += ['', '## Levers of a slice', '',
-            'A value carries its measure\'s lever, unless a stop kind or reason it is sliced to, by its row or a filter, has a lever of '
-            'its own: planned maintenance is schedule-driven and a power outage is external (the owner, PR #111; `targets.json`). '
-            'The answer names a row\'s lever when it differs from the total\'s.', '',
+            'A value carries the lever every record it sums shares; a stop\'s lever is its kind\'s, so a reason or place takes the '
+            'lever of its stops (Planned maintenance is schedule-driven, the place Power and the reason Power outage are external: '
+            'the owner, PR #111; `targets.json`). Records of several levers carry the measure\'s own. The answer names a row\'s lever '
+            'when it differs from the total\'s.', '',
             '| Dimension | Value | Lever |', '| --- | --- | --- |']
     for d in dims:
         for value, lever in (d.get('value_levers') or {}).items():
