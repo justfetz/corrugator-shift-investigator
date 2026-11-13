@@ -15,12 +15,16 @@ What a line never holds: an IP address, a user agent, a cookie, a key, or any re
 passes this module the two ids and nothing else from the request's headers, and an id is kept only when it is 16
 lowercase hex characters (`ids`); anything else is dropped. The after= chain is not kept either, only its length,
 nor the visitor's rates= (their own cost figures).
-The question is cut at 500 characters and a comment at 300. Before a line is written, invisible format characters
-(Unicode category Cf: bidi overrides, zero-width characters, the tag characters) are removed, and these are replaced
-(`redact`): email addresses; IPv4 and IPv6 addresses; phone and other personal numbers (nine or more digits in one run
-with spaces, dots, dashes, slashes or brackets between them, and a 3-4 local number such as 123-4567; an ISO date is
-not one); and key-like tokens (20 or more letters and digits mixed, or a run with / or + in mixed case). A comment
-with a format character is refused, not cleaned.
+The question is cut at 500 characters and a comment at 300. Before a line is written, invisible characters are
+removed (`invisible`: Unicode category Cf, such as bidi overrides, zero-width characters and the tag characters, and
+the other default-ignorable code points, such as the variation selectors, the Hangul fillers and the whole tag block
+U+E0000-E0FFF), and these are replaced (`redact`): email addresses; IPv4 and IPv6 addresses; phone and other personal
+numbers (nine or more digits in one run with spaces, dots, dashes, slashes or brackets between them, and a 3-4 local
+number such as 123-4567; an ISO date in such a run is kept, and the digits beside it are read on their own); and
+key-like tokens (a run of 20 or more letters, digits, _ and - that holds both a letter and a digit, or a run of 20 or
+more that holds / or + together with a lower-case letter, an upper-case letter and a digit). A comment with a format
+character or a tag-block character is refused, not cleaned; the other default-ignorables (an emoji's U+FE0F) are
+removed from it.
 
 At most LINES_PER_MIN lines a minute are written for one client address (the address only counts; it is never written).
 
@@ -44,9 +48,10 @@ LINES_PER_MIN = 30   # per client address: a script with a well-formed id cannot
 ID = re.compile(r'[0-9a-f]{16}')
 LINE_HEADER, SESSION_HEADER = 'X-Question-Line', 'X-Question-Session'
 
-# The #113 guard: a question that asks for one quantity ("how many", "what was our …") of a countable noun or in a
-# unit, and lands on the KPI summary (measure=kpis), got the catch-all it should not have. "How did shift 1 go … on
-# lineal per paper change?" asks how a window went, which the KPI tiles answer, so it is not flagged.
+# The #113 guard: a question that both asks for one quantity (ASKS_QUANTITY: "how many", "what was our …") and names
+# a countable noun or a unit (COUNTABLE), and lands on the KPI summary (measure=kpis), got the catch-all it should not
+# have. "How did shift 1 go … on lineal per paper change?" names a unit but asks how a window went, which the KPI
+# tiles answer, so it is not flagged.
 COUNTABLE = re.compile(
     r"\b(counts?|set-?ups?|(paper|order|grade|flute|board) changes?|change-?overs?|"
     r"wet[- ]ends?|stops?|splices?|step-?ups?|rolls?|orders?|sheets?|boards?|boxes|jams?|rejects?|chops?|"
