@@ -96,6 +96,13 @@ def test_a_table_page_is_the_schema_and_fifty_rows_newest_first(store):
     starts = [r['started'] for r in first['rows']]
     assert starts == sorted(starts, reverse=True) and first['rows'][0]['production_date'] == store.last_day
     assert first['newer'] is None and first['older'] == '/data/stops?page=2'
+    # newest first is the reverse of the order the store wrote the rows in: that order is production order, every table
+    for table, t in dp.TABLES.items():
+        if not t.dated:
+            continue   # a dimension reads in the order of its file
+        keys = [k.split()[0] for k in t.order.split(', ')]
+        written = store._db.execute(f'SELECT {", ".join(keys)} FROM {table} ORDER BY rowid').fetchall()
+        assert written == sorted(written), f'{table}: the rows are not stored in production order, so rowid paging would not be newest first'
     second = dp.page(store, 'stops', 'page=2')
     assert second['rows'][0]['started'] <= starts[-1] and not {r['stop_id'] for r in second['rows']} & {r['stop_id'] for r in first['rows']}
     assert [c['name'] for c in first['columns']] == [name for name, _ in dp.TYPES['stops']]
@@ -196,15 +203,19 @@ def test_fuzzed_filters_never_reach_the_sql(store):
         for value in [v for _, v in parse_qsl(query)]:
             if len(value) > 2 and not re.fullmatch(r'[\w.\-]*', value):
                 assert value not in out['sql'] and value not in out['count_sql'], (table, query)
-                assert value in out['parameters'] or value.lower() in {str(p).lower() for p in out['parameters']}, (table, query)
+                bound_values = {str(p).lower() for values in out['parameters'] for p in values}
+                assert value.lower() in bound_values, (table, query)
                 bound += value in NASTY
         shape = re.sub(r'EXISTS \(SELECT 1 FROM shifts c WHERE c\.production_date = \w+\.production_date AND c\.shift = \w+\.shift '
                        r'AND lower\(c\.crew\) IN \((?:lower\(\?\)(?:, )?)+\)\)'
                        r'|EXISTS \(SELECT 1 FROM setups g WHERE g\.setup_id = \w+\.setup_id AND lower\(g\.quality_id\) IN \((?:lower\(\?\)(?:, )?)+\)\)'
                        r'|lower\("\w+"\) IN \((?:lower\(\?\)(?:, )?)+\)|"\w+" IN \((?:\?(?:, )?)+\)', 'C', out['sql'])
-        shapes.add(re.sub(r'"?\w+"? (=|>=|<=) \?|lower\("\w+"\) = lower\(\?\)|dayofweek\(production_date\) = \?', 'C', shape))
+        shapes.update(re.sub(r'"?\w+"? (=|>=|<=) \?|lower\("\w+"\) = lower\(\?\)|dayofweek\(production_date\) = \?', 'C', one).replace('rowid BETWEEN ? AND ?', 'R')
+                      for one in shape.split(';\n'))
     assert refused > 100 and tried - refused > 60 and bound > 20, (tried, refused, bound)   # hostile values were bound, not refused only
-    assert all(re.fullmatch(r'SELECT [\w", ]+ FROM \w+( WHERE C( AND C)*)? ORDER BY [\w, ]+ LIMIT \? OFFSET \?', s) for s in shapes), shapes
+    span = r'SELECT min\(r\) AS lo, max\(r\) AS hi, count\(\*\) AS n FROM \(SELECT rowid AS r FROM \w+( WHERE C( AND C)*)? ORDER BY rowid (DESC|ASC) LIMIT \? OFFSET \?\)'
+    rows = r'SELECT [\w", ]+ FROM \w+ WHERE (C AND )*R ORDER BY rowid (DESC|ASC)'
+    assert all(re.fullmatch(span, s) or re.fullmatch(rows, s) for s in shapes), shapes
     assert counts == {t: store._db.execute(f'SELECT count(*) FROM {t}').fetchone()[0] for t in dp.TABLES}
     with pytest.raises(ValueError, match='No table'):
         dp.page(store, 'duckdb_tables', '')

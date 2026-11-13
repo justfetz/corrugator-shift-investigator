@@ -141,8 +141,9 @@ function schemaCard(page){
 }
 function sqlCard(page){
  const box=el('details',undefined,'card data-sql'); box.append(el('summary','The query this page ran'));
- box.append(el('pre',`${page.sql}\n-- bound: ${JSON.stringify(page.parameters)}\n\n${page.count_sql}`,'sql'));
- box.append(el('p','A fixed SELECT over an allowlisted table and its columns: every value above is a bound parameter, with a LIMIT and the store\'s own time cap. Visitors cannot edit it.','muted'));
+ const queries=String(page.sql||'').split(';\n').map((q,i)=>`${q}\n-- bound: ${JSON.stringify((page.parameters||[])[i]||[])}`);
+ box.append(el('pre',[...queries,`${page.count_sql}\n-- bound: ${JSON.stringify(page.count_parameters||[])}`].join('\n\n'),'sql'));
+ box.append(el('p','Fixed SELECTs over an allowlisted table and its columns: the rowids of the page (newest first is the reverse of the order the store wrote the rows in, which is production order), then those rows, then the count. Every value above is a bound parameter, with a LIMIT and the store\'s own time cap. Visitors cannot edit them.','muted'));
  return box;
 }
 function renderTable(page){

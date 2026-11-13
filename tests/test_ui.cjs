@@ -1759,7 +1759,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.deepEqual(kind.children.slice(1,4).map(td=>td.textContent),['VARCHAR',page.columns.find(c=>c.name==='kind').unit,page.columns.find(c=>c.name==='kind').meaning]);
  assert.equal(kind.children[4].children[0].href,'/docs/record-contract#col-stops-kind');
  assert.equal(walkAll(schemaCard).find(e=>e.textContent==='the record contract ↗').href,'/docs/record-contract#col-stops');
- assert.ok(textOf(sqlCard).includes(page.sql)&&textOf(sqlCard).includes('-- bound: ["2026-09-14",2,50,0]'));
+ assert.ok(textOf(sqlCard).includes(page.sql.split(';\n')[0])&&textOf(sqlCard).includes('-- bound: ["2026-09-14",2,50,0]')&&textOf(sqlCard).includes(page.count_sql));
  // a span page (where a period receipt lands): a day's cell opens that day alone, never a day inside the span (#142 review)
  p=await load('/data/stops','?from=2026-09-01&to=2026-09-30&shift=2',{...page,filters:{from:'2026-09-01',to:'2026-09-30',shift:2},url:'/data/stops?from=2026-09-01&to=2026-09-30&shift=2'});
  const spanGrid=walkAll(p.els['data-body'].children[1]).find(e=>e.tag==='table');

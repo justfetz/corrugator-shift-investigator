@@ -54,7 +54,7 @@ class Table:
     name: str
     label: str
     meaning: str        # one sentence from the record contract
-    order: str          # ORDER BY: newest first, a unique key last so pages never overlap
+    order: str          # the production order, newest first: the store writes rows in it, so a page reads rowid DESC (a test holds it)
     docs: str           # the docs page whose table documents its columns
     dated: bool = True  # has production_date (the dimensions do not)
 
@@ -64,22 +64,22 @@ TABLES = {t.name: t for t in (
     Table('setups', 'Dry-end run setups',
           'One row per run setup, the fact table: up to three orders (lanes) across the web, the setup\'s clock, '
           'its feet, square feet and every waste line of its own.',
-          'production_date DESC, started DESC, setup_id DESC', CONTRACT),
+          'production_date DESC, started DESC', CONTRACT),
     Table('setup_orders', 'Order lanes',
           'One row per order lane of a setup: one customer\'s slice of the web, its sheet size, outs, cuts, '
           'cutoff knife and waste boards.',
-          'production_date DESC, setup_id DESC, lane ASC', CONTRACT),
+          'production_date DESC, setup_id DESC', CONTRACT),
     Table('stops', 'The downtime log',
           'One row per stop: the run setup that holds it, its kind (Maintenance, Operator, Scheduled; a power '
           'outage counts as External), place, reason, seconds and the operator\'s comment.',
-          'started DESC, stop_id DESC', CONTRACT),
+          'production_date DESC, started DESC', CONTRACT),
     Table('rejects', 'Reject lines',
           'One row per reject line: one lane\'s rejected sheets by category and reason, with where on the board '
           'as attributes (liner, side).',
-          'production_date DESC, setup_id DESC, lane ASC, category ASC, reason ASC, liner ASC, side ASC, sqft DESC', CONTRACT),
+          'production_date DESC, setup_id DESC', CONTRACT),
     Table('wet_ends', 'Wet-end paper runs',
           'One row per paper run: consecutive setups on one grade and web width, its totals exact sums of its setups.',
-          'started DESC, wet_end_id DESC', CONTRACT),
+          'production_date DESC, started DESC', CONTRACT),
     Table('rolls', 'Roll stock',
           'One row per roll of paper fed into a paper run: its stand, paper, feet fed, peel and core.',
           'production_date DESC, roll_id DESC', CONTRACT),
@@ -92,11 +92,11 @@ TABLES = {t.name: t for t in (
           'production_date DESC, shift DESC, corrupt ASC', METRICS),
     Table('customers', 'Customers',
           'The customer dimension: forty invented customers and C000, the plant itself, for pallet sheets; no measures.',
-          'customer_id ASC', CONTRACT, dated=False),
+          'rowid ASC', CONTRACT, dated=False),
     Table('reject_reasons', 'The reject taxonomy',
           'One row per reason of the reject taxonomy (reject_reasons.json): its category, family, waste line and '
           'the positions it can be recorded at.',
-          'category ASC, reason ASC', CONTRACT, dated=False),
+          'rowid ASC', CONTRACT, dated=False),
 )}
 
 # ---- the columns: unit and meaning, each from the contract row the link names (tests/test_datapages.py holds the
@@ -498,10 +498,44 @@ def plain(value):
     return value
 
 
-def _select(table, filters, limit, offset=0):
+# Newest first is the reverse of the order the store wrote the rows in, which is production order (a test holds it), so
+# a page is two reads that never sort a wide row: the rowids of its rows (one integer column, top-N over the filter),
+# then the rows of that rowid range that pass the filter, which are exactly the page. A dimension reads in file order.
+def _direction(table):
+    return 'DESC' if TABLES[table].dated else 'ASC'
+
+
+def _span_sql(table, filters, limit, offset=0):
+    where, params = _where(table, filters)
+    sql = (f'SELECT min(r) AS lo, max(r) AS hi, count(*) AS n FROM (SELECT rowid AS r FROM {table}{where} '
+           f'ORDER BY rowid {_direction(table)} LIMIT ? OFFSET ?)')
+    return sql, params + [limit, offset]
+
+
+def _rows_sql(table, filters, lo, hi):
     names = ', '.join(f'"{name}"' for name, _ in TYPES[table])
     where, params = _where(table, filters)
-    sql = f'SELECT {names} FROM {table}{where} ORDER BY {TABLES[table].order} LIMIT ? OFFSET ?'
+    where = f'{where} AND rowid BETWEEN ? AND ?' if where else ' WHERE rowid BETWEEN ? AND ?'
+    return f'SELECT {names} FROM {table}{where} ORDER BY rowid {_direction(table)}', params + [lo, hi]
+
+
+def _read(store, table, filters, limit, offset=0):
+    """(rows, the queries that ran with their values): `limit` rows of the filter from `offset`, in page order."""
+    span_sql, span_params = _span_sql(table, filters, limit, offset)
+    span = store._fetch(span_sql, span_params, limit=1)[0]
+    ran = [(span_sql, span_params)]
+    if not span['n']:
+        return [], ran
+    rows_sql, rows_params = _rows_sql(table, filters, span['lo'], span['hi'])
+    rows = store._fetch(rows_sql, rows_params, limit=limit)
+    return rows, ran + [(rows_sql, rows_params)]
+
+
+def _select(table, filters, limit, offset=0):
+    """One plain read of a filter in page order (what a receipt link holds, for the tests)."""
+    names = ', '.join(f'"{name}"' for name, _ in TYPES[table])
+    where, params = _where(table, filters)
+    sql = f'SELECT {names} FROM {table}{where} ORDER BY rowid {_direction(table)} LIMIT ? OFFSET ?'
     return sql, params + [limit, offset]
 
 
@@ -536,8 +570,7 @@ def page(store, table, query):
     """GET /data/<table>.json?<filters>: the schema and one page of rows, newest first, with the SQL that ran."""
     started = time.perf_counter()
     filters, number = parse_filters(table, query)
-    sql, params = _select(table, filters, PER_PAGE, (number - 1) * PER_PAGE)
-    rows = store._fetch(sql, params, limit=PER_PAGE)
+    rows, ran = _read(store, table, filters, PER_PAGE, (number - 1) * PER_PAGE)
     where, bound = _where(table, filters)
     count_sql = f'SELECT count(*) AS n FROM {table}{where}'
     count = store._fetch(count_sql, bound, limit=1)[0]['n']
@@ -550,24 +583,25 @@ def page(store, table, query):
             'newer': table_url(table, filters, number - 1) if number > 1 else None,
             'older': table_url(table, filters, number + 1) if number < pages and number < MAX_PAGE else None,
             'csv': table_url(table, filters, suffix='.csv'), 'csv_limit': CSV_LIMIT,
-            'sql': sql, 'parameters': [plain(p) for p in params], 'count_sql': count_sql,
+            'sql': ';\n'.join(q for q, _ in ran), 'parameters': [[plain(p) for p in values] for _, values in ran], 'count_sql': count_sql, 'count_parameters': [plain(p) for p in bound],
             'window': {'first_day': store.first_day, 'last_day': store.last_day},
             'elapsed_ms': round((time.perf_counter() - started) * 1000, 2)}
 
 
 def csv_rows(store, table, query):
     """GET /data/<table>.csv?<filters>: the filtered rows, newest first, at most CSV_LIMIT. Returns (bytes, truncated).
-    Read CSV_CHUNK rows at a time, each read its own short hold of the store's lock, so a download never keeps the
-    tools waiting longer than a page does."""
+    One read of the filter's rowids (a single integer column), then the rows CSV_CHUNK at a time by rowid range: each read
+    its own short hold of the store's lock, so a download never keeps the tools waiting longer than a page does."""
     filters, _ = parse_filters(table, query)
+    where, params = _where(table, filters)
+    ids = [r['r'] for r in store._fetch(f'SELECT rowid AS r FROM {table}{where} ORDER BY rowid {_direction(table)} LIMIT ?',
+                                        params + [CSV_LIMIT + 1], limit=CSV_LIMIT + 1)]
+    truncated = len(ids) > CSV_LIMIT
     rows = []
-    while len(rows) <= CSV_LIMIT:
-        sql, params = _select(table, filters, CSV_CHUNK, len(rows))
-        chunk = store._fetch(sql, params, limit=CSV_CHUNK)
-        rows.extend(chunk)
-        if len(chunk) < CSV_CHUNK:
-            break
-    truncated = len(rows) > CSV_LIMIT
+    for at in range(0, min(len(ids), CSV_LIMIT), CSV_CHUNK):
+        chunk = ids[at:min(at + CSV_CHUNK, CSV_LIMIT)]
+        sql, bound = _rows_sql(table, filters, min(chunk), max(chunk))
+        rows.extend(store._fetch(sql, bound, limit=len(chunk)))
     out = io.StringIO()
     writer = csv.writer(out, lineterminator='\n')
     names = [name for name, _ in TYPES[table]]
