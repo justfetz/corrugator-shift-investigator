@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from investigator.agent import (GRADE_QUANTITIES, QUANTITY_HELP, QUANTITY_METRICS, SETUP_SPEED, Agent, Context, catch_all_guard,
+from investigator.agent import (GRADE_QUANTITIES, QUANTITY_HELP, QUANTITY_METRICS, SETUP_SPEED, WASTE_KEYS, Agent, Context, catch_all_guard,
                                 parse_request, question_scope, quantity_request, route, slug)
 from investigator.fixture import GRADES
 from investigator.records import STOP_PLACES, STOP_REASONS
@@ -59,6 +59,13 @@ AUDIT = [
     # the Codex review of PR 143: order change stops and their minutes are a stop reason; a kind's stop count
     'how many order change stops this week', 'how many minutes of order change stops this week',
     'how many minutes did order changes take this week', 'how many maintenance stops did we have yesterday',
+    # the coordinator's review of PR 143: qualified sheets, ratios in another unit, durations, the overview, area and percent
+    'how many reject sheets yesterday', 'how many bad sheets this week', 'how many sheets of warp this week', 'how many sheets per order this week',
+    'what was our minutes per setup last week', 'what was our msf per setup this week', 'how many minutes did setups take this week',
+    'what was our average setup time this week', 'how long did changeovers take this week', 'how long did knife jams take this week',
+    'how long were we down on shift 3', 'how many widgets on shift 2', 'how much scrap on shift 2', 'how many square feet of trim this week',
+    'how many sq ft of warp this week', 'how much waste in msf this week', 'what percent was shear this week', 'how much trim in msf this week',
+    'what percentage was dry-end rejects this week', 'how many setups did this shift run yesterday',
 ]
 # What a refusal of an audited question says: what can be asked instead.
 REFUSALS = (QUANTITY_HELP, 'Offline mode supports', SETUP_SPEED, 'one shift or all shifts together', 'Selected shift only')
@@ -114,13 +121,14 @@ def test_no_audited_question_lands_on_the_kpi_summary_and_each_opens_with_its_un
 
 def test_the_seven_rows_of_the_issue_land_on_one_quantity():
     """The issue's table, by row: the measure and the metric each lands on, and the scope it is answered in."""
-    rows = {'how many setups did we run last week': '/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups',
-            'how many paper changes last week': '/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=paper_changes',
-            'how many order changes this week': '/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=order_changes',
-            'what was our lineal per setup last week': '/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=lineal_per_setup',
+    # no shift named: every shift together (the coordinator's review of PR 143, item 7, pending the owner)
+    rows = {'how many setups did we run last week': '/corr/1/week/2026-09-07?measure=quantity&metric=setups',
+            'how many paper changes last week': '/corr/1/week/2026-09-07?measure=quantity&metric=paper_changes',
+            'how many order changes this week': '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=order_changes',
+            'what was our lineal per setup last week': '/corr/1/week/2026-09-07?measure=quantity&metric=lineal_per_setup',
             'how many minutes of maintenance downtime yesterday': '/corr/1/day/2026-09-11?measure=quantity&metric=maintenance_minutes',
             'how many stops did we have yesterday': '/corr/1/day/2026-09-11?measure=quantity&metric=stops',
-            'how many setups yesterday': '/corr/1/day/2026-09-11/shift/2?measure=quantity&metric=setups'}
+            'how many setups yesterday': '/corr/1/day/2026-09-11?measure=quantity&metric=setups'}
     for question, url in rows.items():
         assert landing(question)[0] == url, question
 
@@ -153,6 +161,11 @@ def test_the_router_refuses_a_quantity_it_cannot_place_rather_than_summarize():
     ('How many hours of downtime this month?', 'in minutes, not hours'), ('How many pallets did we ship?', 'no shipping'),
     ('How many stops on 55-C this week?', 'not by grade'), ('How many order changes on 275-BC this week?', 'not by grade'),
     ('How many setups on the single facer this week?', 'counted for the line'), ('How many sheets at the stacker this week?', 'counted for the line'),
+    ('How many reject sheets this week?', 'square feet by reason'), ('How many sheets of warp this week?', 'square feet by reason'),
+    ('What was our minutes per setup this week?', 'not a ratio the records keep'), ('How many sheets per order this week?', 'not a ratio the records keep'),
+    ('How many minutes did setups take this week?', 'setup matrix'), ('How long are our runs this week?', 'setup matrix'),
+    ('How much trim in MSF this week?', 'in square feet'), ('How many square feet did we make this week?', 'Square feet are kept for the waste lines'),
+    ('How many widgets on shift 2?', 'one quantity at a time'), ('How much scrap on shift 2?', 'one quantity at a time'),
 ])
 def test_a_count_the_records_do_not_hold_is_refused_with_what_can_be_counted(question, refusal):
     with pytest.raises(ValueError, match=refusal) as caught:
@@ -185,9 +198,10 @@ def test_every_quantity_has_one_canonical_address_in_every_grain():
     for grain, (period, anchor) in windows.items():
         for scope, shift in (('day', None), ('shift', 2)):
             context = Context(DAY, shift or 2, scope=scope, period=period)
-            leads = [{'metric': m} for m in QUANTITY_METRICS] + [{'metric': 'stops', 'reason': r} for r in STOP_REASONS] + \
+            leads = [{'metric': m} for m in QUANTITY_METRICS if not m.startswith('waste_')] + [{'metric': 'stops', 'reason': r} for r in STOP_REASONS] + \
                     [{'metric': 'downtime_minutes', 'place': p} for p in STOP_PLACES] + \
-                    [{'metric': m, 'grade': g} for m in GRADE_QUANTITIES for g in GRADES]
+                    [{'metric': m, 'grade': g} for m in GRADE_QUANTITIES for g in GRADES] + \
+                    [{'metric': m, 'waste': w} for m in ('waste_sqft', 'waste_pct') for w in WASTE_KEYS]
             for lead in leads:
                 request = quantity_request(lead, {'period': period, 'anchor': anchor}, shift)
                 url = canonical_url(request, context)
@@ -203,6 +217,10 @@ def test_every_quantity_has_one_canonical_address_in_every_grain():
                         (f'/corr/1/week/{DAY}?measure=quantity&metric=stops&grade=32-c', 'A grade takes metric=setups'),
                         (f'/corr/1/week/{DAY}?measure=quantity&metric=setups&grade=99-c', 'grade is one of'),
                         (f'/corr/1/week/{DAY}?measure=grade&grade=32-c', 'grade= does not apply'),
+                        (f'/corr/1/week/{DAY}?measure=quantity&metric=waste_sqft', 'takes waste='),
+                        (f'/corr/1/week/{DAY}?measure=quantity&metric=waste_pct&waste=glue', 'waste is one of'),
+                        (f'/corr/1/week/{DAY}?measure=quantity&metric=setups&waste=trim', 'takes waste='),
+                        (f'/corr/1/week/{DAY}?measure=waste&waste=trim', 'waste= does not apply'),
                         (f'/corr/1/week/{DAY}?measure=kpis&reason=missed-splice', 'reason= does not apply'),
                         (f'/corr/1/week/{DAY}?measure=pareto&place=stacker', 'place= does not apply')]:
         with pytest.raises(ValueError, match=reason):
@@ -210,18 +228,37 @@ def test_every_quantity_has_one_canonical_address_in_every_grain():
     assert slug('Knife / slitter jam') == 'knife-slitter-jam' and slug('Raw material (roll)') == 'raw-material-roll' and slug('Slitter/scorer') == 'slitter-scorer'
 
 
-def test_a_downtime_quantity_takes_the_owner_default_and_a_setup_count_keeps_the_controls():
-    """No shift and no window but yesterday: a downtime quantity is the previous production day across all shifts (#101),
-    as the downtime review is; a setup count is asked of the controls; a named shift or window keeps its own scope."""
+def test_a_quantity_with_no_shift_named_answers_every_shift_and_downtime_takes_the_owner_day():
+    """No shift named: one quantity answers every shift together, whatever the shift control says (the coordinator's review of
+    PR 143, item 7, pending the owner); a downtime quantity with no window but yesterday is also the previous production day
+    (#101). "This shift" or a named shift keeps the shift."""
     store = default_store()
     context = Context(DAY, 2, scope='shift', period='day')
     for question in ('How many stops did we have?', 'How many minutes of maintenance downtime yesterday?', 'How many missed splices yesterday?',
                      'What was our minutes per stop?'):
         moved = question_scope(question, context, store.production_days)
         assert (moved.scope, moved.production_day, moved.read.get('default')) == ('day', '2026-09-11', 'the previous production day, all shifts'), question
-    assert question_scope('How many setups did we run?', context, store.production_days) is context
-    assert question_scope('How many stops this week?', context, store.production_days) is context
-    assert question_scope('How many stops on shift 2 yesterday?', context, store.production_days).scope == 'shift'
+    for question, day in (('How many setups did we run?', DAY), ('How many stops this week?', DAY), ('How many setups yesterday?', '2026-09-11'),
+                          ('How many square feet of trim this week?', DAY)):
+        moved = question_scope(question, context, store.production_days)
+        assert (moved.scope, moved.production_day, moved.read.get('all_shifts')) == ('day', day, True), question
+    for question in ('How many setups did this shift run yesterday?', 'How many stops on shift 2 yesterday?', 'How many setups did our shift run?'):
+        assert question_scope(question, context, store.production_days).scope == 'shift', question
+    assert question_scope('Show setup matrix', context, store.production_days) is context   # not a quantity: the controls
+
+
+def test_the_runner_catches_the_wrong_answers_the_review_found():
+    """The rules in evals/run.py, held to the answers the router gave before the coordinator's review of PR 143: each would fail."""
+    assert catch_all_failures('How many widgets on shift 2?', '/corr/1/day/2026-09-14/shift/2?measure=overview')
+    assert catch_all_failures('How much scrap on shift 2?', '/corr/1/day/2026-09-14/shift/2?measure=overview')
+    assert catch_all_failures('How long were we down on shift 3?', '/corr/1/day/2026-09-14/shift/3?measure=overview')
+    assert not catch_all_failures('Why was this shift slow?', '/corr/1/day/2026-09-14/shift/2?measure=overview')
+    assert not catch_all_failures('Summarize performance, downtime and waste. Show supporting charts.', '/corr/1/day/2026-09-14/shift/2?measure=summary')
+    assert asked_unit_failures('What was our minutes per setup last week?', ['**7,212.6 ft per setup** · -401.8 vs 7,614.4 the week before'])
+    assert asked_unit_failures('How many square feet of trim this week?', ['**3.21%** of gross · +0.17 points'])
+    assert asked_unit_failures('What percent was shear this week?', ['**388,677 sq ft** of Side trim'])
+    assert asked_unit_failures('How much waste in MSF this week?', ['**5.04%** of gross'])
+    assert not asked_unit_failures('What was our lineal per setup last week?', ['**7,212.6 ft per setup** · -401.8 vs 7,614.4 the week before'])
 
 
 def test_order_changes_are_counted_beside_the_tiles_and_never_zero_for_a_missing_window():

@@ -45,9 +45,9 @@ PERIOD_SHAPES = {('get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown
 UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothing: `want=chart` changes their status
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
-QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank',
+QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'waste', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank',
                 'lens', 'want', 'rates', 'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'weeks', 'compare', 'against', 'shifts', 'rank',
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'waste', 'weeks', 'compare', 'against', 'shifts', 'rank',
                'lens', 'want', 'rates', 'corrupt', 'after')
 AGAINST = ('baseline', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; baseline is the default
 AGAINST_ALIASES = {'target': 'baseline'}   # before the owner's speed baseline (issue #101) the default was each grade's target
@@ -119,7 +119,7 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
             measure = 'quantity'
             lead = request['lead']
             params.append(('metric', lead['metric']))
-            params += [(key, slug(lead[key])) for key in ('reason', 'place', 'grade') if key in lead]
+            params += [(key, slug(lead[key])) for key in ('reason', 'place', 'grade', 'waste') if key in lead]
         elif tools in PERIOD_SHAPES:
             measure = 'summary' if request.get('intent') == 'period_summary' else PERIOD_SHAPES[tools]
             if measure in ('overview', 'summary'):
@@ -278,7 +278,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
                 raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
             raise
         request['asked'] = _wants(fields.get('want'))
-    for key in ('by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'weeks', 'window', 'compare', 'against', 'rank', 'lens'):
+    for key in ('by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'waste', 'weeks', 'window', 'compare', 'against', 'rank', 'lens'):
         if key in fields and key not in _used(measure, fields):
             hint = ''
             if key == 'compare':
@@ -331,7 +331,7 @@ def _used(measure, fields):
     if measure == 'speedvar':
         return {'window', 'against'}
     if measure == 'quantity':
-        return {'window', 'metric', 'reason', 'place', 'grade'}
+        return {'window', 'metric', 'reason', 'place', 'grade', 'waste'}
     if measure in STORE_MEASURES:
         return {'window'}
     return set()
@@ -495,11 +495,12 @@ def _request(measure, fields, context, window):
 def _quantity(fields, shifts, context, window):
     """`measure=quantity&metric=…` (issue #113): one count or unit over the window, one shift or all shifts, opening
     with the quantity asked; `reason=` or `place=` (a slug: `missed-splice`, `splicer-3`) narrows stops or downtime
-    minutes to one stop reason or place, `grade=` (`32-c`) setups, paper changes or lineal feet to one board grade."""
+    minutes to one stop reason or place, `grade=` (`32-c`) setups, paper changes or lineal feet to one board grade, and
+    `waste=` (`trim`, `dry-end`) names the waste line of `metric=waste_sqft` or `waste_pct`."""
     metric = fields.get('metric')
     if metric not in QUANTITY_METRICS:
         raise ValueError('metric is one of ' + ', '.join(QUANTITY_METRICS) + ' for measure=quantity')
-    lead = {'metric': metric, **{key: unslug(fields[key], key) for key in ('reason', 'place', 'grade') if key in fields}}
+    lead = {'metric': metric, **{key: unslug(fields[key], key) for key in ('reason', 'place', 'grade', 'waste') if key in fields}}
     if context.scope == 'shift':
         shift = context.shift
     elif len(shifts) > 1:

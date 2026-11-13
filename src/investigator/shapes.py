@@ -875,7 +875,8 @@ class PeriodAnswer:
             'period_stops': ('get_stops_profile',), 'period_trend': ('get_trend',), 'period_rollstock': ('get_rollstock',),
             'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',),
             'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',),
-            'period_quantity': ('get_period_kpis', 'get_downtime_review', 'get_downtime_pareto', 'get_overrun', 'get_grade_totals')}
+            'period_quantity': ('get_period_kpis', 'get_downtime_review', 'get_downtime_pareto', 'get_overrun', 'get_grade_totals',
+                                'get_waste_breakdown')}
 
     KPI_TOOLS = ('get_period_kpis', 'compare_periods')
     USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
@@ -1427,8 +1428,9 @@ class PeriodAnswer:
     # previous window and the band; the tiles it is read from (or the reasons, or the knives) follow, the rest folded
     QUANTITY_WORDS = {'setups': 'setups', 'paper_changes': 'paper changes', 'order_changes': 'order changes', 'stops': 'stops',
                       'lineal_ft': 'lineal ft', 'lineal_per_setup': 'ft per setup', 'lineal_per_paper_change': 'ft per paper change',
-                      'downtime_minutes': 'minutes', 'minutes_per_stop': 'minutes per stop'}
-    QUANTITY_PLACES = {'lineal_ft': 0, 'lineal_per_setup': 1, 'lineal_per_paper_change': 1, 'downtime_minutes': 1, 'minutes_per_stop': 2}
+                      'downtime_minutes': 'minutes', 'minutes_per_stop': 'minutes per stop', 'bale_msf': 'MSF'}
+    QUANTITY_PLACES = {'lineal_ft': 0, 'lineal_per_setup': 1, 'lineal_per_paper_change': 1, 'downtime_minutes': 1, 'minutes_per_stop': 2,
+                       'bale_msf': 1}
     QUANTITY_RELATED = {'setups': ('paper_changes', 'lineal_per_setup', 'lineal_ft'),
                         'paper_changes': ('setups', 'lineal_per_paper_change', 'lineal_ft'),
                         'order_changes': ('setups', 'paper_changes', 'lineal_per_setup'),
@@ -1437,7 +1439,8 @@ class PeriodAnswer:
                         'lineal_ft': ('volume_msf', 'speed_all_fpm', 'lineal_per_setup'),
                         'stops': ('downtime_minutes', 'minutes_per_stop', 'downtime_pct'),
                         'downtime_minutes': ('stops', 'minutes_per_stop', 'downtime_pct'),
-                        'minutes_per_stop': ('stops', 'downtime_minutes', 'downtime_pct')}
+                        'minutes_per_stop': ('stops', 'downtime_minutes', 'downtime_pct'),
+                        'bale_msf': ('bale_pct', 'unexplained_pct', 'volume_msf')}
     QUANTITY_FOLDED = ('volume_msf', 'speed_all_fpm', 'downtime_pct', 'trim_pct', 'dry_end_pct')
     QUANTITY_NOTES = {
         'setups': 'A setup is a dry-end record: one that runs on across a shift change is counted in both shifts (a shift split).',
@@ -1445,7 +1448,8 @@ class PeriodAnswer:
                          'and continuations are setup records no new order started.',
         'paper_changes': 'A paper change is a wet-end run: the distinct wet ends the setups of the window ran on.',
         'stops': 'Every recorded stop is counted: planned maintenance and external downtime too.',
-        'downtime_minutes': 'Every recorded stop is counted: planned maintenance and external downtime too.'}
+        'downtime_minutes': 'Every recorded stop is counted: planned maintenance and external downtime too.',
+        'bale_msf': 'The bale is a scale reading of the waste baled: trim, shear and rejects together, and what the records do not explain.'}
     BEFORE = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before', 'fiscal': 'the period before'}
 
     def qnum(self, metric, value):
@@ -1475,6 +1479,8 @@ class PeriodAnswer:
             return self.quantity_of_sheets(q)
         if q['tool'] == 'get_grade_totals':
             return self.quantity_of_grade(q)
+        if q['tool'] == 'get_waste_breakdown':
+            return self.quantity_of_waste(q)
         return self.quantity_of_tiles(q)
 
     def quantity_of_tiles(self, k):
@@ -1487,7 +1493,7 @@ class PeriodAnswer:
                     f' {ref(k)}')
         else:
             i, row = self.metric(k, metric)
-            noun = ' of downtime' if metric == 'downtime_minutes' else ''
+            noun = {'downtime_minutes': ' of downtime', 'bale_msf': ' of baled waste'}.get(metric, '')
             head = (f'**{self.qnum(metric, row["current"])} {words}**{noun}{where} · '
                     f'{self.qchange(metric, row["current"], row["previous"], row["delta"], row["change"], data)}{band(row.get("band_text"))} {ref(k, i)}')
         related = self.QUANTITY_RELATED[metric]
@@ -1498,6 +1504,8 @@ class PeriodAnswer:
         sfx = self.sfx(data)
         if metric in ('stops', 'downtime_minutes', 'minutes_per_stop'):
             looks = self.window_looks(data, ('pareto', 'stops', 'trend_downtime'))
+        elif metric == 'bale_msf':
+            looks = self.window_looks(data, ('waste', 'trend_trim', 'grade'))
         else:
             looks = []
             if data['window']['period'] == 'day' and getattr(self.context, 'period', 'day') == 'day':
@@ -1583,6 +1591,32 @@ class PeriodAnswer:
                  'shift change is counted in both shifts.',
                  "The totals by grade carry the previous window's volume, not its setups, paper changes or lineal feet."]
         return head, bullets, notes, self.window_looks(data, ('grade', 'speed', 'rollstock'))
+
+    def quantity_of_waste(self, w):
+        """One waste line in square feet or as a percent (get_waste_breakdown): a dry-end line as a percent of the yield after trim and
+        shear (the owner's denominator, issue #101), any other of gross; the previous window beside, the other lines after it."""
+        data, rows, metric = w['data'], w['data']['rows'], self.lead['metric']
+        where, before = self.where(data), self.BEFORE.get(data['window']['period'], 'the window before')
+        i = next((j for j, r in enumerate(rows) if r['category'] == self.lead.get('waste')), None)
+        if i is None:
+            return f'No waste recorded in this window{where} {ref(w)}', [], [], self.window_looks(data, ('waste',))
+        r = rows[i]
+        yield_based = r.get('pct_of_yield') is not None
+        share = (f'{pval(r["pct_of_yield"])}% of the yield after trim and shear' if yield_based else f'{pval(r["pct_of_gross"])}% of gross')
+        if metric == 'waste_sqft':
+            previous = f'{f0(r["previous_sqft"])} sq ft {before}' if r.get('previous_sqft') is not None else 'previous unavailable'
+            head = f'**{f0(r["sqft"])} sq ft** of {r["label"]}{where} · {share} · {previous}{band(r.get("band_text"))} {ref(w, i)}'
+        else:
+            key = 'pct_of_yield' if yield_based else 'pct_of_gross'
+            base = 'the yield after trim and shear' if yield_based else 'gross'
+            previous = f'previous {pval(r["previous_" + key])}%' if r.get('previous_' + key) is not None else 'previous unavailable'
+            head = (f'**{pval(r[key])}%** of {base} in {r["label"]}{where}{band(r.get("band_text"))} · {f0(r["sqft"])} sq ft · {previous} {ref(w, i)}')
+        bullets = [bullet(f'{x["label"]}: **' + (f'{f0(x["sqft"])} sq ft** · {pval(x["pct_of_gross"])}% of gross' if metric == 'waste_sqft' else
+                                                 f'{pval(x["pct_of_gross"])}%** of gross · {f0(x["sqft"])} sq ft'), w, j)
+                   for j, x in enumerate(rows) if j != i and x['category'] not in ('bale', 'unexplained', 'dry_end')][:3]
+        notes = ['Bale is a scale reading; unexplained is bale minus trim, shear and rejects.'] + (
+            ['Dry-end rejects are a percent of the yield after trim and shear, the owner\'s denominator.'] if yield_based else [])
+        return head, bullets, notes, self.window_looks(data, ('waste', 'grade', 'trend_trim' if r['category'] == 'trim' else 'trend_dry_end'))
 
     def quantity_of_sheets(self, o):
         """Sheets cut across all knives (get_overrun), each knife after them."""

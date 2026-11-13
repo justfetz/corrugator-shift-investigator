@@ -115,9 +115,14 @@ QUANTITY_NOUN = re.compile(r'\b(set-?ups?|paper changes?|order changes?|changeov
                            r'|\bper (set-?up|paper change|stop|wet[- ]end)\b', re.I)
 ASKED_UNIT = re.compile(r'\b(minutes|mins|hours?|hrs?|feet|ft|footage|msf|sq ft|square feet|tons?|percent|costs?|dollars?|money)\b|[%$]', re.I)
 COUNT_ASKED = r'\b(?:how many|number of|count of|total)\b.*'
+# A ratio is in the unit it names ("minutes per setup" is not feet per setup); a bare "per setup" is the run length in feet.
+NAMED_PER = r'\b(minutes|mins|msf|sq ft|square feet|sheets|stops|hours)\s+per\s+(set-?up|paper change|wet[- ]end|order)\b'
 ASKED_UNITS = ((r'\bminutes per stop\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
-               (r'\b(?:lineal|feet|ft) per (?:paper change|wet[- ]end)\b|\bper paper change\b', r'\bft(?: per |/)paper change\b'),
-               (r'\b(?:lineal|feet|ft) per set-?up\b|\bper set-?up\b', r'\bft(?: per |/)setup\b'),
+               (r'\b(?:lineal|feet|ft|footage) per (?:paper change|wet[- ]end)\b|(?<!minutes )(?<!msf )\bper paper change\b', r'\bft(?: per |/)paper change\b'),
+               (r'\b(?:lineal|feet|ft|footage) per set-?up\b|(?<!minutes )(?<!mins )(?<!msf )(?<!sheets )(?<!stops )\bper set-?up\b', r'\bft(?: per |/)setup\b'),
+               (r'\bsquare f(?:ee|oo)t\b|\bsq\.? ?ft\b|\bsqft\b', r'\bsq ft\b'),
+               (r'\bpercent(?:age)?\b|%', r'%'),
+               (r'\bin msf\b|\bhow (?:many|much) msf\b', r'\bMSF\b'),
                (r'\bhow many (?:minutes|mins)\b|\b(?:minutes|mins) (?:of|did|were|was|lost)\b|\bin minutes\b|\btotal (?:downtime )?minutes\b', r'\bmin(?:utes)?\b'),
                (COUNT_ASKED + r'\b(?:order changes?(?!\s+(?:stops?|downtime|minutes)\b)|changeovers?)\b', r'\border changes\b'),   # order change stops are stops
                (COUNT_ASKED + r'\b(?:paper changes?|wet[- ]ends?)\b', r'\bpaper changes\b'),
@@ -128,10 +133,17 @@ ASKED_UNITS = ((r'\bminutes per stop\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
 
 
 def catch_all_failures(question, url):
-    """A question naming a countable noun or a unit, or asking "how many" of anything, that resolved to the KPI summary (issue #113)."""
+    """A question naming a countable noun or a unit, or asking "how many" of anything, that resolved to the KPI summary; or a
+    quantity asked ("how many", "how much", "how long", a unit) that resolved to the overview or the summary, which answer "why
+    was it slow" and "summarize" (issue #113; the coordinator's review of PR 143, item 5)."""
     named = QUANTITY_NOUN.search(question) or ASKED_UNIT.search(question) or re.search(r'\b(how many|number of|count of)\b', question, re.I)
     if named and re.search(r'[?&]measure=kpis(&|$)', url or ''):
         return [f'{question[:60]!r} names {named[0]!r} but lands on the KPI summary (measure=kpis): a quantity question '
+                'opens with its quantity or is refused']
+    asked = re.search(r'\b(how many|number of|count of|how much|how long)\b', question, re.I) or ASKED_UNIT.search(question)
+    diagnosis = re.search(r'\bwhy\b|\bslow\w*\b|\bbad\b|\bkilled\b|\bsummar', question, re.I)
+    if asked and not diagnosis and re.search(r'[?&]measure=(overview|summary)(&|$)', url or ''):
+        return [f'{question[:60]!r} asks {asked[0]!r} but lands on a summary (overview or summary): a quantity question '
                 'opens with its quantity or is refused']
     return []
 
@@ -139,7 +151,9 @@ def catch_all_failures(question, url):
 def asked_unit_failures(question, sections):
     """A count or unit question whose headline (the first section with a bold figure that is not a bullet, else the
     first section) does not carry the unit it asked for (issue #113)."""
-    want = next((unit for ask, unit in ASKED_UNITS if re.search(ask, question, re.I)), None)
+    named = re.search(NAMED_PER, question, re.I)
+    want = (rf'\b{named[1]} per {named[2]}' if named else
+            next((unit for ask, unit in ASKED_UNITS if re.search(ask, question, re.I)), None))
     if want is None or not sections:
         return []
     head = next((s for s in sections if '**' in s and not s.startswith('- ')), sections[0])

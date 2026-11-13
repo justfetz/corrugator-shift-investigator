@@ -95,7 +95,7 @@ def ids(line=LINE, session=SESSION):
 
 def test_a_question_and_its_answer_are_two_lines_with_these_fields(public):
     status, result = ask(public, 'how many setups did we run last week', ids())
-    assert status == 200 and result['url'] == '/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups'   # issue #113
+    assert status == 200 and result['url'] == '/corr/1/week/2026-09-07?measure=quantity&metric=setups'   # issue #113: no shift named, all shifts
     question, answer = lines(public, 2)
     assert set(question) == QUESTION_KEYS and set(answer) == ANSWER_KEYS
     assert question['log'] == answer['log'] == 'question_log' and question['v'] == 1
@@ -103,7 +103,7 @@ def test_a_question_and_its_answer_are_two_lines_with_these_fields(public):
     assert question['line'] == answer['line'] == LINE and question['session'] == answer['session'] == SESSION
     assert question['question'] == 'how many setups did we run last week' and question['truncated'] is False
     assert question['scope'] == {'day': '2026-09-14', 'shift': 2, 'scope': 'shift', 'period': 'day', 'corrupt': False}
-    assert question['url'] == answer['url'] == '/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups'
+    assert question['url'] == answer['url'] == '/corr/1/week/2026-09-07?measure=quantity&metric=setups'
     assert question['measure'] == answer['measure'] == 'quantity'
     assert question['status'] == 'routed' and answer['status'] == 'complete' and question['refusal'] is None
     assert question['flags'] == ['scope_moved']   # the #113 example, asked with a day on the rail: its count since #113, no catch-all

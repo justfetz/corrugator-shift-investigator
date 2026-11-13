@@ -75,12 +75,15 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
 - **the catch-all guard**: a question that names a countable noun (setups, paper changes, order changes, stops,
   splices, step-ups, rolls, sheets, boards, orders, customers, a per-setup or per-paper-change ratio), a stop reason or
   place, a board grade, or asks for a unit (minutes, hours, feet, MSF, square feet, tons, percent, dollars or cost),
-  or asks "how many" of anything, never resolves to the KPI summary, `measure=kpis` (checked on
+  or asks "how many" of anything, never resolves to the KPI summary, `measure=kpis`; and a quantity asked ("how many",
+  "how much", "how long", a unit) never resolves to the overview or the summary either, unless it asks why or to
+  summarize (checked on
   the `GET /q` redirect of every case, live ones included). The KPI summary is for "how did we do".
 - **the unit asked opens the answer**: a count or unit question ("how many setups", "number of paper changes", "how
   many minutes of …", "minutes per stop", "feet per setup", "how many lineal feet") carries that unit in its headline
   (the first section with a bold figure that is not a bullet): setups, paper changes, order changes, stops (missed
-  splices are stops), sheets, minutes (or min), ft per setup (or ft/setup), ft per paper change, minutes per stop, lineal ft.
+  splices are stops), sheets, minutes (or min), ft per setup (or ft/setup), ft per paper change, minutes per stop, lineal ft,
+  sq ft, a percent, MSF; a ratio in the unit it names ("minutes per setup" wants minutes per setup, never feet per setup).
 
 `tests/test_quantity_questions.py` runs both over the issue's catch-all audit as well: the issue's seven rows, the owner's
 interview phrasings and every count or unit phrasing that landed on the KPI summary before; each lands on a measure that
