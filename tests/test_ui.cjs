@@ -38,15 +38,17 @@ elements.mode.querySelector=()=>null;
 // Public demo: with the server's model available the default stays offline (issue #42) and the model is a choice; without it the OpenAI option is gone and offline is forced.
 vm.runInContext("config={public:true,live_model_available:true,days:['2026-09-01','2026-09-30'],token:'t'};applyPublicMode()",context);assert.equal(elements.mode.value,'offline');assert.equal(elements['key-label'].hidden,true);assert.match(elements['mode-badge'].textContent,/model available/);
 elements.mode.value='openai';vm.runInContext("config={public:true,live_model_available:false,days:['2026-09-01','2026-09-30'],token:'t'};applyPublicMode()",context);assert.equal(elements.mode.value,'offline');assert.equal(elements.mode.disabled,true);
-vm.runInContext("config={days:['2026-09-01','2026-09-30'],token:'test'}",context);elements.mode.disabled=false;elements.mode.value='offline';
+// the owner's bands as /api/config serves them (targets.client_config): a tile whose row has no band is read against them
+const TARGETS=Object.fromEntries(JSON.parse(fs.readFileSync('src/investigator/targets.json','utf8')).bands.map(b=>[b.id,{home_run:b.home_run,target:b.target,flag:b.flag,unit:b.unit}]));
+vm.runInContext(`config={days:['2026-09-01','2026-09-30'],token:'test',targets:${JSON.stringify(TARGETS)}}`,context);elements.mode.disabled=false;elements.mode.value='offline';
 const row={observed_shift_fpm:600,speed_to_target_pct:75,valid_setups:60,paper_changes:30,maintenance_pct:3,operator_pct:1,dry_end_pct:1.2,trim_pct:2,shear_pct:.5,throughput_in:94,lineal_per_setup:4800};
 context.result={run_id:'test',session_id:'session',production_day:'2026-09-14',selected_shifts:[2],mode:'offline',status:'complete',context:{shift:2},usage:{tool_calls:1,model_calls:0},trace:[{tool:'get_shift_kpis',ok:true,elapsed_ms:1,data:{shift:2,coverage:'complete',rows:[row]}}],tables:[{title:'get_shift_notes',shift:2,coverage:'complete',rows:[{notes:'<script>untrusted</script>'}]}],charts:[{title:'Output heatmap',type:'calendar_heatmap',coverage:'complete',unit:'estimated good sq ft',rows:[{day:'2026-09-14',available:true,estimated_good_sqft:1000000,gross_sqft:1020000,speed_to_target_pct:75,downtime_pct:4,maintenance_pct:3,operator_pct:1,dry_end_pct:1.2,trim_pct:2,shear_pct:.5,paper_changes:27,valid_setups:60,heavy_hitter:'Upper knife / Knife jam',heavy_hitter_minutes:12,heavy_hitter_stops:3}]},{shift:2,coverage:'complete',unit:'ft/min',x:'wet_end_id',y:'actual_fpm',rows:[{wet_end_id:'W2-01',actual_fpm:600,target_fpm:800,speed_to_target_pct:75,grade:'200-C'}]}]};
 const first=context.result.charts[0].rows[0];
 context.result.charts[0].rows.push({...first,day:'2026-09-15',estimated_good_sqft:1500000},{...first,day:'2026-09-16',estimated_good_sqft:2000000},{day:'2026-09-17',available:false});
 vm.runInContext('showResult(result)',context);assert.equal(elements.metrics.children.length,7);assert.equal(elements.tables.children.length,1);assert.equal(elements.charts.children.length,1);
 // issue #63: the eleven numbers of the KPI row sit on seven tiles, one row of the card (value, unit, and a second number beneath)
-assert.deepEqual(elements.metrics.children.map(t=>[t.children[0].textContent,t.children[1].children.map(c=>c.textContent).join(' '),t.children[2].textContent]),[['Speed','600.0 ft/min','75.0% of target'],['Maintenance','3.00 %','target 2.5%'],['Operator','1.00 %','target 2.5%'],['Dry-end waste','1.20 %','above 1%'],['Trim','2.00 %','shear 0.50%'],['Setups','60','30 paper changes'],['Throughput','94.0 in','4,800 ft / setup']]);
-assert.deepEqual(elements.metrics.children.filter(t=>/flag/.test(t.children[2].className)).map(t=>t.children[0].textContent),['Speed','Maintenance','Dry-end waste']);   // under target, over 2.5%, over 1%
+assert.deepEqual(elements.metrics.children.map(t=>[t.children[0].textContent,t.children[1].children.map(c=>c.textContent).join(' '),t.children[2].textContent]),[['Speed','600.0 ft/min','75.0% of target'],['Maintenance','3.00 %','flag: over 2.5%'],['Operator','1.00 %','on target (2.5% or under)'],['Dry-end waste','1.20 %','of yield · over the 1% target, under the 1.25% flag'],['Trim','2.00 %','shear 0.50%'],['Setups','60','30 paper changes'],['Throughput','94.0 in','4,800 ft / setup']]);
+assert.deepEqual(elements.metrics.children.filter(t=>/flag/.test(t.children[2].className)).map(t=>t.children[0].textContent),['Speed','Maintenance','Dry-end waste']);   // under target, over 2.5%, over the 1% target
 vm.runInContext('showResult(result)',context);assert.equal(elements.charts.children.length,1);assert.equal(elements.tables.children.length,1);assert.equal(elements.trace.children.length,1);   // a second answer replaces the first one's evidence, never stacks on it
 const heatmap=elements.heatmaps.children[0];
 const cells=heatmap.children.find(e=>e.className==='heatmap-grid').children.filter(e=>e.tag==='button');
@@ -182,7 +184,7 @@ assert.ok(!marks.some(e=>/Includes downtime/.test((e.textContent||'')+(e['aria-l
 // Speed variance (issue #92): a waterfall from the reference speed through each bucket to the speed with stops;
 // a loss bar steps left in the warm series, an offset right in the cool one, and the two ends are level marks.
 elements.charts.replaceChildren();
-vm.runInContext(`showChart({type:'waterfall',title:'Speed gap by contributor (ft/min): week against shift 1 (shift 3)',shift:3,coverage:'complete',unit:'ft/min',x:'label',y:'gap_fpm',start:615.8,end:571.2,gap:44.62,start_label:'Shift 1',end_label:'Shift 3',rows:[{bucket:'below_target',label:'Below target',gap_fpm:60.15,share_of_gap_pct:134.8,top_item:'275-BC',top_item_fpm:12.79},{bucket:'mix',label:'Grade mix',gap_fpm:27.37,share_of_gap_pct:61.3,top_item:'275-BC',top_item_fpm:14.22},{bucket:'setups',label:'Setups',gap_fpm:-2.33,share_of_gap_pct:-5.2,top_item:'32-C',top_item_fpm:-1.1},{bucket:'stops',label:'Stops',gap_fpm:-40.57,share_of_gap_pct:-90.9,top_item:'Planned maintenance',top_item_fpm:-33.5}]})`,context);
+vm.runInContext(`showChart({type:'waterfall',title:'Speed gap by contributor (ft/min): week against shift 1 (shift 3)',shift:3,coverage:'complete',unit:'ft/min',x:'label',y:'gap_fpm',start:615.8,end:571.2,gap:44.62,start_label:'Shift 1',end_label:'Shift 3',rows:[{bucket:'below_baseline',label:'Below baseline',gap_fpm:60.15,share_of_gap_pct:134.8,top_item:'275-BC',top_item_fpm:12.79},{bucket:'mix',label:'Grade mix',gap_fpm:27.37,share_of_gap_pct:61.3,top_item:'275-BC',top_item_fpm:14.22},{bucket:'setups',label:'Setups',gap_fpm:-2.33,share_of_gap_pct:-5.2,top_item:'32-C',top_item_fpm:-1.1},{bucket:'stops',label:'Stops',gap_fpm:-40.57,share_of_gap_pct:-90.9,top_item:'Planned maintenance',top_item_fpm:-33.5}]})`,context);
 marks=walk(elements.charts);
 assert.equal(marks.filter(e=>e.class==='bar loss').length,2);assert.equal(marks.filter(e=>e.class==='bar offset').length,2);
 assert.equal(marks.filter(e=>e.class==='level').length,2);assert.equal(marks.filter(e=>e.class==='connector').length,5);
@@ -318,6 +320,11 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  const link=lookList.children[0].children[2];assert.equal(link.className,'look-q');assert.equal(link.textContent,'“Show the setup matrix”');
  assert.ok(link.href.startsWith('/q?day=2026-09-14&shift=2&scope=shift&period=day&q=Show+the+setup+matrix'),link.href);   // an address: a modifier click opens it in a new tab
  link.events.click({preventDefault(){}});assert.deepEqual(asked.map(a=>[a[0],a[1].mode,a[1].scope]),[['Show the setup matrix','offline',rec.scope]]);   // a plain click asks it offline, in the card's scope
+ // a card whose question moved the controls (the owner's downtime default, review of #111: asked on Monday, shift 2; answered
+ // Friday, all shifts) asks its looks in the scope it answered, so "Show the shift notes for shift 2" opens Friday's notes
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext(`lookScope({scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},result:{context:{production_day:'2026-09-11',shift:2,scope:'day'}}})`,context))),{day:'2026-09-11',shift:2,scope:'day',period:'day'});
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext(`lookScope({scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},result:{context:{production_day:'2026-08-31',shift:2,scope:'shift',period:'fiscal'}}})`,context))),{day:'2026-08-31',shift:2,scope:'shift',period:'accounting'});
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext(`lookScope({scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'}})`,context))),{day:'2026-09-14',shift:2,scope:'shift',period:'day'});   // no answer yet: the asked scope
  // what a reader sees is the sections without their two markers, word for word and in order
  assert.deepEqual([textOf(head),...list.children.map(textOf),textOf(label),...subs.children.map(textOf),textOf(caveat),textOf(lookLabel),...lookList.children.map(textOf)],sections.map(strip));
  vm.runInContext('ask=__ask',context);
@@ -1162,6 +1169,87 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  console.log('UI issue-86 checks passed: no page scroll, follow while filling (bottom, then title line), stop on scroll-up with the ↓ new pill, resume on click or scroll-down, never up on its own, asking always shows the new card, earlier cards whole with their own ids, Enter / Shift+Enter / slash, nothing disabled, no new fetch on the hot path, small trackpad steps up never pulled back, reload replays the thread by GET without /api/ask within a share of the rate limit.');
 })().catch(error=>{console.error(error);process.exit(1);});
 
+// ---- issue #25: the narrative judge. The grading page lists the recorded narratives, saves one grade with the token,
+// never fetches the judge's scores (the owner's grades stay unanchored), and /evals draws the judge's table.
+(async()=>{
+ class El extends Element{constructor(tag){super(tag);const cls=new Set();this.classList={add:c=>cls.add(c),has:c=>cls.has(c)};}insertBefore(item,ref){const i=this.children.indexOf(ref);this.children.splice(i<0?this.children.length:i,0,item);}}
+ const page=fs.readFileSync('src/investigator/web/grade.html','utf8'), src=fs.readFileSync('src/investigator/web/grade.js','utf8');
+ const els=Object.fromEntries([...page.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1])]));
+ for(const value of ['todo','all']){const b=new El('button');b.dataset.value=value;els['show-filter'].children.push(b);}
+ const rubric=['grounded','recorded_not_proven','prescribes_nothing','unavailable_not_zero','comparisons_consistent'].map(key=>({key,name:key,criterion:'c '+key,steps:['s1','s2','Score 1 or Score 0']}));
+ const item=(id,grade,stale=false)=>({id,run:id.split(':')[0],turn:1,source:'recorded anthropic',question:'Why was this shift slow?',scope:'production day 2026-09-14, shift 2',
+  narrative:['Finding: Shift 2 ran at 89.04 of its speed target. (cites r1 row 0 speed_to_target_pct)','Check: Ask the crew whether the paper changes were planned.'],digest:'d-'+id,
+  evidence:['r1 get_shift_overview(shift=2) -> {"rows":[{"speed_to_target_pct":89.0443}]}'],grade,stale});
+ const done={id:'b@anthropic:1',digest:'d-b@anthropic:1',verdict:'good',grounded:true,recorded_not_proven:true,prescribes_nothing:true,unavailable_not_zero:true,note:'',graded_at:'2026-11-11T10:00:00Z'};
+ const listing={rubric,target:20,target_text:'20 once the live recordings are re-recorded (#71)',graded:2,set_aside:1,file:'evals/judge_calibration.json',narratives:[item('a@anthropic:1',null),item('b@anthropic:1',done),item('c@anthropic:1',{...done,id:'c@anthropic:1',digest:'old'},true)]};
+ const calls=[], gradedIds=new Set(['b@anthropic:1','c@anthropic:1']), staleIds=new Set(['c@anthropic:1']);
+ const fetchStub=async(path,init)=>{
+  calls.push([init&&init.method||'GET',path,init&&init.body?JSON.parse(init.body):null,init&&init.headers?init.headers['X-Workbench-Token']:undefined]);
+  if(path==='/api/evals/narratives')return {ok:true,status:200,json:async()=>listing};
+  if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'tok',public:false})};
+  const body=JSON.parse(init.body);
+  if(!body.note.trim())return {ok:false,status:400,json:async()=>({error:'Say why: the reason is what fixes the rubric when the judge disagrees'})};
+  gradedIds.add(body.id); staleIds.delete(body.id);   // the server's counts: every saved grade, and those set aside
+  return {ok:true,status:200,json:async()=>({saved:{...body,graded_at:'2026-11-11T20:00:00Z'},graded:gradedIds.size,set_aside:staleIds.size,target:20})};
+ };
+ const doc={getElementById:id=>{assert.ok(els[id],`Unknown grade control ${id}`);return els[id];},createElement:tag=>new El(tag)};
+ const ctx={document:doc,fetch:fetchStub,window:{},console};
+ vm.createContext(ctx);vm.runInContext(src,ctx);await vm.runInContext('ready',ctx);
+ const all=(el,out=[])=>{for(const c of el.children||[]){out.push(c);all(c,out);}return out;};
+ // every saved grade is counted, as /evals counts them; the stale one is set aside; the target waits on re-recording (#71)
+ assert.equal(els.progress.textContent,'2 graded · target 20 once the live recordings are re-recorded (#71) · 3 narratives to choose from · 1 set aside (text changed, or not replayable now)');
+ assert.equal(els.rubric.children.length,5);
+ const [a,b,c]=els.items.children;
+ assert.deepEqual([a.hidden,b.hidden,c.hidden],[false,true,false]);                  // "To grade" hides a current grade, keeps a stale one
+ assert.ok(all(c).some(e=>/graded an earlier version of this text on 2026-11-11/.test(e.textContent)));
+ els['show-filter'].children[1].events.click();assert.deepEqual(els.items.children.map(x=>x.hidden),[false,false,false]);
+ assert.ok(all(a).some(e=>e.textContent==='Finding: Shift 2 ran at 89.04 of its speed target. (cites r1 row 0 speed_to_target_pct)'));
+ assert.ok(all(a).some(e=>e.tag==='pre'&&/get_shift_overview/.test(e.textContent)));      // the evidence it was written from
+ const boxes=all(a).filter(e=>e.tag==='input'), [good,bad]=all(a).find(e=>e.dataset&&e.children.length===2&&e.children[0].dataset.value==='good').children;
+ const save=all(a).find(e=>e.tag==='button'&&e.textContent==='Save grade'), note=all(a).find(e=>e.tag==='textarea');
+ assert.equal(boxes.length,5);
+ boxes.forEach(x=>{x.checked=false;}); good.events.click(); assert.ok(boxes.every(x=>x.checked));   // good ticks every line
+ bad.events.click(); boxes[2].checked=false; await save.events.click();
+ assert.match(all(a).find(e=>e.className==='muted'&&/Say why/.test(e.textContent)).textContent,/^Say why/);   // refused without a reason
+ note.value='It tells the crew what to compare.'; await save.events.click();
+ const posted=calls.filter(x=>x[0]==='POST');
+ assert.deepEqual(posted[posted.length-1],['POST','/api/evals/grade',{id:'a@anthropic:1',digest:'d-a@anthropic:1',verdict:'bad',note:'It tells the crew what to compare.',grounded:true,recorded_not_proven:true,prescribes_nothing:false,unavailable_not_zero:true,comparisons_consistent:true},'tok']);
+ assert.match(els.progress.textContent,/^3 graded · target 20 once .* · 1 set aside/);
+ // regrading a stale one clears its "earlier version" warning; the card stays in view until the filter is applied again
+ const staleNote=all(c).find(e=>/graded an earlier version/.test(e.textContent)); assert.equal(Boolean(staleNote.hidden),false);
+ all(c).find(e=>e.tag==='textarea').value='Re-read after the re-record: still fine.'; await all(c).find(e=>e.tag==='button'&&e.textContent==='Save grade').events.click();
+ assert.equal(staleNote.hidden,true); assert.ok(c.classList.has('graded')); assert.ok(!/set aside/.test(els.progress.textContent));
+ els['show-filter'].children[0].events.click(); assert.deepEqual(els.items.children.map(x=>x.hidden),[true,true,true]);
+ // the page reads the narratives and saves grades; it never asks for the judge's scores
+ assert.deepEqual([...new Set(calls.map(x=>x[0]+' '+x[1]))].sort(),['GET /api/config','GET /api/evals/narratives','POST /api/evals/grade']);
+ assert.deepEqual([...new Set([...src.matchAll(/fetch\(([^,)]+)/g)].map(m=>m[1]))].sort(),["'/api/config'","'/api/evals/grade'","'/api/evals/narratives'"]);
+ assert.ok(!/evals\.json/.test(src));
+ // /evals: the judge's table, line by line, beside the agreement; the grading link only on the local workbench
+ const epage=fs.readFileSync('src/investigator/web/evals.html','utf8'), esrc=fs.readFileSync('src/investigator/web/evals.js','utf8');
+ const eels=Object.fromEntries([...epage.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new El(m[1])]));
+ const scored=(s)=>Object.fromEntries(rubric.map((r,i)=>[r.key,s[i]]));
+ const judge={rubric,rubric_digest:'f2643a949682',target:20,bar_pct:90,graded:2,
+  last:{ran_at:'2026-11-12T09:00Z',commit:'abc1234',metric:'GEval',model:'claude-haiku-5-5',narratives:2,judged:2,cost_per_case_usd:0.00112,rubric_current:true,
+   criteria:{grounded:{pass:2,fail:0,error:0},recorded_not_proven:{pass:2,fail:0,error:0},prescribes_nothing:{pass:1,fail:1,error:0},unavailable_not_zero:{pass:1,fail:0,error:1},comparisons_consistent:{pass:1,fail:1,error:0}}},
+  rows:[{id:'a@anthropic:1',scores:scored([1,1,0,1,1]),reasons:scored(['ok','ok','It tells the crew what to compare.','ok','ok'])},{id:'b@anthropic:1',scores:scored([1,1,1,null,0]),reasons:scored(['ok','ok','ok','judge error: bad JSON','467.45 is below the 500.00 target'])}],
+  agreement:{graded:2,matched:2,unmatched:0,target:20,bar_pct:90,criteria:{grounded:{n:2,agree:2,pct:100,kappa:null,ok:true},recorded_not_proven:{n:2,agree:2,pct:100,kappa:null,ok:true},prescribes_nothing:{n:2,agree:1,pct:50,kappa:0,ok:false},unavailable_not_zero:{n:1,agree:1,pct:100,kappa:null,ok:true},comparisons_consistent:{n:2,agree:1,pct:50,kappa:0,ok:false}},overall:{n:1,agree:1,pct:100,kappa:null,ok:true}}};
+ const board={badge:'4/4 golden · 12 ms p50',dataset_hash:'d9143ff1d15029b5',counts:{cases:0,runs:0,by_type:{},recordings:0},thresholds:{offline_latency_ms:{p50:100,p95:250}},types:['routing'],history:[],last_run:null,cases:[],judge};
+ for(const isPublic of [false,true]){
+  const ectx={document:{getElementById:id=>{assert.ok(eels[id],`Unknown evals control ${id}`);return eels[id];},createElement:tag=>new El(tag),createElementNS:(_,tag)=>new El(tag)},
+   fetch:async path=>path==='/evals.json'?{ok:true,status:200,json:async()=>board}:{ok:true,status:200,json:async()=>({token:'tok',public:isPublic})},
+   window:{innerWidth:1200,location:{search:''},history:{replaceState(){}}},console,URLSearchParams};
+  vm.createContext(ectx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ectx);vm.runInContext(esrc,ectx);await vm.runInContext('ready',ectx);
+  assert.equal(eels['grade-link'].hidden,isPublic);
+ }
+ assert.equal(eels['judge-summary'].textContent,'Last judged run 2026-11-12 09:00 UTC at commit abc1234: GEval with claude-haiku-5-5, 2 of 2 narratives scored, $0.0011 per judged case · agreement with the owner over 2 narratives graded as the same text (bar 90% per line)');
+ const jrows=eels['judge-table'].children[1].children.map(tr=>tr.children.map(td=>td.textContent));
+ assert.deepEqual(jrows.map(r=>[r[0],r[2],r[3]]),[['grounded','2/2','2/2 · 100% · κ undefined'],['recorded_not_proven','2/2','2/2 · 100% · κ undefined'],['prescribes_nothing','1/2','1/2 · 50% · κ 0.00'],['unavailable_not_zero','1/1 (1 unscored)','1/1 · 100% · κ undefined'],['comparisons_consistent','1/2','1/2 · 50% · κ 0.00'],['overall','—','1/1 · 100% · κ undefined']]);
+ assert.equal(eels['judge-detail'].hidden,false);
+ const nrows=eels['judge-rows'].children[1].children.map(tr=>tr.children.map(td=>td.textContent));
+ assert.deepEqual(nrows,[['a@anthropic:1','1','1','0','1','1','prescribes_nothing: It tells the crew what to compare.'],['b@anthropic:1','1','1','1','—','0','unavailable_not_zero: judge error: bad JSON · comparisons_consistent: 467.45 is below the 500.00 target']]);
+ console.log('UI issue-25 checks passed: grading page lists, filters, refuses a bad grade without a reason, saves one with the token, never fetches the judge; /evals draws the judge table and agreement.');
+})().catch(error=>{console.error(error);process.exit(1);});
+
 // ---- issue #31b: the money on the card. The why-slow answer (tests/ui_fixtures/why_slow.json) lands with the cost
 // model in /api/config; its money is its scope's money answer, fetched once (evals/client_money.json's get_shift_dollars,
 // the shift's own losses at the post's rates). The card shows a dollar line under the headline, the opportunities panel,
@@ -1202,7 +1290,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const all=el=>walk(el).map(textOf).join('\n');
  // the rail: Show as minutes · % · $ ($ by default), each rate with its source, Change rates live
  assert.deepEqual(els['units-seg'].children.map(b=>[b.textContent,b['aria-pressed']]),[['minutes','false'],['%','false'],['$','true']]);
- assert.deepEqual(els['rates-list'].children.map(textOf),['Paper','$55/MSFpost','Machine','$1,200/hrpost','Margin','not setowner to set','Trim','3.25%process rule']);
+ assert.deepEqual(els['rates-list'].children.map(textOf),['Paper','$55/MSFpost','Machine','$1,200/hrpost','Margin','not setowner to set','Trim','3%owner, 2026-11-10']);   // the owner's trim target (issue #101)
  assert.equal(els['rates-change'].disabled,false);assert.equal(els['rates-panel'].hidden,false);
 
  const t0=fetched.length;
@@ -1226,7 +1314,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const ledger=all(els.ledger);
  assert.match(ledger,/Paper 121,107 sq ft of trim, shear and rejects = 121\.1 MSF × \$55\/MSF = \$6,661/);
  assert.match(ledger,/Machine time 55\.1 min \(stops 12\.8 · speed gap 34\.6 · waste run time 7\.7\) = 297\.3 MSF not made at 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$1,101/);
- assert.match(ledger,/Side trim 3\.30% of gross − 3\.25% target = 0\.05 points over → \$49,952\/yr/);
+ assert.match(ledger,/Side trim 3\.30% of gross − 3% target = 0\.30 points over → \$297,452\/yr/);   // the owner's 3% target (issue #101)
  assert.match(ledger,/Total = \$7,762 this shift · \$5,810,233\/yr at this rate · contribution: margin not set/);
  assert.match(ledger,/Rates: paper \$55\/MSF \(post\), machine time \$1,200\/hr \(post\), contribution margin not set \(assumption: owner to set\)/);
  assert.match(ledger,/they are not a real plant's figures/);
@@ -1278,7 +1366,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const valsOf=el=>walk(el).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);   // an svg value's own text, not its hover title
  assert.deepEqual(valsOf(els.money).slice(0,2),['7.21% of time','3.30% of gross']);   // the speed gap's share of the shift's minutes, side trim's of its gross
  assert.equal(fetched.length,t4,'the units toggle makes no request');
- assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['608.4ft/min','1.24%','1.42%','1.16%','3.30%']);   // in % the tiles read as the tools report them
+ assert.deepEqual(els.metrics.children.slice(0,5).map(t=>textOf(t.children[1])),['608.4ft/min','1.24%','1.42%','1.21%','3.30%']);   // in % the tiles read as the tools report them (dry-end over the yield after trim and shear, issue #101)
  // reset: the post's rates, and the address without rates=
  els['units-seg'].children[2].events.click(); els['rates-reset'].events.click();
  assert.equal(location.search.includes('rates='),false);assert.match(all(els.ledger),/× \$1,200\/hr = \$1,101/);
@@ -1286,12 +1374,12 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
 
  // a margin and a trim target: the dollar line says the contribution beside the losses, never added; the arithmetic's trim line follows the target
  els['rates-change'].events.click(); const fields=els['rates-fields'].children.map(f=>f.children[1]);
- fields[2].value='40'; fields[2].events.input(); fields[3].value='3'; fields[3].events.input();
- assert.equal(location.search,'?measure=overview&rates=margin:40,trim:3');
- const m40=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,{margin_usd_msf:40,trim_target_pct:3}),cfg);
+ fields[2].value='40'; fields[2].events.input(); fields[3].value='3.1'; fields[3].events.input();   // 3% is the owner's default now (issue #101)
+ assert.equal(location.search,'?measure=overview&rates=margin:40,trim:3.1');
+ const m40=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,{margin_usd_msf:40,trim_target_pct:3.1}),cfg);
  const lineNow=()=>textOf(els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line').children[0]);
  assert.ok(lineNow().endsWith('contribution '+Money.money(m40.total_contribution_usd)+' at $40/MSF, not added'),lineNow());
- assert.match(all(els.ledger),/Side trim 3\.30% of gross − 3% target = 0\.30 points over → \$/);
+ assert.match(all(els.ledger),/Side trim 3\.30% of gross − 3\.1% target = 0\.20 points over → \$/);
  els['rates-reset'].events.click(); assert.match(lineNow(),/contribution: margin not set$/);
 
  // all three shifts (tests/ui_fixtures/money_day.json, the server's answer on corrupt data): the card reads the day's own
@@ -1311,8 +1399,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(ledger3,/Shift 2: data incomplete, not counted/);
  assert.ok(ledger3.includes(`${Money.fmt(dayTotal.area_sqft,0)} sq ft of trim, shear and rejects = ${Money.fmt(dayTotal.area_msf,1)} MSF`),ledger3);
  assert.ok(ledger3.includes(`${Money.fmt(dayTotal.machine_minutes,1)} min (stops ${Money.fmt(dayTotal.stop_minutes,1)} · speed gap ${Money.fmt(dayTotal.speed_minutes,1)} · waste run time ${Money.fmt(dayTotal.waste_run_minutes,1)}) = ${Money.fmt(dayTotal.msf_not_made,1)} MSF not made`),ledger3);
- assert.ok(ledger3.includes(dayTotal.trim_points_over?`${Money.fixed(dayTotal.trim_pct_of_gross,2)}% of gross − 3.25% target = ${Money.fixed(dayTotal.trim_points_over,2)} points over → ${Money.money(dayTotal.trim_over_usd_per_year)}/yr`
-  :`${Money.fixed(dayTotal.trim_pct_of_gross,2)}% of gross, at or under the 3.25% target: no trim lever`),ledger3);   // the server's trim line, whichever side of the target the day is
+ assert.ok(ledger3.includes(dayTotal.trim_points_over?`${Money.fixed(dayTotal.trim_pct_of_gross,2)}% of gross − ${Money.gText(dayTotal.trim_target_pct)}% target = ${Money.fixed(dayTotal.trim_points_over,2)} points over → ${Money.money(dayTotal.trim_over_usd_per_year)}/yr`
+  :`${Money.fixed(dayTotal.trim_pct_of_gross,2)}% of gross, at or under the ${Money.gText(dayTotal.trim_target_pct)}% target: no trim lever`),ledger3);   // the target the server priced at (the owner's 3%, issue #101)   // the server's trim line, whichever side of the target the day is
  // each counted shift's own $/yr is its get_shift_dollars step, re-priced with the day at a rate edit (never a stale field)
  const shiftStep=n=>threeAnswer.trace.find(e=>e.tool==='get_shift_dollars'&&e.data.shift===n).data;
  assert.ok(ledger3.includes(`(each shift at its own rate: shift 1 ${Money.short(shiftStep(1).total_usd_per_year)}/yr · shift 3 ${Money.short(shiftStep(3).total_usd_per_year)}/yr)`),ledger3);
@@ -1336,13 +1424,97 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(els.charts.children.length,0,'the money tool\'s own chart is the panel');
  const wvals=walk(els.money.children[0]).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);
  assert.deepEqual(wvals.slice(0,2),[`${Money.short(levers.rows[0].usd_per_year)}/yr`,`${Money.short(levers.rows[1].usd_per_year)}/yr`]);
- assert.match(all(els.ledger),/Side trim 3\.21% of gross, at or under the 3\.25% target: no trim lever this window/);
+ // the owner's 3% trim target (issue #101): the week's 3.21% of gross is a trim lever at the post's rates
+ const atThree=levers.rows.find(r=>r.kind==='trim');
+ assert.ok(all(els.ledger).includes('Side trim 3.21% of gross − 3% target = 0.21 points over → '+Money.money(atThree.usd_per_year)+'/yr'),'the levers trim line at the owner\'s target');
+ assert.ok(all(els.messages).includes(`Side trim over the 3% target: ${Money.money(atThree.usd_per_year)}/yr`),'the trim lever in the prose names the target and its dollars');
  // the prose of the money answer re-prices with its levers re-ranked, as the server would write it at those rates
- els['rates-change'].events.click(); const wf=els['rates-fields'].children.map(f=>f.children[1]); wf[3].value='3'; wf[3].events.input();
- const lever=Money.reprice('get_opportunities',levers,Money.effective(cfg,{trim_target_pct:3}),cfg).rows.find(r=>r.kind==='trim');
- assert.ok(all(els.ledger).includes('Side trim 3.21% of gross − 3% target = 0.21 points over → '+Money.money(lever.usd_per_year)+'/yr'),'the levers trim line at the new target');
- assert.ok(all(els.messages).includes(`Side trim over the 3% target: ${Money.money(lever.usd_per_year)}/yr`),'the trim lever in the prose names the new target and its dollars');
+ els['rates-change'].events.click(); const wf=els['rates-fields'].children.map(f=>f.children[1]); wf[3].value='3.25'; wf[3].events.input();
+ const lever=Money.reprice('get_opportunities',levers,Money.effective(cfg,{trim_target_pct:3.25}),cfg).rows.find(r=>r.kind==='trim');
+ assert.match(all(els.ledger),/Side trim 3\.21% of gross, at or under the 3\.25% target: no trim lever this window/);
+ assert.ok(all(els.messages).includes(`Side trim over the 3.25% target: ${Money.money(lever.usd_per_year)}/yr`),'the trim lever in the prose names the new target and its dollars');
  els['rates-reset'].events.click();
+
+ // issue #101: the two lenses on the month's levers (tests/ui_fixtures/money_<lens>.json, the server's answers). A rate
+ // changed on each card re-ranks it as the server ranks it at those rates (tests/test_money_ui.py holds every figure and
+ // line to the server's own): under the supervisor lens the schedule-driven levers stay after the ranked controllable
+ // ones with no rank, however large; under the ownership lens all of side trim stays first, however small.
+ // At $1/MSF paper and $5,000/hr machine time three downtime levers move into the supervisor's five beside the headline
+ // (across its label), planned maintenance outweighs most ranked levers, and side trim is smaller than four others.
+ for(const [lens,changes,over] of [['supervisor',[[0,'1'],[1,'5000']],{paper_usd_msf:1,machine_usd_hour:5000}],['ownership',[[0,'1'],[1,'5000']],{paper_usd_msf:1,machine_usd_hour:5000}]]){
+  const lensed=JSON.parse(fs.readFileSync(`tests/ui_fixtures/money_${lens}.json`,'utf8')), data=lensed.trace.find(e=>e.tool==='get_opportunities').data;
+  vm.runInContext(`thread.push({id:++seq,question:'q-${lens}',title:'${lens}',scope:{day:'2026-09-14',period:'month',shift:2,scope:'day'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(lensed)},url:${JSON.stringify(lensed.url)},revealed:true});openId=seq;renderCard();`,ctx);
+  els['rates-change'].events.click(); const lf=els['rates-fields'].children.map(f=>f.children[1]);
+  for(const [i,v] of changes){ lf[i].value=v; lf[i].events.input(); }
+  const now=Money.reprice('get_opportunities',data,Money.effective(cfg,over),cfg), rows=now.rows, prose=all(els.messages);
+  const allBars=walk(els.money.children[0]).find(e=>e.tag==='button'&&/^All \d+$/.test(e.textContent)); if(allBars)allBars.events.click();
+  const bars=walk(els.money.children[0]).filter(e=>e.class==='lbl').map(e=>e.textContent), opens=(bar,lever)=>lever.startsWith(bar.replace(/…$/,''));
+  if(lens==='supervisor'){
+   const mine=rows.filter(r=>r.control==='controllable'), rest=rows.filter(r=>r.control!=='controllable');
+   assert.deepEqual(rows,[...mine,...rest],'the controllable levers first, then the schedule-driven ones');
+   assert.deepEqual(mine.map(r=>r.rank),mine.map((_,i)=>i+1)); assert.ok(rest.length&&rest.every(r=>r.rank===null),'schedule-driven levers carry no rank');
+   assert.ok(mine.every((r,i)=>!i||mine[i-1].usd_per_year>=r.usd_per_year),'the controllable levers by dollars a year');
+   assert.ok(rest[0].usd_per_year>mine[mine.length-1].usd_per_year,'a schedule-driven lever larger than a ranked one stays after it: the lens, not the dollars');
+   assert.equal(now.controllable_usd_per_year,Money.round(mine.reduce((s,r)=>s+r.usd_per_year,0),0));
+   assert.ok(prose.includes(`${Money.money(now.controllable_usd_per_year)} a year in controllable losses across ${mine.length} levers`),'the headline at the new rates');
+   assert.ok(prose.includes(`1. ${mine[0].lever}: ${Money.money(mine[0].usd_per_year)}/yr`),'the first ranked lever at the new rates');
+   const at=mine.map(r=>prose.indexOf(`${r.rank}. ${r.lever}: ${Money.money(r.usd_per_year)}/yr`));
+   assert.ok(at.every((x,i)=>x>=0&&(!i||at[i-1]<x)),'every controllable lever, numbered and in rank order, across the label');
+   for(const r of rest){ assert.ok(prose.includes(`${r.lever}: ${Money.money(r.usd_per_year)}/yr`),r.lever); assert.ok(!new RegExp(`\\d+\\. ${r.lever.replace(/[()]/g,'\\$&')}`).test(prose),`${r.lever} is listed unranked`); }
+   assert.ok(bars.slice(-rest.length).every((bar,i)=>opens(bar,rest[i].lever)),'the panel puts the schedule-driven levers last: '+bars.join(' | '));
+  }else{
+   assert.equal(rows[0].lever,'Side trim (all recorded)'); assert.equal(rows[0].rank,1);
+   assert.ok(rows[0].usd_per_year<rows[1].usd_per_year,'side trim is no longer the largest at these rates, and stays first');
+   // the rest by dollars a year, the dry-end kinds as one group (the tag scrap, the owner on PR #111) with no rank of their own
+   const dry=rows.filter(r=>r.group==='dry_end'), first=rows.indexOf(dry[0]), sum=Money.round(dry.reduce((s,r)=>s+r.usd_per_year,0),0);
+   assert.ok(dry.length===4&&rows.slice(first,first+4).every(r=>r.group==='dry_end')&&dry.every(r=>r.rank===null),'the dry-end kinds together, unranked');
+   assert.ok(dry.every((r,i)=>!i||dry[i-1].usd_per_year>=r.usd_per_year),'the kinds by dollars a year beneath the subtotal');
+   assert.equal(now.dry_end_usd_per_year,sum); assert.equal(now.dry_end_rank,first+1);
+   const sizes=[...rows.slice(1,first).map(r=>r.usd_per_year),sum,...rows.slice(first+4).map(r=>r.usd_per_year)];
+   assert.ok(sizes.every((v,i)=>!i||sizes[i-1]>=v),'the groups by dollars a year: '+sizes.join(', '));
+   assert.ok(prose.includes(`Side trim costs ${Money.money(rows[0].usd_per_year)} a year`),'the headline is side trim at the new rates');
+   const sub=prose.indexOf(`${now.dry_end_rank}. Dry-end waste (tag scrap), the 4 kinds below: ${Money.money(sum)}/yr`);
+   const kinds=dry.map(r=>prose.indexOf(`${r.lever}: ${Money.money(r.usd_per_year)}/yr`));
+   assert.ok(sub>=0&&kinds.every((x,i)=>x>(i?kinds[i-1]:sub)),'the subtotal at the new rates, each kind beneath it in order');
+   assert.ok(!/\d+\. Dry-end: /.test(prose),'the kinds are not numbered on their own');
+   assert.ok(opens(bars[0],rows[0].lever),'the panel puts side trim first: '+bars.join(' | '));
+   // a rate that moves a group past the tag scrap: the subtotal line moves with its kinds and every line is renumbered
+   const moved=JSON.parse(JSON.stringify(data)), unexplained=moved.rows.find(r=>r.lever.startsWith('Unexplained'));
+   unexplained.price_terms.quantity=3e6;   // a remainder larger than all the dry-end waste, so at paper-heavy rates it ranks second
+   const heavy=Money.effective(cfg,{paper_usd_msf:100,machine_usd_hour:1}), after=Money.reprice('get_opportunities',moved,heavy,cfg);
+   const step={tool:'get_opportunities',before:moved,after}, q=lensed.trace.findIndex(e=>e.tool==='get_opportunities');
+   const lines=Money.repriceSections(lensed.sections,lensed.trace.map((e,i)=>i===q?step:null),heavy,cfg);
+   const u=lines.findIndex(l=>l.startsWith('- 2. Unexplained')), d=lines.findIndex(l=>l.startsWith('- 3. Dry-end waste (tag scrap)'));
+   assert.ok(u>=0&&d===u+1,'the remainder is second, the tag scrap third: '+lines.join(' | '));
+   assert.ok(lines.slice(d+1,d+5).every(l=>l.startsWith('- Dry-end: ')),'its four kinds beneath it');
+   assert.ok(lines[d+5].startsWith('- 4. Shear chops'),'then shear, fourth');
+  }
+  els['rates-reset'].events.click();
+ }
+
+ // the owner's ruling on PR #111 (tests/ui_fixtures/money_apart.json, Thursday's first shift): planned maintenance is on the
+ // money card with its dollars, apart from the ranked losses; the line states the recorded losses and the all-in total, the
+ // bar of the gap apart comes last, and a rate re-prices both totals without ranking the gap apart
+ {
+  const apart=JSON.parse(fs.readFileSync('tests/ui_fixtures/money_apart.json','utf8')), d=apart.trace.find(e=>e.tool==='get_shift_dollars').data;
+  vm.runInContext(`thread.push({id:++seq,question:'q-apart',title:'apart',scope:{day:'2026-09-17',period:'day',shift:1,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(apart)},url:${JSON.stringify(apart.url)},revealed:true});openId=seq;renderCard();`,ctx);
+  const card=()=>els.messages.children.filter(e=>/^message\b/.test(e.className)).pop(), lineOf=()=>card().children.find(e=>e.className==='dollar-line');
+  const pm=d.rows.find(r=>r.apart==='schedule-driven');
+  assert.ok(pm&&pm.rank===null&&d.all_in_usd>d.total_usd,'planned maintenance apart, outside the recorded losses');
+  assert.equal(textOf(lineOf().children[0]),`≈ ${Money.money(d.total_usd)} recorded losses this shift · ${Money.short(d.total_usd_per_year)}/yr at this rate · ${Money.money(d.all_in_usd)} (${Money.short(d.all_in_usd_per_year)}/yr) all in, with the schedule-driven and external downtime · contribution: margin not set`);
+  const bars=()=>walk(els.money.children[0]).filter(e=>e.class==='lbl').map(e=>e.textContent);
+  const allBars=walk(els.money.children[0]).find(e=>e.tag==='button'&&/^All \d+$/.test(e.textContent)); if(allBars)allBars.events.click();
+  assert.ok(bars().pop().startsWith('Downtime: Planned'),'the gap apart is the last bar: '+bars().join(' | '));
+  els['rates-change'].events.click(); const af=els['rates-fields'].children.map(f=>f.children[1]); af[1].value='5000'; af[1].events.input();
+  const now=Money.reprice('get_shift_dollars',d,Money.effective(cfg,{machine_usd_hour:5000}),cfg), prose=all(els.messages);
+  const pmNow=now.rows.find(r=>r.apart==='schedule-driven');
+  assert.ok(pmNow.rank===null&&now.rows.indexOf(pmNow)===now.rows.length-1,'at $5,000/hr planned maintenance is still apart, after every ranked loss');
+  assert.ok(pmNow.usd>now.rows[0].usd,'it now outweighs the first ranked loss, and still has no rank');
+  assert.equal(now.total_usd,Money.round(now.rows.filter(r=>!r.apart).reduce((s,r)=>s+r.usd,0),2));
+  assert.ok(prose.includes(`${Money.money(now.total_usd)} of recorded losses · ${Money.money(now.total_usd_per_year)} per year at the post's volumes · ${Money.money(now.all_in_usd)} all in`),'the headline states both totals at the new rates');
+  assert.ok(prose.includes(`Downtime: Planned maintenance: ${Money.money(pmNow.usd)}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered');
+  els['rates-reset'].events.click();
+ }
 
  // the analyst prices at the card's rates, and its interpretation is never rewritten: at other rates it says which it was written at
  vm.runInContext("config.live_modes=['anthropic'];",ctx);

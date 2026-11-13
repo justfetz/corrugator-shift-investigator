@@ -42,6 +42,7 @@ from .cost_model import client_config, effective as effective_rates, parse_rates
 from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
 from .record_store import default_store
+from . import targets
 from .urls import PATH as URL_PATH, canonical_url, machine_slug, page_url, redirect_for, resolve_url, scope_url
 
 WEB = Path(__file__).with_name('web')
@@ -154,7 +155,7 @@ class Workbench:
         # (a wheel installed without the repository), and the page and the badge are then absent.
         folder = evals_dir()
         self.evals = EvalBoard(folder) if folder else None   # scored against the golden window, not this store (issue #35)
-        self.evals_json = json.dumps(self.evals.board(), allow_nan=False).encode() if self.evals else None
+        self.evals_json = json.dumps(self.evals.board(public=public is not None), allow_nan=False).encode() if self.evals else None
         # The docs site at /docs (issue #93): {path: html}, prebuilt in the image or rendered from the checkout;
         # None when neither is there, and /docs is then a 404 like any unknown path.
         self.docs = load_docs()
@@ -696,6 +697,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                                        'live_model_available': app.live_model_available, 'live_model': LIVE_MODEL,
                                        'live_modes': list(app.live_modes), 'live_models': app.live_models,
                                        'demo_guards': app.guards.summary, 'cost_model': client_config(),
+                                       'targets': targets.client_config(),   # the owner's bands (issue #101) for a tile without one
                                        'evals': app.evals.summary if app.evals else None})
             if self.path == '/evals.json':
                 # The scoreboard as data, Datasette-style: public, read-only, and readable from another
@@ -712,6 +714,17 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 if page is None:
                     return self._send(404, {'error': 'Not found'})
                 return self._static(page, 'text/html; charset=utf-8')
+            if url.path in ('/evals/grade', '/grade.js', '/api/evals/narratives'):
+                # The owner's grading page (issue #25) exists on the local workbench only: it writes evals/judge_calibration.json.
+                if public is not None or app.evals is None:
+                    return self._send(404, {'error': 'Not found'})
+                if url.path == '/api/evals/narratives':   # replays the recordings once per process; never a model call
+                    try:
+                        return self._send(200, app.evals.grading(app.lock))
+                    except Exception:
+                        return self._send(500, {'error': 'The recorded narratives could not be replayed'})
+                name, content_type = ('grade.html', 'text/html; charset=utf-8') if url.path == '/evals/grade' else ('grade.js', 'text/javascript; charset=utf-8')
+                return self._static((WEB/name).read_bytes(), content_type)
             files = {'/': ('index.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
                      '/trail.js': ('trail.js', 'text/javascript; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
@@ -782,7 +795,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                     return self._send(400, {'error': 'Incomplete request body'})
             except (ValueError, TimeoutError):
                 return self._send(400, {'error': 'Invalid or timed-out request body'})
-            if not self._host_ok() or self.path not in ('/api/ask', '/api/report', '/api/evals/run'):
+            if not self._host_ok() or self.path not in ('/api/ask', '/api/report', '/api/evals/run', '/api/evals/grade'):
                 return self._send(403, {'error': 'Request not allowed'})
             if not self._origin_ok():
                 return self._send(403, {'error': 'Origin not allowed'})
@@ -796,7 +809,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                     return self._send(413, {'error': 'Request too large or empty'})
                 # Eval runs are counted apart from questions (EVAL_RUNS_PER_MIN for everyone together): a visitor
                 # opening cases on /evals must not use up the question window or their own per-IP rounds.
-                if self.path == '/api/evals/run':
+                if self.path in ('/api/evals/run', '/api/evals/grade'):
                     now = time.monotonic()
                     window = app.eval_requests
                     while window and window[0] < now-60:
@@ -813,6 +826,13 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 api_key = anthropic_key = None
                 if public is None:
                     api_key, anthropic_key = self.headers.get('X-OpenAI-Key'), self.headers.get('X-Anthropic-Key')
+                if self.path == '/api/evals/grade':
+                    # One owner grade of a recorded narrative, saved to evals/judge_calibration.json: local workbench only.
+                    if public is not None or app.evals is None:
+                        return self._send(404, {'error': 'Grading is on the local workbench only'})
+                    saved = app.evals.save_grade(payload, app.lock)
+                    app.evals_json = json.dumps(app.evals.board(), allow_nan=False).encode()
+                    return self._send(200, saved)
                 if self.path == '/api/evals/run':
                     # Offline, or a replay of a recorded fixture: never a model call, whatever the server's keys.
                     # The board takes app.lock itself (per case), so a whole-set run does not starve questions.

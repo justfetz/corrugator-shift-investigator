@@ -231,12 +231,13 @@ def test_percentiles_are_nearest_rank():
 
 HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-per-stop', 'period-trim-trend',
                'period-trend-warp-weekly', 'period-control-compare-shifts', 'period-moisture-trend',
-               'period-run-length-trend', 'value-trend-trim-8w', 'value-trend-warp-8w', 'value-trend-stops-9w-missing-weeks'}
+               'period-run-length-trend', 'value-trend-trim-8w', 'value-trend-warp-8w', 'value-trend-stops-9w-missing-weeks',
+               'money-day-ranks-shifts-without-the-outage'}   # the three shifts' and the day's dollars: 210 ms uncontended (PR #111)
 
 
 def test_heavy_cases_carry_an_explicit_offline_budget():
-    """The eleven heaviest offline cases (the multi-turn stories, the eight- and nine-week trends, the
-    three-shift compare) run 52-116 ms uncontended and crossed the 250 ms default under 2x CPU
+    """The heaviest offline cases (the multi-turn stories, the eight- and nine-week trends, the three-shift
+    compare, and the three shifts' money with the day's: 210 ms uncontended) run 52-116 ms uncontended and crossed the 250 ms default under 2x CPU
     contention, so each carries expect.max_ms: 500 (evals/README.md has the numbers). The budget is
     offline only: the live or replayed run of a live: true case shares its expect and is never timed
     against it."""
@@ -297,7 +298,7 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
     a case whose question lands elsewhere, and every offline question is also answered over its URL."""
     routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c]   # an analyst-plan case is a scripted live round: no URL
-    assert len(routing) == 147 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    assert len(routing) == 174 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + 27 issue #101 cases (eight from the review of #111, ten from the owner's decisions and rulings on it)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

@@ -718,7 +718,7 @@ def merged_pulls(ref='HEAD', root=ROOT):
         if not record.strip():
             continue
         date, subject, body = (record.strip('\n').split('\x1f') + ['', ''])[:3]
-        merge = re.match(r'Merge pull request #(\d+) from \S+', subject)
+        merge = re.match(r'Merge pull request #(\d+)\b', subject)
         squash = re.search(r'\s*\(#(\d+)\)$', subject)
         if merge:
             title = next((line.strip() for line in body.splitlines() if line.strip()), subject)

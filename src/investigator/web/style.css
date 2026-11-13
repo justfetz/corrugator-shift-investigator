@@ -534,6 +534,17 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
 .run-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.85rem}.run-head button{min-height:30px;font-size:12px}
 .result-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}.result-line .mono,.turn-facts{font-size:12px!important;color:var(--ink-2)}
 .turn{margin-top:10px}.recorded .tool{background:var(--code-bg);padding:2px 6px;border-radius:4px;font-size:12px}.recorded span{font-size:12px}
+/* The narrative judge on /evals and the owner's grading page (issue #25) */
+.judge-score{font-family:var(--mono);font-weight:700}.judge-score.s1{color:var(--good)}.judge-score.s0{color:var(--bad)}
+#judge-rows td{font-size:12px;overflow-wrap:anywhere}
+.grade-item{border-top:1px solid var(--line-2);padding:12px 0}.grade-item.graded .case-id::after{content:" · graded";color:var(--good);font-weight:500}
+.grade-narrative p{margin:6px 0;font-size:.92rem;line-height:1.55;overflow-wrap:anywhere}
+.grade-evidence{white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--mono);font-size:11.5px;line-height:1.45;background:var(--code-bg);color:var(--code-ink);padding:8px 10px;border-radius:6px;margin:6px 0;max-height:240px;overflow:auto}
+.grade-lines{border:1px solid var(--line-2);border-radius:8px;margin:10px 0;padding:6px 12px 8px}.grade-lines legend{font-size:12px;color:var(--ink-3);padding:0 4px}
+.grade-line{flex-direction:row;gap:8px;align-items:flex-start;font-size:.88rem;font-weight:400;line-height:1.45;padding:4px 0}.grade-line input{flex:none;width:18px;height:18px;margin:1px 0 0;accent-color:var(--brand)}
+.grade-note{width:100%;box-sizing:border-box;resize:vertical;font-size:.9rem}
+.grade-actions{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:8px}
+#rubric li{margin:6px 0;font-size:.9rem;line-height:1.5}#rubric ul{padding-left:18px;margin:4px 0}
 @media(max-width:850px){
  #trend-charts,.case-grid{grid-template-columns:1fr}
  .evals-page .card{padding:14px}

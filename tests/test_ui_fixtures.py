@@ -40,6 +40,47 @@ def test_money_week_ui_fixture_is_the_offline_answer_of_its_url():
     assert [e['data'] for e in saved['trace'] if e['tool'] == 'get_opportunities'] == [{**e['data'], 'trace': saved['trace'][0]['data']['trace']} for e in fresh['trace'] if e['tool'] == 'get_opportunities'], refresh
 
 
+LENSES = {'supervisor': Path(__file__).parent / 'ui_fixtures' / 'money_supervisor.json',
+          'ownership': Path(__file__).parent / 'ui_fixtures' / 'money_ownership.json'}
+
+
+def test_the_lens_ui_fixtures_are_the_offline_answers_of_their_urls():
+    """Issue #101's two lenses on the month's levers, as the server answers them: the UI test changes a rate on each and
+    holds the card's order to the lens (supervisor: schedule-driven levers after the ranked ones, unranked; ownership:
+    side trim first)."""
+    for lens, path in LENSES.items():
+        saved = json.loads(path.read_text())
+        assert saved['url'] == f'/corr/1/month/2026-09-14?measure=money&lens={lens}'
+        result, _ = Workbench().answer_url(saved['url'])
+        result.pop('report_markdown', None)
+        fresh = json.loads(json.dumps(result))
+        refresh = REFRESH.replace('why_slow', path.stem).replace('/corr/1/day/2026-09-14/shift/2?measure=overview', saved['url'])
+        for key in ('sections', 'url'):
+            assert saved[key] == fresh[key], f'{key} drifted; refresh with: {refresh}'
+        lever = lambda r: [{k: v for k, v in e['data'].items() if k != 'trace'} for e in r['trace'] if e['tool'] == 'get_opportunities']
+        assert lever(saved) == lever(fresh), refresh
+        assert lever(saved)[0]['lens'] == lens
+
+
+APART = Path(__file__).parent / 'ui_fixtures' / 'money_apart.json'
+
+
+def test_money_apart_ui_fixture_is_the_offline_answer_of_its_url():
+    """The owner's ruling on PR #111: Thursday's first shift, whose planned maintenance is on the money card apart from the
+    ranked losses, with the all-in total beside the recorded losses'."""
+    saved = json.loads(APART.read_text())
+    assert saved['url'] == '/corr/1/day/2026-09-17/shift/1?measure=dollars'
+    result, _ = Workbench().answer_url(saved['url'])
+    result.pop('report_markdown', None)
+    fresh = json.loads(json.dumps(result))
+    refresh = REFRESH.replace('why_slow', APART.stem).replace('/corr/1/day/2026-09-14/shift/2?measure=overview', saved['url'])
+    for key in ('sections', 'url'):
+        assert saved[key] == fresh[key], f'{key} drifted; refresh with: {refresh}'
+    money = lambda r: [{k: v for k, v in e['data'].items() if k != 'trace'} for e in r['trace'] if e['tool'] == 'get_shift_dollars']
+    assert money(saved) == money(fresh), refresh
+    assert money(saved)[0]['apart_gaps'] == 1
+
+
 DAY = Path(__file__).parent / 'ui_fixtures' / 'money_day.json'
 
 
