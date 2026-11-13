@@ -801,9 +801,26 @@ class RecordStore:
         comparable = bool(previous) and current["coverage"] == "complete" and previous["coverage"] == "complete"
         rows = self._kpi_rows(self._kpis(now), self._kpis(before) if before else None, comparable)
         source = {"current": now["source_rows"], "previous": before["source_rows"] if before else None}
+        orders = self._order_changes(current, shift, now, trace)
+        before_orders = self._order_changes(previous, shift, before, trace) if previous else None
         return self._envelope("get_period_kpis", current, previous, shift, rows, trace, started, source,
                               comparison="complete" if comparable else "withheld: a window is incomplete or unavailable",
-                              current_sums=_tile_sums(now), **self._day_basis(current, previous))
+                              current_sums=_tile_sums(now), **self._day_basis(current, previous),
+                              order_changes=orders, previous_order_changes=before_orders,
+                              order_changes_delta=orders - before_orders if comparable and None not in (orders, before_orders) else None)
+
+    def _order_changes(self, window, shift, sums, trace):
+        """Setup records an order change started (change code O) in a window (issue #113): what a crew counts as an
+        order change. Shift splits (S) and continuations (C) are setup records too, but no new order started them.
+        None, never zero, for a window with no shift records."""
+        if not sums["shift_records"]:
+            return None
+        clause, extra = self._shift_clause(shift)
+        sql = f"SELECT count(*) AS order_changes FROM setups WHERE change_code = 'O' AND production_date BETWEEN ? AND ?{clause}"
+        params = [window["start"], window["end"], *extra]
+        trace["sql"].append(sql)
+        trace["parameters"].append(params)
+        return self._fetch(sql, params)[0]["order_changes"]
 
     def compare_periods(self, current_window, previous_window, shift=None):
         """The same KPI table for two arbitrary windows (month vs month, week vs

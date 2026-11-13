@@ -2,8 +2,9 @@
 
 Presentation of tool results only. Every figure is a value of a tool row, or of the envelope that carries
 the rows, in one of the application's formats, or a count of rows; nothing here computes a new number.
-A shape depends on the plan that ran (the intent and the evidence) and the scope, never on the wording
-of the question, so a question and its canonical URL answer with the same sections (docs/URLS.md).
+A shape depends on the plan that ran (the intent and the evidence), the one quantity a count or unit question asked
+for (the request's `lead`, which its canonical URL carries as `measure=quantity&metric=`; issue #113) and the scope,
+never on the wording of the question, so a question and its canonical URL answer with the same sections (docs/URLS.md).
 
 The sections stay plain text, so the Markdown export, the PDF and the /evals page read them as before,
 with a light structure the client renders (docs/AGENT_CONTRACT.md, "Answer shapes"):
@@ -182,15 +183,17 @@ def argmax(rows, key):
 
 # ------------------------------------------------------------------ entry point
 
-def answer_sections(intent, evidence, context, period_tools):
-    """The sections of an offline answer: headline, bullets, caveats and where to look."""
+def answer_sections(intent, evidence, context, period_tools, lead=None):
+    """The sections of an offline answer: headline, bullets, caveats and where to look. `lead` is the one quantity a
+    count or unit question asked for (issue #113: the request's `lead`, which its canonical URL carries as
+    `measure=quantity&metric=`), so the answer opens with it."""
     intent = ALIASES.get(intent, intent)
     period = [r for r in evidence if r['tool'] in period_tools]
     daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] != 'get_day_dollars']   # the day's total is the card's (#31b)
     lines = []
     if period:
         own = intent.startswith('period_')
-        lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own).sections()
+        lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own, lead=lead).sections()
     if daily:
         own = not intent.startswith('period_') and intent != 'model'
         lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own).sections()
@@ -871,15 +874,16 @@ class PeriodAnswer:
             'period_grade': ('get_grade_totals',), 'period_pareto': ('get_downtime_pareto',), 'period_waste': ('get_waste_breakdown',),
             'period_stops': ('get_stops_profile',), 'period_trend': ('get_trend',), 'period_rollstock': ('get_rollstock',),
             'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',),
-            'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',)}
+            'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',),
+            'period_quantity': ('get_period_kpis', 'get_downtime_review', 'get_downtime_pareto', 'get_overrun')}
 
     KPI_TOOLS = ('get_period_kpis', 'compare_periods')
     USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
             'period_summary': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'), 'period_speed': (*KPI_TOOLS, 'get_grade_totals')}
 
-    def __init__(self, intent, evidence, context, inferred=False):
-        self.intent = intent if intent in self.LEAD else infer_period(evidence)
-        self.context, self.evidence, self.inferred = context, evidence, inferred
+    def __init__(self, intent, evidence, context, inferred=False, lead=None):
+        self.intent = intent if intent in self.LEAD and (intent != 'period_quantity' or lead) else infer_period(evidence)
+        self.context, self.evidence, self.inferred, self.lead = context, evidence, inferred, lead or {}
         self.shifts = group(evidence)
 
     def wp(self, data):
@@ -1418,6 +1422,158 @@ class PeriodAnswer:
         notes += money_notes(v, priced_rows[0], 'label') if priced_rows else money_notes(v)
         kinds = list(dict.fromkeys(self.SPEEDVAR_LOOKS[r['bucket']] for r in rows if r['gap_fpm'] * sign > 0)) + ['opportunity']
         return head, bullets, notes, self.window_looks(data, list(dict.fromkeys(kinds)))
+
+    # ---- one quantity (issue #113): a count or unit question opens with the quantity asked, in the unit asked, then the
+    # previous window and the band; the tiles it is read from (or the reasons, or the knives) follow, the rest folded
+    QUANTITY_WORDS = {'setups': 'setups', 'paper_changes': 'paper changes', 'order_changes': 'order changes', 'stops': 'stops',
+                      'lineal_ft': 'lineal ft', 'lineal_per_setup': 'ft per setup', 'lineal_per_paper_change': 'ft per paper change',
+                      'downtime_minutes': 'minutes', 'minutes_per_stop': 'minutes per stop'}
+    QUANTITY_PLACES = {'lineal_ft': 0, 'lineal_per_setup': 1, 'lineal_per_paper_change': 1, 'downtime_minutes': 1, 'minutes_per_stop': 2}
+    QUANTITY_RELATED = {'setups': ('paper_changes', 'lineal_per_setup', 'lineal_ft'),
+                        'paper_changes': ('setups', 'lineal_per_paper_change', 'lineal_ft'),
+                        'order_changes': ('setups', 'paper_changes', 'lineal_per_setup'),
+                        'lineal_per_setup': ('setups', 'lineal_ft', 'lineal_per_paper_change'),
+                        'lineal_per_paper_change': ('paper_changes', 'lineal_ft', 'lineal_per_setup'),
+                        'lineal_ft': ('volume_msf', 'speed_all_fpm', 'lineal_per_setup'),
+                        'stops': ('downtime_minutes', 'minutes_per_stop', 'downtime_pct'),
+                        'downtime_minutes': ('stops', 'minutes_per_stop', 'downtime_pct'),
+                        'minutes_per_stop': ('stops', 'downtime_minutes', 'downtime_pct')}
+    QUANTITY_FOLDED = ('volume_msf', 'speed_all_fpm', 'downtime_pct', 'trim_pct', 'dry_end_pct')
+    QUANTITY_NOTES = {
+        'setups': 'A setup is a dry-end record: one that runs on across a shift change is counted in both shifts (a shift split).',
+        'order_changes': 'An order change is a setup record a new knife order combination started (change code O); shift splits '
+                         'and continuations are setup records no new order started.',
+        'paper_changes': 'A paper change is a wet-end run: the distinct wet ends the setups of the window ran on.',
+        'stops': 'Every recorded stop is counted: planned maintenance and external downtime too.',
+        'downtime_minutes': 'Every recorded stop is counted: planned maintenance and external downtime too.'}
+    BEFORE = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before', 'fiscal': 'the period before'}
+
+    def qnum(self, metric, value):
+        if value is None:
+            return 'unavailable'
+        if isinstance(value, int):
+            return n(value)
+        return f'{value:,.{self.QUANTITY_PLACES.get(metric, 2)}f}'
+
+    def qchange(self, metric, current, previous, delta, change, data):
+        """`+30 vs 182 the week before` (`, worse` for a measure with a better direction), the previous value alone when the
+        comparison is withheld, or `previous unavailable`, never zero."""
+        before = self.BEFORE.get(data['window']['period'], 'the window before')
+        if previous is None:
+            return 'previous unavailable'
+        if delta is None:
+            return f'{self.qnum(metric, previous)} {before}'
+        signed_delta = f'{delta:+,}' if isinstance(delta, int) else f'{delta:+,.{self.QUANTITY_PLACES.get(metric, 2)}f}'
+        return f'{signed_delta} vs {self.qnum(metric, previous)} {before}' + ('' if change in (None, 'neutral') else f', {change}')
+
+    def period_quantity(self, tools, q):
+        if q['tool'] == 'get_downtime_pareto':
+            return self.quantity_of_stops(q)
+        if q['tool'] == 'get_downtime_review':
+            return self.quantity_of_kind(q)
+        if q['tool'] == 'get_overrun':
+            return self.quantity_of_sheets(q)
+        return self.quantity_of_tiles(q)
+
+    def quantity_of_tiles(self, k):
+        """A count, a length or minutes from the KPI tiles (order changes from the envelope beside them)."""
+        data, metric = k['data'], self.lead['metric']
+        where, words = self.where(data), self.QUANTITY_WORDS[metric]
+        if metric == 'order_changes':
+            head = (f'**{self.qnum(metric, data.get("order_changes"))} {words}**{where} · ' +
+                    self.qchange(metric, data.get('order_changes'), data.get('previous_order_changes'), data.get('order_changes_delta'), 'neutral', data) +
+                    f' {ref(k)}')
+        else:
+            i, row = self.metric(k, metric)
+            noun = ' of downtime' if metric == 'downtime_minutes' else ''
+            head = (f'**{self.qnum(metric, row["current"])} {words}**{noun}{where} · '
+                    f'{self.qchange(metric, row["current"], row["previous"], row["delta"], row["change"], data)}{band(row.get("band_text"))} {ref(k, i)}')
+        related = self.QUANTITY_RELATED[metric]
+        bullets = [self.kpi_bullet(k, m) for m in related]
+        folded = [m for m in self.QUANTITY_FOLDED if m not in related and m != metric]
+        bullets += ['The other KPI tiles', *[self.kpi_bullet(k, m) for m in folded]]
+        notes = self.kpi_notes(data) + ([self.QUANTITY_NOTES[metric]] if metric in self.QUANTITY_NOTES else [])
+        sfx = self.sfx(data)
+        if metric in ('stops', 'downtime_minutes', 'minutes_per_stop'):
+            looks = self.window_looks(data, ('pareto', 'stops', 'trend_downtime'))
+        else:
+            looks = []
+            if data['window']['period'] == 'day' and getattr(self.context, 'period', 'day') == 'day':
+                looks.append(look('Each setup with its speed, stops and rejects', f'Show the setup matrix{sfx}'))
+            ratio = 'lineal per paper change' if metric in ('paper_changes', 'lineal_per_paper_change') else 'lineal per setup'
+            looks.append(look(f'The {ratio} week by week', f'Trend of {ratio} over eight weeks{sfx}'))
+            looks += self.window_looks(data, ('rollstock' if 'paper' in metric else 'grade',))
+        return head, bullets, notes, looks[:3]
+
+    def quantity_of_kind(self, r):
+        """Maintenance or operator downtime in minutes or stops (get_downtime_review), its reasons after it."""
+        data, rows, metric = r['data'], r['data']['rows'], self.lead['metric']
+        kind, unit = metric.split('_')
+        where = self.where(data)
+        if not data['scheduled_minutes']:
+            return f'No shifts in this window{where} {ref(r)}', [], [], self.window_looks(data, ('pareto',))
+        minutes, stops, pct = data[f'{kind}_minutes'], data[f'{kind}_stops'], data[f'{kind}_pct']
+        share = f'{pval(pct)}% of scheduled minutes{band(data[f"{kind}_band_text"])}'
+        previous = data.get(f'previous_{kind}_minutes')
+        before = self.BEFORE.get(data['window']['period'], 'the window before')
+        if unit == 'minutes':
+            head = (f'**{f2(minutes)} minutes** of {kind} downtime{where} over {stops_text(stops)} · {share} · ' +
+                    (f'{f2(previous)} minutes {before}' if previous is not None else 'previous unavailable') + f' {ref(r)}')
+        else:
+            head = f'**{n(stops)} {kind} stops**{where} · {f2(minutes)} minutes, {share} {ref(r)}'
+        # its reasons ranked as the review ranks them, the top five (the chart and the table hold every one)
+        mine = [(i, x) for i, x in enumerate(rows) if x['kind'] == kind.capitalize() and not (x['scheduled'] or x.get('external'))][:5]
+        bullets = [bullet(f'{x["reason"]}: **' + (f'{pval(x["minutes"])} minutes** over {stops_text(x["stops"])}' if unit == 'minutes' else
+                                                  f'{stops_text(x["stops"])}** · {pval(x["minutes"])} minutes') +
+                          f' · {pval(x["pct_of_scheduled"])}% of scheduled minutes · {review_previous(x)}', r, i) for i, x in mine]
+        other = 'operator' if kind == 'maintenance' else 'maintenance'
+        bullets += ['Beside it', bullet(f'{other.capitalize()} downtime: **{f2(data[f"{other}_minutes"])} minutes** over '
+                                        f'{stops_text(data[f"{other}_stops"])} · {pval(data[f"{other}_pct"])}% of scheduled minutes'
+                                        f'{band(data[f"{other}_band_text"])}', r)]
+        if not mine:
+            bullets.insert(0, f'No {kind} stops are recorded in this window.')
+        looks = self.window_looks(data, ('pareto', 'stops', 'trend_downtime'))
+        return head, bullets, sentences(data.get('method_note')), looks
+
+    def quantity_of_stops(self, p):
+        """The stops or minutes of one stop reason or place (the Pareto grouped by it, in the unit asked)."""
+        data, rows = p['data'], p['data']['rows']
+        named = self.lead.get('reason') or self.lead.get('place')
+        count = self.lead['metric'] == 'stops'
+        unit = 'stops' if count else 'minutes'
+        where, at = self.where(data), ' at ' if 'place' in self.lead else ' for '
+        i = next((j for j, x in enumerate(rows) if x['category'] == named), None)
+        if i is not None:
+            x = rows[i]
+            fig = f'{n(x["stops"])} stops' if count else f'{pval(x["minutes"])} minutes'
+            beside = f'{pval(x["minutes"])} minutes' if count else stops_text(x['stops'])
+            prev = x.get('previous_stops' if count else 'previous_minutes')
+            previous = 'previous unavailable' if prev is None else f'{n(prev) if count else pval(prev)} {unit} {self.BEFORE.get(data["window"]["period"], "the window before")}'
+            head = f'**{fig}**{at}{named}{where} · {beside} · {pval(x["share_pct"])}% of the window\'s {unit} · {previous} {ref(p, i)}'
+        elif data['coverage'] == 'unavailable':
+            head = f'{named}: unavailable, the window holds no production days {ref(p)}'
+        else:
+            head = f'No {unit} recorded{at}{named}{where} in this window {ref(p)}'
+        # the largest other reasons (or places) of the window, as the tool ordered them, beside the one asked about
+        bullets = [bullet(f'{x["category"]}: **' + (f'{n(x["stops"])} stops** · {pval(x["minutes"])} min' if count else
+                                                     f'{pval(x["minutes"])} min** over {stops_text(x["stops"])}') + f' · {pval(x["share_pct"])}%', p, j)
+                   for j, x in enumerate(rows) if j != i][:3]
+        notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[i], 'category') if i is not None else [])
+        return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'pareto'))
+
+    def quantity_of_sheets(self, o):
+        """Sheets cut across all knives (get_overrun), each knife after them."""
+        data, rows = o['data'], o['data']['rows']
+        total = next((i for i, x in enumerate(rows) if x['knife'] == 'all knives'), None)
+        if total is None:
+            return f'No customer lines in this window{self.where(data)} {ref(o)}', [], [], self.window_looks(data, ('grade',))
+        x = rows[total]
+        head = (f'**{n(x["actual_sheets"])} sheets** cut across all knives{self.where(data)} · {n(x["nominal_sheets"])} nominal · '
+                f'{x["overrun_pct"] + 0.0:+.2f}% of nominal cuts {ref(o, total)}')
+        bullets = [bullet(f'{y["knife"]}: **{n(y["actual_sheets"])} sheets** · {n(y["nominal_sheets"])} nominal · {y["overrun_pct"] + 0.0:+.2f}%', o, i)
+                   for i, y in enumerate(rows) if i != total]
+        notes = ['Sheets are counted at the knife: the dry-end rejects are inside them.', *sentences(data.get('band_note'))]
+        return head, bullets, notes, self.window_looks(data, ('grade', 'rollstock'))
 
     def window_looks(self, data, kinds):
         """Where-to-look lines over the same window (or the trends that end on the selected day)."""

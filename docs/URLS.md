@@ -76,7 +76,8 @@ store measures run one record-store tool over a window.
 | `quality` | KPIs and dry-end rejects by reason | the waste breakdown alone: an alias of `waste` |
 | `compare` | KPIs, downtime and speed per shift (`shifts=` or all three) | KPI tiles per shift: an alias of `kpis` with `shifts=` |
 | `setups`, `orders`, `notes`, `rank` | the setup matrix, the order matrix, the notes, the rankings (`rank=` picks the metrics) | refused: "Switch Period to Day", as the question is |
-| `kpis` | `get_period_kpis` for the window with the previous window; `compare=` changes the base | the same |
+| `kpis` | `get_period_kpis` for the window with the previous window; `compare=` changes the base. The KPI summary, for "how did we do": a question that names a countable noun or a unit never lands here (issue #113) | the same |
+| `quantity` | one count or unit (issue #113), named by `metric=`: `setups`, `paper_changes`, `order_changes` (setups an order change started, change code O), `lineal_ft`, `lineal_per_setup`, `lineal_per_paper_change`, `stops`, `downtime_minutes`, `minutes_per_stop` from `get_period_kpis` over the day; `maintenance_minutes`, `operator_minutes`, `maintenance_stops`, `operator_stops` from `get_downtime_review`; `sheets` from `get_overrun`. `reason=` or `place=` narrows `stops` or `downtime_minutes` to one stop reason or place (`get_downtime_pareto` by it, counted or in minutes). The answer opens with that quantity in its unit, then the previous window and the band; with `window=` over that window ("how many setups this week", "how many minutes of steam / moisture this month") | the same over the window |
 | `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |
 | `waste`, `stops`, `grade`, `overrun`, `opportunity` | the waste breakdown, stops per production day, totals by grade, over/under-run by knife, the speed opportunity by `by=width|crew` | the same |
 | `rollstock` | `get_rollstock`: paper consumed from the wet-end records as lineal feet and MSF per grade and web width, paper runs and feet per run, the previous window beside ("how much paper did we consume this month") | the same |
@@ -95,7 +96,8 @@ Modifiers, each refused when it does not apply to the measure:
 | `by=` | `reason`, `place`, `kind` for downtime and the Pareto; `width`, `crew` for the opportunity; `grade` for `fpm` | `reason`; `width`; none |
 | `kind=` | `maintenance`, `operator` (day `overview`, `downtime`, `compare`; refused on the period form, which groups the Pareto with `by=kind`) | both |
 | `unit=` | `minutes`, `count` (Pareto) | `minutes` |
-| `metric=`, `weeks=` | a `TREND_METRICS` name; 1–26 | required; `8` |
+| `metric=`, `weeks=` | `trend`: a `TREND_METRICS` name, `weeks` 1–26; `quantity`: a quantity name (the `quantity` row above) | required; `8` |
+| `reason=`, `place=` | `quantity` with `metric=stops` or `metric=downtime_minutes`: one stop reason or place as a slug, the name lower-cased with every run of other characters a hyphen (`missed-splice`, `knife-slitter-jam`, `raw-material-roll`, `steam-moisture`, `splicer-3`, `slitter-scorer`); one of the two | none |
 | `compare=` | `prev`, `none`, a month `YYYY-MM`, or a date `YYYY-MM-DD` of the same grain (then `compare_periods`); on other measures `prev` alone, as an alias (below) | `prev` |
 | `against=` | `speedvar` only: `baseline` (each grade's trailing-year baseline at the usual grade mix, issue #101; `target`, its old name, redirects to it), `previous` (the previous window of the same grain), `shift` (needs `shifts=` with two shifts, the one explained first: `shifts=3,1`; refused under one shift, which cannot read another) | `baseline` |
 | `shifts=` | distinct shifts, e.g. `2,1`: the shifts a question named under the all-shifts scope (the order is the question's); a store measure takes one, except `kpis`, and `pareto` and `waste` under a ranged grain, which run once per shift, and `speedvar`, which runs once per shift (or, with `against=shift`, takes exactly two) | all three for day plans, all shifts together for store tools |
@@ -170,6 +172,10 @@ shows the refusal of its `.json`.
 | "Compare that with first shift", after "Why was second shift slow?" — all shifts | `/corr/1/day/2026-09-14?measure=compare&shifts=2,1&after=/corr/1/day/2026-09-14?measure=overview%26shifts=2` |
 | "Where did the money go this shift?" — Day, shift 2, paper at $60 | `/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:60` |
 | "Where is the money this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month` |
+| "How many setups did we run last week?" — Day, shift 2 (issue #113) | `/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups` |
+| "How many order changes this week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=order_changes` |
+| "How many minutes of maintenance downtime yesterday?" — Day 2026-09-14, shift 2 (no shift named: the owner's downtime default) | `/corr/1/day/2026-09-11?measure=quantity&metric=maintenance_minutes` |
+| "How many missed splices this week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=stops&reason=missed-splice` |
 | "What were the top 3 contributors to speed variations?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=speedvar` |
 | "What drove speed this week versus last week?" — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=speedvar&window=week&against=previous` |
 | "Why did speed differ on shift 3 versus shift 1 this week?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=speedvar&window=week&against=shift&shifts=3,1` |

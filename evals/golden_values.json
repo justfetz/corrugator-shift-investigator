@@ -15076,6 +15076,1812 @@
    }
   },
   {
+   "id": "value-quantity-week-0907-all",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_period_kpis",
+   "arguments": {
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-07"
+    },
+    "compare": true,
+    "shift": null
+   },
+   "note": "How many setups, paper changes and order changes 7-11 Sep, all shifts: paper changes counted as the week's wet-end run records.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 25,
+    "values": {
+     "metric=volume_msf": {
+      "current": [
+       35103.7571,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       34541.3471,
+       0.051
+      ],
+      "delta": [
+       562.41,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=lineal_ft": {
+      "current": [
+       4295427.4,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       4186755.2,
+       0.051
+      ],
+      "delta": [
+       108672.2,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       7020.75142,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6908.26942,
+       0.051
+      ],
+      "delta": [
+       112.482,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_run_fpm": {
+      "current": [
+       632.491267,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       611.185807,
+       0.051
+      ],
+      "delta": [
+       21.30546,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_all_fpm": {
+      "current": [
+       596.587139,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       581.493778,
+       0.051
+      ],
+      "delta": [
+       15.093361,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=downtime_pct": {
+      "current": [
+       5.67662,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.858102,
+       5.1e-05
+      ],
+      "delta": [
+       0.818519,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=downtime_minutes": {
+      "current": [
+       408.716667,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       349.783333,
+       0.051
+      ],
+      "delta": [
+       58.933333,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=stops": {
+      "current": [
+       176,
+       0
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       143,
+       0
+      ],
+      "delta": [
+       33,
+       0
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=minutes_per_stop": {
+      "current": [
+       2.322254,
+       0.0051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       2.446037,
+       0.0051
+      ],
+      "delta": [
+       -0.123784,
+       0.0102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=trim_pct": {
+      "current": [
+       3.107334,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       3.06217,
+       5.1e-05
+      ],
+      "delta": [
+       0.045163,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=shear_pct": {
+      "current": [
+       0.550301,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.513191,
+       5.1e-05
+      ],
+      "delta": [
+       0.03711,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=dry_end_pct": {
+      "current": [
+       1.067625,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.110025,
+       5.1e-05
+      ],
+      "delta": [
+       -0.0424,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bond_pct": {
+      "current": [
+       0.414032,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.415696,
+       5.1e-05
+      ],
+      "delta": [
+       -0.001664,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=warp_pct": {
+      "current": [
+       0.341813,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.384036,
+       5.1e-05
+      ],
+      "delta": [
+       -0.042223,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=misalignment_pct": {
+      "current": [
+       0.207667,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.205252,
+       5.1e-05
+      ],
+      "delta": [
+       0.002415,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.104113,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.105041,
+       5.1e-05
+      ],
+      "delta": [
+       -0.000928,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       4.952675,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.934343,
+       5.1e-05
+      ],
+      "delta": [
+       0.018332,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=unexplained_pct": {
+      "current": [
+       0.266465,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.288644,
+       5.1e-05
+      ],
+      "delta": [
+       -0.022179,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=maintenance_pm_pct": {
+      "current": [
+       2.640509,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       2.878009,
+       5.1e-05
+      ],
+      "delta": [
+       -0.2375,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=operator_pct": {
+      "current": [
+       3.036111,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.980093,
+       5.1e-05
+      ],
+      "delta": [
+       1.056019,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=setups": {
+      "current": [
+       587,
+       null
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       565,
+       null
+      ],
+      "delta": [
+       22,
+       null
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=paper_changes": {
+      "current": [
+       211,
+       null
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       192,
+       null
+      ],
+      "delta": [
+       19,
+       null
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=lineal_per_setup": {
+      "current": [
+       7317.593526,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       7410.186195,
+       0.051
+      ],
+      "delta": [
+       -92.592668,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=lineal_per_paper_change": {
+      "current": [
+       20357.475829,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       21806.016667,
+       0.051
+      ],
+      "delta": [
+       -1448.540837,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=bale_msf": {
+      "current": [
+       1738.5749,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1704.3885,
+       0.051
+      ],
+      "delta": [
+       34.1864,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "$": {
+      "comparison": [
+       "complete",
+       null
+      ],
+      "production_days_current": [
+       5,
+       null
+      ],
+      "production_days_previous": [
+       5,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
+      ],
+      "order_changes": [
+       327,
+       null
+      ],
+      "previous_order_changes": [
+       302,
+       null
+      ],
+      "order_changes_delta": [
+       25,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-quantity-week-0907-shift-2",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_period_kpis",
+   "arguments": {
+    "window": {
+     "period": "week",
+     "anchor": "2026-09-07"
+    },
+    "compare": true,
+    "shift": 2
+   },
+   "note": "The same week on shift 2: paper changes as the distinct runs its setups ran on (a run that spans a shift change counts in both).",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 25,
+    "values": {
+     "metric=volume_msf": {
+      "current": [
+       12545.1216,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       11435.6327,
+       0.051
+      ],
+      "delta": [
+       1109.4889,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=lineal_ft": {
+      "current": [
+       1529064.7,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       1385814.3,
+       0.051
+      ],
+      "delta": [
+       143250.4,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       2509.02432,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       2287.12654,
+       0.051
+      ],
+      "delta": [
+       221.89778,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_run_fpm": {
+      "current": [
+       663.229561,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       594.001029,
+       0.051
+      ],
+      "delta": [
+       69.228533,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_all_fpm": {
+      "current": [
+       637.110292,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       577.422625,
+       0.051
+      ],
+      "delta": [
+       59.687667,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=downtime_pct": {
+      "current": [
+       3.938194,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       2.790972,
+       5.1e-05
+      ],
+      "delta": [
+       1.147222,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=downtime_minutes": {
+      "current": [
+       94.516667,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       66.983333,
+       0.051
+      ],
+      "delta": [
+       27.533333,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=stops": {
+      "current": [
+       60,
+       0
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       45,
+       0
+      ],
+      "delta": [
+       15,
+       0
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=minutes_per_stop": {
+      "current": [
+       1.575278,
+       0.0051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.488519,
+       0.0051
+      ],
+      "delta": [
+       0.086759,
+       0.0102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=trim_pct": {
+      "current": [
+       3.046678,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       3.076383,
+       5.1e-05
+      ],
+      "delta": [
+       -0.029706,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=shear_pct": {
+      "current": [
+       0.576252,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.49659,
+       5.1e-05
+      ],
+      "delta": [
+       0.079662,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=dry_end_pct": {
+      "current": [
+       1.056237,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.101773,
+       5.1e-05
+      ],
+      "delta": [
+       -0.045536,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bond_pct": {
+      "current": [
+       0.408719,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.41482,
+       5.1e-05
+      ],
+      "delta": [
+       -0.006101,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=warp_pct": {
+      "current": [
+       0.336764,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.380467,
+       5.1e-05
+      ],
+      "delta": [
+       -0.043702,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=misalignment_pct": {
+      "current": [
+       0.208946,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.204252,
+       5.1e-05
+      ],
+      "delta": [
+       0.004695,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.101807,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.102235,
+       5.1e-05
+      ],
+      "delta": [
+       -0.000428,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       4.977115,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.929378,
+       5.1e-05
+      ],
+      "delta": [
+       0.047736,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=unexplained_pct": {
+      "current": [
+       0.336215,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.293998,
+       5.1e-05
+      ],
+      "delta": [
+       0.042217,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=maintenance_pm_pct": {
+      "current": [
+       0.829167,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.156944,
+       5.1e-05
+      ],
+      "delta": [
+       -0.327778,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=operator_pct": {
+      "current": [
+       3.109028,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.634028,
+       5.1e-05
+      ],
+      "delta": [
+       1.475,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=setups": {
+      "current": [
+       212,
+       null
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       182,
+       null
+      ],
+      "delta": [
+       30,
+       null
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=paper_changes": {
+      "current": [
+       82,
+       null
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       70,
+       null
+      ],
+      "delta": [
+       12,
+       null
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=lineal_per_setup": {
+      "current": [
+       7212.56934,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       7614.364286,
+       0.051
+      ],
+      "delta": [
+       -401.794946,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=lineal_per_paper_change": {
+      "current": [
+       18647.130488,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       19797.347143,
+       0.051
+      ],
+      "delta": [
+       -1150.216655,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=bale_msf": {
+      "current": [
+       624.3851,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       563.7056,
+       0.051
+      ],
+      "delta": [
+       60.6795,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "$": {
+      "comparison": [
+       "complete",
+       null
+      ],
+      "production_days_current": [
+       5,
+       null
+      ],
+      "production_days_previous": [
+       5,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
+      ],
+      "order_changes": [
+       127,
+       null
+      ],
+      "previous_order_changes": [
+       100,
+       null
+      ],
+      "order_changes_delta": [
+       27,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "value-quantity-day-0911-all",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "tool": "get_period_kpis",
+   "arguments": {
+    "window": {
+     "period": "day",
+     "anchor": "2026-09-11"
+    },
+    "compare": true,
+    "shift": null
+   },
+   "note": "The production day before Mon 14 Sep, all shifts: what 'how many setups yesterday' counts across the shifts.",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 25,
+    "values": {
+     "metric=volume_msf": {
+      "current": [
+       7030.2564,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6255.6747,
+       0.051
+      ],
+      "delta": [
+       774.5817,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=lineal_ft": {
+      "current": [
+       866436.8,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       764776.8,
+       0.051
+      ],
+      "delta": [
+       101660.0,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=msf_per_day": {
+      "current": [
+       7030.2564,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       6255.6747,
+       0.051
+      ],
+      "delta": [
+       774.5817,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_run_fpm": {
+      "current": [
+       623.919349,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       618.426232,
+       0.051
+      ],
+      "delta": [
+       5.493117,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=speed_all_fpm": {
+      "current": [
+       601.692222,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       531.095,
+       0.051
+      ],
+      "delta": [
+       70.597222,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=downtime_pct": {
+      "current": [
+       3.5625,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       14.121528,
+       5.1e-05
+      ],
+      "delta": [
+       -10.559028,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=downtime_minutes": {
+      "current": [
+       51.3,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       203.35,
+       0.051
+      ],
+      "delta": [
+       -152.05,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=stops": {
+      "current": [
+       33,
+       0
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       45,
+       0
+      ],
+      "delta": [
+       -12,
+       0
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=minutes_per_stop": {
+      "current": [
+       1.554545,
+       0.0051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       4.518889,
+       0.0051
+      ],
+      "delta": [
+       -2.964343,
+       0.0102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=trim_pct": {
+      "current": [
+       3.11824,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       3.112099,
+       5.1e-05
+      ],
+      "delta": [
+       0.006141,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=shear_pct": {
+      "current": [
+       0.518934,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.60753,
+       5.1e-05
+      ],
+      "delta": [
+       -0.088596,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=dry_end_pct": {
+      "current": [
+       1.033228,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       1.036549,
+       5.1e-05
+      ],
+      "delta": [
+       -0.003321,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bond_pct": {
+      "current": [
+       0.41958,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.408163,
+       5.1e-05
+      ],
+      "delta": [
+       0.011417,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=warp_pct": {
+      "current": [
+       0.298043,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.317191,
+       5.1e-05
+      ],
+      "delta": [
+       -0.019148,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=misalignment_pct": {
+      "current": [
+       0.207413,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.205484,
+       5.1e-05
+      ],
+      "delta": [
+       0.001928,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=moisture_pct": {
+      "current": [
+       0.108192,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.10571,
+       5.1e-05
+      ],
+      "delta": [
+       0.002482,
+       0.000102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "metric=bale_pct": {
+      "current": [
+       4.891657,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       5.013154,
+       5.1e-05
+      ],
+      "delta": [
+       -0.121497,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=unexplained_pct": {
+      "current": [
+       0.258834,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       0.295532,
+       5.1e-05
+      ],
+      "delta": [
+       -0.036698,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=maintenance_pm_pct": {
+      "current": [
+       1.024306,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       10.481481,
+       5.1e-05
+      ],
+      "delta": [
+       -9.457176,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=operator_pct": {
+      "current": [
+       2.538194,
+       5.1e-05
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       3.640046,
+       5.1e-05
+      ],
+      "delta": [
+       -1.101852,
+       0.000102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=setups": {
+      "current": [
+       115,
+       null
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       108,
+       null
+      ],
+      "delta": [
+       7,
+       null
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=paper_changes": {
+      "current": [
+       39,
+       null
+      ],
+      "better": [
+       "neutral",
+       null
+      ],
+      "previous": [
+       37,
+       null
+      ],
+      "delta": [
+       2,
+       null
+      ],
+      "change": [
+       "neutral",
+       null
+      ]
+     },
+     "metric=lineal_per_setup": {
+      "current": [
+       7534.233043,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       7081.266667,
+       0.051
+      ],
+      "delta": [
+       452.966377,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=lineal_per_paper_change": {
+      "current": [
+       22216.328205,
+       0.051
+      ],
+      "better": [
+       "higher",
+       null
+      ],
+      "previous": [
+       20669.643243,
+       0.051
+      ],
+      "delta": [
+       1546.684962,
+       0.102
+      ],
+      "change": [
+       "better",
+       null
+      ]
+     },
+     "metric=bale_msf": {
+      "current": [
+       343.896,
+       0.051
+      ],
+      "better": [
+       "lower",
+       null
+      ],
+      "previous": [
+       313.6066,
+       0.051
+      ],
+      "delta": [
+       30.2894,
+       0.102
+      ],
+      "change": [
+       "worse",
+       null
+      ]
+     },
+     "$": {
+      "comparison": [
+       "complete",
+       null
+      ],
+      "production_days_current": [
+       1,
+       null
+      ],
+      "production_days_previous": [
+       1,
+       null
+      ],
+      "equal_production_days": [
+       true,
+       null
+      ],
+      "order_changes": [
+       55,
+       null
+      ],
+      "previous_order_changes": [
+       60,
+       null
+      ],
+      "order_changes_delta": [
+       -5,
+       null
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "value-compare-september-vs-august",
    "type": "value",
    "mode": "offline",

@@ -70,6 +70,21 @@ Every case, whatever its type, also checks:
   envelope; every other number on the line is one of those, a count of the result's rows or a rule constant. A figure
   moved to the wrong row, changed by a digit, stated beside a row it does not cite, or citing a chart step fails the case.
 
+Two more hold "exact over summary" (issue #113), stated in `run.py` on their own, not imported from the router:
+
+- **the catch-all guard**: a question that names a countable noun (setups, paper changes, order changes, stops,
+  splices, step-ups, rolls, sheets, boards, orders, customers, a per-setup or per-paper-change ratio) or asks for a unit
+  (minutes, hours, feet, MSF, square feet, tons, percent) never resolves to the KPI summary, `measure=kpis` (checked on
+  the `GET /q` redirect of every case, live ones included). The KPI summary is for "how did we do".
+- **the unit asked opens the answer**: a count or unit question ("how many setups", "number of paper changes", "how
+  many minutes of …", "minutes per stop", "feet per setup", "how many lineal feet") carries that unit in its headline
+  (the first section with a bold figure that is not a bullet): setups, paper changes, order changes, stops (missed
+  splices are stops), sheets, minutes (or min), ft per setup (or ft/setup), ft per paper change, minutes per stop, lineal ft.
+
+`tests/test_quantity_questions.py` runs both over the issue's catch-all audit as well: the issue's seven rows, the owner's
+interview phrasings and every count or unit phrasing that landed on the KPI summary before; each lands on a measure that
+answers it (`measure=quantity`, the Pareto, the review) or is refused with what can be counted.
+
 Two expectations hold the answer shape itself. `sections_match` takes one pattern or a list of patterns, each
 of which some section must match. `shape` (`why-slow-answer-shape`, `period-slowest-grades-answer-shape`)
 checks one headline, `bullets: [min, max]` finding bullets right under it with one bold figure each, an
@@ -176,7 +191,9 @@ the trim, warp, stops (reaching before the year) and MSF-per-day trends, the thr
 the corrupt-record day, and the money tools' dollars (issue #31a: shift dollars for two shifts, one
 with a visitor's rates; the September waste breakdown and the story week's downtime Pareto priced;
 the opportunities for September and for one week with a margin set), and the speed variance (issue #92:
-September against target, a week against the previous one, shift 3 against shift 1).
+September against target, a week against the previous one, shift 3 against shift 1), and the counts a count question
+opens with (issue #113: setups counted record by record, paper changes as the wet-end run records of the window, order
+changes as the setups whose change code is O, for the week of 7 September, all shifts and shift 2, and Friday 11 September).
 
 Row selectors: `metric=volume_msf` (the first row whose field prints as the
 value), `#0` (row by index), `weekday_profile:weekday=Mon` (another row set),

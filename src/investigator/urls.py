@@ -17,7 +17,7 @@ from datetime import date
 import re
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
-from .agent import Context, PERIOD_WORDS, TREND_METRICS, asked_for, period_plan
+from .agent import Context, PERIOD_WORDS, QUANTITY_METRICS, TREND_METRICS, asked_for, period_plan, quantity_request, slug, unslug
 from .cost_model import format_rates, parse_rates
 
 # URL grain <-> the Period control (web and /api/ask) <-> the period tools' name for it.
@@ -45,10 +45,10 @@ PERIOD_SHAPES = {('get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown
 UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothing: `want=chart` changes their status
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
-QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'lens', 'want',
-                'rates', 'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'weeks', 'compare', 'against', 'shifts', 'rank', 'lens', 'want', 'rates',
-               'corrupt', 'after')
+QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank',
+                'lens', 'want', 'rates', 'corrupt', 'after', 'format')
+PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'weeks', 'compare', 'against', 'shifts', 'rank',
+               'lens', 'want', 'rates', 'corrupt', 'after')
 AGAINST = ('baseline', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; baseline is the default
 AGAINST_ALIASES = {'target': 'baseline'}   # before the owner's speed baseline (issue #101) the default was each grade's target
 LENSES = ('supervisor', 'ownership')   # get_opportunities' owner lenses (issue #101); `all` is the default and is omitted
@@ -56,7 +56,7 @@ MAX_AFTER = 8          # prior views carried as follow-up context; the agent kee
 MAX_URL = 2000
 PATH = re.compile(r'^/corr/(?P<machine>[A-Za-z0-9_.-]{1,32})/(?P<grain>day|week|month|period)/'
                   r'(?P<date>\d{4}-\d{2}-\d{2})(?:/shift/(?P<shift>[123]))?(?P<json>\.json)?$')
-MEASURE_HELP = ('measure is one of ' + ', '.join([*INTENT_MEASURES.values(), *STORE_MEASURES, 'report']) +
+MEASURE_HELP = ('measure is one of ' + ', '.join([*INTENT_MEASURES.values(), *STORE_MEASURES, 'quantity', 'report']) +
                 '; see docs/URLS.md')
 # Hand-typed spellings of a canonical state (issue #70; the "you may type · it becomes" table of docs/URLS.md).
 # `resolve_url` rewrites them before it builds the request; the server redirects them to the canonical address.
@@ -114,7 +114,13 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                 window_param = _month_of(window['anchor'])                          # a named month: "August"
             else:
                 raise ValueError(f'No canonical URL for a window anchored on {window["anchor"]} from {day}')
-        if tools in PERIOD_SHAPES:
+        if request.get('intent') == 'period_quantity':
+            # one quantity (issue #113): the metric names it, a stop reason or place narrows it; the tool follows from them
+            measure = 'quantity'
+            lead = request['lead']
+            params.append(('metric', lead['metric']))
+            params += [(key, slug(lead[key])) for key in ('reason', 'place') if key in lead]
+        elif tools in PERIOD_SHAPES:
             measure = 'summary' if request.get('intent') == 'period_summary' else PERIOD_SHAPES[tools]
             if measure in ('overview', 'summary'):
                 pareto = next(step['arguments'] for step in plan if step['tool'] == 'get_downtime_pareto')
@@ -272,7 +278,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
                 raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
             raise
         request['asked'] = _wants(fields.get('want'))
-    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'rank', 'lens'):
+    for key in ('by', 'kind', 'unit', 'metric', 'reason', 'place', 'weeks', 'window', 'compare', 'against', 'rank', 'lens'):
         if key in fields and key not in _used(measure, fields):
             hint = ''
             if key == 'compare':
@@ -324,6 +330,8 @@ def _used(measure, fields):
         return {'window', 'lens'}
     if measure == 'speedvar':
         return {'window', 'against'}
+    if measure == 'quantity':
+        return {'window', 'metric', 'reason', 'place'}
     if measure in STORE_MEASURES:
         return {'window'}
     return set()
@@ -424,6 +432,8 @@ def _request(measure, fields, context, window):
             return period_plan(intent, window, shifts, group_by, context)
         return {'intent': intent, 'shifts': shifts or ([1, 2, 3] if scope == 'day' else [shift]), 'kind': kind,
                 'group_by': group_by, 'want_chart': True, 'ranking_metrics': metrics}
+    if measure == 'quantity':
+        return _quantity(fields, shifts, context, window)
     if measure not in STORE_MEASURES:
         raise ValueError(f'Unknown measure {measure!r}; ' + MEASURE_HELP)
     if measure == 'speedvar':
@@ -480,6 +490,23 @@ def _request(measure, fields, context, window):
               'trend': 'period_trend', 'rollstock': 'period_rollstock', 'money': 'period_money', 'review': 'period_review'}[measure]
     return {'intent': intent, 'shifts': [s for s in per_shift if s], 'kind': None, 'group_by': 'reason', 'want_chart': True,
             'ranking_metrics': [], 'plan': [{'tool': tool, 'arguments': arguments} for tool, arguments in plan]}
+
+
+def _quantity(fields, shifts, context, window):
+    """`measure=quantity&metric=…` (issue #113): one count or unit over the window, one shift or all shifts, opening
+    with the quantity asked; `reason=` or `place=` (a slug: `missed-splice`, `splicer-3`) narrows stops or downtime
+    minutes to one stop reason or place."""
+    metric = fields.get('metric')
+    if metric not in QUANTITY_METRICS:
+        raise ValueError('metric is one of ' + ', '.join(QUANTITY_METRICS) + ' for measure=quantity')
+    lead = {'metric': metric, **{key: unslug(fields[key], key) for key in ('reason', 'place') if key in fields}}
+    if context.scope == 'shift':
+        shift = context.shift
+    elif len(shifts) > 1:
+        raise ValueError('measure=quantity runs for one shift (shifts=3) or all shifts; it is not split by shift')
+    else:
+        shift = shifts[0] if shifts else None
+    return quantity_request(lead, window, shift)
 
 
 def _speed_by_grade(by, shifts, context, window):

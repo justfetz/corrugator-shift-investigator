@@ -26,7 +26,7 @@ def test_committed_file_is_what_the_generator_produces():
 
 def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
     cases = COMMITTED['cases']
-    assert 40 <= len(cases) <= 100 and len({c["id"] for c in cases}) == len(cases)   # main's 90 + the review and lens cases of #101
+    assert 40 <= len(cases) <= 110 and len({c["id"] for c in cases}) == len(cases)   # main's 90 + the review and lens cases of #101 + #113's counts
     tools = {c['tool'] for c in cases}
     assert tools == {'get_period_kpis', 'compare_periods', 'get_downtime_pareto', 'get_waste_breakdown',
                      'get_stops_profile', 'get_trend', 'get_grade_totals', 'get_overrun', 'get_speed_opportunity', 'get_rollstock',

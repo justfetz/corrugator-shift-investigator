@@ -2688,8 +2688,9 @@
    "scope": "shift",
    "shift": 1,
    "question": "How did shift 1 go compared with last week on lineal per paper change?",
+   "note": "Issue #113's catch-all audit: the one golden question that named a quantity and landed on the KPI summary (measure=kpis, volume first, lineal per paper change the sixth bullet). It names its measure, so it opens with it: lineal per paper change this week on shift 1, the previous week beside; the same tool and arguments.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/1?measure=kpis&window=week",
+    "url": "/corr/1/day/2026-09-14/shift/1?measure=quantity&window=week&metric=lineal_per_paper_change",
     "status": "complete",
     "tools": [
      {
@@ -2705,7 +2706,7 @@
      }
     ],
     "charts": 1,
-    "sections_match": "^- Lineal per paper change \\(wet-end record\\): \\*\\*[0-9.,]+ ft/paper change\\*\\*",
+    "sections_match": "^\\*\\*[0-9,.]+ ft per paper change\\*\\* · [+-][0-9,.]+ vs [0-9,.]+ the week before, (better|worse) \\(query 1 · row [0-9]+\\)$",
     "tables": [
      "get_period_kpis"
     ]
@@ -7481,6 +7482,1133 @@
      "^- Planned maintenance: \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · [0-9.]+% "
     ],
     "sections_not_match": "the other way, an offset"
+   }
+  },
+  {
+   "id": "count-setups-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many setups did we run last week",
+   "note": "Issue #113 (exact over summary): the owner's question opened with 13,233.4 MSF, the KPI summary. It opens with the setup count of the week it names (7-11 Sep, question_scope), the previous week beside; paper changes, feet per setup and lineal feet follow, the other tiles folded.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before \\(query 1 · row [0-9]+\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- Paper changes \\(distinct wet ends\\): \\*\\*[0-9,]+\\*\\* · ",
+     "^- Lineal per setup \\(dry-end record\\): \\*\\*[0-9,.]+ ft/setup\\*\\* · ",
+     "^The other KPI tiles$"
+    ]
+   }
+  },
+  {
+   "id": "count-paper-changes-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many paper changes last week",
+   "note": "Issue #113 (exact over summary): opened with MSF; it opens with the paper changes (wet-end runs) of 7-11 Sep, feet per paper change beside.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=paper_changes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ paper changes\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before \\(query 1 · row [0-9]+\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": "^- Lineal per paper change \\(wet-end record\\): \\*\\*[0-9,.]+ ft/paper change\\*\\* · "
+   }
+  },
+  {
+   "id": "count-order-changes-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many order changes this week",
+   "note": "Issue #113 (exact over summary): opened with MSF; it opens with the setups an order change started this week (change code O), counted by the KPI tool beside its tiles, the setups they are among after it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=order_changes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ order changes\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before \\(query 1\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": "change code O"
+   }
+  },
+  {
+   "id": "unit-lineal-per-setup-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "what was our lineal per setup last week",
+   "note": "Issue #113 (exact over summary): opened with MSF; it opens with feet per setup, the ratio it names, the setups and lineal feet it is made of after it.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=lineal_per_setup",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ ft per setup\\*\\* · [+-][0-9,.]+ vs [0-9,.]+ the week before, (better|worse) \\(query 1 · row [0-9]+\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    }
+   }
+  },
+  {
+   "id": "unit-maintenance-minutes-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many minutes of maintenance downtime yesterday",
+   "note": "Issue #113 (exact over summary): opened with a percent (2.61%); it opens with the minutes asked, the percent of scheduled minutes and the owner's band beside, then each maintenance reason in minutes. No shift named: the owner's downtime default (issue #101), the previous production day across all shifts (Fri 11 Sep from Mon 14 Sep).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=quantity&metric=maintenance_minutes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* of maintenance downtime over [0-9]+ stops? · [0-9.]+% of scheduled minutes · (on target|over target|flag)[^·]* · ([0-9.]+ minutes the production day before|previous unavailable) \\(query 1\\)$"
+    },
+    "sections_match": "^- .+: \\*\\*[0-9.]+ minutes\\*\\* over [0-9]+ stops? · [0-9.]+% of scheduled minutes · "
+   }
+  },
+  {
+   "id": "count-stops-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many stops did we have yesterday",
+   "note": "Issue #113 (exact over summary): opened with a percent (4.10%); it opens with the stops, then the downtime minutes and the minutes per stop. No shift named: the owner's downtime default, the previous production day across all shifts.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=quantity&metric=stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ the production day before, (better|worse) \\(query 1 · row [0-9]+\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": [
+     "^- Downtime minutes: \\*\\*[0-9.]+ min\\*\\* · ",
+     "^- Minutes per stop: \\*\\*[0-9.]+ min/stop\\*\\* · "
+    ]
+   }
+  },
+  {
+   "id": "count-setups-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "how many setups yesterday",
+   "note": "Issue #113 (exact over summary): the one row that already opened with its count (the setup matrix, 44 setups). The week form must match it, so both are the same measure in their own grain: the shift's setups on Fri 11 Sep with the day before beside, and the setup matrix is the first place to look.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11/shift/2?measure=quantity&metric=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* · [+-][0-9,]+ vs [0-9,]+ the production day before \\(query 1 · row [0-9]+\\)$",
+     "bullets": [
+      3,
+      3
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
+    "sections_match": "→ “Show the setup matrix”$"
+   }
+  },
+  {
+   "id": "count-missed-splices-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many missed splices this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. A missed splice is a stop reason (the owner, #24 Q2): the count is its stops, the minutes beside.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=stops&reason=missed-splice",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "count",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Missed splice · [0-9.]+ minutes · [0-9.]+% of the window\\'s stops · "
+    }
+   }
+  },
+  {
+   "id": "count-splices-missed-yesterday",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many splices did we miss yesterday?",
+   "note": "Issue #113 (exact over summary): refused on main (Offline mode supports ...). A missed splice's count is its stops; a downtime question with no shift named takes the owner's default, the previous production day across all shifts.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=quantity&metric=stops&reason=missed-splice",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "group_by": "reason",
+       "measure": "count",
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Missed splice · [0-9.]+ minutes · "
+    }
+   }
+  },
+  {
+   "id": "unit-minutes-lost-to-missed-splices",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes did we lose to missed splices this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. The minutes of one stop reason (CLAUDE.md's example of a measure named) open the answer.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=downtime_minutes&reason=missed-splice",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* for Missed splice · [0-9]+ stops? · [0-9.]+% of the window\\'s minutes · "
+    }
+   }
+  },
+  {
+   "id": "count-step-ups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many step-ups did we have this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. No wet-end width change is in the records yet (#102): refused plainly with what can be counted, never the KPI summary.",
+   "expect": {
+    "raises": "The records hold no step-ups"
+   }
+  },
+  {
+   "id": "count-rolls-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many rolls did we use this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Paper is recorded as lineal feet, MSF and paper runs, not rolls (until the record contract v2, #100): refused with the rollstock question that answers in those units.",
+   "expect": {
+    "raises": "The records do not count rolls"
+   }
+  },
+  {
+   "id": "count-sheets-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many sheets did we make this week?",
+   "note": "Issue #113 (exact over summary): opened with MSF (volume by grade, a different unit); the sheets are counted at the knife (over/under-run), each knife after the total.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=sheets",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_overrun",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_overrun",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ sheets\\*\\* cut across all knives · [0-9,]+ nominal · [+-][0-9.]+% of nominal cuts \\(query 1 · row [0-9]+\\)$"
+    }
+   }
+  },
+  {
+   "id": "count-boards-at-the-knife-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many boards did we lose at the knife this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Rejects are recorded as square feet by reason; board counts at the knife and stacker come with #100.",
+   "expect": {
+    "raises": "The records do not count boards"
+   }
+  },
+  {
+   "id": "count-boards-at-the-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many boards did we lose at the stacker yesterday?",
+   "note": "Issue #113 (exact over summary): refused on main with the generic help; refused plainly now, never as stops at the stacker (a different count).",
+   "expect": {
+    "raises": "The records do not count boards"
+   }
+  },
+  {
+   "id": "count-stops-at-the-stacker",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops at the stacker this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Trouble on the discharge (the owner, #24 Q1): the stops recorded at the stacker, a place.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=stops&place=stacker",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "place",
+       "measure": "count",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* at Stacker · [0-9.]+ minutes · "
+    }
+   }
+  },
+  {
+   "id": "count-splices-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many splices did we run this week?",
+   "note": "Issue #113 (exact over summary): every splice is not recorded, only a missed one as a stop reason: refused with the missed-splice question.",
+   "expect": {
+    "raises": "not every splice"
+   }
+  },
+  {
+   "id": "unit-hours-of-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many hours of downtime this month?",
+   "note": "Issue #113 (exact over summary): routed to the Pareto in stop counts on main (a different unit): the records keep minutes, so the answer names the minutes question rather than convert.",
+   "expect": {
+    "raises": "The records keep downtime in minutes, not hours"
+   }
+  },
+  {
+   "id": "count-orders-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many orders did we run this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Order lines repeat when an order continues across setups and shifts: refused with order changes, which are counted.",
+   "expect": {
+    "raises": "The records do not count distinct orders"
+   }
+  },
+  {
+   "id": "count-wet-ends-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many wet ends this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. A wet-end run is a paper change.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=paper_changes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ paper changes\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "count-paper-changes-this-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many paper changes this month?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=month&metric=paper_changes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ paper changes\\*\\* · [+-][0-9,]+ vs [0-9,]+ the month before "
+    }
+   }
+  },
+  {
+   "id": "count-number-of-setups-this-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Number of setups this month",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=month&metric=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "count-stops-this-week-all-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "question": "How many stops this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. All shifts: the week names a window, so the owner's day default does not move it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before"
+    }
+   }
+  },
+  {
+   "id": "count-of-stops-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Count of stops this week",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unit-feet-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many feet did we run last week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Lineal feet, the unit asked (volume by grade would lead with MSF).",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=lineal_ft",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unit-lineal-feet-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many lineal feet did we run this week?",
+   "note": "Issue #113 (exact over summary): opened with MSF on main (volume by grade), not the feet asked.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=lineal_ft",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unit-feet-per-paper-change-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What was our feet per paper change this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=lineal_per_paper_change",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ ft per paper change\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unit-minutes-per-stop-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Minutes per stop this week",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unit-minutes-per-stop-last-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Average minutes per stop last month",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. Last month moves the scope to August (its first production day, Mon 3 Aug).",
+   "expect": {
+    "url": "/corr/1/month/2026-08-03/shift/2?measure=quantity&metric=minutes_per_stop",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-03"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · [+-][0-9.]+ vs [0-9.]+ the month before"
+    }
+   }
+  },
+  {
+   "id": "unit-minutes-of-downtime-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes of downtime last week?",
+   "note": "Issue #113 (exact over summary): routed to the Pareto in stop counts on main (\"how many\" read as a count): the minutes asked open the answer, the stops beside.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=downtime_minutes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* of downtime · "
+    }
+   }
+  },
+  {
+   "id": "unit-operator-minutes-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes of operator downtime this week?",
+   "note": "Issue #113 (exact over summary): routed to the Pareto in stop counts on main: the operator minutes open the answer, each operator reason after.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=operator_minutes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_review",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* of operator downtime over [0-9]+ stops? · [0-9.]+% of scheduled minutes · "
+    }
+   }
+  },
+  {
+   "id": "unit-minutes-of-steam-moisture-this-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes of steam / moisture this month?",
+   "note": "Issue #113 (exact over summary): routed to the waste breakdown on main (\"moisture\" read as the reject family): Steam / moisture is a stop reason.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=month&metric=downtime_minutes&reason=steam-moisture",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* for Steam / moisture · "
+    }
+   }
+  },
+  {
+   "id": "count-changeovers-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many changeovers this week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. A changeover is an order change (change code O).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=order_changes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ order changes\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "count-order-changes-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many order changes last week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/2?measure=quantity&metric=order_changes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ order changes\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before \\(query 1\\)$"
+    }
+   }
+  },
+  {
+   "id": "count-setups-this-period",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many setups this period?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. This period is the 4-4-5 accounting period.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=quantity&window=period&metric=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": 2
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* · .* the period before "
+    }
+   }
+  },
+  {
+   "id": "count-paper-changes-shift-1-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many paper changes on shift 1 last week?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main. The question's own shift and window win over the controls (issue #105).",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07/shift/1?measure=quantity&metric=paper_changes",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-07"
+       },
+       "compare": true,
+       "shift": 1
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ paper changes\\*\\* · "
+    },
+    "shifts": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "count-setups-shift-3-last-month",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many setups did we run on shift 3 last month?",
+   "note": "Issue #113 (exact over summary): found by the catch-all audit, where it landed on the KPI summary (measure=kpis) on main.",
+   "expect": {
+    "url": "/corr/1/month/2026-08-03/shift/3?measure=quantity&metric=setups",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-08-03"
+       },
+       "compare": true,
+       "shift": 3
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* · "
+    },
+    "shifts": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "guard-setups-summary-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How did we do on setups this month?",
+   "note": "Issue #113 (exact over summary): the catch-all guard. A \"how did we do\" question that names a countable noun would have landed on the KPI summary; until the model reads such questions (#104) it is refused with what can be counted.",
+   "expect": {
+    "raises": "Offline mode answers one quantity at a time"
+   }
+  },
+  {
+   "id": "guard-compare-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Compare stops this week to last week",
+   "note": "Issue #113 (exact over summary): the catch-all guard: the KPI tiles this week against last would answer stops with volume first.",
+   "expect": {
+    "raises": "Offline mode answers one quantity at a time"
    }
   }
  ]

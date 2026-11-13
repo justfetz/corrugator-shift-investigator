@@ -26,7 +26,7 @@ Two files hold the cases. `evals/golden.json` is questions with written expectat
 
 ## How a score is computed
 
-- **An offline case passes or fails on its own.** It passes only when every expectation it carries holds **and** every global invariant holds: zero model calls and $0; every tool in the catalog and inside the selected scope; chart rows equal to the rows they cite; tables complete; every number on a cited line a value of the row it cites.
+- **An offline case passes or fails on its own.** It passes only when every expectation it carries holds **and** every global invariant holds: zero model calls and $0; every tool in the catalog and inside the selected scope; chart rows equal to the rows they cite; tables complete; every number on a cited line a value of the row it cites; and exact over summary (issue #113): a question that names a countable noun or a unit never lands on the KPI summary, and a count or unit question's headline carries the unit it asked for.
 - **It is checked twice.** After the in-process run, the question is sent to `GET /q` on a loopback server: the redirect must land on the case's address, and the answer served there is scored with the same expectations.
 - **It has a time budget.** An offline case fails above its `max_ms` (250 ms unless the case sets more), and a whole-set run fails when the offline p50 is over 100 ms or the p95 over 250 ms.
 - **A live case passes by rate.** Recorded model rounds are replayed through the real agent and validators and scored per type against a threshold: routing at least 90%, investigation at least 80%, every other type 100%.

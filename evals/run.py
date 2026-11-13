@@ -104,6 +104,44 @@ NUMBER = re.compile(r'\d[\d,]*(?:\.\d+)?')
 RUN_ID = re.compile(r'[0-9a-f]{32}:\d+')
 CITATION = re.compile(r'^(?:Shift (\d)|All shifts), (\w+), ([0-9a-f]{32}:\d+), row (\d+)$')
 COMPARISON_WITHDRAWN_LINE = 'A comparison was withdrawn because it contradicted its own figures.'
+# Exact over summary (issue #113), stated here independently of the router. The KPI summary (`measure=kpis`) answers
+# "how did we do": a question that names a countable noun or asks for a unit never lands on it. And a count or unit
+# question's headline carries the unit it asked for (first match wins: a ratio before the count of its parts).
+QUANTITY_NOUN = re.compile(r'\b(set-?ups?|paper changes?|order changes?|changeovers?|wet[- ]ends?|stops|stoppages?|splices?|'
+                           r'step[- ]?ups?|rolls?|sheets?|boards?|orders?|customers?)\b|\bper (set-?up|paper change|stop|wet[- ]end)\b', re.I)
+ASKED_UNIT = re.compile(r'\b(minutes|hours?|feet|ft|footage|msf|sq ft|square feet|tons?|percent)\b|%', re.I)
+COUNT_ASKED = r'\b(?:how many|number of|count of|total)\b.*'
+ASKED_UNITS = ((r'\bminutes per stop\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
+               (r'\b(?:lineal|feet|ft) per (?:paper change|wet[- ]end)\b|\bper paper change\b', r'\bft(?: per |/)paper change\b'),
+               (r'\b(?:lineal|feet|ft) per set-?up\b|\bper set-?up\b', r'\bft(?: per |/)setup\b'),
+               (r'\bhow many minutes\b|\bminutes (?:of|did|were|was|lost)\b|\bin minutes\b|\btotal (?:downtime )?minutes\b', r'\bmin(?:utes)?\b'),
+               (COUNT_ASKED + r'\b(?:order changes?|changeovers?)\b', r'\border changes\b'),
+               (COUNT_ASKED + r'\b(?:paper changes?|wet[- ]ends?)\b', r'\bpaper changes\b'),
+               (COUNT_ASKED + r'\bset-?ups?\b', r'\bsetups\b'),
+               (COUNT_ASKED + r'\b(?:stops|stoppages|missed splices?|splices (?:did )?we miss)\b', r'\bstops\b'),
+               (COUNT_ASKED + r'\bsheets\b', r'\bsheets\b'),
+               (r'\bhow many (?:lineal )?(?:feet|ft)\b|\blineal feet\b', r'\b(?:lineal )?ft\b'))
+
+
+def catch_all_failures(question, url):
+    """A question naming a countable noun or a unit that resolved to the KPI summary (issue #113)."""
+    named = QUANTITY_NOUN.search(question) or ASKED_UNIT.search(question)
+    if named and re.search(r'[?&]measure=kpis(&|$)', url or ''):
+        return [f'{question[:60]!r} names {named[0]!r} but lands on the KPI summary (measure=kpis): a quantity question '
+                'opens with its quantity or is refused']
+    return []
+
+
+def asked_unit_failures(question, sections):
+    """A count or unit question whose headline (the first section with a bold figure that is not a bullet, else the
+    first section) does not carry the unit it asked for (issue #113)."""
+    want = next((unit for ask, unit in ASKED_UNITS if re.search(ask, question, re.I)), None)
+    if want is None or not sections:
+        return []
+    head = next((s for s in sections if '**' in s and not s.startswith('- ')), sections[0])
+    if not re.search(want, head, re.I):
+        return [f'asked for /{want}/ but the headline says {head[:70]!r}']
+    return []
 
 
 # ---------------------------------------------------------------- cases
@@ -251,6 +289,7 @@ def via_url(case, expect, turns, redirect_only=False):
             failures.append(f'GET /q answered {status}, expected a 302 to the canonical URL')
             break
         location = headers['Location']
+        failures.extend(catch_all_failures(text, location))
         if redirect_only:
             continue
         status, headers, body = http_get(location)
@@ -1139,6 +1178,9 @@ def score(case, expect, results, analysis, allowed, mode):
         failures.extend(expectations(expect, results[-1]))
         if case['type'] == 'value':
             failures.extend(value_failures(expect, results[-1]))
+    turns = case.get('turns') or [case.get('question')]
+    if mode == 'offline' and case.get('plan') is None and turns[-1]:
+        failures.extend(asked_unit_failures(turns[-1], results[-1]['sections']))   # issue #113: the unit asked opens the answer
     return failures
 
 
