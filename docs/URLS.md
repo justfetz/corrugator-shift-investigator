@@ -191,6 +191,7 @@ resolves each question through the server and fails the case when it lands elsew
 | `GET /corr/…?measure=…` | the app page; `app.js` reads the address, sets the controls and fetches the `.json`. The bare scope address (no `measure`) is the page with the controls set. An alias, in any representation below, is a **302** to the canonical address in the same representation (see Aliases). |
 | `GET /corr/….json?measure=…`, `…&format=json`, or `Accept: application/json` | the JSON `/api/ask` returns for the same state, plus `url` (the page address, with the `after=` chain) and no `session_id`; the bare scope address is a 400 asking for `measure=`. `Server-Timing: app;dur=<ms>` is the server's own time. |
 | `GET /corr/…?measure=…&format=pdf` | the PDF of that answer, rendered on request from the same state. No report cache, so any instance serves any PDF; `POST /api/report` remains for live answers, which have no address. |
+| `GET /data…` | the data browser: the tables the answers read, a table's schema and rows, its CSV ([below](#the-data-browser)) |
 
 While the hosted demo keeps its question log (issue #125, [the fields](DATA.md#the-question-log)), the page sends `/q` two
 random ids as headers, `X-Question-Line` and `X-Question-Session`, which ride its redirect to the `.json` answer. They
@@ -206,6 +207,35 @@ cap. It
 takes its own lock (`Workbench.read_lock`) and keeps its own three-day analysis cache, so a URL answer
 never waits behind a live round that holds `Workbench.lock`. `POST /api/ask` answers in offline mode
 also carry `url`, the question's own address without a conversation chain.
+
+## The data browser
+
+The tables every answer reads have addresses of their own (issue #142, `datapages.py`), Datasette-style. The URL is the state: a filter is a query parameter, so a link is the page.
+
+| Request | Answer |
+| --- | --- |
+| `GET /data` | the page (`data.html`, `data.js`): every table the tools read with what it is, its rows in the window and its first and last day |
+| `GET /data.json` (or `/data` with `Accept: application/json`) | the same as JSON: `tables` (name, label, meaning, rows, first_day, last_day, columns, url, contract), `window`, `dataset_hash` |
+| `GET /data/<table>?<filters>` | the page of one table: its rows, 50 at a time, newest first, then its schema (each column's type, unit and meaning from [the record contract](RECORD_CONTRACT.md), with a link to its row there) and the query that ran |
+| `GET /data/<table>.json?<filters>` (or `Accept: application/json`) | the same as JSON: `columns`, `filters` (as applied), `filterable`, `rows`, `count`, `page`, `pages`, `url` (the canonical address), `newer`, `older`, `csv`, `sql`, `parameters`, `count_sql`, `elapsed_ms` |
+| `GET /data/<table>.csv?<filters>` | the filtered rows as CSV, newest first, at most 10,000; `X-Rows-Truncated` says whether more matched |
+
+The tables are the record contract's (`setups`, `setup_orders`, `stops`, `rejects`, `wet_ends`, `rolls`, `shifts`, `customers`, `reject_reasons`) and the derived `shift_kpis` ([metrics](METRICS.md#the-shift_kpis-table)). The filters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `day=YYYY-MM-DD` | one production day (a dated table) |
+| `from=`, `to=` | a span of production days, either end optional; not with `day` |
+| `weekday=Mon` … `Fri` | the production days of one weekday |
+| `shift=1`, `2` or `3` | one shift (a table with a shift column) |
+| `<column>=<value>` | equality on any text, whole-number, number or yes/no column of the table; text compares without case. `order=` is `order_number=` and `grade=` is `quality_id=`; on `stops`, `kind=pm` is `kind=Scheduled` (the contract's rule) |
+| `page=N` | the page of 50, from 1 to 2,000 |
+
+An unknown parameter, a repeated one, a value of the wrong type or longer than 120 characters is a 400 that names it; an unknown table is a 404. The server answers with the canonical spelling (`url`: the filters in the order above, the column filters in the table's column order), and the page puts it in the address bar. Examples: `/data/stops?day=2026-09-14&shift=2&reason=Missed%20splice`, `/data/setup_orders?order_number=SO-2609140077`, `/data/shift_kpis?from=2026-09-07&to=2026-09-11&shift=2&corrupt=false`.
+
+**Bounded and read-only.** Every query is one fixed `SELECT` over an allowlisted table and its allowlisted columns, every value bound as a parameter, with a `LIMIT` and the record store's own lock, two-second cap and row cap, the bounds every tool runs under (`RecordStore._fetch`). There is no typed SQL, in public mode or on the workbench, no system table and no file path. The routes are GET-only (a POST is refused like any other path), carry no `Access-Control-Allow-Origin`, write nothing and log nothing to the question log; the loopback Host rule and the public mode's origin rules are unchanged. The data reads have a container-wide window of their own, 600 a minute, so browsing rows never spends a visitor's question rounds; a page answers in a few milliseconds on the prebuilt store.
+
+**Receipts link here.** Each step of an answer's trace carries `source`: the table it read, the filter it read it with (its window or production day and its shift), `url`, and `rows`, one address per row of each cited list (`row`, `detail`, `weekday`, `flag`). A finding's "(query N · row M)" gets a "rows ↗" link to `rows[part][M]`, else to the step's own `url`, and each step of the query box links to its rows. [The agent contract](AGENT_CONTRACT.md#what-each-tool-read) lists what each tool declares.
 
 ## What the browser does
 

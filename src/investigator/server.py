@@ -15,6 +15,11 @@ resolves a typed question and redirects to its canonical URL, `/corr/<machine>/<
 PDF with `format=pdf`. That path never calls a model and never waits on the lock a live round holds.
 Live analysis stays on `POST /api/ask`.
 
+The data browser (issue #142, datapages.py): `GET /data` lists the tables every answer reads, `/data/<table>` shows a
+table's schema and its rows 50 at a time, newest first, filtered by the URL, and `/data/<table>.csv` downloads the
+filtered rows (bounded). Read-only, GET-only, fixed parameterized queries under the store's own lock and time cap;
+each trace entry of an answer declares the table and filter it read (`source`), so its receipts link there.
+
 The question log (issue #125, questionlog.py): in the hosted demo each question the page asks, its answer, an analyst
 round on it and a thumbs up or down on its card (`POST /api/feedback`) are one JSON line each on stdout, written
 after the response; no IP, user agent, cookie, key or other header value is in a line.
@@ -43,6 +48,7 @@ from urllib.parse import parse_qsl, urlsplit
 from .agent import Agent, Context, TOOL_SCHEMAS, parse_request, question_scope, route
 from .anthropic_provider import resolve_model
 from .cost_model import client_config, effective as effective_rates, parse_rates
+from . import datapages
 from .docsite import load_site as load_docs
 from .evalboard import EvalBoard, evals_dir
 from .questionlog import LINES_PER_MIN, QuestionLog, check_comment, ids as log_ids, scope_of, valid_id
@@ -55,6 +61,7 @@ LIVE_MODEL = 'gpt-4.1-mini-2025-04-14'
 LIVE_MODES = ('openai', 'anthropic')
 EVAL_RUNS_PER_MIN = 120   # POST /api/evals/run, container-wide: a case is 10-100 ms offline, the whole set about 3 s once a minute
 FEEDBACK_PER_MIN = 60     # POST /api/feedback, container-wide, as the question window; per IP it is DEMO_RATE_LIMIT_PER_MIN, as /api/ask
+DATA_READS_PER_MIN = 600 # GET /data/<table>.json and .csv, container-wide: a page is a few milliseconds of the store's lock
 LIVE_CONCURRENCY = 2      # live rounds in flight per container; a third is answered 429 `busy` instead of queueing
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
 
@@ -150,6 +157,7 @@ class Workbench:
         self.requests = deque()
         self.request_limit = 60       # investigations per process per minute (POST and URL answers); the eval harness raises it
         self.eval_requests = deque()  # /api/evals/run has its own window, so browsing the golden set never spends the question limits
+        self.data_requests = deque()  # the data browser's reads (issue #142) have theirs: browsing rows never spends a question
         self.rate_windows = {}        # client ip -> deque of /api/ask timestamps (fixed 60-second window)
         self.feedback_requests = deque()   # POST /api/feedback has windows of its own: a thumbs up never spends a question
         self.feedback_windows = {}         # client ip -> deque of feedback timestamps, limited like rate_windows
@@ -325,6 +333,7 @@ class Workbench:
             context.history = resolved['history']
             analysis = self._read_dataset(resolved['day'], resolved['corrupt'])
             result = Agent(analysis, max_turns=self.guards.max_turns).ask(resolved['text'], context, request=resolved['request'])
+            datapages.attach_sources(result, resolved['corrupt'])   # each step names the rows it read: the receipts' links (#142)
         result['url'] = page_url(resolved)
         result['report_markdown'] = self._markdown(result)
         return result, resolved['format']
@@ -448,6 +457,7 @@ class Workbench:
         result = Agent(self._dataset((run.production_day, job['corrupt'])), max_turns=self.guards.max_turns).ask(job['question'], run, request=request)
         self._settle(context, run)
         result['url'] = canonical_url(request, run, job['corrupt'], self.store.machine_id)   # the question's own address
+        datapages.attach_sources(result, job['corrupt'])   # each step names the rows it read: the receipts' links (#142)
         return self._retain(result, job['session_id'], job['session_reset'])
 
     def make_planner(self, mode, key, budget, cancelled=None):
@@ -481,6 +491,7 @@ class Workbench:
             planner.close()
             with self.lock:
                 self.pins[key] -= 1
+        datapages.attach_sources(result, job['corrupt'])
         with self.lock:
             self._settle(context, run)
             return self._retain(result, job['session_id'], job['session_reset'])
@@ -827,6 +838,8 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                 return self._send(302, {'url': target}, extra={'Location': target, 'Cache-Control': 'no-store'})
             if url.path.startswith('/corr/'):
                 return self._answer_url(url)
+            if url.path in ('/data', '/data/', '/data.json') or url.path.startswith('/data/'):
+                return self._data(url)
             if self.path in ('/api/health', '/healthz'):  # /healthz is reserved by Google's front end on *.run.app; /api/health reaches the container everywhere
                 return self._send(200, {'ok': True, 'public': public is not None,
                                         'store': {'source': app.store.boot_source, 'boot_ms': round(app.store.boot_seconds * 1000),
@@ -876,7 +889,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             files = {'/': ('index.html', 'text/html; charset=utf-8'),
                      '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
                      '/trail.js': ('trail.js', 'text/javascript; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
-                     '/money.js': ('money.js', 'text/javascript; charset=utf-8'),
+                     '/money.js': ('money.js', 'text/javascript; charset=utf-8'), '/data.js': ('data.js', 'text/javascript; charset=utf-8'),
                      '/style.css': ('style.css', 'text/css; charset=utf-8')}
             path = self.path
             if app.evals is not None and path.split('?', 1)[0] == '/evals':   # /evals?case=<id> opens that case: the URL is the state
@@ -892,6 +905,47 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             if etag in held or etag[:-1] + '-gzip"' in held:   # either representation the browser may hold
                 return self._send(304, b'', content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
             self._send(200, data, content_type, {'ETag': etag, 'Cache-Control': 'no-cache'})
+
+        def _data(self, url):
+            """`/data[.json]` and `/data/<table>[.json|.csv]?<filters>` (issue #142, datapages.py, docs/URLS.md): the page,
+            the tables as JSON, a table's schema and one page of rows, or the filtered rows as CSV. GET-only and read-only:
+            fixed parameterized queries over allowlisted tables and columns under the store's own lock, time cap and row
+            cap; no answer, no model and no question log. The data reads have a container-wide window of their own."""
+            path = '/data' if url.path in ('/data', '/data/') else url.path
+            name = path.removeprefix('/data/') if path.startswith('/data/') else ''
+            if path == '/data' and not self._wants_json(url.query) or (name and '.' not in name and not self._wants_json(url.query)):
+                if name and name not in datapages.TABLES:
+                    return self._send(404, {'error': f'No table {name!r}; the tables are {", ".join(datapages.TABLES)}'})
+                return self._static((WEB/'data.html').read_bytes(), 'text/html; charset=utf-8')
+            now = time.monotonic()
+            window = app.data_requests
+            while window and window[0] < now-60:
+                window.popleft()
+            if len(window) >= DATA_READS_PER_MIN:
+                return self._send(429, {'error': 'Data browser limit reached; retry in a minute'}, extra={'Retry-After': str(math.ceil(window[0]+60-now))})
+            window.append(now)
+            started = time.perf_counter()
+            timing = lambda: {'Server-Timing': f'app;dur={(time.perf_counter()-started)*1000:.1f}'}
+            try:
+                if path in ('/data', '/data.json'):
+                    return self._send(200, datapages.index(app.store), extra=timing())
+                table, _, suffix = name.partition('.')
+                if suffix not in ('', 'json', 'csv'):
+                    return self._send(404, {'error': 'Not found'})
+                if table not in datapages.TABLES:
+                    return self._send(404, {'error': f'No table {table!r}; the tables are {", ".join(datapages.TABLES)}'})
+                if suffix == 'csv':
+                    body, truncated = datapages.csv_rows(app.store, table, url.query)
+                    return self._send(200, body, 'text/csv; charset=utf-8',
+                                      {**timing(), 'Content-Disposition': f'attachment; filename="{table}.csv"',
+                                       'X-Rows-Truncated': 'true' if truncated else 'false'})
+                return self._send(200, datapages.page(app.store, table, url.query), extra=timing())
+            except ValueError as exc:
+                if 'limit' in str(exc):   # the store's time or row cap
+                    return self._send(503, {'error': str(exc)})
+                return self._send(400, {'error': str(exc)})
+            except Exception:
+                return self._send(500, {'error': 'The rows could not be read'})
 
         def _answer_url(self, url):
             """`/corr/<machine>/<grain>/<date>[/shift/<n>][.json]?measure=...`: the page, the answer or the PDF.

@@ -1694,3 +1694,97 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(fs.readFileSync('src/investigator/docsite.py','utf8'),new RegExp(`^REPO = '${repo.replace(/[./]/g,'\\$&')}'$`,'m'));
  console.log('UI issue-145 checks passed: a GitHub link in the header of the main page (between Docs and the eval badge), /evals and /docs.');
 }
+
+// ---- issue #142: the data browser. /data lists the tables (/data.json); /data/<table> renders the schema (type, unit,
+// the contract's meaning and a link to its row), the rows newest first with cells that link to a filter or to the row
+// they name, and the filters of its own address; a receipt on an answer links to the rows its step declared. The
+// payloads are the server's own answers for the golden window (tests/ui_fixtures/data_*.json; test_datapages.py keeps
+// them in step).
+(async()=>{
+ const dataHtml=fs.readFileSync('src/investigator/web/data.html','utf8');
+ const load=async(pathname,search,payload,status=200)=>{
+  const els=Object.fromEntries([...dataHtml.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+  const fetched=[], assigned=[], replaced=[];
+  const doc={getElementById:id=>{assert.ok(els[id],`Unknown element ${id}`);return els[id];},createElement:tag=>new Element(tag),title:''};
+  const ctx={document:doc,console,location:{pathname,search,assign:u=>assigned.push(u)},history:{replaceState:(a,b,u)=>replaced.push(u)},
+   fetch:async(url,init)=>{fetched.push([url,init&&init.headers&&init.headers.Accept]);return {ok:status===200,status,json:async()=>JSON.parse(JSON.stringify(payload))};}};
+  vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/investigator/web/data.js','utf8'),ctx);
+  await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));
+  return {els,doc,fetched,assigned,replaced};
+ };
+ const walkAll=e=>[e,...(e.children||[]).flatMap(walkAll)];
+ const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
+ // /data: one row per table, its meaning, rows in the window, first and last day, and a link to its page
+ const index=JSON.parse(fs.readFileSync('tests/ui_fixtures/data_index.json','utf8'));
+ let p=await load('/data','',index);
+ assert.deepEqual(p.fetched,[['/data.json','application/json']]);
+ const table=walkAll(p.els['data-body']).find(e=>e.tag==='table'), body=table.children.find(e=>e.tag==='tbody');
+ assert.deepEqual(table.children[0].children[0].children.map(th=>th.textContent),['Table','What it is','Rows in the window','First day','Last day','Columns']);
+ assert.equal(body.children.length,index.tables.length);
+ const stops=body.children[index.tables.findIndex(t=>t.name==='stops')];
+ assert.equal(stops.children[0].children[0].href,'/data/stops');assert.equal(stops.children[0].children[0].textContent,'stops');
+ assert.ok(textOf(stops.children[1]).startsWith(index.tables.find(t=>t.name==='stops').meaning));
+ assert.equal(stops.children[2].textContent,index.tables.find(t=>t.name==='stops').rows.toLocaleString('en-US'));
+ assert.deepEqual([stops.children[3].textContent,stops.children[4].textContent],['2025-01-01','2026-09-30']);
+ assert.equal(p.doc.title,'Data · Shift Investigator');
+ // /data/stops?day=…&shift=…: the rows first (newest first), the schema with its contract links, the query that ran
+ const page=JSON.parse(fs.readFileSync('tests/ui_fixtures/data_stops.json','utf8'));
+ p=await load('/data/stops','?shift=2&day=2026-09-14',page);
+ assert.deepEqual(p.fetched,[['/data/stops.json?shift=2&day=2026-09-14','application/json']]);
+ assert.deepEqual(p.replaced,['/data/stops?day=2026-09-14&shift=2']);   // the canonical spelling replaces the typed one
+ assert.equal(p.els['data-title'].textContent,'The downtime log');assert.equal(p.els['data-lede'].textContent,page.meaning);
+ const [rowsCard,schemaCard,sqlCard]=p.els['data-body'].children;
+ const chips=walkAll(rowsCard).filter(e=>e.className==='chip');
+ assert.deepEqual(chips.map(c=>c.children[0].textContent),['day = 2026-09-14','shift = 2']);
+ assert.equal(chips[1].children[1].href,'/data/stops?day=2026-09-14');   // × drops that filter, back on page 1
+ const grid=walkAll(rowsCard).find(e=>e.tag==='table'), heads=grid.children[0].children[0].children.map(th=>th.textContent), rows=grid.children[1].children;
+ assert.deepEqual(heads,page.columns.map(c=>c.name));assert.equal(rows.length,page.rows.length);assert.equal(rows.length,page.count);
+ const col=name=>heads.indexOf(name);
+ assert.equal(rows[0].children[col('stop_id')].children[0].href,`/data/stops?day=2026-09-14&shift=2&stop_id=${page.rows[0].stop_id}`);   // a cell is a filter
+ assert.equal(rows[0].children[col('setup_id')].children[0].href,`/data/setups?setup_id=${page.rows[0].setup_id}`);   // a key opens the row it names
+ assert.equal(rows[0].children[col('reason')].children[0].href,`/data/stops?day=2026-09-14&shift=2&reason=${encodeURIComponent(page.rows[0].reason)}`);
+ assert.equal(rows[0].children[col('comment')].children.length,0);assert.equal(rows[0].children[col('comment')].className,page.rows[0].comment===''?'text':'text');
+ assert.match(textOf(rowsCard),new RegExp(`${page.count} rows match · showing 1–${page.count}, newest first · page 1 of 1`));
+ const actions=walkAll(rowsCard).filter(e=>e.className==='nav-btn').map(a=>[a.textContent,a.href]);
+ assert.deepEqual(actions,[['CSV (up to 10,000 rows)','/data/stops.csv?day=2026-09-14&shift=2'],['JSON','/data/stops.json?day=2026-09-14&shift=2']]);
+ // the add-filter form navigates to the address with the filter set, in the server's order
+ const form=walkAll(rowsCard).find(e=>e.tag==='form'), [pick,input]=form.children;
+ assert.deepEqual(pick.children.map(o=>o.value),page.filterable);
+ pick.value='reason';input.value='Missed splice';form.events.submit({preventDefault(){}});
+ assert.deepEqual(p.assigned,['/data/stops?day=2026-09-14&shift=2&reason=Missed%20splice']);
+ // the schema: every column with its type, unit, meaning and the contract row it links to
+ const schema=walkAll(schemaCard).find(e=>e.tag==='table').children[1].children;
+ assert.equal(schema.length,page.columns.length);
+ const kind=schema[page.columns.findIndex(c=>c.name==='kind')];
+ assert.deepEqual(kind.children.slice(1,4).map(td=>td.textContent),['VARCHAR',page.columns.find(c=>c.name==='kind').unit,page.columns.find(c=>c.name==='kind').meaning]);
+ assert.equal(kind.children[4].children[0].href,'/docs/record-contract#col-stops-kind');
+ assert.equal(walkAll(schemaCard).find(e=>e.textContent==='the record contract ↗').href,'/docs/record-contract#col-stops');
+ assert.ok(textOf(sqlCard).includes(page.sql)&&textOf(sqlCard).includes('-- bound: ["2026-09-14",2,50,0]'));
+ // a refused address shows the server's reason
+ p=await load('/data/stops','?shift=9',{error:'shift is 1, 2 or 3'},400);
+ assert.equal(walkAll(p.els['data-body']).find(e=>e.className==='warning-note').textContent,'shift is 1, 2 or 3');
+ // a receipt on an answer: the why-slow answer's steps declare their rows; each figure's receipt links to its row's rows
+ const whySlow=JSON.parse(fs.readFileSync('tests/ui_fixtures/why_slow.json','utf8'));
+ const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+ Object.assign(els.day,{value:'2026-09-14'});els.period.value='day';els.shift.value='2';els.scope.value='shift';els.mode.value='offline';
+ const ctx={document:{getElementById:id=>els[id],createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[]},
+  fetch:async()=>({ok:true,json:async()=>({days:['2026-09-14'],token:'t'})}),window:{addEventListener(){}},console,setTimeout,URL,URLSearchParams,Blob,AbortController};
+ vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx);
+ ctx.__rec={scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},corrupt:false,result:whySlow};
+ vm.runInContext(`message('',__rec.result.sections,'',__rec)`,ctx);
+ const msg=els.messages.children[els.messages.children.length-1];
+ const bullet=msg.children.find(e=>e.tag==='ul').children[0], link=bullet.children.find(e=>e.className==='rows-link');
+ const cited=/\(query (\d+) · row (\d+)\)/.exec(textOf(bullet)), step=whySlow.trace[Number(cited[1])-1];
+ assert.equal(link.href,step.source.rows.row[Number(cited[2])]);assert.match(link.href,/^\/data\/stops\?day=2026-09-14&shift=2&reason=/);
+ assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener');assert.equal(link.textContent,'');   // no text of its own: the card still reads the answer word for word
+ assert.equal(textOf(bullet),whySlow.sections.find(s=>s.startsWith('- ')).slice(2).replace(/\*\*([^*]+)\*\*/g,'$1'));
+ const head=msg.children.find(e=>e.className==='headline');assert.equal(head.children.find(e=>e.className==='rows-link').href,'/data/shift_kpis?day=2026-09-14&shift=2&corrupt=false');
+ // a step without rows of its own (render_chart) or without a declaration gets no link; a link outside /data is never drawn
+ assert.equal(vm.runInContext(`rowsHref({url:'https://evil.example/x'})`,ctx),null);assert.equal(vm.runInContext('rowsHref(null)',ctx),null);
+ assert.equal(vm.runInContext(`rowsHref({url:'/data/stops',rows:{row:['/data/stops?reason=Other']}},'row',0)`,ctx),'/data/stops?reason=Other');
+ // and the query box: each step's foot links to the rows it read
+ vm.runInContext('renderQueries(__rec.result)',ctx);
+ const foot=els.queries.children.find(e=>e.id==='query-1').children.find(e=>e.className==='query-foot');
+ assert.deepEqual(foot.children.filter(e=>/rows-step/.test(e.className)).map(a=>[a.textContent,a.href]),[['Rows: stops ↗','/data/stops?day=2026-09-14&shift=2']]);
+ console.log('UI issue-142 checks passed: /data lists the tables, a table page shows its rows newest first with filters from the address, its schema with contract links and its query, and a receipt links to the rows behind its figure.');
+})().catch(error=>{console.error(error);process.exit(1);});

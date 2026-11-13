@@ -51,6 +51,31 @@ Period tools read the whole record store (the rolling year, Monday to Friday) in
 
 Forbidden: shell, arbitrary SQL/code, external URLs, filesystem browsing, machinery control, schedule changes, subscriber access or email sending. SQL values are bound separately and grouping identifiers are allowlisted.
 
+## What each tool read
+
+Every step of an answer declares the store table it read and the filter it read it with (issue #142, `datapages.SOURCES`), so a receipt "(query N · row M)" links to the rows behind its figure in [the data browser](URLS.md#the-data-browser). The server attaches the declaration to each trace entry as `source` (`table`, `filter`, `url`, and `rows`: one `/data` address per row of each cited list); it changes no tool, no row and no answer text, and a model never sees it. The filter is the step's window (`from`, `to`, or `day` for a one-day window) or the selected production day, plus its shift when it read one; a cited row narrows it further:
+
+| Tool | Table | A cited row narrows to |
+| --- | --- | --- |
+| `get_shift_kpis`, `get_shift_overview` | `shift_kpis` (the shift's row; `corrupt=true` on the data-quality demo's day) | the same row |
+| `get_downtime_breakdown`, `get_downtime_pareto` | `stops` (and the breakdown's `kind`) | its reason, place or kind; a flag, its day, shift and kind |
+| `get_downtime_review` | `shift_kpis` | a reason row, its `kind` and `reason` in `stops`; a flag, its day, shift and kind |
+| `get_wet_end_performance` | `setups` | the run's setups in the shift (`wet_end_id`) |
+| `get_quality_breakdown` | `rejects` | the family (`counted_in=dry_end`); a sub-reason, the family and reason |
+| `get_setup_matrix`, `get_order_matrix` | `setups`, `setup_orders` | the setup; the lane (setup, order number, cutoff knife) |
+| `get_shift_notes` | `stops` (every stop of the shift is a note, after the shift's own) | |
+| `get_rankings` | `setups`, `stops` or `rejects` by metric | the run, the place and reason, or the family |
+| `get_shift_dollars`, `get_day_dollars`, `get_opportunities` | `shift_kpis` | the line's own rows: a downtime reason in `stops`, a reject family in `rejects`, side trim, shear and speed in `setups`, the waste boards in `setup_orders`, the bale in `shifts` |
+| `get_period_kpis`, `compare_periods`, `get_trend` | `shift_kpis` (`corrupt=false`) | the same window (a trend week, its own five days) |
+| `get_waste_breakdown` | `shift_kpis` | the line's own rows, as above; a sub-reason, its family and reason in `rejects` |
+| `get_stops_profile` | `stops` | the production day; a weekday, `weekday=` over the window |
+| `get_grade_totals`, `get_speed_opportunity` | `setups` | the grade (and the cell's web width) |
+| `get_rollstock` | `wet_ends` for all shifts, `setups` for one | the grade and web width |
+| `get_overrun` | `setup_orders` | the knife (`cutoff_knife`); the all-knives row, the window |
+| `get_speed_variance` | `setups` | a stop bucket or reason in `stops`, a grade in `setups`; a loss on the reference's side, the reference shift or window |
+
+`tests/test_datapages.py` holds it on the golden set: every receipt of every offline golden answer links to rows, and those rows hold the cited row's quantity (its stops and minutes, square feet, cuts, volume, or the tile recomputed from the `shift_kpis` rows). A dollar figure is a priced quantity, so its rows hold the quantity it prices; a modeled line (the speed gap, the bale's unexplained remainder) links to the rows it was computed over. The browser runs no tool and no model: it reads the store's tables under the same lock and bounds as the tools.
+
 ## Bounds, failures and done
 
 Default offline bounds: 20 tool calls and a ten-second loop deadline checked between planner steps. The server configures live mode for ten tool calls and 60 seconds; the adapter also caps model calls at ten and uses bounded socket timeouts. Agent context is limited to 200,000 serialized characters; the live serialized request limit is 24 KB for the OpenAI adapter and 64 KB for the Anthropic adapter, which trims the oldest tool results to a stub before refusing a request. DuckDB queries use a two-second interrupt timer and a 1,000-row limit. Failed tool validation consumes a call. Period aggregation bypasses the agent loop and is bounded by the fixed demo calendar rather than these loop deadlines.
