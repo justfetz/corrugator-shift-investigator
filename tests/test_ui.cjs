@@ -1520,7 +1520,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   assert.ok(prose.includes(`${Money.money(now.total_usd)} of recorded losses · ${Money.money(now.total_usd_per_year)} per year at the post's volumes · ${Money.money(now.all_in_usd)} all in`),'the headline states both totals at the new rates');
   assert.ok(prose.includes(`Downtime: Planned maintenance (scheduled): ${Money.money(pmNow.usd)}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered, as its reason and its kind (owner ruling (c) on PR #123)');
   // issue #135: side trim stays ranked among the recorded losses, tagged schedule-driven from its row's control (targets.json's
-  // trim band lever); at $5,000/hr it is re-ranked, keeps the tag on its line and on its bar, and still counts in the total
+  // trim band lever); at $5,000/hr it is re-priced (still first here; the parity test in tests/test_money_ui.py moves it to
+  // second on 2026-09-16 shift 3) and keeps the tag on its line and on its bar, and still counts in the total
   const trimNow=now.rows.find(r=>r.kind==='trim');
   assert.ok(trimNow.control==='schedule-driven'&&typeof trimNow.rank==='number'&&!trimNow.apart,'side trim keeps its control and its rank');
   assert.ok(prose.includes(`${trimNow.rank}. Side trim: ${Money.money(trimNow.usd)} · ${Money.money(trimNow.usd_per_year)}/yr · schedule-driven`),'the ranked trim line keeps the tag at the new rates');
