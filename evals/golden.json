@@ -8240,6 +8240,248 @@
      ]
     }
    }
+  },
+  {
+   "id": "semantic-compare-never-splits-by-day",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=stops&by=day&compare=prev",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's review of a5af68d, item 1: the previous week holds none of this week's days, so a comparison split by day set every row against nothing: the card read \"previous 0 stops\" on every day and the chart \"25 vs 0\". A split by time is refused with compare.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^A comparison with the previous window cannot split by day"
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-compare-never-splits-by-week",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=downtime_minutes&by=week&compare=prev",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's review of a5af68d, item 1: the weeks of September are not the weeks of August: a comparison split by week is refused, as by day.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^A comparison with the previous window cannot split by week"
+   },
+   "period": "month"
+  },
+  {
+   "id": "semantic-band-from-a-filter-marks-no-slice",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_pct&by=grade&kind=Maintenance",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's review of a5af68d, item 3: each grade's maintenance minutes are read against all the week's scheduled minutes, a share of the maintenance %, not the ratio the owner's maintenance band is for: no grade carries a band (it read \"on target\" on every grade). The total, the week's maintenance %, keeps it.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_pct&by=grade&kind=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_pct",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {
+        "kind": "Maintenance"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime, stop kind Maintenance this week: \\*\\*[0-9.]+%\\*\\* of scheduled minutes · (home run|on target|over the|flag)",
+     "bullets": [
+      6,
+      6
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "charts": 1,
+    "sections_not_match": "^- .*\\*\\* of scheduled minutes · (home run|on target|over the|flag)"
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-refusal-lists-every-value",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=stops&place=zzz",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's review of a5af68d, item 4: a value with no near match is refused with the values the records hold: all fifteen stop places, never the first eight under \"the values are\".",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "raises": "^No stop place 'zzz' in the records; the values are: Double backer, Glue dams, Lower knife, Power, Shear knife, Single facer, Slitter/scorer, Splicer 1, Splicer 2, Splicer 3, Splicer 4, Splicer 5, Stacker, Steam system, Upper knife$"
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-lever-of-each-stop-kind",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_minutes&by=kind",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's review of a5af68d, item 6: downtime is controllable, but its planned-maintenance slice is schedule-driven and its External slice (a power outage) is external, per the owner's rulings on PR #111: each of those rows names its own lever.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=downtime_minutes&by=kind",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "kind"
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime this week: \\*\\*[0-9.,]+ min\\*\\* \\(query 1\\)$",
+     "bullets": [
+      4,
+      4
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "charts": 1,
+    "sections_match": [
+     "^- Planned maintenance \\(scheduled\\): \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total · schedule-driven \\(query 1 · row \\d\\)$",
+     "^- External: \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total · external \\(query 1 · row \\d\\)$",
+     "^- Maintenance: \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total \\(query 1 · row \\d\\)$",
+     "^Lever: controllable; a row with another lever names it\\.$"
+    ]
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-lever-of-the-filtered-kind",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=stops&kind=External",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's review of a5af68d, item 6: stops filtered to the External kind (a power outage) are outside the plant: the answer names the lever external, not the measure's controllable.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=stops&kind=External",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [],
+       "filters": {
+        "kind": "External"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Stops, stop kind External this week: \\*\\*[0-9,]+ stops?\\*\\* \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "charts": 0,
+    "sections_match": [
+     "^Lever: external\\.$"
+    ]
+   },
+   "period": "week"
+  },
+  {
+   "id": "semantic-percent-change-in-points",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/week/2026-09-14?measure=semantic&m=trim_pct&compare=prev",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's review of a5af68d, item 7: a change of a percentage is in points: \"+0.12 points vs 3.11% of gross\", never a bare \"+0.12\".",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/week/2026-09-14?measure=semantic&m=trim_pct&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "trim_pct",
+       "group_by": [],
+       "compare": "previous"
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Side trim this week: \\*\\*[0-9.]+%\\*\\* of gross · [+-][0-9.]+ points vs [0-9.]+% of gross the week before · ",
+     "bullets": [
+      0,
+      0
+     ],
+     "look": [
+      2,
+      2
+     ]
+    },
+    "charts": 0
+   },
+   "period": "week"
   }
  ]
 }

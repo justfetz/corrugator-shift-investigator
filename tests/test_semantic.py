@@ -770,3 +770,180 @@ def test_every_semantic_answer_reads_short_and_its_looks_route_in_scope(store, c
             context = resolved['context']
             _, asked = route(look[1], context, store.production_days)
             assert asked is context, (look[1], asked.read)
+
+
+# ------------------------------------------------------------------ the coordinator's review of a5af68d (issue #117)
+
+@pytest.mark.parametrize('dim', ['day', 'week', 'month', 'period'])
+def test_a_comparison_never_splits_by_time(dim):
+    """Item 1: the previous window holds none of this window's days, weeks, months or periods, so a comparison split by
+    one set every row against nothing (the card read "previous 0 stops" on every day). It is refused, with why."""
+    window = {'period': 'fiscal', 'anchor': '2026-09-14'} if dim in ('month', 'period') else MONTH
+    for group_by in ([dim], ['kind', dim]):
+        with pytest.raises(S.SemanticError, match=f'^A comparison with the previous window cannot split by {dim}: '):
+            S.validate(S.SemanticQuery('stops', window=window, group_by=group_by, compare='previous'))
+        assert S.validate(S.SemanticQuery('stops', window=window, group_by=group_by)).group_by == group_by   # without compare, it splits
+    for group_by in (['shift'], ['kind'], ['crew', 'shift']):   # a category is in both windows: it still compares
+        assert S.validate(S.SemanticQuery('stops', window=WEEK, group_by=group_by, compare='previous')).compare == 'previous'
+    with pytest.raises(ValueError, match='^A comparison with the previous window cannot split by day'):
+        resolve_url('/corr/1/week/2026-09-14?measure=semantic&m=stops&by=day&compare=prev', default_store())
+
+
+def _with_where(entity, where):
+    spec = json.loads(S.MODEL_PATH.read_text())
+    spec['physical']['entities'][entity]['where'] = where
+    return S.Model(spec)
+
+
+def test_an_entity_where_holds_a_checked_condition(store):
+    """Item 2: an entity's physical `where` holds a small grammar, checked when the model loads: a column of its table, a
+    comparison (= <> != < <= > >=) and a literal, or a column IN a list of literals, joined by AND. The literals are bound
+    parameters, never SQL text, and the rows the compiler reads are exactly the rows the condition keeps."""
+    mdl = _with_where('stop', "kind IN ('Maintenance', 'Operator') AND seconds >= 60 AND place <> 'Power'")
+    week = {'period': 'week', 'anchor': '2026-09-14'}
+    result = S.run(S.SemanticQuery('downtime_minutes', window=week, group_by=['kind']), store, mdl=mdl)
+    want = store._fetch("SELECT kind, sum(seconds) / 60 AS value, count(*) AS n FROM stops WHERE production_date BETWEEN ? AND ? "
+                        "AND kind IN ('Maintenance', 'Operator') AND seconds >= 60 AND place <> 'Power' GROUP BY kind",
+                        [date(2026, 9, 14), date(2026, 9, 18)], limit=10)
+    assert {r['kind']: (r['value'], r['source_count']) for r in result['rows']} == {r['kind']: (r['value'], r['n']) for r in want}
+    assert close(result['value'], sum(r['value'] for r in want))
+    for sql, params in zip(result['trace']['sql'].split(';\n'), result['trace']['parameters']):
+        assert "'Maintenance'" not in sql and "'Power'" not in sql and '>= 60' not in sql
+        assert sql.count('?') == len(params) and {'Maintenance', 'Operator', 60, 'Power'} <= set(params)
+    # the values a filter may name are the restricted rows' own
+    assert S.store_values('kind', store, mdl) == ['Maintenance', 'Operator']
+    with pytest.raises(S.SemanticError, match="No stop kind 'External' in the records"):
+        S.validate(S.SemanticQuery('stops', window=week, filters={'kind': 'External'}), store, mdl)
+    assert _with_where('stop', "seconds > 0.5").entities['stop']['where'] == "seconds > 0.5"
+    assert _with_where('stop', "kind = 'Operator'") is not None and _with_where('stop', "kind != 'Operator'") is not None
+
+
+@pytest.mark.parametrize('where', [
+    "kind = 'PM' OR 1 = 1",              # OR: not in the grammar
+    "kind = 'PM'; DROP TABLE stops",     # a second statement
+    "nope = 1",                          # a column the table does not have
+    "kind LIKE 'P%'",                    # an operator outside the grammar
+    "kind = place",                      # a column against a column: a literal is required
+    "kind IN ()",                        # an empty list
+    "kind = 'it''s'",                    # a quote inside a literal
+    "lower(kind) = 'pm'",                # a function
+    "kind = ",                           # no literal
+    "AND kind = 'PM'",                   # a leading AND
+    "kind = 'PM' AND",                   # a trailing AND
+    "kind IN ('PM', seconds)",           # a column inside the list
+    "(kind = 'PM')",                     # parentheses
+    "kind = 'PM' -- comment",            # a comment
+])
+def test_an_entity_where_outside_the_grammar_is_refused(where):
+    with pytest.raises(ValueError, match='semantic model: stop where'):
+        _with_where('stop', where)
+
+
+def test_an_entity_reached_by_a_join_holds_no_where():
+    """A join to a restricted entity would read its excluded rows as a dimension of nothing; the model refuses one."""
+    with pytest.raises(ValueError, match='semantic model: .*setup.* joined'):
+        _with_where('setup', 'seconds > 0')
+
+
+def test_a_band_from_a_filter_never_marks_a_slice_of_the_whole(store):
+    """Item 3: the owner's band reads a ratio of its own. A grade's maintenance minutes over all the week's scheduled minutes
+    is a share of the maintenance %, so it carries no band, though the band came from the kind filter; the week's maintenance
+    % and each day's are ratios of their own and carry it (docs/AGENT_CONTRACT.md, the semantic shape)."""
+    grades = run(store, 'downtime_pct', WEEK, group_by=['grade'], filters={'kind': 'Maintenance'})
+    assert grades['rows'] and all(r.get('band') is None for r in grades['rows'])
+    assert grades['band'] == targets.band('maintenance', grades['value'])
+    days = run(store, 'downtime_pct', WEEK, group_by=['day'], filters={'kind': 'Maintenance'})
+    assert all(r['band'] == targets.band('maintenance', r['value']) for r in days['rows'])
+    assert run(store, 'downtime_pct', WEEK, filters={'kind': 'Maintenance', 'place': 'Stacker'}).get('band') is None
+    assert run(store, 'dry_end_pct', WEEK, filters={'reject_family': 'BOND'}).get('band') is None   # a family against all the yield
+    grade = run(store, 'dry_end_pct', WEEK, filters={'grade': '32-C'})   # a grade's yield is its own: its own ratio
+    assert grade['band'] == targets.band('dry_end', grade['value'])
+
+
+def test_a_refusal_lists_every_value_or_says_how_many_more(monkeypatch):
+    """Item 4: "the values are" lists every value the records hold; past VALUES_SHOWN it says how many more and how to list them."""
+    store = default_store()
+    places = S.store_values('place', store)
+    with pytest.raises(S.SemanticError) as refused:
+        S.validate(S.SemanticQuery('stops', window=WEEK, filters={'place': 'zzz'}), store)
+    assert str(refused.value) == "No stop place 'zzz' in the records; the values are: " + ', '.join(places)
+    assert refused.value.choices == places
+    many = [f'Q{i:02}' for i in range(S.VALUES_SHOWN + 7)]
+    monkeypatch.setattr(S, 'store_values', lambda dim, store, mdl=None: many)
+    with pytest.raises(S.SemanticError) as refused:
+        S.validate(S.SemanticQuery('stops', window=WEEK, filters={'place': 'zzz'}), store)
+    assert str(refused.value) == ("No stop place 'zzz' in the records; the values are: " + ', '.join(many[:S.VALUES_SHOWN]) +
+                                  ', and 7 more; by=place lists every value a window recorded')
+    assert refused.value.choices == many
+
+
+@pytest.mark.parametrize('measure, by', [('reject_sqft', ['order']), ('reject_sqft', ['order', 'reject_family']), ('dry_end_pct', ['order']),
+                                         ('sheets', ['order']), ('overrun_pct', ['order'])])
+def test_a_line_receipt_lists_the_lines_it_sums(store, measure, by):
+    """Item 5: a reject line and an order lane are keyed by their own identity (setup, lane, and for a reject line its family
+    and reason), so a row's source_ids are the lines it summed, one id each, and source_count counts the same lines."""
+    mdl = S.model()
+    result = run(store, measure, window_of('2026-09-14'), shift=2, group_by=by, limit=200)
+    entity = mdl.measure_entities(measure)[0]
+    table = mdl.entities[entity]['table']
+    key = S._column(mdl, entity, mdl.entities[entity]['id'], 'b')
+    assert result['rows']
+    lines = store._fetch(f"SELECT count(*) AS n, count(DISTINCT {key}) AS ids FROM {table} b WHERE b.production_date = ? AND b.shift = 2",
+                         [date(2026, 9, 14)])
+    assert lines[0]['n'] == lines[0]['ids'] > 0   # one id per line of the table
+    for row in result['rows']:
+        assert row['source_count'] <= S.SOURCE_ID_CAP, 'an order on one shift has fewer lines than the cap'
+        assert len(row['source_ids']) == len(set(row['source_ids'])) == row['source_count'], (measure, row['label'])
+        counted = store._fetch(f'SELECT count(*) AS n FROM {table} b WHERE {key} IN (SELECT unnest(?))', [row['source_ids']])
+        assert counted[0]['n'] == row['source_count']
+    if measure == 'reject_sqft':   # the ids name exactly the lines whose square feet the row sums
+        for row in result['rows']:
+            summed = store._fetch(f'SELECT sum(b.sqft) AS v FROM {table} b WHERE {key} IN (SELECT unnest(?))', [row['source_ids']])
+            assert close(summed[0]['v'], row['value'])
+
+
+def test_the_lever_is_the_slices(store):
+    """Item 6: planned maintenance is schedule-driven and a power outage external (the owner on PR #111; targets.json): a
+    measure filtered by stop kind or reason takes that value's lever, each row of a split by one names its own, and the
+    maintenance-and-planned measures are schedule-driven."""
+    mdl = S.model()
+    assert mdl.measures['maintenance_pm_minutes']['lever'] == mdl.measures['maintenance_pm_pct']['lever'] == 'schedule-driven'
+    planned = S.resolve_value('kind', 'planned', store)
+    kinds = run(store, 'downtime_minutes', WEEK, group_by=['kind'])
+    assert kinds['lever'] == 'controllable'
+    assert {r['kind']: r['lever'] for r in kinds['rows']} == {'Maintenance': 'controllable', 'Operator': 'controllable',
+                                                              planned: 'schedule-driven', targets.EXTERNAL_KIND: 'external'}
+    reasons = run(store, 'stops', WEEK, group_by=['reason'], limit=200)
+    for row in reasons['rows']:
+        want = 'external' if row['reason'] in targets.EXTERNAL_REASONS else 'schedule-driven' if row['reason'] == 'Planned maintenance' else 'controllable'
+        assert row['lever'] == want, row['reason']
+    assert run(store, 'downtime_minutes', WEEK, filters={'kind': 'planned'})['lever'] == 'schedule-driven'
+    assert run(store, 'downtime_pct', WEEK, filters={'reason': 'Power outage'})['lever'] == 'external'
+    assert run(store, 'stops', WEEK, filters={'kind': 'Operator'})['lever'] == 'controllable'
+    assert run(store, 'trim_pct', WEEK)['lever'] == 'schedule-driven'
+    # the model's value levers are the owner's: the External kind and its reasons are external (targets.json)
+    kind_levers = mdl.dimensions['kind']['value_levers']
+    assert kind_levers[targets.EXTERNAL_KIND] == targets.EXTERNAL['lever'] == 'external'
+    assert all(mdl.dimensions['reason']['value_levers'][r] == 'external' for r in targets.EXTERNAL_REASONS)
+
+
+def test_a_scale_is_a_positive_number():
+    """Item 7: a ratio's scale is checked when the model loads, as every other field is."""
+    spec = json.loads(S.MODEL_PATH.read_text())
+    for scale in ('100', 0, -100, True, None):
+        bad = copy.deepcopy(spec)
+        next(m for m in bad['measures'] if m['name'] == 'trim_pct')['scale'] = scale
+        with pytest.raises(ValueError, match='semantic model: ratio trim_pct'):
+            S.Model(bad)
+
+
+def test_a_change_of_a_percentage_is_in_points(store):
+    """Item 7: a percent measure's change reads in points (`+0.12 points vs 3.11% of gross`), never a bare number."""
+    resolved = resolve_url('/corr/1/week/2026-09-14?measure=semantic&m=trim_pct&compare=prev', store)
+    analysis = store.day_analysis(resolved['day'])
+    try:
+        answer = Agent(analysis).ask(resolved['text'], resolved['context'], request=resolved['request'])
+    finally:
+        analysis.close()
+    data = answer['trace'][0]['data']
+    assert f' · {data["delta"]:+.2f} points vs {data["previous_value"]:.2f}% of gross the week before' in answer['sections'][0]
