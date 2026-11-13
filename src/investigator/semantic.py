@@ -899,24 +899,57 @@ def _band_of(mdl, query, dims_values):
     return band
 
 
-def _lever(mdl, query, dims_values, keys):
+def _lever(mdl, query, dims_values, keys, store=None):
     """The lever of a value: the one lever every record it sums shares, read from the dimension its entity takes its lever
     from (a stop's kind: planned maintenance schedule-driven, a power outage external, the owner on PR #111 and
     targets.json; unplanned maintenance and operator controllable), whatever dimension slices it (a reason, a place). Its
-    records' kinds are `keys`, listed by DuckDB. With records of several levers it is the measure's own; with none, the
-    lever its row's or filter's value names, else the measure's."""
-    rows = mdl.entities[mdl.measure_entities(query.measure)[0]]
-    levers = mdl.dimensions[rows['lever_by']]['value_levers'] if rows.get('lever_by') else {}
+    records' kinds are `keys`, listed by DuckDB. With records of several levers it is the measure's own. A slice with no
+    records in its window (a week without an outage, a day a ratio's denominator fills in) takes the lever of the records
+    its values hold across the store (`_slice_keys`), else the measure's."""
+    name = mdl.measure_entities(query.measure)[0]
+    rows = mdl.entities[name]
+    if not rows.get('lever_by'):
+        return mdl.measures[query.measure]['lever']
+    levers = mdl.dimensions[rows['lever_by']]['value_levers']
+    if not keys and store is not None:
+        keys = _slice_keys(mdl, query, name, {**query.filters, **dims_values}, store)
     found = {levers.get(k) for k in keys or []}
     if len(found) == 1 and None not in found:
         return found.pop()
-    if not keys:
-        for values in (dims_values, query.filters):
-            for dim, value in values.items():
-                lever = (mdl.dimensions[dim].get('value_levers') or {}).get(value) if isinstance(value, str) else None
-                if lever:
-                    return lever
     return mdl.measures[query.measure]['lever']
+
+
+_SLICE_KEYS = {}
+
+
+def _slice_keys(mdl, query, name, values, store):
+    """The distinct lever keys (a stop's kinds) of every record in the store that holds the slice's values on the lever
+    entity's own dimensions (a stop's kind, place, reason) and the measure's own row filter; [] for a slice with none of
+    those values. One bound query, cached per store and slice."""
+    m = mdl.measures[query.measure]
+    own = m if m['agg'] in SIMPLE else mdl.measures[m['numerator'] if m['agg'] == 'ratio' else m['quantity']]
+    slice_ = {d: v for d, v in values.items() if mdl.dimensions[d]['entity'] == name and mdl.dimensions[d]['type'] != 'time'}
+    if not slice_:
+        return []
+    key = (id(store), getattr(store, 'content_hash', None), name, own['name'], tuple(sorted((d, str(v)) for d, v in slice_.items())))
+    if key not in _SLICE_KEYS:
+        where, params = [], []
+        if name in mdl.wheres:
+            sql, extra = where_sql(mdl.wheres[name], 'b')
+            where.append(f'({sql})')
+            params += extra
+        for dim, value in slice_.items():
+            where.append(f"{_dimension_sql(mdl, dim, name, 'b')} = ?")
+            params.append(value)
+        for column, value in own.get('filter', {}).items():
+            listed = value if isinstance(value, list) else [value]
+            where.append(f"{_column(mdl, name, column, 'b')} IN ({', '.join('?' for _ in listed)})")
+            params += listed
+        lever_by = _dimension_sql(mdl, mdl.entities[name]['lever_by'], name, 'b')
+        rows = store._fetch(f"SELECT list(DISTINCT {lever_by}) AS keys FROM {mdl.entities[name]['table']} b WHERE {' AND '.join(where)} LIMIT 1",
+                            params, limit=1)
+        _SLICE_KEYS[key] = list(rows[0]['keys'] or []) if rows else []
+    return _SLICE_KEYS[key]
 
 
 def _scope_text(mdl, query):
@@ -955,14 +988,14 @@ def run(query, store, rates=None, mdl=None):
         values = {dim: r[f'd{i}'] for i, dim in enumerate(query.group_by)}
         row = {dim: _plain(v) for dim, v in values.items()}
         row['label'] = ' · '.join(_label(mdl, dim, v) for dim, v in values.items())
-        row.update(_reading(mdl, query, r, rates, basis, values))
+        row.update(_reading(mdl, query, r, rates, basis, values, store))
         if query.compare:
             row['previous_value'] = _previous(mdl, query, r, rates, basis) if available else None
         row['source_count'] = r['source_count']
         row['source_ids'] = list(r['source_ids'] or [])
         rows.append(row)
     groups = fetched['groups'][0]['groups'] if fetched.get('groups') else 0
-    total = _reading(mdl, query, total_row, rates, basis, {}) if total_row else {'value': None}
+    total = _reading(mdl, query, total_row, rates, basis, {}, store) if total_row else {'value': None}
     data = {'tool': TOOL, 'measure': query.measure, 'label': m['label'], 'unit': m['unit'], 'agg': m['agg'],
             'definition': m['description'], 'entity': mdl.measure_entities(query.measure)[0], 'group_by': list(query.group_by),
             'filters': [{'dimension': d, 'label': mdl.dimensions[d]['label'], 'value': _plain(v), 'text': _label(mdl, d, v)}
@@ -982,7 +1015,7 @@ def run(query, store, rates=None, mdl=None):
     for key in ('band', 'band_text'):
         if key in total:
             data[key] = total[key]
-    data['lever'] = total.get('lever') or _lever(mdl, query, {}, None)
+    data['lever'] = total.get('lever') or _lever(mdl, query, {}, None, store)
     if query.compare:
         data['previous_value'] = _previous(mdl, query, total_row, rates, basis) if available and total_row else None
         # the change is DuckDB's (cur.value - prev.value), stated only when both windows are complete, as the tools do (a
@@ -999,7 +1032,7 @@ def run(query, store, rates=None, mdl=None):
     return data
 
 
-def _reading(mdl, query, r, rates, basis, dims_values):
+def _reading(mdl, query, r, rates, basis, dims_values, store=None):
     """One row's value fields: the value, and for a ratio its numerator and denominator, for a priced measure its
     quantity and the cost model's price fields, for an additive measure its share, and its band when it has one."""
     m = mdl.measures[query.measure]
@@ -1017,7 +1050,7 @@ def _reading(mdl, query, r, rates, basis, dims_values):
     band = _band_of(mdl, query, dims_values)
     if band:
         targets.mark(out, band, out['value'])
-    out['lever'] = _lever(mdl, query, dims_values, r.get('lever_keys'))
+    out['lever'] = _lever(mdl, query, dims_values, r.get('lever_keys'), store)
     return out
 
 
@@ -1119,8 +1152,8 @@ def model_markdown(text=None):
     out += ['', '## Levers of a slice', '',
             'A value carries the lever every record it sums shares; a stop\'s lever is its kind\'s, so a reason or place takes the '
             'lever of its stops (Planned maintenance is schedule-driven, the place Power and the reason Power outage are external: '
-            'the owner, PR #111; `targets.json`). Records of several levers carry the measure\'s own. The answer names a row\'s lever '
-            'when it differs from the total\'s.', '',
+            'the owner, PR #111; `targets.json`). Records of several levers carry the measure\'s own; a slice with no records in its '
+            'window carries the lever of the records its values hold. The answer names a row\'s lever when it differs from the total\'s.', '',
             '| Dimension | Value | Lever |', '| --- | --- | --- |']
     for d in dims:
         for value, lever in (d.get('value_levers') or {}).items():
