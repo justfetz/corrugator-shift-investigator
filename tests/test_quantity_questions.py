@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from investigator.agent import (GRADE_QUANTITIES, QUANTITY_HELP, QUANTITY_METRICS, SETUP_SPEED, WASTE_KEYS, Agent, Context, catch_all_guard,
-                                parse_request, question_scope, quantity_request, route, slug)
+from investigator.agent import (GRADE_QUANTITIES, QUANTITY_HELP, QUANTITY_METRICS, RANKED_TEXT, SETUP_SPEED, WASTE_KEYS, Agent, Context,
+                                catch_all_guard, parse_request, question_scope, quantity_request, route, slug)
 from investigator.fixture import GRADES
 from investigator.records import STOP_PLACES, STOP_REASONS
 from investigator.record_store import default_store
@@ -79,9 +79,21 @@ AUDIT = [
     'How much did we make per day this week?', 'How many MSF did we make per day this week?', 'Throughput per day this week',
     'Average speed per day this week', 'How many feet per minute did we run this week?',
     'What was our fastest setup time?', 'How many feet did we run per day this week?', 'How long did we run slow this week?',
+    # round 4 of the coordinator's review: a ranked shift, a numerator the records do not keep per setup, per minute, an average or
+    # longest stop, a grouping or a shift comparison, a breakdown in percent, the stops profile's scope and the downtime of each day
+    ('How many minutes of downtime did the slowest shift have this week?', 1), ('How many minutes of downtime did the best shift have this week?', 1),
+    ('How many stops did the fastest shift have this week?', 1), ('How many minutes of downtime did the slowest shift have this week?', 2, 'day'),
+    'Cost per setup this week', 'Glue per setup this week', 'Starch per setup this week', 'Yield per setup this week',
+    'Efficiency per setup this week', 'Loss per setup this week', 'Sheets per minute this week', 'Stops per minute this week',
+    'Setups per minute this week', 'Average stop length this week', 'Average stop duration this week', 'Typical stop this week',
+    'What was the average stop this week?', 'How long is our average stop?', 'Average setup length this week',
+    'How long was the longest stop this week?', 'How many minutes of downtime at each place this week?',
+    'How many minutes of downtime for each reason this week?', ('Compare shifts on downtime minutes', 2, 'day'),
+    'Square feet per minute this week', 'Waste breakdown in percent this week', 'Stops per day this week', 'How many stops per day this week?',
+    'Downtime per day this week', 'How many minutes of downtime per day this week?',
 ]
 # What a refusal of an audited question says: what can be asked instead.
-REFUSALS = (QUANTITY_HELP, 'Offline mode supports', SETUP_SPEED, 'one shift or all shifts together', 'Selected shift only')
+REFUSALS = (QUANTITY_HELP, 'Offline mode supports', SETUP_SPEED, 'one shift or all shifts together', 'Selected shift only', RANKED_TEXT)
 
 
 def landing(question, scope='shift', shift=2, period='day', day=DAY):
@@ -103,7 +115,8 @@ def test_the_guard_flags_a_quantity_question_on_the_kpi_summary():
                           ('what was our lineal per setup last week', '/corr/1/week/2026-09-07/shift/2?measure=kpis'),
                           ('how many minutes of downtime this month', '/corr/1/day/2026-09-14?measure=kpis&window=month')]:
         assert catch_all_failures(question, url), question
-        assert not catch_all_failures(question, url.replace('measure=kpis', 'measure=quantity&metric=setups')), question
+        # the same quantity over every shift, as a question that names no shift is answered (round 4, item 8)
+        assert not catch_all_failures(question, url.replace('measure=kpis', 'measure=quantity&metric=setups').replace('/shift/2', '')), question
     for question in ('Compare this month to last', 'How did September go versus August?', 'How did shift 3 go this month?', 'Compare all shifts'):
         assert not catch_all_failures(question, '/corr/1/day/2026-09-14?measure=kpis&window=month'), question
 
@@ -181,11 +194,32 @@ def test_the_router_refuses_a_quantity_it_cannot_place_rather_than_summarize():
     ('How many widgets on shift 2?', 'one quantity at a time'), ('How much scrap on shift 2?', 'one quantity at a time'),
     ('Feet per stop this week', 'Feet per stop is not a ratio the records keep'), ('Setups per day this week', 'Setups per day is not a ratio'),
     ('Splices per setup this week', 'Splices per setup is not a ratio'), ('MSF per hour this week', 'MSF per hour is not a ratio'),
-    ('How many minutes of downtime per day this week?', 'not a ratio the records keep'),
     ('How long were we slow on shift 2?', 'Slow is a speed'), ('How many minutes were we slow this week?', 'Slow is a speed'),
     ('How much downtime in hours this week?', 'in minutes, not hours'),
     ('How many feet did we run per day this week?', 'Feet per day is not a ratio'), ('How much per day this week?', 'Per day is not a ratio'),
     ('How long did we run slow this week?', 'Slow is a speed'), ('What was our fastest setup time?', 'setup matrix'),
+    # round 4 of the coordinator's review
+    ('Cost per setup this week', 'Cost per setup is not a ratio'), ('Glue per setup this week', 'Glue per setup is not a ratio'),
+    ('Starch per setup this week', 'Starch per setup is not a ratio'), ('Yield per setup this week', 'Yield per setup is not a ratio'),
+    ('Efficiency per setup this week', 'Efficiency per setup is not a ratio'), ('Loss per setup this week', 'Loss per setup is not a ratio'),
+    ('Sheets per minute this week', 'Sheets per minute is not a ratio'), ('Stops per minute this week', 'Stops per minute is not a ratio'),
+    ('Setups per minute this week', 'Setups per minute is not a ratio'), ('Square feet per minute this week', 'Square feet per minute is not a ratio'),
+    ('MSF per minute this week', 'MSF per minute is not a ratio'),
+    ('Average setup length this week', 'per setup in the setup matrix'), ('How long was the average changeover this week?', 'per setup in the setup matrix'),
+    ('Average missed splice stop this week', "each stop reason's minutes per stop are in the downtime review"),
+    ('Average maintenance stop this week', 'the downtime review'),
+    # the reviewer subagent's probe of round 4: a grouping, an average across days, a percent per day, a share of waste
+    ('Average stop length by reason this week', 'the downtime review'), ('Average minutes per stop by reason this week', "the whole window's"),
+    ('How long do our missed splices take on average this week?', 'the downtime review'),
+    ('Average downtime per day this week', 'No tool returns one average across'), ('Percent downtime per day this week', 'kept in minutes'),
+    ('Downtime per reason per day this week', "the whole window's"), ('How many minutes of downtime at each place per day this week?', 'not by day'),
+    ('How many minutes did the slowest crew lose this week?', 'A ranked shift'),
+    ('Dry-end rejects as a percent of gross this week', 'a percent of the yield'), ('What percentage of waste was dry end this week?', 'not as a share'),
+    ('How many setups at each place this week?', "the whole window's"), ('Stops breakdown by reason in percent this week', "the whole window's"),
+    ('How long was the longest stop this week?', 'No tool returns the longest'), ('What was our shortest setup this week?', 'No tool returns the longest'),
+    ('Which stop was the longest this week?', 'No tool returns the longest'),
+    ('How many minutes of downtime did the slowest shift have this week?', 'A ranked shift'),
+    ('How many setups did the best shift run this week?', 'A ranked shift'), ('How many stops did the shift with the most downtime have?', 'A ranked shift'),
 ])
 def test_a_count_the_records_do_not_hold_is_refused_with_what_can_be_counted(question, refusal):
     with pytest.raises(ValueError, match=refusal) as caught:
@@ -203,6 +237,13 @@ def test_a_count_the_records_do_not_hold_is_refused_with_what_can_be_counted(que
     ('How quick were the changeovers this month?', 'day', 'per setup and per production day'),
     ('How much scrap on shift 1 versus shift 2?', 'day', 'one quantity at a time'),
     ('How many minutes of downtime did shift 1 have versus shift 3?', 'day', 'one shift or all shifts together'),
+    ('Compare shifts on downtime minutes', 'day', 'one shift or all shifts together'),
+    ('Compare the shifts on setups this week', 'shift', 'one shift or all shifts together'),
+    ('Shift comparison of stops this week', 'day', 'one shift or all shifts together'),
+    ('Compare stops across shifts this week', 'day', 'one shift or all shifts together'),
+    ('How do the shifts stack up on setups this week?', 'day', 'one shift or all shifts together'),
+    ('Minutes of downtime shift vs shift this week', 'day', 'one shift or all shifts together'),
+    ('How many minutes of downtime did the slowest shift have this week?', 'day', 'A ranked shift'),
 ])
 def test_a_count_split_by_shift_or_a_setup_speed_over_a_window_is_refused(question, scope, refusal):
     """A quantity is one shift or all shifts together, never each shift's total read as the answer; how fast a setup went
@@ -266,6 +307,10 @@ def test_a_quantity_with_no_shift_named_answers_every_shift_over_the_window_it_n
                           ('Number of stops by reason this week', DAY)):
         moved = question_scope(question, context, store.production_days)
         assert (moved.scope, moved.production_day, moved.read.get('all_shifts'), moved.read.get('default')) == ('day', day, True, None), question
+    # a quantity measure takes the default scope with or without an ask word (round 4 of the coordinator's review, item 8)
+    for question in ('Stops per day this week', 'How many stops per day this week?', 'Downtime per day this week', 'Feet per setup this week'):
+        moved = question_scope(question, context, store.production_days)
+        assert (moved.scope, moved.read.get('all_shifts')) == ('day', True), question
     for question in ('How much downtime?', 'How much downtime yesterday?'):   # the owner's downtime review: the day before, all shifts (#101)
         moved = question_scope(question, context, store.production_days)
         assert (moved.scope, moved.production_day, moved.read.get('default')) == ('day', '2026-09-11', 'the previous production day, all shifts'), question
@@ -304,6 +349,53 @@ def test_the_runner_catches_the_wrong_answers_the_review_found():
     assert not catch_all_failures('Compare shift 1 and shift 2 in feet per minute', '/corr/1/day/2026-09-14?measure=compare&shifts=1,2')
     assert asked_unit_failures('How many feet per minute did we run this week?', ['**4,225,692 lineal ft** · -1,000 vs 4,226,692'])
     assert not asked_unit_failures('Were we slow in the first hours of the shift?', ['**87.2%** of grade target'])
+    # round 4 of the coordinator's review: each wrong answer it found, and the right one beside it where there is one
+    shift_1 = '/corr/1/day/2026-09-14/shift/1?measure=quantity&window=week&metric=downtime_minutes'
+    assert catch_all_failures('How many minutes of downtime did the slowest shift have this week?', shift_1)   # item 1
+    assert catch_all_failures('How many minutes of downtime did the best shift have this week?', shift_1)
+    assert not catch_all_failures('How many minutes of downtime did shift 1 have this week?', shift_1)
+    for word in ('Cost', 'Glue', 'Starch', 'Yield', 'Efficiency', 'Loss'):   # item 2: the bare "per setup" rule
+        assert asked_unit_failures(f'{word} per setup this week', ['**7,126.0 ft per setup** · +76.2 vs 7,049.8 the week before']), word
+    assert not asked_unit_failures('What was our per setup this week?', ['**7,126.0 ft per setup** · +76.2 vs 7,049.8 the week before'])
+    assert not asked_unit_failures('Length per setup this week', ['**7,126.0 ft per setup** · +76.2 vs 7,049.8 the week before'])
+    assert asked_unit_failures('Sheets per minute this week', ['**3,800,554 sheets** cut across all knives · 3,789,206 nominal'])   # item 3
+    assert asked_unit_failures('Stops per minute this week', ['**137 stops** · -39 vs 176 the week before, better'])
+    assert asked_unit_failures('Setups per minute this week', ['**580 setups** · -26 vs 606 the week before'])
+    for question in ('Average stop length this week', 'Average stop duration this week', 'Typical stop this week',   # item 4
+                     'What was the average stop this week?'):
+        assert asked_unit_failures(question, ['**137 stops** · -39 vs 176 the week before, better']), question
+        assert not asked_unit_failures(question, ['**2.66 minutes per stop** · +0.27 vs 2.39 the week before, worse']), question
+    assert asked_unit_failures('How long is our average stop?', ['**41.4 minutes** of downtime · +3.6 vs 37.8 the production day before'])
+    assert asked_unit_failures('Average setup length this week', ['**580 setups** · -26 vs 606 the week before'])
+    assert asked_unit_failures('How long was the longest stop this week?', ['**364.3 minutes** of downtime · -66.2 vs 430.5 the week before'])
+    week = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=downtime_minutes'
+    assert catch_all_failures('How many minutes of downtime at each place this week?', week)   # item 5
+    assert catch_all_failures('Compare shifts on downtime minutes', '/corr/1/day/2026-09-14?measure=quantity&metric=downtime_minutes')
+    assert not catch_all_failures('How many minutes of downtime at each place this week?', '/corr/1/day/2026-09-14?measure=pareto&window=week&by=place')
+    assert asked_unit_failures('Square feet per minute this week', ['**618.2 ft/min** without stops · -26.9 vs 645.1 ft/min'])   # item 6
+    assert catch_all_failures('Waste breakdown in percent this week',   # item 7
+                              '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=waste_pct&waste=bale')
+    assert not catch_all_failures('Waste breakdown in percent this week', '/corr/1/day/2026-09-14?measure=waste&window=week')
+    assert catch_all_failures('Stops per day this week', '/corr/1/day/2026-09-14/shift/2?measure=stops&window=week')   # item 8
+    assert not catch_all_failures('Stops per day this week', '/corr/1/day/2026-09-14?measure=stops&window=week')
+    assert not catch_all_failures('How many stops per day on this shift this week?', '/corr/1/day/2026-09-14/shift/2?measure=stops&window=week')
+    assert not asked_unit_failures('Downtime per day this week',   # item 9: the downtime of each production day, in minutes
+                                   ['**160.93 minutes** of downtime on 2026-09-17 (Thu), the most of 5 production days · 20 stops'])
+    assert asked_unit_failures('Downtime per day this week', ['**36 stops** on 2026-09-15 (Tue), the most of 5 production days · 55.10 min'])
+    # the reviewer subagent's probe of round 4: the same wrong answers in other words
+    assert catch_all_failures('How many minutes did the slowest crew lose this week?', week)
+    assert catch_all_failures('How many stops did the shift with the most downtime have?', '/corr/1/day/2026-09-14?measure=quantity&metric=stops')
+    for question in ('How many minutes of downtime in each area this week?', 'How many minutes of downtime at every piece of equipment this week?',
+                     'How many minutes of downtime for each stop reason this week?', 'Downtime breakdown in minutes this week',
+                     'Average stop length by reason this week', 'Downtime per reason per day this week', 'How many setups at each place this week?',
+                     'Shift comparison of stops this week', 'Compare stops across shifts this week', 'How do the shifts stack up on setups this week?',
+                     'Minutes of downtime shift vs shift this week', 'Waste lines in percent this week'):
+        assert catch_all_failures(question, week), question
+    assert not catch_all_failures('How many setups across all shifts this week?', week.replace('downtime_minutes', 'setups'))
+    assert asked_unit_failures('Average downtime per day this week',
+                               ['**160.93 minutes** of downtime on 2026-09-17 (Thu), the most of 5 production days · 20 stops'])
+    assert asked_unit_failures('Percent downtime per day this week',
+                               ['**160.93 minutes** of downtime on 2026-09-17 (Thu), the most of 5 production days · 20 stops'])
 
 
 def test_per_is_a_ratio_only_when_it_divides_and_slow_or_hours_only_when_asked():
@@ -318,7 +410,18 @@ def test_per_is_a_ratio_only_when_it_divides_and_slow_or_hours_only_when_asked()
                               ('How much did we make per production day this month?', 'metric=msf_per_day'),
                               ('Production per day this week', 'metric=msf_per_day'),
                               ('What was speed in the first hours of the week?', 'measure=fpm'),
-                              ('How many minutes of downtime did the slowest shift have this week?', 'metric=downtime_minutes')):
+                              ('How many minutes of downtime did shift 3 have this week?', 'metric=downtime_minutes'),
+                              # round 4 of the coordinator's review: an average stop, a time per stop, the downtime of each day
+                              ('Average stop length this week', 'metric=minutes_per_stop'), ('Average time per stop this week', 'metric=minutes_per_stop'),
+                              ('How long is our average stop?', 'metric=minutes_per_stop'), ('What was our per stop this week?', 'metric=minutes_per_stop'),
+                              ('Downtime per day this week', 'metric=downtime_per_day'), ('How much downtime per day in September?', 'metric=downtime_per_day'),
+                              ('How many stops at each place this week?', 'by=place&unit=count'), ('Waste breakdown in percent this week', 'measure=waste'),
+                              ('Dry-end rejects by reason in percent this week', 'measure=waste'), ('Lineal feet per minute this week', 'measure=fpm'),
+                              ('How many feet per setup did we run this week?', 'metric=lineal_per_setup'),
+                              ('How many minutes of downtime in each area this week?', 'by=place'), ('Stops by kind this week', 'by=kind&unit=count'),
+                              ('How many minutes of downtime for each stop reason this week?', 'measure=pareto&window=week'),
+                              ('Downtime breakdown in minutes this week', 'measure=pareto&window=week'), ('Waste lines in percent this week', 'measure=waste'),
+                              ('Feet per min this week', 'measure=fpm'), ('ft per minute this week', 'measure=fpm')):
         url = landing(question)[0]
         assert url and measure in url, (question, url)
     url = landing('Compare shift 1 and shift 2 in feet per minute', scope='day')[0]

@@ -305,7 +305,7 @@ MONEY_REJECT_WORDS = rf"\b(rejects?|warp|bond|misalignment|{MOISTURE_WORDS}|{CRA
 
 # Measure words decide the intent; grouping words (by grade, by width, by crew) only choose the breakdown.
 # "running" alone ("which grades are we running") is not a speed word: "how fast are we running" carries one.
-SPEED_WORDS = r"\b(speeds?|fpm|ft/min|feet per minute|fast|faster|fastest|pace|slow|slower|slowest)\b"
+SPEED_WORDS = r"\b(speeds?|fpm|ft/min|(feet|ft) per min(ute)?|fast|faster|fastest|pace|slow|slower|slowest)\b"
 # A volume cue next to a speed word ("how much 275-BC did we run", "which grade ran the most") keeps it volume.
 # The cue is attached to a volume ask: a loose "most", "share" or "how much" ("which shift lost the most
 # speed", "how much speed did we lose", "what share of time were we at speed") leaves the question speed.
@@ -443,13 +443,14 @@ QUANTITY_TOOLS = {'setups': 'get_period_kpis', 'paper_changes': 'get_period_kpis
                   'stops': 'get_period_kpis', 'downtime_minutes': 'get_period_kpis', 'minutes_per_stop': 'get_period_kpis',
                   'maintenance_minutes': 'get_downtime_review', 'operator_minutes': 'get_downtime_review',
                   'maintenance_stops': 'get_downtime_review', 'operator_stops': 'get_downtime_review', 'sheets': 'get_overrun',
-                  'bale_msf': 'get_period_kpis', 'waste_sqft': 'get_waste_breakdown', 'waste_pct': 'get_waste_breakdown'}
+                  'bale_msf': 'get_period_kpis', 'waste_sqft': 'get_waste_breakdown', 'waste_pct': 'get_waste_breakdown',
+                  'downtime_per_day': 'get_stops_profile'}
 QUANTITY_METRICS = tuple(QUANTITY_TOOLS)
 COUNT_ASK = r"\bhow many\b|\bnumber of\b|\bcount (of|the)\b|\btotal\b|\bhow often\b"
 MINUTES_ASK = r"\bhow many (minutes|mins)\b|\b(minutes|mins) (of|did|were|was|lost|down|we)\b|\bin minutes\b|\b(downtime|total|stop) (minutes|mins)\b"
 # A duration asked in other words (the coordinator's review of PR 143, items 3 and 4): "how long", "how much time", "setup time"
 DURATION_ASK = (MINUTES_ASK + r"|\bhow long\b|\bhow much time\b|\btime (did|do|does) .{1,40}\btake\b"
-                r"|\b(set-?up|paper[- ]change|changeover|order[- ]change|downtime|stop) times?\b")
+                r"|\b(set-?up|paper[- ]change|changeover|order[- ]change|downtime|stop) (times?|lengths?|durations?)\b")
 # Area and percent asked (item 6): the waste lines carry square feet and a percent; the bale (all waste) is in MSF too
 SQFT_ASK = r"\bsquare f(ee|oo)t\b|\bsq\.? ?ft\b|\bsqft\b"
 MSF_ASK = r"\bmsf\b"
@@ -466,21 +467,33 @@ UNIT_PER = (r"\b(minutes|mins|time|hours?|msf|square feet|sq ft|sheets|stops|dol
 # by: only the ratios the records keep are answered, never the count of the numerator ("feet per stop" is not the stops).
 # "Per" meaning "by" ("downtime per reason", "rollstock per width") is the grouping the router reads, a shift is EACH_SHIFT, a
 # grade by grade, an MSF or a dollar a money ratio, and a speed ("speed per day", "feet per minute") the speed answer.
+# "Per minute" is a span too (round 4 of the coordinator's review, items 3 and 6): only lineal feet per minute is kept, the speed.
 PER_WORD = (r"\bper\s+(production\s+)?(paper changes?|wet[- ]ends?|order changes?|set-?ups?|changeovers?|stops?|stoppages?|days?|"
-            r"weeks?|months?|periods?|hours?|runs?|orders?|sheets?|boards?|rolls?|splices?|jams?|customers?)\b")
+            r"weeks?|months?|periods?|hours?|minutes?|mins?|runs?|orders?|sheets?|boards?|rolls?|splices?|jams?|customers?)\b")
 # The numerator is the last unit or countable noun before "per" in its clause; none ("what was our per setup", "how much did
 # we make per day") is the ratio the denominator keeps, read by its verb for a day
 PER_NOUNS = (r"\b(square feet|sq ft|lineal|feet|ft|footage|length|minutes|mins|time|hours?|msf|sheets|stops|stoppages|set-?ups?|"
              r"paper changes?|order changes?|changeovers?|wet[- ]ends?|splices?|jams?|boards?|rolls?|dollars|tons?|waste|scrap|trim|"
              r"shear|rejects?|downtime|volume|output|throughput|production|orders?|customers?)\b")
 PER_FEET = r"^(lineal|feet|ft|footage|length)$"
+# The ratios kept, by denominator and numerator; downtime per day is the stops profile's minutes of each production day
 PER_KEPT = ((r"set-?ups?$", PER_FEET, 'lineal_per_setup'),
             (r"(paper changes?|wet[- ]ends?)$", PER_FEET, 'lineal_per_paper_change'),
-            (r"stops?$", r"^(minutes|mins|downtime)$", 'minutes_per_stop'),
-            (r"days?$", r"^(msf|volume|output|throughput|production)$", 'msf_per_day'))
-PER_RATIOS = "feet per setup, feet per paper change, minutes per stop and MSF per production day"
+            (r"stops?$", r"^(minutes|mins|downtime|time)$", 'minutes_per_stop'),
+            (r"days?$", r"^(msf|volume|output|throughput|production)$", 'msf_per_day'),
+            (r"days?$", r"^(minutes|mins|downtime)$", 'downtime_per_day'))
+# A bare "per" ("what was our per setup", "how much did we make per day") is the ratio its denominator keeps
+PER_BARE = ((r"set-?ups?$", 'lineal_per_setup'), (r"(paper changes?|wet[- ]ends?)$", 'lineal_per_paper_change'), (r"stops?$", 'minutes_per_stop'))
+# ... but only when the word before "per" is a filler, a volume verb or a window: any other word is a numerator the records do
+# not keep per anything ("cost per setup", "glue per setup", "yield per setup": round 4 of the coordinator's review, item 2),
+# refused, never read as feet per setup
+PER_FILLER = (r"^(what|whats|what's|was|is|were|are|our|my|the|we|us|did|do|does|how|much|many|average|avg|mean|typical|overall|"
+              r"run|ran|running|make|made|making|produce|produced|producing|get|got|go|went|this|that|its|it's|a|an|on|of|for|in|"
+              r"at|so|far|today|yesterday|week|weeks|month|months|period|day|days|shift|shifts)$")
+PER_RATIOS = ("feet per setup, feet per paper change, minutes per stop, MSF per production day and the downtime minutes of each "
+              "production day")
 # A speed asked in its unit is the speed answer, never the lineal feet a count of feet would be ("how many feet per minute")
-SPEED_UNIT = r"\bfeet per minute\b|\bft/min\b|\bfpm\b"
+SPEED_UNIT = r"\b(feet|ft) per min(ute)?\b|\bft/min\b|\bfpm\b"
 REJECT_SHEETS = (r"\b(rejects?|rejected|bad|scrap|waste|warp|warped|bond|misalignment|moisture|quality|dry[- ]end|damaged)\b")
 FEET_ASK = r"\bhow (many|much) (lineal )?(feet|ft|footage)\b|\blineal (feet|ft|footage)\b|\bfootage\b"
 # A ratio named is the quantity asked, whatever the verb ("what was our lineal per setup last week"): PER_KEPT, and the run length
@@ -529,7 +542,8 @@ NOT_COUNTED = ((r"\b(grade|flute) changes?\b", "The records do not count grade o
 QUANTITY_HELP = ("Offline mode answers one quantity at a time: how many setups, order changes, paper changes, stops or sheets; "
                  "minutes of downtime, of maintenance or operator downtime, or the stops or minutes of one stop reason or place "
                  "('how many minutes of missed splices this week', 'how many stops at the stacker'); lineal feet, feet per setup or per "
-                 "paper change, minutes per stop, MSF per production day; the setups of one grade. Dollars: 'where is the money this week'. Try an example question.")
+                 "paper change, minutes per stop, MSF per production day, the downtime of each production day ('downtime per day this week'); "
+                 "the setups of one grade. Dollars: 'where is the money this week'. Try an example question.")
 # A countable noun, an asked unit, a stop reason or place, a grade or a money word: a question carrying one is not a "how
 # did we do" question, so it is never answered with the KPI summary (catch_all_guard); evals/run.py states the same rule.
 QUANTITY_WORDS = (r"\b(set-?ups?|paper changes?|order changes?|changeovers?|wet[- ]ends?|stops|stoppages?|splices?|step[- ]?ups?|"
@@ -546,7 +560,62 @@ GRADE_QUANTITIES = ('setups', 'paper_changes', 'lineal_ft')
 GRADE_CODE = r"\b(\d{2,3})-?(c|bc|eb)\b"
 LINE_COUNTS = ("Setups, paper changes, order changes and sheets are counted for the line, not by stop place or reason: a place "
                "or reason counts its stops or minutes ('how many stops at the stacker this week'). ")
-EACH_SHIFT = r"\b(each|every|by|per) shift\b|\bbetween (the )?shifts\b|\bshift by shift\b"
+# "Compare shifts on downtime minutes" is each shift's total too (round 4 of the coordinator's review, item 5)
+EACH_SHIFT = (r"\b(each|every|by|per) shift\b|\bbetween (the )?shifts\b|\bshift by shift\b"
+              r"|\bcompar\w*\s+(the\s+|all\s+(the\s+)?|our\s+|three\s+)?shifts\b|\bshifts\s+compared\b|\bshift comparison\b"
+              r"|\bcompar\w*\b.*\bacross (the |all |all the )?shifts\b|\bshifts? (vs|versus) shifts?\b|\bshifts\b.*\bstack up\b")
+# A shift named by its rank ("the slowest shift", "the best shift"): the router cannot rank shifts while it reads a question,
+# so a quantity of one is refused plainly, never answered for the shift the control selects (round 4, item 1)
+RANKED_SHIFT = (r"\b(slowest|fastest|quickest|best|worst|top|strongest|weakest|busiest|highest|lowest|most productive|"
+                r"least productive)\s+(performing\s+)?(shifts?|crews?|teams?)\b"
+                r"|\bshifts?\s+(that|which)\s+(ran|was|were|did|had)\s+(the\s+)?(slowest|fastest|best|worst|most|least|fewest)\b"
+                r"|\bshifts?\s+with\s+the\s+(most|least|fewest|highest|lowest|best|worst)\b")
+RANKED_TEXT = ("A ranked shift (the slowest, fastest, best or worst) is not one the router can name while it reads a question: which "
+               "shift ran fastest is the shift comparison of a production day ('which shift was fastest', with Production-day "
+               "comparison selected), and a quantity is answered for the shift it names ('how many minutes of downtime did shift 3 "
+               "have this week'). ")
+# The longest or shortest of anything: no tool returns a maximum (round 4, item 4)
+LONGEST = (r"\b(longest|shortest|maximum|minimum|max)\s+(single\s+)?(stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|"
+           r"order changes?)\b|\b(stops?|stoppages?|set-?ups?|runs?|changeovers?)\s+(was|is|were|ran)\s+(the\s+)?(longest|shortest)\b")
+LONGEST_TEXT = ("No tool returns the longest or shortest stop, setup or run: the records answer a window's stops, its downtime minutes "
+                "and minutes per stop ('what was our average stop this week'), and the Pareto ranks the reasons by minutes ('which "
+                "downtime reason cost the most minutes this week'). ")
+# An average stop ("average stop length", "a typical stop", "how long is our average stop") is minutes per stop, a ratio kept
+# for all stops together (round 4, item 4); an average of anything else timed is refused with where it is answered.
+AVERAGE_ASK = r"\b(average|avg|mean|typical)\b"
+AVERAGE_STOP = (r"\b(average|avg|mean|typical)\s+([a-z/-]+\s+){0,3}?(stop|stoppage)\b"
+                r"|\b(average|avg|mean|typical)\s+(length|duration|time) of (a |the |our )?(stops?|stoppages?)\b")
+AVERAGE_TEXT = ("The average stop of a window is minutes per stop ('what was our average stop this week'); each stop reason's minutes "
+                "per stop are in the downtime review, beside its minutes and stops ('downtime by reason this week'), a place's or a "
+                "kind's stops and minutes are their own ('how many minutes of downtime at the stacker this week'), and how long a setup "
+                "or run took is per setup in the setup matrix ('show the setup matrix'). ")
+SETUP_NOUNS = r"\b(set-?ups?|changeovers?|paper changes?|order changes?|wet[- ]ends?|runs?)\b"
+# An average of a count or a total ("average stops this week", "average number of setups") needs a span the records keep
+RATIO_METRICS = ('lineal_per_setup', 'lineal_per_paper_change', 'minutes_per_stop', 'msf_per_day', 'downtime_per_day', 'waste_pct')
+AVERAGE_TOTAL = ("An average needs a span the records keep: minutes per stop ('what was our average stop this week'), feet per setup or "
+                 "per paper change, MSF per production day, and each production day's stops or downtime ('stops per day this week', "
+                 "'downtime per day this week'); a window's total is asked without 'average' ('how many stops this week'). ")
+# A breakdown asked ("waste breakdown in percent", "dry-end rejects by reason") is the breakdown, not one of its lines (round 4,
+# item 7); a count or minutes asked of each place or reason is the Pareto grouped by it (item 5)
+BREAKDOWN = r"\bbreak ?downs?\b|\b(by|per|each|every) (reason|line|kind|type|category|family)\b|\blines\b"
+GROUPED = (r"\b(by|per|(at |for |in |on )?(each|every))\s+(stop\s+|downtime\s+|piece of\s+)?(reason|place|equipment|kind|location|area|"
+           r"machine|section)s?\b")
+# One quantity is the whole window's: grouped by reason, place or kind it is the Pareto, and a ratio has no grouping
+GROUPED_TEXT = ("One quantity is the whole window's: grouped by stop reason, place or kind it is the Pareto ('how many minutes of "
+                "downtime by reason this week', 'how many stops at each place this week'), each reason's minutes per stop are in the "
+                "downtime review ('downtime by reason this week'), and setups, paper changes, order changes and sheets are the line's. ")
+GROUPED_PER_DAY = ("The Pareto groups a window's stops by reason, place or kind, not by day: ask the window ('how many minutes of downtime "
+                   "at each place this week'), or each production day's stops and minutes ('downtime per day this week'). ")
+DAILY_AVERAGE = ("No tool returns one average across a window's production days: 'downtime per day this week' and 'stops per day this "
+                 "week' give each production day's minutes and stops and each weekday's per-day figures, and 'what percent downtime "
+                 "this week' the window's share of scheduled minutes. ")
+# A percent of waste ("what percentage of waste was dry end"): the lines are kept as a percent of gross (a dry-end line of the
+# yield after trim and shear), never as a share of the waste; dry-end rejects asked of gross are listed in the breakdown
+SHARE_OF_WASTE = r"\b(percent(age)?|%|share) of (the |our |all )?(waste|scrap|bale)\b"
+SHARE_OF_WASTE_TEXT = ("The waste lines are kept as a percent of gross, a dry-end line of the yield after trim and shear, not as a share of "
+                       "the waste: 'waste breakdown this week' lists every line. ")
+DRY_END_OF_GROSS = ("Dry-end rejects are a percent of the yield after trim and shear, the owner's denominator: 'what percent was dry-end "
+                    "rejects this week'; the waste breakdown lists their percent of gross beside it ('waste breakdown this week'). ")
 # A duration of running slow ("how long were we slow", "how many minutes were we slow"): the minutes stopped are not the
 # minutes slow (the coordinator's re-review of PR 143, item 2). Slow named of something else ("the slowest shift's downtime",
 # "the fastest setup time") is not it.
@@ -598,7 +667,8 @@ def initial(text):
 
 def per_ratio(lower):
     """The ratio a question's "per" names (PER_KEPT: feet per setup or per paper change, minutes per stop, MSF per production
-    day), None when it names none, or a ValueError for a ratio the records do not keep ("feet per stop", "setups per day")."""
+    day, the downtime of each production day), None when it names none, or a ValueError for a ratio the records do not keep
+    ("feet per stop", "setups per day", "sheets per minute", "cost per setup")."""
     for m in re.finditer(PER_WORD, lower):
         den = m[2]
         clause = re.split(r"[,;:?.!]|\band\b|\bversus\b|\bvs\b", lower[:m.start()])[-1]
@@ -606,13 +676,20 @@ def per_ratio(lower):
             continue   # "average speed per day": the speed answer
         nouns = re.findall(PER_NOUNS, clause)
         numerator = nouns[-1] if nouns else None
+        if re.match(r"min", den) and numerator and re.search(r"^(lineal|feet|ft|footage)$", numerator):
+            continue   # "how many feet per minute": the speed answer (SPEED_UNIT); "square feet per minute" is not kept
         for den_pattern, kept, metric in PER_KEPT:
-            if not re.search(den_pattern, den):
-                continue
-            if numerator and re.search(kept, numerator):
+            if numerator and re.search(den_pattern, den) and re.search(kept, numerator):
                 return metric
-            if numerator is None and (metric != 'msf_per_day' or re.search(r"\b(make|made|produced?|run|ran)\b", clause)):
-                return metric   # "what was our per setup", "how much did we make per day"
+        words = re.findall(r"[a-z']+", clause)
+        if numerator is None and words and not re.search(PER_FILLER, words[-1]):
+            numerator = words[-1]   # "cost per setup": a numerator the records do not keep, never the bare ratio
+        elif numerator is None:
+            bare = next((metric for den_pattern, metric in PER_BARE if re.search(den_pattern, den)), None)
+            if re.search(r"days?$", den) and re.search(r"\b(make|made|produced?|run|ran)\b", clause):
+                bare = 'msf_per_day'   # "how much did we make per day"
+            if bare:
+                return bare   # "what was our per setup"
         named = (numerator.upper() if numerator == 'msf' else numerator) if numerator else ''
         raise ValueError(initial(f"{named} per {m[1] or ''}{den}".strip()) + f" is not a ratio the records keep: the ratios are "
                          f"{PER_RATIOS}. " + QUANTITY_HELP)
@@ -624,7 +701,24 @@ def quantity_lead(lower, assume_count=False):
     reason or place), or None when it asks for none. A count of something the records do not hold, or a unit they do
     not keep, is a ValueError saying what can be counted: never a summary that looks like an answer. `assume_count`
     reads a countable noun as the count asked ("how did we do on setups this month", "compare stops this week to last"):
-    the router's last resort before the KPI summary, which those questions would otherwise get."""
+    the router's last resort before the KPI summary, which those questions would otherwise get. A quantity of a shift
+    named by its rank ("the slowest shift") is refused: the router cannot rank shifts (RANKED_SHIFT)."""
+    lead = _quantity_lead(lower, assume_count)
+    if lead and re.search(RANKED_SHIFT, lower):
+        raise ValueError(RANKED_TEXT + QUANTITY_HELP)
+    if lead and re.search(GROUPED, lower):
+        raise ValueError(GROUPED_TEXT + QUANTITY_HELP)   # "minutes per stop by reason", "setups at each place": never one total
+    if lead and lead['metric'] == 'downtime_per_day' and re.search(AVERAGE_ASK, lower):
+        raise ValueError(DAILY_AVERAGE + QUANTITY_HELP)   # "average downtime per day": never the busiest day
+    if lead and lead['metric'] == 'downtime_per_day' and re.search(PCT_ASK, lower):
+        raise ValueError("Each production day's downtime is kept in minutes ('downtime per day this week'), its percent of scheduled "
+                         "minutes beside it; the window's percent is 'what percent downtime this week'. " + QUANTITY_HELP)
+    if lead and re.search(AVERAGE_ASK, lower) and lead['metric'] not in RATIO_METRICS:
+        raise ValueError(AVERAGE_TOTAL + QUANTITY_HELP)   # "average stops this week": never the window's total (round 4, item 4)
+    return lead
+
+
+def _quantity_lead(lower, assume_count):
     per = re.search(UNIT_PER, lower)
     if per:   # "minutes per setup": the unit named, never read as feet per setup (the coordinator's review of PR 143, item 2)
         raise ValueError(initial(f"{per[1].upper() if per[1] == 'msf' else per[1]} per {per[3]}") + " is not a ratio the records keep: "
@@ -636,11 +730,27 @@ def quantity_lead(lower, assume_count=False):
         return None   # "how many feet per minute did we run": the speed answer, in ft/min (the re-review, item 1)
     if re.search(HOURS_ASK, lower):   # "how much downtime in hours": the minutes, never a percent (the re-review, item 6)
         raise ValueError(f'{HOURS_TEXT} ' + QUANTITY_HELP)
+    if re.search(LONGEST, lower):   # "how long was the longest stop": never the window's total (round 4, item 4)
+        raise ValueError(LONGEST_TEXT + QUANTITY_HELP)
     count, minutes, feet, sqft, msf, pct = (bool(re.search(p, lower)) for p in (COUNT_ASK, DURATION_ASK, FEET_ASK, SQFT_ASK, MSF_ASK, PCT_ASK))
+    if re.search(AVERAGE_ASK, lower) and not count:   # an average stop, never the stop count or the total (round 4, item 4)
+        narrowed = (any(re.search(pattern, lower) for pattern, _ in PLACE_WORDS + REASON_WORDS) or 'maintenance' in lower
+                    or 'operator' in lower or re.search(GROUPED, lower))
+        if re.search(AVERAGE_STOP, lower) and not narrowed:
+            return {'metric': 'minutes_per_stop'}
+        if re.search(AVERAGE_STOP, lower) or minutes or re.search(r"\b(length|duration)s?\b", lower):
+            raise ValueError((SETUP_TIME if re.search(SETUP_NOUNS, lower) and not re.search(AVERAGE_STOP, lower) else AVERAGE_TEXT)
+                             + QUANTITY_HELP)
     count = count or assume_count
     if minutes and re.search(SLOW_TIMED, lower):   # "how long were we slow": never the minutes stopped (the re-review, item 2)
         raise ValueError(SLOW_DURATION + QUANTITY_HELP)
     waste = next((key for pattern, key in WASTE_WORDS if re.search(pattern, lower)), None)
+    if (sqft or pct or msf) and waste and re.search(BREAKDOWN, lower):
+        return None   # "waste breakdown in percent": the breakdown, not one of its lines (round 4, item 7)
+    if pct and waste and waste != 'bale' and re.search(SHARE_OF_WASTE, lower):
+        raise ValueError(SHARE_OF_WASTE_TEXT + QUANTITY_HELP)   # "what percentage of waste was dry end": not a share kept
+    if pct and waste in ('dry_end', 'bond', 'warp', 'misalignment', 'moisture') and re.search(r"\bof (the )?gross\b", lower):
+        raise ValueError(DRY_END_OF_GROSS + QUANTITY_HELP)   # "dry-end rejects as a percent of gross": never the yield's percent
     if (sqft or pct or msf) and waste:   # an area or a percent of one waste line (item 6)
         if sqft or pct:
             return {'metric': 'waste_sqft' if sqft else 'waste_pct', 'waste': waste}
@@ -733,10 +843,20 @@ def parse_period_request(lower, current, shifts):
     fiscal = bool(re.search(r"\bfiscal\b|\baccounting period\b|4-4-5|\b445\b|\b(this|last|previous|prior|current) period\b|\bperiod (over|vs|versus|to|against) period\b|\bp(1[0-3]|[1-9])\b", lower))
     period = 'fiscal' if fiscal else 'month' if months or re.search(r"\bmonth(s|ly)?\b", lower) else 'week' if re.search(r"\bweek(s|ly)?\b", lower) else None
     trend = bool(re.search(r"\btrends?\b", lower))
+    # stops or minutes grouped by reason, place or kind ("how many minutes of downtime at each place", "stops by reason", "downtime
+    # breakdown in minutes"): the Pareto in the unit asked (round 4 of the coordinator's review, item 5); asked in percent it is not
+    grouped = bool((re.search(GROUPED, lower) or re.search(r"\bbreak ?downs?\b", lower) and re.search(DOWNTIME_WORDS, lower))
+                   and (re.search(COUNT_ASK, lower) or re.search(MINUTES_ASK, lower) or re.search(r"\b(stops|stoppages|minutes|mins)\b", lower))
+                   and (re.search(DOWNTIME_WORDS, lower) or re.search(r"\b(minutes|mins)\b", lower)) and not re.search(PCT_ASK, lower)
+                   # an average or a ratio by reason is not the Pareto either ("average minutes per stop by reason"): refused below
+                   and not re.search(AVERAGE_ASK, lower) and not re.search(r"\bper (stops?|stoppages?|set-?ups?|paper changes?|wet[- ]ends?)\b", lower))
+    if grouped and re.search(r"\bper (production )?day\b", lower):
+        raise ValueError(GROUPED_PER_DAY + QUANTITY_HELP)   # "minutes at each place per day": never the window's Pareto
     pareto = bool(re.search(r"\bpareto\b|cost the most|costing( us)? the most|most (downtime )?minutes|most often|most stops|most frequent", lower)
                   and re.search(r"downtime|stop|reason|place|equipment|kind", lower)
-                  # "how many stops by reason this week": a count grouped is the Pareto counted, not one quantity (issue #113)
-                  or re.search(COUNT_ASK, lower) and re.search(r"\bby (reason|place|equipment|kind)\b", lower) and re.search(DOWNTIME_WORDS, lower))
+                  # "how many stops by reason this week": a count grouped is the Pareto counted, not one quantity (issue #113);
+                  # "how many minutes of downtime at each place" the Pareto in minutes (round 4 of the coordinator's review, item 5)
+                  or grouped)
     profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower))
     # "How much downtime last week": over a named window the downtime answer is the Pareto, as the day-shaped
     # downtime question is under a ranged Period control (period_plan), not the KPI tiles (issue #105).
@@ -833,6 +953,11 @@ def parse_period_request(lower, current, shifts):
                 raise ValueError(f"Stops, downtime, order changes and sheets are recorded by shift, reason, place and knife, not by grade: "
                                  f"ask 'how many setups on {grade_code} this week', or 'volume by grade this week'. " + QUANTITY_HELP)
             lead = {**lead, 'grade': grade_code}
+        if lead['metric'] == 'downtime_per_day' and window['period'] == 'day':
+            # the downtime of each production day is the stops profile's, over the week when no window is named, as "stops per
+            # day" is (round 4 of the coordinator's review, item 9)
+            return quantity_request(lead, {"period": "week", "anchor": anchor} if not months else
+                                    {"period": "month", "anchor": month_start(months[0])}, shift)
         return quantity_request(lead, {"period": "month", "anchor": month_start(months[0])} if months else window, shift)
     if lead:
         return answer_quantity(lead)
@@ -878,8 +1003,11 @@ def parse_period_request(lower, current, shifts):
         plan = [("get_trend", {"metric": metric, "weeks": weeks, "anchor": anchor, "shift": shift})]
         intent = 'period_trend'
     elif pareto or (downtime and not (diagnose or waste or profile or speed or volume or len(set(months)) >= 2)):
-        group_by = 'place' if re.search(r"equipment|place|where|location", lower) else 'kind' if re.search(r"\bkind\b", lower) or ('maintenance' in lower and 'operator' in lower) else 'reason'
-        measure = 'count' if re.search(r"\b(count|how many|number of|most often|most stops|frequent)\b", lower) else 'minutes'
+        group_by = 'place' if re.search(r"equipment|place|where|location|\barea|\bmachine|\bsection", lower) else 'kind' if re.search(r"\bkind\b", lower) or ('maintenance' in lower and 'operator' in lower) else 'reason'
+        # minutes asked are minutes ("how many minutes of downtime at each place"), never the stops counted
+        measure = ('minutes' if re.search(MINUTES_ASK, lower) or grouped and re.search(r"\b(minutes|mins)\b", lower) else
+                   'count' if re.search(r"\b(count|how many|number of|most often|most stops|frequent)\b", lower)
+                   or grouped and re.search(r"\b(stops|stoppages)\b", lower) else 'minutes')
         if not pareto and months:
             window = {"period": "month", "anchor": month_start(months[0])}   # "downtime in August": that month, the latest such on or before the day
         if not pareto and group_by == 'reason' and measure == 'minutes':
@@ -1098,7 +1226,7 @@ OTHER_GROUPING = r"\bby\s+(kind|type|category|equipment|place|machine|location|s
 # A quantity asked of any answer (the re-review, item 6): a count, a duration or a unit asked (percent, MSF, square feet, minutes,
 # hours, feet). A bare "how much" is not one ("how much did we make"), nor a unit named without being asked ("which reason cost
 # the most minutes", "trend of MSF per day", asked of the selected scope as before), nor a trend, nor a money question.
-UNIT_ASKED = (r"\bin (msf|percent(age)?|%)|\bhow (many|much) msf\b|\bmsf (did|were|was|do)\b|\bwhat (percent(age)?|%)"
+UNIT_ASKED = (r"\bin (msf|percent(age)?|%)|\bhow (many|much) msf\b|\bmsf (did|were|was|do)\b|\bwhat (percent(age)?|%)|\bbreak ?down (percent(age)?|%)"
               r"|\b(percent(age)?|%) of\b|\b(downtime|trim|shear|waste|scrap|rejects?) (percent(age)?|%)")
 QUANTITY_SCOPE_ASK = "|".join((COUNT_ASK, DURATION_ASK, HOURS_ASK, FEET_ASK, SQFT_ASK, UNIT_ASKED))
 
@@ -1115,8 +1243,12 @@ def quantity_default(text, lower, current, shifts, day, period, read):
         request = parse_request(text, probe)
     except ValueError:
         return False
-    return request.get('intent') == 'period_quantity' or bool(re.search(QUANTITY_SCOPE_ASK, lower) and not MONEY.search(lower)
-                                                              and request.get('intent') != 'period_trend')
+    # a quantity measure (one quantity, the stops of each production day) takes it with or without an ask word: "stops per day this
+    # week" and "how many stops per day this week" read the same scope (round 4 of the coordinator's review, item 8)
+    # "lineal feet per minute" is the speed, not a count of feet: it keeps the controls as "feet per minute" does
+    asked = re.sub(r"\b(lineal |linear )?(feet|ft) per min(ute)?s?\b|\bft/min\b", "fpm", lower)
+    return request.get('intent') in ('period_quantity', 'period_stops') or bool(re.search(QUANTITY_SCOPE_ASK, asked) and not MONEY.search(lower)
+                                                                               and request.get('intent') != 'period_trend')
 
 
 def downtime_default(text, lower, current, shifts, relative, day, period, read):

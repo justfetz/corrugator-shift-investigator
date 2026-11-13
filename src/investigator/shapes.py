@@ -884,7 +884,7 @@ class PeriodAnswer:
             'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',),
             'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',),
             'period_quantity': ('get_period_kpis', 'get_downtime_review', 'get_downtime_pareto', 'get_overrun', 'get_grade_totals',
-                                'get_waste_breakdown')}
+                                'get_waste_breakdown', 'get_stops_profile')}
 
     KPI_TOOLS = ('get_period_kpis', 'compare_periods')
     USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
@@ -1506,7 +1506,26 @@ class PeriodAnswer:
             return self.quantity_of_grade(q)
         if q['tool'] == 'get_waste_breakdown':
             return self.quantity_of_waste(q)
+        if q['tool'] == 'get_stops_profile':
+            return self.quantity_of_daily_downtime(q)
         return self.quantity_of_tiles(q)
+
+    def quantity_of_daily_downtime(self, st):
+        """The downtime of each production day (get_stops_profile, round 4 of the coordinator's review of PR 143, item 9): the day
+        with the most minutes first, as "stops per day" leads with the day with the most stops, then each weekday's minutes per day."""
+        data, rows = st['data'], st['data']['rows']
+        i = argmax(rows, 'minutes')
+        if i is None:
+            return f'No production days in this window{self.where(data)} {ref(st)}', [], [], self.window_looks(data, ('pareto',))
+        r = rows[i]
+        rank = (f', the most of {len(rows)} production days' if len(rows) > 1 else ', the only production day') if self.whole(data) else ''
+        head = (f'**{pval(r["minutes"])} minutes** of downtime on {r["production_day"]} ({r["weekday"]}){self.where(data)}{rank} · '
+                f'{stops_text(r["stops"])} · {pval(r["downtime_pct"])}% of scheduled minutes {ref(st, i)}')
+        bullets = [bullet(f'{p["weekday"]}: **{pval(p["minutes_per_day"])} minutes per day** · {pval(p["stops_per_day"])} stops per day over '
+                          f'{n(p["days"])} day(s)', st, j, 'weekday')
+                   for j, p in enumerate(data.get('weekday_profile') or []) if p['days']]
+        notes = ['A weekday\'s minutes per day are its downtime minutes over the production days of that weekday in the window.']
+        return head, bullets, notes, self.window_looks(data, ('stops', 'pareto', 'trend_downtime'))
 
     def quantity_of_tiles(self, k):
         """A count, a length or minutes from the KPI tiles (order changes from the envelope beside them)."""
@@ -1639,9 +1658,16 @@ class PeriodAnswer:
             base = 'the yield after trim and shear' if yield_based else 'gross'
             previous = f'previous {pval(r["previous_" + key])}%' if r.get('previous_' + key) is not None else 'previous unavailable'
             head = (f'**{pval(r[key])}%** of {base} in {r["label"]}{where}{band(r.get("band_text"))} · {f0(r["sqft"])} sq ft · {previous} {ref(w, i)}')
-        bullets = [bullet(f'{x["label"]}: **' + (f'{f0(x["sqft"])} sq ft** · {pval(x["pct_of_gross"])}% of gross' if metric == 'waste_sqft' else
-                                                 f'{pval(x["pct_of_gross"])}%** of gross · {f0(x["sqft"])} sq ft'), w, j)
-                   for j, x in enumerate(rows) if j != i and x['category'] not in ('bale', 'unexplained', 'dry_end')][:3]
+        if r['category'] == 'dry_end':
+            # the dry-end families it is made of, each a percent of the same yield (round 4 of the coordinator's review, item 9)
+            bullets = [bullet(f'{x["label"]}: **' + (f'{f0(x["sqft"])} sq ft** · {pval(x["pct_of_yield"])}% of the yield after trim and shear'
+                                                     if metric == 'waste_sqft' else
+                                                     f'{pval(x["pct_of_yield"])}%** of the yield after trim and shear · {f0(x["sqft"])} sq ft'), w, j)
+                       for j, x in enumerate(rows) if j != i and x.get('pct_of_yield') is not None][:5]
+        else:
+            bullets = [bullet(f'{x["label"]}: **' + (f'{f0(x["sqft"])} sq ft** · {pval(x["pct_of_gross"])}% of gross' if metric == 'waste_sqft' else
+                                                     f'{pval(x["pct_of_gross"])}%** of gross · {f0(x["sqft"])} sq ft'), w, j)
+                       for j, x in enumerate(rows) if j != i and x['category'] not in ('bale', 'unexplained', 'dry_end')][:3]
         notes = ['Bale is a scale reading; unexplained is bale minus trim, shear and rejects.'] + (
             ['Dry-end rejects are a percent of the yield after trim and shear, the owner\'s denominator.'] if yield_based else [])
         return head, bullets, notes, self.window_looks(data, ('waste', 'grade', 'trend_trim' if r['category'] == 'trim' else 'trend_dry_end'))
@@ -1678,7 +1704,10 @@ class PeriodAnswer:
             text, question = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}?'),
                               'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}'),
                               'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}'),
-                              'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}'),
+                              # the stops of each day answer every shift when no shift is named (round 4 of the coordinator's
+                              # review, item 8): a one-shift card says "this shift" so the look keeps its scope
+                              'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}' + (
+                                  ' on this shift' if self.context.scope == 'shift' and data.get('shift') else '')),
                               'speed': ('Each grade against its speed target', f'Which grade is slowest against target{wp}{sfx}?'),
                               'opportunity': ('Each grade and web width against its best-fifth speed', f'Where is the speed opportunity{wp}{sfx}?'),
                               'rollstock': ('The paper each grade and width consumed', f'How much paper did we consume{wp}{sfx}?')}[kind]
