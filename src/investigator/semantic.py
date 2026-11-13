@@ -112,6 +112,22 @@ def _where_sql(expr, alias, table_columns):
     return ''.join(sql), params
 
 
+def _bands(m):
+    """The targets.json bands a measure names: its own band, the bands its band_by dimension's values read, or the band
+    whose line it counts records over (setups over the trim flag)."""
+    if m.get('band'):
+        return [m['band']]
+    if m.get('band_by'):
+        return list(m['band_by'].get('bands', {}).values())
+    return [m['above_band']['band']] if m.get('above_band') else []
+
+
+def _external_values(key):
+    """The values targets.json's external block names under `key` (the External kind, the power-outage reasons)."""
+    value = targets.EXTERNAL.get(key)
+    return {value} if isinstance(value, str) else set(value or ())
+
+
 class Model:
     """The loaded model, checked against itself, against targets.json and against the store's schema."""
 
@@ -192,14 +208,92 @@ class Model:
                 raise ValueError(f'semantic model: measure {name} has a scale, which only a ratio takes')
             if m.get('band') and m['band'] not in targets.BANDS:
                 raise ValueError(f'semantic model: measure {name} names band {m["band"]}, which targets.json does not hold')
-            if m.get('lever') not in LEVERS:
-                raise ValueError(f'semantic model: measure {name} needs a lever: ' + ', '.join(LEVERS))
             for band in (m.get('band_by') or {}).get('bands', {}).values():
                 if band not in targets.BANDS:
                     raise ValueError(f'semantic model: measure {name} names band {band}, which targets.json does not hold')
         for basis in PRICE_BASIS:
             if self.measures.get(basis, {}).get('agg') != 'sum':
                 raise ValueError(f'semantic model: the pricing basis needs the sum measure {basis}')
+        self.levers = {name: self._measure_lever(name, m) for name, m in self.measures.items()}
+        self._check_levers()
+
+    def _measure_lever(self, name, m):
+        """A measure's lever (issue #101). A measure with a band, or bands by a dimension, reads it from that band in
+        targets.json and types no copy of its own (the coordinator on PR #148: one source for a measure's lever); a
+        measure with no band types its own."""
+        bands = _bands(m)
+        if bands:
+            if 'lever' in m:
+                raise ValueError(f'semantic model: measure {name} reads its lever from its band in targets.json, so it types none of its own')
+            levers = {targets.BANDS[band].get('lever') for band in bands}
+            if len(levers) != 1 or not levers <= set(LEVERS):
+                raise ValueError(f'semantic model: the bands of measure {name} name more than one lever in targets.json, or none')
+            return levers.pop()
+        if m.get('lever') not in LEVERS:
+            raise ValueError(f'semantic model: measure {name} needs a lever: ' + ', '.join(LEVERS))
+        return m['lever']
+
+    def _quantity_key(self, name):
+        """What a simple measure counts: its records (entity, filter, band line) and the columns its expression reads.
+        Two measures with one key are one quantity in two units (side trim in sq ft and in MSF); a filter that keeps
+        other records makes another quantity (maintenance and planned-maintenance minutes are not the maintenance band's)."""
+        m = self.measures[name]
+        return (m['entity'], json.dumps(m.get('filter', {}), sort_keys=True), json.dumps(m.get('above_band'), sort_keys=True),
+                m['agg'] == 'count', frozenset(_PLACEHOLDER.findall(m.get('expr') or '')))
+
+    def _over(self, quantities):
+        """The measures over any of these simple quantities: the quantities themselves, the dollars priced from one and
+        the ratios over one."""
+        return {other for other, o in self.measures.items()
+                if other in quantities or o.get('quantity') in quantities or (o['agg'] == 'ratio' and o['numerator'] in quantities)}
+
+    def same_quantity(self):
+        """(source, its band's lever, measure) for every measure over a quantity a band in targets.json reads: a banded
+        measure's quantity (a ratio's numerator, or the banded sum) in any unit, the dollars priced from it and the other
+        ratios over it (`trim_sqft` and `trim_usd` beside the trim band), and every measure over an entity whose rows are
+        a band's quantity (the reject lines are what the dry-end band reads, in sq ft or in sheets)."""
+        triples = []
+        simple = [n for n, m in self.measures.items() if m['agg'] in SIMPLE]
+        for name, m in self.measures.items():
+            if not (m.get('band') or m.get('band_by')):
+                continue
+            key = self._quantity_key(m['numerator'] if m['agg'] == 'ratio' else name)
+            for other in sorted(self._over({n for n in simple if self._quantity_key(n) == key}) - {name}):
+                triples.append((name, self.levers[name], other))
+        for entity_name, entity in self.entities.items():
+            if entity.get('band'):
+                lever = targets.BANDS[entity['band']].get('lever')
+                for other in sorted(self._over({n for n in simple if self.measures[n]['entity'] == entity_name})):
+                    triples.append((f'the {entity["band"]} band, which reads every {entity_name} row', lever, other))
+        return triples
+
+    def _check_levers(self):
+        for entity_name, entity in self.entities.items():
+            if entity.get('band') and entity['band'] not in targets.BANDS:
+                raise ValueError(f'semantic model: entity {entity_name} names band {entity["band"]}, which targets.json does not hold')
+        for source, lever, other in self.same_quantity():
+            if self.levers[other] != lever:
+                raise ValueError(f'semantic model: measure {other} has lever {self.levers[other]}, but it measures the quantity of '
+                                 f'{source}, whose lever in targets.json is {lever}')
+        lever = targets.EXTERNAL.get('lever')
+        for name, dim in self.dimensions.items():
+            key = dim.get('external')
+            if key is None:
+                continue
+            if key not in ('kind', 'reasons') or key not in targets.EXTERNAL or lever not in LEVERS:
+                raise ValueError(f'semantic model: dimension {name} reads targets.json external.{key}, which holds no values with a lever')
+            typed = set(dim.get('value_levers') or {}) & _external_values(key)
+            if typed:
+                raise ValueError(f'semantic model: dimension {name} types a lever for {", ".join(sorted(typed))}, which '
+                                 'targets.json\'s external block already gives')
+
+    def value_lever(self, dim, value):
+        """The lever of one value of a dimension, when it has its own: targets.json's external block (a power outage,
+        the External kind), else the dimension's `value_levers` (planned maintenance is schedule-driven); else None."""
+        d = self.dimensions[dim]
+        if d.get('external') and str(value) in _external_values(d['external']):
+            return targets.EXTERNAL['lever']
+        return (d.get('value_levers') or {}).get(str(value))
 
     @staticmethod
     def _physical_tokens(expr, table_columns, where):
@@ -827,14 +921,16 @@ def _band_of(mdl, measure, dims_values, filters):
 
 
 def _lever(mdl, measure, dims_values, filters):
-    """Who can move a figure (issue #101): the measure's lever, unless the row's slice or the query's filter is a value
-    with a lever of its own (planned maintenance is schedule-driven, a power outage external; the owner on PR #111)."""
+    """Who can move a figure (issue #101): a value with a lever of its own in the row's slice or the query's filter
+    (planned maintenance is schedule-driven, a power outage external; the owner on PR #111), else the lever of the band
+    the value is read against in targets.json (each stop kind's own), else the measure's."""
     for values in (dims_values, filters):
         for dim, value in values.items():
-            lever = (mdl.dimensions[dim].get('value_levers') or {}).get(str(value))
+            lever = mdl.value_lever(dim, value)
             if lever:
                 return lever
-    return mdl.measures[measure]['lever']
+    band = _band_of(mdl, measure, dims_values, filters)
+    return targets.BANDS[band]['lever'] if band else mdl.levers[measure]
 
 
 def _scope_text(mdl, query):
@@ -983,6 +1079,7 @@ def model_markdown(text=None):
     and the physical mapping."""
     spec = json.loads(text) if isinstance(text, str) else (text or json.loads(MODEL_PATH.read_text()))
     measures = {m['name']: m for m in spec['measures']}
+    levers = Model(spec).levers
     dims = spec['dimensions']
     out = ['# The semantic model', '',
            'Generated from `src/investigator/semantic_model.json` when the docs are built: '
@@ -1020,8 +1117,9 @@ def model_markdown(text=None):
         band = _band_words(m['band']) if m.get('band') else ''
         if m.get('band_by'):
             band = '; '.join(f'{value}: {_band_words(b)}' for value, b in m['band_by']['bands'].items())
+        lever = levers[m['name']] + (' (its band\'s, targets.json)' if _bands(m) else '')
         out.append(f'| **{m["label"]}** `{m["name"]}` | {_cell(m["description"])} | {_cell(m["unit"])} | {_cell(agg)} | {_cell(band) or "none"} | '
-                   f'{m.get("lever", "")} | {_cell(m.get("tool", ""))} |')
+                   f'{_cell(lever)} | {_cell(m.get("tool", ""))} |')
     out += ['', '## Dimensions', '',
             'A dimension slices a measure when the measure\'s rows carry it, directly or through one many-to-one join '
             '(a stop belongs to one setup, so stops split by grade; a setup carries several order lanes, so setup feet never '
@@ -1043,11 +1141,21 @@ def model_markdown(text=None):
         for value, words in (d.get('value_synonyms') or {}).items():
             out.append(f'| {_cell(", ".join(words))} | {d["name"]} {_cell(value)} |')
     out += ['', '## Levers of a slice', '',
-            'A measure has its lever (the Lever column above). A slice or a filter on one of these values takes the value\'s own '
-            'lever instead (the owner\'s rulings on PR #111).', '', '| Dimension | Value | Lever |', '| --- | --- | --- |']
+            'A measure has its lever (the Lever column above): a measure with a band reads it from that band in targets.json '
+            'and types no copy, and a measure over the same quantity (the band\'s square feet, minutes or dollars) has the same '
+            'lever, which the model checks when it loads. A slice or a filter on one of these values takes the value\'s own lever '
+            'instead (the owner\'s rulings on PR #111); a value read against a band of its own (a stop kind) takes that band\'s.', '',
+            '| Dimension | Value | Lever | From |', '| --- | --- | --- | --- |']
+    banded = [e for e in spec['entities'] if e.get('band')]
     for d in dims:
+        if d.get('external'):
+            for value in sorted(_external_values(d['external'])):
+                out.append(f'| `{d["name"]}` | {_cell(value)} | {targets.EXTERNAL["lever"]} | targets.json, external |')
         for value, lever in (d.get('value_levers') or {}).items():
-            out.append(f'| `{d["name"]}` | {_cell(value)} | {lever} |')
+            out.append(f'| `{d["name"]}` | {_cell(value)} | {lever} | the model file |')
+    for e in banded:
+        out += ['', f'Every measure over the {e["label"].lower()}s (`{e["name"]}`) measures what the {e["band"]} band reads, so it has '
+                f'that band\'s lever, {targets.BANDS[e["band"]]["lever"]}.']
     out += ['', '## Entities and joins', '', '| Entity | Label | Key | Definition |', '| --- | --- | --- | --- |']
     for e in spec['entities']:
         out.append(f'| `{e["name"]}` | {_cell(e["label"])} | {_cell(e["key"])} | {_cell(e["description"])} |')

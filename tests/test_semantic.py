@@ -428,7 +428,7 @@ def test_the_compiler_agrees_with_the_tools(store, measure):
 def test_the_model_file_is_complete():
     model = S.model()
     for name, m in model.measures.items():
-        assert m['label'] and m['unit'] and m['description'] and m['lever'] in ('controllable', 'schedule-driven', 'external'), name
+        assert m['label'] and m['unit'] and m['description'] and model.levers[name] in ('controllable', 'schedule-driven', 'external'), name
         assert m.get('tool'), f'{name}: name the tool that serves it today, or say none does'
         # the answer prints the definition: it may state a rule constant (480 a shift, / 12) and nothing a tool did not return
         assert set(re.findall(r'\d+(?:\.\d+)?', m['description'])) <= {'480', '12'}, name
@@ -508,6 +508,13 @@ def test_a_broken_model_file_is_refused():
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_pct').update(scale=-100))   # a scale that is not a positive number
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_sqft').update(scale=100))   # a scale on a measure that is no ratio
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'stops').update(lever='maybe'))   # a lever the owner has not named
+    broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_pct').update(lever='schedule-driven'))   # a typed copy of its band's lever
+    broken(lambda s: next(m for m in s['measures'] if m['name'] == 'trim_sqft').update(lever='controllable'))     # the trim band's feet, another lever
+    broken(lambda s: next(m for m in s['measures'] if m['name'] == 'dry_end_usd').update(lever='schedule-driven'))   # the dry-end band's dollars
+    broken(lambda s: next(d for d in s['dimensions'] if d['name'] == 'kind')['value_levers'].update(External='external'))   # targets.json's, retyped
+    broken(lambda s: next(d for d in s['dimensions'] if d['name'] == 'reason').update(external='causes'))   # an external block targets.json lacks
+    broken(lambda s: next(m for m in s['measures'] if m['name'] == 'setups_above_trim_target').update(lever='controllable'))   # over the trim flag
+    broken(lambda s: next(e for e in s['entities'] if e['name'] == 'reject').update(band='not_a_band'))   # an entity band targets.json lacks
     for where in ("family = 'BOND'; DROP TABLE stops", "kategory = 'dry_end'", "family = 'BOND' OR (sqft > 0", "sqft > 0)", "upper(family) = 'BOND'"):
         broken(lambda s, w=where: s['physical']['entities']['reject'].update(where=w))   # a where outside its small grammar
 
@@ -728,6 +735,47 @@ def test_a_band_read_from_a_filter_stands_beside_the_total_and_the_slices_that_a
     assert all(r['band'] == targets.band('maintenance', r['value']) for r in shifts['rows'])
 
 
+def test_a_measure_with_a_band_reads_its_lever_from_targets_json(monkeypatch):
+    """One source for a measure's lever (the coordinator on PR #148): a banded measure types no lever and has its band's
+    from targets.json; a measure over the same quantity (trim feet and trim dollars beside the trim band) has the same one,
+    so the model refuses to load when the two drift apart; the External kind and the power outage read targets.json's
+    external block."""
+    model, spec = S.model(), json.loads(S.MODEL_PATH.read_text())
+    for name, m in model.measures.items():
+        bands = [m['band']] if m.get('band') else list((m.get('band_by') or {}).get('bands', {}).values())
+        if bands:
+            assert 'lever' not in m, name
+            assert {model.levers[name]} == {targets.BANDS[b]['lever'] for b in bands}, name
+    assert model.levers['setups_above_trim_target'] == targets.BANDS['trim']['lever'] and 'lever' not in model.measures['setups_above_trim_target']
+    triples = model.same_quantity()
+    pairs = {(source.split(',')[0], other) for source, _, other in triples}
+    assert {('trim_pct', 'trim_sqft'), ('trim_pct', 'trim_usd'), ('shear_pct', 'shear_sqft'), ('dry_end_pct', 'reject_sqft'),
+            ('dry_end_pct', 'dry_end_usd'), ('op_maint_pct', 'op_maint_minutes'), ('downtime_pct', 'downtime_minutes'),
+            ('the dry_end band', 'reject_sheets')} <= pairs
+    assert not {other for _, _, other in triples} & {'maintenance_pm_minutes', 'maintenance_pm_pct', 'yield_sqft', 'lineal_ft'}   # other records
+    assert all(model.levers[other] == lever for _, lever, other in triples)
+    # the owner moves trim's control in targets.json: the typed trim feet and dollars now contradict it, and the model says so
+    monkeypatch.setitem(targets.BANDS['trim'], 'lever', 'controllable')
+    with pytest.raises(ValueError, match=r'measure trim_sqft has lever schedule-driven, but it measures the quantity of trim_pct, whose lever in targets.json is controllable'):
+        S.Model(copy.deepcopy(spec))
+    monkeypatch.undo()
+    # side trim in another unit is the same quantity, and so are the reject lines counted in sheets
+    alias = copy.deepcopy(spec)
+    alias['measures'].append({**next(m for m in spec['measures'] if m['name'] == 'trim_sqft'), 'name': 'trim_msf', 'expr': '{trim_sqft} / 1000',
+                              'lever': 'controllable', 'synonyms': []})
+    with pytest.raises(ValueError, match=r'measure trim_msf has lever controllable, but it measures the quantity of trim_pct'):
+        S.Model(alias)
+    sheets = copy.deepcopy(spec)
+    next(m for m in sheets['measures'] if m['name'] == 'reject_sheets').update(lever='schedule-driven')
+    with pytest.raises(ValueError, match=r'measure reject_sheets has lever schedule-driven, but it measures the quantity of the dry_end band, which reads every reject row'):
+        S.Model(sheets)
+    assert model.value_lever('kind', targets.EXTERNAL_KIND) == targets.EXTERNAL['lever']
+    assert all(model.value_lever('reason', r) == targets.EXTERNAL['lever'] for r in targets.EXTERNAL_REASONS)
+    assert model.value_lever('kind', 'Maintenance') is None
+    text = S.model_markdown(S.MODEL_PATH.read_text())
+    assert "| schedule-driven (its band's, targets.json) |" in text and '| `kind` | External | external | targets.json, external |' in text
+
+
 def test_a_slice_with_a_lever_of_its_own_says_it(store):
     """Planned maintenance is schedule-driven and a power outage external (the owner on PR #111), as a slice or a filter."""
     outage_week = {'period': 'week', 'anchor': '2026-09-14'}   # the week of September's power outage
@@ -736,6 +784,9 @@ def test_a_slice_with_a_lever_of_its_own_says_it(store):
     assert run(store, 'downtime_minutes', WEEK, filters={'kind': 'Scheduled'})['lever'] == 'schedule-driven'
     assert run(store, 'downtime_pct', WEEK, filters={'reason': 'Power outage'})['lever'] == 'external'
     assert run(store, 'maintenance_pm_pct', WEEK)['lever'] == 'schedule-driven' and run(store, 'stops', WEEK)['lever'] == 'controllable'
+    # a stop kind read against a band of its own takes that band's lever from targets.json
+    assert run(store, 'downtime_pct', WEEK, filters={'kind': 'Operator'})['lever'] == targets.BANDS['operator']['lever']
+    assert run(store, 'trim_usd', WEEK)['lever'] == run(store, 'trim_pct', WEEK)['lever'] == targets.BANDS['trim']['lever']
 
 
 def test_an_entity_where_is_a_small_checked_grammar_and_its_literals_are_bound(store):
