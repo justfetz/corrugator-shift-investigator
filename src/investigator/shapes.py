@@ -1281,13 +1281,16 @@ class PeriodAnswer:
     @staticmethod
     def dry_end_line(o):
         """The ownership lens's dry-end subtotal: bond, warp, misalignment, moisture and other are dry-end waste, the tag scrap
-        (the owner, PR #111); its dollars are the lines beneath it added up, its share and band the dry-end waste's."""
+        (the owner, PR #111); its dollars are the lines beneath it added up, its share and band the dry-end waste's. Each kind
+        names its own cause on its line (reject_reasons.json; the coordinator's re-review of PR #123), so the subtotal names none."""
         d = o['data']
+        kinds = [r for r in d['rows'] if r.get('group') == 'dry_end']
+        control = 'controllable' if all(r['control'] == 'controllable' for r in kinds) else 'partly controllable'
         figure = (f'**{money(d["dry_end_usd_per_year"])}/yr**' if d.get('dry_end_usd_per_year') is not None else
                   f'**{money(d["dry_end_usd"])}** in the window')
         return bullet(f'{d["dry_end_rank"]}. {d["dry_end_label"]}, the {n(d["dry_end_kinds"])} kinds below: {figure} · '
                       f'{money(d["dry_end_usd"])} in this window · {pval(d["dry_end_pct_of_yield"])}% of the yield after trim and shear'
-                      f'{band(d.get("dry_end_band_text"))} · controllable, temperatures', o)
+                      f'{band(d.get("dry_end_band_text"))} · {control}, each kind\'s cause on its line', o)
 
     def money_supervisor(self, o):
         """The supervisor lens: the controllable losses ranked by dollars a year; side trim and planned maintenance after, schedule-driven;

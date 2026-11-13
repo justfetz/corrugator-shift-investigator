@@ -60,7 +60,8 @@ stops (a power outage) external, none of them priced, so the envelope's
   downtime; the lineal feet not made / 675 = machine minutes), side trim, shear, the changeover rejects,
   the cutoff-knife and stacker waste boards (each its own gap, priced once: owner, 2026-11-12) and each dry-end reason.
   Planned maintenance and a power outage are on the card with their dollars, apart from the ranked recorded
-  losses (the owner's ruling on PR #111): each carries `apart` (`schedule-driven` or `external`, with an
+  losses (the owner's ruling on PR #111); the planned stop's gap reads "Downtime: Planned maintenance (scheduled)",
+  its reason and its kind both, as it does wherever it shows (owner, 2026-11-12). Each carries `apart` (`schedule-driven` or `external`, with an
   `apart_note`) and no rank, and the answer lists them under "Schedule-driven, shown apart" and "External, not
   controllable", as the lenses do. Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`,
   `total_usd_per_year`, `total_contribution_usd` (null while the margin is not set), the recorded losses only, and
@@ -72,25 +73,33 @@ stops (a power outage) external, none of them priced, so the envelope's
   points over the trim target (points / 100 x gross, priced as paper: per year this is the post's trim
   formula), each downtime reason (Order change is labelled setup time, Planned maintenance scheduled time,
   Power outage external), and all recorded shear, the changeover rejects counted with it, and each dry-end
-  family: bond, warp, misalignment, moisture, other (the whole loss). The cutoff-knife and stacker waste boards
-  and the planning / admin entries are priced on the waste breakdown's own rows but are not levers: the boards
-  are defaults the record carries, and admin entries are not production waste (issue #100). Each lever names
-  the records behind it and is marked `control`: `controllable`, `schedule-driven` or `external` (a power
-  outage, outside the plant: the owner on PR #111), with a `control_note` (sequencing, temperatures, the
-  order mix and its web widths). It ranks levers and names records; it never prescribes
+  family: bond, warp, misalignment, moisture, other (the whole loss). Under `all` and `supervisor` the cutoff-knife
+  and stacker waste boards and the planning / admin entries are priced on the waste breakdown's own rows but are not
+  levers: the boards are defaults the record carries, and admin entries are not production waste (issue #100); the
+  `ownership` lens prices them, below. Each lever names the records behind it and is marked `control`:
+  `controllable`, `schedule-driven` or `external` (a power outage, outside the plant: the owner on PR #111), with a
+  `control_note`: sequencing, the order mix and its web widths, and for each reject family its own cause from
+  `reject_reasons.json` (`cost_model.family_control`): bond and warp temperature, moisture the steam and temperature
+  along the machine, misalignment the slitter, scorer and knife, other the board surface, handling after the knife,
+  paper as received (partly controllable: receiving and roll prep) and pre-print, the changeover rejects
+  sequencing. It ranks levers and names records; it never prescribes
   a machine adjustment. Asked as "where is the money this month", "what's costing us", "opportunities";
   under the Day control "where is the money" is the shift's own `get_shift_dollars`.
   `lens` reads the same numbers the owner's two ways (issue #101): `supervisor` ranks the controllable
   losses and lists side trim and planned maintenance after, unranked, then external downtime, each group by
   dollars (`cost_model.APART`; "where's my biggest opportunity", "what went wrong yesterday"); `ownership` is
-  the total cost of waste, side trim first (all of it, with its band), then by dollars shear, the changeover
-  rejects, the dry-end waste and the unexplained remainder (`control` `unattributed`) ("what does trim cost",
-  "what's trim costing us"). Bond, warp, misalignment, moisture and other are one group, the tag scrap (the
+  the total cost of waste, side trim first (all of it, with its band), then by dollars every other line of the
+  waste breakdown, each priced once (owner, 2026-11-12): shear, the changeover rejects, the cutoff-knife and
+  stacker waste boards (`control_note` sequencing: the boards each order change loses), planning / admin (`control`
+  `not production waste`), the dry-end waste and the unexplained remainder (`control` `unattributed`), so the
+  lens's total is the waste breakdown's for the same window: every line it lists but the dry-end total and the bale
+  ("what does trim cost", "what's trim costing us"). Bond, warp, misalignment, moisture and other are one group, the tag scrap (the
   owner, PR #111): the group is ranked by the sum of its rows and carries the rank (`dry_end_rank`, with
   `dry_end_usd` and `dry_end_usd_per_year` added left to right, and the dry-end waste's `dry_end_pct_of_yield`
   and band), and each kind is its own row beneath the subtotal line (`group: dry_end`, no rank). `all`, the
   default, ranks every lever. A dry-end family's share is read against the yield after trim and shear
-  (`pct_of_yield`), as the dry-end band is; shear, the changeover rejects and trim against gross.
+  (`pct_of_yield`), as the dry-end band is; shear, the changeover rejects, the boards, planning / admin and trim
+  against gross.
 
 ## Money questions
 

@@ -37,7 +37,7 @@ The owner's standards are in `src/investigator/targets.json` (issue #101), and e
 | Operator and maintenance together | scheduled minutes | | 5% | over 5% | controllable |
 | Side trim | gross | 2.75% | 3.0% | over 3.25% (also per setup) | schedule-driven |
 | Shear (chop) | gross | 0.5% | 0.75% | over 1.0% | controllable (sequencing) |
-| Dry-end waste (bond, warp, misalignment, moisture, other) | yield after trim and shear | 0.75% | 1.0% | over 1.25% | controllable (temperatures) |
+| Dry-end waste (bond, warp, misalignment, moisture, other) | yield after trim and shear | 0.75% | 1.0% | over 1.25% | controllable, each family its own cause (temperature, steam, the slitter and knife, board surface, handling, paper partly, pre-print) |
 
 Downtime has no gap between target and flag, so anything over 2.5% of a shift is a flag. Planned maintenance is scheduled time: it is schedule-driven, never ranked, and never counted in the maintenance band. A power outage is **external** downtime, outside the plant and not controllable. It shows in downtime as its own kind, but it never counts against the maintenance or operator band and never trips their flags. The records log it as a maintenance stop; the investigator counts it as External (the owner, PR #111). Each grade's speed is held to its sustained average speed over the trailing year, never its target or its maximum.
 

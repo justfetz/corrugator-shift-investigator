@@ -30,6 +30,7 @@ import re
 from pathlib import Path
 from . import targets
 
+from . import records as R
 from .records import stop_label
 
 DEFINITION = json.loads((Path(__file__).with_name('rates.json')).read_text())
@@ -496,9 +497,9 @@ def shift_dollars(analysis, shift, rates):
     rows = []
     for r in stops['rows']:
         apart = apart_of(r)
-        # a planned stop's gap reads "Downtime: Planned maintenance" with its apart note, "planned maintenance is scheduled
-        # time": the reason and the kind both, as the owner approved the card (PR #111; ruling (c) on PR #123)
-        rows.append({'gap': f'Downtime: {r["category"]}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
+        # a planned stop's gap reads "Downtime: Planned maintenance (scheduled)", its reason and its kind both, wherever it
+        # shows (owner ruling (c) on PR #123), with its apart note "planned maintenance is scheduled time" (PR #111)
+        rows.append({'gap': f'Downtime: {stop_label(r["category"])}', 'kind': 'setup' if r['category'] == 'Order change' else 'downtime',
                      'quantity': round(r['down_minutes'], 2), 'unit': 'min', 'source_ids': r['source_ids'],
                      'apart': apart, **({'apart_note': GAP_APART_NOTE[apart]} if apart else {}),
                      **price('downtime', r['down_minutes'], rates, gross, SHIFT_MINUTES)})
@@ -578,11 +579,30 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
 
 
 LENSES = ('all', 'supervisor', 'ownership')
-# The owner's two lenses (issue #101, targets.json): which levers a supervisor controls, and why.
+
+
+def family_control(family):
+    """A reject family's control label from the taxonomy (reject_reasons.json): its categories' drivers in the file's
+    order, a category that is only partly controllable saying so with its own note. A family none of whose categories is
+    controllable is not production waste (planning / admin). The coordinator's re-review of PR #123: every dry-end family
+    read "temperatures" before, the slitter and knife, the board surface, handling, paper and print included."""
+    found = [c for c in R.categories().values() if c['family'] == family]
+    if all(c['controllable'] == 'no' for c in found):
+        return 'not production waste', '; '.join(c['driver'] for c in found)
+    return 'controllable', '; '.join(c['driver'] + (f', partly controllable ({c["control_note"]})' if c['controllable'] == 'partly' else
+                                                    ' (not controllable)' if c['controllable'] == 'no' else '') for c in found)
+
+
+# The owner's two lenses (issue #101, targets.json): which levers a supervisor controls, and why. Each reject family (the
+# five dry-end families, the changeover rejects, planning / admin) takes its label from the taxonomy; the cutoff-knife and
+# stacker boards are lost at each order change, so sequencing, as the changeover rejects are.
 CONTROL = {'speed': ('controllable', 'speed under the grade baseline'), 'trim': ('schedule-driven', 'the order mix and its web widths'),
            'downtime': ('controllable', 'maintenance and operator downtime'), 'setup': ('controllable', 'operator downtime at order changes'),
            'scheduled': ('schedule-driven', 'planned maintenance is scheduled time'), 'shear': ('controllable', 'sequencing'),
-           'dry_end': ('controllable', 'temperatures'), 'unexplained': ('unattributed', 'the scale reading less the recorded waste'),
+           **{R.families()[code]['key']: family_control(code) for code in R.families()},
+           'cutoff_waste': ('controllable', 'sequencing: the boards each order change loses at the cutoff knife'),
+           'stacker_waste': ('controllable', 'sequencing: the boards each order change loses at the stacker'),
+           'unexplained': ('unattributed', 'the scale reading less the recorded waste'),
            'external': ('external', 'outside the plant, not controllable')}   # a power outage (targets.json; the owner on PR #111)
 # The supervisor lens lists what it does not rank by control, each group by dollars a year: schedule-driven, then external.
 APART = {'schedule-driven': 0, 'external': 1}
@@ -590,6 +610,7 @@ TOTAL_TRIM = 'Side trim (all recorded)'
 # The ownership lens's dry-end subtotal (the owner, PR #111): bond, warp, misalignment, moisture and other are dry-end waste,
 # the tag scrap, priced and ranked as one line with each kind kept beneath it, since the detail is what supervisors go after.
 DRY_END_GROUP, DRY_END_LABEL = 'dry_end', 'Dry-end waste (tag scrap)'
+DRY_END_KINDS = tuple(R.families()[code]['key'] for code in R.DRY_END_FAMILIES)   # bond, warp, misalignment, moisture, other
 
 
 def _by_year(r):
@@ -641,7 +662,9 @@ def opportunities(store, window, shift, rates, lens='all'):
     `lens` picks the owner's view of the same numbers: `all` ranks every lever; `supervisor` ranks the
     controllable losses and lists the schedule-driven ones after, unranked; `ownership` is the total cost of
     waste, side trim first (all of it, not only the points over target), then shear, each dry-end reason and
-    the unexplained remainder by dollars."""
+    the unexplained remainder by dollars. Every line of the waste breakdown is an ownership lever, each priced once
+    (owner ruling (d) on PR #123): the changeover rejects, the cutoff-knife and stacker boards and planning / admin too,
+    so the lens's total is the waste breakdown's for the same window."""
     if lens not in LENSES:
         raise ValueError('lens is all, supervisor or ownership')
     waste = store.get_waste_breakdown(window, shift)
@@ -666,14 +689,15 @@ def opportunities(store, window, shift, rates, lens='all'):
                               'band': trim.get('band'), 'band_text': trim.get('band_text'),
                               'records': f'side trim {trim_pct}% of {gross:,.1f} sq ft gross',
                               **price('trim', trim['sqft'], rates, gross, minutes)}, 'trim'))
-        for key, control in (('shear', 'shear'), ('changeover', 'shear'), ('bond', 'dry_end'), ('warp', 'dry_end'), ('misalignment', 'dry_end'),
-                             ('moisture', 'dry_end'), ('other', 'dry_end'), ('unexplained', 'unexplained')):
+        # every line of the waste breakdown, each priced once (owner ruling (d) on PR #123): the lens's total is the
+        # breakdown's, but the dry-end total (its five families are lines here) and the bale (the scale reading)
+        for key in ('shear', 'changeover', 'cutoff_waste', 'stacker_waste', 'admin', *DRY_END_KINDS, 'unexplained'):
             r = by[key]
             if r['sqft'] and r['sqft'] > 0:
                 pct, records = share(r)
                 rows.append(_control({'lever': r['label'] + (' (all recorded)' if key != 'unexplained' else ''), 'kind': 'waste' if key != 'unexplained' else 'paper',
-                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct, **({'group': DRY_END_GROUP} if control == 'dry_end' else {}),
-                                      'records': records, **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, control))
+                                      'quantity': r['sqft'], 'unit': 'sq ft', **pct, **({'group': DRY_END_GROUP} if key in DRY_END_KINDS else {}),
+                                      'records': records, **price(WASTE_KINDS[key], r['sqft'], rates, gross, minutes)}, key))
     else:
         rows.append(_control({'lever': "Speed under each grade's trailing-year speed", 'kind': 'speed', 'quantity': speed['gap_minutes'], 'unit': 'min',
                               'records': f'{speed["runs_under"]} of {len(speed["runs"])} wet-end runs under their grade baseline',
@@ -700,8 +724,7 @@ def opportunities(store, window, shift, rates, lens='all'):
             if r['sqft']:
                 pct, records = share(r)
                 rows.append(_control({'lever': r['label'] + ' (all recorded)', 'kind': 'waste', 'quantity': r['sqft'], 'unit': 'sq ft', **pct,
-                                      'records': records, **price('waste', r['sqft'], rates, gross, minutes)},
-                                     'shear' if key in ('shear', 'changeover') else 'dry_end'))
+                                      'records': records, **price('waste', r['sqft'], rates, gross, minutes)}, key))
     group = {}
     if lens == 'ownership':   # trim first, always: every owner asks what trim costs; then the rest by dollars, tag scrap as one
         rows[0]['rank'] = 1
@@ -733,10 +756,10 @@ def opportunities(store, window, shift, rates, lens='all'):
                             'targets. Peel and core are controllable too; the roll records carry them, but no lever prices them yet. Per year at the '
                             'post\'s volumes; these name where to look, they do not prescribe a machine adjustment.'),
              'ownership': ('The ownership lens: the total cost of the waste recorded, side trim first, then the rest by dollars: the dry-end '
-                           'waste, shear, the changeover rejects and the unexplained remainder (the scale reading less the recorded waste). The dry-end '
-                           'waste is the tag scrap: bond, warp, misalignment, moisture and other, one subtotal with each kind beneath it. The cutoff-knife '
-                           'and stacker waste boards are priced on each shift\'s card and the waste breakdown, not as a lever here. Per year at '
-                           'the post\'s volumes.')}[lens]
+                           'waste, shear, the changeover rejects, the cutoff-knife and stacker waste boards, planning / admin (not production waste) '
+                           'and the unexplained remainder (the scale reading less the recorded waste). Each line of the waste breakdown is priced '
+                           'once, so the total is the waste breakdown\'s. The dry-end waste is the tag scrap: bond, warp, misalignment, moisture '
+                           'and other, one subtotal with each kind beneath it. Per year at the post\'s volumes.')}[lens]
     data = {'tool': 'get_opportunities', 'window': waste['window'], 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': waste['dataset_version'], 'rows': rows,
             'coverage': 'complete' if coverage == 'complete' else coverage, 'excluded_records': [],

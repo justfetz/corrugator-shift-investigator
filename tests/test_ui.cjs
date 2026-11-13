@@ -1512,7 +1512,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   assert.ok(pmNow.usd>now.rows[0].usd,'it now outweighs the first ranked loss, and still has no rank');
   assert.equal(now.total_usd,Money.round(now.rows.filter(r=>!r.apart).reduce((s,r)=>s+r.usd,0),2));
   assert.ok(prose.includes(`${Money.money(now.total_usd)} of recorded losses · ${Money.money(now.total_usd_per_year)} per year at the post's volumes · ${Money.money(now.all_in_usd)} all in`),'the headline states both totals at the new rates');
-  assert.ok(prose.includes(`Downtime: Planned maintenance: ${Money.money(pmNow.usd)}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered');
+  assert.ok(prose.includes(`Downtime: Planned maintenance (scheduled): ${Money.money(pmNow.usd)}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered, as its reason and its kind (owner ruling (c) on PR #123)');
   els['rates-reset'].events.click();
  }
 

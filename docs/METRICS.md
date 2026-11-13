@@ -172,7 +172,7 @@ The owner's bands ([next section](#the-owners-targets-and-bands-issue-101)) repl
 | Operator and maintenance together | | 5 % | 5 % | scheduled minutes | controllable |
 | Side trim | 2.75 % | 3 % | 3.25 % | gross sq ft | schedule-driven |
 | Shear (chop) | 0.5 % | 0.75 % | 1 % | gross sq ft | controllable (sequencing) |
-| Dry-end waste | 0.75 % | 1 % | 1.25 % | yield after trim and shear | controllable (temperatures) |
+| Dry-end waste | 0.75 % | 1 % | 1.25 % | yield after trim and shear | controllable, each family its own cause (`reject_reasons.json`: temperature, steam, the slitter and knife, board surface, handling, paper partly, pre-print) |
 | Peel (roll prep) | | about 0.5 % | owner to set | roll stock consumed | controllable |
 | Core (at splice) | | about 0.1 % | owner to set | roll stock consumed | controllable |
 

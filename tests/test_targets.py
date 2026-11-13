@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from investigator import cost_model, targets
+from investigator import cost_model, records as R, targets
 from investigator.agent import Agent, Context, parse_request, question_scope, read_scope_text, route
 from investigator.record_store import SPEED_MIN_RUN_MINUTES, default_store
 from investigator.urls import canonical_url, page_url, redirect_for, resolve_url
@@ -334,8 +334,11 @@ def test_downtime_with_no_scope_is_the_previous_production_day_all_shifts(store)
 def test_every_lever_is_marked_controllable_or_schedule_driven(store, lens):
     data = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, cost_model.effective(), lens)
     marks = {r['lever']: r['control'] for r in data['rows']}
-    allowed = {'controllable', 'schedule-driven'} | ({'unattributed'} if lens == 'ownership' else {'external'})
+    # the ownership lens prices every waste line, planning / admin too, which is bookkeeping, not production waste
+    allowed = {'controllable', 'schedule-driven'} | ({'unattributed', 'not production waste'} if lens == 'ownership' else {'external'})
     assert set(marks.values()) <= allowed and all(r['control_note'] for r in data['rows'])
+    if lens == 'ownership':
+        assert marks['Planning / admin (not production waste) (all recorded)'] == 'not production waste'
     trim = next(r for r in data['rows'] if r['lever'].startswith('Side trim'))
     assert trim['control'] == 'schedule-driven'
     if lens != 'ownership':
@@ -488,16 +491,57 @@ def test_the_ownership_lens_shows_the_dry_end_waste_as_one_tag_scrap_subtotal_wi
     waste = next(r for r in store.get_waste_breakdown(window)['rows'] if r['category'] == 'dry_end')
     assert data['dry_end_pct_of_yield'] == waste['pct_of_yield'] and data['dry_end_band'] == targets.band('dry_end', waste['pct_of_yield'])
     # ranked by dollars among the other levers: September's tag scrap ($1.08M/yr) outranks shear ($600k/yr), the unexplained
-    # remainder and the changeover rejects (their own line, priced once: owner ruling (d) on PR #123)
+    # remainder, the changeover rejects, the stacker and cutoff-knife boards and planning / admin (each its own line, priced
+    # once: owner ruling (d) on PR #123 and the coordinator's re-review)
     others = [r for r in rows[1:] if not r.get('group')]
     groups = sorted([(data['dry_end_usd_per_year'], 'dry_end')] + [(r['usd_per_year'], r['lever']) for r in others], reverse=True)
     assert data['dry_end_rank'] == 2 + [g for _, g in groups].index('dry_end') == 2
-    assert [r['rank'] for r in others] == [2 + [g for _, g in groups].index(r['lever']) for r in others] == [3, 4, 5]
+    assert [r['rank'] for r in others] == [2 + [g for _, g in groups].index(r['lever']) for r in others] == [3, 4, 5, 6, 7, 8]
     assert data['total_usd_per_year'] == round(sum(r['usd_per_year'] for r in rows))   # the subtotal adds nothing to the total
     sections = Agent(store.day_analysis(DAY)).ask("What's trim costing us this month?", Context(DAY, 2, scope='day'))['sections']
     at = next(i for i, s in enumerate(sections) if s.startswith('- 2. Dry-end waste (tag scrap), the 5 kinds below: '))
     assert [s.split(' (all recorded)')[0] for s in sections[at + 1:at + 6]] == ['- ' + r['lever'].split(' (all recorded)')[0] for r in dry]
     assert sections[at + 6].startswith('- 3. Shear chops')
+
+
+def test_each_reject_family_names_its_own_cause_from_the_taxonomy(store):
+    """The coordinator's re-review of PR #123, item 4: every dry-end family was filed "controllable, temperatures", the
+    slitter and knife, the board surface, handling, paper and print included. Each family's label is its categories'
+    drivers in reject_reasons.json, a partly controllable category saying so; planning / admin is not production waste."""
+    taxonomy = {c['key']: c for c in R.categories().values()}
+    assert cost_model.CONTROL['bond'] == cost_model.CONTROL['warp'] == ('controllable', 'temperature')
+    assert cost_model.CONTROL['misalignment'] == ('controllable', taxonomy['misalignment']['driver']) == ('controllable', 'slitter, scorer and knife')
+    assert cost_model.CONTROL['moisture'] == ('controllable', 'steam and temperature along the machine')
+    assert cost_model.CONTROL['other'] == ('controllable', 'board surface; handling after the knife; paper as received, partly controllable '
+                                                           '(receiving and roll prep); pre-print')
+    assert [taxonomy[k]['driver'] for k in ('cracking', 'handling', 'paper', 'print')] == \
+        ['board surface', 'handling after the knife', 'paper as received', 'pre-print']   # the taxonomy's order, the family label's
+    assert cost_model.CONTROL['changeover'] == ('controllable', 'sequencing') and cost_model.CONTROL['admin'] == ('not production waste', 'planning and bookkeeping')
+    for lens in cost_model.LENSES:
+        rows = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, cost_model.effective(), lens)['rows']
+        dry = {r['lever']: r['control_note'] for r in rows if r['lever'].startswith('Dry-end: ')}
+        assert len(dry) == 5 and len(set(dry.values())) == 4 and 'temperatures' not in ' '.join(dry.values()), lens
+
+
+@pytest.mark.parametrize('window, shift', [({'period': 'month', 'anchor': DAY}, None), ({'period': 'week', 'anchor': DAY}, 2),
+                                           ({'period': 'day', 'anchor': DAY}, None), ({'period': 'month', 'anchor': '2026-08-14'}, 3)])
+def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced_once(store, window, shift):
+    """The coordinator's re-review of PR #123 (owner ruling (d): each loss priced exactly once). The ownership lens priced the
+    cutoff-knife and stacker boards and planning / admin zero times; every line of the waste breakdown is a lever now, priced
+    as the breakdown prices it, so the lens's total is the breakdown's: every line it lists but the dry-end total (its five
+    families are lines already) and the bale (the scale reading), the unexplained remainder when the bale is over the lines.
+    The value goldens value-ownership-total-is-the-waste-breakdown-* hold the same identity by hand."""
+    rates = cost_model.effective()
+    lens = cost_model.opportunities(store, window, shift, rates, 'ownership')
+    waste = cost_model.attach('get_waste_breakdown', store.get_waste_breakdown(window, shift), rates)
+    lines = [r for r in waste['rows'] if r['category'] not in ('dry_end', 'bale') and r['sqft'] > 0]
+    assert {r['quantity'] for r in lens['rows']} == {r['sqft'] for r in lines} and len(lens['rows']) == len(lines)
+    assert {r['usd'] for r in lens['rows']} == {r['usd'] for r in lines}, 'each line priced the same way, once'
+    assert lens['total_usd'] == pytest.approx(sum(r['usd'] for r in lines), abs=0.01)
+    assert lens['total_usd_per_year'] == pytest.approx(sum(r['usd_per_year'] for r in lines), abs=1)
+    for key in ('cutoff_waste', 'stacker_waste', 'admin', 'changeover'):
+        line = next(r for r in waste['rows'] if r['category'] == key)
+        assert sum(r['quantity'] == line['sqft'] and r['lever'].startswith(line['label']) for r in lens['rows']) == 1, key
 
 
 def test_the_supervisor_lens_lists_a_power_outage_apart_as_external(store):
