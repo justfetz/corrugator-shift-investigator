@@ -117,17 +117,24 @@ The same container runs on Fly.io or Render with `PORT` injected; set `PUBLIC_DE
 
 The hosted demo writes one anonymous JSON line per question event to stdout (issue #125; the fields are on [the Data page](DATA.md#the-question-log)): the question and where it routed, its answer, an analyst round on it, and a thumbs up or down on its card (`POST /api/feedback`, limited like `/api/ask` on windows of its own: 60 a minute for the container and `DEMO_RATE_LIMIT_PER_MIN` per IP, plain text only). It is on by default when `PUBLIC_DEMO_ORIGIN` is set; `QUESTION_LOG=0` turns it off and `QUESTION_LOG=1` turns it on for the loopback workbench. Cloud Run ships stdout to Cloud Logging, which keeps it 30 days in the `_Default` bucket, with no new service. A line is printed after its response is written, so an answer's time does not change.
 
-**The copy in BigQuery: the owner runs this, once.** It is a GCP configuration change (a dataset, a log sink and one IAM binding on the dataset), so sessions do not run it. Each day's partition expires after 90 days (7,776,000 s):
+**The copy in BigQuery: the owner runs this, once.** It is a GCP configuration change (the BigQuery API, a dataset, a log sink and one writer entry on the dataset), so sessions do not run it. **Done on `felix-august` on 2026-11-13.** Each day's partition expires after 90 days (7,776,000 s). Run it in Cloud Shell:
 
 ```bash
 PROJECT_ID=<project>
+gcloud services enable bigquery.googleapis.com --project "$PROJECT_ID"      # a new project has the BigQuery API off
 bq --location=US mk --dataset --default_partition_expiration=7776000 "$PROJECT_ID:question_log"
 gcloud logging sinks create question-log "bigquery.googleapis.com/projects/$PROJECT_ID/datasets/question_log" \
   --project "$PROJECT_ID" --use-partitioned-tables \
   --log-filter='resource.type="cloud_run_revision" AND resource.labels.service_name="corrugator-shift-investigator" AND jsonPayload.log="question_log"'
-WRITER=$(gcloud logging sinks describe question-log --project "$PROJECT_ID" --format='value(writerIdentity)')
-bq add-iam-policy-binding --dataset=true --member="$WRITER" --role=roles/bigquery.dataEditor "$PROJECT_ID:question_log"
+WRITER=$(gcloud logging sinks describe question-log --project "$PROJECT_ID" --format='value(writerIdentity)')   # serviceAccount:service-<number>@gcp-sa-logging...
+# Give the sink's account WRITER (BigQuery Data Editor) on this dataset only. `bq add-iam-policy-binding --dataset=true`
+# answers "This feature requires allowlisting" on most projects, so add it to the dataset's access list instead:
+bq show --format=prettyjson "$PROJECT_ID:question_log" > /tmp/ds.json
+python3 -c "import json,sys; d=json.load(open('/tmp/ds.json')); d['access'].append({'role':'WRITER','userByEmail':sys.argv[1].split(':',1)[1]}); json.dump(d,open('/tmp/ds.json','w'))" "$WRITER"
+bq update --source /tmp/ds.json "$PROJECT_ID:question_log"
 ```
+
+The same writer entry can be added in the console: BigQuery → the `question_log` dataset → Sharing → Permissions → Add principal (the sink's account) → BigQuery Data Editor. The table `run_googleapis_com_stdout` appears only after the first line arrives; check with `bq ls "$PROJECT_ID:question_log"` a few minutes after asking a question.
 
 **Cloud Run's request log (optional, the owner's call).** Separately from the question log, Cloud Run's own request log records every request's URL with the visitor's IP address and user agent, as any web server's access log does, and the URL of `/q` holds the question. It stays in Cloud Logging for 30 days and is not copied to BigQuery. To keep those `/q` entries out of it altogether, exclude them from the `_Default` sink:
 

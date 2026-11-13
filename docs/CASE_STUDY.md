@@ -12,7 +12,7 @@ The owner's targets give each loss a band (home run, target, flag) over its own 
 
 - **The records hold no costs.** Every dollar is a recorded quantity at an assumed, named rate, never a plant's own figure ([cost model](COST_MODEL.md), [rates.json](../src/investigator/rates.json)).
 - **A lost minute is priced from both sides.** It is {{rates.machine_minute}} of machine time at {{rates.hour}}, or {{rates.msf_per_minute}} of board not made (MSF: thousand square feet), priced at a contribution margin the owner sets ({{rates.margin}}). Both price the same lost capacity, so they sit side by side and are never added ([formulas](COST_MODEL.md#formulas)).
-- **Trim is width, not time.** It costs paper and no run time: each point of side trim over the cost model's {{rates.trim_target}} threshold is {{rates.trim_point_year}} a year on one machine at {{rates.paper}} ([cost_model.py](../src/investigator/cost_model.py)). The owner's bands reach the tools with [#101](https://github.com/justfetz/corrugator-shift-investigator/issues/101).
+- **Trim is width, not time.** It costs paper and no run time: each point of side trim over the cost model's {{rates.trim_target}} threshold is {{rates.trim_point_year}} a year on one machine at {{rates.paper}} ([cost_model.py](../src/investigator/cost_model.py)). The owner's bands live in `targets.json` and reach every tool row that prices or flags a loss ([#101](https://github.com/justfetz/corrugator-shift-investigator/issues/101)).
 
 ## The design in one diagram
 
@@ -69,7 +69,7 @@ Every golden case has a type and expectations written down; the last tracked run
 - **Rules before a model for routing.** The router is instant, free and testable, and a question it cannot read is refused rather than guessed; the price is phrasing coverage. Next: the model reads only the questions the router cannot, as a translator to a checked URL ([#104](https://github.com/justfetz/corrugator-shift-investigator/issues/104)).
 - **Synthetic data.** A seed gives byte-identical records with planted stories, so every eval is reproducible and no plant's data is exposed; the price is realism. Next: a generic dry-end setup record with order lanes, roll stock and a reject taxonomy, from the owner's schema ([#100](https://github.com/justfetz/corrugator-shift-investigator/issues/100), [data](DATA.md)).
 - **A trail, not a trace.** Each answer carries its own trail of tools, arguments, rows and SQL, but no request leaves a trace across the service. Next: OpenTelemetry spans with prompt versions ([#114](https://github.com/justfetz/corrugator-shift-investigator/issues/114), [evidence and tracing](AGENT_EXECUTION.md#evidence-and-tracing)).
-- **Digits, not judgment.** The checks prove every number came from a row, not that the words around it are wise. Next: a judge model for the narrative, live only, calibrated against the owner's grades ([#25](https://github.com/justfetz/corrugator-shift-investigator/issues/25), [the rubric](../evals/README.md#the-narrative-rubric)).
+- **Digits, not judgment.** The checks prove every number came from a row, not that the words around it are wise. A judge model now grades the narrative against a rubric, live only and never the gate, with a page for the owner's grades; its agreement with the owner is measured once the live recordings are re-recorded and graded ([#25](https://github.com/justfetz/corrugator-shift-investigator/issues/25), [the rubric](../evals/README.md#the-narrative-rubric)).
 
 ## Built with
 
