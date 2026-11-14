@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from investigator import agent  # noqa: E402
 from investigator.agent import (FUNCTION_WORDS, GRADE_QUANTITIES, LEFTOVER_FAMILIES, QUANTITY_HELP, QUANTITY_METRICS, RANKED_TEXT, SETUP_SPEED, WASTE_KEYS, Agent,
                                 Context, catch_all_guard, parse_request, question_scope, quantity_request, route, slug)
 from investigator.fixture import GRADES
@@ -485,14 +486,17 @@ def test_a_count_or_unit_golden_states_its_headline():
 # ---- Round 6 of the coordinator's review of PR 143: the allow-list. A quantity answers only when every word of the question is
 # consumed (its measure, its filter, the window, the shift) or is one of a closed table of function words, the same table in the
 # router and the runner. This file states it once more, so a word added to either side fails here until it is added to all three.
+# Issue #153 took out every word that names a plan, a capacity, what is left, the line running or a span to date ("can", "could",
+# "would", "will", "need", "want", "to", "go", "went", "up", "so", "far"): a word sits here only if it carries no meaning a route could
+# ignore.
 FUNCTION_WORDS_TABLE = sorted((
     'a', 'an', 'the', 'this', 'that', 'these', 'those', 'any', 'all', 'some', 'our', 'my', 'your', 'its', 'their',
     'i', 'me', 'we', 'us', 'you', 'it', 'they', 'there', "what's", 'whats', "it's", "there's", "we've",
     'what', 'how', 'many', 'much', 'number', 'count', 'total', 'totals', 'overall', 'altogether', 'combined', 'amount',
-    'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
-    'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked', 'up',
-    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give', 'done', 'complete', 'completed',
-    'need', 'want', 'know', 'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had',
+    'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked',
+    'happen', 'happened', 'occur', 'occurred', 'show', 'tell', 'give', 'done', 'complete', 'completed',
+    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'please', 'line', 'corrugator', 'machine', 'plant'))
 WEEK_SETUPS = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=setups'
 
 
@@ -528,11 +532,12 @@ def test_every_word_outside_the_table_is_refused_by_the_router_and_failed_by_the
     assert catch_all_failures(question, WEEK_SETUPS), question
 
 
-@pytest.mark.parametrize('case', [c for c in GOLDEN if c['id'].startswith(('gate-', 'allow-')) and c['type'] == 'refusal'], ids=lambda c: c['id'])
+@pytest.mark.parametrize('case', [c for c in GOLDEN if c['id'].startswith(('gate-', 'allow-', 'unapplied-')) and c['type'] == 'refusal'],
+                         ids=lambda c: c['id'])
 def test_a_gate_refusal_names_what_it_answers_in_at_most_three_questions_that_answer(case):
     """A refusal of rounds 5 and 6, the day words' too, names what the route answers instead, at most three questions and never the
     generic help, and each of them is answered."""
-    url, refusal, _ = landing(case['question'], shift=case.get('shift', 2), scope=case.get('scope', 'shift'))
+    url, refusal, _ = landing(case['question'], shift=case.get('shift', 2), scope=case.get('scope', 'shift'), period=case.get('period', 'day'))
     assert url is None and case['expect']['raises'] in refusal, (case['question'], url, refusal)
     asks = re.findall(r"'([^']* this week)'", refusal)
     assert 1 <= len(asks) <= 3 and QUANTITY_HELP not in refusal, refusal
@@ -698,3 +703,155 @@ def test_a_grouping_by_day_of_anything_but_stops_or_downtime_is_never_the_per_da
         assert catch_all_failures(question, '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=msf_per_day'), question
     assert catch_all_failures('Stops per day at the stacker this week', '/corr/1/day/2026-09-14?measure=stops&window=week')
     assert not catch_all_failures('Stops per day this week', '/corr/1/day/2026-09-14?measure=stops&window=week')
+
+
+# ---- Issue #153, the hotfix after PR 143: words the gate consumed but no route applied. A word may sit in the function-word table only
+# if it carries no meaning a route could ignore; a word that names a scope, a comparison, a state, a plan or a time span is consumed
+# only by the code that applies it.
+FILTER_WORDS = '|'.join(pattern for pattern, _ in agent.PLACE_WORDS + agent.REASON_WORDS)
+# The phrases a route reads, a function word inside one included ("this week", "how many", "at the stacker", "the number of", "a day",
+# "how did shift 1 go", "make per day"): deleting a word of one changes the phrase, not a function word's meaning
+READ_PHRASES = (*agent.CONSUMED_ALWAYS, *(pattern for words in agent.METRIC_WORDS.values() for pattern in words), agent.COUNT_ASK,
+                agent.DURATION_ASK, agent.FEET_ASK, r"\bhow\s+(many|much)\b", r"\b(the\s+)?(number|count|total)\s+of\b", agent.HOW_DID_GO,
+                agent.PER_WORD, r"\ba\s+day\b", r"\b(make|made|produced?|run|ran)\b(?=.*\bper\b)",
+                rf"\b((at|on|by|to|from|for|of|due\s+to|caused\s+by)\s+)?(the\s+)?({FILTER_WORDS})", r"\b(on|of|for)\s+\d{2,3}-?(c|bc|eb)\b",
+                agent.WINDOW_COMPARE, agent.COMPARED_TO_SAID, agent.PREVIOUS_WINDOW)
+
+
+def free_function_words(question):
+    """The function words of `question` outside every phrase a route reads, as regex matches on its lower case."""
+    lower = question.lower()
+    spans = [m.span() for pattern in READ_PHRASES for m in re.finditer(pattern, lower) if m.end() > m.start()]
+    return [t for t in re.finditer(r"[a-z0-9']+", lower)
+            if t.group(0) in FUNCTION_WORDS and not any(start <= t.start() and t.end() <= end for start, end in spans)]
+
+
+QUANTITY_GOLDENS = [c for c in GOLDEN if c['type'] == 'routing' and c.get('mode') == 'offline' and c.get('question')
+                    and re.search(r'measure=(quantity|stops)\b', c['expect'].get('url') or '') and free_function_words(c['question'])]
+
+
+def test_deleting_a_function_word_from_a_golden_question_changes_nothing():
+    """Issue #153: each function word a golden quantity question holds (outside the phrases a route reads), deleted, leaves the question
+    on the same address: a function word carries no meaning, so no route reads it either. Twenty golden questions at least."""
+    assert len(QUANTITY_GOLDENS) >= 20, len(QUANTITY_GOLDENS)
+    deleted = 0
+    for case in QUANTITY_GOLDENS:
+        controls = dict(scope=case.get('scope', 'shift'), shift=case.get('shift', 2), period=case.get('period', 'day'), day=case.get('day', DAY))
+        question, url = case['question'], case['expect']['url']
+        assert landing(question, **controls)[0] == url, case['id']
+        for word in free_function_words(question):
+            shorter = re.sub(r'\s+', ' ', question[:word.start()] + question[word.end():]).strip()
+            assert landing(shorter, **controls)[0] == url, (case['id'], word.group(0), shorter, landing(shorter, **controls)[1])
+            deleted += 1
+    assert deleted >= 40, deleted
+
+
+WEEK = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric='
+# Each word that left the table (a plan or capacity, the line running, a span to date) or a shift said with no shift selected, added to a
+# plain question in its own sense, with the address main (3cefa4d) gave the question, which the runner fails
+ADDED = [
+    ('need', 'How many setups do we need this week?', 'shift', WEEK + 'setups'),
+    ('want', 'How many setups do we want this week?', 'shift', WEEK + 'setups'),
+    ('can', 'How many setups can we run this week?', 'shift', WEEK + 'setups'),
+    ('could', 'How many setups could we have run this week?', 'shift', WEEK + 'setups'),
+    ('would', 'How many stops would we have this week?', 'shift', WEEK + 'stops'),
+    ('will', 'How many setups will we run this week?', 'shift', WEEK + 'setups'),
+    ('should', 'How many setups should we run this week?', 'shift', WEEK + 'setups'),
+    ('to', 'How many sheets to make this week?', 'shift', WEEK + 'sheets'),
+    ('go', 'How many setups to go this week?', 'shift', WEEK + 'setups'),
+    ('left', 'How many setups are left this week?', 'shift', WEEK + 'setups'),
+    ('up', 'How many minutes were we up this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('on', 'How long was the machine on this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('on', 'How long has the line been on this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('go', 'How long did the line go this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('going', 'How long was the line going this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('running', 'How long were we running this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('machine time', 'How many minutes of machine time this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('run time', 'Run time per stop this week', 'shift', WEEK + 'minutes_per_stop'),
+    ('uptime', 'How many minutes of uptime this week?', 'shift', WEEK + 'downtime_minutes'),
+    ('so far', 'How many stops so far this week?', 'shift', WEEK + 'stops'),
+    ('so far', 'How many setups so far this month?', 'shift', '/corr/1/day/2026-09-14?measure=quantity&window=month&metric=setups'),
+    ('until now', 'How many stops until now this week?', 'shift', WEEK + 'stops'),
+    ('this shift', 'How many stops this shift this week?', 'day', WEEK + 'stops'),
+    ('my shift', 'How many stops on my shift this week?', 'day', WEEK + 'stops'),
+    ('our shift', 'How many minutes of downtime on our shift this week?', 'day', WEEK + 'downtime_minutes'),
+]
+
+
+# "On" stays in the table as the preposition it is everywhere ("on shift 1", "on 32-C", "on the stacker", "how did we do on setups"):
+# its state sense, the line on, is a duration of running, refused by the duration gate before a word is read (agent.duration_gate)
+PREPOSITIONS_KEPT = {'on'}
+
+
+@pytest.mark.parametrize('word, question, scope, main_url', ADDED, ids=[f'{w}: {q}' for w, q, _, _ in ADDED])
+def test_a_scope_plan_state_or_span_word_added_to_a_plain_question_refuses(word, question, scope, main_url):
+    """Issue #153 (rows 1, 4, 5 and 8): the word is refused by name, never read as the plain quantity it was added to, and the runner
+    fails the plain quantity's address for it. A single word of them is out of the function-word table, "on" the preposition aside."""
+    url, refusal, _ = landing(question, scope=scope)
+    assert url is None and word.split()[-1] in refusal, (question, url, refusal)
+    assert ' ' in word or word in PREPOSITIONS_KEPT or word not in FUNCTION_WORDS, word   # a phrase ("so far", "run time") is refused as one
+    assert catch_all_failures(question, main_url), (question, main_url)
+
+
+def test_the_words_that_left_the_table_are_named_by_the_refusals():
+    """Each word that left the table belongs to a family a refusal names (a plan, the line running, a span to date), never "a word one
+    quantity does not read", and none is a function word."""
+    for family, words in (('plan', agent.PLAN_WORDS), ('state', agent.STATE_WORDS), ('span', agent.SPAN_WORDS)):
+        assert set(words) <= set(LEFTOVER_FAMILIES[family]) and not set(words) & FUNCTION_WORDS, family
+    for word in ('can', 'could', 'would', 'will', 'need', 'want', 'to', 'go', 'went', 'up', 'so', 'far'):
+        assert word not in FUNCTION_WORDS and any(word in members for members in LEFTOVER_FAMILIES.values()), word
+
+
+def test_the_runner_catches_the_hotfix_rows_wrong_answers():
+    """evals/run.py, held to the addresses main (3cefa4d) gave the issue's rows: each fails on its own; and the right answers pass."""
+    pareto = '/corr/1/day/2026-09-14?measure=pareto&window=week'
+    for question, url in (
+            ('How many stops last week versus the week before?', WEEK + 'stops'),                          # row 2
+            ('How many stops this week versus last month?', '/corr/1/day/2026-09-14?measure=quantity&window=month&metric=stops'),
+            ('How many setups this week versus last month?', '/corr/1/day/2026-09-14?measure=quantity&window=month&metric=setups'),
+            ('How many stops in August versus last month?', '/corr/1/day/2026-09-14?measure=quantity&window=2026-08&metric=stops'),
+            ('How many brief stops by reason this week?', pareto + '&unit=count'),                         # row 3
+            ('How many stops under 2 minutes at each place this week?', pareto + '&by=place'),
+            ('How many planned stops by reason this week?', pareto + '&unit=count'),
+            ('How many long stops at each place this week?', pareto + '&by=place&unit=count'),
+            ('How many slitter stops by reason this week?', pareto + '&unit=count'),
+            ('How many stops at night by reason this week?', pareto + '&unit=count'),
+            ('How many sheets this week versus last week?', WEEK + 'sheets'),                               # row 6
+            ('Stops per day this week versus last week', '/corr/1/day/2026-09-14?measure=stops&window=week'),
+            ('Downtime per day this week compared with last week', WEEK + 'downtime_per_day'),
+            ('How many setups on 32-C this week versus last week?', WEEK + 'setups&grade=32-C'),
+            ('How many stops and why this week?', '/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&unit=count'),   # row 7
+            ('How many stops did the operators log this week?', WEEK + 'operator_stops'),                  # row 9
+            ('How many stops were logged by the operator this week?', WEEK + 'operator_stops')):
+        assert catch_all_failures(question, url), (question, url)
+    for question, url in (('How many stops during the week?', WEEK + 'stops'), ('How many stops over the week?', WEEK + 'stops'),   # row 10
+                          ('How many stops across the week?', WEEK + 'stops'), ('I need the number of stops this week', WEEK + 'stops'),
+                          ('Can you tell me how many setups we ran this week?', WEEK + 'setups'),
+                          ('How many stops did we rack up this week?', WEEK + 'stops'),
+                          ('Compare stops this week to last week', WEEK + 'stops'), ('How many stops this week and last week?', WEEK + 'stops'),
+                          ('How many minutes went to maintenance this week?', WEEK + 'maintenance_minutes'),
+                          ('How many operator stops were logged this week?', WEEK + 'operator_stops'),
+                          ('How many stops in August versus the month before?', '/corr/1/day/2026-09-14?measure=quantity&window=2026-08&metric=stops'),
+                          ('How many stops by reason this week?', pareto + '&unit=count'),
+                          ('How many minutes of downtime at each place this week?', pareto + '&by=place'),
+                          ('How many stops this shift this week?', '/corr/1/day/2026-09-14/shift/2?measure=quantity&window=week&metric=stops')):
+        assert not catch_all_failures(question, url), (question, url, catch_all_failures(question, url))
+
+
+@pytest.mark.parametrize('question, metric', [
+    ('How many stops during the week?', 'stops'), ('How many stops across the week?', 'stops'), ('How many setups over the month?', 'setups'),
+    ('Can you tell me how many setups we ran this week?', 'setups'), ('I want to know how many stops this week', 'stops'),
+    ('Could you show me the number of stops this week?', 'stops'), ('How many stops did we rack up this week?', 'stops'),
+    ('How many minutes went to maintenance this week?', 'maintenance_minutes'), ('How much time did we lose this week?', 'downtime_minutes'),
+    ('How long were we down this week?', 'downtime_minutes'), ('How long did knife jams take this week?', 'downtime_minutes'),
+    ('How many minutes of maintenance this week?', 'maintenance_minutes'), ('How much time per stop this week?', 'minutes_per_stop'),
+    ('How many operator stops were logged this week?', 'operator_stops'), ('How many stops were caused by operators this week?', 'operator_stops'),
+    ('How many stops this week compared to last week?', 'stops'), ('How many stops last week and the week before?', 'stops'),
+    ('How many stops in August versus the month before?', 'stops'), ('How many stops in September versus last month?', 'stops'),
+])
+def test_what_the_hotfix_reads_still_answers(question, metric):
+    """The words the hotfix reads where they are applied keep answering: a window after a preposition, a request said first, a particle,
+    "went to" a filter, a duration that names downtime, a comparison with the window just before the answered one."""
+    url, request, _ = landing(question)
+    assert url and f'metric={metric}' in url, (question, url or request)
+    assert not catch_all_failures(question, url), (question, url)

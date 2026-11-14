@@ -217,15 +217,18 @@ RANKED_SHIFT = (r'\b(?:slowest|fastest|quickest|best|worst|top|strongest|weakest
 # a window compared with the one before, the shift, a kept ratio's "per <denominator>" and the average it is, and FUNCTION_WORDS. Any
 # other word left asks a different question ("how many brief stops", "stops at the slitter", "stop rate"), so the URL fails. This is
 # its own statement of the router's rule (agent.FUNCTION_WORDS, agent.allow_list); tests/test_quantity_questions.py checks that the
-# two function-word tables are one.
+# two function-word tables are one. A word is in the table only if it carries no meaning a route could ignore (issue #153): a plan or a
+# capacity ("can", "could", "would", "will", "need", "want", "to", "go"), the line running ("up", "went") and a span to date ("so far")
+# are not, so a URL that answers one fails; a request said first ("I need the number of", "can you tell me"), the verb of "how did it
+# go", a particle ("rack up") and "compared to last week" are read by the patterns below.
 FUNCTION_WORDS = frozenset((
     'a', 'an', 'the', 'this', 'that', 'these', 'those', 'any', 'all', 'some', 'our', 'my', 'your', 'its', 'their',
     'i', 'me', 'we', 'us', 'you', 'it', 'they', 'there', "what's", 'whats', "it's", "there's", "we've",
     'what', 'how', 'many', 'much', 'number', 'count', 'total', 'totals', 'overall', 'altogether', 'combined', 'amount',
-    'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
-    'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked', 'up',
-    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give', 'done', 'complete', 'completed',
-    'need', 'want', 'know', 'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had',
+    'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked',
+    'happen', 'happened', 'occur', 'occurred', 'show', 'tell', 'give', 'done', 'complete', 'completed',
+    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'please', 'line', 'corrugator', 'machine', 'plant'))
 _AVG_ANY = r'\b(?:on\s+(?:the\s+)?)?(?:averag(?:e|es|ed|ing)|avg|mean|typical(?:ly)?)\b'
 _PER_DAY = r'\b(?:per (?:production )?days?|a day)\b|\bdaily\b'
 _EACH_DAY = (r"\b(?:per (?:production )?days?|(?:each|every|a|by) (?:production )?day(?:'s)?|day by day)\b|\bdaily\b"
@@ -235,6 +238,8 @@ _MINUTES = (r'\b(?:minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losin
             r'spend|spent)\b|\blasted\b'   # "last" the verb only: "how long did stops last", never "the last stop"
             r'|\blasts?\b(?!\s+(?:stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))')
 _FEET = r'\b(?:lineal|linear|feet|foot|ft|footage)\b'
+_GROUPED = (r'\b(?:by|per|(?:at |for |in |on )?(?:each|every))\s+(?:stop\s+|downtime\s+|piece of\s+)?(?:reason|place|equipment|kind|'
+            r'location|area|machine|section)s?\b', r'\bbreak\s*downs?(?:\s+of)?\b|\bbroken\s+down\b', r'\bpareto\b')
 QUANTITY_CONSUMES = {   # each metric's own words: its noun and unit, a kept ratio's "per" and the average it is
     'setups': (r'\bset-?ups?\b|\bset ups?\b',),
     'paper_changes': (r'\bpaper changes?\b|\bwet[- ]?ends?(?:\s+(?:changes?|runs?))?\b|\bpaper runs?\b',),
@@ -254,34 +259,189 @@ QUANTITY_CONSUMES = {   # each metric's own words: its noun and unit, a kept rat
     'waste_pct': (r'\bpercent(?:age)?\b|%', r'\bof\s+(?:the\s+)?gross\b'),
     'stops_per_day': (_EACH_DAY, _STOP, r'\bby\s+weekday\b|\bday\s+of\s+the\s+week\b|\bweekday\s+profile\b|\bweekdays?\b|\bprofile\b'
                       r'|\bafter\s+the\s+weekend\b|\b(?:mondays|tuesdays|wednesdays|thursdays|fridays)\b|\b(?:stand|stick)s?\s+out\b'),
+    # a count or minutes grouped by reason, place or kind (measure=pareto, issue #153 row 3): the grouping, and the measure's words
+    'stops_by_group': (*_GROUPED, _STOP, r'\btimes\b', r'\bdown\s*time\b'),
+    'minutes_by_group': (*_GROUPED, _MINUTES),
 }
 # The words a filter is said with beyond its own name (a URL slug names it: reason=missed-splice, place=splicer-3, waste=dry-end)
 FILTER_SAID = {'missed-splice': r'\bmiss(?:ed|es)?\b', 'order-change': r'\border change(?:over)?s?\b|\bchangeovers?\b',
                'knife-slitter-jam': r'\bjams?\b', 'trim': r'\bside\b', 'shear': r'\bchops?\b',
                'dry-end': r'\bdry[- ]end\b|\brejects?\b|\bquality\b', 'bale': r'\b(?:waste|bale[ds]?|scrap)\b'}
-_FILTER_CONNECTOR = (r'\b(?:(?:caused|triggered|brought\s+on|lost|made|due|related|attributed|coded|charged)\s+)?(?:by|to|from|as)\s+'
+_FILTER_CONNECTOR = (r'\b(?:(?:caused|triggered|brought\s+on|lost|made|due|related|attributed|coded|charged|went|gone|go|goes|going)\s+)?(?:by|to|from|as)\s+'
                      r'(?:the\s+)?zfilteredz|\bbecause\s+of\s+(?:the\s+)?zfilteredz|zfilteredz')
 # ... but an average stop is its length only (round 5, item 2): its count, frequency, rate, interval, cost, place, location or reason
 # is never minutes per stop
 NOT_A_LENGTH = r'\b(?:average|avg|mean|typical)\s+(?:stop|stoppage)\s+(?:count|frequency|rate|interval|cost|place|location|reason|number)s?\b'
 _MONTHS = r'(?:january|february|march|april|may|june|july|august|september|october|november|december)'
+_ALL_SHIFTS = r'\b(?:(?:across|on|for|over|in)\s+)?all\s+(?:the\s+|three\s+)*shifts\b|\bacross\s+(?:the\s+)?shifts\b|\bshifts\s+(?:together|combined)\b'
 QUANTITY_CONSUMES_ALWAYS = (   # every route's: the window, the shift, how long or often, the whole line
+    # a preposition before a window is the window's ("during the week", "over the week": issue #153, row 10), read before "the week"
+    r'\b(?:across|over|during|for|in|on|through)\s+(?:the|this|that|all)\s+(?:whole\s+|entire\s+|full\s+)?(?:production\s+)?(?:week|month|period|day)\b',
     r'\b(?:this|that|the|current|selected|whole|full|entire)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+|fiscal\s+|4-4-5\s+)?period)\b',
     r'\b(?:(?<!the )last|previous|prior)\s+(?:week|month|(?:accounting\s+)?period)\b(?!\s+(?:before|of)\b)',   # the question's own move (issue #105)
-    r'\b(?:across|over|during|for|in|on|through)\s+(?:the|this|that|all)\s+(?:production\s+)?(?:week|month|period|day)\b',
     rf'\b(?:(?:across|over|during|in|for|through)\s+)?(?:all\s+of\s+)?(?:the\s+month\s+of\s+)?{_MONTHS}\b',
     r'\ball\s+(?:week|month|day|period)\s+long\b', r'\b(?:fiscal|accounting)\s+period\b|\b4-4-5\b|\b445\b|\bp(?:1[0-3]|[1-9])\b',
     r'\byesterday\b',
     r'\b(?:(?:on|for|by|in|during|from)\s+)?(?:the\s+)?(?:shift\s*[1-3]|(?:first|second|third|1st|2nd|3rd)\s+shift|'
     r'(?:this|that|my|our|the)\s+shift)\b',
-    r'\b(?:(?:across|on|for|over|in)\s+)?all\s+(?:the\s+|three\s+)*shifts\b|\bacross\s+(?:the\s+)?shifts\b|\bshifts\s+(?:together|combined)\b',
+    _ALL_SHIFTS,
     r'\bhow long\b', r'\bhow often\b',
-    r'\b(?:across|over|on|for)\s+(?:the\s+)?(?:whole\s+|entire\s+)?(?:line|corrugator|machine|plant)\b', r'\bof\s+any\s+(?:type|kind|sort)\b')
+    r'\b(?:across|over|on|for)\s+(?:the\s+)?(?:whole\s+|entire\s+)?(?:line|corrugator|machine|plant)\b', r'\bof\s+any\s+(?:type|kind|sort)\b',
+    # a request said first ("I need the number of stops", "I want to know", "can you tell me", "could I see"), never "do we need" or
+    # "can we run"; a particle ("rack up", "add up"), never "up" the state (issue #153)
+    r'^\s*(?:please\s+)?(?:(?:can|could|would|will)\s+(?:you|u)\b(?:\s+please\b)?|(?:can|could|may)\s+(?:i|we)\s+(?:please\s+)?(?:see|get|have|know)\b'
+    r'|(?:(?:i|we)\s+)?(?:need|want)\s+(?:to\s+(?:know|see|get|find\s+out)\b|(?=(?:the|a|an)\s+(?:number|count|total|figure|tally)\b))'
+    r"|(?:i|we)\s*(?:'d|\s+would)\s+like\s+to\s+(?:know|see|get|find\s+out)\b)",
+    r'\b(?:rack|racks|racked|racking|add|adds|added|adding|pile|piles|piled|piling|sum|sums|summed|tot|tots|totted|tally|tallies|tallied)\s+up\b')
+# the verb of "how did shift 1 go", "how is the week going" (the words between are read as they are)
+HOW_DID_GO = r'\b(how\s+(?:did|does|do|has|have|is|was|are|were)\s+(?:[a-z0-9-]+\s+){0,3}?)(?:go|goes|gone|going|went)\b'
 # a window compared with the one before ("compare stops this week to last week", "versus last week"), never the shifts compared
 QUANTITY_WINDOW_COMPARED = (r'\b(?:compar\w*|versus|vs|better|worse|more|fewer|less|higher|lower)(?:\s+(?:to|with|against|than))?\b'
                             r'(?=(?:.*\b(?:to|with|against|versus|vs|than))?\s+(?:the\s+)?(?:last|previous|prior|week before|month before|day before)\b)')
 ROLLING_WINDOW = (r'\b(?:last|past|previous|prior)\s+(?:\d+|few|couple(?:\s+of)?|several|two|three|four|five|six|seven|eight|nine|ten|'
                   r'eleven|twelve|fourteen|thirty)\s+(?:production\s+)?(?:days?|weeks?|months?|shifts?|hours?)\b')
+# ... the word before the window compared ("than", "versus", "and", "this week to last week") and the window before itself
+COMPARED_TO = r'\b(?:than|with|against|versus|vs|and)\b(?=\s+(?:the\s+)?(?:last|previous|prior|week before|month before|day before)\b)'
+COMPARED_TO_SAID = r'\b(?:than|with|against|versus|vs|and|to)\b(?=\s+(?:the\s+)?(?:last|previous|prior|week before|month before|day before)\b)'
+PREVIOUS_SAID_BEFORE = (r'\b(?:the\s+)?(?:last|previous|prior)\s+(?:week|month|period|day)\b'
+                        r'|\b(?:the\s+)?(?:week|month|day|period)\s+before\b(?!\s+last)')
+JOINED = (r'\b(?:this|current)\s+(week|month|period)\b.*\band\b.*\b(?:last|previous|prior)\s+\1\b'
+          r'|\b(?:last|previous|prior)\s+(week|month|period)\b.*\band\b.*\b(?:this|current)\s+\2\b')   # two windows joined
+
+
+def window_compared(text):
+    """True when `text` compares a window with the one before ("versus last week", "this week and last week"), never the shifts."""
+    return bool(not re.search(r'\bshifts\b', re.sub(_ALL_SHIFTS, ' ', text))
+                and (re.search(QUANTITY_WINDOW_COMPARED, text) or re.search(COMPARED_TO, text) or re.search(JOINED, text)))
+
+
+# ---- Words read but never applied (issue #153, the hotfix after PR 143), stated on the URL.
+# A duration is downtime only when the question names a stop or downtime, a stop reason, place or kind (row 1): run time, uptime, the line
+# on, up or running ("how many minutes were we up", "how long was the machine on", "minutes of machine time", "run time per stop") is
+# never the minutes it stood.
+DURATION_QUANTITIES = ('downtime_minutes', 'maintenance_minutes', 'operator_minutes', 'minutes_per_stop', 'downtime_per_day')
+RUN_TIME_SAID = r'\b(?:run(?:ning)?|up|machine|line|production|operating|corrugator)[- ]?times?\b|\buptime\b|\bruntime\b'
+DOWN_SAID = (r'\b(?:downtime|down\s*time|down|stop(?:s|ped|page|pages)?|stopping|lost|lose|loses|losing|idle|delays?|jams?|outages?|'
+             r'missed)\b')
+RUNNING_SAID = (r'\b(?:run|runs|ran|running|go|goes|went|going|gone|operat(?:e|es|ed|ing)|produc(?:e|es|ed|ing)|online|working)\b|\bup\b'
+                r'|\b(?:is|was|were|are|been|be|being|stay(?:s|ed)?|kept|keep|turned|switched)\s+(?:(?:the\s+)?(?:line|machine|corrugator|plant|'
+                r'it|we|they)\s+)?on\b')
+# A window compared with the one before (rows 2 and 6) is the answer's only when the answer carries the window before (NO_PREVIOUS) and
+# the windows said are the answered one and the one just before it, of the same length
+PREVIOUS_SAID = (r'\byesterday\b|\b(?:last|previous|prior)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+)?period)\b'
+                 r'|\b(?:the\s+)?(?:day|week|month|period)\s+before\b(?!\s+(?:last|yesterday)\b)')
+BASE_SAID = r'\b(?:this|current)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+)?period)\b|\btoday\b'
+# "This shift", "my shift" (row 8): the selected shift, so its number's address names one
+SELECTED_SHIFT_SAID = r'\b(?:this|that|my|our|the|current|selected)\s+shift\b'
+# Who logged a stop (row 9): not its kind
+KIND_LOGGED = (r'\b(?:operators?|maintenance|crews?|teams?)\s+(?:log|logs|logged|record|records|recorded|enter|enters|entered|report|reports|'
+               r'reported|note|notes|noted)\b|\b(?:logged|recorded|entered|reported|noted|written)\s+by\s+(?:the\s+|an?\s+|our\s+)?(?:operators?|'
+               r'maintenance|crews?|teams?)\b')
+# A number and its cause asked together (row 7): two questions
+NUMBER_ASKED = r'\bhow\s+(?:many|much|long|often)\b|\bnumber\s+of\b|\bcount\s+of\b'
+
+
+def grain_said(words):
+    """The window grain a window phrase names ("last week" week, "yesterday" day, "the period before" fiscal, a month's name month)."""
+    for grain, pattern in (('day', r'\b(?:day|yesterday|today)\b'), ('week', r'\bweek\b'), ('month', rf'\bmonth\b|\b{_MONTHS}\b'),
+                           ('fiscal', r'\bperiod\b')):
+        if re.search(pattern, words):
+            return grain
+    return None
+
+
+def url_window(url):
+    """(grain, month) of the window a URL answers: `window=` when the question named one, else the path's grain (the selected day's
+    window); the month is `YYYY-MM` for a named month, else None."""
+    params = dict(parse_qsl(urlsplit(url).query))
+    window = params.get('window')
+    if window and re.fullmatch(r'\d{4}-\d{2}', window):
+        return 'month', window
+    if window:
+        return {'period': 'fiscal'}.get(window, window), None
+    grain = re.match(r'/corr/[^/]+/(day|week|month|period)/', urlsplit(url).path)
+    return ({'period': 'fiscal'}.get(grain[1], grain[1]) if grain else None), None
+
+
+def read_but_unapplied_failures(question, url):
+    """Issue #153: a gated URL (one quantity, each production day's stops, a grouped Pareto) for a duration that names no downtime, a
+    comparison its answer does not carry or of other windows than the answered one and the one before it, "this shift" with no shift in
+    the address, or a kind said of who logged the stops."""
+    params = dict(parse_qsl(urlsplit(url).query))
+    metric, text = url_metric(params), question.lower()
+    failures = []
+    if metric in DURATION_QUANTITIES:
+        said = re.sub(r'\bper\s+(?:stop|stoppage)s?\b', ' ', text) if metric == 'minutes_per_stop' else text
+        connectors = re.sub(r'\b(?:went|gone|go|goes|going)\s+to\b|\b(?:rack|racks|racked|racking|add|adds|added|adding)\s+up\b', ' ', text)
+        running = re.search(RUN_TIME_SAID, text) or (not re.search(DOWN_SAID, said) and re.search(RUNNING_SAID, connectors))
+        if running:
+            failures.append(f'{question[:60]!r} asks how long the line ran ({running[0]!r}) but lands on {metric}: run time is never downtime')
+        elif (not re.search(DOWN_SAID, said) and metric != 'minutes_per_stop' and not params.get('reason') and not params.get('place')
+              and not metric.startswith(('maintenance_', 'operator_'))):
+            failures.append(f'{question[:60]!r} names no stop or downtime but lands on {metric}: a duration is downtime only when asked')
+    if window_compared(text):
+        previous = [m.group(0) for m in re.finditer(PREVIOUS_SAID, text)]
+        grain, month = url_window(url)
+        grains = {grain_said(w) for w in previous} | {grain_said(m.group(0)) for m in re.finditer(BASE_SAID, text)}
+        grains |= {'month'} if re.search(rf'\b{_MONTHS}\b', text) else set()
+        day = re.search(r'/(\d{4}-\d{2})-\d{2}', urlsplit(url).path)
+        if metric in NO_PREVIOUS or params.get('grade'):
+            failures.append(f'{question[:60]!r} compares with the window before but lands on {metric or "a grade"}, which carries none beside it')
+        elif len(previous) > 1 and not (len(previous) == 2 and not params.get('window') and grain == grain_said(previous[0])
+                                        and not re.search(r'\b(?:compar\w*|versus|vs|than|against|relative)\b', text)):
+            # two windows before the selected one, unless joined by "and" alone, where the first moved the scope to it (issue #105):
+            # "how many stops last week and the week before" is last week with the week before beside it
+            failures.append(f'{question[:60]!r} names two windows before the selected one ({previous[0]!r}, {previous[1]!r}) but lands on one window')
+        elif previous and grains != {grain}:
+            failures.append(f'{question[:60]!r} compares windows of another length ({", ".join(sorted(g for g in grains if g))}) than the '
+                            f'answered {grain}')
+        elif (previous and month and day and month != day[1] and re.search(r'\b(?:last|previous|prior)\s+month\b', previous[0])):
+            failures.append(f'{question[:60]!r} compares a month with the month before the selected day, but lands on {month} beside its own')
+    # a window said in words ("for the day", "this day", "over the period"; issue #153) is the window answered, never the selected one
+    said = {grain_said(m.group(0)) for m in re.finditer(r'\b(?:the|this|that|current|selected|whole|full|entire)\s+(?:production\s+)?'
+                                                         r'(?:day|week|month|period)\b(?!\s+(?:before|of\s+the\s+week)\b)', text)}
+    answered = 'week' if metric in ('downtime_per_day', 'stops_per_day') and url_window(url)[0] == 'week' else url_window(url)[0]
+    if (len(said) == 1 and not window_compared(text) and not re.search(rf'\b{_MONTHS}\b|\b(?:last|previous|prior)\b|\byesterday\b', text)
+            and said != {answered} and not (metric in ('downtime_per_day', 'stops_per_day') and said == {'day'})):
+        failures.append(f'{question[:60]!r} names {next(iter(said))} as its window but lands on the {answered}\'s')
+    if re.search(SELECTED_SHIFT_SAID, text) and not re.search(r'/shift/\d', urlsplit(url).path) and not re.search(r'\bshifts?\s*[1-3]\b', text):
+        failures.append(f'{question[:60]!r} says {re.search(SELECTED_SHIFT_SAID, text)[0]!r} but its address names no shift: never every shift\'s figure')
+    logged = re.search(KIND_LOGGED, text)
+    if logged and metric.startswith(('maintenance_', 'operator_')):
+        failures.append(f'{question[:60]!r} says {logged[0]!r}, who logged the stops, but lands on {metric}, a stop\'s kind')
+    return failures
+
+
+# The Pareto grouped by reason, place or kind for a count or minutes asked (round 4, item 5) is the allow-list's too (issue #153, row 3),
+# in the unit asked: a count asked is counted ("how many stops under 2 minutes at each place" is not minutes)
+GROUPED_COUNT_OR_MINUTES = r'\b(?:how many|number of|count of|count|total)\b|\b(?:stops|stoppages|minutes|mins)\b'
+MINUTES_ASKED = (r'\bhow many (?:minutes|mins)\b|\b(?:minutes|mins) (?:of|did|were|was|lost|down|we)\b|\bin minutes\b'
+                 r'|\b(?:downtime|total|stop) (?:minutes|mins)\b')
+EXPLICIT_PARETO = r'\bcost(?:ing)?(?: us)? the most\b|\bmost (?:downtime )?minutes\b|\bmost often\b|\bmost stops\b|\bmost frequent\b'
+
+
+def grouped_pareto_failures(question, url):
+    """A grouped count or minutes (measure=pareto from "how many stops by reason", "how many minutes of downtime at each place") that
+    leaves a word unread, or answers minutes for a count asked or a count for minutes asked."""
+    params, text = dict(parse_qsl(urlsplit(url).query)), question.lower()
+    grouped = re.search(_GROUPED[0], text) or re.search(_GROUPED[1], text) and re.search(r'\b(?:downtime|stops?|stoppages?)\b', text)
+    if (params.get('measure') != 'pareto' or not grouped or not re.search(GROUPED_COUNT_OR_MINUTES, text) or re.search(EXPLICIT_PARETO, text)
+            or re.search(r'\bpercent(?:age)?\b|%|\b(?:average|avg|mean)\b|\bper (?:stops?|stoppages?|set-?ups?|paper changes?|wet[- ]ends?)\b', text)):
+        return []
+    counted = params.get('unit') == 'count'
+    count_asked = re.search(r'\b(?:how many|number of|count)\b', text) and re.search(r'\b(?:stops|stoppages)\b', text)
+    if counted and re.search(MINUTES_ASKED, text):
+        return [f'{question[:60]!r} asks minutes but lands on the Pareto counted']
+    if not counted and count_asked and not re.search(MINUTES_ASKED, text):
+        return [f'{question[:60]!r} asks a count of stops but lands on the Pareto in minutes']
+    unapplied = read_but_unapplied_failures(question, url)   # "this shift" with no shift, a comparison it does not carry
+    if unapplied:
+        return unapplied
+    left = unconsumed_words(question, url)
+    if left:
+        return [f'{question[:60]!r} leaves {left[0]!r} unread but lands on the Pareto grouped ({url_metric(params)}): the Pareto applies no '
+                'stop reason, place, kind or subset']
+    return []
 
 
 # A ratio kept for all stops or for the line (minutes per stop, each day's downtime, feet per setup) answers no one stop reason,
@@ -291,29 +451,43 @@ STOP_FILTER = (r'\b(maintenance|operators?|stacker|splicers?|knife|knives|slitte
                r'double backer|single facer|glue dams?|missed splices?|order changes? (?:stops?|downtime)|planned|scheduled|unplanned)\b')
 
 
+def url_metric(params):
+    """The quantity a gated URL answers: one quantity's metric=, the stops of each production day (measure=stops), or a count or minutes
+    grouped by reason, place or kind (measure=pareto, unit=count or minutes)."""
+    if params.get('measure') == 'stops':
+        return 'stops_per_day'
+    if params.get('measure') == 'pareto':
+        return 'stops_by_group' if params.get('unit') == 'count' else 'minutes_by_group'
+    return params.get('metric', '')
+
+
+# The answers that carry no window before beside them (issue #153, row 6): the over/under-run (sheets), the stops profile, each day's
+# downtime, a grade's totals and the Pareto grouped. A comparison asked of one is never read.
+NO_PREVIOUS = ('sheets', 'downtime_per_day', 'stops_per_day', 'stops_by_group', 'minutes_by_group')
+
+
 def unconsumed_words(question, url):
-    """The words of `question` that its URL (measure=quantity or measure=stops) does not consume, in order: the allow-list's leftovers."""
+    """The words of `question` that its URL (measure=quantity, measure=stops or a grouped measure=pareto) does not consume, in order:
+    the allow-list's leftovers."""
     params = dict(parse_qsl(urlsplit(url).query))
-    metric = 'stops_per_day' if params.get('measure') == 'stops' else params.get('metric', '')
+    metric = url_metric(params)
     text = re.sub(r"['’]s\b", '', question.lower())
     filters = [f for key in ('reason', 'place', 'waste') for f in [params.get(key)] if f]
     patterns = [rf'\b{re.escape(word)}s?\b' for f in filters for word in f.split('-') if word]
     patterns += [FILTER_SAID[f] for f in filters if f in FILTER_SAID]
     if params.get('grade'):
         patterns += [r'\b' + re.escape(params['grade']).replace(r'\-', '-?') + r'\b', r'\b(?:board\s+)?grades?\b']
-    if metric.startswith(('maintenance_', 'operator_')):
+    if metric.startswith(('maintenance_', 'operator_')) or (metric.endswith('_by_group') and params.get('by') == 'kind'):
         patterns.append(r'\b(?:maintenance|operators?)\b')
     for pattern in patterns:
         text = re.sub(pattern, ' zfilteredz ', text)
     if 'zfilteredz' in text:   # "how many stops did the stacker cause", "stacker related stops"
         text = re.sub(r'\b(?:cause|causes|caused|related|driven)\b', ' zfilteredz ', text)
-    shifts_said = re.search(r'\bshifts\b', re.sub(QUANTITY_CONSUMES_ALWAYS[8], ' ', text))
-    compared_to = r'\b(?:than|with|against|versus|vs|and)\b(?=\s+(?:the\s+)?(?:last|previous|prior|week before|month before|day before)\b)'
-    before = r'\b(?:the\s+)?(?:last|previous|prior)\s+(?:week|month|period|day)\b|\b(?:the\s+)?(?:week|month|day|period)\s+before\b(?!\s+last)'
-    joined = (r'\b(?:this|current)\s+(week|month|period)\b.*\band\b.*\b(?:last|previous|prior)\s+\1\b'
-              r'|\b(?:last|previous|prior)\s+(week|month|period)\b.*\band\b.*\b(?:this|current)\s+\2\b')   # two windows joined
-    compared = (() if shifts_said or not (re.search(QUANTITY_WINDOW_COMPARED, text) or re.search(compared_to, text) or re.search(joined, text))
-                else (QUANTITY_WINDOW_COMPARED, compared_to, before) + ((r'\band\b',) if re.search(joined, text) else ()))   # the week before beside a comparison
+    # the week before beside a comparison, read only where the answer carries it (issue #153, row 6): never the over/under-run's
+    compared = (QUANTITY_WINDOW_COMPARED, COMPARED_TO_SAID, PREVIOUS_SAID_BEFORE) + ((r'\band\b',) if re.search(JOINED, text) else ())
+    if not window_compared(text) or metric in NO_PREVIOUS or params.get('grade'):
+        compared = ()
+    text = re.sub(HOW_DID_GO, r'\1 | ', text)   # "how did shift 1 go": the verb only
     for pattern in (_FILTER_CONNECTOR, *compared, *QUANTITY_CONSUMES_ALWAYS, *QUANTITY_CONSUMES.get(metric, ())):
         text = re.sub(pattern, ' | ', text)
     left = [w for w in re.findall(r"[a-z0-9%$]+(?:[-'’][a-z0-9]+)*", text) if w not in FUNCTION_WORDS]
@@ -354,6 +528,9 @@ def plain_quantity_failures(question, url):
     if re.search(ROLLING_WINDOW, text):
         return [f'{question[:60]!r} asks a rolling window ({re.search(ROLLING_WINDOW, text)[0]!r}), which the records do not keep, but '
                 f'lands on one quantity']
+    unapplied = read_but_unapplied_failures(question, url)   # issue #153: words read but never applied
+    if unapplied:
+        return unapplied
     left = unconsumed_words(question, url)
     if not left:
         return []
@@ -391,6 +568,12 @@ def catch_all_failures(question, url):
         failures.append(f'{question[:60]!r} names {re.search(STOP_FILTER, question, re.I)[0]!r} but lands on every stop of each production day')
     elif re.search(r'[?&]measure=stops(&|$)', url or ''):
         failures.extend(plain_quantity_failures(question, url))   # round 6: the allow-list on the stops of each production day
+    if re.search(r'[?&]measure=pareto(&|$)', url or ''):
+        failures.extend(grouped_pareto_failures(question, url))   # issue #153, row 3: the grouped Pareto is the allow-list's too
+    if re.search(INVESTIGATION, question, re.I) and re.search(NUMBER_ASKED, question, re.I) and url and \
+            not re.search(r'[?&]measure=quantity(&|$)', url):
+        # a number and its cause together (issue #153, row 7): two questions, never one reason's stops or minutes
+        failures.append(f'{question[:60]!r} asks for a number and its cause together but lands on {url}, led by one reason or a summary')
     if re.search(SCOPED_NUMBER, url or '') and not re.search(r'\bshifts?\b', question, re.I) and not re.search(INVESTIGATION, question, re.I):
         failures.append(f'{question[:60]!r} asks for a number and names no shift but is answered for the selected one ({url}): the owner\'s '
                         'scope ruling answers it for every shift')

@@ -14015,6 +14015,429 @@
    "expect": {
     "raises": "asks for a grouping or a rate"
    }
+  },
+  {
+   "id": "unapplied-minutes-we-were-up-is-not-downtime",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes were we up this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 1, uptime is not downtime ('up' was a function word, any duration downtime); main at 3cefa4d answered **354.9 minutes** of downtime.",
+   "expect": {
+    "raises": "asks how long the line ran or was up"
+   }
+  },
+  {
+   "id": "unapplied-how-long-the-machine-was-on-is-not-downtime",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How long was the machine on this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 1, the machine on is run time ('on' and 'machine' read as function words); main at 3cefa4d answered **354.9 minutes** of downtime.",
+   "expect": {
+    "raises": "asks how long the line ran or was up"
+   }
+  },
+  {
+   "id": "unapplied-how-long-the-line-has-been-on-is-not-downtime",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How long has the line been on this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 1, the line on is run time; main at 3cefa4d answered **354.9 minutes** of downtime.",
+   "expect": {
+    "raises": "asks how long the line ran or was up"
+   }
+  },
+  {
+   "id": "unapplied-minutes-of-machine-time-is-not-downtime",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes of machine time this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 1, machine time is run time ('time' read as a minutes word); main at 3cefa4d answered **354.9 minutes** of downtime.",
+   "expect": {
+    "raises": "asks how long the line ran or was up"
+   }
+  },
+  {
+   "id": "unapplied-how-long-the-line-went-is-not-downtime",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How long did the line go this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 1, the line going is run time ('go' was a function word); main at 3cefa4d answered **354.9 minutes** of downtime.",
+   "expect": {
+    "raises": "asks how long the line ran or was up"
+   }
+  },
+  {
+   "id": "unapplied-run-time-per-stop-is-not-minutes-per-stop",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Run time per stop this week",
+   "note": "Issue #153 (hotfix after PR 143): row 1, run time per stop is not a stop's length; main at 3cefa4d answered **2.71 minutes per stop**.",
+   "expect": {
+    "raises": "asks how long the line ran or was up"
+   }
+  },
+  {
+   "id": "unapplied-stops-last-week-versus-the-week-before-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops last week versus the week before?",
+   "note": "Issue #153 (hotfix after PR 143): row 2, two windows before the selected one, while the scope stayed on this week; main at 3cefa4d answered **131 stops** · -57 vs 188 the week before (this week; last week was 188 vs 146).",
+   "expect": {
+    "raises": "names two windows"
+   }
+  },
+  {
+   "id": "unapplied-stops-this-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops this week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): row 2, a week against a month (month beat week); main at 3cefa4d answered **665 stops**, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-setups-this-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups this week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): row 2, a week against a month; main at 3cefa4d answered **2,614 setups**, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-downtime-this-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes of downtime this week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): row 2, a week against a month; main at 3cefa4d answered **1,542.2 minutes** of downtime, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-paper-changes-this-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many paper changes this week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): row 2, a week against a month; main at 3cefa4d answered **799 paper changes**, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-stops-in-august-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops in August versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): row 2, 'last month' from Mon 14 Sep is August itself, not the month before August; main at 3cefa4d answered **533 stops** · +25 vs 508 the month before (August against July).",
+   "expect": {
+    "raises": "the month before the selected day"
+   }
+  },
+  {
+   "id": "unapplied-brief-stops-by-reason-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many brief stops by reason this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 3, the grouped Pareto applies no subset; main at 3cefa4d answered **32 stops** at Stacker (every stop's Pareto).",
+   "expect": {
+    "raises": "'brief' asks for a subset"
+   }
+  },
+  {
+   "id": "unapplied-stops-under-2-minutes-at-each-place-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops under 2 minutes at each place this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 3, a subset, and a count asked is counted; main at 3cefa4d answered **155.28 min** at Glue dams (every stop's minutes).",
+   "expect": {
+    "raises": "'under 2' asks for a subset"
+   }
+  },
+  {
+   "id": "unapplied-planned-stops-by-reason-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many planned stops by reason this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 3, the grouped Pareto applies no filter; main at 3cefa4d answered **32 stops** at Stacker.",
+   "expect": {
+    "raises": "'planned' is not one stop reason, place or kind the router applies"
+   }
+  },
+  {
+   "id": "unapplied-long-stops-at-each-place-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many long stops at each place this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 3, a subset; main at 3cefa4d answered **39 stops** at Stacker.",
+   "expect": {
+    "raises": "'long' asks for a subset"
+   }
+  },
+  {
+   "id": "unapplied-slitter-stops-by-reason-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many slitter stops by reason this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 3, a filter the Pareto does not apply; main at 3cefa4d answered **32 stops** at Stacker.",
+   "expect": {
+    "raises": "'slitter' is not one stop reason, place or kind the router applies"
+   }
+  },
+  {
+   "id": "unapplied-stops-at-night-by-reason-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops at night by reason this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 3, a part of the day; main at 3cefa4d answered **32 stops** at Stacker.",
+   "expect": {
+    "raises": "'night' asks for a subset"
+   }
+  },
+  {
+   "id": "unapplied-setups-we-need-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups do we need this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 4, a plan ('need' was a function word); main at 3cefa4d answered **577 setups**, the ones that ran.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-setups-we-can-run-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups can we run this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 4, a capacity ('can'); main at 3cefa4d answered **577 setups**.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-setups-we-could-have-run-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups could we have run this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 4, a capacity ('could'); main at 3cefa4d answered **577 setups**.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-setups-to-go-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups to go this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 4, what is left ('to', 'go'); main at 3cefa4d answered **577 setups**.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-sheets-we-need-to-make-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many sheets do we need to make this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 4, a plan; main at 3cefa4d answered **3,614,510 sheets**, the ones cut.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-stops-we-would-have-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops would we have this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 4, a forecast ('would'); main at 3cefa4d answered **131 stops**.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-stops-so-far-this-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops so far this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 5, a window up to the selected day, which one quantity does not cut; main at 3cefa4d answered the whole week's **131 stops**.",
+   "expect": {
+    "raises": "'so far' is not a window the router reads"
+   }
+  },
+  {
+   "id": "unapplied-setups-so-far-this-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups so far this month?",
+   "note": "Issue #153 (hotfix after PR 143): row 5, a window up to the selected day; main at 3cefa4d answered the month's **2,614 setups**.",
+   "expect": {
+    "raises": "'so far' is not a window the router reads"
+   }
+  },
+  {
+   "id": "unapplied-sheets-versus-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many sheets this week versus last week?",
+   "note": "Issue #153 (hotfix after PR 143): row 6, the over/under-run carries no window before; main at 3cefa4d answered **3,614,510 sheets**, this week alone.",
+   "expect": {
+    "raises": "does not carry beside it"
+   }
+  },
+  {
+   "id": "unapplied-stops-per-day-versus-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops per day this week versus last week",
+   "note": "Issue #153 (hotfix after PR 143): row 6, the stops profile carries no window before; main at 3cefa4d answered **36 stops** on 2026-09-15, this week alone.",
+   "expect": {
+    "raises": "does not carry beside it"
+   }
+  },
+  {
+   "id": "unapplied-downtime-per-day-versus-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime per day this week compared with last week",
+   "note": "Issue #153 (hotfix after PR 143): row 6, each day's downtime carries no window before; main at 3cefa4d answered **160.93 minutes** on 2026-09-17, this week alone.",
+   "expect": {
+    "raises": "does not carry beside it"
+   }
+  },
+  {
+   "id": "unapplied-how-many-stops-and-why-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops and why this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 7, two questions; main at 3cefa4d answered **11 stops** at Stacker, shift 2's top reason, not the total.",
+   "expect": {
+    "raises": "a number and for its cause together"
+   }
+  },
+  {
+   "id": "unapplied-stops-this-shift-with-all-shifts-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops this shift this week?",
+   "scope": "day",
+   "note": "Issue #153 (hotfix after PR 143): row 8, 'this shift' under All shifts has no referent; main at 3cefa4d answered all shifts' **131 stops**.",
+   "expect": {
+    "raises": "no shift is selected"
+   }
+  },
+  {
+   "id": "unapplied-stops-on-my-shift-with-all-shifts-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops on my shift this week?",
+   "scope": "day",
+   "note": "Issue #153 (hotfix after PR 143): row 8, 'my shift' under All shifts; main at 3cefa4d answered all shifts' **131 stops**.",
+   "expect": {
+    "raises": "no shift is selected"
+   }
+  },
+  {
+   "id": "unapplied-stops-the-operators-logged-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops did the operators log this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 9, who logged a stop is not recorded; a stop's kind is; main at 3cefa4d answered **92 operator stops**.",
+   "expect": {
+    "raises": "who logged the stops"
+   }
+  },
+  {
+   "id": "unapplied-stops-logged-by-the-operator-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops were logged by the operator this week?",
+   "note": "Issue #153 (hotfix after PR 143): row 9, who logged a stop is not recorded; main at 3cefa4d answered **92 operator stops**.",
+   "expect": {
+    "raises": "who logged the stops"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops during the week?",
+   "note": "Issue #153 (hotfix after PR 143): row 10, 'during the week' is the week; main at 3cefa4d answered a refusal: \"'during' asks for a subset\".",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-over-the-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops over the week?",
+   "note": "Issue #153 (hotfix after PR 143): row 10, 'over the week' is the week; main at 3cefa4d answered a refusal: \"'over' asks for a subset\".",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-across-the-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops across the week?",
+   "note": "Issue #153 (hotfix after PR 143): row 10, 'across the week' is the week; main at 3cefa4d answered a refusal: \"'across' asks for a grouping or a rate\".",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-for-the-period-is-the-period",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops for the period?",
+   "note": "Issue #153 (hotfix after PR 143): row 10's family, found by this PR's own probe: 'the period' was consumed as a window but never applied; main at 3cefa4d answered the selected day's **25 stops**.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=period&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-over-the-period-is-the-period",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops over the period?",
+   "note": "Issue #153 (hotfix after PR 143): row 10's family, found by this PR's own probe: 'over the period' is the 4-4-5 period, read once the preposition is the window's; main at 3cefa4d answered a refusal ('over' asks for a subset).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=period&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-this-day-under-a-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops this day?",
+   "period": "week",
+   "note": "Issue #153 (hotfix after PR 143): row 10's family, found by this PR's own probe: 'this day' under the week's Period control was consumed but never applied; main at 3cefa4d answered the week's **131 stops**.",
+   "expect": {
+    "raises": "names the selected production day"
+   }
   }
  ]
 }
