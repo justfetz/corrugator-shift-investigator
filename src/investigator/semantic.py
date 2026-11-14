@@ -999,7 +999,8 @@ class Compiled:
         n_sql = f'SELECT {n_select} FROM {n_part.source()} WHERE {where}{group}'
         d_select = ', '.join(d_cols + [f'{denominator} AS denominator'])
         d_sql = f"SELECT {d_select} FROM {d_part.source()} WHERE {' AND '.join(d_part.where)}" + (' GROUP BY ALL' if d_cols else '')
-        on = [f'n.d{dims.index(d)} = d.d{dims.index(d)}' for d in shared]
+        # a slice whose dimension is not recorded (NULL on both sides) is one slice, as the compare join reads it, never a lost one
+        on = [f'n.d{dims.index(d)} IS NOT DISTINCT FROM d.d{dims.index(d)}' for d in shared]
         if dims and len(shared) == len(dims):
             # every slice is a slice of the denominator too (a day, a shift): the denominator's slices are the rows, and a
             # slice with no numerator records is a recorded zero (a day without a stop is no downtime, not a missing day)
@@ -1207,7 +1208,7 @@ def _check_adds_up(mdl, query, rows, groups, total):
         return
     listed = sum(r.get(key) or 0 for r in rows)
     if abs(listed - total[key]) > abs(total[key]) * 1e-9 + 1e-6:
-        raise SemanticError('The rows of this request do not add up to its total, so the result is refused rather than shown; ask again')
+        raise SemanticError('The rows of this request do not add up to its total, so the result is refused rather than shown')
 
 
 def _reading(mdl, query, r, rates, basis, dims_values):
