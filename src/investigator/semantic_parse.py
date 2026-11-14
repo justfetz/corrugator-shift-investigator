@@ -388,6 +388,13 @@ def _read(reading, text, context, store, mdl):
             lower, _ = _consume(re.escape(before[0]), lower, used, 'window')
             said.append((f"'{before[0].strip()}' and '{previous[0].group(0).strip()}' are two windows before the selected one: ask one window, "
                          "or one window against the one just before it", lambda word, window: [f'{word} this week versus last week', f'{word} this week']))
+    if re.search(r"\bthan\b", lower):
+        # "which grades had more setups than 26-C", "more stops than shift 1", "reasons other than the stacker": a threshold, another
+        # value compared or a value excluded, which no query of the model reads; never the value ranked against itself, nor every
+        # reason's downtime (the reviewer's checks of c5d840c and 20c833d). Said, so it stands over any other refusal of the words
+        reading.cues |= {'said', 'than'}
+        said.append(("'than' compares with another value, excludes one or names a threshold, which the semantic model does not read: ask "
+                     "the split, or two values compared", lambda word, window: [f'{word} {window}']))
     unread = re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
         wrong = re.search(WRONG_WINDOW, lower)
@@ -657,7 +664,7 @@ def _assign(reading, items, mdl, store, a, context):
         if kind == 'verb':
             verbs.append(item)   # read once the measure is known (LOSS_VERBS, REJECT_VERBS, PRODUCE_VERBS), else refused
         elif kind == 'than':
-            than.append(item)    # "more setups than 26-C": refused once every other word is read ("than last week" is PREVIOUS's)
+            than.append(item)    # "more setups than 26-C": refused in _read, over any other refusal ("than last week" is PREVIOUS's)
         elif kind == 'unit':
             units.append(item.value)
             item.role = 'unit'
@@ -1001,8 +1008,10 @@ def _assign(reading, items, mdl, store, a, context):
         raise Refused(f"'{statistic[0]}' asks for a statistic the semantic model does not define: it keeps sums, counts and ratios of sums",
                       list(dict.fromkeys(asks + _suggest(mdl, reading, base, group_by[0] if group_by else None, None)))[:3])
     loss = [it for it in verbs if it.words in LOSS_VERBS + REJECT_VERBS]
-    if measure is None and loss and not leftover:
-        # "which shift rejected the most", "which shift lost the most": a loss with no measure is never the waste breakdown's side trim
+    if measure is None and loss and not leftover and '$' not in units:
+        # "which shift rejected the most", "which shift lost the most": a loss with no measure is never the waste breakdown's side trim.
+        # Money lost ("how much money did we lose", "where are we losing money") is the money answer's own: the levers, the shift's
+        # recorded losses (the reviewer's check of 20c833d)
         reading.cues.add('loss')
         rejected = loss[0].words in REJECT_VERBS
         raise Refused(f"'{loss[0].words}' asks what was {'rejected' if rejected else 'lost'} and names no measure: the "
@@ -1017,13 +1026,6 @@ def _assign(reading, items, mdl, store, a, context):
         reading.unused = list(dict.fromkeys(leftover))
         raise Refused(f"'{reading.unused[0]}' is not a word the semantic model reads",
                       _suggest(mdl, reading, measure, group_by[0] if group_by else None, rank or speed_rank))
-    if than:
-        # "which grades had more setups than 26-C", "more stops than shift 1": a threshold or another value compared, which no query of
-        # the model reads; never the value ranked against itself (the review of PR #155 at 74cc46f, the reviewer's item 8)
-        reading.cues |= {'said', 'than'}
-        dim = group_by[0] if group_by else None
-        raise Refused("'than' compares with another value or a threshold, which the semantic model does not read: ask the split, or two "
-                      "values compared", _suggest(mdl, reading, measure, dim, None))
     if a['loss'] and mdl.measures[measure]['unit'] == 'ft/min':
         raise Refused('Speed lost is a gap against a target or a baseline, which the semantic model does not hold: it keeps the speed itself',
                       _suggest(mdl, reading, measure, group_by[0] if group_by else 'shift', 'least'))
@@ -1361,13 +1363,14 @@ COUNT_ASK = r"\b(?:how\s+many|number\s+of|count\s+of)\b"
 
 
 def reads_otherwise(reading, nouns):
-    """True when the reading read one of `nouns` inside a phrase of two or more words of the model's vocabulary, or as a measure kept in
-    no count unit while the question asks no count."""
+    """True when the reading read one of `nouns` inside a phrase of two or more words of the model's vocabulary ("roll changes", "good
+    board"), or as a measure kept in no count unit ("how much chop"); a count asked ("how many stacker boards", "how many shear chops")
+    is read otherwise only as a count ("how many roll changes"), never answered in square feet (the reviewer's check of 20c833d)."""
     words = [set(tokens_of(w)) for w, role in reading.used if role in ('measure', 'dimension', 'value', 'qualifier')]
-    phrase = any(len(w) > 1 and w & nouns for w in words)
-    alone = any(w & nouns for w in words) and semantic.model().measures[reading.query.measure]['unit'] not in COUNT_UNITS \
-        and not re.search(COUNT_ASK, reading.question, re.I)
-    return phrase or alone
+    counted = semantic.model().measures[reading.query.measure]['unit'] in COUNT_UNITS
+    if re.search(COUNT_ASK, reading.question, re.I) and not counted:
+        return False
+    return any(len(w) > 1 and w & nouns for w in words) or (any(w & nouns for w in words) and not counted)
 
 
 OVERRULED = ((r"^The records do not count customers", lambda r: 'customer' in r.query.group_by or 'customer' in r.query.filters),

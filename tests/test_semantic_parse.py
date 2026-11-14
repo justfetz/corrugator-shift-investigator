@@ -154,7 +154,8 @@ def test_a_share_leads_with_the_values_own_row_beyond_the_limit_and_without_reco
     ('Which grade took the most setups this week', "'took' is not a word the semantic model reads"),
     ('Which shift spent the most downtime this week', "'spent' is not a word the semantic model reads"),
     ('Which shift lost the most this week', "'lost' asks what was lost and names no measure"),
-    ('Which grades had more setups than 26-C this week', "'than' compares with another value or a threshold"),
+    ('Which grades had more setups than 26-C this week', "'than' compares with another value, excludes one"),
+    ('Downtime for reasons other than the stacker this week', "'than' compares with another value, excludes one"),
 ])
 def test_a_word_the_model_cannot_place_is_refused_with_at_most_three_questions(store, question, why):
     r = reading(store, question)
