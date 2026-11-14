@@ -117,6 +117,8 @@
     "quantity": 82194.9,
     "unit": "sq ft",
     "apart": null,
+    "control": "schedule-driven",
+    "control_note": "the order mix and its web widths",
     "msf": 82.195,
     "paper_usd": 4520.72,
     "machine_minutes": 0.0,
@@ -770,7 +772,9 @@
     "contribution_usd_per_year": 0,
     "contribution_status": "set",
     "usd_basis": "82,194.9 sq ft = 82.195 MSF x $60/MSF paper = $4,932; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added); per year: x 668.06 (1,800,000 MSF a year / 2,694.377 MSF gross)",
-    "share_of_window_pct": 3.0506
+    "share_of_window_pct": 3.0506,
+    "control": "schedule-driven",
+    "control_note": "the order mix and its web widths"
    },
    {
     "gap": "Dry-end: WARP",
