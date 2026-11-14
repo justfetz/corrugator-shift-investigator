@@ -372,6 +372,28 @@ def kpi_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""
                 {"coverage": coverage, "row_count": len(TILES), "values": values}, day=day, note=note)
 
 
+def quantity_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", note=""):
+    """Issue #113: the counts a count question opens with (measure=quantity), a second way from the raw records, beside
+    every tile of the KPI tool they are read from. Setup records counted one by one; paper changes as the wet-end run
+    records of the window (all shifts) or the distinct runs one shift's setups ran on; order changes as the setup records
+    whose change code is O. The KPI tool's tiles and the order-change count beside them must equal them."""
+    cur = window(period, anchor)
+    prev = previous(period, *cur)
+    values, coverage = kpi_values(plain, cur, prev, shift)
+    counts = {}
+    for side, span in (("current", cur), ("previous", prev)):
+        setups = plain.between("dry_end_setups", *span, shift)
+        runs = len(plain.between("wet_ends", *span)) if shift is None else len({s.wet_end_id for s in setups})
+        counts[side] = (len(setups), runs, sum(1 for s in setups if s.change_code == "O"))
+    (setups, runs, orders), (setups_before, runs_before, orders_before) = counts["current"], counts["previous"]
+    values["metric=setups"].update(current=exact(setups), previous=exact(setups_before), delta=exact(setups - setups_before))
+    values["metric=paper_changes"].update(current=exact(runs), previous=exact(runs_before), delta=exact(runs - runs_before))
+    values["$"].update(order_changes=exact(orders), previous_order_changes=exact(orders_before),
+                       order_changes_delta=exact(orders - orders_before))
+    return case(id, "get_period_kpis", {"window": {"period": period, "anchor": anchor}, "compare": True, "shift": shift},
+                {"coverage": coverage, "row_count": len(TILES), "values": values}, day=day, note=note)
+
+
 def compare_case(plain, id, current, base, shift=None, *, day="2026-09-14", note=""):
     cur, prev = window(*current), window(*base)
     values, coverage = kpi_values(plain, cur, prev, shift)
@@ -1450,6 +1472,13 @@ def build(data=None):
                           note="Renamed from value-kpi-first-month-previous-partial (issue #100), an intended rename, not a removal (owner ruling (a), 2026-11-12): the data now opens on the first of a month, so the first month has no previous month and no month is partial at the start; value-kpi-second-week-previous-partial keeps the partial-previous path. January 2025 is complete; December 2024 is before the dataset: previous unavailable, deltas withheld."))
     cases.append(kpi_case(plain, "value-kpi-last-week-partial", "week", "2026-09-29",
                           note="The week of 28 September has three production days: coverage partial, deltas withheld."))
+    # The counts a count question opens with (issue #113), from the raw setup and wet-end run records.
+    cases.append(quantity_case(plain, "value-quantity-week-0907-all", "week", "2026-09-07",
+                               note="How many setups, paper changes and order changes 7-11 Sep, all shifts: paper changes counted as the week's wet-end run records."))
+    cases.append(quantity_case(plain, "value-quantity-week-0907-shift-2", "week", "2026-09-07", 2,
+                               note="The same week on shift 2: paper changes as the distinct runs its setups ran on (a run that spans a shift change counts in both)."))
+    cases.append(quantity_case(plain, "value-quantity-day-0911-all", "day", "2026-09-11",
+                               note="Fri 11 Sep, the production day before Mon 14 Sep, all shifts: the day the issue's 'yesterday' rows read."))
     cases.append(compare_case(plain, "value-compare-september-vs-august", ("month", "2026-09-01"), ("month", "2026-08-01")))
     cases.append(compare_case(plain, "value-compare-day-0914-vs-0803-shift-1", ("day", "2026-09-14"), ("day", "2026-08-03"), 1))
     # The downtime Pareto for the story week (7-11 September), by reason and by place, minutes and count.

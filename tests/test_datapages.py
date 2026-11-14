@@ -11,8 +11,10 @@ import gc
 import http.client
 import json
 import math
+import os
 import random
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -697,17 +699,27 @@ class Figures:
             return (stop_minutes(rows) / 480 * 100 if after.startswith(' of the shift') else stop_minutes(rows)), False
         if tool == 'get_downtime_pareto':
             return (len(rows), True) if 'stop' in text else (stop_minutes(rows), False)
+        if tool == 'get_downtime_review' and receipt['table'] == 'stops' and re.search(r'stops?$', text):
+            return len(rows), True   # a stop kind's or a reason's stops (a quantity answer, #113)
+        if tool == 'get_downtime_review' and receipt['table'] == 'stops' and re.search(r'min(utes)?$', text):
+            return stop_minutes(rows), False
         if tool == 'get_downtime_review' and part is None:
             return sum(r['maintenance_seconds'] + r['operator_seconds'] for r in rows) / sum(r['scheduled_seconds'] for r in rows) * 100, False
         if tool == 'get_downtime_review':
-            if text.endswith('min'):
-                return stop_minutes(rows), False
             return stop_minutes(rows) / (sum(r['scheduled_seconds'] for r in self.whole(entry)) / 60) * 100, False
+        if tool in ('get_period_kpis', 'compare_periods') and text.endswith(' order changes'):
+            return len(rows), True   # the setups an order change started (change code O)
         if tool in ('get_period_kpis', 'compare_periods'):
             return RecordStore._kpis(tile_sums(rows))[row['metric']], False
         if tool == 'get_trend':
             return RecordStore._kpis(tile_sums(rows))[data['metric']], False
         if tool == 'get_grade_totals':
+            if text.endswith(' setups'):
+                return len(rows), True
+            if text.endswith(' paper changes'):
+                return len({r['wet_end_id'] for r in rows}), True
+            if text.endswith(' lineal ft'):
+                return sum(r['lineal_ft'] for r in rows), False
             if 'grades observed' in after:
                 return len({r['quality_id'] for r in rows}), True
             if text.endswith('ft/min'):
@@ -727,6 +739,10 @@ class Figures:
             if part == 'row':
                 return self.priced(entry, row, self.line_quantity(entry, row, url), 'usd'), False
             return self.total_usd(entry, url, 'usd', [j for j, r in enumerate(data['rows']) if not r.get('apart')]), False
+        if tool == 'get_overrun' and text.endswith(' sheets'):   # sheets at the knife: cuts x outs; over nominal, the cuts past it
+            if section.startswith('- Over nominal'):
+                return sum(max(0, r['actual_cuts'] - r['nominal_cuts']) * r['outs'] for r in rows), True
+            return sum(r['actual_cuts'] * r['outs'] for r in rows), True
         if tool == 'get_overrun':
             nominal, actual = (sum(r[c] for r in rows) for c in ('nominal_cuts', 'actual_cuts'))
             return (actual - nominal) / nominal * 100, False
@@ -797,9 +813,10 @@ class Figures:
         if tool == 'get_speed_variance':
             return self.speedvar_printed(entry, part, index, section, self.speedvar(entry, part, index, rows, url)), False
         if tool == 'get_stops_profile':
+            minutes = ' minutes' in text   # a quantity answer's downtime per day (#113), else stops
             if part == 'weekday':   # over the production days of that weekday the receipt's span holds (a window can pass the data)
-                return len(rows) / len(self.weekdays(url)), False
-            return len(rows), True
+                return (stop_minutes(rows) if minutes else len(rows)) / len(self.weekdays(url)), False
+            return (stop_minutes(rows), False) if minutes else (len(rows), True)
         if tool == 'get_waste_breakdown':
             whole = self.whole(entry)
             gross = sum(r['gross_sqft'] for r in whole)
@@ -830,7 +847,7 @@ class Figures:
         raise Unchecked(f'{tool} {part}: no figure check for {section[:80]!r}')
 
     # ---- "N of M": the other numbers of a count, recomputed too
-    OF = re.compile(r'\*\*[^*]+\*\* of ([\d,]+)\b')
+    OF = re.compile(r'\*\*[^*]+\*\* of ([\d,]+)\b(?!-)')   # never a grade's name: "**100 setups** of 32-C"
     RUNS_UNDER = re.compile(r'([\d,]+) of ([\d,]+) wet-end runs under their grade baseline')
     DAYS = re.compile(r' over (\d+) day\(s\)')
     NOTED = re.compile(r'\*\* stops?(?: on shift \d)?, (\d+) with a note')
@@ -1139,14 +1156,31 @@ def test_a_label_reads_only_the_bullets_of_its_own_group(store):
     assert [r['of'] for r in got[-2:]] == ['row', 'result'] and all('day=2026-09-11' in r['url'] for r in got[-2:]), got[-2:]
 
 
-def test_receipts_on_golden_answers_link_to_rows_that_hold_the_bold_figure(store):
+def golden_receipt_sweep(path):
+    """receipt_failures over every offline golden answer, written to `path` as JSON (the test below runs it in a process of
+    its own: `python tests/test_datapages.py golden-receipts <path>`)."""
+    mutants = {}
+    failures, checked, tools = receipt_failures(default_store(), golden_urls(), golden_case_answers(), mutants)
+    Path(path).write_text(json.dumps({'failures': failures, 'checked': checked, 'tools': sorted(tools), 'mutants': mutants}))
+
+
+def test_receipts_on_golden_answers_link_to_rows_that_hold_the_bold_figure(tmp_path):
     """Every section of every offline golden answer that cites a step, by its address or not: its receipt opens rows, and
     the section's bold figure, recomputed from those rows with the receipt's filter, is the figure printed; so are the
-    other numbers of a count ("N of M")."""
-    mutants = {}
-    failures, checked, tools = receipt_failures(store, golden_urls(), golden_case_answers(), mutants)
+    other numbers of a count ("N of M").
+
+    The sweep answers every golden address and case and imports the eval runner, and what that leaves in a process (about
+    fifty thousand more live objects) made every later test's garbage collection slower: the /evals run-all went over its
+    latency budget in both CI runs on b086d68. So it runs in a process of its own, with this one's environment (the
+    golden window, tests/conftest.py), and no budget moves."""
+    out = tmp_path / 'sweep.json'
+    run = subprocess.run([sys.executable, str(Path(__file__).resolve()), 'golden-receipts', str(out)], cwd=ROOT, env=dict(os.environ),
+                         capture_output=True, text=True, timeout=1500)
+    assert run.returncode == 0 and out.exists(), run.stderr[-4000:]
+    sweep = json.loads(out.read_text())
+    failures, checked, tools, mutants = sweep['failures'], sweep['checked'], sweep['tools'], sweep['mutants']
     assert not failures, f'{len(failures)} of {checked}:\n' + '\n'.join(failures[:25])
-    assert checked > 1000 and len(tools) >= 20, (checked, sorted(tools))
+    assert checked > 1000 and len(tools) >= 20, (checked, tools)
     # every money total moved a day off its rows (M5) and every speed gap a week off (M7) fails: the reviewer's mutations
     assert all(mutants.get(k, [0])[0] >= n for k, n in (('M5', 10), ('M7', 10), ('twice', 10), ('this window only', 5))), mutants
 
@@ -1292,3 +1326,7 @@ def test_the_docs_renderer_anchors_a_column_table_and_nothing_else():
     assert '<tr id="col-shifts-crew">' in page and '<tr id="col-shifts-lane">' in page
     plain = docsite.Renderer().render('| Model | Cost |\n| --- | --- |\n| `gpt-small` | $1 |\n')
     assert ' id=' not in plain
+
+
+if __name__ == '__main__' and sys.argv[1:2] == ['golden-receipts']:   # the golden sweep's own process (its test, above)
+    golden_receipt_sweep(sys.argv[2])

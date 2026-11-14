@@ -1066,6 +1066,26 @@ def _overview_line(row, section):
     return 'shift_kpis', {}
 
 
+def _quantity_rows(entry, part, section):
+    """The rows behind a count or unit figure (a quantity answer, #113) that its step's own rows do not hold: a stop kind's
+    minutes or stops (the downtime review's rows are the shifts' sums, which carry no stop count by kind), and the window's
+    order changes (the KPI tiles carry no order change; they are the setups an order change started, change code O)."""
+    bold = BOLD.search(section)
+    if part is not None or not bold:
+        return None
+    figure, tool = bold.group(1), entry.get('tool')
+    if tool == 'get_downtime_review' and re.search(r'\b(minutes|stops)$', figure):
+        kinds = {k for k in ('maintenance', 'operator') if re.search(rf'\b{k}\b', section, re.I)}
+        if len(kinds) == 1:   # one kind named (its own lead, or the other kind beside it), never "maintenance and operator"
+            return 'stops', {'kind': kinds.pop().capitalize()}
+    if tool in ('get_period_kpis', 'compare_periods') and figure.endswith(' order changes'):
+        return 'setups', {'change_code': 'O'}
+    return None
+
+
+BOLD = re.compile(r'\*\*([^*]+)\*\*')
+
+
 def receipt(entry, part, index, section, production_day, corrupt=False):
     """The rows behind one section's figure: {'url', 'table', 'of'}. Usually the cited row's own rows (`source.rows`) or
     the step's (`source.url`); a figure about the previous window opens that window's rows, a recurrence count the reason's
@@ -1086,6 +1106,11 @@ def receipt(entry, part, index, section, production_day, corrupt=False):
         table, extra = _overview_line(data['rows'][0], section)
         filters = _merge(table, _scope(entry, production_day), extra, corrupt)
         return {'url': table_url(table, filters), 'table': table, 'of': 'row'}
+    quantity = _quantity_rows(entry, part, section)
+    if quantity:   # a quantity answer's figure (#113) that its step's own rows do not hold
+        table, extra = quantity
+        filters = _merge(table, _scope(entry, production_day), extra, corrupt)
+        return {'url': table_url(table, filters), 'table': table, 'of': 'quantity'}
     url = receipt_url(entry, part, index)
     if not url:
         return None

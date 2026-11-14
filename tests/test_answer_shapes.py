@@ -134,6 +134,7 @@ INTENT_QUESTIONS = [
     ('period_money', 'Where is the money this month?', 'day', 'day'),
     ('period_speedvar', 'What were the top 3 contributors to speed variations?', 'shift', 'day'),
     ('period_review', 'What were the top downtime reasons this week?', 'day', 'day'),
+    ('period_quantity', 'How many setups did we run this week?', 'day', 'day'),   # one quantity asked (issue #113)
 ]
 # downtime by reason over a window is the owner's review (issue #101); by equipment it is still the Pareto's alias
 ALIASES = [('period_downtime', 'Show downtime by equipment', 'period_pareto'), ('period_quality', 'Show dry-end quality waste', 'period_waste')]
