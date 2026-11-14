@@ -220,6 +220,7 @@ server answers it, then fetched over GET, where a hand-typed spelling must redir
 | `GET /corr/…?measure=…` | the app page; `app.js` reads the address, sets the controls and fetches the `.json`. The bare scope address (no `measure`) is the page with the controls set. An alias, in any representation below, is a **302** to the canonical address in the same representation (see Aliases). |
 | `GET /corr/….json?measure=…`, `…&format=json`, or `Accept: application/json` | the JSON `/api/ask` returns for the same state, plus `url` (the page address, with the `after=` chain) and no `session_id`; the bare scope address is a 400 asking for `measure=`. `Server-Timing: app;dur=<ms>` is the server's own time. |
 | `GET /corr/…?measure=…&format=pdf` | the PDF of that answer, rendered on request from the same state. No report cache, so any instance serves any PDF; `POST /api/report` remains for live answers, which have no address. |
+| `GET /data…` | the data browser: the tables the answers read, a table's schema and rows, its CSV ([below](#the-data-browser)) |
 
 While the hosted demo keeps its question log (issue #125, [the fields](DATA.md#the-question-log)), the page sends `/q` two
 random ids as headers, `X-Question-Line` and `X-Question-Session`, which ride its redirect to the `.json` answer. They
@@ -235,6 +236,39 @@ cap. It
 takes its own lock (`Workbench.read_lock`) and keeps its own three-day analysis cache, so a URL answer
 never waits behind a live round that holds `Workbench.lock`. `POST /api/ask` answers in offline mode
 also carry `url`, the question's own address without a conversation chain.
+
+## The data browser
+
+The tables every answer reads have addresses of their own (issue #142, `datapages.py`), Datasette-style. The URL is the state: a filter is a query parameter, so a link is the page.
+
+| Request | Answer |
+| --- | --- |
+| `GET /data` | the page (`data.html`, `data.js`): every table the tools read with what it is, its rows in the window and its first and last day |
+| `GET /data.json` (or `/data` with `Accept: application/json`) | the same as JSON: `tables` (name, label, meaning, rows, first_day, last_day, columns, url, contract), `window`, `dataset_hash` |
+| `GET /data/<table>?<filters>` | the page of one table: its schema (each column's type, unit and meaning from [the record contract](RECORD_CONTRACT.md), with a link to its row there), then its rows below it, 50 at a time, newest first, and the query that ran |
+| `GET /data/<table>.json?<filters>` (or `Accept: application/json`, or `format=json`) | the same as JSON: `columns`, `filters` (as applied), `filterable`, `rows`, `count`, `page`, `pages`, `url` (the canonical address), `newer`, `older`, `csv`, `sql` (the queries that ran for the rows, joined by `;` and a line break), `parameters` (their bound values, one list per query), `count_sql` and `count_parameters`, `elapsed_ms` |
+| `GET /data/<table>.csv?<filters>` | the filtered rows as CSV, newest first, at most 10,000; `X-Rows-Truncated` says whether more matched |
+
+The tables are the record contract's (`setups`, `setup_orders`, `stops`, `rejects`, `wet_ends`, `rolls`, `shifts`, `customers`, `reject_reasons`) and the derived `shift_kpis` ([metrics](METRICS.md#the-shift_kpis-table)). The filters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `day=YYYY-MM-DD` | one production day (a dated table) |
+| `from=`, `to=` | a span of production days, either end optional; not with `day` |
+| `weekday=Mon` … `Fri` | the production days of one weekday |
+| `shift=1`, `2` or `3`, or a list `shift=1,3` | one shift, or any of a list (a table with a shift column): the shifts a day's money was summed over, the two shifts a speed gap is between. `shift=1&shift=3` and `shift=3,1` are the same list, written back as `shift=1,3`; a shift twice in one list (`shift=1,1`) is a 400, while a repeated parameter with the same value (`shift=1&shift=1`) counts it once, as any repeated filter does |
+| `crew=Crew B` | the crew on the row's shift: a column of `shifts` and `shift_kpis`, read from the shift record by the tables that have a shift but no crew of their own |
+| `<column>=<value>` | equality on any text, whole-number, number or yes/no column of the table; text compares without case. `order=` is `order_number=` and `grade=` is `quality_id=`, which the lanes, the stops and the reject lines take too, as the board grade of their setup; the reject lines take `order_number=` and `customer_id=` as their lane's; on `stops`, `kind=pm` is `kind=Scheduled` (the contract's rule) |
+| the same column, `crew` or `shift` again | any of the values: `?reason=Missed%20splice&reason=Stacker` (at most 20) |
+| `page=N` | the page of 50, from 1 to 200; past the 10,000th row, a narrower filter is the way further |
+
+**More rows than a page reaches.** A filter may select more than 10,000 rows: a month of dry-end reject lines is about 15,000, the trailing year of setups a grade baseline comes from about 33,000. The filter still holds the figure a receipt links it for (`count` and the test count every row), but the pages stop at page 200 and the CSV at the newest 10,000 rows, and the page says so under its count; a narrower filter (a day, a shift, a reason) reaches the rest.
+
+An unknown parameter, a repeated `day`, `from`, `to`, `weekday` or `page`, a value of the wrong type or longer than 120 characters is a 400 that names it; an unknown table is a 404. The server answers with the canonical spelling (`url`: the filters in the order above, the column filters in the table's column order, a repeated filter's values sorted), and the page puts it in the address bar; a day picked on a span page replaces the span. Examples: `/data/stops?day=2026-09-14&shift=2&reason=Missed%20splice`, `/data/setup_orders?order_number=SO-2609140077`, `/data/shift_kpis?from=2026-09-07&to=2026-09-11&shift=2&corrupt=false`.
+
+**Bounded and read-only.** Every query is one fixed `SELECT` over an allowlisted table and its allowlisted columns, every value bound as a parameter, with a `LIMIT` and the record store's own lock, two-second cap and row cap, the bounds every tool runs under (`RecordStore._fetch`). There is no typed SQL, in public mode or on the workbench, no system table and no file path. The routes are GET-only (a POST is refused like any other path), carry no `Access-Control-Allow-Origin`, write nothing and log nothing to the question log; the loopback Host rule and the public mode's origin rules are unchanged. The data reads have windows of their own (600 a minute for the container, 120 for one client address, 30 CSV downloads a minute), so browsing rows never spends a visitor's question rounds. No read sorts a wide row: newest first is the reverse of the order the store wrote the rows in, which is production order (a test holds it), so a page is the rowids of its rows (one integer column) and then the rows of that rowid range, and its count, a few milliseconds each on the prebuilt store at any depth; a CSV reads its rowids once and then its rows 1,000 at a time by rowid range, letting the tools' lock go between reads of a few milliseconds.
+
+**Receipts link here.** Each step of an answer's trace carries `source`: the table it read, the filter it read it with (its window or production day and its shift), `url`, `rows`, one address per row of each cited list (`row`, `detail`, `weekday`, `flag`), and `also`, the other rows it read: a comparison's previous window, the trailing year of setups a grade baseline comes from (speed variance, the levers, wet-end performance), the notes' shift record, a semantic ratio's denominator. A speed gap reads both sides of its comparison in its own `url`: both shifts, or both windows as one span (the previous window ends where this one starts). A semantic answer's `source` is its measure's records (a ratio's numerator), and a ratio adds `denominator` (`url`, and one per row), the records it is read against. Each section that cites a step also has its own receipt in the answer's `receipts` (one per section, `null` for a section that cites none): `{url, table, of}`, the rows behind that section's bold figure. Usually that is `rows[part][M]`, else the step's own `url`. A finding about the previous window (its own line, or a bullet of the group under the label "The previous window": one that cites the whole result of the step the lines above the label cite) opens that window's rows; a flag's recurrence count ("over the band on its own on **N** of M shifts since …") opens the reason's stops over the trailing year it counts; a shift summary finding opens the table its figure is read from (the largest reason's stops, the largest family's reject lines, the setups whose runs are counted); a quantity answer's stop-kind minutes or stops open that kind's stops, and its order changes the setups with `change_code=O`. A finding's "(query N · row M)" gets a "rows ↗" link to its receipt, and each step of the query box links to its rows and to its `also` rows. [The agent contract](AGENT_CONTRACT.md#what-each-tool-read) lists what each tool declares.
 
 ## What the browser does
 

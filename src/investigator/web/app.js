@@ -27,18 +27,52 @@ const NOTE_LINE=/ - reported note \(synthetic, unverified\): /;
 // question that opens that place in the records, go under the charts as links that ask it. A list longer than five
 // folds the rest under "more". What a reader sees is the section without its two markers, word for word.
 const LOOK_LABEL='Where to look', BULLETS_SHOWN=5;
-const SHAPE_REF=/ \(query (\d+)(?: · (?:row|detail|weekday|flag) \d+)?\)$/, SHAPE_LOOK=/^(.*) → “([^”]+)”$/;
+const SHAPE_REF=/ \(query (\d+)(?: · (row|detail|weekday|flag) (\d+))?\)$/, SHAPE_LOOK=/^(.*) → “([^”]+)”$/;
 function plainSection(s){ return (s.startsWith('- ')?s.slice(2):s).replace(/\*\*([^*]+)\*\*/g,'$1'); }
 function shapeLabel(s,next){ return !!next&&next.startsWith('- ')&&!s.startsWith('- ')&&!s.includes('**')&&!/\d|[.:;!?]$/.test(s)&&s.length<=48; }
 function textOf(e){ return e&&e.children&&e.children.length?[...e.children].map(textOf).join(''):((e&&e.textContent)||''); }   // the stub DOM of the unit tests does not compute textContent from children
 function refLink(text,step){ const a=node('a',text,'ref'); a.href=`#query-${step-1}`; a.title='The query and row this figure came from'; a.addEventListener('click',event=>revealQuery(a,event)); return a; }
-// One section's inline content: text spans, the bold figure, the trailing evidence link. `headline` puts what follows
-// the figure in the secondary ink.
-function shapedInline(text,headline=false){
+// The rows behind a receipt (issue #142): each step of the trace names the table and filter it read (`source`,
+// datapages.py), and each row it cites its own; the link opens them in the data browser, in a new tab so the card
+// thread stays. It carries no text of its own (style.css draws "rows ↗", aria-label names it), so what the card reads
+// is still the answer's sections word for word (#65).
+function rowsHref(src,part=null,index=null){
+ if(!src||typeof src!=='object')return null;
+ const urls=part&&src.rows&&src.rows[part], url=urls&&index!==null&&typeof urls[index]==='string'?urls[index]:src.url;
+ return typeof url==='string'&&/^\/data\/[a-z_]+(\?|$)/.test(url)?url:null;
+}
+function rowsLink(href,label='The rows behind this figure, in the data browser'){ const a=node('a',undefined,'rows-link'); a.href=href; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.setAttribute('aria-label',label); a.title=label; return a; }
+// The rows behind paragraph i of a card (#151 review). A section the card shows as the server wrote it, in its place,
+// takes the server's own receipt for it (result.receipts: the rows that hold its bold figure). A line the visitor's rates
+// rewrote (Money.repriceSections re-ranks a money tool's lines and renumbers "row N" to the re-ranked rows) takes the
+// rows of the row it now cites, mapped back to the server's order through the re-priced result's byIndex; a line the
+// rates only moved keeps the receipt of the server's line with the same text. Otherwise the cited step's rows.
+function receiptHref(rec,p,i){
+ const r=rec&&rec.result; if(!r||typeof p!=='string')return null;
+ const sections=Array.isArray(r.sections)?r.sections:[], receipts=Array.isArray(r.receipts)&&r.receipts.length===sections.length?r.receipts:null;
+ if(receipts&&sections[i]===p)return rowsHref(receipts[i]);
+ const ref=SHAPE_REF.exec(p), trace=Array.isArray(r.trace)?r.trace:null, n=ref?Number(ref[1]):0, step=trace&&trace[n-1];
+ if(!ref||!step)return null;
+ const view=rec.view&&rec.view.repriced&&rec.view.of===r&&rec.view.result, now=view&&Array.isArray(view.trace)?view.trace[n-1]:null, data=now&&now.data;
+ let index=ref[3]===undefined?null:Number(ref[3]);
+ if(index!==null&&ref[2]==='row'&&data&&Array.isArray(data.byIndex)&&Array.isArray(data.rows)){
+  index=data.byIndex.indexOf(data.rows[index]); if(index<0)return null;   // the re-ranked row's place in the server's rows
+  return rowsHref(step.source,'row',index);
+ }
+ const same=sections.indexOf(p);
+ if(receipts&&same>=0&&sections.lastIndexOf(p)===same)return rowsHref(receipts[same]);
+ return rowsHref(step.source,ref[2]||null,index);
+}
+// One section's inline content: text spans, the bold figure, the trailing evidence link and the link to its rows
+// (`href`, receiptHref). `headline` puts what follows the figure in the secondary ink.
+function shapedInline(text,headline=false,href=null){
  const out=[], ref=SHAPE_REF.exec(text); let rest=ref?text.slice(0,ref.index):text, last=0, after=false;
  for(const m of rest.matchAll(/\*\*([^*]+)\*\*/g)){ if(m.index>last)out.push(node('span',rest.slice(last,m.index))); out.push(node('strong',m[1],'figure')); last=m.index+m[0].length; after=true; }
  if(last<rest.length)out.push(node('span',rest.slice(last),headline&&after?'clause':undefined));
- if(ref){ out.push(node('span',' ')); out.push(refLink(ref[0].trim(),Number(ref[1]))); }
+ if(ref){
+  out.push(node('span',' ')); out.push(refLink(ref[0].trim(),Number(ref[1])));
+  if(href)out.push(rowsLink(href));
+ }
  return out;
 }
 // Three to five findings per card (#75): past the fifth bullet of the card's finding lists the rest fold under one
@@ -89,10 +123,10 @@ function message(label, paragraphs, cls='', rec=null) {
   if(p===LOOK_LABEL&&next&&next.startsWith('- ')){ list=null; look=node('ul',undefined,'look-list'); return; }   // where to look: under the charts
   if(look&&p.startsWith('- ')){ look.append(lookItem(p.slice(2),rec)); if(!looks.includes(look))looks.push(look); return; }
   look=null;
-  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2)));list.append(li); return; }
+  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2),false,receiptHref(rec,p,i)));list.append(li); return; }
   list=null;
   if(shapeLabel(p,next)){ e.append(node('p',p,'label')); return; }
-  if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true)); e.append(h); return; }
+  if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true,receiptHref(rec,p,i))); e.append(h); return; }
   if(lists.length&&!STAYS.test(p)){ context.push(node('p',p,'context-line')); return; }
   e.append(node('p',p));
  });
@@ -712,6 +746,9 @@ function queryBox(entry,i){
  const foot=node('div',undefined,'query-foot');
  if(sql){const copy=node('button','Copy SQL','secondary copy');copy.type='button';copy.dataset.copy=sql;copy.addEventListener('click',()=>copyText(sql,copy));foot.append(copy);}
  const back=node('a','What came back ↓','came-back');back.href=`#step-${i}`;back.title='The full result of this step, below the charts';back.addEventListener('click',()=>revealStep(i));foot.append(back);
+ const rows=rowsHref(entry.source);   // the table and filter this step read, in the data browser (#142)
+ if(rows){ const a=node('a',`Rows: ${entry.source.table} ↗`,'came-back rows-step'); a.href=rows; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.title='The rows this query read, with their schema'; foot.append(a); }
+ for(const more of (rows&&Array.isArray(entry.source.also)?entry.source.also:[])){ const href=rowsHref(more); if(!href)continue; const a=node('a',`${more.label==='previous window'?'Previous window':'Also'}: ${more.table} ↗`,'came-back rows-step'); a.href=href; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.title=`The rows this query also read: ${more.label}`; foot.append(a); }   // the comparison window, the shift record of the notes
  d.append(foot);
  return d;
 }

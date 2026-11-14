@@ -182,7 +182,8 @@ def test_run_all_scores_the_whole_set_once_a_minute(running, monkeypatch):
     no_model(monkeypatch)
     status, result = run(running, {'all': True})
     assert status == 200 and result['total'] == HISTORY[-1]['cases'] == len(result['rows'])
-    assert result['failed'] == 0 and result['passed'] + result['skipped'] == result['total'] and result['model_called'] is False
+    failed = [(row['id'], row['ms'], row['failures']) for row in result['rows'] if row['outcome'] == 'fail']   # name a failing case, not a count
+    assert result['failed'] == 0 and result['passed'] + result['skipped'] == result['total'] and result['model_called'] is False, failed
     assert result['cached'] is False and result['latency_ms']['p50'] is not None
     assert len({row['id'] for row in result['rows']}) == result['total']
     status, again = run(running, {'all': True})

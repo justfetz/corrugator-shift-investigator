@@ -77,6 +77,14 @@ def test_prebuilt_store_is_identical_to_a_generated_one(folder, generated):
         for table in (*TABLES, "shift_kpis"):   # shift_kpis: built at image build, loaded, never recomputed (#34)
             assert _rows(store, table) == _rows(generated, table), table
         assert store._db.execute("SELECT count(*) FROM shift_kpis").fetchone()[0] == 2 * len(store.production_days) * 3
+        # the data browser pages by rowid (issue #142): the prebuilt load keeps the order the store wrote, row for row,
+        # so a page is the same rows on the image as on a generated store (tests/test_datapages.py holds that order)
+        for table in (*TABLES, "shift_kpis"):
+            written = f"SELECT * FROM {table} ORDER BY rowid"
+            assert store._db.execute(written).fetchall() == generated._db.execute(written).fetchall(), table
+        from investigator import datapages
+        for table, query in (("stops", "page=2"), ("rejects", "family=warp&page=3"), ("setups", "crew=Crew%20A")):
+            assert datapages.page(store, table, query)["rows"] == datapages.page(generated, table, query)["rows"], (table, query)
         # the per-day objects drive the Analysis: an answer must be byte-identical either way
         day = "2026-09-14"
         a, b = store.day_analysis(day), generated.day_analysis(day)
