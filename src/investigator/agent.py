@@ -1677,7 +1677,8 @@ def parse_request(text, current, store=None):
     the model's own terms. A complete reading (every content word used) answers with measure=semantic when the hand router
     refused the question or answers something else; a reading that asks a split, a ranking, a share or a ratio the hand
     route drops refuses with at most three questions that answer; otherwise the hand route, or its refusal, stands.
-    The investigations (WHY_ASK) are never read by it."""
+    The investigations (WHY_ASK) are never read by it. `store` gives the parser the dimension values (the process's default
+    store when None; False for a single-day fixture, which no semantic query can read: the hand router alone)."""
     from . import semantic_parse
     request, refused = None, None
     try:
@@ -2038,7 +2039,8 @@ class Agent:
             raise ValueError('Enter a question of 1-2000 characters')
         with self.guard:
             if request is None:
-                request = parse_request(text, context, self.store) if isinstance(self.planner, OfflinePlanner) else {
+                # a single-day fixture has no record store, so no semantic answer could run: the hand router alone (store False)
+                request = parse_request(text, context, self.store if self.store is not None else False) if isinstance(self.planner, OfflinePlanner) else {
                     'intent': 'model', 'shifts': [context.shift], 'kind': None,
                     'group_by': 'reason', 'want_chart': True, 'asked': asked_for(text)}
             allowed_shifts, period = self._enter(context)

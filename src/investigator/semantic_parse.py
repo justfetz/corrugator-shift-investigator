@@ -954,8 +954,8 @@ def route(text, context, store, request, refused):
     """What the offline router does with a question the hand router answered (`request`) or refused (`refused`): a semantic
     request when the reading is complete and the hand route does not answer it, a ValueError (the reading's refusal) when the
     question asks a structure the hand route drops, else None (the hand route, or its refusal, stands)."""
-    if not isinstance(text, str) or not text.strip() or re.search(agent.WHY_ASK, agent.correct_typos(text.lower())):
-        return None
+    if store is False or not isinstance(text, str) or not text.strip() or re.search(agent.WHY_ASK, agent.correct_typos(text.lower())):
+        return None   # store False: a single-day fixture, which no semantic query can read
     reading = read(text, context, store)
     if reading.complete:
         if refused is not None or request is None or not covers(request, reading, context):
