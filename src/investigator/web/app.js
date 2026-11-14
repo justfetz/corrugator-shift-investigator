@@ -166,6 +166,40 @@ function dayRejection(value, days){
  return null;
 }
 function weekOf(d){ const monday=addDays(d,-((d.getUTCDay()+6)%7)); return [monday,addDays(monday,4)]; }
+// ---- Windows (issue #137): under Week, Month or 4-4-5 the day field is greyed, its label names the window and ‹ › step
+// by it. The 4-4-5 calendar is record_store.fiscal_period's: 52-week years of quarters of 4, 4 and 5 weeks, year 0 starting
+// on FISCAL_START, the prior year 52 weeks earlier (tests/test_landing.py holds the two to one anchor).
+const FISCAL_START='2026-08-03', FISCAL_WEEKS=[4,4,5];
+function fiscalPeriod(d){
+ const weeks=Math.floor(Math.round((d-utc(FISCAL_START))/86400000)/7), year=Math.floor(weeks/52), week=weeks-52*year, yearStart=addDays(utc(FISCAL_START),364*year);
+ for(let n=0,first=0;n<12;first+=FISCAL_WEEKS[n%3],n++){ const len=FISCAL_WEEKS[n%3]; if(week<first+len){ const start=addDays(yearStart,7*first); return {start,end:addDays(start,7*len-1),year,number:n+1,yearStart}; } }
+ return null;
+}
+// The calendar dates [first, last] of the window of `period` that holds the date d.
+function periodBounds(d,period){
+ if(period==='week'){ const monday=weekOf(d)[0]; return [monday,addDays(monday,6)]; }
+ if(period==='month')return [new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),1)),new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0))];
+ if(period==='accounting'){ const f=fiscalPeriod(d); return [f.start,f.end]; }
+ return [d,d];
+}
+// The day field's label under a window: "Week of 2026-09-14", "September 2026", "4-4-5 period 2"; null under Day.
+function periodName(day,period){
+ const d=utc(day); if(Number.isNaN(d.getTime()))return null;
+ if(period==='week')return `Week of ${iso(weekOf(d)[0])}`;
+ if(period==='month')return `${MONTHS_LONG[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+ if(period==='accounting'){ const f=fiscalPeriod(d); return `4-4-5 period ${f.number}`+(f.year===0?'':f.year===-1?' of the prior year':` of the year starting ${iso(f.yearStart)}`); }
+ return null;
+}
+// Where ‹ or › moves the anchor under a window: the first production day of the next window that holds one, or of the
+// previous one; null at the ends of the store. The address then names that window by its first production day.
+function periodStep(direction){
+ const days=storeDays(), period=$('period').value, d=utc($('day').value); if(!days||period==='day'||Number.isNaN(d.getTime()))return null;
+ const [first,last]=periodBounds(d,period).map(iso);
+ if(direction>0)return days.find(x=>x>last)||null;
+ const before=days.filter(x=>x<first); if(!before.length)return null;
+ const start=iso(periodBounds(utc(before[before.length-1]),period)[0]);
+ return days.find(x=>x>=start)||null;
+}
 function spanText(a,b){ return a.getUTCMonth()===b.getUTCMonth()?`Mon ${a.getUTCDate()} – Fri ${b.getUTCDate()} ${MONTHS[b.getUTCMonth()]} ${b.getUTCFullYear()}`:`Mon ${dayText(a,{weekday:false,year:false})} – Fri ${dayText(b,{weekday:false})}`; }
 // The plain-English read-back of the selected scope: window, shift, hours and the comparison base.
 function scopeSentence(state){
@@ -308,6 +342,7 @@ function dayChanged(){
 }
 function stepDay(direction){
  const days=storeDays(); if(!days)return;
+ if($('period').value!=='day'){ const target=periodStep(direction); if(target){ $('day').value=target; dayChanged(); } return; }   // a window steps by the window (#137)
  const index=days.indexOf($('day').value); const next=index<0?(direction>0?0:days.length-1):index+direction;
  if(next<0||next>=days.length)return;
  $('day').value=days[next]; dayChanged();
@@ -318,7 +353,14 @@ function updateScope(){
  $('scope-help').textContent=scopeSentence(currentScope());
  $('mode').disabled=!!(config&&config.public);syncKeyLabel();syncSegments();   // public: the model is Ask the analyst, never a mode (#23)
  const days=storeDays(), index=days?days.indexOf($('day').value):-1;
- $('day-prev').disabled=!days||index<=0; $('day-next').disabled=!days||index<0||index>=days.length-1;   // the ends of the store, never a busy state (#63)
+ if(ranged){ $('day-prev').disabled=!periodStep(-1); $('day-next').disabled=!periodStep(1); }
+ else { $('day-prev').disabled=!days||index<=0; $('day-next').disabled=!days||index<0||index>=days.length-1; }   // the ends of the store, never a busy state (#63)
+ // Under a window the answer covers the whole window, so the day is greyed and out of the tab order, and its label
+ // names the window; Day gives the field back (#137).
+ const name=ranged?periodName($('day').value,$('period').value):null, step=ranged?PERIOD_NOUN[$('period').value]||'period':'production day';
+ $('day-label').textContent=name||'Production day'; $('day-label').className=name?'field-label period-name':'field-label';
+ $('day').disabled=ranged; $('day').setAttribute('aria-disabled',String(ranged)); $('day').setAttribute('tabindex',ranged?'-1':'0');
+ for(const [id,word] of [['day-prev','Previous'],['day-next','Next']]){ $(id).setAttribute('aria-label',`${word} ${step}`); $(id).setAttribute('title',`${word} ${step}`); }
  $('mode-badge').textContent=live?`Synthetic data / ${provider().name} selected`:'Synthetic data / Offline planner';
  const noun=PERIOD_NOUN[$('period').value]||'period';
  if(ranged)$('mode-help').textContent=`Ask about the selected ${noun}: KPIs against the previous one, the downtime Pareto, waste, stops per day, trends, totals by grade, paper consumed, over/under-run, the speed opportunity, what drove speed.${live?' '+liveHelp():' No model calls or API charges.'} Period report builds the output heatmap, daily matrix, recurring downtime and notes without a model.`;
@@ -1806,12 +1848,16 @@ function applyPublicMode(){
  }
  $('mode-badge').textContent=modes.length?'Synthetic data / Public demo · model available':'Synthetic data / Public demo';
 }
+// Where the page lands (issue #137): the server's landing (`/` redirects there; the store's last production day, shift 1,
+// Day window), else the last day of the store, shift 1. The page holds no default day of its own.
+function landingUrl(){ const l=config&&config.landing; return l&&typeof l.url==='string'&&CANONICAL.test(l.url)?l.url:`/corr/${machine()}/day/${lastStoreDay()}/shift/1`; }
 async function init(){
+ const early=currentAddress(); if(early&&CANONICAL.test(pathOf(early)))applyUrl(early);   // the rail shows the address's scope while the config loads
  renderSegments();renderQuestionChips();renderCard();renderUnits();
  try{const response=await fetch('/api/config');if(!response.ok)throw new Error('Workbench unavailable');config=await response.json();$('day').min=config.days[0];$('day').max=config.days[config.days.length-1];
  // The store is a rolling year (issue #35): the footer names the window this server holds.
  $('dataset-range').textContent=`${config.days.length} synthetic production days (Mon–Fri, ${dayText(utc(config.days[0]),{weekday:false})} – ${dayText(utc(config.days[config.days.length-1]),{weekday:false})})`;
- if(!config.days.includes($('day').value))$('day').value=config.days.includes('2026-09-14')?'2026-09-14':config.days[config.days.length-1];acceptedDay=$('day').value;
+ if(!config.days.includes($('day').value))applyUrl(landingUrl());acceptedDay=$('day').value;   // a fresh page holds no day: the landing's day, shift and Day window
  applyPublicMode();loadMoney(currentAddress());updateScope();
  // The golden-set score of the last tracked run, where people look: one line linking to /evals (issue #26).
  if(questionLog())$('log-foot').hidden=false;   // the question log's disclosure (#125)
@@ -1819,7 +1865,7 @@ async function init(){
  const address=currentAddress(), addressable=!!(address&&CANONICAL.test(pathOf(address))), cards=storedThread();
  let addressed=-1; if(addressable)for(let i=cards.length-1;i>=0;i--)if(sameView(cards[i].url,address)){addressed=i;break;}
  replayThread(cards.filter((c,i)=>i!==addressed));   // the thread above the addressed card comes back first, in its order (#86)
- if(!(addressable&&await restore(address,addressed>=0?cards[addressed]:null))){pushAddress(scopeUrl(),true);primeKpis();}
+ if(!(addressable&&await restore(address,addressed>=0?cards[addressed]:null))){pushAddress(scopeUrl(),true);primeKpis();}   // an address the controls cannot read: the controls' own scope, the landing's on a fresh page (#137)
  const context=document.modelContext;
  if(context?.registerTool){const lifecycle=new AbortController();window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});await context.registerTool({name:'investigate_selected_shift',description:'Run an offline investigation for the selected day and update the visible answer, charts and trace.',inputSchema:{type:'object',properties:{question:{type:'string',maxLength:2000}},required:['question'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute:async input=>{if($('mode').value!=='offline')throw new Error('Browser question tool is available only for offline investigations');if(!input||typeof input.question!=='string'||Object.keys(input).some(k=>k!=='question')||input.question.length>2000)throw new Error('Invalid question');$('question').value=input.question;fitQuestion();return ask(input.question,{mode:'offline'});}},{signal:lifecycle.signal});}
  }catch(error){$('status').textContent=error.message;}
