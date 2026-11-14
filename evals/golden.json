@@ -3675,20 +3675,8 @@
     "shifts": [
      2
     ],
-    "shape": {
-     "headline_match": "^\\*\\*[0-9.]+%\\*\\* of grade target · [0-9.,]+ ft/min including downtime",
-     "bullets": [
-      3,
-      5
-     ],
-     "look": [
-      2,
-      3
-     ]
-    },
     "sections_match": [
-     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest of [0-9]+ reasons · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row [0-9]+\\)$",
-     "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the slowest of [0-9]+ runs \\(query 3 · row [0-9]+\\)$"
+     "^\\*\\*[0-9.]+%\\*\\* of grade target · [0-9.,]+ ft/min including downtime"
     ],
     "sections_not_match": "ft/min including downtime; .* lineal ft\\. Maintenance"
    }
@@ -13074,6 +13062,549 @@
    "period": "month",
    "expect": {
     "raises": "^No customer 'C9999' in the records; the values are: C000, C001, .*, C039, C040$"
+   }
+  },
+  {
+   "id": "allow-stops-under-2-minutes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops under 2 minutes this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (subsets): answered 131 stops, every stop; the records do not split stops by length.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-brief-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many brief stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (subsets): answered 131 stops, every stop.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-micro-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many micro stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (subsets): answered 131 stops, every stop.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-major-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many major stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (subsets): answered 131 stops, every stop.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-stops-before-noon-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops before noon this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (subsets): answered 131 stops, every stop of the week at any hour.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-proportion-of-stops-at-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What proportion of stops were at the stacker this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (shares): answered 39 stops at the stacker, a count, for a share.",
+   "expect": {
+    "raises": "asks for a share of a whole"
+   }
+  },
+  {
+   "id": "allow-stop-rate-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stop rate this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (rates): answered 131 stops, a count, for a rate.",
+   "expect": {
+    "raises": "asks for a grouping or a rate"
+   }
+  },
+  {
+   "id": "allow-stop-distribution-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stop distribution this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (distributions): answered 131 stops, the total.",
+   "expect": {
+    "raises": "asks for a grouping or a rate"
+   }
+  },
+  {
+   "id": "allow-90th-percentile-stop-length-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "90th percentile stop length this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (statistics): answered 354.9 minutes, the week's downtime, for a percentile of one stop's length.",
+   "expect": {
+    "raises": "asks for a statistic"
+   }
+  },
+  {
+   "id": "allow-minimum-stops-in-a-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Minimum stops in a day this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (minimum in a day): answered the busiest day, 36 stops, for the quietest.",
+   "expect": {
+    "raises": "asks for a statistic"
+   }
+  },
+  {
+   "id": "allow-fewest-stops-in-a-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What was the fewest stops in a day this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (fewest in a day): answered the busiest day, 36 stops, for the quietest.",
+   "expect": {
+    "raises": "asks for a ranking"
+   }
+  },
+  {
+   "id": "allow-long-stops-each-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many long stops each day this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (long stops each day): answered every stop of each production day.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-share-of-stops-each-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Share of stops each day this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (share each day): answered each production day's count, for a share.",
+   "expect": {
+    "raises": "asks for a share of a whole"
+   }
+  },
+  {
+   "id": "allow-an-unread-word-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many unexpected stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (any other content word): an adjective the route does not read refuses, naming at most three questions that answer.",
+   "expect": {
+    "raises": "is a word one quantity does not read"
+   }
+  },
+  {
+   "id": "allow-stops-at-the-slitter-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops at the slitter this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops; 'the slitter' alone is no place (the slitter scorer is), so no filter applied.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-stops-at-the-slitter-scorer-stays-answered",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops at the slitter scorer this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2 (guard): the place by its name is applied.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&place=slitter-scorer",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* at Slitter/scorer · "
+    }
+   }
+  },
+  {
+   "id": "allow-planned-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many planned stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops, every stop.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-unplanned-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many unplanned stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops, every stop.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-scheduled-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many scheduled stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops, every stop.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-minutes-of-planned-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes of planned downtime this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 354.9 minutes, every minute; planned maintenance is the reason that names it.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-planned-maintenance-stops-stay-answered",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many planned maintenance stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2 (guard): the reason by its name is applied.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=planned-maintenance",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Planned maintenance · "
+    }
+   }
+  },
+  {
+   "id": "allow-minutes-per-stop-at-the-dry-end-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Minutes per stop at the dry end this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 2.71 minutes per stop, every stop's.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-minutes-per-stop-for-crew-a-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Minutes per stop for crew A this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 2.71 minutes per stop, every stop's; the records name no crew on a stop.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-downtime-per-day-at-the-dry-end-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime per day at the dry end this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered each production day's downtime, every stop's.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "why-downtime-high-every-day-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Why was downtime high every day this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 3: answered 160.93 minutes, the busiest day's downtime; a why question keeps main's answer, the review, on the shift control.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "why-what-caused-the-stops-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What caused the stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 3: answered 131 stops (main: the KPI tiles); what caused the stops is the review of their reasons, as 'what drove downtime' is.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "why-so-many-stops-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Why were there so many stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 3: a why question about stops is the review of their reasons, never a count.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "why-what-caused-the-stops-each-day-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What caused all the stops each day this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 3: answered the stops of each production day; what caused them is the review.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "why-what-drove-downtime-stays-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What drove downtime this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 3 (guard): main's answer, on the shift control (an investigation keeps it: the owner's scope ruling).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "why-where-did-downtime-come-from-stays-the-place-pareto",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Where did the downtime come from this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 3 (guard): main's answer, the Pareto by place, on the shift control.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&by=place",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+ min\\*\\* at .+, the largest of [0-9]+ places · "
+    ]
+   }
+  },
+  {
+   "id": "allow-stops-for-order-changes-are-the-order-change-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops for order changes this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 571 order changes, the setups an order change started.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=order-change",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Order change · "
+    }
+   }
+  },
+  {
+   "id": "allow-stops-due-to-order-changes-are-the-order-change-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops due to order changes this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 571 order changes.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=order-change",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Order change · "
+    }
+   }
+  },
+  {
+   "id": "allow-stops-that-were-order-changes-are-the-order-change-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops were order changes this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 571 order changes.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=order-change",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Order change · "
+    }
+   }
+  },
+  {
+   "id": "allow-stops-at-the-wet-end-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops at the wet end this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 183 paper changes; the wet end is no stop place.",
+   "expect": {
+    "raises": "is not a stop reason, place or kind the records name"
+   }
+  },
+  {
+   "id": "allow-stops-during-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during setups this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 577 setups.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-stops-after-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops after setups this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 577 setups.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-stops-between-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops between setups this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 577 setups.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "allow-ratio-of-stops-to-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Ratio of stops to setups this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 577 setups.",
+   "expect": {
+    "raises": "asks for a grouping or a rate"
+   }
+  },
+  {
+   "id": "allow-how-long-stops-last-on-average-is-minutes-per-stop",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How long did our stops last on average this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 6: refused; how long a stop lasts on average is minutes per stop.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "allow-minutes-the-average-stop-lasted-is-minutes-per-stop",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes did the average stop last this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 6: refused; the minutes of the average stop are minutes per stop.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "allow-sheets-at-the-knife-are-every-sheet",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many sheets at the knife this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 6: refused; sheets are counted at the knife, so this is every sheet cut (the review allowed the total or a refusal).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=sheets",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ sheets\\*\\* "
+    }
+   }
+  },
+  {
+   "id": "allow-last-7-days-is-a-rolling-window",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops in the last 7 days?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 6: refused with \"'days' asks for a grouping\"; the reason is that the records keep no rolling window.",
+   "expect": {
+    "raises": "rolling window"
+   }
+  },
+  {
+   "id": "scope-how-much-downtime-this-week-reads-every-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much downtime this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 5, the owner's scope ruling: a question that asks for a number and names no shift answers all shifts; 'how much downtime this week' reads what 'total downtime this week' reads (shift 2 at ff8ad77).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "scope-feet-per-minute-this-week-reads-every-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Feet per minute this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 5, the owner's scope ruling: speed alike; 'feet per minute this week' reads what 'how many feet per minute this week' reads (shift 2 at ff8ad77).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ ft/min\\*\\* "
+    ]
+   }
+  },
+  {
+   "id": "scope-what-percent-downtime-reads-the-selected-day",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What percent downtime?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 5, the owner's scope ruling: a question that names no day reads the selected day, the downtime review too; this retires #101's previous production day (2026-09-11 at ff8ad77).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "scope-why-slow-this-week-keeps-the-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Why was this shift slow this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 5 (guard), the owner's scope ruling: the shift control still scopes the investigation questions and 'this shift'.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
+    "status": "complete"
+   }
+  },
+  {
+   "id": "scope-an-ask-word-never-moves-the-day-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many feet per minute did we run?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 5, the owner's scope ruling: an ask word never changes the scope. 'Feet per minute' on Day reads the shift's own speed, so 'how many feet per minute' does too; at ff8ad77 the ask word moved it to all shifts, whose day answer is the three shifts compared, led by the slowest: a different question.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ ft/min\\*\\* including downtime · "
+    ]
    }
   }
  ]
