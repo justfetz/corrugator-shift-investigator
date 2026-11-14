@@ -72,6 +72,8 @@ DIMENSION_FIRST = ('kind',)
 ASK = ((r"\bhow\s+often\b", 'count'), (r"\bhow\s+many\b", None), (r"\bnumber\s+of\b", None), (r"\bcount\s+of\b", None),
        (r"\bhow\s+long\b", 'min'), (r"\bhow\s+much\s+time\b", 'min'), (r"\bhow\s+much\b", None), (r"\btotal\b", None))
 SHARE = r"\b(?:what\s+)?(?:percent(?:age)?|%|share|proportion|fraction|portion)\s+of\b|\bhow\s+much\s+of\b"
+PERCENT_OF_SHIFT = r"\b(?:what\s+)?(?:percent(?:age)?|%)\s+of\s+(?:the|this|our|my)\s+shift\b(?!\s*[1-3])"
+PERCENT_OF_SCHEDULED = r"\b(?:what\s+)?(?:percent(?:age)?|%)\s+of\s+(?:the\s+|our\s+)?(?:scheduled\s+(?:time|minutes)|shift\s+minutes)\b"
 # The verb after the measure of a share: the value after it is the one whose share is asked ("what percent of maintenance stops
 # were at the stacker": the stacker's share of the maintenance stops; Codex on PR #155), a value before it narrows the whole
 COPULA = ('was', 'were', 'is', 'are')
@@ -113,6 +115,7 @@ class Reading:
     measure: str = None
     window_words: str = ''
     shares: bool = False   # a share of each row of a split ("percent of stops by kind"): the card leads with the largest share
+    versus: list = None    # two values of the split compared ("32-C and 26-C", "shift 1 versus shift 2"): the card leads with both
 
     @property
     def complete(self):
@@ -321,6 +324,11 @@ def _read(reading, text, context, store, mdl):
     if read_words.get('words'):
         lower = lower.replace(read_words['words'], agent.READ_AS[read_words['period']])
     lower = re.sub(r"(\d),(\d{3})\b", r"\1\2", lower)   # "1,000 feet"
+    # a percent of the shift or of the scheduled time is the measure's percent of the scheduled minutes (downtime %), never a share
+    # of the downtime (the review of PR #155: "what percent of the shift was maintenance downtime" is 1.80% of shift 2, the hand
+    # router's answer, never maintenance's share of the downtime); "the shift" is still the selected one
+    lower = re.sub(PERCENT_OF_SHIFT, ' percent this shift ', lower)
+    lower = re.sub(PERCENT_OF_SCHEDULED, ' percent ', lower)
     used = reading.used
     # ---- the window: the scope's, or the one the question names
     period, anchor, month = getattr(context, 'period', 'day') or 'day', context.production_day, None
@@ -778,10 +786,13 @@ def _assign(reading, items, mdl, store, a, context):
         vals = list(dict.fromkeys(vals))
         if len(vals) > 1:
             if 'compare' in reading.cues or any(it.kind == 'and' for it in items):
-                # two values of one dimension compared ("32-C and 26-C"): the split by it, every value listed
+                # two values of one dimension compared ("32-C and 26-C"): the split by it, the card led by the two (the review of PR
+                # #155: never by the total of every value), every other value after them
                 if dim not in group_by:
                     group_by.append(dim)
                 reading.cues.add('compare')
+                if len(vals) == 2:
+                    reading.versus = vals
                 joined = True
                 continue
             raise Refused(f"{' and '.join(str(v) for v in vals)} are two values of one {_dim_word(mdl, dim)}: ask one, or split by it",
@@ -824,6 +835,8 @@ def _assign(reading, items, mdl, store, a, context):
         if 'compare' in reading.cues or any(it.kind == 'and' for it in items):
             if 'shift' not in group_by:
                 group_by.append('shift')
+            if len(a['shifts']) == 2 and reading.versus is None:
+                reading.versus = list(a['shifts'])   # "scrap on shift 1 versus shift 2": the two shifts lead
             joined = True
         else:
             raise Refused('Two shifts named: compare them ("compare shift 1 and shift 2 stops"), or ask one shift at a time')
@@ -906,6 +919,10 @@ def _assign(reading, items, mdl, store, a, context):
                                    compare=a['compare'], order=order, limit=limit, shift=shift, share=share_value)
     reading.query = semantic.validate(query, store, mdl)
     reading.share = reading.query.share
+    if reading.versus is not None and (len(reading.query.group_by) != 1 or reading.shares or reading.share is not None or reading.rank):
+        reading.versus = None   # the two lead a split by them alone; a ranking or a share leads with its own row
+    if reading.versus is not None and reading.query.group_by != ['shift']:
+        reading.versus = [semantic.resolve_value(reading.query.group_by[0], v, store, mdl) for v in reading.versus]
     reading.used += [(it.words, it.role) for it in items if it.role]
 
 
@@ -968,6 +985,8 @@ def request_of(reading):
         lead['rank'] = reading.rank
     if reading.shares:
         lead['shares'] = True
+    if reading.versus:
+        lead['versus'] = list(reading.versus)
     request = {'intent': 'semantic', 'shifts': [query.shift] if query.shift else [], 'kind': None, 'group_by': 'reason',
                'want_chart': bool(query.group_by), 'ranking_metrics': [], 'plan': [{'tool': semantic.TOOL, 'arguments': query.to_arguments()}]}
     if lead:
@@ -1066,7 +1085,8 @@ def covers(request, reading, context=None):
         return q.measure in SPEED_FAMILY and set(group_by) <= {'shift'} and not filters and share is None
     if intent == 'downtime':   # the day's downtime breakdown, per shift, by reason, place or kind
         return (q.measure in DOWNTIME_FAMILY + ('stops',) and group_by in ([], [request.get('group_by')]) and rank in (None, 'most')
-                and set(filters) <= {'kind'} and filters.get('kind') in (None, request.get('kind')) and share is None)
+                and set(filters) <= {'kind'} and (filters.get('kind') is None or str(filters['kind']).lower() == str(request.get('kind') or '').lower())
+                and share is None)
     return not (group_by or rank or share is not None or filters)
 
 

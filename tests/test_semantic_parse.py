@@ -226,18 +226,76 @@ def test_a_tie_names_every_winner_and_a_fewest_counts_the_values_with_no_records
 
 
 def test_planned_maintenance_and_external_downtime_never_lead_a_ranking_of_stops(store):
-    """The review of PR #155, item 7 (the owner, docs/METRICS.md): a ranking of stop reasons or kinds leads with the largest (or
-    fewest) unplanned one and says so; planned maintenance and the power outage follow it, citing their own rows."""
+    """The review of PR #155, item 7 (the owner, docs/METRICS.md): a ranking of stop reasons or kinds never leads with planned
+    maintenance or external downtime. Its second review: the line names the rows it sets apart ("leaving out Planned maintenance and
+    Power outage"), never "the unplanned" (a power outage is unplanned), and lists them after the ranking with their own figures, so
+    the claim is true over every row it does not name; the runner holds it to that."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'evals'))
+    from run import ranked_failures
     for question in ('Top 3 downtime reasons this week', 'Least common stop reason this week', 'Which reason had the fewest stops this month?',
-                     'Most common downtime reason'):
+                     'Which kind had the fewest stops this week?', 'Most common downtime reason'):
         request, asked, result = answer(store, question)
-        head = result['sections'][0]
-        assert not re.match(r'^(Planned maintenance|Power outage|External)', head) and ' of the unplanned stop reasons' in head, head
-        rows = result['trace'][0]['data']['rows']
-        bullets = [s for s in result['sections'] if s.startswith('- ') and '(query 1 · row ' in s]
-        apart = [i for i, r in enumerate(rows) if r['lever'] in ('schedule-driven', 'external')]
+        head, rows = result['sections'][0], result['trace'][0]['data']['rows']
+        apart = sorted(r['label'] for r in rows if r['lever'] in ('schedule-driven', 'external'))
+        assert 'unplanned' not in head and not re.match(r'^(Planned maintenance|Power outage|External)', head), head
+        assert (f', leaving out {" and ".join(apart)}: **' in head) if apart else ('leaving out' not in head), (head, apart)
+        assert not ranked_failures([head], result['trace']), (question, ranked_failures([head], result['trace']))
         if apart:
-            assert all(any(b.startswith(f'- {rows[i]["label"]}:') for b in bullets[-len(apart):]) for i in apart), (question, bullets)
+            sections = result['sections']
+            at = sections.index('Left out of the ranking (planned maintenance and external downtime never lead)')
+            assert sorted(re.match(r'^- (.+?): \*\*', b)[1] for b in sections[at + 1:at + 1 + len(apart)]) == apart, sections[at:at + 4]
+    # the wording the review caught fails the runner: "the unplanned" leaves out a power outage it never names
+    request, asked, result = answer(store, 'Least common stop reason this week')
+    head = result['sections'][0]
+    false = re.sub(r' this week, leaving out [^:]+:', ' of the unplanned stop reasons this week:', head)
+    assert false != head and any('Power outage' in f for f in ranked_failures([false], result['trace'])), false
+
+
+def test_two_values_compared_lead_with_both_and_keep_them_in_the_address(store):
+    """The second review of PR #155, item 4: "scrap on shift 1 versus shift 2" and "setups on 32-C and 26-C" led with the total of
+    every shift or grade. The card names both (the larger one's figure, cited), the two rows first, the others after them; the
+    address carries them (vs=), and the runner fails a comparison its rows contradict."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'evals'))
+    from run import ranked_failures
+    for question, scope, part, pattern in (
+            ('How much scrap on shift 1 versus shift 2?', 'day', '&by=shift&vs=1,2', r'^Shift [12] had more dry-end rejects than Shift [12]: \*\*'),
+            ('How many setups did we run on 32-C and 26-C last week?', 'shift', '&by=grade&vs=32-C,26-C', r'^(32-C|26-C) had more setups than (32-C|26-C) last week: \*\*'),
+            ('Compare shift 1 and shift 3 on downtime this week', 'shift', '&by=shift&vs=1,3', r'^Shift [13] had more downtime than Shift [13] this week: \*\*')):
+        request, asked, result = answer(store, question, scope=scope)
+        url = canonical_url(request, asked)
+        assert url.endswith(part), url
+        head, rows = result['sections'][0], result['trace'][0]['data']['rows']
+        assert re.match(pattern, head) and not ranked_failures([head], result['trace']), head
+        bullets = [s for s in result['sections'] if s.startswith('- ') and '(query 1 · row ' in s]
+        named = {r['label'] for r in rows if r['label'] in head}
+        assert len(named) == 2 and {re.match(r'^- (.+?): ', b)[1] for b in bullets[:2]} == named, (head, bullets[:3])
+        resolved = resolve_url(url, store)
+        assert resolved['request'].get('lead') == request.get('lead'), (resolved['request'].get('lead'), request.get('lead'))
+        swapped = re.sub(r'^(.+?) had more (.+?) than (.+?)( this week| last week)?: ', r'\3 had more \2 than \1\4: ', head)
+        assert ranked_failures([swapped], result['trace']), swapped
+    with pytest.raises(ValueError, match='vs= names two values'):
+        resolve_url('/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=shift&vs=1', store)
+
+
+def test_a_percent_of_the_shift_or_of_the_scheduled_time_is_never_a_share_of_the_downtime(store):
+    """The second review of PR #155, items 2 and 3: "what percent of the shift was maintenance downtime" answered maintenance's
+    share of the downtime, and "what percentage of scheduled time was operator downtime" was refused as two measures. A percent of
+    the shift or of the scheduled time is downtime as a percent of the scheduled minutes: the hand router's answers (main's) stand."""
+    for question, scope, url in (
+            ('What percent of the shift was maintenance downtime?', 'shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=maintenance'),
+            ('What percent of the shift was operator downtime?', 'shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=operator'),
+            ('What percentage of scheduled time was operator downtime this week?', 'shift', '/corr/1/day/2026-09-14?measure=review&window=week'),
+            ('Maintenance downtime as a percent of scheduled minutes this week', 'shift', '/corr/1/day/2026-09-14?measure=review&window=week'),
+            ('What percent of the shift were we down?', 'shift', '/corr/1/day/2026-09-14/shift/2?measure=semantic&m=downtime_pct')):
+        request, asked = route(question, Context(DAY, 2, scope=scope), store.production_days, store)
+        assert canonical_url(request, asked) == url, (question, canonical_url(request, asked))
+    r = reading(store, 'What percent of the shift was maintenance downtime?', scope='shift')
+    assert (r.query.measure, r.query.filters, r.query.shift, r.share) == ('downtime_pct', {'kind': 'Maintenance'}, 2, None)
+    assert reading(store, 'What percent of stops were at the stacker this week?').share == 'Stacker'   # a share of a split stays one
 
 
 def test_a_moved_window_keeps_its_own_words_on_the_card_and_its_dates_in_the_read_as_line(store):

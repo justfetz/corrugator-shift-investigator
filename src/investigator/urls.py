@@ -54,11 +54,12 @@ SEMANTIC_FILTERS = tuple(d for d in semantic.model().dimensions if semantic.mode
 # A question the semantic model's parser ranked or read as a share (issue #144) keeps it in its address: `rank=most|least` (the
 # card names the first row: "Shift 3 had the most setups this week"), `top=N` (the first N rows), `share=<value>` (the card opens
 # with that value's share of the total, by=<its dimension>; the query's `share` field, so its row is read whatever the limit) and
-# `share=each` (every row's share: the card opens with the largest).
+# `share=each` (every row's share: the card opens with the largest); `vs=<value>,<value>` two values of the split compared (the card
+# opens with both, the review of PR #155: "32-C and 26-C", "shift 1 versus shift 2").
 SEMANTIC_ORDERS = {'most': 'value', 'least': 'value_asc'}
 QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'lens', 'want',
-                'rates', 'corrupt', 'after', 'format', 'm', 'top', 'share', *(f for f in SEMANTIC_FILTERS if f != 'kind'), 'waste')
-PARAM_ORDER = ('measure', 'm', 'window', 'by', 'rank', 'top', 'share', 'kind', 'unit', 'metric', *(f for f in SEMANTIC_FILTERS if f != 'kind'),
+                'rates', 'corrupt', 'after', 'format', 'm', 'top', 'share', 'vs', *(f for f in SEMANTIC_FILTERS if f != 'kind'), 'waste')
+PARAM_ORDER = ('measure', 'm', 'window', 'by', 'rank', 'top', 'share', 'vs', 'kind', 'unit', 'metric', *(f for f in SEMANTIC_FILTERS if f != 'kind'),
                'waste', 'weeks', 'compare', 'against', 'shifts', 'lens', 'want', 'rates', 'corrupt', 'after')
 AGAINST = ('baseline', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; baseline is the default
 AGAINST_ALIASES = {'target': 'baseline'}   # before the owner's speed baseline (issue #101) the default was each grade's target
@@ -145,6 +146,8 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                 params.append(('share', _semantic_text(first['share'])))   # one value's share: the query's own field
             elif lead.get('shares'):
                 params.append(('share', 'each'))   # every row's share of the total (the review of PR #155)
+            if lead.get('versus') and not any(',' in _semantic_text(v) for v in lead['versus']):
+                params.append(('vs', ','.join(_semantic_text(v) for v in lead['versus'])))   # two values compared (the review of PR #155)
             params.extend((dim, _semantic_text(value)) for dim, value in first['filters'].items())
             if first.get('compare') == 'previous':
                 params.append(('compare', 'prev'))
@@ -306,7 +309,7 @@ def resolve_url(url, store, max_turns=4, depth=0):
                 raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
             raise
         request['asked'] = _wants(fields.get('want'))
-    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'rank', 'lens', 'm', 'top', 'share', *SEMANTIC_FILTERS, 'waste'):
+    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'rank', 'lens', 'm', 'top', 'share', 'vs', *SEMANTIC_FILTERS, 'waste'):
         if key in fields and key not in _used(measure, fields):
             hint = ''
             if key == 'compare':
@@ -361,7 +364,7 @@ def _used(measure, fields):
     if measure == 'quantity':
         return {'window', 'metric', 'reason', 'place', 'grade', 'waste'}
     if measure == 'semantic':
-        return {'m', 'by', 'window', 'compare', 'rank', 'top', 'share', *SEMANTIC_FILTERS}
+        return {'m', 'by', 'window', 'compare', 'rank', 'top', 'share', 'vs', *SEMANTIC_FILTERS}
     if measure in STORE_MEASURES:
         return {'window'}
     return set()
@@ -623,6 +626,13 @@ def _semantic(fields, context, window, shifts, store):
     query = semantic.validate(query, store)
     if lead.get('shares') and semantic.model().measures[query.measure]['agg'] not in semantic.ADDITIVE:
         raise ValueError('share=each reads each row of a single by= dimension as its share of the total, for a count or a sum')
+    if 'vs' in fields:   # two values of the split compared: the card leads with both (the review of PR #155)
+        values = [v for v in fields['vs'].split(',') if v.strip()]
+        if len(query.group_by) != 1 or len(values) != 2 or 'rank' in fields or 'share' in fields:
+            raise ValueError('vs= names two values of the single by= dimension, compared (vs=32-C,26-C), without rank= or share=')
+        lead['versus'] = [semantic.resolve_value(query.group_by[0], v, store) for v in values]
+        if lead['versus'][0] == lead['versus'][1]:
+            raise ValueError('vs= names two different values of the by= dimension')
     request = {'intent': 'semantic', 'shifts': [shift] if shift else [], 'kind': None, 'group_by': 'reason', 'want_chart': bool(query.group_by),
                'ranking_metrics': [], 'plan': [{'tool': semantic.TOOL, 'arguments': query.to_arguments()}]}
     if lead:

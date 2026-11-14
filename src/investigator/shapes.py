@@ -24,7 +24,7 @@ import re
 
 from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
 from .records import stop_label
-from .semantic import TOOL as SEMANTIC_TOOL
+from .semantic import TOOL as SEMANTIC_TOOL, _same as same_value
 
 LOOK = 'Where to look'
 # `(query 2 · row 0)`, `(query 3)`: the evidence a bullet or headline cites.
@@ -1828,13 +1828,21 @@ class SemanticAnswer:
             # the whole, with no figure of its own and no citation (a cited line carries its bold figure; this one is the envelope's total)
             total = REF.sub('', 'In all' + head[len(data['label']):].replace(f'**{bold}**', bold))
             head = led
-        order = list(range(len(data['rows'])))
-        if self.lead.get('rank'):
-            apart = self.apart(data)   # planned maintenance and external downtime follow the ranking of the unplanned rows
-            order = [i for i in order if i not in apart] + [i for i in order if i in apart]
+        order, apart, label = list(range(len(data['rows']))), [], None
+        named = self.named_rows(data)
+        if named:
+            # two values compared (the review of PR #155): the two named rows first, every other row after them, apart
+            apart, label = [i for i in order if i not in named], f'The other {self.dim_noun(data)}s, not compared'
+            order = list(named)
+        elif self.lead.get('rank') or self.lead.get('shares'):
+            # planned maintenance and external downtime are set apart from the ranking, listed after it with their own figures
+            apart = [i for i in order if i in self.apart(data)]
+            order, label = [i for i in order if i not in apart], 'Left out of the ranking (planned maintenance and external downtime never lead)'
         bullets = [self.row_line(result, i, data['rows'][i]) for i in order]
         if len(bullets) > SEMANTIC_FIRST:
             bullets = bullets[:SEMANTIC_FIRST] + ['The rest, in the same order'] + bullets[SEMANTIC_FIRST:]
+        if apart:
+            bullets += [label] + [self.row_line(result, i, data['rows'][i]) for i in apart]
         notes = [total] if total else []
         notes.append(self.read_as(data, wp))
         notes += [self.cut_note(data)] if data.get('cut_by') else []
@@ -1871,11 +1879,31 @@ class SemanticAnswer:
         return {i for i, r in enumerate(data['rows']) if r.get('lever') in ('schedule-driven', 'external') and r.get('lever') != data.get('lever')}
 
     @staticmethod
-    def names(labels):
-        """`A`, `A and B`, `A, B and C`; more than three tied: the first three `and others` (a tie said, never a count typed)."""
-        if len(labels) > 3:
+    def names(labels, every=False):
+        """`A`, `A and B`, `A, B and C`; more than three tied: the first three `and others` (a tie said, never a count typed);
+        `every` names them all (the rows a ranking leaves out)."""
+        if len(labels) > 3 and not every:
             return ', '.join(labels[:3]) + ' and others'
         return ', '.join(labels[:-1]) + ' and ' + labels[-1] if len(labels) > 1 else labels[0]
+
+    @staticmethod
+    def dim_noun(data):
+        return GROUP_NOUNS.get(data['group_by'][0], data['group_by'][0].replace('_', ' ')) if data['group_by'] else ''
+
+    def named_rows(self, data):
+        """The indices of the two values a question compared (`vs=`, the review of PR #155), in the order named; None unless both
+        are rows of the one split."""
+        versus = self.lead.get('versus')
+        if not versus or len(data['group_by']) != 1:
+            return None
+        dim = data['group_by'][0]
+        found = [next((i for i, r in enumerate(data['rows']) if same_value(v, r.get(dim))), None) for v in versus]
+        return None if None in found or len(set(found)) != len(found) else found
+
+    def leaving_out(self, data, apart):
+        """`, leaving out Planned maintenance and Power outage`: the rows a ranking of stops set apart, named, so the winner's claim
+        holds over every row it does not name (the review of PR #155: "the unplanned" called a power outage planned)."""
+        return f', leaving out {self.names(sorted(data["rows"][i]["label"] for i in apart), every=True)}' if apart else ''
 
     def led_head(self, result, where, wp, unit):
         """The headline of a ranked question or a share (issue #144), citing the row it names: `Shift 3 had the most setups this
@@ -1897,34 +1925,43 @@ class SemanticAnswer:
             return f'{row["label"]} was {f2(row["share_pct"])}% of the {noun}{where}{wp}: **{bold}**{rest} {ref(result, index)}'
         if not rows or data['window']['coverage'] != 'complete':
             return None
+        kind = 'ratio' if data['agg'] == 'ratio' else 'count' if data['unit'] in SEMANTIC_COUNTS else 'sum'
+        named = self.named_rows(data)
+        if named:
+            # two values compared: the line names both, the larger one's figure bold and cited (the other's is the next finding)
+            a, b = named
+            if rows[a].get('value') is None or rows[b].get('value') is None:
+                return None
+            if rows[a]['value'] == rows[b]['value']:
+                lead, claim = a, f'{rows[a]["label"]} and {rows[b]["label"]} had the same {noun}'
+            else:
+                lead, other = (a, b) if rows[a]['value'] > rows[b]['value'] else (b, a)
+                claim = f'{rows[lead]["label"]} had {"a higher" if kind == "ratio" else "more"} {noun} than {rows[other]["label"]}'
+            bold, rest = semantic_figure(rows[lead]['value'], self.unit_of(rows[lead], data['unit']))
+            return f'{claim}{where}{wp}: **{bold}**{rest}{band(rows[lead].get("band_text"))} {ref(result, lead)}'
         apart = self.apart(data)
         considered = [i for i in range(len(rows)) if i not in apart and rows[i].get('value') is not None]
         if not considered:
             return None
-        dim_noun = GROUP_NOUNS.get(data['group_by'][0], data['group_by'][0].replace('_', ' ')) if data['group_by'] else ''
         if self.lead.get('shares') and all(rows[i].get('share_pct') is not None for i in considered):
             index = max(considered, key=lambda i: rows[i]['value'])
             tied = [i for i in considered if rows[i]['value'] == rows[index]['value']]
-            # the unplanned said only when a planned or external row would have been the largest
-            unplanned = f' of the unplanned {dim_noun}s' if any(rows[i]['value'] > rows[index]['value'] for i in apart) else ''
+            # the rows left out are named only when one of them would have been the largest
+            left = self.leaving_out(data, apart) if any(rows[i]['value'] > rows[index]['value'] for i in apart) else ''
             verb = 'tied for' if len(tied) > 1 else 'was'
             bold, rest = semantic_figure(rows[index]['value'], self.unit_of(rows[index], data['unit']))
-            return (f'{self.names([rows[i]["label"] for i in tied])} {verb} the largest share of the {noun}{unplanned}{where}{wp}, '
+            return (f'{self.names([rows[i]["label"] for i in tied])} {verb} the largest share of the {noun}{where}{wp}{left}, '
                     f'{f2(rows[index]["share_pct"])}%: **{bold}**{rest} {ref(result, index)}')
         if not self.lead.get('rank'):
             return None
         index = considered[0]   # the rows are ranked by DuckDB (value, then the dimension's own order)
         tied = [i for i in considered if rows[i]['value'] == rows[index]['value']]
-        kind = 'ratio' if data['agg'] == 'ratio' else 'count' if data['unit'] in SEMANTIC_COUNTS else 'sum'
         word = {('most', 'count'): 'the most', ('least', 'count'): 'the fewest', ('most', 'sum'): 'the most', ('least', 'sum'): 'the least',
                 ('most', 'ratio'): 'the highest', ('least', 'ratio'): 'the lowest'}[(self.lead['rank'], kind)]
-        # a ranking of stop reasons or kinds ranks the unplanned ones (the owner, docs/METRICS.md), and says so every time
-        unplanned = (f' of the unplanned {dim_noun}s' if data.get('entity') == 'stop' and data['group_by'][0] in ('reason', 'kind')
-                     and data.get('lever') not in ('schedule-driven', 'external') else '')
         verb = 'tied for' if len(tied) > 1 else 'had'
         row = rows[index]
         bold, rest = semantic_figure(row['value'], self.unit_of(row, data['unit']))
-        return (f'{self.names([rows[i]["label"] for i in tied])} {verb} {word} {noun}{unplanned}{where}{wp}: **{bold}**{rest}'
+        return (f'{self.names([rows[i]["label"] for i in tied])} {verb} {word} {noun}{where}{wp}{self.leaving_out(data, apart)}: **{bold}**{rest}'
                 f'{band(row.get("band_text"))} {ref(result, index)}')
 
     def read_as(self, data, wp):
@@ -1949,6 +1986,9 @@ class SemanticAnswer:
             parts.append(f'the share of {data["rows"][data["share_row"]]["label"]}')
         elif self.lead.get('shares'):
             parts.append("each row's share of the total")
+        named = self.named_rows(data)
+        if named:
+            parts.append(f'{data["rows"][named[0]]["label"]} against {data["rows"][named[1]]["label"]}')
         if data.get('previous_window'):
             parts.append(f'against {data["previous_window"]["label"]}')
         return 'Read as: ' + ', '.join(parts) + '.'

@@ -387,7 +387,10 @@ INVESTIGATION = (r'\bwhy\b|\bwhat\s+(?:caused|causes|drove|drives|led\s+to|leads
 # address reproduces a card that names the winner or the share, never an unranked split.
 SEMANTIC_RANKED = (r'\b(?:which|what)\s+(?:shift|crew|grade|day|reason|place|kind|customer|flute|week|month)s?\b.*'
                    r'\b(?:most|fewest|least|highest|lowest|biggest|smallest|slowest|fastest)\b|\btop\s+\d+\b')
-SEMANTIC_SHARE = r'\b(?:percent(?:age)?|share|proportion|fraction)\s+of\b.*\b(?:were|was|is|are)\b'
+# ... a percent of the shift or of the scheduled time is a percent of the scheduled minutes, never a share of a split (the review of
+# PR #155: "what percent of the shift was maintenance downtime" is 1.80% of the shift)
+SEMANTIC_SHARE = (r'\b(?:percent(?:age)?|share|proportion|fraction)\s+of\s+(?!(?:the|this|our|my)\s+shift\b|(?:the\s+|our\s+)?scheduled\s+(?:time|minutes)\b)'
+                  r'.*\b(?:were|was|is|are)\b')
 
 
 def semantic_failures(question, url):
@@ -829,6 +832,9 @@ def unprovenanced(lines, trace):
             if part == 'row' and ' tied for ' in line:
                 # a tie names every row with the cited row's value (issue #144, the review of PR #155): their labels are tool output too
                 names += [r['label'] for r in records if isinstance(r.get('label'), str) and r.get('value') == record.get('value')]
+            if part == 'row' and (VERSUS_HEAD.match(line) or LEFT_OUT.search(line)):
+                # two values compared name the other row, a ranking of stops the rows it leaves out (the reviews of PR #155)
+                names += [r['label'] for r in records if isinstance(r.get('label'), str)]
         else:
             allowed = renderings(len(rows))
             if rows and 'actual_fpm' in rows[0] and 'target_fpm' in rows[0]:
@@ -849,32 +855,55 @@ def unprovenanced(lines, trace):
     return bad
 
 
-RANKED_HEAD = re.compile(r'^(?P<names>.+?) (?P<verb>had|tied for) the (?P<rank>most|fewest|least|highest|lowest) ')
+RANKED_HEAD = re.compile(r'^(?P<names>.+?) (?P<verb>had|tied for|was) the (?P<rank>most|fewest|least|highest|lowest|largest share) ')
+LEFT_OUT = re.compile(r', leaving out (?P<left>[^:]+?)(?:, [0-9.]+%)?: \*\*')
+VERSUS_HEAD = re.compile(r'^(?P<a>.+?) had (?P<word>more|a higher) .+? than (?P<rest>.+?): \*\*|^(?P<x>.+?) had the same .+?: \*\*')
 
 
 def ranked_failures(lines, trace):
-    """A ranked headline of the semantic model (issue #144, the review of PR #155) names the extreme of its rows and every row tied
-    with it: `X had the most ...` fails when another row of the same lever has the same value (a tie named as one winner) or a value
-    beyond it (a fewest that is not the fewest: a place with no stops left out); `X and Y tied for ...` fails when a tied row of the
-    same lever is neither named nor covered by "and others". Rows of another lever (planned maintenance, a power outage) never lead."""
+    """A ranked headline of the semantic model (issue #144, the reviews of PR #155) is true over every row it does not name as left
+    out: `X had the most ...` (fewest, least, highest, lowest; `was the largest share`) fails when a row it does not leave out (`,
+    leaving out Planned maintenance and Power outage`) has the same value (a tie named as one winner) or a value beyond it (a fewest
+    that is not the fewest: a place with no stops dropped; "the unplanned" leaving a power outage unnamed); `X and Y tied for ...`
+    fails when a tied row is neither named nor covered by "and others". Two values compared (`X had more ... than Y`) fail when Y's
+    value is the larger, `X and Y had the same ...` when the two differ."""
     bad = []
     for line in lines:
-        head = RANKED_HEAD.match(line)
         refs = EVIDENCE.findall(line)
-        if line.startswith('- ') or not head or len(refs) != 1 or refs[0][1] != 'row':
+        if line.startswith('- ') or len(refs) != 1 or refs[0][1] != 'row':
             continue
         step, _, index = refs[0]
         source = trace[int(step) - 1] if 0 < int(step) <= len(trace) else None
         if source is None or not source['ok'] or source['tool'] != semantic.TOOL or 'share_row' in source['data']:
             continue
         rows, row = source['data']['rows'], source['data']['rows'][int(index)]
-        peers = [r for r in rows if r is not row and r.get('lever') == row.get('lever') and r.get('value') is not None]
-        most = head['rank'] in ('most', 'highest')
+        versus = VERSUS_HEAD.match(line)
+        if versus:
+            subject = versus['a'] or versus['x'].split(' and ')[0]
+            if row.get('label') != subject:
+                bad.append(f'the comparison in {line[:70]!r} cites {row.get("label")!r}, not the row it names first ({subject!r})')
+                continue
+            named = [r for r in rows if r is not row and r.get('label') and r['label'] in line[len(subject):]]
+            other = max(named, key=lambda r: len(r['label'])) if named else None
+            if other is None or other.get('value') is None or row.get('value') is None:
+                bad.append(f'the comparison in {line[:70]!r} names no second row')
+            elif versus['a'] and not row['value'] > other['value']:
+                bad.append(f'{versus["a"]!r} is said to have {versus["word"]} than {other["label"]!r}, which has {other["value"]!r}: {line[:70]!r}')
+            elif versus['x'] and row['value'] != other['value']:
+                bad.append(f'the two rows in {line[:70]!r} are not the same: {row["value"]!r} and {other["value"]!r}')
+            continue
+        head = RANKED_HEAD.match(line)
+        if not head:
+            continue
+        left = LEFT_OUT.search(line)
+        peers = [r for r in rows if r is not row and r.get('value') is not None and not (left and r.get('label') and r['label'] in left['left'])]
+        most = head['rank'] in ('most', 'highest', 'largest share')
         beyond = [r for r in peers if (r['value'] > row['value'] if most else r['value'] < row['value'])]
         if beyond:
-            bad.append(f'{head["names"]!r} is named the {head["rank"]} but {beyond[0]["label"]!r} has {beyond[0]["value"]!r}: {line[:70]!r}')
+            listed = ', '.join(f'{r["label"]!r} ({r["value"]!r})' for r in beyond[:3])
+            bad.append(f'{head["names"]!r} is named the {head["rank"]} but the line does not leave out {listed}: {line[:70]!r}')
         tied = [r for r in peers if r['value'] == row['value']]
-        if tied and head['verb'] == 'had':
+        if tied and head['verb'] in ('had', 'was'):
             bad.append(f'{head["names"]!r} is named alone but {tied[0]["label"]!r} ties it: {line[:70]!r}')
         elif head['verb'] == 'tied for' and 'and others' not in head['names']:
             missing = [r['label'] for r in tied if r['label'] not in head['names']]
@@ -1525,6 +1554,7 @@ def _run_case(case, provider, live, record, scratch):
 
     failures = latency_failures(expect, provider, ms)
     failures.extend(score(case, expect, results, analysis, allowed, mode))
+    failures.extend(asked_failures(expect, results[-1]))
     failures.extend(url_failures(case, expect, turns, provider, analysis, allowed))
     last = results[-1]
     if provider and planned:
@@ -1574,6 +1604,15 @@ def score(case, expect, results, analysis, allowed, mode):
     if mode == 'offline' and case.get('plan') is None and turns[-1]:
         failures.extend(asked_unit_failures(turns[-1], results[-1]['sections']))   # issue #113: the unit asked opens the answer
     return failures
+
+
+def asked_failures(expect, result):
+    """`asked_sections_match`: patterns only the question's own answer must match, never its address's. A question that moved the
+    window ("last week") says so on its card; the address, whose controls sit on that window, says "this week" (the review of PR
+    #155), so `sections_match` accepts both and this pins the question's words."""
+    patterns = expect.get('asked_sections_match') or []
+    return [f'no section of the asked answer matches /{p}/' for p in ([patterns] if isinstance(patterns, str) else patterns)
+            if not any(re.search(p, s, re.I) for s in result['sections'])]
 
 
 def answered_scope(case, expect, result, analysis, allowed, last):
