@@ -9159,7 +9159,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "How many setups did each shift run last week?",
-   "note": "Issue #113 (exact over summary): found by the review of this PR: under all shifts the count of each shift is not one quantity; it was answered as the total. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"one shift or all shifts together\"}; the semantic model now reads the question completely, so it answers at its semantic address.",
+   "note": "Issue #113 (exact over summary): found by the review of this PR: under all shifts the count of each shift is not one quantity; it was answered as the total. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"one shift or all shifts together\"}; the semantic model now reads the question completely, so it answers at its semantic address. Reviewer of PR #155, item 6: it pinned \"this week\" for last week; the Read as line names the week by its dates.",
    "expect": {
     "url": "/corr/1/week/2026-09-07?measure=semantic&m=setups&by=shift",
     "status": "complete",
@@ -9180,8 +9180,8 @@
      "render_chart"
     ],
     "sections_match": [
-     "^Setups this week: \\*\\*[0-9][0-9,.]* setups\\*\\*",
-     "^Read as: setups by shift, this week, all shifts\\."
+     "^Setups (?:last|this) week: \\*\\*[0-9][0-9,.]* setups\\*\\*",
+     "^Read as: setups by shift, Week 2026-09-07 to 2026-09-11 \\(Mon-Fri\\), all shifts\\."
     ]
    }
   },
@@ -9210,7 +9210,7 @@
    "type": "routing",
    "mode": "offline",
    "question": "How many setups did we run on 32-C and 26-C last week?",
-   "note": "Issue #113 (exact over summary): found by the re-review of this PR: two grades are not one quantity; it opened with the MSF of every grade. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"one grade at a time\"}; the semantic model now reads the question completely, so it answers at its semantic address.",
+   "note": "Issue #113 (exact over summary): found by the re-review of this PR: two grades are not one quantity; it opened with the MSF of every grade. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"one grade at a time\"}; the semantic model now reads the question completely, so it answers at its semantic address. Reviewer of PR #155, item 6: it pinned \"this week\" for last week; the Read as line names the week by its dates.",
    "expect": {
     "url": "/corr/1/week/2026-09-07?measure=semantic&m=setups&by=grade",
     "status": "complete",
@@ -9231,8 +9231,8 @@
      "render_chart"
     ],
     "sections_match": [
-     "^Setups this week: \\*\\*[0-9][0-9,.]* setups\\*\\*",
-     "^Read as: setups by board grade, this week, all shifts\\."
+     "^Setups (?:last|this) week: \\*\\*[0-9][0-9,.]* setups\\*\\*",
+     "^Read as: setups by board grade, Week 2026-09-07 to 2026-09-11 \\(Mon-Fri\\), all shifts\\."
     ]
    }
   },
@@ -9429,33 +9429,12 @@
   },
   {
    "id": "count-sheets-per-order-refused",
-   "type": "routing",
+   "type": "refusal",
    "mode": "offline",
    "question": "How many sheets per order this week?",
-   "note": "Issue #113 (exact over summary): item 1 of the review: answered with the sheets cut; orders are not counted, so sheets per order is not one. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"is not a ratio the records keep\"}; the semantic model now reads the question completely, so it answers at its semantic address.",
+   "note": "Issue #113 (exact over summary): item 1 of the review: answered with the sheets cut; orders are not counted, so sheets per order is not one. (Reviewer of PR #155, item 9: sheets per order is a ratio the records do not keep, refused as on main.)",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=sheets&window=week&by=order",
-    "status": "complete",
-    "tools": [
-     {
-      "tool": "semantic_query",
-      "arguments": {
-       "measure": "sheets",
-       "group_by": [
-        "order"
-       ],
-       "filters": {}
-      }
-     }
-    ],
-    "tools_only": [
-     "semantic_query",
-     "render_chart"
-    ],
-    "sections_match": [
-     "^Sheets this week: \\*\\*[0-9][0-9,.]* sheets\\*\\*",
-     "^Read as: sheets by order, this week, all shifts, the first [0-9][0-9,.]*\\."
-    ]
+    "raises": "is not a ratio the records keep"
    }
   },
   {
@@ -11606,33 +11585,12 @@
   },
   {
    "id": "gate-daily-setups-refused",
-   "type": "routing",
+   "type": "refusal",
    "mode": "offline",
    "question": "Daily setups this week",
-   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 577 setups, the week's total. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"Setups per day is not a ratio the records keep\"}; the semantic model now reads the question completely, so it answers at its semantic address.",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 577 setups, the week's total. (Reviewer of PR #155, item 9: per day of setups stays refused, as on main; a split is \"setups by day\".)",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=setups&window=week&by=day",
-    "status": "complete",
-    "tools": [
-     {
-      "tool": "semantic_query",
-      "arguments": {
-       "measure": "setups",
-       "group_by": [
-        "day"
-       ],
-       "filters": {}
-      }
-     }
-    ],
-    "tools_only": [
-     "semantic_query",
-     "render_chart"
-    ],
-    "sections_match": [
-     "^Setups this week: \\*\\*[0-9][0-9,.]* setups\\*\\*",
-     "^Read as: setups by production day, this week, all shifts\\."
-    ]
+    "raises": "Setups per day is not a ratio the records keep"
    }
   },
   {
@@ -13853,37 +13811,6 @@
    "note": "Coordinator on #144 (PR #123 review): went to kind=maintenance and answered no recorded stops; planned maintenance is the Scheduled kind."
   },
   {
-   "id": "semantic-setups-per-day-is-by-day",
-   "type": "routing",
-   "mode": "offline",
-   "question": "how many setups per day this week",
-   "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=setups&window=week&by=day",
-    "status": "complete",
-    "tools": [
-     {
-      "tool": "semantic_query",
-      "arguments": {
-       "measure": "setups",
-       "group_by": [
-        "day"
-       ],
-       "filters": {}
-      }
-     }
-    ],
-    "tools_only": [
-     "semantic_query",
-     "render_chart"
-    ],
-    "sections_match": [
-     "^Setups this week: \\*\\*[0-9][0-9,.]* setups\\*\\*",
-     "^Read as: setups by production day, this week, all shifts\\."
-    ]
-   },
-   "note": "Coordinator on #144 (PR #143 re-review): 'per day' of setups, a ratio the records do not keep, is the setups of each production day."
-  },
-  {
    "id": "semantic-how-often-down-is-the-stops",
    "type": "routing",
    "mode": "offline",
@@ -14193,11 +14120,11 @@
      "render_chart"
     ],
     "sections_match": [
-     "^Shift [123] had the lowest speed without stops this month: \\*\\*[0-9][0-9,.]* ft/min\\*\\*",
-     "^Read as: speed without stops in ft/min by shift, this month, all shifts, smallest first\\."
+     "^Shift [123] had the lowest speed without stops (?:last|this) month: \\*\\*[0-9][0-9,.]* ft/min\\*\\*",
+     "^Read as: speed without stops in ft/min by shift, August 2026 \\(2026-08-01 to 2026-08-31\\), all shifts, smallest first\\."
     ]
    },
-   "note": "Coordinator on #144 (round 4): answered shift 2's speed. Shifts ranked on speed without stops, slowest first."
+   "note": "Coordinator on #144 (round 4): answered shift 2's speed. Shifts ranked on speed without stops, slowest first. Reviewer of PR #155, item 6: the Read as line names the month by its dates."
   },
   {
    "id": "semantic-worst-shift-refused",
@@ -15158,6 +15085,692 @@
    "note": "Coordinator on #144 (round 5): refused with the generic help. Side trim on the day before."
   },
   {
+   "id": "scope-stops-is-the-all-shift-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Stops",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 1: answered shift 2's day breakdown; main answers the owner's downtime default, the all-shift review of the selected day."
+  },
+  {
+   "id": "scope-show-me-the-stops-is-the-all-shift-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Show me the stops",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 1: answered shift 2's day breakdown; the owner's downtime default is the all-shift review."
+  },
+  {
+   "id": "scope-stops-yesterday-is-the-all-shift-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Stops yesterday",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=review",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_review",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-11"
+       },
+       "shift": null
+      }
+     }
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 1: answered shift 2's breakdown of the day before; the owner's downtime default is the all-shift review of that day."
+  },
+  {
+   "id": "semantic-most-common-downtime-reason-every-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Most common downtime reason",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&by=reason&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^(?!Planned maintenance|Power outage)[^:*]+ (had|tied for) the most stops of the unplanned stop reasons: \\*\\*[0-9][0-9,.]* stops?\\*\\*",
+     "^Read as: stops by stop reason, 2026-09-14 \\(Mon\\), all shifts, largest first\\."
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 1: answered shift 2's day breakdown (main: the review, which ranks by minutes, not by count). Most common is a count, asked of every shift on the selected day."
+  },
+  {
+   "id": "semantic-most-common-downtime-reason-yesterday-every-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Most common downtime reason yesterday",
+   "expect": {
+    "url": "/corr/1/day/2026-09-11?measure=semantic&m=stops&by=reason&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^(?!Planned maintenance|Power outage)[^:*]+ (had|tied for) the most stops of the unplanned stop reasons(?: yesterday)?: \\*\\*[0-9][0-9,.]* stops?\\*\\*",
+     "^Read as: stops by stop reason, 2026-09-11 \\(Fri\\), all shifts, largest first\\."
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 1: answered shift 2's breakdown of the day before; every shift, the count of stops by reason."
+  },
+  {
+   "id": "semantic-tied-crews-are-both-named",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which crew had the most stops at the stacker this month?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=month&by=crew&rank=most&place=Stacker",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "crew"
+       ],
+       "filters": {
+        "place": "Stacker"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Crew [ABC] and Crew [ABC] tied for the most stops, stop place Stacker this month: \\*\\*[0-9][0-9,.]* stops\\*\\*"
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 2: named Crew B alone while Crew B and Crew C both had the same number of stops at the stacker: a tie names every winner."
+  },
+  {
+   "id": "semantic-least-common-reason-is-an-unplanned-one",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Least common stop reason this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=reason&rank=least",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^(?!Planned maintenance|Power outage)[^:*]+ (had|tied for) the fewest stops of the unplanned stop reasons this week: \\*\\*[0-9][0-9,.]* stops?\\*\\*"
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 2 and 7: named planned maintenance alone, tied with the power outage; neither leads a downtime answer (the owner, docs/METRICS.md)."
+  },
+  {
+   "id": "semantic-fewest-counts-a-place-with-no-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which place had the fewest stops this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=place&rank=least",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "place"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Steam system had the fewest stops this week: \\*\\*0 stops\\*\\*"
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 3: named Power (one stop) as the fewest while the steam system recorded none: a place with no records is a zero, never left out of a fewest ranking."
+  },
+  {
+   "id": "semantic-share-of-a-value-with-no-records",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What percent of stops were at the steam system this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=place&share=Steam+system",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "place"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Steam system was 0\\.00% of the stops this week: \\*\\*0 stops\\*\\*",
+     "^Read as: stops by stop place, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts, the share of Steam system\\."
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 4: led with the week's total: a value with no records is 0% of the total, never the total."
+  },
+  {
+   "id": "semantic-share-of-a-value-beyond-the-rows-listed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What share of dry end rejects was cracking this month?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=month&by=reject_reason&share=Cracking+board",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "reject_reason"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Cracking board was [0-9.]+% of the dry-end rejects this month: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 4: led with the month's total because cracking ranked below the first rows listed: the share is read whatever the row limit."
+  },
+  {
+   "id": "semantic-percent-of-a-split-leads-with-the-shares",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Percent of stops by kind this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=kind&share=each",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "kind"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[A-Z][a-z]+ (was|tied for) the largest share of the stops this week, [0-9.]+%: \\*\\*[0-9][0-9,]* stops\\*\\*",
+     "^Read as: stops by stop kind, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts, each row's share of the total\\."
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 5: led with the week's count of stops and its Read as dropped the share: a percent of a split leads with the shares."
+  },
+  {
+   "id": "semantic-slowest-shift-last-week-says-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift was the slowest last week?",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=speed_run_fpm&by=shift&rank=least",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_run_fpm",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] had the lowest speed without stops (?:last|this) week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*",
+     "^Read as: speed without stops in ft/min by shift, Week 2026-09-07 to 2026-09-11 \\(Mon-Fri\\), all shifts, smallest first\\."
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 6: said \"this week\" for last week in the headline and the Read as line. The question's card says \"last week\"; its address, whose controls are on that week, says \"this week\"; the Read as line names the window by its dates on both."
+  },
+  {
+   "id": "semantic-top-downtime-reasons-lead-with-an-unplanned-one",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Top 3 downtime reasons this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=reason&rank=most&top=3",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^(?!Planned maintenance|Power outage)[^:*]+ (had|tied for) the most downtime of the unplanned stop reasons this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 7: named planned maintenance as the top downtime reason; planned maintenance and external downtime never lead a downtime answer (docs/METRICS.md), as the Pareto names the largest unplanned reason."
+  },
+  {
+   "id": "semantic-a-named-shift-beside-a-split-by-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most stops on shift 2 this week?",
+   "expect": {
+    "raises": "shift 2.*split by shift.*Did you mean"
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 8: answered every shift and dropped \"on shift 2\": a shift named beside a split by shift is refused, never dropped."
+  },
+  {
+   "id": "semantic-percent-of-a-filtered-whole",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What percent of maintenance stops were at the stacker this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=place&share=Stacker&kind=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "place"
+       ],
+       "filters": {
+        "kind": "Maintenance"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Stacker was [0-9.]+% of the stops, stop kind Maintenance this week: \\*\\*[0-9][0-9,]* stops?\\*\\*"
+    ]
+   },
+   "note": "Codex on PR #155: the share of the stacker in maintenance stops was read as maintenance's share of the stacker's stops. The value after \"were\" is the share; the one beside the measure narrows the whole."
+  },
+  {
+   "id": "semantic-portion-of-downtime-at-an-ambiguous-value-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What portion of downtime was the stacker this week",
+   "expect": {
+    "raises": "'stacker' is a place and a reason.*Did you mean 'what percent of"
+   },
+   "note": "Coordinator on #144 (2026-11-14): answered the review. The stacker is a place and a reason: refused with the two shares that answer."
+  },
+  {
+   "id": "semantic-how-much-of-downtime-is-a-share",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much of our downtime was maintenance this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=kind&share=Maintenance",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "kind"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Maintenance was [0-9.]+% of the downtime this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Coordinator on #144 (2026-11-14): answered the review. How much of the downtime is a share of it."
+  },
+  {
+   "id": "semantic-median-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Median downtime this week",
+   "expect": {
+    "raises": "'median' asks for a statistic.*Did you mean"
+   },
+   "note": "Coordinator on #144 (2026-11-14): answered the review. A median is a statistic the model does not define."
+  },
+  {
+   "id": "semantic-average-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What was our average downtime this week",
+   "expect": {
+    "raises": "'average' asks for a statistic.*Did you mean"
+   },
+   "note": "Coordinator on #144 (2026-11-14): answered the review. An average downtime is a statistic the model does not define; minutes per stop is offered."
+  },
+  {
+   "id": "semantic-bare-worst-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Worst shift",
+   "expect": {
+    "raises": "'worst' does not say which way is better.*Did you mean"
+   },
+   "note": "Reviewer of PR #155: the bare form answered shift 2's overview. Worst says no measure and no direction."
+  },
+  {
+   "id": "semantic-bare-best-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift was best",
+   "expect": {
+    "raises": "'best' does not say which way is better.*Did you mean"
+   },
+   "note": "Reviewer of PR #155: the bare form answered shift 2's overview."
+  },
+  {
+   "id": "semantic-bare-best-crew-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Best crew",
+   "expect": {
+    "raises": "'best' does not say which way is better.*Did you mean"
+   },
+   "note": "Reviewer of PR #155: the bare form answered with the generic wall of supported shapes; refused with three questions instead."
+  },
+  {
+   "id": "semantic-minutes-of-downtime-by-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Minutes of downtime by grade this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Downtime this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Coordinator on #144 (2026-11-14), fixed at c8a0e04 and unpinned: answered volume by grade on main."
+  },
+  {
+   "id": "semantic-minutes-per-stop-by-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Minutes per stop by grade this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=minutes_per_stop&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "minutes_per_stop",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Minutes per stop this week: \\*\\*[0-9][0-9,.]* min/stop\\*\\*"
+    ]
+   },
+   "note": "Coordinator on #144 (2026-11-14), fixed at c8a0e04 and unpinned: answered volume by grade on main."
+  },
+  {
+   "id": "semantic-grade-with-most-setups",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade had the most setups this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=setups&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "setups",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(C|BC|EB)( and [0-9]+-(C|BC|EB))* (had|tied for) the most setups this week: \\*\\*[0-9][0-9,]* setups\\*\\*"
+    ]
+   },
+   "note": "Coordinator on #144 (2026-11-14), fixed at c8a0e04 and unpinned: answered volume by grade on main."
+  },
+  {
+   "id": "semantic-lowest-downtime-day",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Lowest downtime day this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=day&rank=least",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "day"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]{4}-[0-9]{2}-[0-9]{2} \\([A-Z][a-z]{2}\\) had the least downtime this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Coordinator on #144 (2026-11-14), fixed at c8a0e04 and unpinned: answered the review on main."
+  },
+  {
+   "id": "semantic-share-of-downtime-operator",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What share of downtime was operator this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=kind&share=Operator",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "kind"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Operator was [0-9.]+% of the downtime this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Coordinator on #144 (2026-11-14), fixed at c8a0e04 and unpinned: answered the review on main."
+  },
+  {
+   "id": "semantic-run-time-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much run time this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=running_minutes&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "running_minutes",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Running minutes this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Coordinator on #144 (2026-11-14), fixed at c8a0e04 and unpinned: answered the KPI tiles on main."
+  },
+  {
    "id": "allow-stops-under-2-minutes-refused",
    "type": "refusal",
    "mode": "offline",
@@ -15345,9 +15958,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Share of stops each day this week",
-   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (share each day): answered each production day's count, for a share. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"asks for a share of a whole\"}; the semantic model now reads the question completely, so it answers at its semantic address.",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 1 (share each day): answered each production day's count, for a share. Re-pointed by issue #144 (the semantic parser): it expected {\"raises\": \"asks for a share of a whole\"}; the semantic model now reads the question completely, so it answers at its semantic address. Reviewer of PR #155, item 5: it led with the count and its Read as dropped the share; a share of a split leads with the shares.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=day",
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=day&share=each",
     "status": "complete",
     "tools": [
      {
@@ -15366,8 +15979,8 @@
      "render_chart"
     ],
     "sections_match": [
-     "^Stops this week: \\*\\*[0-9][0-9,.]* stops\\*\\*",
-     "^Read as: stops by production day, this week, all shifts\\."
+     "^[0-9]{4}-[0-9]{2}-[0-9]{2} \\([A-Z][a-z]{2}\\)( and [^:]+)? (was|tied for) the largest share of the stops this week, [0-9.]+%: \\*\\*[0-9][0-9,]* stops\\*\\*",
+     "^Read as: stops by production day, Week 2026-09-14 to 2026-09-18 \\(Mon-Fri\\), all shifts, each row's share of the total\\."
     ]
    }
   },
