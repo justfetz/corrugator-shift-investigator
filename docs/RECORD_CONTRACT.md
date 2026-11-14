@@ -33,6 +33,7 @@ Every store column carries the contract's name, one name for each meaning (owner
 | `production_date`, `shift` | `production_date`, `shift_number` | production date, shift number | a production day starts 07:00 and carries its start date |
 | `started`, `ended` | `start_date` + `start_time`, `end_date` + `end_time` | start and end, each a date and a time | the record keeps the date and time pairs a plant's system records; the store joins them |
 | `run_seconds` | `actual_run_sec` | actual run time | running time: elapsed minus the stops inside the setup. Elapsed is the store's `seconds` |
+| `seconds` | (end minus start) | elapsed time | the setup's clock: `run_seconds` plus `stop_seconds` |
 | `lineal_ft` | `lineal_ft` | lineal feet as run | as run: the longest lane's actual cuts × its length / 12, plus the shear chops |
 | `scheduled_lineal_ft` | `total_nominal_ft` | scheduled (nominal) lineal feet | the plan: the longest lane's nominal cuts × its length / 12 |
 | `avg_fpm` | `avg_speed_fpm` | average speed, ft/min | lineal / elapsed minutes, stops included |
@@ -40,6 +41,7 @@ Every store column carries the contract's name, one name for each meaning (owner
 | `quality_id` | `quality_id` | board grade | the board grade key (`fixture.GRADES`: 26-C, 32-C, 55-C, 200-C, 275-BC, 275-EB) |
 | `gross_sqft` | `total_produced_sqft` | gross square feet made | web × lineal / 12 |
 | `trim_sqft`, `trim_pct` | `trim_sqft`, `trim_pct` | side trim, sq ft and % | trim inches × order travel / 12; trim inches / web × 100. The store adds `trim_in` |
+| `trim_in` | (derived) | side trim width, in | web width minus the used width, split evenly both sides (identity 1) |
 | `shear_sqft` | `chop_sqft` | shear chops, sq ft | the shear chops: full-web, 34 in each, part of gross |
 | `swing_knife_sqft` | `swing_knife_sqft` | swing-knife waste, sq ft | optional: null when the machine has no swing knife (most machines; the demo corrugator has none), **never zero** |
 | `change_code` | `change_code` | change code | a code with a lookup (`records.CHANGE_CODES`): `O` a regular order change, `S` a shift split (the setup continues `split_from` across a shift boundary); others are added as they appear |
@@ -60,6 +62,7 @@ One row per lane; lane N of the setup record carries one customer's slice of the
 
 | Ours | Record field | Plant term | Notes |
 | --- | --- | --- | --- |
+| `setup_id`, `production_date`, `shift` | (the setup's) | run setup, production date, shift number | the lane's setup, and its day and shift copied from it, so a lane filters by day |
 | `lane` | `lane` | lane across the web | 1–3 across the web |
 | `order_number`, `part_number` | `order_number`, `part_number` | order and item number, per lane | `SO-YYMMDDnnnn`: the production day and the order's sequence in it |
 | `customer_id` | `customer_id` | customer, per lane | the customer dimension's key (a plant's setup record often carries the name) |
@@ -100,6 +103,7 @@ At the generator's own minimum trim (2 in, 1 in a side) the same search does bet
 | Ours | Record field | Notes |
 | --- | --- | --- |
 | `stop_id` | `stop_id` | key |
+| `production_date`, `shift` | (the setup's) | the production day and shift of the setup that holds the stop |
 | `setup_id` | `setup_id` | the run setup that holds the stop |
 | `started`, `ended`, `seconds` | `start_*`, `end_*`, `duration_sec` | `seconds = ended − started` |
 | `kind` | `kind` | the category: Maintenance, Operator or Scheduled (the planned-maintenance window). v1 recorded the planned kind as `PM`; a filter that names it (`kind=pm`, a tool's `PM`) answers as Scheduled |
@@ -153,6 +157,7 @@ A window's waste breakdown (`get_waste_breakdown`) lists every line the records 
 | Ours | Notes |
 | --- | --- |
 | `roll_id` | key: R + production date + sequence |
+| `production_date` | the paper run's production day |
 | `wet_end_id` | the paper run the roll fed |
 | `stand`, `paper_grade` | the roll stand (top liner, medium, bottom liner; double wall adds a second medium and the single-facer liner) and the paper on it |
 | `width_in` | the run's web width |
@@ -164,7 +169,14 @@ Peel and core are paper-side measures, before the board is made: they are not pa
 
 ## The customer dimension (`customers`)
 
-`customer_id`, `name`, `destination`, `ship_to`; no measures. Forty invented customers and `C000`, the plant itself, for pallet bottom and cap sheets. An order lane names its customer by `customer_id`.
+No measures. Forty invented customers and `C000`, the plant itself, for pallet bottom and cap sheets. An order lane names its customer by `customer_id`.
+
+| Ours | Notes |
+| --- | --- |
+| `customer_id` | key: C + number; `C000` is the plant's own pallet sheets |
+| `name` | an invented customer name |
+| `destination` | the delivery route |
+| `ship_to` | the ship-to code |
 
 ## Wet-end runs (`wet_ends`) and shifts
 
@@ -189,7 +201,31 @@ A paper run is consecutive setups on one grade and web width, its totals exact s
 | `max_fpm`, `avg_fpm` | `max_speed_fpm`, `avg_speed_fpm` | peak and average speed |
 | `scheduled_minutes`, `wet_end_count` | `scheduled_minutes`, `wet_end_ids` | 480; the paper runs the shift touched |
 
-The reject lines (`rejects`) carry `setup_id`, `production_date`, `shift`, `family`, `category`, `reason`, `liner`, `side`, `lane`, `sheets`, `sqft` and `counted_in` (the record's `RejectEntry`: `category`, `reason`, `lane`, `sheets`, `sqft`, `liner`, `side`). The taxonomy table (`reject_reasons`) has one row per reason: `category`, `category_label`, `family`, `counted_in`, `controllable`, `driver`, `reason`, `liner_positions`, `side_positions` and `generated`.
+## Reject lines and the taxonomy (`rejects`, `reject_reasons`)
+
+The reject lines (`rejects`) are the record's `RejectEntry` lines (`category`, `reason`, `lane`, `sheets`, `sqft`, `liner`, `side`) with their setup, day and shift, and the family and waste line the taxonomy gives their category:
+
+| Ours (`rejects`) | Record field | Notes |
+| --- | --- | --- |
+| `setup_id`, `production_date`, `shift` | (the setup's) | the run setup the line was recorded on, and its production day and shift |
+| `family` | (the taxonomy's) | the tile the category adds to: `BOND`, `WARP`, `MISALIGNMENT`, `MOISTURE`, `OTHER` (the five dry-end families), `CHANGEOVER` or `ADMIN` |
+| `category`, `reason` | `category`, `reason` | the taxonomy's category and the reported reason within it: a recorded observation, not a proven cause |
+| `liner`, `side` | `liner`, `side` | where on the board, as attributes, never a reason: liner top / bottom / medium / DB / SF, side drive / operator / middle |
+| `lane` | `lane` | whose sheets were rejected |
+| `sheets` | `sheets` | individual sheets; never multiplied by outs again |
+| `sqft` | `sqft` | sheets × sheet width × sheet length / 144 |
+| `counted_in` | (the taxonomy's) | the waste line: `dry_end`, `shear` (changeover, counted with shear) or `excluded` (planning / admin, reported apart) |
+
+The taxonomy table (`reject_reasons`) is `reject_reasons.json`, one row per reason:
+
+| Ours (`reject_reasons`) | Notes |
+| --- | --- |
+| `category`, `category_label` | the category key and its plant name |
+| `family`, `counted_in` | the tile and the waste line the category counts in |
+| `controllable`, `driver` | whether the crew controls it (yes, no, partly) and what drives it (temperature, sequencing, ...) |
+| `reason` | the reason within the category |
+| `liner_positions`, `side_positions` | the liners and sides it can be recorded at; empty when position does not apply |
+| `generated` | false for bookkeeping entered downstream of the corrugator, never on a dry-end record |
 
 ## Not modeled
 

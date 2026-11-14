@@ -338,6 +338,8 @@ class Renderer:
         self.link = link
         self.seen = {}
         self.headings = []   # (level, id, plain text) in document order
+        self.section = ''    # the latest heading as written: a table under it may take its table name (row anchors)
+        self.anchors = set()
 
     # ---- blocks
     def render(self, text):
@@ -383,6 +385,7 @@ class Renderer:
                 level, text = len(heading.group(1)), heading.group(2)
                 ident = slugify(plain(text), self.seen)
                 self.headings.append((level, ident, plain(text)))
+                self.section = text
                 out.append(f'<h{level} id="{ident}">{self.inline(text)}</h{level}>')
                 i += 1
                 continue
@@ -499,8 +502,29 @@ class Renderer:
         out.append(cell.strip())
         return out
 
+    COLUMN = re.compile(r'`([a-z_][a-z0-9_]*)`')
+
+    def _table_key(self, head):
+        """The store table a column table documents (issue #142): a name in backticks in its first header cell, as in
+        `Ours (`shifts`)`, else the one name in backticks in the heading above it; None for any other table."""
+        named = self.COLUMN.findall(head[0]) if head else []
+        if not named:
+            named = self.COLUMN.findall(self.section)
+            if len(named) != 1:
+                return None
+        return named[0]
+
+    def _anchor(self, ident):
+        if ident in self.anchors:
+            return ''
+        self.anchors.add(ident)
+        return ident
+
     def table(self, rows):
         head, sep, body = self.cells(rows[0]), self.cells(rows[1]), [self.cells(r) for r in rows[2:]]
+        # A column table of the record contract (or of the shift_kpis inventory) anchors each column it names in its
+        # first cell as `col-<table>-<column>`, and itself as `col-<table>`: the /data schema pages link there.
+        key = self._table_key(head)
         align = []
         for spec in sep:
             spec = spec.strip()
@@ -510,10 +534,19 @@ class Renderer:
         def cell(tag, text, n):
             cls = f' class="{align[n]}"' if n < len(align) and align[n] in ('right', 'center') else ''
             return f'<{tag}{cls}>{self.inline(text)}</{tag}>'
+        def row(r):
+            names = self.COLUMN.findall(r[0]) if key and r and r[0].lstrip().startswith('`') else []
+            marks = [a for a in (self._anchor(f'col-{key}-{name}') for name in names) if a]
+            cells = [cell('td', r[n] if n < len(r) else '', n) for n in range(len(head))]
+            if marks:   # one id per column the row defines: the first on the row, the rest as empty spans in its first cell
+                cells[0] = cells[0].replace('>', '>' + ''.join(f'<span id="{m}"></span>' for m in marks[1:]), 1)
+                return f'<tr id="{marks[0]}">' + ''.join(cells) + '</tr>'
+            return '<tr>' + ''.join(cells) + '</tr>'
         thead = '<tr>' + ''.join(cell('th', t, n) for n, t in enumerate(head)) + '</tr>'
-        tbody = ''.join('<tr>' + ''.join(cell('td', r[n] if n < len(r) else '', n) for n in range(len(head))) + '</tr>'
-                        for r in body)
-        return (f'<div class="table-scroll" tabindex="0" role="region" aria-label="Table">'
+        tbody = ''.join(row(r) for r in body)
+        ident = self._anchor(f'col-{key}') if key and any(self.COLUMN.match(r[0].lstrip()) for r in body if r) else ''
+        attr = f' id="{ident}"' if ident else ''
+        return (f'<div class="table-scroll"{attr} tabindex="0" role="region" aria-label="Table">'
                 f'<table><thead>{thead}</thead><tbody>{tbody}</tbody></table></div>')
 
     # ---- inline

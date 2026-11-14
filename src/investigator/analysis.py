@@ -416,12 +416,18 @@ class Analysis:
         WHERE s.shift=? GROUP BY ALL ORDER BY start""", [shift])
 
     def get_shift_notes(self, shift):
-        return self._query(shift, """SELECT 'Shift' AS record_type, 'Shift ' || shift AS record_id,
+        result = self._query(shift, """SELECT 'Shift' AS record_type, 'Shift ' || shift AS record_id,
         '' AS start, '' AS end, '' AS kind, '' AS place, '' AS reason, NULL AS down_minutes,
         notes, ['shift-' || shift] AS source_ids FROM shifts WHERE shift=?
         UNION ALL SELECT 'Downtime', id, strftime(started,'%Y-%m-%d %H:%M:%S'),
         strftime(ended,'%Y-%m-%d %H:%M:%S'), kind, place, reason, seconds/60, notes, [id]
         FROM stops WHERE shift=? ORDER BY record_type DESC, start, record_id""", [shift, shift])
+        # The stops apart from the shift's own note (its first row): the count an answer states and the rows its receipt
+        # opens, and how many of them carry a comment (about half are empty; the #151 re-review: say what the link opens).
+        stops = [r for r in result["rows"] if r["record_type"] == "Downtime"]
+        result["stop_notes"] = len(stops)
+        result["stops_with_note"] = sum(1 for r in stops if (r["notes"] or "").strip())
+        return result
 
     def get_rankings(self, shift, metric='speed'):
         queries = {
