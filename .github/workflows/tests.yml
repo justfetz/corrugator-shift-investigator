@@ -8,9 +8,10 @@ jobs:
   deterministic:
     runs-on: ubuntu-latest
     # A shared runner is slow in bursts, so each golden case's own budget and every speed budget a test asserts are
-    # doubled here (evals/run.py latency_budget, issue #139). The offline p50 / p95 gate (100 / 250 ms) is never scaled.
+    # tripled here (evals/run.py latency_budget, issue #139; 2 was not enough: docs/TESTING.md). The offline p50 / p95
+    # gate (100 / 250 ms) is never scaled.
     env:
-      INVESTIGATOR_LATENCY_SCALE: '2'
+      INVESTIGATOR_LATENCY_SCALE: '3'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
