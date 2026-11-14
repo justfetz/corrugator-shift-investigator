@@ -103,7 +103,7 @@ The authoritative KPI inventory. `shift_kpis` holds one row per production day, 
 
 Every measure is a raw numerator or denominator, never a percentage, so any window's tile is a ratio of the sums of these columns, never an average of percentages. The third column names the formula rows each column feeds: tile keys of the period tools' table above, and fields of the period report's daily matrix (which carries the daily KPI tool's fields). `tests/test_shift_kpis.py` reads this table and the database's own column list and fails when they differ.
 
-| Column | Type | Formula row |
+| Column (`shift_kpis`) | Type | Formula row |
 | --- | --- | --- |
 | `production_date` | `DATE` | key: the production day (07:00 to 07:00) |
 | `shift` | `INTEGER` | key: shift 1, 2 or 3; the tools' shift filter |

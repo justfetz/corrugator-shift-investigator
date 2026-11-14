@@ -505,6 +505,33 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
 @keyframes skel{from{opacity:1}to{opacity:.55}}
 @media(prefers-reduced-motion:no-preference){button{transition:filter .15s}}
 
+/* The data browser (/data, issue #142) and the links to it from an answer's receipts and query box. A receipt's link
+   carries no text of its own, so the card reads the answer word for word; its label is drawn here. */
+.rows-link{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:6px;text-decoration:none;white-space:nowrap}
+.rows-link::after{content:'rows \2197'}
+.rows-link:hover{color:var(--accent);text-decoration:underline}
+.data-page .card+.card{margin-top:14px}
+.data-page h2{font-size:16px;margin:0 0 8px}
+.data-page .table-scroll{max-height:620px}
+.data-page td.num{text-align:right;font-variant-numeric:tabular-nums}
+.data-rows td{white-space:nowrap;max-width:none}.data-rows td.text{white-space:normal;min-width:240px;max-width:420px}
+.data-page td a.facet,.data-page td a.fk{color:inherit}
+.data-page td a.fk{color:var(--brand)}
+.data-index td{max-width:none}.data-index .table-name{font-weight:600;color:var(--brand)}
+.data-page .data-schema{max-height:300px}.data-schema td{max-width:520px}.data-schema td .muted{font-size:11px}.data-schema th,.data-schema td{min-width:70px}
+.contract-link{font-family:var(--mono);font-size:11px;color:var(--brand);white-space:nowrap}
+.data-filters{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:2px 0 8px}
+.data-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.data-chips .chip{display:inline-flex;gap:6px;align-items:center}.data-chips .chip code{font-size:11.5px}
+.chip-x{text-decoration:none;color:var(--ink-3);font-weight:600}.chip-x:hover{color:var(--bad)}
+.data-add{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.data-add select,.data-add input{min-height:34px;padding:6px 10px;font-size:.88rem}.data-add input{width:min(220px,100%)}
+.data-add button{min-height:34px}
+.data-count{margin:4px 0 0;font-family:var(--mono);font-size:12px}
+.data-pager{display:flex;gap:8px;margin-top:10px}
+.data-sql summary{cursor:pointer;font-weight:600}.data-sql pre.sql{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0}
+@media(max-width:600px){.data-filters{flex-direction:column;align-items:stretch}.data-add input{flex:1 1 120px}}
+
 /* Golden evals page (/evals) and its badge in the investigator's header */
 .evals-badge{display:inline-flex;align-items:center;margin-top:10px;min-height:30px;padding:0 10px;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--ink-2);text-decoration:none}
 .evals-badge:hover{color:var(--accent);border-color:var(--accent)}

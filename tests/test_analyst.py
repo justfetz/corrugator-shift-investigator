@@ -389,11 +389,13 @@ def test_live_mode_answers_as_a_stream_and_offline_stays_one_json(monkeypatch, t
         result = events[-1]['result']
         assert result['status'] == 'complete' and result['usage']['model_calls'] == 2 and result['session_id'] == events[0]['session_id']
         assert result['report_markdown'] and len(result['trace']) == 2
+        assert all(e['source']['url'].startswith('/data/') for e in result['trace'] if e['ok'])   # each step names its rows (#142)
         # the stream's validated paragraphs are the answer's narrative
         assert [e['text'] for e in events if e['type'] == 'paragraph'] == [p['text'] for p in result['narrative']]
         # offline: one JSON document, exactly as before
         status, response_headers, body = post(server, ASK)
         assert status == 200 and response_headers['Content-Type'].startswith('application/json') and json.loads(body)['usage']['model_calls'] == 0
+        assert json.loads(body)['trace'][0]['source']['url'] == '/data/shift_kpis?day=2026-09-14&shift=2&corrupt=false'   # the POST path's receipts too
         # a request refused before the round starts is a plain 400, not a stream
         status, response_headers, body = post(server, {**ASK, 'mode': 'anthropic', 'day': '2026-09-12'})
         assert status == 400 and response_headers['Content-Type'].startswith('application/json') and 'error' in json.loads(body)
