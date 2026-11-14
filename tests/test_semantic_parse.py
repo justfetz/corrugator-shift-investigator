@@ -647,7 +647,9 @@ def test_the_parser_reads_the_routers_request_phrases_and_no_moved_function_word
     for question in ('Which shift can run the most setups this week?', 'Which grade will run the most setups this week?',
                      'Which shift had the most stops so far this week?', 'Which shift was up the most this week?',
                      'Which crew needs the most setups this week?', 'Which shift had the most setups to go this week?',
-                     'Which shift went down the most this week?'):
+                     'Which shift went down the most this week?', 'Which shift is going to have the most setups this week?',
+                     'Which grade are we going to run the most setups on this week?',
+                     'Compare setups we have to run on 32-C to 26-C this week', 'Compare setups to be run on 32-C to 26-C this week'):
         assert not reading(store, question).complete, question
 
 
