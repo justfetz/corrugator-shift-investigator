@@ -102,6 +102,17 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   ("the last 7 days"). And a ratio kept for all stops or for the line (minutes per stop, each day's downtime, feet per
   setup), or the stops of each production day (`measure=stops`), never answers a question that names one stop reason,
   place or kind, and an average stop is its length only (its count, rate, cost or reason is never minutes per stop).
+  A word is in `FUNCTION_WORDS` only if it carries no meaning a route could ignore (issue #153): a plan, a capacity or
+  what is left ("do we need", "can we run", "to go", "would"), the line running ("were we up", "went") and a span to date
+  ("so far") are not, so a URL that answers one fails. The words read but never applied fail too: a duration answered as
+  downtime that names no stop or downtime, or names run time, uptime or the line on ("how long was the machine on",
+  "minutes of machine time", "run time per stop"); a comparison the answer does not carry beside it (sheets, each day's
+  stops or downtime, a grade's totals, the Pareto counted), or of other windows than the answered one and the one just
+  before it, of the same length ("last week versus the week before", "this week versus last month"); "this shift" or "my
+  shift" with no shift in the address; a kind said of who logged the stops ("the stops the operators logged"); a window
+  said in words ("for the period", "this day") that is not the answered one; a number and its cause asked together ("how
+  many stops and why"), which no URL answers. The Pareto grouped by reason, place or kind (`measure=pareto` for "how many
+  stops by reason", "how many minutes of downtime at each place") is held to the allow-list as well, in the unit asked.
 - **the unit asked opens the answer**: a count or unit question ("how many setups", "number of paper changes", "how
   many minutes of …", "minutes per stop", "feet per setup", "how many lineal feet") carries that unit in its headline
   (the first section with a bold figure that is not a bullet), in its lead clause, the text before the first ` · `, so a
