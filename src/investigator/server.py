@@ -13,7 +13,8 @@ Offline questions are URL-addressable (issue #20, docs/URLS.md): `GET /q?day=&sh
 resolves a typed question and redirects to its canonical URL, `/corr/<machine>/<grain>/<date>[/shift/<n>]
 ?measure=...`, which serves the page, the answer as `.json` (or with `Accept: application/json`), or the
 PDF with `format=pdf`. That path never calls a model and never waits on the lock a live round holds.
-Live analysis stays on `POST /api/ask`.
+Live analysis stays on `POST /api/ask`. `GET /` redirects to the landing address (issue #137): the store's last production
+day, shift 1, Day window (`INVESTIGATOR_LANDING` pins another, as the test harness does).
 
 The data browser (issue #142, datapages.py): `GET /data` lists the tables every answer reads, `/data/<table>` shows a
 table's schema and its rows 50 at a time, newest first, filtered by the URL, and `/data/<table>.csv` downloads the
@@ -25,7 +26,7 @@ round on it and a thumbs up or down on its card (`POST /api/feedback`) are one J
 after the response; no IP, user agent, cookie, key or other header value is in a line.
 """
 from collections import Counter, OrderedDict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
@@ -36,6 +37,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import secrets
 import select
 import socket
@@ -66,6 +68,31 @@ DATA_READS_PER_IP = 120  # the same reads for one client address, so one visitor
 DATA_CSV_PER_MIN = 30    # CSV downloads, container-wide: each is up to ten short reads of the store
 LIVE_CONCURRENCY = 2      # live rounds in flight per container; a third is answered 429 `busy` instead of queueing
 LEDGER = Path('artifacts/model-budget.sqlite3')  # monthly reservations and the daily round counter
+LANDING_ENV = 'INVESTIGATOR_LANDING'   # YYYY-MM-DD/shift/N: where `/` lands; unset = the store's last production day, shift 1 (#137)
+
+
+def landing(store, environ=None):
+    """(day, shift) where `/` lands (issue #137): the store's last production day (`last_day`, the latest Monday to Friday
+    of its window; on the hosted demo the window ends the day before the last nightly deploy), shift 1, Day window.
+    INVESTIGATOR_LANDING pins another production day and shift, `YYYY-MM-DD/shift/N`: the test harness pins the golden
+    default there (tests/conftest.py, beside INVESTIGATOR_AS_OF), so a page opened on the golden store lands where the
+    goldens are asked, and the page itself holds no date. A pin in another form, or naming no calendar date, fails at
+    boot; a pinned day this store does not hold (a weekend, or outside its window) lands on the store's own default, so
+    a second store over another window, such as the golden set's behind /evals, never fails over a pin meant for the first."""
+    environ = os.environ if environ is None else environ
+    raw = (environ.get(LANDING_ENV) or '').strip()
+    if not raw:
+        return store.last_day, 1
+    match = re.fullmatch(r'(\d{4}-\d{2}-\d{2})/shift/([123])', raw)
+    try:
+        date.fromisoformat(match.group(1)) if match else None
+    except ValueError:
+        match = None   # 2026-02-30 is a date's shape, not a date
+    if not match:
+        raise ValueError(f'{LANDING_ENV} must be YYYY-MM-DD/shift/N with N 1, 2 or 3, for example 2026-09-14/shift/2')
+    if match.group(1) not in store.production_days:
+        return store.last_day, 1
+    return match.group(1), int(match.group(2))
 
 
 class DemoLimit(Exception):
@@ -171,6 +198,9 @@ class Workbench:
         self.reports = OrderedDict()
         # The rolling year of synthetic production, built once per process; the eval harness passes the golden window's store.
         self.store = store if store is not None else default_store()
+        # Where `/` lands (issue #137): an explicit address, so the URL is the state from the first response.
+        self.landing = landing(self.store)
+        self.landing_url = scope_url(self.landing[0], 'day', 'shift', self.landing[1], self.store.machine_id)
         from .periods import PeriodReports
         self.periods = PeriodReports(self.store)
         # The golden set behind /evals, read from the shipped evals/ folder; None when it is not there
@@ -794,7 +824,8 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             return 'application/json' in accept and 'text/html' not in accept
 
         def _page(self):
-            """The app page, revalidated with an ETag like `/`: a canonical URL serves it and app.js reads the address."""
+            """The app page, revalidated with an ETag like the static files: a canonical URL serves it (`/` redirects to
+            one, issue #137) and app.js reads the address."""
             data = (WEB/'index.html').read_bytes()
             etag = '"' + hashlib.sha256(data).hexdigest()[:16] + '"'
             held = [v.strip() for v in self.headers.get('If-None-Match', '').split(',')]
@@ -828,6 +859,10 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             if not self._host_ok():
                 return self._send(403, {'error': 'Local host only'})
             url = urlsplit(self.path)
+            if url.path == '/':
+                # The page opens on an explicit address (issue #137): the store's last production day, shift 1, Day, or the
+                # harness's pin. A redirect like /q's, never cached: the window moves with every nightly deploy.
+                return self._send(302, {'url': app.landing_url}, extra={'Location': app.landing_url, 'Cache-Control': 'no-store'})
             if url.path == '/q':
                 # A typed question is a shortcut: resolve it and redirect to the one URL for it. The page's own asks
                 # carry a line id, and their question is logged after the redirect is sent (issue #125).
@@ -855,6 +890,8 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
             if self.path == '/api/config':
                 return self._send(200, {'days': app.store.production_days, 'first_day': app.store.first_day,
                                        'last_day': app.store.last_day, 'production_calendar': 'Mon-Fri',
+                                       # where the page lands (issue #137): `/` redirects there; a page at any other address the controls cannot read opens on it
+                                       'landing': {'day': app.landing[0], 'shift': app.landing[1], 'url': app.landing_url},
                                        'dataset_hash': app.store.content_hash, 'machine': machine_slug(app.store.machine_id),
                                        'token': app.token, 'tools': TOOL_SCHEMAS, 'mode': 'offline',
                                        'public': public is not None, 'server_key_available': app.live_model_available,
@@ -890,8 +927,7 @@ def make_server(port=8765, public=None, host=None, guards=None, store=None):
                         return self._send(500, {'error': 'The recorded narratives could not be replayed'})
                 name, content_type = ('grade.html', 'text/html; charset=utf-8') if url.path == '/evals/grade' else ('grade.js', 'text/javascript; charset=utf-8')
                 return self._static((WEB/name).read_bytes(), content_type)
-            files = {'/': ('index.html', 'text/html; charset=utf-8'),
-                     '/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
+            files = {'/app.js': ('app.js', 'text/javascript; charset=utf-8'), '/theme.js': ('theme.js', 'text/javascript; charset=utf-8'),
                      '/trail.js': ('trail.js', 'text/javascript; charset=utf-8'), '/evals.js': ('evals.js', 'text/javascript; charset=utf-8'),
                      '/money.js': ('money.js', 'text/javascript; charset=utf-8'), '/data.js': ('data.js', 'text/javascript; charset=utf-8'),
                      '/style.css': ('style.css', 'text/css; charset=utf-8')}

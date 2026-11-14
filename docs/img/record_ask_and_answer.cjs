@@ -13,7 +13,7 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 
 const base = process.argv[2] || 'http://127.0.0.1:7860';
 const out = path.join(__dirname, 'ask-and-answer.gif');
-const day = '2026-09-09';   // Wednesday of the planted missed-splice week; shift 2 is the page's default
+const day = '2026-09-09';   // Wednesday of the planted missed-splice week, on shift 2 (`/` lands on the last production day, shift 1: #137)
 const question = 'Which downtime reason cost the most minutes this week?';
 
 (async () => {
@@ -26,9 +26,7 @@ const question = 'Which downtime reason cost the most minutes this week?';
     await page.screenshot({ path: file });
     frames.push([path.basename(file), ms]);
   };
-  await page.goto(base + '/', { waitUntil: 'networkidle' });
-  await page.fill('#day', day);
-  await page.dispatchEvent('#day', 'change');
+  await page.goto(base + `/corr/1/day/${day}/shift/2`, { waitUntil: 'networkidle' });
   await page.evaluate(() => document.activeElement && document.activeElement.blur());   // no selected text in the first frame
   // the header's eval badge states the current golden count, which drifts with every case (CLAUDE.md: no current counts)
   await page.evaluate(() => { const badge = document.getElementById('evals-badge'); if (badge) badge.hidden = true; });

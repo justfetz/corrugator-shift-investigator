@@ -27,7 +27,11 @@ def request(server,method,path,body=None,headers=None):
 
 
 def test_server_home_and_security_headers(running):
-    status,headers,body=request(running,'GET','/')
+    # `/` lands on an explicit address (issue #137): here the harness's pin (tests/conftest.py), and the page is served there
+    status,headers,_=request(running,'GET','/')
+    assert status==302 and headers['Location']=='/corr/1/day/2026-09-14/shift/2' and headers['Cache-Control']=='no-store'
+    assert "frame-ancestors 'none'" in headers['Content-Security-Policy']
+    status,headers,body=request(running,'GET',headers['Location'])
     assert status==200
     assert b'Shift Investigator' in body
     assert "frame-ancestors 'none'" in headers['Content-Security-Policy']
@@ -165,7 +169,9 @@ def public():
 
 
 def test_public_mode_hostname_embed_and_health(public):
-    status,headers,body=request(public,'GET','/',headers={'Host':'justfetz-shift.hf.space'})
+    status,headers,_=request(public,'GET','/',headers={'Host':'justfetz-shift.hf.space'})
+    assert status==302 and headers['Location']=='/corr/1/day/2026-09-14/shift/2'   # the landing (issue #137)
+    status,headers,body=request(public,'GET',headers['Location'],headers={'Host':'justfetz-shift.hf.space'})
     assert status==200 and b'Shift Investigator' in body
     assert 'frame-ancestors https://justfetz.github.io;' in headers['Content-Security-Policy']
     assert request(public,'GET','/../../README.md')[0]==404
