@@ -13,7 +13,7 @@ class Element {
 const elements=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
 Object.assign(elements.day,{value:'2026-09-14'});elements.period.value='day';elements.shift.value='2';elements.scope.value='shift';elements.mode.value='offline';
 const document={getElementById:id=>{assert.ok(elements[id],`Unknown control ${id}`);return elements[id];},createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[]};
-const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test',evals:{badge:'160/160 golden · 12 ms p50',ran_at:'2026-11-09T19:21Z',commit:'abc1234'}})}),window:{addEventListener(){}},console,setTimeout,URL,URLSearchParams,Blob,AbortController};
+const context={document,fetch:async()=>({ok:true,json:async()=>({days:['2026-09-01','2026-09-30'],token:'test',landing:{day:'2026-09-30',shift:2,url:'/corr/1/day/2026-09-30/shift/2'},evals:{badge:'160/160 golden · 12 ms p50',ran_at:'2026-11-09T19:21Z',commit:'abc1234'}})}),window:{addEventListener(){}},console,setTimeout,URL,URLSearchParams,Blob,AbortController};
 vm.createContext(context);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),context);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),context);   // trail.js first, as index.html loads them
 vm.runInContext('updateScope()',context);assert.equal(elements['scope-help'].textContent,'Monday 14 Sep 2026 · shift 2 · 15:00–23:00 · compared with Friday 11 Sep');
 elements.scope.value='day';vm.runInContext('updateScope()',context);assert.match(elements['scope-help'].textContent,/all three shifts · 24 hours from 07:00 · compared with Friday 11 Sep/);
@@ -1851,4 +1851,77 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const notesFoot=els.queries.children.find(e=>e.id==='query-3').children.find(e=>e.className==='query-foot');   // the notes also read the shift record
  assert.deepEqual(notesFoot.children.filter(e=>/rows-step/.test(e.className)).map(a=>[a.textContent,a.href]),[['Rows: stops ↗','/data/stops?day=2026-09-14&shift=2'],['Also: shifts ↗','/data/shifts?day=2026-09-14&shift=2']]);
  console.log('UI issue-142 checks passed: /data lists the tables, a table page shows its schema with contract links, then its rows newest first with filters from the address (a day replaces a span, a repeated filter is any of its values), and its query; a list of shifts stays one parameter; a receipt links to the rows behind its own figure, the server receipt per section when it lines up, and a repriced lever line to the rows of its own lever.');
+})().catch(error=>{console.error(error);process.exit(1);});
+
+// ---- issue #137: a fresh page lands on the server's landing (the store's last production day, shift 1, Window Day; the
+// markup holds no date of its own), and under Week, Month or 4-4-5 the day field is greyed (disabled, aria-disabled, out
+// of the tab order) while its label names the window and ‹ › step by the window; Day gives the field back.
+(async()=>{
+ const tick=()=>new Promise(r=>setTimeout(r,0));
+ const weekdays=(from,to)=>{ const out=[]; for(let d=new Date(from+'T00:00:00Z');d<=new Date(to+'T00:00:00Z');d=new Date(d.getTime()+86400000))if(d.getUTCDay()%6)out.push(d.toISOString().slice(0,10)); return out; };
+ const firstOption=id=>html.match(new RegExp(`<select id="${id}"[^>]*><option value="([^"]+)"`))[1];
+ assert.doesNotMatch(html,/<input id="day"[^>]*value=/);assert.doesNotMatch(html,/<option value="\d" selected>/);   // no day and no shift of the page's own
+ const page=async({days,landing,location={pathname:'/',search:''}})=>{
+  const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element(m[1])]));
+  for(const id of ['period','shift','scope','mode'])els[id].value=firstOption(id);   // what the browser shows before the script: the first option, an empty day
+  const history=[], fetched=[], move=u=>{const i=u.indexOf('?');location.pathname=i<0?u:u.slice(0,i);location.search=i<0?'':u.slice(i);};
+  const win={history:{pushState(s,_,u){history.push(['push',u]);move(u);},replaceState(s,_,u){history.push(['replace',u]);move(u);}},location,addEventListener(){}};
+  const fetch=async path=>{ fetched.push(path);
+   if(path==='/api/config')return {ok:true,status:200,json:async()=>({token:'t',machine:'1',days,first_day:days[0],last_day:days[days.length-1],...(landing?{landing}:{}),demo_guards:{max_turns:4,rate_limit_per_min:0}})};
+   return {ok:true,status:200,json:async()=>({trace:[]})}; };
+  const doc={getElementById:id=>els[id]||assert.fail(`Unknown control ${id}`),createElement:tag=>new Element(tag),createElementNS:(_,tag)=>new Element(tag),querySelectorAll:()=>[]};
+  const ctx={document:doc,fetch,window:win,location,console,setTimeout,URL,URLSearchParams,Blob,AbortController};
+  vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/investigator/web/trail.js','utf8'),ctx);vm.runInContext(fs.readFileSync('src/investigator/web/app.js','utf8'),ctx);
+  for(let i=0;i<6;i++)await tick();
+  return {els,ctx,history,fetched};
+ };
+ const days=weekdays('2026-07-27','2026-10-09');
+ // the landing the server names (`/` redirects there; a page at an address the controls cannot read opens on it)
+ const {els,ctx,history,fetched}=await page({days,landing:{day:'2026-10-09',shift:1,url:'/corr/1/day/2026-10-09/shift/1'}});
+ assert.deepEqual(history,[['replace','/corr/1/day/2026-10-09/shift/1']]);
+ assert.deepEqual([els.day.value,els.shift.value,els.scope.value,els.period.value],['2026-10-09','1','shift','day']);
+ assert.ok(fetched.includes('/corr/1/day/2026-10-09/shift/1.json?measure=kpis'),JSON.stringify(fetched));   // the landing's own tiles
+ assert.match(els['scope-help'].textContent,/^Friday 9 Oct 2026 · shift 1 · 07:00–15:00/);
+ const field=()=>[els.day.disabled,els.day['aria-disabled'],els.day.tabindex,els['day-label'].textContent,els['day-prev']['aria-label'],els['day-next']['aria-label']];
+ assert.deepEqual(field(),[false,'false','0','Production day','Previous production day','Next production day']);
+ assert.equal(els['day-next'].disabled,true);assert.equal(els['day-prev'].disabled,false);   // the last day of the store
+ // without a landing in the config (an older server), the last day of the store, shift 1
+ const bare=await page({days:['2026-09-11','2026-09-14']});
+ assert.deepEqual(bare.history,[['replace','/corr/1/day/2026-09-14/shift/1']]);assert.equal(bare.els.shift.value,'1');
+ const choose=value=>els['period-seg'].children.find(b=>b.dataset.value===value).events.click();
+ const prev=()=>els['day-prev'].events.click(), next=()=>els['day-next'].events.click(), last=()=>history[history.length-1];
+ // Week: greyed, the label names the week by its Monday, ‹ › step a week to its first production day
+ choose('week');
+ assert.deepEqual(field(),[true,'true','-1','Week of 2026-10-05','Previous week','Next week']);
+ assert.equal(els['day-label'].className,'field-label period-name');
+ assert.deepEqual(last(),['push','/corr/1/week/2026-10-09/shift/1']);
+ assert.equal(els['day-next'].disabled,true);assert.equal(els['day-prev'].disabled,false);   // no production day after this week
+ prev();assert.equal(els.day.value,'2026-09-28');assert.equal(els['day-label'].textContent,'Week of 2026-09-28');assert.deepEqual(last(),['push','/corr/1/week/2026-09-28/shift/1']);
+ assert.equal(els['day-next'].disabled,false);next();assert.equal(els.day.value,'2026-10-05');assert.equal(els['day-label'].textContent,'Week of 2026-10-05');
+ // Month: the label is the month, ‹ › step a month
+ choose('month');
+ assert.deepEqual(field(),[true,'true','-1','October 2026','Previous month','Next month']);
+ prev();assert.deepEqual([els.day.value,els['day-label'].textContent],['2026-09-01','September 2026']);assert.deepEqual(last(),['push','/corr/1/month/2026-09-01/shift/1']);
+ prev();assert.deepEqual([els.day.value,els['day-label'].textContent],['2026-08-03','August 2026']);
+ prev();assert.deepEqual([els.day.value,els['day-label'].textContent],['2026-07-27','July 2026']);
+ assert.equal(els['day-prev'].disabled,true);prev();assert.equal(els.day.value,'2026-07-27');   // the store's first month: nothing earlier
+ // 4-4-5: the period's number in its fiscal year (record_store.fiscal_period), ‹ › step a period
+ choose('accounting');
+ assert.deepEqual(field(),[true,'true','-1','4-4-5 period 12 of the prior year','Previous 4-4-5 period','Next 4-4-5 period']);   // 29 Jun – 2 Aug 2026
+ assert.equal(els['day-prev'].disabled,true);
+ next();assert.deepEqual([els.day.value,els['day-label'].textContent],['2026-08-03','4-4-5 period 1']);assert.deepEqual(last(),['push','/corr/1/period/2026-08-03/shift/1']);
+ next();assert.deepEqual([els.day.value,els['day-label'].textContent],['2026-08-31','4-4-5 period 2']);
+ next();assert.deepEqual([els.day.value,els['day-label'].textContent],['2026-09-28','4-4-5 period 3']);   // 28 Sep – 1 Nov, five weeks
+ assert.equal(els['day-next'].disabled,true);
+ prev();assert.deepEqual([els.day.value,els['day-label'].textContent],['2026-08-31','4-4-5 period 2']);
+ const name=(day,period)=>vm.runInContext(`periodName(${JSON.stringify(day)},${JSON.stringify(period)})`,ctx);
+ assert.deepEqual(['2026-08-30','2026-09-27','2026-11-01','2026-11-02','2025-08-04','2025-01-02','2024-12-30'].map(d=>name(d,'accounting')),
+  ['4-4-5 period 1','4-4-5 period 2','4-4-5 period 3','4-4-5 period 4','4-4-5 period 1 of the prior year','4-4-5 period 6 of the year starting 2024-08-05','4-4-5 period 6 of the year starting 2024-08-05']);   // docs/METRICS.md's calendar
+ assert.deepEqual([name('2026-09-16','week'),name('2026-09-16','month'),name('2026-09-16','day')],['Week of 2026-09-14','September 2026',null]);
+ // Day gives the field back, and ‹ › step a production day again
+ choose('day');
+ assert.deepEqual(field(),[false,'false','0','Production day','Previous production day','Next production day']);
+ assert.equal(els['day-label'].className,'field-label');
+ prev();assert.equal(els.day.value,'2026-08-28');assert.deepEqual(last(),['push','/corr/1/day/2026-08-28/shift/1']);
+ console.log('UI issue-137 checks passed: a fresh page lands on the server\'s landing (last production day, shift 1, Day) with no day in the markup; Week, Month and 4-4-5 grey the day (disabled, aria-disabled, out of the tab order), name the window ("Week of 2026-10-05", "October 2026", "4-4-5 period 1") and step by it; Day re-enables the field.');
 })().catch(error=>{console.error(error);process.exit(1);});
