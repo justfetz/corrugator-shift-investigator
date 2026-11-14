@@ -18891,6 +18891,390 @@
     ]
    },
    "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 3: The reading had compare=previous, and covers() never checked it: the grade totals carry no week before. The answer carries it."
+  },
+  {
+   "id": "semantic-grade-took-most-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade took the most setups this week?",
+   "expect": {
+    "raises": "'took'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: 'took' became a word the parser does not read, so main's grade totals (36,213.8 MSF across 6 grades) answered. A verb it does not read is refused unless the hand route answers the other words."
+  },
+  {
+   "id": "semantic-shift-experienced-most-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift experienced the most stops this week?",
+   "expect": {
+    "raises": "'experienced'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: the hand route answered shift 2's Pareto (11 stops at the stacker), never the shifts ranked."
+  },
+  {
+   "id": "semantic-shift-produced-most-msf",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift produced the most MSF this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=msf&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "msf",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] (?:and Shift [123] )?(?:had|tied for) the most volume this week: \\*\\*[0-9][0-9,.]* MSF\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: with 'produced' unread the hand route answered shift 2's grade totals. 'Produced' is read of what ran."
+  },
+  {
+   "id": "semantic-more-setups-than-a-grade-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grades had more setups than 26-C this week?",
+   "expect": {
+    "raises": "'than'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: 'than' was a filler word, so the parser answered '26-C had the most setups, board grade 26-C'. A threshold or another value compared is refused."
+  },
+  {
+   "id": "semantic-bond-this-week-leads-with-bond",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Bond this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&reject_family=BOND",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {
+        "reject_family": "BOND"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects, reject family Bond this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: a family named bare got the waste breakdown, led by side trim; 'show bond' and 'is it bond or warp' keep it."
+  },
+  {
+   "id": "semantic-reject-family-most-rejects-is-ranked",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which reject family had the most rejects this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&by=reject_family&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "reject_family"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[A-Z][a-z]+(?: and [A-Z][a-z]+)? (?:had|tied for) the most dry-end rejects this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: a ranking of the families got the waste breakdown, led by side trim, which ranks nothing."
+  },
+  {
+   "id": "semantic-elapsed-speed-by-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Elapsed speed by grade this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_elapsed_fpm&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_elapsed_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Elapsed speed this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: the grades' speed card answered, whose speeds are without stops, never the elapsed speed."
+  },
+  {
+   "id": "semantic-speed-by-grade-versus-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Speed by grade this week versus last week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_run_fpm&window=week&by=grade&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_run_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Speed without stops this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\* · [-+]?[0-9][0-9,.]* vs [0-9][0-9,.]* ft/min the week before"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: the grades' speed card answered with no week before, although the question compared with it."
+  },
+  {
+   "id": "semantic-downtime-dollars-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Downtime dollars this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_usd&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_usd",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Downtime, priced this week: \\*\\*\\$[0-9][0-9,.]*\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: the levers answered (every lever's dollars a year), never the downtime's own dollars."
+  },
+  {
+   "id": "semantic-roll-changes-are-paper-changes",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Roll changes this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=paper_changes&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "paper_changes",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Paper changes this week: \\*\\*[0-9][0-9,.]* paper changes\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: the hand router's 'The records do not count rolls' stood as a domain reason, but 'roll changes' is the model's word for paper changes."
+  },
+  {
+   "id": "semantic-good-board-is-good-output",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Good board this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=good_output_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "good_output_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Good output this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: 'The records do not count boards' stood, but 'good board' is the model's word for good output, no count asked."
+  },
+  {
+   "id": "semantic-shift-lost-most-setups-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift lost the most setups yesterday?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: the 'lost' refusal skipped the overview routes, so shift 2's KPI tiles (49 dry-end setups) answered."
+  },
+  {
+   "id": "semantic-shift-rejected-most-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift rejected the most this week?",
+   "expect": {
+    "raises": "'rejected'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: a reject with no measure got shift 2's waste breakdown, led by side trim."
+  },
+  {
+   "id": "semantic-lose-to-warp-leads-with-warp",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much did we lose to warp this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&reject_family=WARP",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {
+        "reject_family": "WARP"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects, reject family Warp this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of c5d840c: 'to' after 'lose' was unread, so the waste breakdown, led by side trim, answered. It is the cue of the value after it."
+  },
+  {
+   "id": "money-lose-this-week-is-the-levers",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much money did we lose this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=money&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_opportunities",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*\\$[0-9][0-9,.]* a year\\*\\* across [0-9][0-9,.]* levers"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of 20c833d: money lost with no measure named is the money's own answer, main's: 20c833d refused it ('lose' names no measure)."
+  },
+  {
+   "id": "money-lose-this-shift-is-the-shifts-dollars",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much money did we lose this shift?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*\\$[0-9][0-9,.]*\\*\\* of recorded losses"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of 20c833d: as the week's: the shift's recorded losses, main's answer, which 20c833d refused."
+  },
+  {
+   "id": "semantic-how-many-stacker-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stacker boards this week?",
+   "expect": {
+    "raises": "do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of 20c833d: a count asked: 20c833d overruled main's refusal and answered the stacker waste boards in square feet."
+  },
+  {
+   "id": "semantic-how-many-shear-chops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many shear chops this week?",
+   "expect": {
+    "raises": "not a count"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of 20c833d: a count asked of the chops, which are kept as square feet: 20c833d answered in square feet."
+  },
+  {
+   "id": "semantic-downtime-other-than-a-reason-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime for reasons other than the stacker this week",
+   "expect": {
+    "raises": "'than'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of 20c833d: 'other than' excludes a value, which no query reads: main and 20c833d answered every reason's downtime review."
   }
  ]
 }
