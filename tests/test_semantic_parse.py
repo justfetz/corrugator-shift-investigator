@@ -641,11 +641,13 @@ def test_the_parser_reads_the_routers_request_phrases_and_no_moved_function_word
     moved = ('can', 'could', 'would', 'will', 'need', 'want', 'to', 'go', 'up', 'went', 'far')
     assert not set(moved) & agent.FUNCTION_WORDS and not set(moved) & P.FILLER
     for question in ('Could you tell me which shift had the most stops this week?', 'I want to know which grade had the most setups this month',
-                     'Which shift racked up the most stops this week?', 'Can you show me which shift had the most stops this week?'):
+                     'Which shift racked up the most stops this week?', 'Can you show me which shift had the most stops this week?',
+                     'Compare shift 1 to shift 2 on stops this week', 'What percent of downtime went to maintenance this week?'):
         assert reading(store, question).complete, question
     for question in ('Which shift can run the most setups this week?', 'Which grade will run the most setups this week?',
                      'Which shift had the most stops so far this week?', 'Which shift was up the most this week?',
-                     'Which crew needs the most setups this week?', 'Which shift had the most setups to go this week?'):
+                     'Which crew needs the most setups this week?', 'Which shift had the most setups to go this week?',
+                     'Which shift went down the most this week?'):
         assert not reading(store, question).complete, question
 
 

@@ -35,7 +35,10 @@ LOSS = ('lost', 'lose', 'losing', 'down')
 # ... of which these are cues before a value or a dimension, and are consumed with it
 PLACE_CUES = ('at', 'on', 'in')
 REASON_CUES = ('for', 'from', 'to', 'due', 'caused', 'because', 'triggered', 'related')
-CONNECTOR = (r"\b(?:(?:caused|triggered|brought\s+on|due|related|attributed|coded|charged)\s+(?:by|to|from)|because\s+of)\b")
+# ("went to maintenance", "stops that go to the stacker": the router's FILTER_CONNECTOR reads the same verbs; "go" and "went" are not
+# function words after issue #153)
+CONNECTOR = (r"\b(?:(?:caused|triggered|brought\s+on|due|related|attributed|coded|charged)\s+(?:by|to|from)|(?:went|gone|go|goes|going)\s+to"
+             r"|because\s+of)\b")
 # The closed table of ranking, grouping, comparison and statistic words (the issue's "closed set"): the model holds measures,
 # dimensions and values, never these.
 RANK = {'most': 'most', 'top': 'most', 'highest': 'most', 'biggest': 'most', 'largest': 'most', 'greatest': 'most', 'max': 'most',
@@ -453,6 +456,10 @@ def _read(reading, text, context, store, mdl):
     lower = re.sub(r"\b(cost|costs|costing)(\s+us)?\s+(?=(the\s+)?(most|least|more|less)\b)", ' ', lower)   # "cost the most minutes": the verb
     lower, connectors = _consume(CONNECTOR, lower, used, 'reason cue')
     # ---- the words, longest vocabulary phrase first
+    if re.search(r"\bcompar(?:e|ed|ing)\b", lower):
+        # "compare 32-C to 26-C", "compare shift 1 to shift 2": the two compared, joined as "and" joins them. "To" is not a function word
+        # (issue #153: "to go", "need to"); only beside a comparison said is it the comparison's
+        lower = re.sub(r"\bto\b", ' and ', lower)
     vocab = vocabulary(store, mdl)
     items = _items(lower, vocab)
     a = {'rank': rank, 'limit': limit, 'per_day': bool(per_day), 'reason_cue': bool(connectors), 'period': period, 'anchor': anchor,
