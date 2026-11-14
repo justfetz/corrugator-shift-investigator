@@ -93,6 +93,7 @@ store measures run one record-store tool over a window.
 | `speedvar` | `get_speed_variance` over the window: the speed gap against each grade's trailing-year baseline split into stops, setups, running under baseline and grade mix, with planned maintenance and external stops as buckets of their own when the window holds them ("top 3 contributors to speed variation", "what drove speed", "speed loss breakdown"); `against=` changes the reference; `shifts=` lists one decomposition per shift, or with `against=shift` the shift explained and the one it is measured against | the same |
 | `review` | `get_downtime_review` (issue #101): maintenance and operator downtime against their bands, every reason ranked by % of scheduled minutes with stops and minutes per stop, a power outage apart as external, planned maintenance (scheduled) last as scheduled time, and the flags with their supervisor slot and recurrence; the all-shifts downtime of a production day ("top downtime reasons yesterday", "show downtime by reason" under all shifts) | the same over the window |
 | `trend` | `get_trend` of `metric=` over `weeks=` (default 8) production weeks ending with the day's week | the same |
+| `semantic` | one query of [the semantic model](../src/investigator/semantic_model.json) (issue #117): `m=` names its measure, `by=` up to two of its dimensions (`by=grade,shift`), and each other dimension is a filter field taking one value (`kind=Maintenance`, `place=Double backer`, `reject_family=WARP`, `grade=26-C`, `lane=2`, `web_width=100`); `compare=prev` puts the previous window of the same grain beside every row (a slice it recorded nothing for is a zero; a previous window outside the records says so, and the change is stated only when both windows are complete; refused beside a time split, `by=day` for one, whose rows have none in common with the window before); over the Period control's window or `window=`, for one shift (the path's, or `shifts=3`) or all. The answer leads with the asked measure over the whole window as the bold figure, then one finding per row of the split, each citing its row; the table is the rows, each with the ids of the records it sums. The router does not ask it yet (phase 2) | the same |
 | `report` | refused: a day is investigated with a question | the deterministic period report (heatmap, daily matrix, recurring downtime, notes) |
 
 Modifiers, each refused when it does not apply to the measure:
@@ -113,6 +114,8 @@ Modifiers, each refused when it does not apply to the measure:
 | `rank=` | `speed`, `downtime`, `quality` | all three |
 | `lens=` | `supervisor` (the controllable losses ranked; side trim and planned maintenance schedule-driven, then a power outage external, after), `ownership` (the total cost of waste, side trim first, every waste line priced once, the dry-end kinds under one tag-scrap subtotal), for `money` (issue #101) | every lever ranked |
 | `want=` | `chart`, `profit`: objectives the question stated that the tools may not meet, so the answer's status and disclaimer survive the redirect | none |
+| `m=` | `semantic` only: a measure of the semantic model, by its name or one of its synonyms (`m=scrap` is `reject_sqft`); [every measure](../src/investigator/semantic_model.json) | required |
+| `crew=`, `grade=`, `flute=`, `wet_end=`, `web_width=`, `place=`, `reason=`, `reject_family=`, `reject_reason=`, `lane=`, `order=`, `customer=` (and `kind=`) | `semantic` only: one value of that dimension, which the records must hold (any case, or a synonym in the plant's words: `place=DB` is `Double backer`, `reason=glue` is `Glue / starch`, `kind=pm` the planned maintenance kind); a dimension the measure's records do not carry is refused with the ones they do, and a value the records do not hold with the nearest values they do | none |
 | `rates=` | the visitor's rates, `paper:<$/MSF>`, `hour:<$/hr>`, `margin:<$/MSF>`, `trim:<% target>`, comma-separated in that order, at most two decimals each, ASCII digits only ([the cost model](COST_MODEL.md#overrides)); every measure takes it, and the answer's provenance line names each rate as "yours". The page writes it (#31b): a rate changed in the rail's rates panel (**Change rates**) re-prices the page in the browser and is written into the address bar (replaced, not pushed), into every question asked after it and into the canned questions' links; a prior view (`after=`) never carries it. The period report has no dollars of its own but keeps it, since its card carries the money of its window | the server's rates (`INVESTIGATOR_RATES`, else the post's) |
 | `corrupt=1` | the Advanced toggle that injects the bad trim record | off |
 | `after=` | the earlier views of this conversation, each a canonical address without its own chain, at most 8; the agent keeps its `max_turns`. A period report in the chain is kept on the address but, as on the session path, enters no history | none |
@@ -149,6 +152,7 @@ same grain, which these answers carry already or which their store form carries.
 | `measure=overview`, `summary` or `fpm` with `compare=prev` under Day | `measure=kpis`: the day's KPI tiles against the previous production day |
 | `kind=pm` | `kind=scheduled`: the planned stop's kind, which v1 recorded as `PM` (owner, 2026-11-12) |
 | a default spelled out (`by=reason`, `unit=minutes`, `weeks=8`) or the fields in another order | the canonical spelling |
+| `measure=semantic` with a synonym or another case: `m=scrap&by=defect`, `kind=maint`, `place=db`, `web_width=100.0` | the model's own names and the records' own values: `m=reject_sqft&by=reject_reason`, `kind=Maintenance`, `place=Double+backer`, `web_width=100` (issue #117) |
 
 Issue #20's examples: `/corr/1/day/2026-09-14/shift/2?measure=downtime&by=reason&compare=prev` →
 `/corr/1/day/2026-09-14/shift/2?measure=pareto`; `/corr/1/period/2026-09-14/shift/3?measure=waste&by=grade` →
@@ -196,9 +200,13 @@ shows the refusal of its `.json`.
 | "What's trim costing us this month?" — Day, all shifts | `/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership` |
 | the Period report button — Month, shift 2 | `/corr/1/month/2026-09-14/shift/2?measure=report` |
 | the scope's own KPI tiles (what the page primes on load) | `/corr/1/week/2026-09-14.json?measure=kpis` |
+| unplanned maintenance minutes by board grade this week (no question asks it yet: the semantic model, issue #117) — Week, all shifts | `/corr/1/week/2026-09-14?measure=semantic&m=downtime_minutes&by=grade&kind=Maintenance` |
+| dry-end rejects by order on one shift — Day, shift 2 | `/corr/1/day/2026-09-14/shift/2?measure=semantic&m=reject_sqft&by=order` |
 
 Every routing case in `evals/golden.json` records its address as `expect.url`; `python3 evals/run.py`
-resolves each question through the server and fails the case when it lands elsewhere.
+resolves each question through the server and fails the case when it lands elsewhere. A case may ask by its address
+instead of a question (`url`, the `measure=semantic` cases): the address is resolved and answered in process as the
+server answers it, then fetched over GET, where a hand-typed spelling must redirect to `expect.url`.
 
 ## The routes
 

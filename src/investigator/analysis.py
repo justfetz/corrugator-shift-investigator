@@ -12,6 +12,12 @@ import duckdb
 from . import records as R
 from . import targets
 
+# Every connection the app opens (this one and the record store's). DuckDB 1.5.1's join filter pushdown can drop the
+# matches of a LEFT JOIN under CPU contention, so a joined row reads NULL: on the review of PR #148 a day split of
+# dry-end % read 0.00% on every day beside a 0.41% total, and the bare join of two grouped subqueries lost its matches in
+# 13 to 26 of 40 runs with four processes sharing two CPUs, and in none of 160 with this optimizer off.
+DUCKDB_CONFIG = {"threads": 2, "disabled_optimizers": "join_filter_pushdown"}
+
 MAX_BYTES = 1_000_000
 
 
@@ -161,7 +167,7 @@ class Analysis:
         return self
 
     def _load(self, shift_rows, setup_rows, stop_rows, order_rows, reject_rows):
-        self._db = duckdb.connect(":memory:", config={"threads": 2})
+        self._db = duckdb.connect(":memory:", config=DUCKDB_CONFIG)
         for table, columns in TABLES.items():
             self._db.execute(f"CREATE TABLE {table} ({columns})")
         for table, rows in (("shifts", shift_rows), ("setups", setup_rows), ("stops", stop_rows),

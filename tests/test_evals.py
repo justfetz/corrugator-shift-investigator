@@ -298,7 +298,9 @@ def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
 def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it():
     """Issue #20: the routing goldens carry expect.url, the runner resolves q= through GET /q and fails
     a case whose question lands elsewhere, and every offline question is also answered over its URL."""
-    routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c]   # an analyst-plan case is a scripted live round: no URL
+    routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c and 'url' not in c]   # an analyst-plan case is a scripted live round: no URL
+    asked_by_address = [c for c in CASES if c.get('url')]   # issue #117: a case that asks by its address, which must answer at expect.url
+    assert asked_by_address and all('question' not in c and (c['type'] == 'refusal' or c['expect']['url'].startswith('/corr/1/')) for c in asked_by_address)
     assert len(routing) == 286 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + issue #100's 14 + issue #101's 27 + issue #135's 2 + 96 issue #113 count and unit cases
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)

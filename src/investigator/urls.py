@@ -19,6 +19,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from .agent import Context, PERIOD_WORDS, QUANTITY_METRICS, TREND_METRICS, asked_for, period_plan, quantity_request, slug, unslug
 from .cost_model import format_rates, parse_rates
+from . import semantic
 
 # URL grain <-> the Period control (web and /api/ask) <-> the period tools' name for it.
 GRAIN_TO_CONTROL = {'day': 'day', 'week': 'week', 'month': 'month', 'period': 'accounting'}
@@ -45,10 +46,15 @@ PERIOD_SHAPES = {('get_period_kpis', 'get_downtime_pareto', 'get_waste_breakdown
 UNCHARTED = ('setups', 'orders', 'notes', 'rank')   # day plans that draw nothing: `want=chart` changes their status
 GROUPS = ('reason', 'place', 'kind')
 RANK_METRICS = ('speed', 'downtime', 'quality')
-QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'waste', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank',
-                'lens', 'want', 'rates', 'corrupt', 'after', 'format')
-PARAM_ORDER = ('measure', 'window', 'by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'waste', 'weeks', 'compare', 'against', 'shifts', 'rank',
-               'lens', 'want', 'rates', 'corrupt', 'after')
+# measure=semantic (issue #117): `m=` names the semantic model's measure and each of its dimensions is a filter field
+# (`place=Double backer`), in the model's order; `by=` takes one dimension or two (`by=grade,shift`).
+# measure=quantity (issue #113) shares `reason=`, `place=` and `grade=` with them and adds `waste=`; its URLs carry one of them,
+# after `metric=`, so `unit` and `metric` sort before the dimension filters (a semantic address carries neither).
+SEMANTIC_FILTERS = tuple(d for d in semantic.model().dimensions if semantic.model().dimensions[d]['type'] != 'time' and d != 'shift')
+QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'lens', 'want',
+                'rates', 'corrupt', 'after', 'format', 'm', *(f for f in SEMANTIC_FILTERS if f != 'kind'), 'waste')
+PARAM_ORDER = ('measure', 'm', 'window', 'by', 'kind', 'unit', 'metric', *(f for f in SEMANTIC_FILTERS if f != 'kind'), 'waste', 'weeks',
+               'compare', 'against', 'shifts', 'rank', 'lens', 'want', 'rates', 'corrupt', 'after')
 AGAINST = ('baseline', 'previous', 'shift')   # measure=speedvar: what the speed gap is measured from; baseline is the default
 AGAINST_ALIASES = {'target': 'baseline'}   # before the owner's speed baseline (issue #101) the default was each grade's target
 LENSES = ('supervisor', 'ownership')   # get_opportunities' owner lenses (issue #101); `all` is the default and is omitted
@@ -56,7 +62,7 @@ MAX_AFTER = 8          # prior views carried as follow-up context; the agent kee
 MAX_URL = 2000
 PATH = re.compile(r'^/corr/(?P<machine>[A-Za-z0-9_.-]{1,32})/(?P<grain>day|week|month|period)/'
                   r'(?P<date>\d{4}-\d{2}-\d{2})(?:/shift/(?P<shift>[123]))?(?P<json>\.json)?$')
-MEASURE_HELP = ('measure is one of ' + ', '.join([*INTENT_MEASURES.values(), *STORE_MEASURES, 'quantity', 'report']) +
+MEASURE_HELP = ('measure is one of ' + ', '.join([*INTENT_MEASURES.values(), *STORE_MEASURES, 'quantity', 'semantic', 'report']) +
                 '; see docs/URLS.md')
 # Hand-typed spellings of a canonical state (issue #70; the "you may type · it becomes" table of docs/URLS.md).
 # `resolve_url` rewrites them before it builds the request; the server redirects them to the canonical address.
@@ -120,6 +126,14 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
             lead = request['lead']
             params.append(('metric', lead['metric']))
             params += [(key, slug(lead[key])) for key in ('reason', 'place', 'grade', 'waste') if key in lead]
+        elif tools == (semantic.TOOL,):
+            measure = 'semantic'   # issue #117: the query's own names, already the model's (validate resolved any synonym)
+            params.append(('m', first['measure']))
+            if first['group_by']:
+                params.append(('by', ','.join(first['group_by'])))
+            params.extend((dim, _semantic_text(value)) for dim, value in first['filters'].items())
+            if first.get('compare') == 'previous':
+                params.append(('compare', 'prev'))
         elif tools in PERIOD_SHAPES:
             measure = 'summary' if request.get('intent') == 'period_summary' else PERIOD_SHAPES[tools]
             if measure in ('overview', 'summary'):
@@ -272,13 +286,13 @@ def resolve_url(url, store, max_turns=4, depth=0):
         request = None
     else:
         try:
-            request = _request(measure, fields, context, window)
+            request = _request(measure, fields, context, window, store)
         except ValueError as exc:
             if typed:   # the refusal names the canonical measure: say which alias became it
                 raise ValueError(f'{exc} ({typed} becomes measure={measure})') from None
             raise
         request['asked'] = _wants(fields.get('want'))
-    for key in ('by', 'kind', 'unit', 'metric', 'reason', 'place', 'grade', 'waste', 'weeks', 'window', 'compare', 'against', 'rank', 'lens'):
+    for key in ('by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'rank', 'lens', 'm', *SEMANTIC_FILTERS, 'waste'):
         if key in fields and key not in _used(measure, fields):
             hint = ''
             if key == 'compare':
@@ -332,6 +346,8 @@ def _used(measure, fields):
         return {'window', 'against'}
     if measure == 'quantity':
         return {'window', 'metric', 'reason', 'place', 'grade', 'waste'}
+    if measure == 'semantic':
+        return {'m', 'by', 'window', 'compare', *SEMANTIC_FILTERS}
     if measure in STORE_MEASURES:
         return {'window'}
     return set()
@@ -404,9 +420,11 @@ def _wants(value):
     return [w for w in ('chart', 'profit') if w in items]
 
 
-def _request(measure, fields, context, window):
+def _request(measure, fields, context, window, store=None):
     scope, shift = context.scope, context.shift
     shifts = _shift_list(fields.get('shifts'), scope, shift)
+    if measure == 'semantic':
+        return _semantic(fields, context, window, shifts, store)
     if measure in MEASURE_INTENTS:
         intent = MEASURE_INTENTS[measure]
         group_by, kind = 'reason', None
@@ -545,6 +563,35 @@ def _speed_variance(against, shifts, context, window):
     return {'intent': 'period_speedvar', 'shifts': list(dict.fromkeys(s for step in steps for s in (step['shift'], step.get('against_shift')) if s)),
             'kind': None, 'group_by': 'reason', 'want_chart': True, 'ranking_metrics': [],
             'plan': [{'tool': 'get_speed_variance', 'arguments': arguments} for arguments in steps]}
+
+
+def _semantic_text(value):
+    """A filter value as the address writes it: a whole number without its decimal point (web_width=100)."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _semantic(fields, context, window, shifts, store):
+    """`measure=semantic&m=<measure>&by=<dimension>[,<dimension>]&<dimension>=<value>` (issue #117): one semantic query over the
+    window (the Period control's, or `window=`), for the selected shift, one listed shift (`shifts=3`) or all shifts.
+    The query is validated against the model and the store here, so the address's names are the model's own: a synonym
+    redirects to the measure, dimension or value it stands for, and anything unknown is refused with the nearest choices."""
+    if context.scope == 'shift':
+        shift = context.shift
+    elif len(shifts) > 1:
+        raise ValueError('measure=semantic runs for one shift (shifts=3) or all shifts; by=shift splits it by shift')
+    else:
+        shift = shifts[0] if shifts else None
+    compare = fields.get('compare')
+    if compare not in (None, 'prev'):
+        raise ValueError('compare=prev puts the previous window of the same kind beside a semantic query; no other comparison applies')
+    filters = {dim: fields[dim] for dim in SEMANTIC_FILTERS if dim in fields}
+    query = semantic.SemanticQuery(measure=fields.get('m'), group_by=[b for b in fields.get('by', '').split(',') if b] if fields.get('by') else [],
+                                   filters=filters, window=window, compare='previous' if compare else None, shift=shift)
+    query = semantic.validate(query, store)
+    return {'intent': 'semantic', 'shifts': [shift] if shift else [], 'kind': None, 'group_by': 'reason', 'want_chart': bool(query.group_by),
+            'ranking_metrics': [], 'plan': [{'tool': semantic.TOOL, 'arguments': query.to_arguments()}]}
 
 
 def _compare_anchor(value, period):

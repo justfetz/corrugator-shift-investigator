@@ -26,13 +26,13 @@ def test_committed_file_is_what_the_generator_produces():
 
 def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
     cases = COMMITTED['cases']
-    assert 40 <= len(cases) <= 130 and len({c["id"] for c in cases}) == len(cases)   # main's 90, the review and lens cases of #101, the contract-v2 cases of #100, #113's counts
+    assert 40 <= len(cases) <= 180 and len({c["id"] for c in cases}) == len(cases)   # main's 90, the review and lens cases of #101, the contract-v2 cases of #100, #113's counts, #117's semantic cases
     tools = {c['tool'] for c in cases}
     assert tools == {'get_period_kpis', 'compare_periods', 'get_downtime_pareto', 'get_waste_breakdown',
                      'get_stops_profile', 'get_trend', 'get_grade_totals', 'get_overrun', 'get_speed_opportunity', 'get_rollstock',
                      'get_shift_kpis', 'get_downtime_breakdown', 'get_quality_breakdown',
                      'get_shift_dollars', 'get_opportunities', 'get_speed_variance', 'get_day_dollars',   # get_day_dollars: the #31b review
-                     'get_downtime_review'}
+                     'get_downtime_review', 'semantic_query'}   # semantic_query: the semantic model's new combinations (issue #117)
     dollars = [c for c in cases if c['id'].startswith('value-dollars-')]
     assert len(dollars) >= 6 and any(c.get('rates') for c in dollars)   # issue #31: dollar cases, one with changed rates
     tiles = {key for key, *_ in KPI_CATALOG}
