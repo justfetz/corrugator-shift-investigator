@@ -11044,6 +11044,596 @@
      "^\\*\\*[0-9,.]+ ft/min\\*\\* "
     ]
    }
+  },
+  {
+   "id": "gate-which-shift-most-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most setups this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (ranked shift): answered 192 setups, the selected shift's total; which shift had the most is a ranking, refused by the plain-quantity gate.",
+   "expect": {
+    "raises": "asks for a ranking"
+   }
+  },
+  {
+   "id": "gate-what-shift-fewest-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What shift had the fewest setups this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (ranked shift): answered 192 setups, the selected shift's total.",
+   "expect": {
+    "raises": "asks for a ranking"
+   }
+  },
+  {
+   "id": "gate-shifts-compare-on-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How did the shifts compare on stops this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (shifts compared): answered 49 stops, the selected shift's total.",
+   "expect": {
+    "raises": "asks for a ranking"
+   }
+  },
+  {
+   "id": "gate-rank-shifts-on-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Rank the shifts on setups this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (shifts ranked): answered 192 setups, the selected shift's total.",
+   "expect": {
+    "raises": "asks for a ranking"
+   }
+  },
+  {
+   "id": "gate-most-common-stop-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What was the most common stop this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (most common): answered 131 stops, every stop of the week.",
+   "expect": {
+    "raises": "asks for a ranking"
+   }
+  },
+  {
+   "id": "gate-stops-by-type-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops by type this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by type): answered 131 stops, the week's total.",
+   "expect": {
+    "raises": "asks for a grouping"
+   }
+  },
+  {
+   "id": "gate-stops-by-category-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops by category this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by category): answered 131 stops.",
+   "expect": {
+    "raises": "asks for a grouping"
+   }
+  },
+  {
+   "id": "gate-stops-by-splicer-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops by splicer this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by splicer): answered 131 stops; a splicer named by its number is a place ('how many stops at splicer 3').",
+   "expect": {
+    "raises": "asks for a grouping"
+   }
+  },
+  {
+   "id": "gate-stops-by-knife-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops by knife this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by knife): answered 131 stops.",
+   "expect": {
+    "raises": "asks for a grouping"
+   }
+  },
+  {
+   "id": "gate-stops-each-day-is-the-stops-profile",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Stops each day this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 131 stops, the week's total; each day is the stops of each production day, as 'stops per day this week' is.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=stops&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_stops_profile",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_stops_profile",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ stops\\*\\* on 2026-09-1[4-8] .*, the most of 5 production days"
+    ]
+   }
+  },
+  {
+   "id": "gate-stops-a-day-is-the-stops-profile",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops a day this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 131 stops; a day is per day, the stops of each production day.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=stops&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_stops_profile",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_stops_profile",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ stops\\*\\* on 2026-09-1[4-8] .*, the most of 5 production days"
+    ]
+   }
+  },
+  {
+   "id": "gate-setups-each-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups each day this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 577 setups, the week's total; setups are not kept per day.",
+   "expect": {
+    "raises": "Setups per day is not a ratio the records keep"
+   }
+  },
+  {
+   "id": "gate-daily-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Daily setups this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 577 setups, the week's total.",
+   "expect": {
+    "raises": "Setups per day is not a ratio the records keep"
+   }
+  },
+  {
+   "id": "gate-downtime-by-day-is-downtime-per-day",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Downtime by day this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 1 (a qualifier an existing route answers stays routed): answered the downtime review led by a percent of scheduled minutes (as on main); by day is each production day's downtime, downtime_per_day.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=downtime_per_day",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_stops_profile",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_stops_profile",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* of downtime on 2026-09-1[4-8] \\(\\w{3}\\), the most of 5 production days · "
+    }
+   }
+  },
+  {
+   "id": "gate-daily-downtime-is-downtime-per-day",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Daily downtime this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 1: answered the downtime review (as on main); daily downtime is each production day's downtime.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=downtime_per_day",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_stops_profile",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_stops_profile",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* of downtime on 2026-09-1[4-8] \\(\\w{3}\\), the most of 5 production days · "
+    }
+   }
+  },
+  {
+   "id": "gate-median-stop-length-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Median stop length this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, items 2 and 4 (statistics): answered 354.9 minutes, the week's total downtime; no tool returns a median.",
+   "expect": {
+    "raises": "asks for a statistic"
+   }
+  },
+  {
+   "id": "gate-average-stop-cost-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Average stop cost this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2 (AVERAGE_STOP means a length only): answered 2.71 minutes per stop; a cost is not a length.",
+   "expect": {
+    "raises": "average"
+   }
+  },
+  {
+   "id": "gate-average-stop-reason-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Average stop reason this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2: answered 2.71 minutes per stop; a reason is not a length.",
+   "expect": {
+    "raises": "average"
+   }
+  },
+  {
+   "id": "gate-average-stop-frequency-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Average stop frequency this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2: answered 2.71 minutes per stop; a frequency is not a length.",
+   "expect": {
+    "raises": "average"
+   }
+  },
+  {
+   "id": "gate-average-stop-location-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Average stop location this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2: answered 2.71 minutes per stop; a location is not a length.",
+   "expect": {
+    "raises": "average"
+   }
+  },
+  {
+   "id": "gate-stops-per-1000-ft-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops per 1000 ft this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (per 1000 ft): answered 131 stops, the numerator's count; stops per 1000 ft is not a ratio the records keep.",
+   "expect": {
+    "raises": "asks for a grouping"
+   }
+  },
+  {
+   "id": "gate-downtime-minutes-per-msf-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes of downtime per MSF this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (per MSF): answered 354.9 minutes, the week's total; downtime per MSF is not a ratio the records keep.",
+   "expect": {
+    "raises": "asks for a grouping"
+   }
+  },
+  {
+   "id": "gate-long-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many long stops this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (subsets): answered 131 stops, every stop; the records do not split stops by length.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "gate-stops-over-10-minutes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops over 10 minutes this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (subsets): answered 131 stops, every stop.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "gate-short-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many short stops this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (subsets): answered 131 stops, every stop.",
+   "expect": {
+    "raises": "asks for a subset"
+   }
+  },
+  {
+   "id": "gate-percent-of-stops-at-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What percent of stops were at the stacker this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (percent of stops): answered 39 stops at the stacker, a count where a percent was asked.",
+   "expect": {
+    "raises": "asks for a percent"
+   }
+  },
+  {
+   "id": "gate-share-of-stops-maintenance-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What share of stops were maintenance this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (percent of stops): answered 37 maintenance stops, a count where a share was asked.",
+   "expect": {
+    "raises": "asks for a percent"
+   }
+  },
+  {
+   "id": "gate-percent-of-setups-order-changes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What percentage of setups were order changes this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (percent): answered 571 order changes, a count where a percent was asked.",
+   "expect": {
+    "raises": "asks for a percent"
+   }
+  },
+  {
+   "id": "gate-feet-a-minute-is-the-speed",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many feet a minute did we run this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 5 (feet a minute): answered 4,196,531 lineal ft, the count of feet; feet a minute is the speed, every shift as 'how many feet per minute' is (the scope split is the owner's, item 6).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ ft/min\\*\\* "
+    ]
+   }
+  },
+  {
+   "id": "gate-feet-a-minute-keeps-the-controls",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Feet a minute this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 5 (feet a minute): refused with the generic help; feet a minute is the speed, on the controls as 'feet per minute this week' is.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ ft/min\\*\\* "
+    ]
+   }
+  },
+  {
+   "id": "gate-stacker-minutes-per-stop-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stacker minutes per stop this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2 (minutes_per_stop applies the filter or refuses): answered 2.71 minutes per stop, every stop's.",
+   "expect": {
+    "raises": "is kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-minutes-per-stop-at-splicer-3-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Minutes per stop at splicer 3 this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2: answered 2.71 minutes per stop, every stop's, not splicer 3's.",
+   "expect": {
+    "raises": "is kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-maintenance-downtime-per-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Maintenance downtime per day this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2 (downtime_per_day applies the filter or refuses): answered 160.93 minutes, every stop's downtime on the busiest day.",
+   "expect": {
+    "raises": "is kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-downtime-per-day-at-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime per day at the stacker this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 2: answered 160.93 minutes, every stop's downtime on the busiest day, not the stacker's.",
+   "expect": {
+    "raises": "is kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-downtime-we-had-per-stop-is-minutes-per-stop",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much downtime did we have per stop this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 3 (the runner must not fail a right answer): the router answered minutes per stop, and the runner's numerator rule read 'have per stop' and failed it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "gate-minutes-we-lose-per-stop-is-minutes-per-stop",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes do we lose per stop this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 3: the router answered minutes per stop; the runner read 'lose per stop' and failed it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "gate-how-long-down-per-stop-is-minutes-per-stop",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How long are we down per stop this week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 3: refused as 'Down per stop is not a ratio'; how long, per stop, is minutes per stop.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "gate-average-run-length-is-feet-per-setup",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Average run length this week",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 3: the router answered ft per setup, its own run length; the runner wanted minutes per run and failed it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=lineal_per_setup",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ ft per setup\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "gate-stops-versus-last-week-stays-the-count",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops this week versus last week?",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 1 (guard, passes before and after): versus last week is the previous window the quantity carries beside it, so the gate consumes it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_period_kpis",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "compare": true,
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_period_kpis",
+     "render_chart"
+    ],
+    "charts": 1,
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before, (better|worse) "
+    }
+   }
   }
  ]
 }
