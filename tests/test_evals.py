@@ -4,6 +4,8 @@ any recorded live fixture must replay cleanly. The offline p50 and p95 over the
 whole set are gated too. Live calls never run here."""
 import copy
 import importlib.util
+import json
+import re
 import time
 from pathlib import Path
 import pytest
@@ -206,15 +208,20 @@ class SlowAnalysis:
 
 def test_slow_tool_fails_the_latency_budget(monkeypatch):
     """A deliberately slow tool pushes an offline case over its 250 ms default budget and
-    the case fails on that alone; an explicit expect.max_ms raises the budget for that case."""
+    the case fails on that alone; an explicit expect.max_ms raises the budget for that case.
+    The case's own run is checked at this run's budget (scaled on a CI runner, issue #139); the slow
+    tool at the product's own 250 ms, the scale pinned to 1, since that is the mechanism under test."""
     case = next(c for c in CASES if c['id'] == 'why-slow')
     assert 'max_ms' not in case['expect'] and golden.DEFAULT_MAX_MS == 250
     assert golden.run_case(case)[0] == 'pass'
+    monkeypatch.delenv(golden.LATENCY_SCALE_ENV, raising=False)
     real = golden.dataset
     monkeypatch.setattr(golden, 'dataset', lambda day, corrupt=False: SlowAnalysis(real(day, corrupt), 0.3))
     outcome, failures, note, ms = golden.run_case(case)
     assert outcome == 'fail' and ms > 250, (failures, note, ms)
-    assert len(failures) == 1 and failures[0] == f'{ms:.0f} ms, budget 250 ms', failures
+    # The URL leg answers from the server's own store at full speed; on a loaded runner its own 250 ms can trip as well.
+    timed = [f for f in failures if not re.fullmatch(r'URL: \d+ ms server time, budget 250 ms', f)]
+    assert len(timed) == 1 and timed[0] == f'{ms:.0f} ms, budget 250 ms', failures
     roomy = copy.deepcopy(case)
     roomy['expect']['max_ms'] = 10_000
     outcome, failures, _, ms = golden.run_case(roomy)
@@ -236,12 +243,13 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                'money-day-side-trim-schedule-driven'}         # the same seven calls on 2025-08-21: 203-207 ms uncontended (issue #135)
 
 
-def test_heavy_cases_carry_an_explicit_offline_budget():
+def test_heavy_cases_carry_an_explicit_offline_budget(monkeypatch):
     """The heaviest offline cases (the multi-turn stories, the eight- and nine-week trends, the three-shift
     compare, and the three shifts' money with the day's: 210 ms uncontended) run 52-116 ms uncontended and crossed the 250 ms default under 2x CPU
     contention, so each carries expect.max_ms: 500 (evals/README.md has the numbers). The budget is
     offline only: the live or replayed run of a live: true case shares its expect and is never timed
-    against it."""
+    against it. Checked at the product's own budgets: the CI scale (issue #139) is pinned to 1 here."""
+    monkeypatch.delenv(golden.LATENCY_SCALE_ENV, raising=False)
     assert {c['id'] for c in CASES if 'max_ms' in c['expect']} == HEAVY_CASES
     assert all(c['expect']['max_ms'] == 500 for c in CASES if c['id'] in HEAVY_CASES)
     assert golden.latency_failures({'max_ms': 500}, None, 499.4) == []
@@ -274,9 +282,108 @@ def test_run_level_breach_raises_the_exit_status_and_fails_the_ci_gate(monkeypat
         test_offline_latency_budget()
 
 
+class SteppedClock:
+    """run.py's `time` with a perf_counter that moves `step_s` on every read, so each timed case takes exactly that long."""
+    def __init__(self, step_s):
+        self.now, self.step_s = 0.0, step_s
+
+    def perf_counter(self):
+        self.now += self.step_s
+        return self.now
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
+def test_the_ci_scale_loosens_each_case_budget_and_never_the_p50_p95_gate(monkeypatch, capsys, tmp_path, latency_budget):
+    """Issue #139: INVESTIGATOR_LATENCY_SCALE (CI sets it in tests.yml) multiplies each case's own budget, in process
+    and over the URL, and every speed budget a test asserts (the conftest fixture is run.py's latency_budget). The run's
+    p50 / p95 budgets, in the CLI and in test_offline_latency_budget, and every recorded time (--json, --track) are
+    never scaled, and a mistyped scale is refused rather than read as 1."""
+    env = golden.LATENCY_SCALE_ENV
+    assert env == 'INVESTIGATOR_LATENCY_SCALE'
+    monkeypatch.delenv(env, raising=False)
+    assert golden.latency_scale() == 1 and golden.latency_budget(250) == 250 == latency_budget(250)
+    for value, scale in (('', 1), ('1', 1), (' 2 ', 2), ('2.5', 2.5), ('3', 3)):
+        monkeypatch.setenv(env, value)
+        assert golden.latency_scale() == scale and golden.latency_budget(100) == latency_budget(100) == 100 * scale
+    for bad in ('fast', '0', '0.5', '3.5', '-2', 'nan', 'inf'):
+        monkeypatch.setenv(env, bad)
+        with pytest.raises(golden.LatencyScaleError, match=env):
+            golden.latency_budget(250)
+    assert golden.main(['--only', 'why-slow']) == 2 and f"{env}='inf'" in capsys.readouterr().out   # refused before any case runs
+
+    monkeypatch.setenv(env, '2')
+    assert golden.LATENCY_BUDGET_MS == {'p50': 100, 'p95': 250} and golden.DEFAULT_MAX_MS == 250
+    assert golden.latency_failures({}, None, 499.4) == [] and golden.latency_failures({'max_ms': 500}, None, 999.4) == []
+    assert golden.latency_failures({}, None, 500.6) == ['501 ms, budget 500 ms (250 ms × 2, INVESTIGATOR_LATENCY_SCALE)']
+    assert golden.latency_failures({}, 'anthropic', 12_000) == []                     # a live or replayed run is still never timed
+    # The URL path's server time goes through the same helper.
+    case = next(c for c in CASES if c['id'] == 'why-slow')
+    monkeypatch.setattr(golden, 'URL_MS', {})
+    monkeypatch.setattr(golden, 'via_url', lambda *a, **k: ([{}], None, [], 400.0))
+    monkeypatch.setattr(golden, 'score', lambda *a, **k: [])
+    assert golden.url_failures(case, case['expect'], [case['question']], None) == [] and golden.URL_MS == {'why-slow': 400.0}
+    monkeypatch.setenv(env, '1')
+    assert golden.url_failures(case, case['expect'], [case['question']], None) == ['URL: 400 ms server time, budget 250 ms']
+    monkeypatch.undo()
+
+    # Every timed case takes 400 ms: over the product's 250, under 250 × 2. The time kept is the time measured.
+    monkeypatch.setattr(golden, 'time', SteppedClock(0.4))
+    monkeypatch.setenv(env, '2')
+    outcome, failures, _, ms = golden.run_case(case)
+    assert outcome == 'pass' and ms == pytest.approx(400), (failures, ms)
+    monkeypatch.setenv(env, '1')
+    outcome, failures, _, ms = golden.run_case(case)
+    assert outcome == 'fail' and failures[0] == '400 ms, budget 250 ms' and ms == pytest.approx(400), (failures, ms)
+    # The whole-set gate in the CLI: the case passes on its scaled budget, and p50 / p95 at 400 ms are both over 100 / 250.
+    # What it writes keeps the measured 400 ms (the tracked files go to tmp_path, printed relative to it).
+    monkeypatch.setenv(env, '2')
+    monkeypatch.setattr(golden, 'load_cases', lambda: [case])
+    for name in ('HISTORY', 'LAST_RUN'):
+        monkeypatch.setattr(golden, name, tmp_path / getattr(golden, name).name)
+    monkeypatch.setattr(golden, 'ROOT', tmp_path)
+    rows = tmp_path / 'rows.json'
+    assert golden.main(['--json', str(rows), '--track']) == 2
+    out = capsys.readouterr().out
+    assert '1 passed, 0 failed' in out and 'p50 400 ms (budget 100: OVER)' in out and 'p95 400 ms (budget 250: OVER)' in out, out
+    assert "INVESTIGATOR_LATENCY_SCALE=2: each case's own budget × 2; the p50 / p95 budgets and every time above are not scaled" in out
+    assert [(r['outcome'], r['ms']) for r in json.loads(rows.read_text())] == [('pass', 400.0)]
+    (line,) = [json.loads(text) for text in (tmp_path / 'history.jsonl').read_text().splitlines()]
+    assert line['latency_ms'] == {'p50': 400.0, 'p95': 400.0} and line['exit'] == 2, line
+    tracked = json.loads((tmp_path / 'last_run.json').read_text())
+    assert [r['ms'] for r in tracked['rows']] == [400.0]
+    # Its verdict was judged at 250 ms × 2, so both files say so (test_the_tracked_record_... refuses such a line in the repo).
+    assert line['latency_scale'] == tracked['latency_scale'] == 2 and 'do not commit it (CI refuses a scaled line)' in out, line
+    monkeypatch.setenv(env, '1')                                                        # unscaled, the record is as before
+    unscaled = golden.history_line(json.loads(rows.read_text()), 0)
+    assert 'latency_scale' not in unscaled and 'latency_scale' not in golden.last_run(json.loads(rows.read_text()), unscaled)
+    monkeypatch.setenv(env, '2')
+    # The CI gate in pytest reads the same unscaled budgets: a p50 of 150 ms fails at scale 2 (a scaled gate would allow 200).
+    monkeypatch.setitem(globals(), 'LATENCY_MS', {c['id']: 150.0 for c in OFFLINE})
+    with pytest.raises(AssertionError, match=r'offline p50 150\.0 ms over the 100 ms budget'):
+        test_offline_latency_budget()
+    # CI's value is set once, in tests.yml, within the bound; the deploy, the preview, the reviewer and the image never scale.
+    workflows = ROOT / '.github' / 'workflows'
+    ci = re.findall(r"^ +INVESTIGATOR_LATENCY_SCALE: '([0-9.]+)'$", (workflows / 'tests.yml').read_text(encoding='utf-8'), re.M)
+    assert len(ci) == 1 and 1 < float(ci[0]) <= golden.MAX_LATENCY_SCALE, ci
+    assert [f.name for f in [*workflows.glob('*.yml'), ROOT / 'Dockerfile'] if f.name != 'tests.yml' and env in f.read_text(encoding='utf-8')] == []
+
+
+def test_the_tracked_record_was_judged_at_the_products_own_budgets():
+    """Issue #139: /evals, its badge and the case study read evals/history.jsonl and evals/last_run.json as committed. A run
+    tracked under INVESTIGATOR_LATENCY_SCALE records `latency_scale` there, since its pass / fail verdicts were judged at
+    scaled case budgets; no committed line may carry one, so CI fails the pull request that would ship a scaled verdict."""
+    history = [json.loads(raw) for raw in (ROOT / 'evals' / 'history.jsonl').read_text(encoding='utf-8').splitlines() if raw.strip()]
+    assert history and [line['ran_at'] for line in history if 'latency_scale' in line] == [], 'track again with the scale unset'
+    assert 'latency_scale' not in json.loads((ROOT / 'evals' / 'last_run.json').read_text(encoding='utf-8')), 'track again with the scale unset'
+
+
 def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):
     """The raises path is timed like any other: a refusal that takes 300 ms fails on time alone.
-    A replayed recording slowed the same way still passes, since a live or replayed run is never timed."""
+    A replayed recording slowed the same way still passes, since a live or replayed run is never timed.
+    At the product's own 250 ms: the CI scale (issue #139) is pinned to 1 here."""
+    monkeypatch.delenv(golden.LATENCY_SCALE_ENV, raising=False)
     real_ask = golden.Agent.ask
 
     def slow_ask(self, text, context):

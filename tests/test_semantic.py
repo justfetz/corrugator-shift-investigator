@@ -663,8 +663,8 @@ def test_a_slice_with_no_records_is_a_recorded_zero_where_the_denominator_says_s
     assert all(r['value'] == 0 and r['source_count'] == 0 for r in result['rows'] if r['numerator'] == 0)
 
 
-def test_the_compiler_answers_in_tens_of_milliseconds(store):
-    """Datasette-fast (CLAUDE.md): a generous bound here, since CI runners are slower (#139); the PR records the measured times."""
+def test_the_compiler_answers_in_tens_of_milliseconds(store, latency_budget):
+    """Datasette-fast (CLAUDE.md): a generous bound here, scaled on a CI runner by latency_budget (#139); the PR records the measured times."""
     import time
     run(store, 'stops', WEEK)   # the first query pays DuckDB's warm-up
     for measure, kw in (('downtime_minutes', {'group_by': ['grade'], 'filters': {'kind': 'Maintenance'}}),
@@ -672,7 +672,7 @@ def test_the_compiler_answers_in_tens_of_milliseconds(store):
                         ('trim_usd', {'group_by': ['grade']}), ('speed_all_fpm', {'group_by': ['shift'], 'compare': 'previous'})):
         started = time.perf_counter()
         run(store, measure, MONTH, **kw)
-        assert (time.perf_counter() - started) * 1000 < 500, measure
+        assert (time.perf_counter() - started) * 1000 < latency_budget(500), measure
 
 
 # ------------------------------------------------------------------ the URL and the answer
