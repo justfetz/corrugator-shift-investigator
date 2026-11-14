@@ -43,14 +43,15 @@ function rowsHref(src,part=null,index=null){
 }
 function rowsLink(href,label='The rows behind this figure, in the data browser'){ const a=node('a',undefined,'rows-link'); a.href=href; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.setAttribute('aria-label',label); a.title=label; return a; }
 // One section's inline content: text spans, the bold figure, the trailing evidence link and the link to its rows.
-// `headline` puts what follows the figure in the secondary ink; `trace` is the answer's, whose steps name their rows.
-function shapedInline(text,headline=false,trace=null){
+// `headline` puts what follows the figure in the secondary ink; `receipt` is the server's address of the rows behind this
+// section's own figure (result.receipts, #151 review), else `trace`, whose steps name the rows they read.
+function shapedInline(text,headline=false,trace=null,receipt=null){
  const out=[], ref=SHAPE_REF.exec(text); let rest=ref?text.slice(0,ref.index):text, last=0, after=false;
  for(const m of rest.matchAll(/\*\*([^*]+)\*\*/g)){ if(m.index>last)out.push(node('span',rest.slice(last,m.index))); out.push(node('strong',m[1],'figure')); last=m.index+m[0].length; after=true; }
  if(last<rest.length)out.push(node('span',rest.slice(last),headline&&after?'clause':undefined));
  if(ref){
   out.push(node('span',' ')); out.push(refLink(ref[0].trim(),Number(ref[1])));
-  const step=Array.isArray(trace)?trace[Number(ref[1])-1]:null, href=rowsHref(step&&step.source,ref[2]||null,ref[3]===undefined?null:Number(ref[3]));
+  const step=Array.isArray(trace)?trace[Number(ref[1])-1]:null, href=rowsHref(receipt)||rowsHref(step&&step.source,ref[2]||null,ref[3]===undefined?null:Number(ref[3]));
   if(href)out.push(rowsLink(href));
  }
  return out;
@@ -95,6 +96,7 @@ const STAYS=/data incomplete|withheld|unavailable/i;
 function message(label, paragraphs, cls='', rec=null) {
  const e=node('div',undefined,'message '+cls);if(label)e.append(node('strong',label));
  const trace=rec&&rec.result&&Array.isArray(rec.result.trace)?rec.result.trace:null;   // the receipts' rows (#142)
+ const receipts=rec&&rec.result&&Array.isArray(rec.result.receipts)&&rec.result.receipts.length===paragraphs.length?rec.result.receipts:[];   // per section (#151)
  let notes=null, list=null, look=null, headline=false; // consecutive shift-note lines fold into one disclosure instead of a dump
  const lists=[], groups=[], context=[], looks=[];
  paragraphs.forEach((p,i)=>{
@@ -104,10 +106,10 @@ function message(label, paragraphs, cls='', rec=null) {
   if(p===LOOK_LABEL&&next&&next.startsWith('- ')){ list=null; look=node('ul',undefined,'look-list'); return; }   // where to look: under the charts
   if(look&&p.startsWith('- ')){ look.append(lookItem(p.slice(2),rec)); if(!looks.includes(look))looks.push(look); return; }
   look=null;
-  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2),false,trace));list.append(li); return; }
+  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2),false,trace,receipts[i]));list.append(li); return; }
   list=null;
   if(shapeLabel(p,next)){ e.append(node('p',p,'label')); return; }
-  if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true,trace)); e.append(h); return; }
+  if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true,trace,receipts[i])); e.append(h); return; }
   if(lists.length&&!STAYS.test(p)){ context.push(node('p',p,'context-line')); return; }
   e.append(node('p',p));
  });

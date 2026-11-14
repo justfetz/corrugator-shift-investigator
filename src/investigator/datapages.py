@@ -42,7 +42,7 @@ METRICS = '/docs/metrics'
 # and the crew on that shift (a table without a crew column of its own reads it from `shifts`). A table that names a
 # setup but not its grade (lanes, stops, reject lines) also takes `quality_id` (`grade`), the board grade of that setup.
 SCOPE_PARAMS = ('day', 'from', 'to', 'weekday', 'shift', 'crew')
-SINGLE = ('day', 'from', 'to', 'weekday', 'shift')   # given once; a column filter (and crew) may be given again, meaning any of them
+SINGLE = ('day', 'from', 'to', 'weekday')   # given once; shift takes a list (shift=1,3), a column filter (and crew) may be given again
 # A word the issue and a plant use for a column: ?order=SO-... is the lane's order number, ?grade=32-C the board grade.
 ALIASES = {'order': 'order_number', 'grade': 'quality_id'}
 # The stop kinds as the store spells them; the contract's rule: a filter that names the planned kind `pm` answers as Scheduled.
@@ -378,6 +378,8 @@ def parse_filters(table, query):
         if name not in raw:
             continue
         typed = [_typed(table, name, kinds, value) for value in raw[name]]
+        if name == 'shift':   # shift=1,3 and shift=1&shift=3 alike
+            typed = [t for v in typed for t in (v if isinstance(v, tuple) else (v,))]
         typed = list(dict.fromkeys(typed))   # a repeated value once
         out[name] = typed[0] if len(typed) == 1 else sorted(typed, key=_value_text)
     if 'day' in out and ('from' in out or 'to' in out):
@@ -399,10 +401,11 @@ def _typed(table, name, kinds, value):
         if not match:
             raise ValueError('weekday is one of Mon, Tue, Wed, Thu, Fri')
         return match[0]
-    if name == 'shift':
-        if value not in ('1', '2', '3'):
-            raise ValueError('shift is 1, 2 or 3')
-        return int(value)
+    if name == 'shift':   # one shift, or a list of them: shift=1,3 (the shifts a day's money was summed over)
+        parts = value.split(',')
+        if not parts or any(p not in ('1', '2', '3') for p in parts) or len(set(parts)) != len(parts):
+            raise ValueError('shift is 1, 2 or 3, or a list of them such as 1,3')
+        return int(parts[0]) if len(parts) == 1 else tuple(sorted(int(p) for p in parts))
     kind = kinds.get(name, 'VARCHAR')   # crew or grade without a column of their own are the shift's or the setup's: text
     if kind == 'INTEGER':
         if not re.fullmatch(r'-?\d{1,9}', value):
@@ -440,8 +443,15 @@ def table_url(table, filters=None, page=1, suffix=''):
     unknown = set(filters) - set(order)
     if unknown:
         raise ValueError(f'not a filter of {table}: {sorted(unknown)}')
-    parts = [f'{k}={quote(_value_text(v), safe="-_.~:")}' for k in order if k in filters
-             for v in (sorted(dict.fromkeys(filters[k]), key=_value_text) if isinstance(filters[k], (list, tuple)) else [filters[k]])]
+    parts = []
+    for k in order:
+        if k not in filters:
+            continue
+        values = sorted(dict.fromkeys(filters[k]), key=_value_text) if isinstance(filters[k], (list, tuple)) else [filters[k]]
+        if k == 'shift':   # one parameter: shift=1,3
+            parts.append(f'shift={",".join(str(v) for v in values)}')
+        else:
+            parts.extend(f'{k}={quote(_value_text(v), safe="-_.~:")}' for v in values)
     if page > 1:
         parts.append(f'page={page}')
     return f'/data/{table}{suffix}' + ('?' + '&'.join(parts) if parts else '')
@@ -649,10 +659,16 @@ def _scope(entry, production_day):
     out = _span(window['start'], window['end']) if isinstance(window, dict) and window.get('start') else {'day': data.get('production_day') or production_day}
     shift = data.get('shift', args.get('shift'))
     shifts = data.get('shifts')
-    if shift is None and isinstance(shifts, list) and len(shifts) == 1:   # the day's money over one listed shift
-        shift = shifts[0]
-    if type(shift) is int and shift in (1, 2, 3):
+    if shift is None and isinstance(shifts, list) and shifts:   # the day's money: the complete shifts it summed (#151 review)
+        excluded = {e.get('shift') if isinstance(e, dict) else e for e in data.get('excluded_shifts') or []}
+        summed = sorted({x.get('shift') if isinstance(x, dict) else x for x in shifts} - excluded)
+        if summed and len(summed) < 3 and all(x in (1, 2, 3) for x in summed):
+            shift = summed[0] if len(summed) == 1 else summed
+    if type(shift) is int and shift in (1, 2, 3) or isinstance(shift, list):
         out['shift'] = shift
+    if entry.get('tool') == 'get_speed_variance' and data.get('against') == 'shift' and data.get('against_shift') in (1, 2, 3) \
+            and type(shift) is int:   # a shift held against another reads both: the gap is between them (#151 review)
+        out['shift'] = sorted({shift, data['against_shift']})
     kind = args.get('kind') if entry.get('tool') == 'get_downtime_breakdown' else None
     if isinstance(kind, str) and kind:   # the breakdown read one stop kind (PM answers as Scheduled, the contract's rule)
         out['kind'] = STOP_KINDS.get(kind.lower(), kind)
@@ -732,8 +748,7 @@ def _speedvar_side(row, entry):
     data = entry.get('data') or {}
     if not _reference(row):
         return {}
-    if data.get('against') == 'shift' and data.get('against_shift') in (1, 2, 3):
-        return {'shift': data['against_shift']}
+    # a shift held against another already reads both shifts (_scope); the previous window is its own span
     previous = data.get('previous_window')
     if data.get('against') == 'previous' and isinstance(previous, dict) and previous.get('start'):
         return {'day': None, 'from': None, 'to': None, **_span(previous['start'], previous['end'])}
@@ -820,7 +835,7 @@ SOURCES = {
     'get_speed_opportunity': ('setups', {'row': _speed_cell}),
     'get_opportunities': ('shift_kpis', {'row': lambda r, e: _line(r.get('lever'), r.get('kind'))}),
     'get_downtime_review': ('shift_kpis', {'row': _review_row, 'flag': _flag}),
-    'get_speed_variance': ('setups', {'row': _speedvar_row, 'detail': _speedvar_detail}),
+    'get_speed_variance': ('shift_kpis', {'row': _speedvar_row, 'detail': _speedvar_detail}),
     'get_trend': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {'from': r.get('week_start'), 'to': r.get('week_end'), 'day': None})}),
 }
 PARTS = {'row': 'rows', 'detail': 'details', 'flag': 'flags', 'weekday': 'weekday_profile'}
@@ -876,6 +891,12 @@ def source(entry, production_day, corrupt=False):
         before = _merge(table, {**{k: v for k, v in scope.items() if k not in ('day', 'from', 'to')},
                                 **_span(previous['start'], previous['end'])}, {}, corrupt)
         also.append({'label': 'previous window', 'table': table, 'filter': before, 'url': table_url(table, before)})
+    # A speed against each grade's baseline also read the trailing year the baselines come from (its sustained speed,
+    # targets.json) and, against the baseline, the usual grade mix of that year (#151 review).
+    since, through = entry['data'].get('baseline_since'), entry['data'].get('baseline_through')
+    if since and through and entry['tool'] in ('get_speed_variance', 'get_opportunities', 'get_wet_end_performance'):
+        year = {'from': since, 'to': through}
+        also.append({'label': 'the trailing year', 'table': 'setups', 'filter': year, 'url': table_url('setups', year)})
     # The notes are the shift's own note (its crew, from the shift record) and then its stops' comments (Codex on #151).
     if entry['tool'] == 'get_shift_notes':
         shift = _merge('shifts', scope, {}, corrupt)
@@ -886,14 +907,102 @@ def source(entry, production_day, corrupt=False):
 
 
 def attach_sources(result, corrupt=False):
-    """Every trace entry of an answer declares the table and filter it read (`source`), so its receipts link to rows."""
+    """Every trace entry of an answer declares the table and filter it read (`source`), and every section that cites a
+    step gets the address of the rows behind its own figure (`receipts`, one per section, None for a section citing none)."""
     day = result.get('production_day')
     for entry in result.get('trace') or []:
         if isinstance(entry, dict):
             declared = source(entry, day, corrupt)
             if declared:
                 entry['source'] = declared
+    if isinstance(result.get('sections'), list):
+        result['receipts'] = receipts(result, corrupt)
     return result
+
+
+# ---------------------------------------------------------------- receipts: the rows behind each section's own figure
+
+# `(query 2 · row 0)` at the end of a section (shapes.REF): the step and the row of its result a figure came from.
+REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday|flag) (\d+))?\)$')
+# A finding about the window a comparison held this one against: "The previous window **3.41%**", "Previous window: **…".
+PREVIOUS = re.compile(r'(?i)\bprevious window\b[^*]*\*\*')
+# A flag's recurrence: "over the band on its own on **1** of 783 shifts since 2025-09-12": a count over the trailing year.
+RECURRENCE = re.compile(r'over the band on its own on \*\*')
+
+
+def _recurrence_filter(flag):
+    """The stops behind a flag's recurrence count: its reason in its kind over the trailing year the count covers, on the
+    flagged shift's own history or the plant's (`recurrence_scope`)."""
+    out = {'from': flag['recurrence_since'], 'to': flag['recurrence_through'], 'kind': _stop_value('kind', flag['kind']),
+           'reason': _stop_value('reason', flag['reason'])}
+    scope = re.fullmatch(r'shift (\d)', str(flag.get('recurrence_scope', '')))
+    if scope:
+        out['shift'] = int(scope.group(1))
+    return out
+
+
+def _overview_line(row, section):
+    """A shift summary finding's own rows: the largest downtime reason's stops, the largest dry-end reject family's lines,
+    the setups whose runs are counted against their grade target; every other figure is the shift's KPI row."""
+    if 'downtime reason' in section or 'the only downtime' in section:
+        return 'stops', {'reason': _stop_value('reason', row.get('largest_downtime_reason'))}
+    if 'dry-end reject reason' in section:
+        return 'rejects', {'family': row.get('largest_reject_reason'), 'counted_in': 'dry_end'}
+    if 'Wet-end runs below' in section:
+        return 'setups', {}
+    return 'shift_kpis', {}
+
+
+def receipt(entry, part, index, section, production_day, corrupt=False):
+    """The rows behind one section's figure: {'url', 'table', 'of'}. Usually the cited row's own rows (`source.rows`) or
+    the step's (`source.url`); a figure about the previous window opens that window's rows, a recurrence count the reason's
+    stops over its trailing year, and a shift summary finding the table its figure is read from (the #151 review)."""
+    src = entry.get('source') if isinstance(entry, dict) else None
+    if not src:
+        return None
+    data = entry.get('data') or {}
+    if PREVIOUS.search(section):
+        previous = next((a for a in src.get('also', []) if a.get('label') == 'previous window'), None)
+        if previous:
+            return {'url': previous['url'], 'table': previous['table'], 'of': 'previous window'}
+    if part == 'flag' and RECURRENCE.search(section):
+        flags = data.get('flags') or []
+        if index is not None and 0 <= index < len(flags) and flags[index].get('recurrence_since'):
+            return {'url': table_url('stops', _recurrence_filter(flags[index])), 'table': 'stops', 'of': 'recurrence'}
+    if entry.get('tool') == 'get_shift_overview' and part == 'row' and data.get('rows'):
+        table, extra = _overview_line(data['rows'][0], section)
+        filters = _merge(table, _scope(entry, production_day), extra, corrupt)
+        return {'url': table_url(table, filters), 'table': table, 'of': 'row'}
+    url = receipt_url(entry, part, index)
+    if not url:
+        return None
+    return {'url': url, 'table': url.split('?')[0].removeprefix('/data/'), 'of': 'row' if part else 'result'}
+
+
+def _is_label(section):
+    """A label line of the answer shape (shapes.py): short, no figure, no digits, no final punctuation; it introduces
+    the bullets under it ("The previous window", "Flags and who to ask")."""
+    return (isinstance(section, str) and not section.startswith('- ') and '**' not in section and len(section) <= 48
+            and not re.search(r'\d|[.:;!?]$', section))
+
+
+def receipts(result, corrupt=False):
+    """One receipt per section of an answer, in section order: None for a section that cites no step. A bullet is read
+    with the label above it, so a finding under "The previous window" opens that window's rows."""
+    trace, day, out, label = result.get('trace') or [], result.get('production_day'), [], ''
+    for section in result.get('sections') or []:
+        if _is_label(section):
+            label = section
+        elif not (isinstance(section, str) and section.startswith('- ')):
+            label = ''
+        m = REF.search(section) if isinstance(section, str) else None
+        step = int(m.group(1)) if m else 0
+        if not m or not 1 <= step <= len(trace):
+            out.append(None)
+            continue
+        context = f'{label}: {section}' if label and section.startswith('- ') else section
+        out.append(receipt(trace[step - 1], m.group(2), int(m.group(3)) if m.group(3) else None, context, day, corrupt))
+    return out
 
 
 def receipt_url(entry, part=None, row=None):

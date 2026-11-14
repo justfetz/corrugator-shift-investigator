@@ -141,9 +141,12 @@ def test_a_table_page_is_the_schema_and_fifty_rows_newest_first(store):
                              "WHERE t.production_date BETWEEN '2026-09-01' AND '2026-09-30' AND c.crew = 'Crew B' AND g.quality_id = '275-BC'").fetchone()[0]
     assert crew['count'] == want > 0 and crew['url'] == '/data/stops?from=2026-09-01&to=2026-09-30&crew=crew%20b&quality_id=275-BC'
     assert dp.page(store, 'stops', 'day=2026-09-14&format=json')['url'] == '/data/stops?day=2026-09-14'   # the JSON asked for by parameter
+    two = dp.page(store, 'stops', 'day=2026-09-14&shift=3,1')   # the shifts a day's money was summed over (#151 review)
+    assert two['url'] == '/data/stops?day=2026-09-14&shift=1,3' and {r['shift'] for r in two['rows']} == {1, 3}
+    assert dp.page(store, 'stops', 'day=2026-09-14&shift=1&shift=3')['url'] == two['url']
     for bad, message in (('day=2026-13-01', 'date'), ('shift=4', 'shift'), ('page=0', 'page'), ('page=201', 'narrow the filter'),
                          ('limit=5', 'not a filter'), ('page=2&page=3', 'twice'), ('reason=' + '&reason='.join(map(str, range(21))), 'at most'),
-                         ('nope=1', 'not a filter'), ('shift=1&shift=2', 'twice'), ('day=2026-09-14&from=2026-09-01', 'not both'),
+                         ('nope=1', 'not a filter'), ('day=2026-09-14&day=2026-09-15', 'twice'), ('shift=1,1', 'list of them'), ('shift=0,2', 'list of them'), ('day=2026-09-14&from=2026-09-01', 'not both'),
                          ('from=2026-09-30&to=2026-09-01', 'on or before'), ('lane=one', 'whole number'), ('weekday=Sat', 'weekday')):
         with pytest.raises(ValueError, match=message):
             dp.page(store, 'setup_orders' if 'lane' in bad else 'stops', bad)
@@ -247,22 +250,37 @@ def test_a_page_answers_in_tens_of_milliseconds(store):
 
 
 # ------------------------------------------------------------------ receipts link to the rows behind a figure
+#
+# Every section of every offline golden answer that cites a step carries a receipt (result['receipts']): the rows behind its
+# own figure. The checker below recomputes the section's **bold figure** from those rows with the receipt's own filter, the
+# way the tool states it (a sum, a count, a ratio of sums, a count over a range, "N of M"), and compares it with the figure
+# as printed. A dollar figure is a quantity recomputed from the rows and priced by the cost model at the answer's rates; a
+# figure held against a baseline takes each grade's baseline from the trailing year's setups the step also declares. A
+# section with no check here fails: nothing counts as verified unless its figure was recomputed.
 
-def near(got, want, places=None):
-    """`want` as the tool rounded it (`places`), else to the decimals it carries: the same floats summed in another order
-    may round to the neighbouring last digit, so one unit of it is allowed."""
-    if want is None:
-        return got is None
-    if got is None:
-        return False
-    if places is None:
-        decimals = len(repr(float(want)).split('.')[1]) if 'e' not in repr(float(want)) else 6
-        return math.isclose(got, want, rel_tol=1e-6, abs_tol=1e-6) or (decimals <= 4 and abs(got - want) <= 10 ** -decimals + 1e-9)
-    return abs(got - want) <= 0.5 * 10 ** -places + 1e-6 * max(1, abs(want))
+from datetime import date as _date, timedelta as _timedelta
+
+from investigator import cost_model, targets
+
+BOLD = re.compile(r'\*\*([^*]+)\*\*')
+NUMBER = re.compile(r'([+-]?)\$?(\d[\d,]*(?:\.\d+)?)')
 
 
-def sums(rows, *columns):
-    return [sum((r[c] or 0) for r in rows) for c in columns]
+class Unchecked(Exception):
+    pass
+
+
+def printed(section):
+    """The bold figure of a section: (text, value, decimals)."""
+    text = BOLD.search(section).group(1)
+    m = NUMBER.search(text)
+    value = float(m.group(2).replace(',', '')) * (-1 if m.group(1) == '-' else 1)
+    decimals = len(m.group(2).split('.')[1]) if '.' in m.group(2) else 0
+    return text, value, decimals
+
+
+def stop_minutes(rows):
+    return sum(r['seconds'] for r in rows) / 60
 
 
 def tile_sums(rows):
@@ -278,184 +296,400 @@ def tile_sums(rows):
     return t
 
 
-def stop_minutes(rows):
-    return sum(r['seconds'] for r in rows) / 60
-
-
-def also_failure(store, entry, part, index):
-    """The rows a step also read hold the rest of what its finding states: a comparison's previous window recomputes the
-    previous value; the notes' shift record is the note before the stops (Codex on #151)."""
-    tool, data = entry['tool'], entry['data']
-    for also in entry['source'].get('also', []):
-        rows = dp.resolve(store, also['url'], limit=500_000)
-        if also['label'] == 'previous window' and tool in ('get_period_kpis', 'compare_periods') and part == 'row':
-            row = data['rows'][index]
-            if row['previous'] is not None and not near(RecordStore._kpis(tile_sums(rows))[row['metric']], row['previous']):
-                return f'{tool} row {index}: previous {row["metric"]} over {also["url"]}, the tool says {row["previous"]}'
-        elif also['label'] == 'previous window' and tool == 'get_rollstock' and part == 'row':
-            row = data['rows'][index]
-            column = 'lineal_ft'
-            got = sum(r[column] for r in rows if r['quality_id'] == row['grade'] and (r.get('web_width_in') or r.get('width_in')) == row['width_in'])
-            if row.get('previous_lineal_ft') is not None and not near(got, row['previous_lineal_ft'], 1):
-                return f'{tool} row {index}: previous feet {got} over {also["url"]}, the tool says {row["previous_lineal_ft"]}'
-        elif also['label'] == 'the shift record':
-            if len(rows) != 1 or rows[0]['crew'] not in data['rows'][0]['notes']:
-                return f'{tool}: the shift record {rows} does not hold the shift note {data["rows"][0]["notes"]!r}'
-        elif not rows and (data.get('previous_window') or {}).get('production_days_observed'):
-            return f'{tool}: the previous window {also["url"]} holds no rows'
-    return None
+LINES = ('trim_sqft', 'shear_sqft', 'reject_sqft', 'changeover_sqft', 'admin_sqft', 'cutoff_waste_sqft', 'stacker_waste_sqft')
 
 
 def unexplained(rows):
-    """The bale minus every recorded waste line, over shift rows (record_store.accounted_sqft)."""
-    lines = ('trim_sqft', 'shear_sqft', 'reject_sqft', 'changeover_sqft', 'admin_sqft', 'cutoff_waste_sqft', 'stacker_waste_sqft')
-    return sum(r['bale_sqft'] - sum(r[c] for c in lines) for r in rows)
+    """The bale minus every recorded waste line (record_store.accounted_sqft), over shift or shift_kpis rows."""
+    return sum(r['bale_sqft'] - sum(r[c] for c in LINES) for r in rows)
 
 
-def speed_gap_ft(rows, required):
-    """cost_model's speed gap to the required speed, shift by shift: required × running minutes − lineal feet."""
-    shifts = {}
-    for r in rows:
-        shifts.setdefault((r['production_date'], r['shift']), []).append(r)
-    return sum(max(0.0, required * (480 - sum(r['stop_seconds'] for r in rs) / 60) - sum(r['lineal_ft'] for r in rs)) for rs in shifts.values())
+def good_output(rows):
+    return sum(r['gross_sqft'] - sum(r[c] for c in LINES) for r in rows)
 
 
-def line_checks(table, row, rows, data):
-    """A priced line's quantity over its rows, each line by what it prices: minutes of stops, square feet of reject
-    lines, waste boards of lanes, side trim and shear of setups, the points over the trim target, the speed gap, the runs
-    under their baseline, the bale's unexplained remainder."""
-    label, quantity = row.get('lever') or row.get('gap'), row['quantity']
-    if table == 'stops':
-        return [('minutes', stop_minutes(rows), quantity, 2)]
-    if table == 'rejects':
-        return [('sq ft', sum(r['sqft'] for r in rows), quantity, 1)]
-    if table == 'setup_orders':
-        cutoff, stacker = sums(rows, 'cutoff_waste_sqft', 'stacker_waste_sqft')
-        got = cutoff if label.startswith('Cutoff-knife waste') else stacker if label.startswith('Stacker waste') else cutoff + stacker   # or both: 'Cutoff-knife and stacker waste boards'
-        return [('waste boards sq ft', got, quantity, 1)]
-    if table == 'shifts':
-        return [('unexplained sq ft', unexplained(rows), quantity, 1)]
-    over = re.match(r'Side trim over the ([\d.]+)% target', label)
-    if over:
-        trim, gross = sums(rows, 'trim_sqft', 'gross_sqft')
-        return [('points over the trim target', max(0.0, trim / gross * 100 - float(over.group(1))), quantity, 4)]
-    if label.startswith('Side trim'):
-        return [('side trim sq ft', sum(r['trim_sqft'] for r in rows), quantity, 1)]
-    if label.startswith('Shear'):
-        return [('shear sq ft', sum(r['shear_sqft'] for r in rows), quantity, 1)]
-    required = re.match(r'Speed gap to ([\d.]+) ft/min', label)
-    if required:
-        return [('speed gap ft', speed_gap_ft(rows, float(required.group(1))), quantity, 1)]
-    if label.startswith('Speed under'):
-        return [('wet-end runs', len({r['wet_end_id'] for r in rows}), data['source_rows']['runs'], None)]
-    return []
+def baselines(year_rows):
+    """Each grade's sustained speed over the trailing year (record_store.grade_speed_baselines): lineal ft over running
+    minutes of the setups with at least SPEED_MIN_RUN_MINUTES of running time, rounded to 0.1 ft/min."""
+    from investigator.record_store import SPEED_MIN_RUN_MINUTES
+    feet, run = {}, {}
+    for r in year_rows:
+        minutes = (r['seconds'] - r['stop_seconds']) / 60
+        if minutes >= SPEED_MIN_RUN_MINUTES:
+            feet[r['quality_id']] = feet.get(r['quality_id'], 0) + r['lineal_ft']
+            run[r['quality_id']] = run.get(r['quality_id'], 0) + minutes
+    return {g: round(feet[g] / run[g], 1) for g in feet if run[g]}
 
 
-def speedvar_checks(part, row, rows, data, url):
-    """A speed-variance receipt: the explained side's stops or setups (the minutes and stops the tool reports for it);
-    a bucket or item that lost nothing there opens the reference's rows, which must then hold what it names."""
-    if part == 'row' and dp._reference(row) or part == 'detail' and dp._reference(row):
-        item = row.get('item')
-        if row['bucket'] in ('below_baseline', 'mix'):
-            return [('the grade on the reference side', all(r['quality_id'] == item for r in rows) if item else bool(rows), True, None)]
-        return [('rows on the reference side', bool(rows), True, None)]
-    if part is None or row['bucket'] in ('below_baseline', 'mix') and part == 'row':
-        return [('setups of the window', len(rows), data['source_rows']['current']['setups'], None)]
-    if part == 'detail' and row['bucket'] in ('below_baseline', 'mix'):
-        return [('setups of the grade', all(r['quality_id'] == row['item'] for r in rows) and bool(rows), True, None)]
-    items = [d for d in data['details'] if d['bucket'] == row['bucket']] if part == 'row' else [row]
-    # a bucket's minutes are its items' minutes, each rounded to two places: their sum is within half a cent per item
-    return [('stops', len(rows), sum(d['stops'] for d in items), None),
-            ('minutes', stop_minutes(rows), sum(d['minutes'] for d in items), ('abs', 0.005 * len(items) + 1e-6))]
+def runs_below_target(setup_rows):
+    """Wet-end runs whose elapsed-time speed is under their grade target (analysis.get_wet_end_performance)."""
+    runs = {}
+    for r in setup_rows:
+        feet, target_ft = runs.get(r['wet_end_id'], (0.0, 0.0))
+        runs[r['wet_end_id']] = (feet + r['lineal_ft'], target_ft + r['target'] * r['seconds'] / 60)
+    return sum(feet < target_ft for feet, target_ft in runs.values()), len(runs)
 
 
-def figure_failure(entry, part, index, url, rows):
-    """None when the rows behind a receipt hold the cited row's quantity, else what differs. The bold figure itself is a
-    field of that row (evals/run.py's faithfulness and grounding checks), so the rows hold the figure. Every receipt
-    must have a check here: one without is a failure, never counted as verified."""
-    if not rows:
-        return f'{url} holds no rows'
-    tool, data = entry['tool'], entry['data']
-    row = data[dp.PARTS[part]][index] if part else None
-    table = url.split('?')[0].removeprefix('/data/')
-    checks = []   # (what, got over the rows, what the tool says, decimals it rounded to or None)
-    if tool in ('get_downtime_pareto', 'get_downtime_breakdown') and part == 'row':
-        minutes = row.get('minutes', row.get('down_minutes'))
-        checks = [('stops', len(rows), row['stops'], None), ('minutes', stop_minutes(rows), minutes, 2 if 'minutes' in row else None)]
-    elif tool in ('get_downtime_review', 'get_downtime_breakdown') and part in ('row', 'flag'):
-        checks = [('stops', len(rows), row['stops'], None), ('minutes', stop_minutes(rows), row['minutes'], 2)]
-    elif tool == 'get_downtime_review':
-        maint_op = sum(r['maintenance_seconds'] + r['operator_seconds'] for r in rows) / 60
-        checks = [('maintenance + operator minutes', maint_op, data['op_maint_minutes'], 2),
-                  ('scheduled minutes', sum(r['scheduled_seconds'] for r in rows) / 60, data['scheduled_minutes'], 0)]
-    elif tool == 'get_grade_totals' and part == 'row':
-        checks = [('setups', len(rows), row['setups'], None), ('MSF', sum(r['gross_sqft'] for r in rows) / 1000, row['volume_msf'], 1)]
-    elif tool == 'get_grade_totals':
-        checks = [('MSF', sum(r['gross_sqft'] for r in rows) / 1000, data['total_volume_msf'], 1)]
-    elif tool in ('get_opportunities', 'get_shift_dollars', 'get_day_dollars') and part == 'row':
-        checks = line_checks(table, row, rows, data)
-    elif tool in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities', 'get_waste_breakdown') and part is None:
-        checks = [('gross sq ft', sum(r['gross_sqft'] for r in rows), data['gross_sqft'], 1)]
-    elif tool == 'get_overrun':
-        nominal, actual = sums(rows, 'nominal_cuts', 'actual_cuts')
-        checks = [('lines', len(rows), row['lines'], None), ('nominal cuts', nominal, row['nominal_cuts'], None), ('actual cuts', actual, row['actual_cuts'], None)]
-    elif tool in ('get_period_kpis', 'compare_periods'):
-        checks = [(row['metric'], RecordStore._kpis(tile_sums(rows))[row['metric']], row['current'], None)]
-    elif tool == 'get_trend':
-        checks = [(data['metric'], RecordStore._kpis(tile_sums(rows))[data['metric']], row['value'], None)]
-    elif tool == 'get_quality_breakdown':
-        checks = [('sq ft', sum(r['sqft'] for r in rows), row['rejected_sqft'], None)]
-    elif tool == 'get_rankings':
-        if data['metric'] == 'speed':
-            got = sum(r['lineal_ft'] for r in rows) / sum(r['target'] * r['seconds'] / 60 for r in rows) * 100
-        else:
-            got = stop_minutes(rows) if data['metric'] == 'downtime' else sum(r['sqft'] for r in rows)
-        checks = [(data['metric'], got, row['value'], None)]
-    elif tool == 'get_rollstock' and part == 'row':
-        checks = [('feet', sum(r['lineal_ft'] for r in rows), row['lineal_ft'], 1)] + ([('paper runs', len(rows), row['paper_runs'], None)] if table == 'wet_ends' else [])
-    elif tool == 'get_rollstock':
-        checks = [('feet', sum(r['lineal_ft'] for r in rows), data['total_lineal_ft'], 1)]
-    elif tool == 'get_setup_matrix':
-        checks = [('the setup', [r['setup_id'] for r in rows], [row['setup_id']], None), ('feet', rows[0]['lineal_ft'], row['lineal_ft'], None)]
-    elif tool in ('get_shift_kpis', 'get_shift_overview'):
-        r = data['rows'][0]
-        checks = [('one shift row', len(rows), 1, None), ('gross sq ft', rows[0]['gross_sqft'], r['gross_sqft'], None),
-                  ('lineal ft', rows[0]['lineal_ft'], r['observed_lineal_ft'], None), ('setups', rows[0]['setups'], r['valid_setups'], None)]
-    elif tool == 'get_shift_notes':
-        checks = [('stops, each a note after the shift\'s own', len(rows), len(data['rows']) - 1, None)]
-    elif tool == 'get_speed_opportunity':
-        target = row['setups'] if part == 'row' else data['source_rows']['setups_included']
-        checks = [('setups past the minimum run time', len([r for r in rows if r['run_seconds'] >= data['min_run_minutes'] * 60]), target, None)]
-    elif tool == 'get_speed_variance':
-        checks = speedvar_checks(part, row, rows, data, url)
-    elif tool == 'get_stops_profile':
-        checks = [('stops', len(rows), row['stops'], None)] + ([('minutes', stop_minutes(rows), row['minutes'], 2)] if part == 'row' else [])
-    elif tool == 'get_waste_breakdown' and part == 'detail':
-        checks = [('sq ft', sum(r['sqft'] for r in rows), row['sqft'], 1), ('sheets', sum(r['sheets'] for r in rows), row['sheets'], None)]
-    elif tool == 'get_waste_breakdown' and part == 'row':
-        if row['category'] == 'unexplained':
-            checks = [('unexplained sq ft', unexplained(rows), row['sqft'], 1)]
-        else:
+def best_fifth_hours(cell):
+    """One speed-opportunity cell (record_store.get_speed_opportunity): the setups past the minimum run time, the fastest
+    fifth by speed without stops (ntile 5), and the running minutes now less the minutes the same feet take at its speed."""
+    from investigator.record_store import SPEED_MIN_RUN_MINUTES, SPEED_MIN_SETUPS
+    base = [(r['lineal_ft'], (r['seconds'] - r['stop_seconds']) / 60) for r in cell if r['seconds'] - r['stop_seconds'] >= SPEED_MIN_RUN_MINUTES * 60]
+    if len(base) < SPEED_MIN_SETUPS:
+        return None
+    base.sort(key=lambda x: -x[0] / x[1])
+    first = len(base) // 5 + (1 if len(base) % 5 else 0)
+    best = sum(f for f, _ in base[:first]) / sum(m for _, m in base[:first])
+    return (sum(m for _, m in base) - sum(f for f, _ in base) / best) / 60
+
+
+class Figures:
+    """Recomputes the bold figure of a receipted section from the rows its receipt opens."""
+
+    def __init__(self, store):
+        self.store, self.cache, self.grades, self.crews = store, {}, None, None
+
+    def rows(self, url):
+        if url not in self.cache:
+            self.cache[url] = dp.resolve(self.store, url, limit=500_000)
+        return self.cache[url]
+
+    def grade_of(self, setup_id):
+        if self.grades is None:
+            self.grades = dict(self.store._db.execute('SELECT setup_id, quality_id FROM setups').fetchall())
+        return self.grades[setup_id]
+
+    def crew_of(self, row):
+        if self.crews is None:
+            self.crews = {(d.isoformat(), s): c for d, s, c in self.store._db.execute('SELECT production_date, shift, crew FROM shifts').fetchall()}
+        return self.crews[(row['production_date'], row['shift'])]
+
+    @staticmethod
+    def also(entry, label):
+        return next((a['url'] for a in entry['source'].get('also', []) if a['label'] == label), None)
+
+    def whole(self, entry):
+        return self.rows(entry['source']['url'])
+
+    @staticmethod
+    def shifted(url, **change):
+        """The same address with some filters changed (None drops one): the other side of a comparison."""
+        table = url.split('?')[0].removeprefix('/data/')
+        filters, _ = dp.parse_filters(table, url.partition('?')[2])
+        for k, v in change.items():
+            if v is None:
+                filters.pop(k, None)
+            else:
+                filters[k] = v
+        return dp.table_url(table, filters)
+
+    # ---- dollars: a quantity from the rows, priced by the cost model at the answer's rates
+    def priced(self, entry, row, quantity, field):
+        terms = row.get('price_terms') or {}
+        whole = self.whole(entry)
+        gross = sum(r['gross_sqft'] for r in whole) if whole and 'gross_sqft' in whole[0] else terms.get('gross_sqft')
+        minutes = (sum(r['scheduled_seconds'] for r in whole) / 60 if whole and 'scheduled_seconds' in whole[0] else terms.get('minutes'))
+        if entry['tool'] in ('get_shift_dollars', 'get_day_dollars'):
+            minutes = 480 * len({(r['production_date'], r['shift']) for r in whole})
+        kind = terms.get('kind') or {'trim': 'trim', 'waste': 'waste', 'paper': 'paper'}.get(row.get('kind'), 'downtime')
+        return cost_model.price(kind, quantity, self.rates, gross, minutes)[field]
+
+    def line_quantity(self, entry, row, url):
+        quantity = self._line_quantity(entry, row, url)
+        if entry['tool'] == 'get_opportunities' and quantity is not None and not str(row.get('lever', '')).startswith('Side trim over'):
+            quantity = round(quantity, 2 if row.get('unit') == 'min' else 1)   # the levers price their rows' rounded quantities
+        return quantity
+
+    def _line_quantity(self, entry, row, url):
+        """The quantity a priced line prices, from its own rows: stop minutes, reject sq ft, waste-board sq ft, side trim
+        and shear sq ft, the sq ft over the trim target, the speed gap's minutes, the minutes under the grade baselines,
+        the bale's unexplained remainder."""
+        rows = self.rows(url)
+        table = url.split('?')[0].removeprefix('/data/')
+        label = row.get('lever') or row.get('gap')
+        if table == 'stops':
+            return stop_minutes(rows)
+        if table == 'rejects':
+            return sum(r['sqft'] for r in rows)
+        if table == 'setup_orders':
+            cutoff, stacker = (sum(r[c] for r in rows) for c in ('cutoff_waste_sqft', 'stacker_waste_sqft'))
+            return cutoff if label.startswith('Cutoff-knife waste') else stacker if label.startswith('Stacker waste') else cutoff + stacker
+        if table == 'shifts':
+            return unexplained(rows)
+        over = re.match(r'Side trim over the ([\d.]+)% target', label)
+        if over:   # the points over the target on the window's trim percent (to four places, as the tool rounds it)
+            trim, gross = (sum(r[c] for r in rows) for c in ('trim_sqft', 'gross_sqft'))
+            return max(0.0, round(trim / gross * 100, 4) - float(over.group(1))) / 100 * gross
+        if label.startswith('Side trim'):
+            return sum(r['trim_sqft'] for r in rows)
+        if label.startswith('Shear'):
+            return sum(r['shear_sqft'] for r in rows)
+        required = re.match(r'Speed gap to ([\d.]+) ft/min', label)
+        if required:
+            speed, shifts = float(required.group(1)), {}
+            for r in rows:
+                shifts.setdefault((r['production_date'], r['shift']), []).append(r)
+            gap_ft = sum(max(0.0, speed * (480 - sum(r['stop_seconds'] for r in rs) / 60) - sum(r['lineal_ft'] for r in rs)) for rs in shifts.values())
+            return gap_ft / speed
+        if label.startswith('Speed under'):
+            base, runs = baselines(self.rows(self.also(entry, 'the trailing year'))), {}
+            for r in rows:
+                key = (r['production_date'], r['wet_end_id'], r['quality_id'])
+                feet, run = runs.get(key, (0.0, 0.0))
+                runs[key] = (feet + r['lineal_ft'], run + (r['seconds'] - r['stop_seconds']) / 60)
+            return sum(max(0.0, base[g] * run - feet) / base[g] for (_, _, g), (feet, run) in runs.items() if g in base and run)
+        raise Unchecked(f'no quantity for the line {label!r}')
+
+    def lever_usd(self, entry, j, field):
+        row = entry['data']['rows'][j]
+        return self.priced(entry, row, self.line_quantity(entry, row, entry['source']['rows']['row'][j]), field)
+
+    # ---- speed variance: each side from its own rows, losses at each grade's trailing-year baseline
+    def speedvar(self, entry, part, index, receipt_rows, url):
+        data = entry['data']
+        base = baselines(self.rows(self.also(entry, 'the trailing year')))
+        speed_of = lambda g: base.get(g)
+        cur_shift, against = data.get('shift'), data['against']
+        whole = self.whole(entry)
+        previous = self.also(entry, 'previous window')
+
+        def side(rows, which):
+            if against == 'shift' and cur_shift is not None:
+                keep = cur_shift if which == 'current' else data['against_shift']
+                return [r for r in rows if r['shift'] == keep]
+            return rows
+
+        def minutes(which):
+            rows = side(whole, which) if which == 'current' or against == 'shift' else self.rows(previous)
+            return sum(r['scheduled_seconds'] for r in rows) / 60
+
+        def other_rows(url):   # the reference side's rows of the same table: the other shift is in them, the previous window is not
+            return side(self.rows(url), 'reference') if against == 'shift' else self.rows(self.shifted(url, day=None, **dict(
+                zip(('from', 'to'), (data['previous_window']['start'], data['previous_window']['end']))))) if against == 'previous' else []
+
+        def loss(stop_rows, t):
+            return sum(r['seconds'] / 60 * speed_of(self.grade_of(r['setup_id'])) for r in stop_rows) / t if t else 0.0
+
+        if part is None:   # the headline: reference speed with stops minus this window's
+            current = sum(r['lineal_ft'] for r in side(whole, 'current')) / minutes('current')
+            if against == 'baseline':
+                year = self.rows(self.also(entry, 'the trailing year'))
+                elapsed = {}
+                for r in year:
+                    elapsed[r['quality_id']] = elapsed.get(r['quality_id'], 0) + r['seconds'] / 60
+                reference = sum(speed_of(g) * m for g, m in elapsed.items()) / sum(elapsed.values())
+            else:
+                rows = side(whole, 'reference') if against == 'shift' else self.rows(previous)
+                reference = sum(r['lineal_ft'] for r in rows) / (sum(r['scheduled_seconds'] for r in rows) / 60)
+            return abs(reference - current)
+        row = data['rows' if part == 'row' else 'details'][index]
+        bucket = row['bucket']
+        t_cur, t_ref = minutes('current'), (minutes('reference') if against != 'baseline' else None)
+        if bucket in ('stops', 'planned', 'external', 'setups'):
+            if dp._reference(row) and against == 'previous':   # lost only in the previous window: the receipt opens that window
+                return abs(loss(receipt_rows, t_ref))
+            return abs(loss(side(receipt_rows, 'current'), t_cur) - (loss(other_rows(url), t_ref) if against != 'baseline' else 0.0))
+        if bucket == 'below_baseline':
+            def below(rows, t):
+                feet, run = {}, {}
+                for r in rows:
+                    feet[r['quality_id']] = feet.get(r['quality_id'], 0) + r['lineal_ft']
+                    run[r['quality_id']] = run.get(r['quality_id'], 0) + (r['seconds'] - r['stop_seconds']) / 60
+                return sum(speed_of(g) * run[g] - feet[g] for g in feet) / t if t else 0.0
+            if dp._reference(row) and against == 'previous':
+                return abs(below(receipt_rows, t_ref))
+            return abs(below(side(receipt_rows, 'current'), t_cur) - (below(other_rows(url), t_ref) if against != 'baseline' else 0.0))
+        if bucket == 'mix':
+            def share(rows, t):
+                out = {}
+                for r in rows:
+                    out[r['quality_id']] = out.get(r['quality_id'], 0) + r['seconds'] / 60 / t
+                return out
+            now = share(side(receipt_rows, 'current'), t_cur) if not (dp._reference(row) and against == 'previous') else {}
+            if against == 'baseline':
+                year = self.rows(self.also(entry, 'the trailing year'))
+                ref = share(year, sum(r['seconds'] for r in year) / 60)
+            else:
+                ref = share(other_rows(url) if not (dp._reference(row) and against == 'previous') else receipt_rows, t_ref)
+            if part == 'row':
+                return abs(sum(speed_of(g) * s for g, s in ref.items()) - sum(speed_of(g) * s for g, s in now.items()))
+            reference_base = sum(speed_of(g) * s for g, s in ref.items())   # a grade's part of the mix: its share change at its distance from the reference
+            g = row['item']
+            return abs((ref.get(g, 0.0) - now.get(g, 0.0)) * (speed_of(g) - reference_base))
+        raise Unchecked(f'speed variance bucket {bucket}')
+
+    # ---- every tool's figures
+    def expected(self, result, entry, part, index, section, receipt):
+        """(value, exact) of the section's bold figure, recomputed from the receipt's rows."""
+        tool, data = entry['tool'], entry['data']
+        url, of = receipt['url'], receipt['of']
+        rows = self.rows(url)
+        text, value, decimals = printed(section)
+        after = section[section.index('**' + text + '**') + len(text) + 4:]
+        row = data[dp.PARTS[part]][index] if part else None
+        if of == 'recurrence':   # shifts on which the reason alone was over its band, over the trailing year
+            band = targets.BANDS[{'Maintenance': 'maintenance', 'Operator': 'operator'}[row['kind']]]['flag'] / 100 * 480
+            minutes = {}
+            for r in rows:
+                minutes[(r['production_date'], r['shift'])] = minutes.get((r['production_date'], r['shift']), 0) + r['seconds'] / 60
+            return sum(m > band for m in minutes.values()), True
+        if tool in ('get_downtime_breakdown', 'get_downtime_review') and part == 'flag':
+            return stop_minutes(rows) / 480 * 100, False
+        if tool == 'get_downtime_breakdown':
+            return (stop_minutes(rows) / 480 * 100 if after.startswith(' of the shift') else stop_minutes(rows)), False
+        if tool == 'get_downtime_pareto':
+            return (len(rows), True) if 'stop' in text else (stop_minutes(rows), False)
+        if tool == 'get_downtime_review' and part is None:
+            return sum(r['maintenance_seconds'] + r['operator_seconds'] for r in rows) / sum(r['scheduled_seconds'] for r in rows) * 100, False
+        if tool == 'get_downtime_review':
+            if text.endswith('min'):
+                return stop_minutes(rows), False
+            return stop_minutes(rows) / (sum(r['scheduled_seconds'] for r in self.whole(entry)) / 60) * 100, False
+        if tool in ('get_period_kpis', 'compare_periods'):
+            return RecordStore._kpis(tile_sums(rows))[row['metric']], False
+        if tool == 'get_trend':
+            return RecordStore._kpis(tile_sums(rows))[data['metric']], False
+        if tool == 'get_grade_totals':
+            if 'grades observed' in after:
+                return len({r['quality_id'] for r in rows}), True
+            if text.endswith('ft/min'):
+                return sum(r['lineal_ft'] for r in rows) / (sum(r['seconds'] - r['stop_seconds'] for r in rows) / 60), False
+            return sum(r['gross_sqft'] for r in rows) / 1000, False
+        if tool == 'get_opportunities':
+            field = 'usd_per_year'
+            if part == 'row':
+                return self.lever_usd(entry, index, field), False
+            levers = range(len(data['rows']))
+            if 'controllable losses' in after:
+                levers = [j for j in levers if data['rows'][j].get('control') == 'controllable']
+            elif 'Dry-end waste (tag scrap)' in section:
+                levers = [j for j in levers if str(data['rows'][j]['lever']).startswith('Dry-end:')]
+            return sum(self.lever_usd(entry, j, field) for j in levers), False
+        if tool in ('get_shift_dollars', 'get_day_dollars'):
+            if part == 'row':
+                return self.priced(entry, row, self.line_quantity(entry, row, url), 'usd'), False
+            return sum(self.lever_usd(entry, j, 'usd') for j, r in enumerate(data['rows']) if not r.get('apart')), False
+        if tool == 'get_overrun':
+            nominal, actual = (sum(r[c] for r in rows) for c in ('nominal_cuts', 'actual_cuts'))
+            return (actual - nominal) / nominal * 100, False
+        if tool == 'get_quality_breakdown':
+            return sum(r['sqft'] for r in rows), False
+        if tool == 'get_rankings':
+            if data['metric'] == 'speed':
+                return sum(r['lineal_ft'] for r in rows) / sum(r['target'] * r['seconds'] / 60 for r in rows) * 100, False
+            return (stop_minutes(rows) if data['metric'] == 'downtime' else sum(r['sqft'] for r in rows)), False
+        if tool == 'get_rollstock':
+            return sum(r['gross_sqft'] for r in rows) / 1000, False
+        if tool == 'get_setup_matrix':
+            (s,) = rows
+            if 'grade target' in after:
+                return s['lineal_ft'] / (s['target'] * s['seconds'] / 60) * 100, False
+            if 'allocated stops' in after:
+                return s['stop_seconds'] / 60, False
+            if 'rejected' in after:
+                return s['reject_sqft'], False
+        if tool in ('get_shift_kpis', 'get_shift_overview'):
+            if receipt['table'] == 'stops':
+                return stop_minutes(rows), False
+            if receipt['table'] == 'rejects':
+                return sum(r['sqft'] for r in rows), False
+            if receipt['table'] == 'setups':
+                return runs_below_target(rows)[0], True
+            (k,) = rows
+            if 'lineal ft' in text or section.lstrip('- ').startswith('Lineal feet'):
+                return k['lineal_ft'], False
+            if text.endswith('ft/min'):
+                return k['lineal_ft'] / 480, False
+            if 'of yield rejected at the dry end' in after:
+                return k['reject_sqft'] / (k['gross_sqft'] - k['trim_sqft'] - k['shear_sqft']) * 100, False
+            if 'dry-end setups' in after:
+                return k['setups'], True
+            if 'trim flag' in section:   # the setups whose own trim is over the flag: a column of the shift's row
+                return k['setups_above_trim_target'], True
+            if 'maintenance and operator downtime' in after:
+                return (k['maintenance_seconds'] + k['operator_seconds']) / 288, False
+            if 'maintenance downtime' in after:
+                return k['maintenance_seconds'] / 288, False
+            if 'operator downtime' in after or section.lstrip('- ').startswith('Operator downtime'):
+                return k['operator_seconds'] / 288, False
+            if 'grade target' in after:
+                return k['lineal_ft'] / k['target_ft'] * 100, False
+            if text.endswith('ft/min'):
+                return k['lineal_ft'] / 480, False
+            if section.lstrip('- ').startswith('Downtime:'):
+                return k['stop_seconds'] / 288, False
+            if section.lstrip('- ').startswith('Dry-end waste'):
+                return k['reject_sqft'] / (k['gross_sqft'] - k['trim_sqft'] - k['shear_sqft']) * 100, False
+            if section.lstrip('- ').startswith('Good output'):
+                return good_output(rows), False
+            if 'lineal ft' in text or section.lstrip('- ').startswith('Lineal feet'):
+                return k['lineal_ft'], False
+        if tool == 'get_shift_notes':
+            return len(rows) + len(self.rows(self.also(entry, 'the shift record'))), True
+        if tool == 'get_speed_opportunity':
+            if part == 'row':
+                return best_fifth_hours(rows), False
+            cells = {}
+            for r in rows:
+                key = (r['quality_id'], r['web_width_in'] if data['rows'][0]['slice_by'] == 'width' else self.crew_of(r))
+                cells.setdefault(key, []).append(r)
+            return sum(h for h in (best_fifth_hours(c) for c in cells.values()) if h is not None), False
+        if tool == 'get_speed_variance':
+            return self.speedvar(entry, part, index, rows, url), False
+        if tool == 'get_stops_profile':
+            if part == 'weekday':
+                window = data['window']
+                first, last = _date.fromisoformat(window['start']), _date.fromisoformat(window['end'])
+                days = sum(1 for n in range((last - first).days + 1) if (first + _timedelta(n)).strftime('%a') == row['weekday'])
+                return len(rows) / days, False
+            return len(rows), True
+        if tool == 'get_waste_breakdown':
+            whole = self.whole(entry)
+            gross = sum(r['gross_sqft'] for r in whole)
+            if part is None:
+                return good_output(rows), False
+            if part == 'detail':   # the tool rounds a reason's share of dry-end to one place and prints two (see the PR thread)
+                return sum(r['sqft'] for r in rows) / sum(r['reject_sqft'] for r in whole) * 100, 1
+            table = receipt['table']
             column = {'setups': f'{row["category"]}_sqft', 'rejects': 'sqft', 'setup_orders': f'{row["category"]}_sqft', 'shifts': 'bale_sqft'}[table]
-            checks = [(row['category'], sum(r[column] for r in rows), row['sqft'], 1)]
-    elif tool == 'get_wet_end_performance' and part == 'row':
-        checks = [('setups', len(rows), len(row['source_ids']), None), ('feet', sum(r['lineal_ft'] for r in rows), row['lineal_ft'], None)]
-    elif tool == 'get_wet_end_performance':
-        checks = [('paper runs', len({r['wet_end_id'] for r in rows}), len(data['rows']), None)]
-    elif tool == 'get_order_matrix' and part is None:
-        checks = [('lanes', len(rows), len(data['rows']), None)]
-    elif tool == 'get_order_matrix':
-        checks = [('one lane', len(rows), 1, None), ('actual cuts', rows[0]['actual_cuts'], row['cuts'], None)]
-    if not checks:
-        return f'{tool} {part} {index}: no check of its rows ({url})'
-    for what, got, want, places in checks:
-        if isinstance(places, tuple):   # ('abs', tolerance): a sum of values the tool rounded one by one
-            same = abs(got - want) <= places[1]
-        else:
-            same = got == want if isinstance(want, (list, bool)) or places is None and isinstance(want, int) else near(got, want, places)
-        if not same:
-            return f'{tool} {part} {index}: {what} {got!r} over {url}, the tool says {want!r}'
-    return None
+            amount = unexplained(rows) if row['category'] == 'unexplained' else sum(r[column] for r in rows)
+            if after.startswith(' of the yield') or after.startswith(' of yield'):
+                return amount / (gross - sum(r['trim_sqft'] + r['shear_sqft'] for r in whole)) * 100, False
+            return (amount / gross * 100 if '%' in text else amount), False
+        if tool == 'get_wet_end_performance':
+            if part is None and 'trailing-year running speed' in section:   # runs under their grade's baseline, running speed
+                base, runs = baselines(self.rows(self.also(entry, 'the trailing year'))), {}
+                for r in rows:
+                    feet, run = runs.get(r['wet_end_id'], (0.0, 0.0, None))[:2]
+                    runs[r['wet_end_id']] = (feet + r['lineal_ft'], run + (r['seconds'] - r['stop_seconds']) / 60, r['quality_id'])
+                return sum(1 for feet, run, g in runs.values() if g in base and run and feet / run < base[g]), True
+            if part is None:
+                return runs_below_target(rows)[0], True
+            return sum(r['lineal_ft'] for r in rows) / sum(r['target'] * r['seconds'] / 60 for r in rows) * 100, False
+        if tool == 'get_order_matrix' and part is None:
+            return len(rows), True
+        raise Unchecked(f'{tool} {part}: no figure check for {section[:80]!r}')
+
+    def check(self, result, i, section):
+        receipt = result['receipts'][i]
+        m = dp.REF.search(section)
+        entry = result['trace'][int(m.group(1)) - 1]
+        part, index = m.group(2), int(m.group(3)) if m.group(3) else None
+        if not receipt or not receipt['url'].startswith('/data/'):
+            return f'no receipt for {section[:90]!r}'
+        rates = entry.get('data', {}).get('rates') if isinstance(entry.get('data'), dict) else None
+        self.rates = rates if isinstance(rates, dict) and 'values' in rates else cost_model.effective()   # the answer's own rates
+        try:
+            want, exact = self.expected(result, entry, part, index, section, receipt)
+        except Unchecked as exc:
+            return f'unchecked: {exc}'
+        text, value, decimals = printed(section)
+        if exact is not True and exact is not False:   # the tool rounded to `exact` places and printed more
+            decimals, exact = exact, False
+        tolerance = 10 ** -decimals * (0.5 if exact else 1.0) + 1e-6 * abs(value)
+        if want is None or abs(round(want, 6) - value) > tolerance:
+            return f'**{text}** but {want!r} over {receipt["url"]} ({entry["tool"]} {part} {index}): {section[:110]!r}'
+        return None
 
 
 # The data-quality demo's day (an excluded record in shift 2): a daily tool links the corrupt variant of shift_kpis, a
@@ -470,35 +704,66 @@ def golden_urls():
     return sorted({c['expect']['url'] for c in cases if c.get('mode', 'offline') == 'offline' and (c.get('expect') or {}).get('url')}) + list(CORRUPT_URLS)
 
 
-def test_receipts_on_golden_answers_link_to_rows_that_hold_the_cited_figure(store):
-    """Every "(query N · row M)" of every offline golden answer: the step declares its table and filter, the link
-    resolves to rows, and those rows hold the cited row's quantity (summed, counted or as the tool's ratio of sums)."""
+def receipt_failures(store, urls):
+    """(failures, receipts checked, tools seen) over the answers of these addresses."""
+    app, figures = Workbench(store=store), Figures(store)
+    failures, checked, tools = [], 0, set()
+    try:
+        for url in urls:
+            try:
+                result, _ = app.answer_url(url)
+            except ValueError:
+                continue   # a refusal case: no answer, no receipt
+            assert len(result['receipts']) == len(result['sections']), url
+            for i, section in enumerate(result['sections']):
+                if not dp.REF.search(section):
+                    assert result['receipts'][i] is None, (url, section)
+                    continue
+                problem = figures.check(result, i, section)
+                if problem:
+                    failures.append(f'{url}: {problem}')
+                checked += 1
+                tools.add(result['trace'][int(dp.REF.search(section).group(1)) - 1]['tool'])
+    finally:
+        app.close()
+    return failures, checked, tools
+
+
+# The coordinator's five reproductions (#151 review): each linked to rows that did not hold its figure before this round.
+REPRODUCTIONS = ('/corr/1/day/2026-09-11?measure=review',                                   # 1. a previous-window finding
+                 '/corr/1/day/2026-09-14?measure=rollstock&window=month',                   # 1. "Previous window: N MSF"
+                 '/corr/1/day/2026-01-05?measure=review',                                   # 2. a recurrence count
+                 '/corr/1/day/2026-09-14/shift/2?measure=summary',                          # 3. the shift summary's findings
+                 '/corr/1/day/2026-03-09?measure=speedvar&window=week&against=shift&shifts=3,1',   # 4. a shift-comparison gap
+                 '/corr/1/day/2026-09-14?measure=dollars&shifts=1,3')                       # 5. a day's money over some shifts
+
+
+def test_the_five_reproductions_link_to_rows_that_hold_their_figures(store):
+    """Each linked to rows that did not hold its bold figure (the coordinator's review of #151); now each figure is
+    recomputed from the rows its receipt opens."""
+    failures, checked, _ = receipt_failures(store, REPRODUCTIONS)
+    assert not failures, '\n'.join(failures)
+    assert checked > 40
     app = Workbench(store=store)
-    failures, receipts, tools = [], 0, set()
-    for url in golden_urls():
-        try:
-            result, _ = app.answer_url(url)
-        except ValueError:
-            continue   # a refusal case: no answer, no receipt
-        for section in result['sections']:
-            m = REF.search(section)
-            if not m:
-                continue
-            entry = result['trace'][int(m.group(1)) - 1]
-            part, index = m.group(2), int(m.group(3)) if m.group(3) else None
-            assert entry.get('source'), (url, entry['tool'])
-            link = dp.receipt_url(entry, part, index)
-            assert link and link.startswith('/data/'), (url, section)
-            assert dp.table_url(link.split('?')[0].removeprefix('/data/'), dp.parse_filters(link.split('?')[0].removeprefix('/data/'), link.partition('?')[2])[0]) == link, link
-            rows = dp.resolve(store, link, limit=500_000)
-            problem = figure_failure(entry, part, index, link, rows) or also_failure(store, entry, part, index)
-            if problem:
-                failures.append(f'{url}: {problem}')
-            receipts += 1
-            tools.add(entry['tool'])
-    app.close()
-    assert not failures, '\n'.join(failures[:20])
-    assert receipts > 1000 and len(tools) >= 20, (receipts, sorted(tools))
+    try:
+        money, _ = app.answer_url('/corr/1/day/2026-09-14?measure=dollars&shifts=1,3')
+        day = next(e for e in money['trace'] if e['tool'] == 'get_day_dollars')
+        assert day['source']['url'] == '/data/shift_kpis?day=2026-09-14&shift=1,3&corrupt=false'
+        gap, _ = app.answer_url('/corr/1/day/2026-03-09?measure=speedvar&window=week&against=shift&shifts=3,1')
+        assert gap['receipts'][0]['url'] == '/data/shift_kpis?from=2026-03-09&to=2026-03-13&shift=1,3&corrupt=false'
+        review, _ = app.answer_url('/corr/1/day/2026-09-11?measure=review')
+        previous = next(r for r in review['receipts'] if r and r['of'] == 'previous window')   # the bullet under "The previous window"
+        assert previous['of'] == 'previous window' and 'day=2026-09-10' in previous['url']
+    finally:
+        app.close()
+
+
+def test_receipts_on_golden_answers_link_to_rows_that_hold_the_bold_figure(store):
+    """Every section of every offline golden answer that cites a step: its receipt opens rows, and the section's bold
+    figure, recomputed from those rows with the receipt's filter, is the figure printed."""
+    failures, checked, tools = receipt_failures(store, golden_urls())
+    assert not failures, f'{len(failures)} of {checked}:\n' + '\n'.join(failures[:25])
+    assert checked > 1000 and len(tools) >= 20, (checked, sorted(tools))
 
 
 def test_a_receipt_link_survives_a_corrupt_day_and_names_its_variant(store):

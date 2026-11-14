@@ -60,21 +60,23 @@ Every step of an answer declares the store table it read and the filter it read 
 | `get_shift_kpis`, `get_shift_overview` | `shift_kpis` (the shift's row; `corrupt=true` on the data-quality demo's day, the variant a daily tool reads; a period tool reads the records as generated, `corrupt=false`) | the same row |
 | `get_downtime_breakdown`, `get_downtime_pareto` | `stops` (and the breakdown's `kind`) | its reason, place or kind; a flag, its day, shift and kind |
 | `get_downtime_review` | `shift_kpis` | a reason row, its `kind` and `reason` in `stops`; a flag, its day, shift and kind |
-| `get_wet_end_performance` | `setups` | the run's setups in the shift (`wet_end_id`) |
+| `get_wet_end_performance` | `setups`, and the trailing year's setups the baselines come from | the run's setups in the shift (`wet_end_id`) |
 | `get_quality_breakdown` | `rejects` | the family (`counted_in=dry_end`); a sub-reason, the family and reason |
 | `get_setup_matrix`, `get_order_matrix` | `setups`, `setup_orders` | the setup; the lane (setup, order number, cutoff knife) |
 | `get_shift_notes` | `stops` (every stop of the shift is a note, after the shift's own) | |
 | `get_rankings` | `setups`, `stops` or `rejects` by metric | the run, the place and reason, or the family |
-| `get_shift_dollars`, `get_day_dollars`, `get_opportunities` | `shift_kpis` | the line's own rows: a downtime reason in `stops`, a reject family in `rejects`, side trim, shear and speed in `setups`, the waste boards in `setup_orders`, the bale in `shifts` |
+| `get_shift_dollars`, `get_day_dollars`, `get_opportunities` | `shift_kpis` (a day's money over some shifts: `shift=1,3`); the levers also the trailing year's setups | the line's own rows: a downtime reason in `stops`, a reject family in `rejects`, side trim, shear and speed in `setups`, the waste boards in `setup_orders`, the bale in `shifts` |
 | `get_period_kpis`, `compare_periods`, `get_trend` | `shift_kpis` (`corrupt=false`) | the same window (a trend week, its own five days) |
 | `get_waste_breakdown` | `shift_kpis` | the line's own rows, as above; a sub-reason, its family and reason in `rejects` |
 | `get_stops_profile` | `stops` | the production day; a weekday, `weekday=` over the window |
 | `get_grade_totals`, `get_speed_opportunity` | `setups` | the grade (and the cell's web width, or its crew) |
 | `get_rollstock` | `wet_ends` for all shifts, `setups` for one | the grade and web width |
 | `get_overrun` | `setup_orders` | the knife (`cutoff_knife`); the all-knives row, the window |
-| `get_speed_variance` | `setups` | the explained side's rows, whose minutes and stops the details carry: the stops bucket as the reasons its details list (`reason=` repeated), the setups bucket as the order-change stops (an item, those on one grade's setups), planned and external stops by kind, a reason in `stops`, a grade in `setups`; a bucket or item that lost nothing there, the reference shift's or window's rows |
+| `get_speed_variance` | `shift_kpis` of both shifts when one is held against another (`shift=1,3`), else of its window; also the trailing year's setups (each grade's baseline, and the usual mix against the baseline) and the previous window | the stops bucket as the reasons its details list (`reason=` repeated), the setups bucket as the order-change stops (an item, those on one grade's setups), planned and external stops by kind, a reason in `stops`, a grade in `setups`, over both shifts of a shift comparison; against the previous window, a bucket or item that lost nothing in this one opens the previous window's rows |
 
-`tests/test_datapages.py` holds it on the golden set and the data-quality demo's day: every receipt of every offline golden answer links to rows, and those rows hold the cited row's quantity (its stops and minutes, square feet, cuts, volume, the tile recomputed from the `shift_kpis` rows, the speed gap from the setups' feet and stops, the bale's unexplained remainder from the shifts); a receipt without such a check fails. A dollar figure is a priced quantity, so its rows hold the quantity it prices. A speed-variance figure is a gap against a reference: its rows are one side of it. The browser runs no tool and no model: it reads the store's tables under the same lock and bounds as the tools.
+Each section of an answer has its own receipt (`receipts`, [the grammar](URLS.md#the-data-browser)): a finding about the previous window opens that window's rows, a flag's recurrence count the reason's stops over the trailing year it counts, a shift summary finding the table its figure is read from.
+
+`tests/test_datapages.py` holds it on the golden set and the data-quality demo's day: for every section that cites a step, it recomputes the section's **bold figure** from the rows its receipt opens, with the receipt's own filter, and compares it with the figure as printed: sums, counts, ratios of sums, the tiles from the `shift_kpis` rows, previous windows, recurrence counts, "N of M" counts, the speed gaps and their buckets at each grade's baseline (from the trailing year's setups), and every dollar figure as its quantity from the rows priced by the cost model at the answer's rates. A section without such a check fails. The browser runs no tool and no model: it reads the store's tables under the same lock and bounds as the tools.
 
 ## Bounds, failures and done
 
