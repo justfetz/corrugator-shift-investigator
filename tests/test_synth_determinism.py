@@ -26,11 +26,11 @@ def day_bytes(data, day):
     return {name: jsonl_bytes([r for r in data[name] if r.production_date == day]) for name in R.FAMILIES}
 
 
-def test_same_seed_is_byte_identical_and_fast(tmp_path):
+def test_same_seed_is_byte_identical_and_fast(tmp_path, latency_budget):
     started = time.perf_counter()
     first = generate_months()
     elapsed = time.perf_counter() - started
-    assert elapsed < 3.0, elapsed
+    assert elapsed < latency_budget(3.0), elapsed
     second = generate_months(seed=2026, months=(("2026", 8), ("2026", 9)), machine_id="CORR-1")
     assert first["content_hash"] == second["content_hash"] == content_hash(first)
     write_jsonl(first, tmp_path / "a")

@@ -165,7 +165,7 @@ def test_a_table_page_is_the_schema_and_fifty_rows_newest_first(store):
             dp.page(store, 'setup_orders' if 'lane' in bad else 'stops', bad)
 
 
-def test_a_csv_holds_the_lock_no_longer_than_a_page(store, monkeypatch):
+def test_a_csv_holds_the_lock_no_longer_than_a_page(store, monkeypatch, latency_budget):
     """The store's lock is the tools' lock: a CSV reads its rows a chunk at a time, each read its own short hold, so a
     download never keeps a tool waiting (the #142 review measured 120-185 ms in one read before)."""
     holds, fetch = [], store._fetch
@@ -181,7 +181,7 @@ def test_a_csv_holds_the_lock_no_longer_than_a_page(store, monkeypatch):
         holds.clear()
         body, truncated = dp.csv_rows(store, table, '')
         assert truncated and len(holds) == dp.CSV_LIMIT // dp.CSV_CHUNK + 1, (table, len(holds))
-        assert sorted(holds)[len(holds) // 2] < 60, (table, holds)   # each read a few tens of milliseconds at most on a slow runner
+        assert sorted(holds)[len(holds) // 2] < latency_budget(60), (table, holds)   # each read a few tens of milliseconds at most
 
 
 def test_the_csv_is_the_filtered_rows_bounded(store):
@@ -250,7 +250,7 @@ def test_fuzzed_filters_never_reach_the_sql(store):
         dp.page(store, 'information_schema.tables', '')
 
 
-def test_a_page_answers_in_tens_of_milliseconds(store):
+def test_a_page_answers_in_tens_of_milliseconds(store, latency_budget):
     """The budget the issue sets, loose enough for a shared CI runner: the median of five reads of each table's first
     page, its deepest page and a filtered page, under 100 ms (on the prebuilt store a page takes a few milliseconds)."""
     deepest = [(t, f'page={dp.MAX_PAGE}') for t in ('setups', 'setup_orders', 'rejects', 'rolls')]
@@ -261,7 +261,7 @@ def test_a_page_answers_in_tens_of_milliseconds(store):
             started = time.perf_counter()
             dp.page(store, table, query)
             times.append((time.perf_counter() - started) * 1000)
-        assert sorted(times)[2] < 100, (table, query, times)
+        assert sorted(times)[2] < latency_budget(100), (table, query, times)
 
 
 # ------------------------------------------------------------------ receipts link to the rows behind a figure
