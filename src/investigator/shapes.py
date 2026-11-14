@@ -201,7 +201,7 @@ def answer_sections(intent, evidence, context, period_tools, lead=None):
     evidence = [r for r in evidence if r['tool'] != SEMANTIC_TOOL]
     period = [r for r in evidence if r['tool'] in period_tools]
     daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] != 'get_day_dollars']   # the day's total is the card's (#31b)
-    lines = SemanticAnswer(semantic, context).sections() if semantic else []
+    lines = SemanticAnswer(semantic, context, lead if intent == 'semantic' else None).sections() if semantic else []
     if period:
         own = intent.startswith('period_')
         lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own, lead=lead).sections()
@@ -1734,6 +1734,9 @@ class PeriodAnswer:
 SEMANTIC_COUNTS = ('setups', 'order changes', 'paper changes', 'stops', 'sheets', 'cuts', 'days')
 SEMANTIC_ONE_PLACE = ('MSF', 'ft', 'sq ft', 'ft/min', 'ft/setup', 'ft/paper change')
 SEMANTIC_FIRST = 5   # the card shows five findings (web/app.js BULLETS_SHOWN); the rest follow under a label
+GROUP_NOUNS = {'grade': 'board grade', 'wet_end': 'paper run', 'web_width': 'web width', 'reject_family': 'reject family',
+               'reject_reason': 'reject reason', 'period': 'accounting period', 'day': 'production day', 'week': 'production week',
+               'month': 'calendar month', 'kind': 'stop kind', 'place': 'stop place', 'reason': 'stop reason'}
 SEMANTIC_LOOKS = {'stop': ('pareto', 'stops'), 'reject': ('waste', 'grade'), 'lane': ('overrun', 'grade'),
                   'shift': ('waste', 'stops'), 'setup': ('grade', 'speed'), 'setup waste': ('waste', 'grade')}
 
@@ -1757,8 +1760,8 @@ class SemanticAnswer:
     window, then one finding per row of the group-by in the result's order, each citing its row; the window, the
     measure's definition and, for a priced measure, how a dollar is priced; where to look in the flagship answers."""
 
-    def __init__(self, evidence, context):
-        self.evidence, self.context = evidence, context
+    def __init__(self, evidence, context, lead=None):
+        self.evidence, self.context, self.lead = evidence, context, lead or {}
 
     def wp(self, data):
         return PeriodAnswer.wp(self, data)
@@ -1799,10 +1802,17 @@ class SemanticAnswer:
             else:
                 head += f' · {words}: {before}{before_rest}'
         head += band(data.get('band_text')) + f' {ref(result)}'
+        total = None
+        led = self.led_head(result, where, wp, unit)   # issue #144: a ranked question names its first row, a share its value's share
+        if led is not None:
+            total = 'In all' + head[len(data['label']):].replace(f'**{bold}**', bold)   # the whole, with no figure of its own
+            head = led
         bullets = [self.row_line(result, i, row) for i, row in enumerate(data['rows'])]
         if len(bullets) > SEMANTIC_FIRST:
             bullets = bullets[:SEMANTIC_FIRST] + ['The rest, in the same order'] + bullets[SEMANTIC_FIRST:]
-        notes = [self.cut_note(data)] if data.get('cut_by') else []
+        notes = [total] if total else []
+        notes.append(self.read_as(data, wp))
+        notes += [self.cut_note(data)] if data.get('cut_by') else []
         if data['window']['coverage'] != 'complete':
             notes.append(f'The window is incomplete (coverage {data["window"]["coverage"]}): observed values only, and rankings are withheld.')
         if data.get('comparison', 'complete') != 'complete':
@@ -1824,6 +1834,53 @@ class SemanticAnswer:
         notes.append('Each row lists the records it sums (source_ids) and their count; the query holds the SQL and its parameters.')
         looks = self.looks(data)
         return [head, *bullets, *notes] + ([LOOK, *looks] if looks else [])
+
+    def led_head(self, result, where, wp, unit):
+        """The headline of a ranked question or a share (issue #144), citing the row it names: `Shift 3 had the most setups this
+        week: **204 setups**`, `Stacker: **39.13%** of the stops this week · 45 stops`. None when the question asked neither, or
+        the window is incomplete (rankings are withheld), or the value has no row."""
+        data = result['data']
+        rows = data['rows']
+        noun = re.sub(r'\s*\(.*\)$', '', data['label']).lower()
+        if self.lead.get('share') is not None and len(data['group_by']) == 1:
+            dim = data['group_by'][0]
+            index = next((i for i, r in enumerate(rows) if r.get(dim) == self.lead['share'] and r.get('share_pct') is not None), None)
+            if index is None:
+                return None
+            row = rows[index]
+            bold, rest = semantic_figure(row['value'], self.unit_of(row, data['unit']))
+            return f'{row["label"]}: **{f2(row["share_pct"])}%** of the {noun}{where}{wp} · {bold}{rest} {ref(result, index)}'
+        if not self.lead.get('rank') or not rows or data['window']['coverage'] != 'complete':
+            return None
+        row = rows[0]
+        kind = 'ratio' if data['agg'] == 'ratio' else 'count' if data['unit'] in SEMANTIC_COUNTS else 'sum'
+        word = {('most', 'count'): 'the most', ('least', 'count'): 'the fewest', ('most', 'sum'): 'the most', ('least', 'sum'): 'the least',
+                ('most', 'ratio'): 'the highest', ('least', 'ratio'): 'the lowest'}[(self.lead['rank'], kind)]
+        bold, rest = semantic_figure(row['value'], self.unit_of(row, data['unit']))
+        return f'{row["label"]} had {word} {noun}{where}{wp}: **{bold}**{rest}{band(row.get("band_text"))} {ref(result, 0)}'
+
+    def read_as(self, data, wp):
+        """`Read as: setups by shift, this week, all shifts, most first.` (issue #144): what the semantic query read, from the
+        result itself, so a question and its address show the same line. Every word of a question that answered is in it: the
+        parser refuses rather than drop one."""
+        unit = data['unit']
+        noun = re.sub(r'\s*\(.*\)$', '', data['label']).lower()
+        what = noun if unit in SEMANTIC_COUNTS else f'{noun} in dollars' if unit == '$' else f'{noun} in {unit}'
+        for f in data.get('filters') or []:
+            what += f', {re.sub(r"\s*\(.*\)$", "", f["label"]).lower()} {f["text"]}'
+        if data['group_by']:
+            what += ' by ' + ' and '.join(GROUP_NOUNS.get(d, d.replace('_', ' ')) for d in data['group_by'])
+        parts = [what, wp.strip() if wp else data['window']['label'], f'shift {data["shift"]}' if data.get('shift') else 'all shifts']
+        if self.lead.get('rank'):
+            parts.append(('largest' if self.lead['rank'] == 'most' else 'smallest') + ' first')
+        if data['groups'] > data['rows_shown'] and data['query'].get('limit') == data['rows_shown']:
+            parts.append(f'the first {n(data["rows_shown"])}')
+        if self.lead.get('share') is not None:
+            label = next((r['label'] for r in data['rows'] if r.get(data['group_by'][0]) == self.lead['share']), None) if data['group_by'] else None
+            parts.append(f'the share of {label}' if label else 'each row\'s share of the total')
+        if data.get('previous_window'):
+            parts.append(f'against {data["previous_window"]["label"]}')
+        return 'Read as: ' + ', '.join(parts) + '.'
 
     @staticmethod
     def cut_note(data):

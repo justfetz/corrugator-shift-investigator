@@ -301,7 +301,7 @@ class Workbench:
         context.scope = scope
         context.rates = parse_rates(fields.get('rates'))
         # The refusals of the offline router, verbatim; the scope is the question's own when it names one (issue #105)
-        request, context = route(question, context, self.store.production_days)
+        request, context = route(question, context, self.store.production_days, self.store)
         seen['moved'] = bool(getattr(context, 'read', None))
         # Follow-ups share the production day: a prior view of another day (the conversation before the question
         # moved to last week, or a view that did) is not this question's context, as a changed control starts afresh.
@@ -383,7 +383,7 @@ class Workbench:
             # The question's own shift and window win over the controls (issue #105), for the analyst as for the router;
             # the run takes that scope (_scoped). A relative window with no production day in the records is refused
             # here, before any model is asked.
-            question_scope(question, Context(day, shift, scope=scope, period=tool_period), self.store.production_days)
+            question_scope(question, Context(day, shift, scope=scope, period=tool_period), self.store.production_days, self.store)
         if mode != 'offline' and not report:
             self.daily_round()  # counted before the model is asked; failed rounds still count
         job = {'mode': mode, 'report': report, 'question': question, 'day': day, 'shift': shift, 'scope': scope, 'period': period,
@@ -416,7 +416,7 @@ class Workbench:
         """The context the job's question runs in (issue #105): the session's, which follows the controls, or a copy in the
         shift and window the question names. The session keeps the controls' conversation; `_settle` hands back the
         history of a same-day question. Lock held."""
-        return context if job['report'] else question_scope(job['question'], context, self.store.production_days)
+        return context if job['report'] else question_scope(job['question'], context, self.store.production_days, self.store)
 
     @staticmethod
     def _settle(context, run):
@@ -444,7 +444,7 @@ class Workbench:
             return self._retain(result, job['session_id'], job['session_reset'])
         context = self._context(job)
         run = self._scoped(job, context)
-        request = parse_request(job['question'], run)
+        request = parse_request(job['question'], run, self.store)
         result = Agent(self._dataset((run.production_day, job['corrupt'])), max_turns=self.guards.max_turns).ask(job['question'], run, request=request)
         self._settle(context, run)
         result['url'] = canonical_url(request, run, job['corrupt'], self.store.machine_id)   # the question's own address

@@ -91,8 +91,9 @@ THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 
 DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
-# the semantic model's compiler (issue #117) is no planner's tool: only a case that asks by its address, or a value case
-# that calls it, may run it, so a model that names it anywhere else still fails the unknown-tool invariant
+# the semantic model's compiler (issue #117) is no model planner's tool: a case that asks by its address, a value case that calls it,
+# or an offline question the router reads into the semantic model (issue #144) may run it, so a model that names it still fails the
+# unknown-tool invariant
 SEMANTIC_TOOL_NAMES = TOOL_NAMES | {semantic.TOOL}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
 # The stated rules an answer may print beside its figures: 480 scheduled minutes a shift, the 12 minutes a downtime flag
@@ -160,6 +161,9 @@ def named_per(question):
     if numerator in ('minutes', 'mins', 'downtime') and denominator == 'day':
         # the downtime of each production day, led by the day with the most minutes (round 4, item 9); a percent asked is a percent
         return r'%' if re.search(r'\bpercent(?:age)?\b|%', question, re.I) else r'\bmin(?:utes)?\b'
+    if numerator in ('setups', 'sheets', 'paper changes', 'paper change', 'stops', 'splices', 'jams') and denominator in ('day', 'week', 'order'):
+        # a count per day, per week or per order is that count split by it (issue #144: the semantic model's split), never a ratio
+        return rf'\b{re.escape(numerator)}\b'
     return (rf'\b{PER_NUMERATOR.get(numerator, re.escape(numerator))}(?: per |/)'
             rf'{PER_DENOMINATOR.get(denominator, re.escape(denominator))}\b')
 
@@ -176,7 +180,7 @@ ASKED_UNITS = (# an average stop is minutes per stop; an average setup or run le
                # feet a minute is the speed (round 5, item 5)
                (r'\b(?:feet|ft) (?:a|an|per) min(?:ute)?\b', r'\bft/min\b'),
                (r'\b(?:longest|shortest|maximum|minimum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|'
-                r'order changes?)\b', r'\b(?:longest|shortest|maximum|minimum)\b'),
+                r'order changes?)\b', r'\b(?:longest|shortest|maximum|minimum)\b|\bhad the (?:most|fewest|least|highest|lowest)\b'),   # or ranked (#144)
                # an average of a count or a total is a ratio, never the total ('average stops this week')
                (r'\b(?:average|avg|mean)\b(?!.*\bper\b)(?=.*\b(?:stops|setups|paper changes|order changes|changeovers|sheets|feet|ft|minutes|mins)\b)',
                 r'(?: per |/)'),
@@ -1434,7 +1438,7 @@ def _run_case(case, provider, live, record, scratch):
                 # carries the follow-up history back; one on another day starts its own, as /q drops the priors.
                 # against the golden year's own days (issue #35): the process's default store is the window ending
                 # yesterday, a different calendar, and building it inside the timed turn cost the first case 10 s
-                turn = context if case['type'] == 'value' else question_scope(text, context, golden_store().production_days)
+                turn = context if case['type'] == 'value' else question_scope(text, context, golden_store().production_days, golden_store())
                 results.append(run_turn(make_agent(dataset(turn.production_day, case.get('corrupt', False))), text, turn))
                 if turn is not context and turn.production_day == context.production_day:
                     context.history = turn.history
@@ -1486,7 +1490,8 @@ def score(case, expect, results, analysis, allowed, mode):
     """The invariants over every turn and the case's own expectations over the last (or, for an
     investigation, over all of them): the same scoring for the in-process and the URL answers."""
     failures = []
-    tools = SEMANTIC_TOOL_NAMES if case.get('url') or case.get('tool') == semantic.TOOL else TOOL_NAMES
+    # the offline router reads a question into the semantic model since issue #144 (measure=semantic); a model planner never plans it
+    tools = SEMANTIC_TOOL_NAMES if case.get('url') or case.get('tool') == semantic.TOOL or mode == 'offline' else TOOL_NAMES
     for index, result in enumerate(results):
         failures.extend(invariants(mode, result, *answered_scope(case, expect, result, analysis, allowed, index == len(results) - 1), tools=tools))
     if case['type'] == 'investigation':
