@@ -30,21 +30,30 @@ MAX_PHRASE = 5
 # many sheets were rejected" was read as every sheet cut).
 FILLER = agent.FUNCTION_WORDS | frozenset((
     'with', 'had', 'having', 'list', 'lists', 'listed', 'chart', 'charts', 'graph', 'plot', 'about', 'across', 'over', 'during', 'within',
-    'did', 'whats', 'was', 'were', 'did', 'do', 'have', 'has', 'into', 'out', 'as', 'than', 'then', 'by', 'per', 'each', 'every',
+    'did', 'whats', 'was', 'were', 'did', 'do', 'have', 'has', 'into', 'out', 'as', 'then', 'by', 'per', 'each', 'every',
     'happened', 'hit', 'see', 'ran'))
 # Words that say minutes were lost: with minutes asked and no measure named, the minutes are downtime ("which shift lost the most minutes")
 LOSS = ('lost', 'lose', 'losing', 'down')
 # The verbs read only where the measure is what they say: a loss is downtime or a waste line ("which shift lost the most minutes",
-# "how much trim did we lose"), a reject is a dry-end reject. Beside any other measure ("how many sheets did we lose", "how many feet
-# were rejected") the reading refuses the verb, never drops it. The other verbs a quantity is said with (spent, took, produced,
-# stopped, running, ...) are words this parser does not read: refused, or left to the hand router, which reads its own.
+# "how much trim did we lose"), a reject is a dry-end reject, a thing produced is what ran or the waste it made ("which shift produced
+# the most MSF"). Beside a loss or a reject any other measure ("how many sheets did we lose", "how many feet were rejected") is refused
+# over a hand route too. The other verbs a quantity is said with (UNREAD_VERBS, and a thing produced that ran no line) the parser does
+# not read: with every other word read, the hand route keeps the question only when it answers what the other words ask ("how much
+# downtime did we experience": the review), else the reading refuses the verb ("which shift experienced the most stops": never shift 2's
+# Pareto).
 LOSS_VERBS = ('lose', 'lost', 'losing')
 REJECT_VERBS = ('rejected',)
+PRODUCE_VERBS = ('produce', 'produced', 'producing', 'making')
+UNREAD_VERBS = ('spend', 'spent', 'spending', 'take', 'took', 'takes', 'taking', 'experience', 'experienced', 'stopped', 'running')
+# The hand routes that read every word of a question (#113's allow-list): a verb they consumed is theirs ("how many stops did we lose
+# to the stacker", "how long did changeovers take")
+ALLOW_LISTED = ('period_quantity', 'period_stops')
 LOSS_MEASURES = ('downtime_minutes', 'downtime_pct', 'op_maint_minutes', 'op_maint_pct', 'maintenance_pm_minutes', 'maintenance_pm_pct',
                  'minutes_per_stop', 'downtime_usd', 'trim_sqft', 'trim_pct', 'trim_usd', 'shear_sqft', 'shear_pct', 'shear_usd',
                  'changeover_sqft', 'cutoff_waste_sqft', 'stacker_waste_sqft', 'admin_sqft', 'reject_sqft', 'reject_sheets', 'dry_end_pct',
                  'dry_end_usd', 'bale_sqft', 'bale_msf', 'bale_pct', 'bale_usd', 'unexplained_sqft', 'unexplained_pct', 'unexplained_usd')
 REJECT_MEASURES = ('reject_sqft', 'reject_sheets', 'dry_end_pct', 'dry_end_usd')
+PRODUCE_UNITS = ('setups', 'order changes', 'paper changes', 'ft', 'sq ft', 'MSF', 'sheets', 'cuts', 'MSF/day', 'ft/setup', 'ft/paper change')
 # ... of which these are cues before a value or a dimension, and are consumed with it
 PLACE_CUES = ('at', 'on', 'in')
 REASON_CUES = ('for', 'from', 'to', 'due', 'caused', 'because', 'triggered', 'related')
@@ -268,7 +277,8 @@ def _items(text, vocab):
                     'frequency' if word in FREQUENCY else 'which' if word in WHICH else 'group' if word in GROUP else
                     'compare' if word in COMPARE else 'statistic' if word in STATISTIC else 'evaluative' if word in EVALUATIVE else
                     'and' if word in ('and', 'or', 'plus', 'also') else 'number' if re.fullmatch(r"\d[\d,.]*", word) else
-                    'verb' if word in LOSS_VERBS + REJECT_VERBS else 'filler' if word in FILLER else 'unknown')
+                    'verb' if word in LOSS_VERBS + REJECT_VERBS + PRODUCE_VERBS + UNREAD_VERBS else 'than' if word == 'than' else
+                    'filler' if word in FILLER else 'unknown')
             found = Item(kind, word, i, value=UNITS.get((word,)))
         else:
             n = len(found.words.split())
@@ -481,6 +491,11 @@ def _read(reading, text, context, store, mdl):
             if item.words == 'to' and item.kind == 'unknown' and before is not None and after is not None and \
                     {e[1] for e in _entries(before, 'value')} & {e[1] for e in _entries(after, 'value')}:
                 item.kind = 'and'
+    for i, item in enumerate(items):
+        # "how much did we lose to warp", "minutes lost to the stacker": "to" after a loss verb is the cue of the value after it
+        after = next((it for it in items[i + 1:] if not (it.kind == 'filler' and it.words in ('the', 'a', 'an', 'our'))), None)
+        if item.words == 'to' and item.kind == 'unknown' and i and items[i - 1].words in LOSS_VERBS and after is not None and _entries(after, 'value'):
+            item.kind, item.role = 'filler', 'reason cue'
     a = {'rank': rank, 'limit': limit, 'per_day': bool(per_day), 'reason_cue': bool(connectors), 'period': period, 'anchor': anchor,
          'compare': compare, 'shifts': shifts, 'this_shift': bool(this_shift), 'all_shifts': bool(all_shifts), 'ask_unit': ask_unit,
          'ask_often': ask_often, 'loss': bool(set(tokens_of(text)) & set(LOSS))}
@@ -636,11 +651,13 @@ def _assign(reading, items, mdl, store, a, context):
     the window, the shift, the asks, the share, "top N", "per day" and a reason's connector."""
     rank, limit, units, leftover = a['rank'], a['limit'], [], []
     statistic, evaluative, which, speed_rank, frequency, who = [], [], False, None, False, False
-    group_by, filters, per_ratio, verbs = [], {}, None, []
+    group_by, filters, per_ratio, verbs, than = [], {}, None, [], []
     for i, item in enumerate(items):
         kind = item.kind
         if kind == 'verb':
-            verbs.append(item)   # read once the measure is known (LOSS_VERBS, REJECT_VERBS), else refused
+            verbs.append(item)   # read once the measure is known (LOSS_VERBS, REJECT_VERBS, PRODUCE_VERBS), else refused
+        elif kind == 'than':
+            than.append(item)    # "more setups than 26-C": refused once every other word is read ("than last week" is PREVIOUS's)
         elif kind == 'unit':
             units.append(item.value)
             item.role = 'unit'
@@ -983,6 +1000,15 @@ def _assign(reading, items, mdl, store, a, context):
         asks = [f'{_strip_parens(mdl.measures[r]["label"]).lower()} {reading.window_words}'.strip() for r in ratios[:2]]
         raise Refused(f"'{statistic[0]}' asks for a statistic the semantic model does not define: it keeps sums, counts and ratios of sums",
                       list(dict.fromkeys(asks + _suggest(mdl, reading, base, group_by[0] if group_by else None, None)))[:3])
+    loss = [it for it in verbs if it.words in LOSS_VERBS + REJECT_VERBS]
+    if measure is None and loss and not leftover:
+        # "which shift rejected the most", "which shift lost the most": a loss with no measure is never the waste breakdown's side trim
+        reading.cues.add('loss')
+        rejected = loss[0].words in REJECT_VERBS
+        raise Refused(f"'{loss[0].words}' asks what was {'rejected' if rejected else 'lost'} and names no measure: the "
+                      f"{'rejects are kept as square feet of dry-end rejects and as reject sheets' if rejected else 'losses the semantic model keeps are minutes of downtime and the waste lines (side trim, shear, dry-end rejects)'}",
+                      [next(iter(_suggest(mdl, reading, m, group_by[0], rank)), None) if group_by else f'{_measure_word(mdl, m)} {reading.window_words}'.strip()
+                       for m in (('reject_sqft', 'reject_sheets') if rejected else ('downtime_minutes', 'reject_sqft', 'trim_sqft'))])
     if measure is None:
         raise Refused('The question names no measure the semantic model holds',
                       _suggest(mdl, reading, None, group_by[0] if group_by else None, rank or speed_rank))
@@ -991,10 +1017,17 @@ def _assign(reading, items, mdl, store, a, context):
         reading.unused = list(dict.fromkeys(leftover))
         raise Refused(f"'{reading.unused[0]}' is not a word the semantic model reads",
                       _suggest(mdl, reading, measure, group_by[0] if group_by else None, rank or speed_rank))
+    if than:
+        # "which grades had more setups than 26-C", "more stops than shift 1": a threshold or another value compared, which no query of
+        # the model reads; never the value ranked against itself (the review of PR #155 at 74cc46f, the reviewer's item 8)
+        reading.cues |= {'said', 'than'}
+        dim = group_by[0] if group_by else None
+        raise Refused("'than' compares with another value or a threshold, which the semantic model does not read: ask the split, or two "
+                      "values compared", _suggest(mdl, reading, measure, dim, None))
     if a['loss'] and mdl.measures[measure]['unit'] == 'ft/min':
         raise Refused('Speed lost is a gap against a target or a baseline, which the semantic model does not hold: it keeps the speed itself',
                       _suggest(mdl, reading, measure, group_by[0] if group_by else 'shift', 'least'))
-    for item in verbs:
+    for item in loss:
         rejected = item.words in REJECT_VERBS
         if measure in (REJECT_MEASURES if rejected else LOSS_MEASURES):
             item.role = 'verb'
@@ -1015,6 +1048,15 @@ def _assign(reading, items, mdl, store, a, context):
         asks = [next(iter(_suggest(mdl, reading, m, dim, rank)), None) if dim else f'{_measure_word(mdl, m)} {reading.window_words}'.strip()
                 for m in alternatives]
         raise Refused(text, [q for q in dict.fromkeys(asks) if q])
+    for item in verbs:
+        if item.words in PRODUCE_VERBS and mdl.measures[measure]['unit'] in PRODUCE_UNITS:
+            item.role = 'verb'   # "which shift produced the most MSF", "how much scrap did we produce": what ran or the waste it made
+        elif item.words not in LOSS_VERBS + REJECT_VERBS:
+            # every other word read: route keeps the hand answer only when it answers the question without the verb, else refuses
+            reading.cues.add('verb')
+            reading.unused = [item.words]
+            raise Refused(f"'{item.words}' is not a word the semantic model reads",
+                          _suggest(mdl, reading, measure, group_by[0] if group_by else None, rank or speed_rank))
     if speed_rank:
         if mdl.measures[measure]['unit'] != 'ft/min':
             raise Refused(f"'{'slowest' if speed_rank == 'least' else 'fastest'}' ranks a speed, and the question names "
@@ -1186,6 +1228,8 @@ WASTE_LINE = {'trim_sqft': 'trim', 'trim_pct': 'trim', 'trim_usd': 'trim', 'shea
 NEVER_LEADS = ('dry_end', 'bale', 'unexplained')
 # "waste" names every waste line, which the breakdown answers: the model's synonym narrows it to the dry-end rejects
 WHOLE_WASTE = ('waste', 'wastes')
+# a reject family or reason the question says to show ("show warp this month", PR #123's rulings), never one named bare ("bond this week")
+SHOWN = r"\b(show|see|display|list|chart|graph|plot|is\s+it)\b"
 
 
 def _asked(reading):
@@ -1202,7 +1246,9 @@ def _waste_leads(reading, store, context):
     if any(role == 'measure' and words in WHOLE_WASTE for words, role in reading.used):
         return True
     rejects = set(q.group_by) | set(q.filters)
-    if rejects & set(REJECT_DIMS) and not _asked(reading):
+    shown = (re.search(SHOWN, reading.question, re.I) or q.group_by or 'compare' in reading.cues
+             or semantic.model().measures[q.measure]['agg'] == 'priced')
+    if rejects & set(REJECT_DIMS) and not _asked(reading) and shown:
         return True
     line = q.filters['reject_family'].lower() if set(q.filters) == {'reject_family'} and not q.group_by else WASTE_LINE.get(q.measure)
     if line is None or q.filters.get('reject_reason') is not None:
@@ -1266,16 +1312,25 @@ def covers(request, reading, context=None, store=None):
         # the waste breakdown: every waste line with the window before, each dry-end family and reason with its dollars, led by the
         # largest line; a reading of a line it does not lead with is answered by the semantic model (_waste_leads)
         return (q.measure in WASTE_FAMILY and set(group_by) <= set(REJECT_DIMS) and set(filters) <= set(REJECT_DIMS)
-                and share is None and rank in (None, 'most') and _waste_leads(reading, store, context))
+                and share is None and rank is None and _waste_leads(reading, store, context))
     if intent == 'period_grade' and tools == ['get_grade_totals']:
         # the grade totals open with the window's MSF and carry no window before (agent.compares): never the lineal feet or the
         # area of each grade, nor "MSF this week versus last week" (the review of 74cc46f, item 3)
         return q.measure == 'msf' and group_by in ([], ['grade']) and not filters and not rank and share is None and not q.compare
     if intent in ('period_speed', 'speed'):
+        # the grades' card leads with each grade's speed without stops against its target and carries no window before: never the
+        # elapsed speed by grade, nor "speed by grade this week versus last week"
         return (q.measure in SPEED_FAMILY and group_by in ([], ['grade']) and not filters and share is None
-                and (not rank or group_by == ['grade']))
+                and (not rank or group_by == ['grade'])
+                and (group_by != ['grade'] or q.measure in ('speed_run_fpm', 'run_speed_to_target_pct') and not q.compare))
     if intent == 'period_compare':
         return False   # the KPI summary answers "how did we do", never a measure the reading named
+    if intent in ('period_money', 'dollars'):
+        # the levers open with every lever's dollars a year, the shift's dollars with every recorded loss: one priced measure is led
+        # only by the ownership lens's side trim ("what's trim costing us"); never "downtime dollars this week" (the reviewer's item 12)
+        whole = any(role == 'measure' and words in WHOLE_WASTE for words, role in reading.used)   # "what did waste cost": every line
+        return ((whole or args.get('lens') == 'ownership' and WASTE_LINE.get(q.measure) == 'trim') and not group_by and not filters
+                and not rank and share is None and not q.compare)
     if intent == 'compare':   # the day's shift comparison opens with each shift's speed
         return q.measure in SPEED_FAMILY and set(group_by) <= {'shift'} and not filters and share is None
     if intent == 'downtime':   # the day's downtime breakdown, per shift, by reason, place or kind
@@ -1298,13 +1353,33 @@ ROUTER_LIMITS = (r"^Offline mode (?:supports|answers one quantity at a time)", r
                  r"^The Pareto groups a window's stops by reason, place or kind, not by day")
 # ... and the domain reasons that refuse a reading of a word the semantic model reads otherwise, overruled only when the reading reads
 # it that way: a customer or an order split or filtered by, never counted ("which customer had the most scrap"); "per" a dimension read
-# as a split, never a ratio ("stops per stop reason"). The last two rows are the re-pointed refusals count-reject-sheets-refused and
+# as a split, never a ratio ("stops per stop reason"); a noun the router does not count read inside a longer phrase of the model ("roll
+# changes", "good board", "stacker boards", "chop cost") or as a measure that is no count, no count asked ("how much chop"); a measure
+# the model keeps in square feet ("gross square feet"). The last two rows are the re-pointed refusals count-reject-sheets-refused and
 # count-stops-of-a-grade-refused, which wait on the owner's "approve anyway" on PR #155 (taking a row out restores main's refusal).
-OVERRULED = ((r"^The records do not count customers", lambda q: 'customer' in q.group_by or 'customer' in q.filters),
-             (r"^The records do not count distinct orders", lambda q: 'order' in q.group_by or 'order' in q.filters),
-             (r"\bis not a ratio the records keep\b", lambda q: bool(q.group_by) and semantic.model().measures[q.measure]['agg'] != 'ratio'),
-             (r"^Rejects are recorded as square feet by reason, not as sheets", lambda q: q.measure == 'reject_sheets'),
-             (r"\bnot by grade\b", lambda q: 'grade' in q.filters or 'grade' in q.group_by))
+COUNT_ASK = r"\b(?:how\s+many|number\s+of|count\s+of)\b"
+
+
+def reads_otherwise(reading, nouns):
+    """True when the reading read one of `nouns` inside a phrase of two or more words of the model's vocabulary, or as a measure kept in
+    no count unit while the question asks no count."""
+    words = [set(tokens_of(w)) for w, role in reading.used if role in ('measure', 'dimension', 'value', 'qualifier')]
+    phrase = any(len(w) > 1 and w & nouns for w in words)
+    alone = any(w & nouns for w in words) and semantic.model().measures[reading.query.measure]['unit'] not in COUNT_UNITS \
+        and not re.search(COUNT_ASK, reading.question, re.I)
+    return phrase or alone
+
+
+OVERRULED = ((r"^The records do not count customers", lambda r: 'customer' in r.query.group_by or 'customer' in r.query.filters),
+             (r"^The records do not count distinct orders", lambda r: 'order' in r.query.group_by or 'order' in r.query.filters),
+             (r"\bis not a ratio the records keep\b",
+              lambda r: bool(r.query.group_by) and semantic.model().measures[r.query.measure]['agg'] != 'ratio'),
+             (r"^The records do not count boards", lambda r: reads_otherwise(r, {'board', 'boards'})),
+             (r"^The records do not count rolls", lambda r: reads_otherwise(r, {'roll', 'rolls'})),
+             (r"^The records keep shear chops as square feet", lambda r: reads_otherwise(r, {'chop', 'chops'})),
+             (r"^Square feet are kept for the waste lines", lambda r: semantic.model().measures[r.query.measure]['unit'] == 'sq ft'),
+             (r"^Rejects are recorded as square feet by reason, not as sheets", lambda r: r.query.measure == 'reject_sheets'),
+             (r"\bnot by grade\b", lambda r: 'grade' in r.query.filters or 'grade' in r.query.group_by))
 
 
 def router_limit(refused):
@@ -1315,7 +1390,7 @@ def router_limit(refused):
 def stands(refused, reading):
     """True when the hand router's refusal gives a domain reason a complete reading never answers in place of (ROUTER_LIMITS,
     OVERRULED)."""
-    return not router_limit(refused) and not any(re.search(p, str(refused)) and overrules(reading.query) for p, overrules in OVERRULED)
+    return not router_limit(refused) and not any(re.search(p, str(refused)) and overrules(reading) for p, overrules in OVERRULED)
 
 
 def route(text, context, store, request, refused):
@@ -1338,21 +1413,33 @@ def route(text, context, store, request, refused):
         return None
     if reading.refusal is None:
         return None
+    unread_verb = 'verb' in reading.cues and not reading.cues & {'wrong window', 'said', 'loss'}
     if refused is not None:
         # the generic help ("Offline mode supports ...") answers nothing a ranking, a share or a statistic asked: the reading's
         # refusal names what it could not say and three questions that answer ("best crew"; the review of PR #155)
         if str(refused).startswith('Offline mode supports') and reading.cues & (set(STRONG) - {'statistic'} | {'statistic asked', 'evaluative'}):
             raise ValueError(refusal_text(reading))
-        if 'loss' in reading.cues and router_limit(refused):
-            raise ValueError(refusal_text(reading))   # "which shift lost the most sheets": the verb it could not read, never "a ranking"
-        return None
+        if (reading.cues & {'loss', 'than'} or unread_verb) and router_limit(refused):
+            raise ValueError(refusal_text(reading))   # "which shift lost the most sheets", "which grade took the most setups": the verb
+        return None                                   # it could not read, never "one quantity does not answer a ranking"
     if request is None:
         return None
     intent = request.get('intent')
-    if reading.cues & {'wrong window', 'said', 'loss'} and intent not in NEVER_PREEMPT:
+    if unread_verb:
+        # every word read but a verb the parser does not read: the hand route keeps the question only when it answers what the other
+        # words ask ("how much MSF did we produce": the grade totals), else the verb is refused, never answered as something else
+        # ("which shift produced the most MSF": never shift 2's grade totals; the review of PR #155 at 74cc46f, item 1)
+        rest = read(re.sub(rf"\b{re.escape(reading.unused[0])}\b", ' ', text, count=1, flags=re.I), context, store)
+        if intent in ALLOW_LISTED or rest.complete and covers(request, rest, context, store):
+            return None
+        raise ValueError(refusal_text(reading))
+    if 'loss' in reading.cues and intent not in ALLOW_LISTED:
+        # "how much MSF was rejected", "which grade lost the most MSF", "which shift lost the most setups yesterday": the waste
+        # breakdown, the grade totals or the shift's KPIs answer what ran, never what was lost
+        raise ValueError(refusal_text(reading))
+    if reading.cues & {'wrong window', 'said'} and intent not in NEVER_PREEMPT:
         # "stops this year", "downtime over the weekend", "stops on Tuesday" (on a Monday): the hand route answers the selected day;
-        # "this week versus last month", "the stops the operators logged": it answers another window or another question; "how much
-        # MSF was rejected", "which grade lost the most MSF": the waste breakdown or the grade totals answer what ran, not what was lost
+        # "this week versus last month", "the stops the operators logged": it answers another window or another question
         raise ValueError(refusal_text(reading))
     if reading.cues & {'statistic asked', 'share', 'shift split'} and intent not in NEVER_PREEMPT and reading.measure not in _family_of(intent):
         # a median, an average or a share the model does not read is refused, never answered with the review or the Pareto

@@ -231,9 +231,12 @@ ASKED_UNITS = (# an average stop is minutes per stop; an average setup or run le
                # review of PR #155 at 74cc46f, item 4: "had the most" let "Stacker had the most stops" pass for "longest stop")
                (r'\b(?:longest|maximum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
                 r'\b(?:longest|shortest|maximum|minimum)\b'),
-               # ... the minimum in a day ("minimum stops in a day") is the day ranked fewest first (issue #144: the semantic model's ranking)
+               # ... the minimum in a day ("minimum stops in a day") is the day ranked fewest first (issue #144: the semantic model's
+               # ranking); the shortest or the minimum of anything else is main's again
+               (r'\bminimum\s+(?:stops?|stoppages?|set-?ups?|changeovers?|paper changes?|order changes?)\s+(?:in|per)\s+(?:a|one)\s+(?:production\s+)?day\b',
+                r'\bminimum\b|\b(?:had|tied for) the (?:fewest|least|lowest)\b'),
                (r'\b(?:shortest|minimum)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
-                r'\b(?:shortest|minimum)\b|\b(?:had|tied for) the (?:fewest|least|lowest)\b'),
+                r'\b(?:longest|shortest|maximum|minimum)\b'),
                # an average of a count or a total is a ratio, never the total ('average stops this week')
                (r'\b(?:average|avg|mean)\b(?!.*\bper\b)(?=.*\b(?:stops|setups|paper changes|order changes|changeovers|sheets|feet|ft|minutes|mins)\b)',
                 r'(?: per |/)'),

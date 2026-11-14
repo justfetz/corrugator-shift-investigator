@@ -359,6 +359,8 @@ def test_the_runner_catches_the_wrong_answers_the_review_found():
     assert asked_unit_failures('Longest stop this week', ['Stacker had the most stops this week: **39 stops** (query 1 · row 0)'])
     assert asked_unit_failures('Maximum stop this week', ['Shift 1 had the most stops this week: **52 stops** (query 1 · row 0)'])
     assert not asked_unit_failures('Minimum stops in a day this week', ['2026-09-18 (Fri) had the fewest stops this week: **12 stops** (query 1 · row 0)'])
+    assert asked_unit_failures('Shortest stop this week', ['Shift 3 had the fewest stops this week: **31 stops** (query 1 · row 0)'])
+    assert asked_unit_failures('Minimum stop this week', ['Shift 3 had the fewest stops this week: **31 stops** (query 1 · row 0)'])
     # the coordinator's re-review: a ratio answered with its numerator's count, a unit found only after the lead clause, a
     # duration asked as "how long" or in hours, "how often" on the overview, and the shift comparison
     assert asked_unit_failures('Feet per stop this week', ['**137 stops** · -39 vs 176 the week before, better'])

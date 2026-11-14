@@ -151,8 +151,10 @@ def test_a_share_leads_with_the_values_own_row_beyond_the_limit_and_without_reco
     ('Which grade lost the most MSF this week', "'lost' asks what was lost"),
     ('How many feet were rejected this week', "'rejected' names the dry-end rejects"),
     ('How many sheets were rejected this week', "'rejected' names the dry-end rejects"),
-    ('How many setups did we produce this week', "'produce' is not a word the semantic model reads"),
+    ('Which grade took the most setups this week', "'took' is not a word the semantic model reads"),
     ('Which shift spent the most downtime this week', "'spent' is not a word the semantic model reads"),
+    ('Which shift lost the most this week', "'lost' asks what was lost and names no measure"),
+    ('Which grades had more setups than 26-C this week', "'than' compares with another value or a threshold"),
 ])
 def test_a_word_the_model_cannot_place_is_refused_with_at_most_three_questions(store, question, why):
     r = reading(store, question)
@@ -169,7 +171,8 @@ def test_every_suggestion_is_a_question_the_parser_answers(store):
                'Run rate this week', 'Best crew this week', 'Stops per 1000 ft this week', 'How many glue stops this week',
                'Which shift had the most stops on shift 2 this week', 'What portion of downtime was the stacker this week',
                'Daily setups this week', 'Worst shift last week', 'Median downtime yesterday', 'How many sheets did we lose this week',
-               'Which grade lost the most MSF this week', 'How many feet were rejected this week', 'Which day lost the most feet this week']
+               'Which grade lost the most MSF this week', 'How many feet were rejected this week', 'Which day lost the most feet this week',
+               'Which grade took the most setups this week', 'Which shift rejected the most this week', 'Which grades had more setups than 26-C this week']
     for question in refused:
         r = reading(store, question)
         assert r.suggestions, question
@@ -184,13 +187,29 @@ def test_a_loss_verb_is_read_only_of_a_loss(store):
     """'lost' is read of downtime and the waste lines, 'rejected' of the dry-end rejects; beside what ran it is refused over the hand
     route, which answers what ran (the coordinator's review of PR #155 at 74cc46f, item 1)."""
     for question, measure in (('Which shift lost the most minutes this week', 'downtime_minutes'), ('How much trim did we lose this week', 'trim_sqft'),
-                              ('How much scrap was rejected this week', 'reject_sqft'), ('Which grade lost the most downtime this week', 'downtime_minutes')):
+                              ('How much scrap was rejected this week', 'reject_sqft'), ('Which grade lost the most downtime this week', 'downtime_minutes'),
+                              ('Which shift produced the most MSF this week', 'msf'), ('How much did we lose to warp this week', 'reject_sqft')):
         r = reading(store, question)
-        assert r.complete and r.query.measure == measure and ('lost' in dict(r.used) or 'lose' in dict(r.used) or 'rejected' in dict(r.used)), (question, r.refusal, r.used)
+        verbs = {'lost', 'lose', 'rejected', 'produced'}
+        assert r.complete and r.query.measure == measure and verbs & set(dict(r.used)), (question, r.refusal, r.used)
     for question, why in (('How much MSF was rejected this week?', "'rejected' names the dry-end rejects"),
                           ('Which grade lost the most MSF this week?', "'lost' asks what was lost"),
                           ('Which shift lost the most sheets this week?', "'lost' asks what was lost")):
         with pytest.raises(ValueError, match=re.escape(why)):
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+
+
+def test_a_verb_the_parser_does_not_read_keeps_only_a_hand_answer_to_the_other_words(store):
+    """"took", "experienced", "running": the hand route stands when it answers the question without the verb (the Pareto for "which
+    reason took the most minutes", the review for "how much downtime did we experience"), else the verb is refused, never answered as
+    something else (the reviewer's probe of this round: "which grade took the most setups" was the grade totals' MSF)."""
+    for question, tool in (('Which reason took the most minutes this week?', 'get_downtime_pareto'),
+                           ('How much downtime did we experience this week?', 'get_downtime_review')):
+        request, _, _ = answer(store, question)
+        assert request['plan'][0]['tool'] == tool, (question, request['plan'][0]['tool'])
+    for question, word in (('Which grade took the most setups this week?', 'took'), ('Which shift experienced the most stops this week?', 'experienced'),
+                           ('Which shift was running the fastest this week?', 'running'), ('How many minutes did each grade spend down this week?', 'spend')):
+        with pytest.raises(ValueError, match=f"'{word}' is not a word the semantic model reads"):
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
 
 
@@ -209,6 +228,15 @@ def test_a_complete_reading_never_replaces_a_domain_refusal(store):
     with pytest.raises(ValueError, match='recorded as square feet by reason'):
         parse_request('How many sheets were rejected this week?', question_scope('How many sheets were rejected this week?', Context(DAY, 2, scope='shift'),
                                                                                   store.production_days, store), store)
+    # a noun the router does not count, read by the model in a longer phrase or as no count, overrules; a count of it does not
+    for question, measure in (('Roll changes this week', 'paper_changes'), ('Good board this week', 'good_output_sqft'),
+                              ('Stacker boards this week', 'stacker_waste_sqft'), ('How much chop this week?', 'shear_sqft'),
+                              ('Gross square feet this week', 'gross_sqft'), ('which customer had the most scrap this week', 'reject_sqft')):
+        request, _, _ = answer(store, question)
+        assert request['plan'][0]['arguments']['measure'] == measure, (question, request['plan'][0])
+    for question, why in (('How many chops this week?', 'not a count'), ('How many boards this week?', 'do not count boards')):
+        with pytest.raises(ValueError, match=why):
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
 
 
 def test_a_waste_answer_leads_with_the_line_asked(store):
@@ -219,7 +247,11 @@ def test_a_waste_answer_leads_with_the_line_asked(store):
                            ('Show warp this month', 'get_waste_breakdown'), ('Is it bond or warp this month?', 'get_waste_breakdown'),
                            ('How much shear this week?', S.TOOL), ('How much warp this week?', S.TOOL), ('Dry end rejects this week', S.TOOL),
                            ('How much bale this week?', S.TOOL), ('Volume by grade this week', 'get_grade_totals'),
-                           ('Lineal feet per grade this week', S.TOOL), ('MSF this week versus last week', S.TOOL)):
+                           ('Lineal feet per grade this week', S.TOOL), ('MSF this week versus last week', S.TOOL),
+                           ('Bond this week', S.TOOL), ('Which reject family had the most rejects this week?', S.TOOL),
+                           ('What did cracks cost this month?', 'get_waste_breakdown'), ('Elapsed speed by grade this week', S.TOOL),
+                           ('Speed by grade this week versus last week', S.TOOL), ('fpm by grade', 'get_grade_totals'),
+                           ('Downtime dollars this week', S.TOOL), ("What's trim costing us this month?", 'get_opportunities')):
         request, _, _ = answer(store, question)
         assert request['plan'][0]['tool'] == tool, (question, request['plan'][0]['tool'])
 
@@ -496,6 +528,34 @@ def test_every_generated_question_uses_every_content_word_or_is_refused(store):
         if value:
             assert r.query.filters.get(value[0]) == value[1] or r.share == value[1], (question, r.query, r.share)
     assert answered > 200 and refused > 0, (answered, refused)
+
+
+def test_a_generated_verb_question_is_answered_only_as_asked_or_refused(store):
+    """Through the router: a question with a verb (VERB_TEMPLATES) is refused, answered by the semantic model reading the verb, or
+    answered by a hand route that covers what the question's other words ask (semantic_parse.covers), never by one that answers
+    something else (the reviewer's probe of this round: "which grade took the most setups" answered with the grade totals' MSF)."""
+    verbs = P.LOSS_VERBS + P.REJECT_VERBS + P.PRODUCE_VERBS + P.UNREAD_VERBS
+    checked = 0
+    for question, measure, dim, value in generated(store):
+        said = [w for w in P.tokens_of(question) if w in verbs]
+        if not said:
+            continue
+        try:
+            request, context = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        except ValueError:
+            continue
+        checked += 1
+        if request['intent'] == 'semantic':
+            assert said[0] not in P.LOSS_VERBS + P.REJECT_VERBS or request['plan'][0]['arguments']['measure'] in P.LOSS_MEASURES + P.REJECT_MEASURES, question
+            continue
+        if request['intent'] in P.ALLOW_LISTED:
+            continue
+        rest = P.read(re.sub(rf"\b{said[0]}\b", ' ', question, count=1), context, store)
+        if not rest.complete:
+            continue   # the other words are refused on their own ("which customer lost the most downtime"): not the verb's to decide
+        assert said[0] not in P.LOSS_VERBS + P.REJECT_VERBS or rest.query.measure in P.LOSS_MEASURES + P.REJECT_MEASURES, (question, request['intent'])
+        assert P.covers(request, rest, context, store), (question, request['intent'], rest.query.to_arguments())
+    assert checked > 100, checked
 
 
 def expected_window(store, question):
