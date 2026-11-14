@@ -89,17 +89,19 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   the `GET /q` redirect of every case, live ones included). The KPI summary is for "how did we do". One quantity
   (`measure=quantity`) never answers a breakdown, a grouping ("at each place", "by reason"), a comparison of shifts or a
   shift named by its rank ("the slowest shift"), and a quantity measure (`measure=quantity`, or `measure=stops`, the stops
-  of each production day) is never answered for the selected shift when the question names no shift.
-  The plain-quantity gate states the general rule on the URL (round 5 of the review of PR 143): once the question loses
-  what its `measure=quantity` URL consumed (the ask word "how long", the ratio's "per" and the average it is, a waste
-  line's percent, the words of `reason=`, `place=` or `waste=`, the window, a window compared with the one before, and
-  the shift), no word of a closed vocabulary may be left: a ranking (which, most, fewest, best, worst, rank, top, most
-  common, compare, versus, better …), a grouping (by, each, every, per, a day, daily, across, type, category, splicer,
-  knife, day …), a statistic (average, mean, median, typical, maximum, minimum, longest, shortest), a subset (long, short,
-  longer than, over N) or a percent (percent, percentage, share, %). And a ratio kept for all stops or for the line
-  (minutes per stop, each day's downtime, feet per setup), or the stops of each production day (`measure=stops`), never
-  answers a question that names one stop reason, place or kind, and an average stop is its length only (its count, rate,
-  cost or reason is never minutes per stop).
+  of each production day) is never answered for the selected shift when the question names no shift. Nor is any number
+  (the review, the Pareto, the waste breakdown, the totals by grade, rollstock, the over/under-run, a window's speed) unless
+  the question mentions a shift or asks why, what caused or drove it, or where it came from (the owner's scope ruling of
+  2026-11-13; a production day's per-shift answers keep the shift control).
+  The allow-list states the general rule on the URL (round 6 of the review of PR 143): a `measure=quantity` or
+  `measure=stops` URL answers only a question whose every word it consumes: the ask words, the measure's noun and unit
+  (`metric=`), the words of `reason=`, `place=`, `waste=` or `grade=` and the connector before them, the window, a window
+  compared with the one before, the shift, a kept ratio's "per" and the average it is, and `FUNCTION_WORDS`, one closed
+  table (`tests/test_quantity_questions.py` checks it equals the router's). Any other word left ("brief", "under 2",
+  "slitter", "planned", "rate", "percentile", "and") is a different question, and the URL fails; so does a rolling window
+  ("the last 7 days"). And a ratio kept for all stops or for the line (minutes per stop, each day's downtime, feet per
+  setup), or the stops of each production day (`measure=stops`), never answers a question that names one stop reason,
+  place or kind, and an average stop is its length only (its count, rate, cost or reason is never minutes per stop).
 - **the unit asked opens the answer**: a count or unit question ("how many setups", "number of paper changes", "how
   many minutes of …", "minutes per stop", "feet per setup", "how many lineal feet") carries that unit in its headline
   (the first section with a bold figure that is not a bullet), in its lead clause, the text before the first ` · `, so a

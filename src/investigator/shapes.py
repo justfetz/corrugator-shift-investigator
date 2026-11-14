@@ -323,7 +323,7 @@ class DailyAnswer:
 
     def dsuffix(self, shift):
         """`suffix` for a downtime look, which also names the shift under one selected shift: a downtime question with no
-        shift is the owner's default, the previous production day across all shifts (review of #111)."""
+        shift is the owner's default, all shifts (review of #111; on the selected day since the owner's scope ruling)."""
         return self.suffix(shift) or (' for this shift' if self.context.scope == 'shift' else '')
 
     @staticmethod
@@ -1212,10 +1212,12 @@ class PeriodAnswer:
         kind = 'pareto' if metric in ('downtime_pct', 'stops', 'minutes_per_stop') else 'speed' if 'speed' in metric else \
             'grade' if metric in ('msf_per_day', 'lineal_per_setup', 'lineal_per_paper_change') else 'waste'
         sfx = self.sfx(data)
+        sfx += ' on this shift' if self.context.scope == 'shift' and data.get('shift') else ''   # a number keeps a one-shift card's scope
         looks = {'pareto': [look('The downtime of the latest week by reason', f'Which downtime reason cost the most minutes this week{sfx}?')],
                  'speed': [look('The latest week by grade, against each grade target', f'Which grade is slowest against target this week{sfx}?')],
                  'grade': [look('The latest week by grade', f'Volume by grade this week{sfx}')],
                  'waste': [look('The latest week\'s waste by component and sub-reason', f'Waste breakdown this week{sfx}')]}[kind]
+        sfx = self.sfx(data)
         looks.append(look('The latest week\'s KPIs against the week before', f'Compare this week to last{sfx}'))
         return head, bullets, notes, looks
 
@@ -1615,10 +1617,11 @@ class PeriodAnswer:
         i = next((j for j, x in enumerate(rows) if x['category'] == named), None)
         if i is not None:
             x = rows[i]
-            fig = f'{n(x["stops"])} stops' if count else f'{pval(x["minutes"])} minutes'
+            fig = stops_text(x['stops']) if count else f'{pval(x["minutes"])} minutes'   # "1 stop", never "1 stops"
             beside = f'{pval(x["minutes"])} minutes' if count else stops_text(x['stops'])
             prev = x.get('previous_stops' if count else 'previous_minutes')
-            previous = 'previous unavailable' if prev is None else f'{n(prev) if count else pval(prev)} {unit} {self.BEFORE.get(data["window"]["period"], "the window before")}'
+            previous = ('previous unavailable' if prev is None else
+                        f'{stops_text(prev) if count else pval(prev) + " " + unit} {self.BEFORE.get(data["window"]["period"], "the window before")}')
             head = f'**{fig}**{at}{named}{where} · {beside} · {pval(x["share_pct"])}% of the window\'s {unit} · {previous} {ref(p, i)}'
         elif data['coverage'] == 'unavailable':
             head = f'{named}: unavailable, the window holds no production days {ref(p)}'
@@ -1703,6 +1706,9 @@ class PeriodAnswer:
     def window_looks(self, data, kinds):
         """Where-to-look lines over the same window (or the trends that end on the selected day)."""
         wp, sfx = self.wp(data), self.sfx(data)
+        # a number asked with no shift named answers every shift (the owner's scope ruling, 2026-11-13; round 4 of the coordinator's
+        # review, item 8): a one-shift card's look says "on this shift", so the look keeps the card's scope
+        own = ' on this shift' if self.context.scope == 'shift' and data.get('shift') else ''
         lines = []
         for kind in kinds:
             if kind.startswith('trend'):
@@ -1712,16 +1718,13 @@ class PeriodAnswer:
                 continue
             if wp is None:
                 continue
-            text, question = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}?'),
-                              'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}'),
-                              'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}'),
-                              # the stops of each day answer every shift when no shift is named (round 4 of the coordinator's
-                              # review, item 8): a one-shift card says "this shift" so the look keeps its scope
-                              'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}' + (
-                                  ' on this shift' if self.context.scope == 'shift' and data.get('shift') else '')),
-                              'speed': ('Each grade against its speed target', f'Which grade is slowest against target{wp}{sfx}?'),
+            text, question = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}{own}?'),
+                              'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}{own}'),
+                              'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}{own}'),
+                              'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}{own}'),
+                              'speed': ('Each grade against its speed target', f'Which grade is slowest against target{wp}{sfx}{own}?'),
                               'opportunity': ('Each grade and web width against its best-fifth speed', f'Where is the speed opportunity{wp}{sfx}?'),
-                              'rollstock': ('The paper each grade and width consumed', f'How much paper did we consume{wp}{sfx}?')}[kind]
+                              'rollstock': ('The paper each grade and width consumed', f'How much paper did we consume{wp}{sfx}{own}?')}[kind]
             lines.append(look(text, question))
         return lines[:3]
 
@@ -1864,6 +1867,7 @@ class SemanticAnswer:
         if wp is None:
             return []
         kinds = SEMANTIC_LOOKS[data['entity'] + (' waste' if data['entity'] == 'setup' and data['unit'] in ('sq ft', '% of gross', '$') else '')]
+        sfx += ' on this shift' if self.context.scope == 'shift' else ''   # a number keeps a one-shift card's scope (the owner's scope ruling)
         questions = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}?'),
                      'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}'),
                      'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}'),

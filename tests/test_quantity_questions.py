@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from investigator.agent import (GRADE_QUANTITIES, QUALIFIERS, QUANTITY_HELP, QUANTITY_METRICS, RANKED_TEXT, SETUP_SPEED, WASTE_KEYS, Agent,
+from investigator.agent import (FUNCTION_WORDS, GRADE_QUANTITIES, LEFTOVER_FAMILIES, QUANTITY_HELP, QUANTITY_METRICS, RANKED_TEXT, SETUP_SPEED, WASTE_KEYS, Agent,
                                 Context, catch_all_guard, parse_request, question_scope, quantity_request, route, slug)
 from investigator.fixture import GRADES
 from investigator.records import STOP_PLACES, STOP_REASONS
@@ -20,7 +20,7 @@ from investigator.urls import canonical_url, page_url, redirect_for, resolve_url
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'evals'))
-from run import QUALIFIER_VOCABULARY, asked_unit_failures, catch_all_failures  # noqa: E402
+from run import FUNCTION_WORDS as RUN_FUNCTION_WORDS, asked_unit_failures, catch_all_failures  # noqa: E402
 
 DAY = '2026-09-14'
 GOLDEN = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
@@ -96,6 +96,13 @@ AUDIT = [
 REFUSALS = (QUANTITY_HELP, 'Offline mode supports', SETUP_SPEED, 'one shift or all shifts together', 'Selected shift only', RANKED_TEXT)
 
 
+def names_three_that_answer(refusal):
+    """True when a refusal names at most three questions, never the generic help, and each of them answers (round 6: the
+    allow-list's refusals and the day words' too)."""
+    asks = re.findall(r"'([^']* this week)'", refusal)
+    return 1 <= len(asks) <= 3 and QUANTITY_HELP not in refusal and all(landing(ask)[0] for ask in asks)
+
+
 def landing(question, scope='shift', shift=2, period='day', day=DAY):
     """(canonical URL, request, context) of a question, or (None, the refusal, None)."""
     store = default_store()
@@ -130,7 +137,7 @@ def test_no_audited_question_lands_on_the_kpi_summary_and_each_opens_with_its_un
     question, shift, scope = (question, 2, 'shift') if isinstance(question, str) else (*question, 'shift')[:3]
     url, request, asked = landing(question, scope=scope, shift=shift)
     if url is None:
-        assert any(r in request for r in REFUSALS), (question, request)
+        assert any(r in request for r in REFUSALS) or names_three_that_answer(request), (question, request)
         return
     assert not catch_all_failures(question, url), (question, url)
     store = default_store()
@@ -225,7 +232,7 @@ def test_the_router_refuses_a_quantity_it_cannot_place_rather_than_summarize():
 def test_a_count_the_records_do_not_hold_is_refused_with_what_can_be_counted(question, refusal):
     with pytest.raises(ValueError, match=refusal) as caught:
         parse_request(question, Context(DAY, 2, scope='shift', period='day'))
-    assert QUANTITY_HELP in str(caught.value)
+    assert QUANTITY_HELP in str(caught.value) or names_three_that_answer(str(caught.value))   # the day words name three (round 6)
 
 
 @pytest.mark.parametrize('question, scope, refusal', [
@@ -292,12 +299,13 @@ def test_every_quantity_has_one_canonical_address_in_every_grain():
     assert slug('Knife / slitter jam') == 'knife-slitter-jam' and slug('Raw material (roll)') == 'raw-material-roll' and slug('Slitter/scorer') == 'slitter-scorer'
 
 
-def test_a_quantity_with_no_shift_named_answers_every_shift_over_the_window_it_names_or_the_selected_day():
-    """The coordinator's re-review of PR 143, item 6 (pending the owner): a quantity asked with no shift named answers every
-    shift together, whatever the shift control says, and not only one quantity (measure=quantity): a percent, MSF or a count
-    of another answer too. No window named is the selected day for every quantity, downtime's too ("how many stops did we
-    have" and "how many setups did we run" read the same day); only the owner's downtime review keeps #101's previous
-    production day. "This shift" or a named shift keeps the shift; a ranking, a bare "how much" or dollars keep the controls."""
+def test_a_number_with_no_shift_named_answers_every_shift_over_the_window_it_names_or_the_selected_day():
+    """The owner's scope ruling (2026-11-13): a question that asks for a number and names no shift answers every shift together,
+    whatever the shift control says, counts, minutes, MSF, percentages and speed alike, and an ask word never changes the scope
+    ("how much downtime this week" reads what "total downtime this week" reads). A question that names no day or window reads the
+    selected day, every quantity and the downtime review alike (it retired #101's previous production day). "This shift" or a named
+    shift keeps the shift, and so do the investigations (why, what caused or drove, where it came from), dollars, and a production
+    day's per-shift answers (its speed, whose all-shift form is the three shifts compared)."""
     store = default_store()
     context = Context(DAY, 2, scope='shift', period='day')
     for question, day in (('How many setups did we run?', DAY), ('How many stops did we have?', DAY), ('What was our minutes per stop?', DAY),
@@ -305,21 +313,41 @@ def test_a_quantity_with_no_shift_named_answers_every_shift_over_the_window_it_n
                           ('How many setups yesterday?', '2026-09-11'), ('How many minutes of maintenance downtime yesterday?', '2026-09-11'),
                           ('How many missed splices yesterday?', '2026-09-11'), ('How many square feet of trim this week?', DAY),
                           ('What percent downtime this week?', DAY), ('How many msf did we run last week?', '2026-09-07'),
-                          ('Number of stops by reason this week', DAY)):
+                          ('Number of stops by reason this week', DAY), ('How much downtime this week?', DAY), ('Total downtime this week', DAY),
+                          ('Feet per minute this week', DAY), ('How many feet per minute did we run this week?', DAY),
+                          ('Which downtime reason cost the most minutes this month?', DAY), ('How much did we make this week?', DAY),
+                          ('How much did we make?', DAY), ('Waste breakdown this week', DAY)):
         moved = question_scope(question, context, store.production_days)
         assert (moved.scope, moved.production_day, moved.read.get('all_shifts'), moved.read.get('default')) == ('day', day, True, None), question
     # a quantity measure takes the default scope with or without an ask word (round 4 of the coordinator's review, item 8)
     for question in ('Stops per day this week', 'How many stops per day this week?', 'Downtime per day this week', 'Feet per setup this week'):
         moved = question_scope(question, context, store.production_days)
         assert (moved.scope, moved.read.get('all_shifts')) == ('day', True), question
-    for question in ('How much downtime?', 'How much downtime yesterday?'):   # the owner's downtime review: the day before, all shifts (#101)
+    # the owner's downtime review: all shifts, on the selected day (or the day "yesterday" names), never the day before it
+    for question, day, default in (('How much downtime?', DAY, 'all shifts on the selected day'), ('What percent downtime?', DAY, 'all shifts on the selected day'),
+                                   ('How much downtime yesterday?', '2026-09-11', 'all shifts')):
         moved = question_scope(question, context, store.production_days)
-        assert (moved.scope, moved.production_day, moved.read.get('default')) == ('day', '2026-09-11', 'the previous production day, all shifts'), question
+        assert (moved.scope, moved.production_day, moved.read.get('default')) == ('day', day, default), question
     for question in ('How many setups did this shift run yesterday?', 'How many stops on shift 2 yesterday?', 'How many setups did our shift run?',
-                     'Which downtime reason cost the most minutes this month?', 'How much did we make this week?',
-                     'How many dollars did trim cost this week?'):
+                     'How many dollars did trim cost this week?', 'Why was downtime high every day this week?', 'What drove downtime this week?',
+                     'Where did the downtime come from this week?', 'Why was downtime so high?', 'How many feet per minute did we run?',
+                     'How fast did we run?', 'Feet per minute', 'Which downtime reason cost the most minutes this month on this shift?'):
         assert question_scope(question, context, store.production_days).scope == 'shift', question
-    assert question_scope('Show setup matrix', context, store.production_days) is context   # not a quantity: the controls
+    assert question_scope('Show setup matrix', context, store.production_days) is context   # not a number: the controls
+
+
+def test_the_runner_states_the_scope_ruling():
+    """evals/run.py fails a number answered for the selected shift when the question names none (the review, the Pareto, the waste
+    breakdown, the totals by grade, a window's speed), and passes an investigation or a production day's per-shift speed there."""
+    assert catch_all_failures('How much downtime this week?', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week')
+    assert catch_all_failures('Feet per minute this week', '/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week')
+    assert catch_all_failures('How much did we make?', '/corr/1/day/2026-09-14/shift/2?measure=grade')
+    assert catch_all_failures('Which downtime reason cost the most minutes this month?', '/corr/1/day/2026-09-14/shift/2?measure=pareto&window=month')
+    for question, url in (('Why was downtime high every day this week?', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week'),
+                          ('Where did the downtime come from this week?', '/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&by=place'),
+                          ('How fast did we run?', '/corr/1/day/2026-09-14/shift/2?measure=fpm'),
+                          ('How much downtime this week on this shift?', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week')):
+        assert not catch_all_failures(question, url), question
 
 
 def test_the_runner_catches_the_wrong_answers_the_review_found():
@@ -454,51 +482,85 @@ def test_a_count_or_unit_golden_states_its_headline():
         assert any(p.startswith('^\\*\\*') for p in patterns), case['id']
 
 
-# ---- Round 5 of the coordinator's review of PR 143: the plain-quantity gate. One quantity is a window's total, or a ratio the
-# records keep: once the route's own words are removed (the ask word, the noun and unit, its filters, the window and the shift),
-# no word of this closed vocabulary may be left. The review lists it; the spellings of its words ("vs", "avg", "comparison",
-# "categories", "knives") are entries of their own, and the forms of a word (plural, past, -ing, -er) are the pattern's.
-VOCABULARY = {
-    'ranking': ['which', 'what shift', 'most', 'fewest', 'least', 'highest', 'lowest', 'best', 'worst', 'rank', 'top', 'number one',
-                'most common', 'biggest', 'compare', 'comparison', 'versus', 'vs', 'better'],
-    'grouping': ['by', 'each', 'every', 'per', 'a day', 'daily', 'across', 'type', 'category', 'categories', 'splicer', 'knife', 'knives',
-                 'day', 'shift by shift'],
-    'statistic': ['average', 'avg', 'mean', 'median', 'typical', 'maximum', 'max', 'minimum', 'longest', 'shortest'],
-    'subset': ['long', 'short', 'longer than', 'over N'],
-    'percent': ['percent', 'percentage', 'share', '%'],
-}
+# ---- Round 6 of the coordinator's review of PR 143: the allow-list. A quantity answers only when every word of the question is
+# consumed (its measure, its filter, the window, the shift) or is one of a closed table of function words, the same table in the
+# router and the runner. This file states it once more, so a word added to either side fails here until it is added to all three.
+FUNCTION_WORDS_TABLE = sorted((
+    'a', 'an', 'the', 'this', 'that', 'these', 'those', 'any', 'all', 'some', 'our', 'my', 'your', 'its', 'their',
+    'i', 'me', 'we', 'us', 'you', 'it', 'they', 'there', "what's", 'whats', "it's", "there's", "we've",
+    'what', 'how', 'many', 'much', 'number', 'count', 'total', 'totals', 'overall', 'altogether', 'combined', 'amount',
+    'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
+    'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked', 'up',
+    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give',
+    'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
 WEEK_SETUPS = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=setups'
 
 
-def test_the_gate_vocabulary_is_closed_and_the_router_and_the_runner_state_the_same_one():
-    """One table in the router (agent.QUALIFIERS) and one in the runner (run.QUALIFIER_VOCABULARY), each the review's list."""
-    assert {family: list(words) for family, words in QUALIFIERS.items()} == VOCABULARY
-    assert {family: list(words) for family, words in QUALIFIER_VOCABULARY.items()} == VOCABULARY
+def test_the_function_words_are_one_closed_table_in_the_router_and_the_runner():
+    """One table in the router (agent.FUNCTION_WORDS) and one in the runner (run.FUNCTION_WORDS), each this file's; no word of it is
+    one a refusal names as asking a different question (agent.LEFTOVER_FAMILIES)."""
+    assert sorted(FUNCTION_WORDS) == FUNCTION_WORDS_TABLE and sorted(RUN_FUNCTION_WORDS) == FUNCTION_WORDS_TABLE
+    assert not set(FUNCTION_WORDS) & {word for words in LEFTOVER_FAMILIES.values() for word in words}
+
+
+@pytest.mark.parametrize('word', FUNCTION_WORDS_TABLE)
+def test_a_function_word_never_takes_a_plain_quantity_off_its_route(word):
+    """Each function word, put into a plain count, leaves it the count: the router answers it and the runner passes it."""
+    question = f"how many setups {word} this week"
+    url, request, _ = landing(question)
+    assert url and 'metric=setups' in url, (question, url or request)
+    assert not catch_all_failures(question, url), (question, url)
 
 
 # a word that needs an object to read as a question ("by type", "across reasons", "per MSF", "over 10")
-OBJECT = {'by': 'by type', 'across': 'across reasons', 'per': 'per MSF', 'over N': 'over 10'}
+OBJECT = {'by': 'by type', 'across': 'across reasons', 'per': 'per MSF', 'over': 'over 10', 'under': 'under 10', 'than': 'more than 10',
+          'within': 'within an hour', 'between': 'between stops', 'during': 'during stops', 'before': 'before noon', 'after': 'after lunch'}
+OUTSIDE = sorted({word for words in LEFTOVER_FAMILIES.values() for word in words} | {'unexpected', 'new', 'weird', 'blue', 'quickly', 'customer'})
 
 
-@pytest.mark.parametrize('family, word', [(family, word) for family, words in VOCABULARY.items() for word in words])
-def test_every_qualifier_left_over_is_refused_by_the_router_and_failed_by_the_runner(family, word):
-    """Each word of the vocabulary, put into a plain count, takes the count off the quantity route (refused, or another route
-    answers it), and the runner fails the count's own URL for it."""
+@pytest.mark.parametrize('word', OUTSIDE)
+def test_every_word_outside_the_table_is_refused_by_the_router_and_failed_by_the_runner(word):
+    """Any word the route does not consume, put into a plain count (every word a refusal names a family for, and words of no family),
+    takes the count off the quantity route (refused, or another route answers it), and the runner fails the count's own URL for it."""
     question = f"how many setups {OBJECT.get(word, word)} this week"
     url, refusal, _ = landing(question)
     assert url is None or 'measure=quantity' not in url, (question, url)
     assert catch_all_failures(question, WEEK_SETUPS), question
 
 
-@pytest.mark.parametrize('case', [c for c in GOLDEN if c['id'].startswith('gate-') and c['type'] == 'refusal'], ids=lambda c: c['id'])
+@pytest.mark.parametrize('case', [c for c in GOLDEN if c['id'].startswith(('gate-', 'allow-')) and c['type'] == 'refusal'], ids=lambda c: c['id'])
 def test_a_gate_refusal_names_what_it_answers_in_at_most_three_questions_that_answer(case):
-    """A refusal of round 5 names what the route answers instead, at most three questions, and each of them is answered."""
+    """A refusal of rounds 5 and 6, the day words' too, names what the route answers instead, at most three questions and never the
+    generic help, and each of them is answered."""
     url, refusal, _ = landing(case['question'], shift=case.get('shift', 2), scope=case.get('scope', 'shift'))
     assert url is None and case['expect']['raises'] in refusal, (case['question'], url, refusal)
     asks = re.findall(r"'([^']* this week)'", refusal)
-    assert 1 <= len(asks) <= 3 and QUANTITY_HELP not in refusal or 'not a ratio the records keep' in refusal, refusal
+    assert 1 <= len(asks) <= 3 and QUANTITY_HELP not in refusal, refusal
     for ask in asks:
         assert landing(ask)[0], (ask, landing(ask)[1])
+
+
+def test_the_runner_catches_round_6s_wrong_answers():
+    """evals/run.py, held to the answers ff8ad77 gave the round-6 review's questions: each fails on its own."""
+    week = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric='
+    profile = '/corr/1/day/2026-09-14?measure=stops&window=week'
+    for question, url in (('How many stops under 2 minutes this week?', week + 'stops'), ('How many brief stops this week?', week + 'stops'),
+                          ('How many stops before noon this week?', week + 'stops'), ('Stop rate this week', week + 'stops'),
+                          ('Stop distribution this week', week + 'stops'), ('What proportion of stops were at the stacker this week?', week + 'stops&place=stacker'),
+                          ('90th percentile stop length this week', week + 'downtime_minutes'), ('Minimum stops in a day this week', profile),
+                          ('What was the fewest stops in a day this week?', profile), ('How many long stops each day this week?', profile),
+                          ('Share of stops each day this week', profile), ('How many stops at the slitter this week?', week + 'stops'),
+                          ('How many planned stops this week?', week + 'stops'), ('How many unplanned stops this week?', week + 'stops'),
+                          ('How many minutes of planned downtime this week?', week + 'downtime_minutes'),
+                          ('Minutes per stop at the dry end this week', week + 'minutes_per_stop'), ('Minutes per stop for crew A this week', week + 'minutes_per_stop'),
+                          ('Downtime per day at the dry end this week', week + 'downtime_per_day'),
+                          ('Why was downtime high every day this week?', week + 'downtime_per_day'),
+                          ('How many stops for order changes this week?', week + 'order_changes'), ('How many stops at the wet end this week?', week + 'paper_changes'),
+                          ('How many stops during setups this week?', week + 'setups'), ('Ratio of stops to setups this week', week + 'setups'),
+                          ('How many stops in the last 7 days?', '/corr/1/day/2026-09-14?measure=quantity&metric=stops')):
+        assert catch_all_failures(question, url), (question, url)
+    assert asked_unit_failures('How many stops for order changes this week?', ['**571 order changes** · -26 vs 597 the week before'])
+    assert not asked_unit_failures('How many stops for order changes this week?', ['**19 stops** for Order change · 26.87 minutes'])
 
 
 @pytest.mark.parametrize('question, scope, metric', [

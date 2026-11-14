@@ -65,7 +65,8 @@ def test_every_golden_question_round_trips_through_its_url(case):
             assert page_url(resolved) == url and redirect_target(url, resolved) is None, url
             addressed, _ = answer(store, resolved['day'], resolved['shift'], resolved['scope'], resolved['tool_period'],
                                   resolved['corrupt'], resolved['text'], resolved['request'])
-            assert addressed == asked and (resolved['day'], resolved['scope'], resolved['shift']) == (day, scope, shift), url
+            # an all-shift address names no shift (the owner's scope ruling moves a number asked under shift 3 to every shift)
+            assert addressed == asked and (resolved['day'], resolved['scope']) == (day, scope) and (scope == 'day' or resolved['shift'] == shift), url
             break
         url = canonical_url(request, context, corrupt, store.machine_id, after)
         try:

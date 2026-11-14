@@ -155,7 +155,7 @@
    "mode": "offline",
    "question": "fpm by grade",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&by=grade",
     "status": "complete",
     "tools": [
      {
@@ -165,7 +165,7 @@
         "period": "day",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -185,7 +185,8 @@
     "tables": [
      "get_grade_totals"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "speed-how-fast",
@@ -219,7 +220,7 @@
    "mode": "offline",
    "question": "how fast are we running this grade",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&by=grade",
     "status": "complete",
     "tools": [
      {
@@ -229,7 +230,7 @@
         "period": "day",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -241,7 +242,8 @@
     "chart_units": [
      "ft/min"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "volume-throughput",
@@ -249,7 +251,7 @@
    "mode": "offline",
    "question": "throughput",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade",
+    "url": "/corr/1/day/2026-09-14?measure=grade",
     "status": "complete",
     "tools": [
      {
@@ -259,7 +261,7 @@
         "period": "day",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -270,7 +272,8 @@
     "chart_units": [
      "MSF"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "volume-how-much-did-we-make",
@@ -278,7 +281,7 @@
    "mode": "offline",
    "question": "how much did we make",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade",
+    "url": "/corr/1/day/2026-09-14?measure=grade",
     "status": "complete",
     "tools": [
      {
@@ -288,7 +291,7 @@
         "period": "day",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -299,7 +302,8 @@
     "chart_units": [
      "MSF"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "speed-average-this-week",
@@ -307,7 +311,7 @@
    "mode": "offline",
    "question": "average speed this week",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "tools": [
      {
@@ -318,7 +322,7 @@
         "anchor": "2026-09-14"
        },
        "compare": true,
-       "shift": 2
+       "shift": null
       }
      },
      {
@@ -328,7 +332,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -346,7 +350,8 @@
      "get_grade_totals",
      "get_period_kpis"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "speed-vs-last-week",
@@ -354,7 +359,7 @@
    "mode": "offline",
    "question": "what is our speed vs last week",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "tools": [
      {
@@ -365,7 +370,7 @@
         "anchor": "2026-09-14"
        },
        "compare": true,
-       "shift": 2
+       "shift": null
       }
      },
      {
@@ -375,7 +380,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -393,7 +398,8 @@
      "get_grade_totals",
      "get_period_kpis"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "speed-slower-than-normal",
@@ -535,7 +541,7 @@
    "mode": "offline",
    "question": "which grade were we running the most this month",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade&window=month",
+    "url": "/corr/1/day/2026-09-14?measure=grade&window=month",
     "status": "complete",
     "tools": [
      {
@@ -545,7 +551,7 @@
         "period": "month",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -556,7 +562,8 @@
     "chart_units": [
      "MSF"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "volume-output-of-the-shift",
@@ -593,7 +600,7 @@
    "mode": "offline",
    "question": "what was our throughput this week",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=grade&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=grade&window=week",
     "status": "complete",
     "tools": [
      {
@@ -603,7 +610,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -614,7 +621,8 @@
     "chart_units": [
      "MSF"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "speed-how-fast-in-august",
@@ -622,7 +630,7 @@
    "mode": "offline",
    "question": "how fast did we run in august",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=2026-08",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=2026-08",
     "status": "complete",
     "tools": [
      {
@@ -633,7 +641,7 @@
         "anchor": "2026-08-01"
        },
        "compare": true,
-       "shift": 2
+       "shift": null
       }
      },
      {
@@ -643,7 +651,7 @@
         "period": "month",
         "anchor": "2026-08-01"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -653,16 +661,17 @@
      "get_grade_totals",
      "render_chart"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "speed-make-speed-target-this-week",
    "type": "routing",
    "mode": "offline",
    "question": "did we make our speed target this week",
-   "note": "Review of PR 81: 'make' beside a speed word does not veto speed. The period path once read it as volume while the day path read 'did we make our speed target' as speed.",
+   "note": "Review of PR 81: 'make' beside a speed word does not veto speed. The period path once read it as volume while the day path read 'did we make our speed target' as speed. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "tools": [
      {
@@ -673,7 +682,7 @@
         "anchor": "2026-09-14"
        },
        "compare": true,
-       "shift": 2
+       "shift": null
       }
      },
      {
@@ -683,7 +692,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -708,9 +717,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "what speed did we make this month",
-   "note": "Review of PR 81: one speed-versus-volume rule for both parse paths; 'made/make' is a bare volume word, not a volume cue.",
+   "note": "Review of PR 81: one speed-versus-volume rule for both parse paths; 'made/make' is a bare volume word, not a volume cue. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=month",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=month",
     "status": "complete",
     "tools": [
      {
@@ -721,7 +730,7 @@
         "anchor": "2026-09-14"
        },
        "compare": true,
-       "shift": 2
+       "shift": null
       }
      },
      {
@@ -731,7 +740,7 @@
         "period": "month",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -748,9 +757,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "speed and output this week",
-   "note": "Review of PR 81: a bare volume word ('output') beside a speed word stays speed, as it does with no window named.",
+   "note": "Review of PR 81: a bare volume word ('output') beside a speed word stays speed, as it does with no window named. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "tools": [
      {
@@ -761,7 +770,7 @@
         "anchor": "2026-09-14"
        },
        "compare": true,
-       "shift": 2
+       "shift": null
       }
      },
      {
@@ -771,7 +780,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -788,9 +797,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "how fast did we make 275-BC this week",
-   "note": "Review of PR 81: a speed word with a grade is speed grouped by grade over the window, never volume by grade.",
+   "note": "Review of PR 81: a speed word with a grade is speed grouped by grade over the window, never volume by grade. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week&by=grade",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week&by=grade",
     "status": "complete",
     "tools": [
      {
@@ -800,7 +809,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -1192,9 +1201,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "how fast did we make 275-BC",
-   "note": "Review of PR 81 (reviewer pass): a speed word with a grade is speed by grade in ft/min; 'make' no longer vetoes speed (was volume by grade).",
+   "note": "Review of PR 81 (reviewer pass): a speed word with a grade is speed by grade in ft/min; 'make' no longer vetoes speed (was volume by grade). The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&by=grade",
     "status": "complete",
     "tools": [
      {
@@ -1204,7 +1213,7 @@
         "period": "day",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -1549,9 +1558,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "fpm by grade after changeovers",
-   "note": "Review of PR 81: a line-speed question that only mentions changeovers stays speed by grade; the first paper-change rule sent it to measure=grade (volume).",
+   "note": "Review of PR 81: a line-speed question that only mentions changeovers stays speed by grade; the first paper-change rule sent it to measure=grade (volume). The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&by=grade",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&by=grade",
     "status": "complete",
     "tools": [
      {
@@ -1561,7 +1570,7 @@
         "period": "day",
         "anchor": "2026-09-14"
        },
-       "shift": 2,
+       "shift": null,
        "measure": "speed"
       }
      }
@@ -2213,13 +2222,11 @@
    "type": "routing",
    "mode": "offline",
    "question": "Which downtime reason cost the most minutes this month?",
-   "note": "Selected-shift scope: the period tool must run for shift 2 only.",
+   "note": "Selected-shift scope: the period tool must run for shift 2 only. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=month",
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=month",
     "status": "complete",
-    "shifts": [
-     2
-    ],
+    "shifts": [],
     "tools": [
      {
       "tool": "get_downtime_pareto",
@@ -2230,13 +2237,13 @@
        },
        "group_by": "reason",
        "measure": "minutes",
-       "shift": 2
+       "shift": null
       }
      }
     ],
     "charts": 1,
     "sections_match": [
-     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest of [0-9]+ reasons · [0-9.]+% of the window's minutes",
+     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest (of [0-9]+ reasons|unplanned reason) · [0-9.]+% of the window's minutes",
      "^- .*: \\*\\*[0-9.,]+ min\\*\\* over [0-9,]+ stops · [0-9.]+%, cumulative [0-9.]+%"
     ],
     "tables": [
@@ -2308,7 +2315,7 @@
    "mode": "offline",
    "question": "Is it bond or warp?",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=waste",
+    "url": "/corr/1/day/2026-09-14?measure=waste",
     "status": "complete",
     "tools": [
      {
@@ -2318,7 +2325,7 @@
         "period": "day",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -2327,7 +2334,8 @@
     "tables": [
      "get_waste_breakdown"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "period-waste-month",
@@ -2518,7 +2526,7 @@
    "shift": 2,
    "question": "Rollstock consumed this week",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=rollstock&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=rollstock&window=week",
     "status": "complete",
     "tools": [
      {
@@ -2528,19 +2536,20 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
     "charts": 1,
     "sections_match": [
      "^\\*\\*[0-9.,]+ MSF\\*\\* of paper consumed · .* paper runs",
-     "^The setups shift 2 ran on each paper run"
+     "^Whole paper runs, each on the production day its first setup started"
     ],
     "tables": [
      "get_rollstock"
     ]
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "period-grade-named-week",
@@ -2607,7 +2616,7 @@
    "shift": 3,
    "question": "Are we inside the cut range this month?",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/3?measure=overrun&window=month",
+    "url": "/corr/1/day/2026-09-14?measure=overrun&window=month",
     "status": "complete",
     "tools": [
      {
@@ -2617,13 +2626,14 @@
         "period": "month",
         "anchor": "2026-09-14"
        },
-       "shift": 3
+       "shift": null
       }
      }
     ],
     "charts": 1,
     "sections_match": "inside the band"
-   }
+   },
+   "note": "The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts."
   },
   {
    "id": "period-grade-downtime",
@@ -3315,9 +3325,9 @@
    "mode": "offline",
    "period": "month",
    "question": "Which downtime reason cost the most minutes this week?",
-   "note": "A window the question names wins over the Period control.",
+   "note": "A window the question names wins over the Period control. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/month/2026-09-14/shift/2?measure=pareto&window=week",
+    "url": "/corr/1/month/2026-09-14?measure=pareto&window=week",
     "status": "complete",
     "tools": [
      {
@@ -3327,7 +3337,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ]
@@ -3499,10 +3509,10 @@
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · (on target|flag)[^·]* · maintenance [0-9.]+%, [^·]+ · operator [0-9.]+%, ",
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous ([0-9.]+%|unavailable) \\(query 1 · row 0\\)$",
-     "^2026-09-11 \\(Fri\\), all shifts, versus 2026-09-10 \\(Thu\\)\\. Window coverage: complete; previous complete\\.$"
+     "^2026-09-14 \\(Mon\\), all shifts, versus 2026-09-11 \\(Fri\\)\\. Window coverage: complete; previous complete\\.$"
     ]
    },
-   "note": "Issue #101: downtime with no scope is the owner's default, the previous production day (Friday 2026-09-11) all shifts; every figure in the review traces to its row."
+   "note": "Issue #101: downtime with no scope is the owner's default, the previous production day (Friday 2026-09-11) all shifts; every figure in the review traces to its row. The owner's scope ruling (2026-11-13) moves its address: a question that names no day reads the selected day, the downtime review too (it read the previous production day, 2026-09-11)."
   },
   {
    "id": "downtime-minutes-this-shift",
@@ -4556,13 +4566,11 @@
    "mode": "offline",
    "day": "2025-02-14",
    "question": "How much downtime last month?",
-   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-02-14 it is January 2025, the data's first month (it opens on 1 January 2025, issue #100); its previous month, December 2024, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 2025-10-15 (September 2025, whose previous month was before the old rolling year's first day) when issue #100 fixed the first day. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags); the scope this question moves to is unchanged, and the review keeps the previous window beside, unavailable here (the owner, review of #111). Merged with #111: on the v2 records the first month, January 2025, is complete, so the review ranks its reasons (each with previous unavailable, never zero) and must not call the window incomplete because the previous one is outside the records (a bug the merge surfaced: the card ranked the reasons and said rankings were withheld). The partial window listed in the tool's order is downtime-first-week-partial-unranked.",
+   "note": "Issue #105: 'last month' is the calendar month before the selected day's, not the selected month; the controls move to it as for last week. Asked on 2025-02-14 it is January 2025, the data's first month (it opens on 1 January 2025, issue #100); its previous month, December 2024, is before the records, so each row's previous is unavailable, never zero. Re-anchored from 2025-10-15 (September 2025, whose previous month was before the old rolling year's first day) when issue #100 fixed the first day. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags); the scope this question moves to is unchanged, and the review keeps the previous window beside, unavailable here (the owner, review of #111). Merged with #111: on the v2 records the first month, January 2025, is complete, so the review ranks its reasons (each with previous unavailable, never zero) and must not call the window incomplete because the previous one is outside the records (a bug the merge surfaced: the card ranked the reasons and said rankings were withheld). The partial window listed in the tool's order is downtime-first-week-partial-unranked. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/month/2025-01-01/shift/2?measure=review",
+    "url": "/corr/1/month/2025-01-01?measure=review",
     "status": "complete",
-    "shifts": [
-     2
-    ],
+    "shifts": [],
     "tools": [
      {
       "tool": "get_downtime_review",
@@ -4571,7 +4579,7 @@
         "period": "month",
         "anchor": "2025-01-01"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -4582,7 +4590,7 @@
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous unavailable \\(query 1 · row 0\\)$",
-     "^January 2025 \\(2025-01-01 to 2025-01-31\\), shift 2, versus December 2024 \\(2024-12-01 to 2024-12-31\\)\\. Window coverage: complete; previous unavailable\\.$"
+     "^January 2025 \\(2025-01-01 to 2025-01-31\\), all shifts, versus December 2024 \\(2024-12-01 to 2024-12-31\\)\\. Window coverage: complete; previous unavailable\\.$"
     ],
     "sections_not_match": "^The window is incomplete"
    }
@@ -4593,13 +4601,11 @@
    "mode": "offline",
    "day": "2025-01-06",
    "question": "How much downtime last week?",
-   "note": "Issue #105 with issue #101's review, on the v2 records (issue #100): 'last week' asked on Monday 2025-01-06 is the data's first week, 30 December 2024 to 3 January 2025, which holds three production days. The window is partial and the previous one is before the records: the review lists its reasons in the tool's order, never ranked, each with previous unavailable, never zero, and says the window is incomplete. It keeps the partial-window path downtime-last-month held before the records started on 1 January 2025.",
+   "note": "Issue #105 with issue #101's review, on the v2 records (issue #100): 'last week' asked on Monday 2025-01-06 is the data's first week, 30 December 2024 to 3 January 2025, which holds three production days. The window is partial and the previous one is before the records: the review lists its reasons in the tool's order, never ranked, each with previous unavailable, never zero, and says the window is incomplete. It keeps the partial-window path downtime-last-month held before the records started on 1 January 2025. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/week/2025-01-01/shift/2?measure=review",
+    "url": "/corr/1/week/2025-01-01?measure=review",
     "status": "complete",
-    "shifts": [
-     2
-    ],
+    "shifts": [],
     "tools": [
      {
       "tool": "get_downtime_review",
@@ -4608,7 +4614,7 @@
         "period": "week",
         "anchor": "2025-01-01"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -4619,7 +4625,7 @@
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
      "^- .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous unavailable \\(query 1 · row 0\\)$",
-     "^Week 2024-12-30 to 2025-01-03 \\(Mon-Fri\\), shift 2, versus Week 2024-12-23 to 2024-12-27 \\(Mon-Fri\\)\\. Window coverage: partial; previous unavailable\\.$",
+     "^Week 2024-12-30 to 2025-01-03 \\(Mon-Fri\\), all shifts, versus Week 2024-12-23 to 2024-12-27 \\(Mon-Fri\\)\\. Window coverage: partial; previous unavailable\\.$",
      "^The window is incomplete \\(coverage partial\\): observed values only, and rankings are withheld\\.$"
     ],
     "sections_not_match": "^- [0-9]+\\. "
@@ -4630,13 +4636,11 @@
    "type": "routing",
    "mode": "offline",
    "question": "How much downtime in August?",
-   "note": "Issue #105 with #35: downtime in a named month is that month's Pareto. The merge of #105 into the year built the month's anchor from a variable the month-name rule had replaced, and the question raised NameError. Issue #101 (merged with main after #91): downtime by reason over a window the question names is the owner's review, as the coordinator's review of #111 accepted; the month the name means is unchanged, and the review keeps the previous month beside.",
+   "note": "Issue #105 with #35: downtime in a named month is that month's Pareto. The merge of #105 into the year built the month's anchor from a variable the month-name rule had replaced, and the question raised NameError. Issue #101 (merged with main after #91): downtime by reason over a window the question names is the owner's review, as the coordinator's review of #111 accepted; the month the name means is unchanged, and the review keeps the previous month beside. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=2026-08",
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2026-08",
     "status": "complete",
-    "shifts": [
-     2
-    ],
+    "shifts": [],
     "tools": [
      {
       "tool": "get_downtime_review",
@@ -4645,7 +4649,7 @@
         "period": "month",
         "anchor": "2026-08-01"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -4656,7 +4660,7 @@
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous [0-9.]+% \\(query 1 · row 0\\)$",
-     "^August 2026 \\(2026-08-01 to 2026-08-31\\), shift 2, versus July 2026"
+     "^August 2026 \\(2026-08-01 to 2026-08-31\\), all shifts, versus July 2026"
     ]
    }
   },
@@ -4665,13 +4669,11 @@
    "type": "routing",
    "mode": "offline",
    "question": "How much downtime in December?",
-   "note": "A month named without a year is the latest such month on or before the selected day (issue #35): December asked on 14 September 2026 is December 2025, inside the year, not a December after the data. Issue #101 (merged with main after #91): downtime by reason over a window the question names is the owner's review, as the coordinator's review of #111 accepted; the month the name means is unchanged, and the review keeps the previous month beside.",
+   "note": "A month named without a year is the latest such month on or before the selected day (issue #35): December asked on 14 September 2026 is December 2025, inside the year, not a December after the data. Issue #101 (merged with main after #91): downtime by reason over a window the question names is the owner's review, as the coordinator's review of #111 accepted; the month the name means is unchanged, and the review keeps the previous month beside. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=2025-12",
+    "url": "/corr/1/day/2026-09-14?measure=review&window=2025-12",
     "status": "complete",
-    "shifts": [
-     2
-    ],
+    "shifts": [],
     "tools": [
      {
       "tool": "get_downtime_review",
@@ -4680,7 +4682,7 @@
         "period": "month",
         "anchor": "2025-12-01"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -4691,7 +4693,7 @@
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · ",
      "^- 1\\. .+, (maintenance|operator): \\*\\*[0-9.]+%\\*\\* of scheduled minutes · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · previous [0-9.]+% \\(query 1 · row 0\\)$",
-     "^December 2025 \\(2025-12-01 to 2025-12-31\\), shift 2, versus November 2025"
+     "^December 2025 \\(2025-12-01 to 2025-12-31\\), all shifts, versus November 2025"
     ]
    }
   },
@@ -4700,9 +4702,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "downtime from maintenance last week",
-   "note": "Review of #105 (Codex on PR #108): 'from', 'over' and 'since' make a relative window a comparison base only right before it ('since last week', #99's speed-variance cue). Elsewhere in the question they leave 'last week' the window asked about, 7-11 Sep from Mon 14 Sep; the first fix read any 'from' as a base and answered the selected week. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "note": "Review of #105 (Codex on PR #108): 'from', 'over' and 'since' make a relative window a comparison base only right before it ('since last week', #99's speed-variance cue). Elsewhere in the question they leave 'last week' the window asked about, 7-11 Sep from Mon 14 Sep; the first fix read any 'from' as a base and answered the selected week. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/week/2026-09-07/shift/2?measure=review",
+    "url": "/corr/1/week/2026-09-07?measure=review",
     "status": "complete",
     "tools": [
      {
@@ -4712,7 +4714,7 @@
         "period": "week",
         "anchor": "2026-09-07"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ]
@@ -4734,9 +4736,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "How much donwtime?",
-   "note": "Issue #105: a swap of two letters in a measure word is read as the measure (one edit, counting a swap as one). Issue #101: downtime with no scope is the previous production day, all shifts, led by maintenance and operator downtime and their bands.",
+   "note": "Issue #105: a swap of two letters in a measure word is read as the measure (one edit, counting a swap as one). Issue #101: downtime with no scope is the previous production day, all shifts, led by maintenance and operator downtime and their bands. The owner's scope ruling (2026-11-13) moves its address: a question that names no day reads the selected day, the downtime review too (it read the previous production day, 2026-09-11).",
    "expect": {
-    "url": "/corr/1/day/2026-09-11?measure=review",
+    "url": "/corr/1/day/2026-09-14?measure=review",
     "status": "complete",
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · (on target|flag)[^·]* · maintenance [0-9.]+%, [^·]+ · operator [0-9.]+%, "
@@ -4748,9 +4750,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Show dowtime by reason this week",
-   "note": "Issue #105: a dropped letter, over a named window, is the downtime Pareto of the week. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged.",
+   "note": "Issue #105: a dropped letter, over a named window, is the downtime Pareto of the week. Issue #101: downtime by reason over a window is the owner's review (maintenance and operator first, reasons ranked by % of scheduled minutes, planned maintenance last, the flags), as the day-shaped downtime question is under a ranged Period control; the scope this question moves to is unchanged. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
     "status": "complete",
     "tools": [
      {
@@ -4760,7 +4762,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ]
@@ -5958,9 +5960,9 @@
    "scope": "shift",
    "shift": 2,
    "question": "Which downtime reason is costing us the most minutes this month?",
-   "note": "Review of #31a: 'costing us' is a money word, but the question is the Pareto, whose rows carry their dollars.",
+   "note": "Review of #31a: 'costing us' is a money word, but the question is the Pareto, whose rows carry their dollars. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=month",
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=month",
     "status": "complete",
     "tools": [
      {
@@ -5972,14 +5974,14 @@
        },
        "group_by": "reason",
        "measure": "minutes",
-       "shift": 2
+       "shift": null
       }
      }
     ],
     "charts": 1,
     "sections_match": [
      "^How a dollar is priced, for .*: .*min x \\$1,200/hr machine time.*per year: x ",
-     "^\\*\\*[0-9.,]+ min\\*\\* at .* · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row 0\\)$"
+     "^\\*\\*[0-9.,]+ min\\*\\* at .* · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row [0-9]+\\)$"
     ]
    }
   },
@@ -7264,10 +7266,10 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-09-08",
+   "day": "2026-09-07",
    "scope": "day",
    "question": "Show downtime by reason",
-   "note": "Issue #101: the same flagged maintenance-fault shift on the owner's default. Asked on Tuesday 2026-09-22 with no scope, the answer is the previous production day, Monday 2026-09-21, all shifts. The flag still pulls in shift 3 with its supervisor slot, and the recurrence of its leading reason, knife / slitter jams, across all shifts; operator flags on shifts 2 and 1 follow it. Re-picked from 2026-05-04 (asked on 05-05), whose maintenance flag was a power outage, external since the owner's decision on PR #111 (2026-11-12). Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the same flagged maintenance-fault shift, second shift on Monday 2026-09-07, asked on Tuesday 2026-09-08 with no scope; across all shifts its knife jams were never over the band alone (0 of 783 shifts) and were in the weekly top five 23 of 53 weeks. That day shift 1's and shift 3's operator flags (5.76%, and 3.28% on 15.75 min against the maintenance flag's 15.73) are larger, so the maintenance flag is the third (flag 2). Changed from the owner's expectations: the dates, the shift (3 to 2) and the flag index (0 to 2); for the owner to confirm.",
+   "note": "Issue #101: the same flagged maintenance-fault shift on the owner's default. Asked on Tuesday 2026-09-22 with no scope, the answer is the previous production day, Monday 2026-09-21, all shifts. The flag still pulls in shift 3 with its supervisor slot, and the recurrence of its leading reason, knife / slitter jams, across all shifts; operator flags on shifts 2 and 1 follow it. Re-picked from 2026-05-04 (asked on 05-05), whose maintenance flag was a power outage, external since the owner's decision on PR #111 (2026-11-12). Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the same flagged maintenance-fault shift, second shift on Monday 2026-09-07, asked on Tuesday 2026-09-08 with no scope; across all shifts its knife jams were never over the band alone (0 of 783 shifts) and were in the weekly top five 23 of 53 weeks. That day shift 1's and shift 3's operator flags (5.76%, and 3.28% on 15.75 min against the maintenance flag's 15.73) are larger, so the maintenance flag is the third (flag 2). Changed from the owner's expectations: the dates, the shift (3 to 2) and the flag index (0 to 2); for the owner to confirm. Re-anchored on the day it reads when the owner's scope ruling (2026-11-13) retired #101's previous production day: asked on 2026-09-07 it reads 2026-09-07, its address unchanged.",
    "expect": {
     "url": "/corr/1/day/2026-09-07?measure=review",
     "status": "complete",
@@ -7348,10 +7350,10 @@
    "type": "routing",
    "mode": "offline",
    "reviewed_by": "owner",
-   "day": "2026-01-06",
+   "day": "2026-01-05",
    "scope": "day",
    "question": "Show downtime by reason",
-   "note": "The owner, PR #111 (2026-11-12): the same day on the default (asked on Tuesday 2026-05-05, the previous production day, all shifts). The power outage shows in the downtime, as external and not controllable, apart from the ranked maintenance and operator reasons; it is not in the maintenance figure and no shift is flagged for it. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Tuesday 2026-01-06, the previous production day is Monday 2026-01-05, whose third shift had a 15-minute power outage (1.04% of the day's 1,440 scheduled minutes), now another day than power-outage-shift-not-flagged-as-maintenance's. Changed from the owner's expectations: the dates and the outage shift named in sections_not_match (Shift 1 to Shift 3); for the owner to confirm.",
+   "note": "The owner, PR #111 (2026-11-12): the same day on the default (asked on Tuesday 2026-05-05, the previous production day, all shifts). The power outage shows in the downtime, as external and not controllable, apart from the ranked maintenance and operator reasons; it is not in the maintenance figure and no shift is flagged for it. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): asked on Tuesday 2026-01-06, the previous production day is Monday 2026-01-05, whose third shift had a 15-minute power outage (1.04% of the day's 1,440 scheduled minutes), now another day than power-outage-shift-not-flagged-as-maintenance's. Changed from the owner's expectations: the dates and the outage shift named in sections_not_match (Shift 1 to Shift 3); for the owner to confirm. Re-anchored on the day it reads when the owner's scope ruling (2026-11-13) retired #101's previous production day: asked on 2026-01-05 it reads 2026-01-05, its address unchanged.",
    "expect": {
     "url": "/corr/1/day/2026-01-05?measure=review",
     "status": "complete",
@@ -9868,9 +9870,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Downtime per reason this week",
-   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: \"per reason\" is \"by reason\", the downtime review, never a ratio refused; no quantity asked, so the selected shift.",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: \"per reason\" is \"by reason\", the downtime review, never a ratio refused; no quantity asked, so the selected shift. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=review&window=week",
     "status": "complete",
     "tools": [
      {
@@ -9880,7 +9882,7 @@
         "period": "week",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ]
@@ -9891,9 +9893,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Rollstock per width this month",
-   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: \"per width\" is the rollstock by grade and width.",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: \"per width\" is the rollstock by grade and width. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=rollstock&window=month",
+    "url": "/corr/1/day/2026-09-14?measure=rollstock&window=month",
     "status": "complete",
     "tools": [
      {
@@ -9903,7 +9905,7 @@
         "period": "month",
         "anchor": "2026-09-14"
        },
-       "shift": 2
+       "shift": null
       }
      }
     ]
@@ -9946,9 +9948,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Average speed per day this week",
-   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: speed per day is the speed answer, never a ratio refused.",
+   "note": "Issue #113 (exact over summary): re-review, the reviewer subagent's check of the fix: speed per day is the speed answer, never a ratio refused. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "sections_match": [
      "^\\*\\*[0-9,.]+ ft/min\\*\\* "
@@ -10886,9 +10888,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Stops by kind this week",
-   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: answered 131 stops, every shift's total; no quantity asked, so the selected shift.",
+   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: answered 131 stops, every shift's total; no quantity asked, so the selected shift. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&by=kind&unit=count",
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=week&by=kind&unit=count",
     "status": "complete",
     "tools": [
      {
@@ -10900,7 +10902,7 @@
        },
        "group_by": "kind",
        "measure": "count",
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -10918,9 +10920,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Minutes by reason this week",
-   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: refused with the generic help; the Pareto by reason answers it.",
+   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: refused with the generic help; the Pareto by reason answers it. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=week",
     "status": "complete",
     "tools": [
      {
@@ -10932,7 +10934,7 @@
        },
        "group_by": "reason",
        "measure": "minutes",
-       "shift": 2
+       "shift": null
       }
      }
     ],
@@ -11010,9 +11012,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Lineal feet per minute this week",
-   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: read every shift (a count of lineal feet) while 'feet per minute this week' read shift 2: the speed asked in its unit is not a count, so both keep the controls.",
+   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: read every shift (a count of lineal feet) while 'feet per minute this week' read shift 2: the speed asked in its unit is not a count, so both keep the controls. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "sections_match": [
      "^\\*\\*[0-9,.]+ ft/min\\*\\* "
@@ -11024,9 +11026,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Feet per min this week",
-   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: refused with the generic help; feet per min is the speed.",
+   "note": "Issue #113 (exact over summary): round 4, the reviewer subagent's probe of the fix: refused with the generic help; feet per min is the speed. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "sections_match": [
      "^\\*\\*[0-9,.]+ ft/min\\*\\* "
@@ -11414,9 +11416,9 @@
    "type": "routing",
    "mode": "offline",
    "question": "Feet a minute this week",
-   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 5 (feet a minute): refused with the generic help; feet a minute is the speed, on the controls as 'feet per minute this week' is.",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 5 (feet a minute): refused with the generic help; feet a minute is the speed, on the controls as 'feet per minute this week' is. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
    "expect": {
-    "url": "/corr/1/day/2026-09-14/shift/2?measure=fpm&window=week",
+    "url": "/corr/1/day/2026-09-14?measure=fpm&window=week",
     "status": "complete",
     "sections_match": [
      "^\\*\\*[0-9,.]+ ft/min\\*\\* "
@@ -13211,7 +13213,7 @@
    "question": "How many stops at the slitter this week?",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops; 'the slitter' alone is no place (the slitter scorer is), so no filter applied.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13235,7 +13237,7 @@
    "question": "How many planned stops this week?",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops, every stop.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13245,7 +13247,7 @@
    "question": "How many unplanned stops this week?",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops, every stop.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13255,7 +13257,7 @@
    "question": "How many scheduled stops this week?",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 131 stops, every stop.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13265,7 +13267,7 @@
    "question": "How many minutes of planned downtime this week?",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 354.9 minutes, every minute; planned maintenance is the reason that names it.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13278,7 +13280,7 @@
     "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=planned-maintenance",
     "status": "complete",
     "shape": {
-     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Planned maintenance · "
+     "headline_match": "^\\*\\*[0-9,]+ stops?\\*\\* for Planned maintenance · "
     }
    }
   },
@@ -13289,7 +13291,7 @@
    "question": "Minutes per stop at the dry end this week",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 2.71 minutes per stop, every stop's.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13299,7 +13301,7 @@
    "question": "Minutes per stop for crew A this week",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered 2.71 minutes per stop, every stop's; the records name no crew on a stop.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13309,7 +13311,7 @@
    "question": "Downtime per day at the dry end this week",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 2: answered each production day's downtime, every stop's.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13445,7 +13447,7 @@
    "question": "How many stops at the wet end this week?",
    "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 4: answered 183 paper changes; the wet end is no stop place.",
    "expect": {
-    "raises": "is not a stop reason, place or kind the records name"
+    "raises": "is not one stop reason, place or kind the router applies"
    }
   },
   {
@@ -13604,6 +13606,73 @@
     "status": "complete",
     "sections_match": [
      "^\\*\\*[0-9,.]+ ft/min\\*\\* including downtime · "
+    ]
+   }
+  },
+  {
+   "id": "scope-rollstock-this-shift-keeps-the-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Rollstock consumed this week on this shift",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=rollstock&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_rollstock",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ MSF\\*\\* of paper consumed · .* paper runs",
+     "^The setups shift 2 ran on each paper run"
+    ],
+    "tables": [
+     "get_rollstock"
+    ]
+   },
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 5 (guard), the owner's scope ruling: 'this shift' keeps the shift control, so rollstock keeps the selected shift's own note (what period-rollstock-selected-shift-week pinned before the ruling moved it to all shifts)."
+  },
+  {
+   "id": "scope-pareto-this-shift-keeps-the-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which downtime reason cost the most minutes this month on this shift?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, item 5 (guard), the owner's scope ruling: 'this shift' keeps the shift control: the period tool runs for shift 2 only (what period-pareto-selected-shift pinned before the ruling moved it to all shifts).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=month",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ min\\*\\* at .*, the largest (of [0-9]+ reasons|unplanned reason) · [0-9.]+% of the window's minutes",
+     "^- .*: \\*\\*[0-9.,]+ min\\*\\* over [0-9,]+ stops · [0-9.]+%, cumulative [0-9.]+%"
+    ],
+    "tables": [
+     "get_downtime_pareto"
     ]
    }
   }
