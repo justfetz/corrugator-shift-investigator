@@ -14728,6 +14728,88 @@
    "expect": {
     "raises": "asks how long the line ran or was up"
    }
+  },
+  {
+   "id": "unapplied-how-many-stops-question-mark-why-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops this week? Why?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's re-probe, a number and its cause joined by a question mark are two questions; main at 1a7d012 answered **11 stops** at Stacker, shift 2's top reason.",
+   "expect": {
+    "raises": "a number and for its cause together"
+   }
+  },
+  {
+   "id": "unapplied-setups-you-could-get-done-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups could you get done this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's re-probe, 'could you get' asks a capacity, never a request; main at 1a7d012 answered **577 setups**.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-setups-you-can-get-through-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups can you get through this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's re-probe, the draft read 'can you get' as a request and answered **577 setups**; it asks a capacity; main at 1a7d012 answered a refusal for 'through'.",
+   "expect": {
+    "raises": "asks for a plan, a capacity or what is left"
+   }
+  },
+  {
+   "id": "unapplied-setups-the-line-went-down-for-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups did the line go down for this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's re-probe, the draft consumed 'go down' for every measure and answered **577 setups**; it is downtime's or the stops' own words; main at 1a7d012 answered a refusal for 'down'.",
+   "expect": {
+    "raises": "is a word one quantity does not read"
+   }
+  },
+  {
+   "id": "unapplied-were-stops-up-is-the-count-beside-the-week-before",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Were stops up this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's re-probe, the draft refused it ('up' the line running): a rise of the measure is read where the answer carries the window before; main at 1a7d012 answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-minutes-per-stop-went-up-versus-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Did minutes per stop go up this week versus last week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's re-probe, the draft refused it as run time: 'go up' is the measure's rise; main at 1a7d012 answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-can-you-see-is-a-request",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops can you see this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's re-probe, the draft refused 'can' as a plan: 'can you see' asks the assistant; main at 1a7d012 answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
   }
  ]
 }

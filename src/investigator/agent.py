@@ -669,7 +669,7 @@ WASTE_SQFT = ("Square feet are kept for the waste lines (trim, shear, each dry-e
 # A word sits in this table only if it carries no meaning a route could ignore (issue #153): a word that names a scope, a comparison,
 # a state, a plan or a time span is consumed only by the code that applies it. So "can", "could", "would", "will", "need", "want",
 # "to" and "go" (a plan, a capacity or what is left: "how many setups can we run", "to go"), "up" and "went" (the line running: "how
-# many minutes were we up") and "so far" (a span to date) are not here: a request said before the question ("I need the number of
+# many minutes were we up") and "far" (so far, a span to date) are not here: a request said before the question ("I need the number of
 # stops", "can you tell me"), the verb of "how did it go", a particle ("rack up") and "compared to last week" are consumed by the
 # patterns that read them (REQUEST_LEAD, HOW_DID_GO, UP_PARTICLE, COMPARED_TO_SAID). "On" stays as the preposition it is everywhere
 # ("on shift 1", "on 32-C", "how did we do on setups"), and "machine" as the line: the line on, up or running, and machine or run
@@ -681,13 +681,13 @@ FUNCTION_WORDS = frozenset((
     'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had',
     'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked',
     'happen', 'happened', 'occur', 'occurred', 'show', 'tell', 'give', 'done', 'complete', 'completed',
-    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'so', 'please', 'line', 'corrugator', 'machine', 'plant'))
 # The words that left the table (issue #153), by what they name: each, added to a plain quantity, is refused (the tests say so)
 PLAN_WORDS = ('need', 'needs', 'needed', 'want', 'wants', 'will', 'would', 'can', 'could', 'should', 'shall', 'might', 'must', 'to',
               'go', 'goes', 'going', 'left', 'remaining', 'remain', 'remains', 'still', 'expect', 'expected', 'forecast', 'projected', 'possible',
               'capacity', 'target', 'targets', 'plan', 'plans')
 STATE_WORDS = ('up', 'uptime', 'runtime', 'running', 'went', 'gone', 'operating', 'online', 'available')
-SPAN_WORDS = ('so', 'far', 'thus', 'since', 'until', 'till', 'now', 'date', 'ago')
+SPAN_WORDS = ('far', 'thus', 'since', 'until', 'till', 'now', 'date', 'ago')
 # What a leftover word asks for (only the refusal's words: the allow-list refuses every word it does not consume, listed here or
 # not). The first leftover word found in a family names it; any other word is "a word one quantity does not read".
 LEFTOVER_FAMILIES = {
@@ -759,7 +759,6 @@ SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\
 # ... and the word that names the window compared ("more stops than last week", "131 versus the week before"; "this week to last week"
 # is consumed beside a comparison, COMPARED_TO_SAID, but never names one: "to" is not a function word, issue #153)
 COMPARED_TO = r"\b(than|with|against|versus|vs|and)\b(?=\s+(the\s+)?(last|previous|prior|week before|month before|day before)\b)"
-RISE_OR_FALL = r"\b((go|goes|went|gone|going)\s+)?(up|down)\b"   # beside a window compared: "were stops up versus last week"
 COMPARED_TO_SAID = r"\b(than|with|against|versus|vs|and|to)\b(?=\s+(the\s+)?(last|previous|prior|week before|month before|day before)\b)"
 PREVIOUS_WINDOW = r"\b(the\s+)?(last|previous|prior)\s+(week|month|period|day)\b|\b(the\s+)?(week|month|day|period)\s+before\b(?!\s+last)"
 # ... and the two windows joined in either order ("last week and this week", "this week and how many last week")
@@ -774,14 +773,25 @@ REQUEST_LEAD = (rf"^\s*({LEAD_FILLER})?(please\s+)?((can|could|would|will)\s+(yo
                 r"|((i|we)\s+)?(need|want)\s+(you\s+to\s+(tell|show|give|find|count|check|get|pull|list)\b|to\s+(know|see|get|find\s+out)\b"
                 r"|(?=(the|a|an)\s+(number|count|total|figure|tally)\b))"
                 r"|(i|we)\s*('d|\s+would)\s+like\s+to\s+(know|see|get|find\s+out)\b)")
-LEAD_SO = rf"^\s*{LEAD_FILLER}"
 # "can you" asks the assistant wherever it stands ("how many stops this week, can you tell me?", "tell me the number, can you?"): never
 # a capacity of the line, which "can we", "can the line" or "can it" asks
-MODAL_YOU = r"\b(can|could|would|will)\s+(you|u)\b(\s+please\b)?(?=\s*(tell|show|give|let|list|pull|find|count|check|get|say)\b|\s*[?.,!]|\s*$)"
+MODAL_YOU = r"\b(can|could|would|will)\s+(you|u)\b(\s+please\b)?(?=\s*(tell|show|give|let|list|pull|find|count|check|see|say)\b|\s*[?.,!]|\s*$)"
 # what ran, asked as an obligation in the past ("how many setups did we have to run"): the setups that ran
 DID_HAVE_TO = r"\bdid\s+(we|you|they|it|the\s+(line|corrugator|machine|plant|shift))\s+(have|need)\s+to\b"
-# "go down" is the line stopping, never "go" the plan ("how long did the line go down")
-GO_DOWN = r"\b(go|goes|went|gone|going)\s+down\b"
+# ("go down" is the line stopping: a duration's or a count of stops' own words, MINUTE_WORDS and STOP_NOUN, never "go" the plan and
+# never a count of anything else: "how many setups did the line go down for")
+# a rise or a fall of the measure itself ("were stops up", "did setups go up", "did minutes per stop go down"): only the rise is consumed,
+# and only where the answer carries the window before beside it; "were we up" names no measure and is the line running
+RISE_NOUNS = (r"(stops?|stoppages?|set-?ups?|paper changes?|order changes?|changeovers?|sheets?|downtime|minutes|feet|footage|msf|waste|"
+              r"trim|shear|rejects?)(\s+per\s+[a-z-]+)?")
+RISE_OF_MEASURE = (rf"\b(?P<before>(were|was|are|is|have|has|been)\s+((the|our)\s+)?{RISE_NOUNS}\s+)(up|down)\b(?!\s+(to|until|till)\b)"
+                   rf"|\b(?P<after>{RISE_NOUNS}\s+)((were|was|are|is|have|has|been)|(go|goes|went|gone|going))\s+(up|down)\b(?!\s+(to|until|till)\b)")
+
+
+def strip_rise(text, keep=' | '):
+    """`text` with the rise or fall of a measure ("were stops up", "stops went up", "did minutes per stop go down") replaced by `keep`,
+    the measure's own words kept: the measure must be its subject, with a verb ("setups up" alone is not one)."""
+    return re.sub(RISE_OF_MEASURE, lambda m: (m.group('before') or m.group('after')) + keep, text)
 # "How did shift 1 go", "how is the week going": the verb of a "how did it go" question (only the verb is consumed; the words between
 # are read as they are), never the line running
 HOW_DID_GO = r"\b(how\s+(did|does|do|has|have|is|was|are|were)\s+([a-z0-9-]+\s+){0,3}?)(go|goes|gone|going|went)\b"
@@ -790,7 +800,7 @@ UP_PARTICLE = (r"\b(rack|racks|racked|racking|add|adds|added|adding|pile|piles|p
                r"tally|tallies|tallied)\s+up\b")
 CONSUMED_ALWAYS = (*WINDOW_WORDS, SHIFT_NAMED, SHIFTS_ALL, r"\bhow long\b", r"\bhow often\b",
                    r"\b(across|over|on|for)\s+(the\s+)?(whole\s+|entire\s+)?(line|corrugator|machine|plant)\b",
-                   r"\bof\s+any\s+(type|kind|sort)\b", REQUEST_LEAD, LEAD_SO, MODAL_YOU, DID_HAVE_TO, GO_DOWN, UP_PARTICLE)
+                   r"\bof\s+any\s+(type|kind|sort)\b", REQUEST_LEAD, MODAL_YOU, DID_HAVE_TO, UP_PARTICLE)
 # A rolling window ("the last 7 days", "the past two weeks") is not one the records keep: refused before the words are read
 ROLLING_WINDOW = (r"\b(last|past|previous|prior)\s+(\d+|few|couple(\s+of)?|several|two|three|four|five|six|seven|eight|nine|ten|"
                   r"eleven|twelve|fourteen|thirty)\s+(production\s+)?(days?|weeks?|months?|shifts?|hours?)\b"
@@ -803,9 +813,9 @@ UNREAD_WINDOW = (r"\b(first|last)\s+(day|week)\s+of\s+(the\s+)?[a-z]+\b|\b(last|
 WINDOW_TEXT = ("'{words}' is not a window the router reads: one quantity reads the selected production day or yesterday, a Mon-Fri "
                "week, a calendar month or a 4-4-5 period. Ask '{plain} this week', '{plain} this month' or '{plain} last week'.")
 # The measure's own words, by metric: its noun and unit, the "per <denominator>" of a kept ratio and the average a kept ratio is
-STOP_NOUN = r"\bstop(s|ped|page|pages)?\b"
+STOP_NOUN = r"\bstop(s|ped|page|pages)?\b|\b(go|goes|went|gone|going)\s+down\b"
 LAST_VERB = r"\blasts?\b(?!\s+(stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))|\blasted\b"
-MINUTE_WORDS = (r"\b(minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(s|ped|page|pages)?|take|takes|took|taking|"
+MINUTE_WORDS = (r"\b(go|goes|went|gone|going)\s+down\b|\b(minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(s|ped|page|pages)?|take|takes|took|taking|"
                 r"spend|spent)\b|" + LAST_VERB)   # "last" the verb ("how long did stops last"), never "the last stop" 
 FEET_WORDS = r"\b(lineal|linear|feet|foot|ft|footage)\b"
 AVG_ANY = r"\b(on\s+(the\s+)?)?(averag(e|es|ed|ing)|avg|mean|typical(ly)?)\b"
@@ -938,7 +948,9 @@ def unconsumed(lower, lead):
     # comparison_gate has checked that the windows said are the answered one and the one before it)
     compared = ()
     if compares(lead) and window_compared(text):
-        compared = (WINDOW_COMPARE, COMPARED_TO_SAID, PREVIOUS_WINDOW, RISE_OR_FALL) + ((r"\band\b",) if re.search(JOINED_WINDOWS, text) else ())
+        compared = (WINDOW_COMPARE, COMPARED_TO_SAID, PREVIOUS_WINDOW) + ((r"\band\b",) if re.search(JOINED_WINDOWS, text) else ())
+    if compares(lead):
+        text = strip_rise(text)   # "were stops up", "did setups go up": the answer carries the window before
     text = re.sub(HOW_DID_GO, r"\1 | ", text)   # "how did shift 1 go": the verb only
     for pattern in (FILTER_CONNECTOR, *compared, *CONSUMED_ALWAYS, *METRIC_WORDS.get(metric, ())):   # the window before the measure's words
         text = re.sub(pattern, ' | ', text)
@@ -979,7 +991,9 @@ def allow_list(lower, lead):
         if said:
             raise ValueError(text.format(words=said, plain=plain))
     found = next(((phrase, word, leftover_family(word)) for phrase in phrases for word in phrase if leftover_family(word)), None)
-    if found and found[1] == 'up' and ' '.join(found[0]).find('up to') >= 0:
+    if found and re.search(r"\b(go|goes|went|gone|going)\s+(up|down)\b", ' '.join(found[0])):
+        found = None   # "how many setups did the line go down for": a word one quantity does not read, never a plan
+    elif found and found[1] == 'up' and ' '.join(found[0]).find('up to') >= 0:
         found = (found[0], 'up', 'span')   # "how many setups were we up to": a span to now, never the line running
     if found and found[2] in ('plan', 'state', 'span'):
         # a filter, a comparison or a subset left beside a verb ("stacker downtime went to maintenance", "compared to normal") is that
@@ -1039,7 +1053,7 @@ KIND_LOGGED_TEXT = ("'{words}' could mean who logged the stops, which the record
                     "kept. Ask '{plain} this week' for the stops coded as that kind, or 'how many stops this week' for every stop logged.")
 # A number and its cause asked together (row 7): "how many stops and why" is two questions, never one reason's stops
 NUMBER_AND_WHY = r"\bhow\s+(many|much|long|often)\b"   # "what drove the number of stops" is an investigation
-TWO_PARTS = r"\band\b|[,;]"   # joined: "how many stops and why", "why so many stops, how many"; "what is driving how many stops we had" is one
+TWO_PARTS = r"\band\b|[,;]|[?.!]\s*\S|\s[-–—]+\s|[–—]"   # joined: "how many stops and why", "why so many stops, how many"; "what is driving how many stops we had" is one
 NUMBER_AND_WHY_TEXT = ("This asks for a number and for its cause together: ask one at a time, the number first ('how many stops this week', "
                        "'how many minutes of downtime this week'), then the cause ('why were there so many stops this week').")
 
@@ -1113,7 +1127,7 @@ def duration_gate(lower, lead):
     if re.search(DOWN_SAID, said):
         return
     # "went to maintenance" is a connector and "rack up" a particle, never the line running
-    running = re.search(RUNNING_SAID, re.sub(UP_PARTICLE, ' ', re.sub(r"\b(went|gone|go|goes|going)\s+to\b", ' ', lower)))
+    running = re.search(RUNNING_SAID, strip_rise(re.sub(UP_PARTICLE, ' ', re.sub(r"\b(went|gone|go|goes|going)\s+to\b", ' ', lower))))
     if running:
         raise ValueError(RUN_TIME_TEXT.format(words=running[0]))
     if metric != 'minutes_per_stop' and not ({'reason', 'place'} & set(lead)) and not metric.startswith(('maintenance_', 'operator_')):

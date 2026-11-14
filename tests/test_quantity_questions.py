@@ -487,8 +487,8 @@ def test_a_count_or_unit_golden_states_its_headline():
 # consumed (its measure, its filter, the window, the shift) or is one of a closed table of function words, the same table in the
 # router and the runner. This file states it once more, so a word added to either side fails here until it is added to all three.
 # Issue #153 took out every word that names a plan, a capacity, what is left, the line running or a span to date ("can", "could",
-# "would", "will", "need", "want", "to", "go", "went", "up", "so", "far"): a word sits here only if it carries no meaning a route could
-# ignore.
+# "would", "will", "need", "want", "to", "go", "went", "up", "far"): a word sits here only if it carries no meaning a route could ignore
+# ("so" stays: only "so far" means something, and "far" left refuses it).
 FUNCTION_WORDS_TABLE = sorted((
     'a', 'an', 'the', 'this', 'that', 'these', 'those', 'any', 'all', 'some', 'our', 'my', 'your', 'its', 'their',
     'i', 'me', 'we', 'us', 'you', 'it', 'they', 'there', "what's", 'whats', "it's", "there's", "we've",
@@ -496,7 +496,7 @@ FUNCTION_WORDS_TABLE = sorted((
     'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had',
     'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked',
     'happen', 'happened', 'occur', 'occurred', 'show', 'tell', 'give', 'done', 'complete', 'completed',
-    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'so', 'please', 'line', 'corrugator', 'machine', 'plant'))
 WEEK_SETUPS = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=setups'
 
 
@@ -716,8 +716,8 @@ READ_PHRASES = (*agent.CONSUMED_ALWAYS, *(pattern for words in agent.METRIC_WORD
                 agent.PER_WORD, r"\ba\s+day\b", r"\b(make|made|produced?|run|ran)\b(?=.*\bper\b)",
                 rf"\b((at|on|by|to|from|for|of|due\s+to|caused\s+by)\s+)?(the\s+)?({FILTER_WORDS})",
                 agent.FILTER_CONNECTOR.replace('zfilteredz', f'({FILTER_WORDS})'), r"\b(on|of|for)\s+\d{2,3}-?(c|bc|eb)\b",
-                agent.WINDOW_COMPARE, agent.COMPARED_TO_SAID, agent.PREVIOUS_WINDOW,
-                r"\b(can|could|would|will)\s+(you|u)\s+(please\s+)?(tell|show|give|let|list|pull|find|count|check|get|say)\b")
+                agent.WINDOW_COMPARE, agent.COMPARED_TO_SAID, agent.PREVIOUS_WINDOW, agent.RISE_OF_MEASURE,
+                r"\b(can|could|would|will)\s+(you|u)\s+(please\s+)?(tell|show|give|let|list|pull|find|count|check|see|say)\b")
 
 
 def free_function_words(question):
@@ -800,7 +800,7 @@ def test_the_words_that_left_the_table_are_named_by_the_refusals():
     quantity does not read", and none is a function word."""
     for family, words in (('plan', agent.PLAN_WORDS), ('state', agent.STATE_WORDS), ('span', agent.SPAN_WORDS)):
         assert set(words) <= set(LEFTOVER_FAMILIES[family]) and not set(words) & FUNCTION_WORDS, family
-    for word in ('can', 'could', 'would', 'will', 'need', 'want', 'to', 'go', 'went', 'up', 'so', 'far'):
+    for word in ('can', 'could', 'would', 'will', 'need', 'want', 'to', 'go', 'went', 'up', 'far'):
         assert word not in FUNCTION_WORDS and any(word in members for members in LEFTOVER_FAMILIES.values()), word
 
 
@@ -861,6 +861,10 @@ def test_the_runner_catches_the_hotfix_rows_wrong_answers():
     ('May I see how many stops this week?', 'stops'), ('How many stops during last week?', 'stops'),
     ("I'd like to know how many stops this week", 'stops'), ('Need the number of stops this week', 'stops'),
     ('How many stops during the whole week?', 'stops'), ('How many stops for the period?', 'stops'),
+    # the reviewer's re-probe: a rise of the measure with no comparison, "so" anywhere, "can you see"
+    ('Were stops up this week?', 'stops'), ('Did setups go up this week?', 'setups'), ('How much did stops go up this week?', 'stops'),
+    ('Did minutes per stop go up this week versus last week?', 'minutes_per_stop'), ('How many stops this week so?', 'stops'),
+    ('How many stops, so, this week?', 'stops'), ('How many stops can you see this week?', 'stops'),
 ])
 def test_what_the_hotfix_reads_still_answers(question, metric):
     """The words the hotfix reads where they are applied keep answering: a window after a preposition, a request said first, a particle,
@@ -880,6 +884,10 @@ def test_what_the_hotfix_reads_still_answers(question, metric):
     ('How many stops for the period?', 'week', 'could be the 4-4-5 accounting period'),
     ('How many stops this day?', 'month', 'names the selected production day'),
     ('How many stops by reason this week versus last week?', 'day', 'does not carry beside it'),
+    ('How many setups can you get through this week?', 'day', "'can' asks for a plan"),
+    ('How many setups could you get done this week?', 'day', "'could' asks for a plan"),
+    ('How many setups did the line go down for this week?', 'day', "'go down' is a word one quantity does not read"),
+    ('How many sheets went down this week?', 'day', "'went down' is a word one quantity does not read"),
 ])
 def test_a_hotfix_refusal_names_the_true_reason(question, period, refusal):
     """The reviewer subagent's probe of the draft: a plan said with "going to", run time said as the time between stops, a comparison
@@ -892,9 +900,10 @@ def test_a_hotfix_refusal_names_the_true_reason(question, period, refusal):
 def test_an_investigation_that_names_a_number_is_not_two_questions():
     """"What drove the number of stops" asks a cause of a number, an investigation; "how many stops and why" asks both."""
     for question in ('What drove the number of stops this week?', 'What caused the number of stops this week?',
-                     'Why was the number of stops so high this week?'):
+                     'Why was the number of stops so high this week?', 'What is driving how many stops we had this week?'):
         url = landing(question)[0]
         assert url and 'measure=pareto' in url and '/shift/2' in url, (question, url)
         assert not catch_all_failures(question, url), (question, url)
-    for question in ('How many stops and why this week?', 'Why so many stops and how many minutes this week?', 'How much downtime and why this week?'):
+    for question in ('How many stops and why this week?', 'Why so many stops and how many minutes this week?', 'How much downtime and why this week?',
+                     'How many stops this week? Why?', 'How many stops this week - why so many?', 'Why so many stops this week — how many?'):
         assert landing(question)[0] is None, question

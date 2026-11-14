@@ -218,7 +218,7 @@ RANKED_SHIFT = (r'\b(?:slowest|fastest|quickest|best|worst|top|strongest|weakest
 # other word left asks a different question ("how many brief stops", "stops at the slitter", "stop rate"), so the URL fails. This is
 # its own statement of the router's rule (agent.FUNCTION_WORDS, agent.allow_list); tests/test_quantity_questions.py checks that the
 # two function-word tables are one. A word is in the table only if it carries no meaning a route could ignore (issue #153): a plan or a
-# capacity ("can", "could", "would", "will", "need", "want", "to", "go"), the line running ("up", "went") and a span to date ("so far")
+# capacity ("can", "could", "would", "will", "need", "want", "to", "go"), the line running ("up", "went") and a span to date ("far")
 # are not, so a URL that answers one fails; a request said first ("I need the number of", "can you tell me"), the verb of "how did it
 # go", a particle ("rack up") and "compared to last week" are read by the patterns below.
 FUNCTION_WORDS = frozenset((
@@ -228,13 +228,13 @@ FUNCTION_WORDS = frozenset((
     'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had',
     'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked',
     'happen', 'happened', 'occur', 'occurred', 'show', 'tell', 'give', 'done', 'complete', 'completed',
-    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'know', 'of', 'in', 'on', 'at', 'for', 'from', 'so', 'please', 'line', 'corrugator', 'machine', 'plant'))
 _AVG_ANY = r'\b(?:on\s+(?:the\s+)?)?(?:averag(?:e|es|ed|ing)|avg|mean|typical(?:ly)?)\b'
 _PER_DAY = r'\b(?:per (?:production )?days?|a day)\b|\bdaily\b'
 _EACH_DAY = (r"\b(?:per (?:production )?days?|(?:each|every|a|by) (?:production )?day(?:'s)?|day by day)\b|\bdaily\b"
              r"|\b(?:each|every) day's\b")
-_STOP = r'\bstop(?:s|ped|page|pages)?\b'
-_MINUTES = (r'\b(?:minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(?:s|ped|page|pages)?|take|takes|took|taking|'
+_STOP = r'\bstop(?:s|ped|page|pages)?\b|\b(?:go|goes|went|gone|going)\s+down\b'   # "go down" is the line stopping
+_MINUTES = (r'\b(?:go|goes|went|gone|going)\s+down\b|\b(?:minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(?:s|ped|page|pages)?|take|takes|took|taking|'
             r'spend|spent)\b|\blasted\b'   # "last" the verb only: "how long did stops last", never "the last stop"
             r'|\blasts?\b(?!\s+(?:stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))')
 _FEET = r'\b(?:lineal|linear|feet|foot|ft|footage)\b'
@@ -295,10 +295,9 @@ QUANTITY_CONSUMES_ALWAYS = (   # every route's: the window, the shift, how long 
     r'|(?:(?:i|we)\s+)?(?:need|want)\s+(?:you\s+to\s+(?:tell|show|give|find|count|check|get|pull|list)\b|to\s+(?:know|see|get|find\s+out)\b'
     r'|(?=(?:the|a|an)\s+(?:number|count|total|figure|tally)\b))'
     r"|(?:i|we)\s*(?:'d|\s+would)\s+like\s+to\s+(?:know|see|get|find\s+out)\b)",
-    r'^\s*(?:(?:and|ok|okay|well)[,\s]+)?so\b(?!\s+far\b),?',   # a leading "so", never "so far"
-    # "can you" asks the assistant wherever it stands, never a capacity; "did we have to run" is what ran; "go down" is the line stopping
-    r'\b(?:can|could|would|will)\s+(?:you|u)\b(?:\s+please\b)?(?=\s*(?:tell|show|give|let|list|pull|find|count|check|get|say)\b|\s*[?.,!]|\s*$)',
-    r'\bdid\s+(?:we|you|they|it|the\s+(?:line|corrugator|machine|plant|shift))\s+(?:have|need)\s+to\b', r'\b(?:go|goes|went|gone|going)\s+down\b',
+    # "can you" asks the assistant wherever it stands ("can you get" is a capacity); "did we have to run" is what ran
+    r'\b(?:can|could|would|will)\s+(?:you|u)\b(?:\s+please\b)?(?=\s*(?:tell|show|give|let|list|pull|find|count|check|see|say)\b|\s*[?.,!]|\s*$)',
+    r'\bdid\s+(?:we|you|they|it|the\s+(?:line|corrugator|machine|plant|shift))\s+(?:have|need)\s+to\b',
     r'\b(?:rack|racks|racked|racking|add|adds|added|adding|pile|piles|piled|piling|sum|sums|summed|tot|tots|totted|tally|tallies|tallied)\s+up\b')
 # the verb of "how did shift 1 go", "how is the week going" (the words between are read as they are)
 HOW_DID_GO = r'\b(how\s+(?:did|does|do|has|have|is|was|are|were)\s+(?:[a-z0-9-]+\s+){0,3}?)(?:go|goes|gone|going|went)\b'
@@ -338,6 +337,16 @@ RUNNING_SAID = (r'\b(?:run|runs|ran|running|go|goes|went|going|gone|operat(?:e|e
 PREVIOUS_SAID = (r'\byesterday\b|\b(?:last|previous|prior)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+)?period)\b'
                  r'|\b(?:the\s+)?(?:day|week|month|period)\s+before\b(?!\s+(?:last|yesterday)\b)')
 BASE_SAID = r'\b(?:this|current)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+)?period)\b|\btoday\b'
+# A rise or a fall of the measure itself ("were stops up", "did minutes per stop go down"), never the line running
+_RISE_NOUNS = (r'(?:stops?|stoppages?|set-?ups?|paper changes?|order changes?|changeovers?|sheets?|downtime|minutes|feet|footage|msf|waste|'
+               r'trim|shear|rejects?)(?:\s+per\s+[a-z-]+)?')
+RISE_OF_MEASURE = (rf'\b(?P<before>(?:were|was|are|is|have|has|been)\s+(?:(?:the|our)\s+)?{_RISE_NOUNS}\s+)(?:up|down)\b(?!\s+(?:to|until|till)\b)'
+                   rf'|\b(?P<after>{_RISE_NOUNS}\s+)(?:were|was|are|is|have|has|been|go|goes|went|gone|going)\s+(?:up|down)\b(?!\s+(?:to|until|till)\b)')
+
+
+def without_rise(text, keep=' | '):
+    """`text` with a measure's rise or fall (the measure its subject, with a verb) replaced by `keep`, the measure's words kept."""
+    return re.sub(RISE_OF_MEASURE, lambda m: (m.group('before') or m.group('after')) + keep, text)
 # "This shift", "my shift" (row 8): the selected shift, so its number's address names one
 SELECTED_SHIFT_SAID = r'\b(?:this|that|my|our|the|current|selected)\s+shift\b'
 # Who logged a stop (row 9): not its kind
@@ -379,7 +388,8 @@ def read_but_unapplied_failures(question, url):
     failures = []
     if metric in DURATION_QUANTITIES:
         said = re.sub(r'\bper\s+(?:stop|stoppage)s?\b', ' ', text) if metric == 'minutes_per_stop' else text
-        connectors = re.sub(r'\b(?:went|gone|go|goes|going)\s+to\b|\b(?:rack|racks|racked|racking|add|adds|added|adding)\s+up\b', ' ', text)
+        connectors = without_rise(re.sub(r'\b(?:went|gone|go|goes|going)\s+to\b|\b(?:rack|racks|racked|racking|add|adds|added|adding)\s+up\b',
+                                                        ' ', text))
         running = (re.search(RUN_TIME_SAID, text) or re.search(r'\b(?:between|without|before|until|till)\s+(?:a\s+|any\s+|the\s+|each\s+)?'
                                                                 r'(?:stop|stops|stoppages?|stopping|downtime)\b', text)
                    or (not re.search(DOWN_SAID, said) and re.search(RUNNING_SAID, connectors)))
@@ -497,10 +507,11 @@ def unconsumed_words(question, url):
     if 'zfilteredz' in text:   # "how many stops did the stacker cause", "stacker related stops"
         text = re.sub(r'\b(?:cause|causes|caused|related|driven)\b', ' zfilteredz ', text)
     # the week before beside a comparison, read only where the answer carries it (issue #153, row 6): never the over/under-run's
-    compared = (QUANTITY_WINDOW_COMPARED, COMPARED_TO_SAID, PREVIOUS_SAID_BEFORE, r'\b(?:(?:go|goes|went|gone|going)\s+)?(?:up|down)\b') + (
-        (r'\band\b',) if re.search(JOINED, text) else ())   # a rise or a fall beside the comparison: "were stops up versus last week"
+    compared = (QUANTITY_WINDOW_COMPARED, COMPARED_TO_SAID, PREVIOUS_SAID_BEFORE) + ((r'\band\b',) if re.search(JOINED, text) else ())
     if not window_compared(text) or metric in NO_PREVIOUS or params.get('grade'):
         compared = ()
+    if metric not in NO_PREVIOUS and not params.get('grade'):
+        text = without_rise(text)   # "were stops up", "did setups go up": the measure's rise, beside the window before
     text = re.sub(HOW_DID_GO, r'\1 | ', text)   # "how did shift 1 go": the verb only
     for pattern in (_FILTER_CONNECTOR, *compared, *QUANTITY_CONSUMES_ALWAYS, *QUANTITY_CONSUMES.get(metric, ())):
         text = re.sub(pattern, ' | ', text)
@@ -584,7 +595,7 @@ def catch_all_failures(question, url):
         failures.extend(plain_quantity_failures(question, url))   # round 6: the allow-list on the stops of each production day
     if re.search(r'[?&]measure=pareto(&|$)', url or ''):
         failures.extend(grouped_pareto_failures(question, url))   # issue #153, row 3: the grouped Pareto is the allow-list's too
-    if re.search(INVESTIGATION, question, re.I) and re.search(NUMBER_ASKED, question, re.I) and re.search(r'\band\b|[,;]', question, re.I) and url and \
+    if re.search(INVESTIGATION, question, re.I) and re.search(NUMBER_ASKED, question, re.I) and re.search(r'\band\b|[,;]|[?.!]\s*\S|\s[-–—]+\s|[–—]', question, re.I) and url and \
             not re.search(r'[?&]measure=quantity(&|$)', url):
         # a number and its cause together (issue #153, row 7): two questions, never one reason's stops or minutes
         failures.append(f'{question[:60]!r} asks for a number and its cause together but lands on {url}, led by one reason or a summary')
