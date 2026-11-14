@@ -280,3 +280,18 @@ def test_a_parsed_questions_figure_is_the_tools_number(store):
     assert rows[0]['reason'] == max(pareto, key=lambda c: (pareto[c]['stops'], c)) or rows[0]['value'] == max(p['stops'] for p in pareto.values())
     for row in rows:
         assert row['value'] == pareto[row['reason']]['stops'], row
+
+
+def test_the_runner_states_the_ranking_and_the_share_on_the_address(store):
+    """evals/run.py's own statement (issue #144): a ranked question's address keeps rank=, a share of one value keeps share=; each
+    golden that ranks or asks a share passes it, and the unranked or share-less address fails."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'evals'))
+    from run import catch_all_failures
+    for question in ('Which shift had the most setups this week?', 'What percent of stops were at the stacker this week?'):
+        request, asked = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        url = canonical_url(request, asked)
+        assert not catch_all_failures(question, url), (question, url)
+        bare = re.sub(r'&(?:rank|share)=[^&]+', '', url)
+        assert catch_all_failures(question, bare), (question, bare)

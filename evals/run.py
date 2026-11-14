@@ -378,6 +378,26 @@ INVESTIGATION = (r'\bwhy\b|\bwhat\s+(?:caused|causes|drove|drives|led\s+to|leads
                  r'|\bcom(?:e|es|ing)\s+from\b|\bwhat\s+went\s+wrong\b')
 
 
+# The semantic model's answers (issue #144), stated on the URL: a question that ranks a dimension ("which shift had the most setups") keeps
+# its ranking in the address (rank=), and a share of one value ("what percent of stops were at the stacker") its value (share=), so the
+# address reproduces a card that names the winner or the share, never an unranked split.
+SEMANTIC_RANKED = (r'\b(?:which|what)\s+(?:shift|crew|grade|day|reason|place|kind|customer|flute|week|month)s?\b.*'
+                   r'\b(?:most|fewest|least|highest|lowest|biggest|smallest|slowest|fastest)\b|\btop\s+\d+\b')
+SEMANTIC_SHARE = r'\b(?:percent(?:age)?|share|proportion|fraction)\s+of\b.*\b(?:were|was|is|are)\b'
+
+
+def semantic_failures(question, url):
+    """A ranked question on measure=semantic without rank=, or a share of one value without share= (issue #144)."""
+    if not re.search(r'[?&]measure=semantic(&|$)', url or ''):
+        return []
+    failures = []
+    if re.search(SEMANTIC_RANKED, question, re.I) and not re.search(r'[?&]rank=(?:most|least)(&|$)', url):
+        failures.append(f'{question[:60]!r} ranks but lands on an unranked split ({url}): the address keeps the ranking (rank=)')
+    if re.search(SEMANTIC_SHARE, question, re.I) and not re.search(r'[?&]share=', url):
+        failures.append(f'{question[:60]!r} asks a share of one value but its address names none ({url}): share=<value>')
+    return failures
+
+
 def catch_all_failures(question, url):
     """A question naming a countable noun or a unit, or asking "how many" of anything, that resolved to the KPI summary; or a
     quantity asked ("how many", "how much", "how long", a unit) that resolved to the overview or the summary, which answer "why
@@ -400,6 +420,7 @@ def catch_all_failures(question, url):
     if re.search(SCOPED_NUMBER, url or '') and not re.search(r'\bshifts?\b', question, re.I) and not re.search(INVESTIGATION, question, re.I):
         failures.append(f'{question[:60]!r} asks for a number and names no shift but is answered for the selected one ({url}): the owner\'s '
                         'scope ruling answers it for every shift')
+    failures.extend(semantic_failures(question, url))
     if failures:
         return failures
     named = QUANTITY_NOUN.search(question) or ASKED_UNIT.search(question) or re.search(r'\b(how many|number of|count of)\b', question, re.I)
