@@ -18559,6 +18559,338 @@
     ]
    },
    "note": "Catch-up after #159 (PR #155), the probe of moved function words: 'to' is not a function word after #159, so the parser left the question to the hand router, whose answer was the week's MSF by grade (main's too). Beside a comparison said, 'to' joins the two compared."
+  },
+  {
+   "id": "semantic-sheets-rejected-this-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many sheets were rejected this week?",
+   "expect": {
+    "raises": "recorded as square feet by reason"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: 'rejected' was a filler word, so the parser read every sheet cut (3,614,510) over main's domain refusal. A rejected sheet is not a sheet cut: main's reason stands."
+  },
+  {
+   "id": "semantic-sheets-rejected-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many sheets were rejected yesterday?",
+   "expect": {
+    "raises": "recorded as square feet by reason"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: As 'this week': the sheets cut yesterday, read over main's domain refusal."
+  },
+  {
+   "id": "semantic-sheets-rejected-by-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many sheets were rejected this week by shift?",
+   "expect": {
+    "raises": "recorded as square feet by reason"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: As 'this week': every sheet cut, read over main's domain refusal."
+  },
+  {
+   "id": "semantic-feet-we-lose-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many feet did we lose this week?",
+   "expect": {
+    "raises": "'lose'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: 'lose' was a filler word, so the parser answered the lineal feet run (4,196,531.1 ft). Feet lost are no measure the records keep: refused, naming the word."
+  },
+  {
+   "id": "semantic-feet-rejected-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many feet were rejected this week?",
+   "expect": {
+    "raises": "'rejected'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: 'rejected' was a filler word, so the parser answered the lineal feet run. The rejects are kept as square feet and reject sheets, never feet: refused, naming the word."
+  },
+  {
+   "id": "semantic-sheets-we-lose-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many sheets did we lose this week?",
+   "expect": {
+    "raises": "'lose'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: 'lose' was a filler word, so the parser answered every sheet cut."
+  },
+  {
+   "id": "semantic-setups-we-lose-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups did we lose this week?",
+   "expect": {
+    "raises": "'lose'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: 'lose' was a filler word, so the parser answered the setups run."
+  },
+  {
+   "id": "semantic-paper-changes-we-lose-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many paper changes did we lose this week?",
+   "expect": {
+    "raises": "'lose'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: 'lose' was a filler word, so the parser answered the paper changes made."
+  },
+  {
+   "id": "semantic-shift-lost-most-sheets-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift lost the most sheets this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: 'lost' was a filler word, so the parser named the shift that cut the most sheets."
+  },
+  {
+   "id": "semantic-msf-rejected-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much MSF was rejected this week?",
+   "expect": {
+    "raises": "'rejected'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: Both wrong: main answered the waste breakdown (led by side trim), the parser the week's whole volume. The dry-end rejects are kept in square feet: refused, naming the word."
+  },
+  {
+   "id": "semantic-shift-lost-most-msf-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift lost the most MSF this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: Both wrong: main answered shift 2's grade totals, the parser the shift that ran the most volume."
+  },
+  {
+   "id": "semantic-grade-lost-most-msf-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade lost the most MSF this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: Both wrong: main answered the grade totals, the parser the grade that ran the most volume."
+  },
+  {
+   "id": "semantic-day-lost-most-msf-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which day lost the most MSF this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: Both wrong: main answered the grade totals, the parser the day that ran the most volume."
+  },
+  {
+   "id": "semantic-shift-lost-most-feet-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift lost the most feet this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: The parser named the shift that ran the most lineal feet."
+  },
+  {
+   "id": "semantic-grade-lost-most-feet-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade lost the most feet this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: Both wrong: main answered the grade totals, the parser the grade that ran the most lineal feet."
+  },
+  {
+   "id": "semantic-day-lost-most-feet-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which day lost the most feet this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 1: The parser named the day that ran the most lineal feet."
+  },
+  {
+   "id": "semantic-how-much-shear-leads-with-shear",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much shear this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=shear_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "shear_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shear chops this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 3: covers() took the waste breakdown for any waste measure: it led with side trim (3.45% of gross). The answer leads with the shear."
+  },
+  {
+   "id": "semantic-how-much-warp-leads-with-warp",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much warp this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&reject_family=WARP",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {
+        "reject_family": "WARP"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects, reject family Warp this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 3: A quantity asked of one reject family: the waste breakdown led with side trim. 'Show warp' and 'is it bond or warp' keep the breakdown (#123's rulings)."
+  },
+  {
+   "id": "semantic-how-much-bale-leads-with-bale",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much bale this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=bale_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "bale_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Bale \\(scale reading\\) this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 3: The waste breakdown led with side trim; the answer leads with the bale."
+  },
+  {
+   "id": "semantic-dry-end-rejects-leads-with-rejects",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Dry end rejects this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 3: The waste breakdown led with side trim; the answer leads with the dry-end rejects. 'Waste this week' keeps the breakdown: waste names every line."
+  },
+  {
+   "id": "semantic-lineal-feet-per-grade-leads-with-feet",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Lineal feet per grade this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=lineal_ft&window=week&by=grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "lineal_ft",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Lineal feet this week: \\*\\*[0-9][0-9,.]* ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 3: covers() took the grade totals for any volume measure: they led with 36,213.8 MSF. The answer leads with the lineal feet, by grade."
+  },
+  {
+   "id": "semantic-msf-versus-last-week-carries-the-week-before",
+   "type": "routing",
+   "mode": "offline",
+   "question": "MSF this week versus last week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=msf&window=week&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "msf",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Volume this week: \\*\\*[0-9][0-9,.]* MSF\\*\\* · [-+]?[0-9][0-9,.]* vs [0-9][0-9,.]* MSF the week before"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 74cc46f (PR #155, 2026-11-14 19:48), item 3: The reading had compare=previous, and covers() never checked it: the grade totals carry no week before. The answer carries it."
   }
  ]
 }
