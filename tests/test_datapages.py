@@ -6,6 +6,7 @@ the contract (docs/RECORD_CONTRACT.md; docs/METRICS.md for the derived shift_kpi
 page links to. Filters are fuzzed: no value or name reaches the SQL text. Every receipt of every offline golden answer
 links to rows, and those rows hold the cited row's own quantity (its sum, count or ratio over them).
 """
+import gc
 import http.client
 import json
 import math
@@ -29,7 +30,15 @@ REF = re.compile(r' \(query (\d+)(?: · (row|detail|weekday|flag) (\d+))?\)')
 
 @pytest.fixture(scope='module')
 def store():
-    return default_store()
+    """The process's shared store, left as this module found it: answering every golden URL unpickles a few dozen days of
+    record objects into its day cache, and keeping them would make every later test's garbage collection walk them. On a
+    slow CI runner that was enough to push the /evals run-all's slowest case past its 250 ms budget (CI on #151)."""
+    shared = default_store()
+    days = dict(shared._by_day)
+    yield shared
+    shared._by_day.clear()
+    shared._by_day.update(days)
+    gc.collect()
 
 
 # ------------------------------------------------------------------ the schema is the contract's
