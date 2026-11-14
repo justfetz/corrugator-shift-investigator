@@ -64,7 +64,7 @@ The review that first listed the PDF, history and guidance defects, and the read
 
 ```bash
 python -m investigator.server --port 7860 &
-node tests/layout_check.cjs http://127.0.0.1:7860/ [screenshot-dir]
+node tests/layout_check.cjs http://127.0.0.1:7860/corr/1/day/2026-09-14/shift/2 [screenshot-dir]
 ```
 
 It asserts, at 1440×1040 with "Why was this shift slow?" answered, that `#messages` and the second chart end inside the visible transcript pane with no page scroll, that the two charts sit side by side, and that the tiles and the footer fit in the pane and the rail in the window; that the skeleton card exists in the task of the click; that three canned questions in quick succession leave one open card and two earlier cards with no navigation, no disabled control, the open card in view and no **↓ new** pill; and, at 390×844, that the page is one column with the rail behind **Questions**. Then, at 1280×720 and at 390×844, three questions typed into the ask bar and sent with Enter: the page never scrolls, the ask bar and the rail keep their exact rectangles, the rail has no scroll of its own at 1280×720, each answer's title line is inside the pane when it finishes, the pane's scroll moved down with each, the offline time on the title line stays two digits, each question is exactly one fetch (its `/q` GET), and focus stays in the ask bar; six small wheel notches up during a fourth answer's reveal each move the pane up and stay, the pill comes up, and clicking it lands on that answer; and a reload restores the three cards above the addressed one with four `/corr/…` fetches and no `/api/ask`. The renders it writes are kept in `docs/design/2026-11-09-ask-and-answer/built/` beside the mockup they are compared with.

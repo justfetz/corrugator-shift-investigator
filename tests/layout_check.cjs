@@ -1,10 +1,11 @@
 // Real-browser layout check for the shell (issues #63, #86). The unit checks in test_ui.cjs run on a DOM stub with no
 // layout, so the "nothing below the fold" and chat-flow criteria are measured here, in headless Chromium, against a
 // running server:   python -m investigator.server --port 7860 &   node tests/layout_check.cjs [url] [screenshot-dir]
+// The default url is the golden day and shift the checks name (`/` lands on the store's last production day, shift 1: #137).
 // Skips (exit 0) when Playwright is not installed; CI does not run it.
 const assert=require('node:assert/strict');
 let chromium; try{({chromium}=require('playwright'));}catch(e){console.log('layout check skipped: Playwright is not installed');process.exit(0);}
-const url=process.argv[2]||'http://127.0.0.1:7860/', shots=process.argv[3]||null;
+const url=process.argv[2]||'http://127.0.0.1:7860/corr/1/day/2026-09-14/shift/2', shots=process.argv[3]||null;
 const canned=label=>{[...document.querySelectorAll('#examples .canned')].find(b=>b.textContent===label).click();};
 const answered=()=>document.getElementById('card').className==='card answer';
 const settled=()=>document.getElementById('card').className==='card answer'&&document.getElementById('card').getAttribute('data-reveal')!=='running';

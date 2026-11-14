@@ -26,7 +26,7 @@ round on it and a thumbs up or down on its card (`POST /api/feedback`) are one J
 after the response; no IP, user agent, cookie, key or other header value is in a line.
 """
 from collections import Counter, OrderedDict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import argparse
@@ -73,17 +73,21 @@ LANDING_ENV = 'INVESTIGATOR_LANDING'   # YYYY-MM-DD/shift/N: where `/` lands; un
 
 def landing(store, environ=None):
     """(day, shift) where `/` lands (issue #137): the store's last production day (`last_day`, the latest Monday to Friday
-    of its window, which ends yesterday on the hosted demo), shift 1, Day window. INVESTIGATOR_LANDING pins another
-    production day and shift, `YYYY-MM-DD/shift/N`: the test harness pins the golden default there (tests/conftest.py,
-    beside INVESTIGATOR_AS_OF), so a page opened on the golden store lands where the goldens are asked, and the page
-    itself holds no date. A pin in another form fails at boot; a pinned day this store does not hold (a weekend, or
-    outside its window) lands on the store's own default, so a second store over another window, such as the golden
-    set's behind /evals, never fails over a pin meant for the first."""
+    of its window; on the hosted demo the window ends the day before the last nightly deploy), shift 1, Day window.
+    INVESTIGATOR_LANDING pins another production day and shift, `YYYY-MM-DD/shift/N`: the test harness pins the golden
+    default there (tests/conftest.py, beside INVESTIGATOR_AS_OF), so a page opened on the golden store lands where the
+    goldens are asked, and the page itself holds no date. A pin in another form, or naming no calendar date, fails at
+    boot; a pinned day this store does not hold (a weekend, or outside its window) lands on the store's own default, so
+    a second store over another window, such as the golden set's behind /evals, never fails over a pin meant for the first."""
     environ = os.environ if environ is None else environ
     raw = (environ.get(LANDING_ENV) or '').strip()
     if not raw:
         return store.last_day, 1
     match = re.fullmatch(r'(\d{4}-\d{2}-\d{2})/shift/([123])', raw)
+    try:
+        date.fromisoformat(match.group(1)) if match else None
+    except ValueError:
+        match = None   # 2026-02-30 is a date's shape, not a date
     if not match:
         raise ValueError(f'{LANDING_ENV} must be YYYY-MM-DD/shift/N with N 1, 2 or 3, for example 2026-09-14/shift/2')
     if match.group(1) not in store.production_days:

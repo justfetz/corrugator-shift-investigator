@@ -88,14 +88,14 @@ def test_a_store_whose_window_ends_yesterday_lands_on_yesterday_shift_1(monkeypa
 
 def test_the_landing_is_the_last_production_day_and_a_pin_must_be_well_formed():
     """Monday to Friday: a window that ends on a Sunday lands on its Friday. A pin names a production day and a shift;
-    one in another form fails at boot, and one this store does not hold lands on the store's own default."""
+    one in another form, or on no calendar date, fails at boot, and one this store does not hold lands on the store's own default."""
     weekend = RecordStore(window=(date(2026, 11, 9), date(2026, 11, 15)), prebuilt='')   # Monday to Sunday
     assert landing(weekend, {}) == ('2026-11-13', 1)
     assert landing(weekend, {LANDING_ENV: ' '}) == ('2026-11-13', 1)
     assert landing(weekend, {LANDING_ENV: '2026-11-11/shift/3'}) == ('2026-11-11', 3)
     for outside in ('2026-11-14/shift/2', '2026-09-14/shift/2'):   # a Saturday; a day before the window
         assert landing(weekend, {LANDING_ENV: outside}) == ('2026-11-13', 1)
-    for bad in ('2026-11-11', '2026-11-11/shift/4', '/corr/1/day/2026-11-11/shift/1', '11/11/2026/shift/1'):
+    for bad in ('2026-11-11', '2026-11-11/shift/4', '/corr/1/day/2026-11-11/shift/1', '11/11/2026/shift/1', '2026-02-30/shift/1'):
         with pytest.raises(ValueError, match=LANDING_ENV):
             landing(weekend, {LANDING_ENV: bad})
 
