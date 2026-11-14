@@ -869,6 +869,19 @@ def source(entry, production_day, corrupt=False):
         links[part] = urls
     if links:
         out['rows'] = links
+    also = []
+    # A comparison also read the window it compares with: the same rows over the previous window (Codex on #151).
+    previous = entry['data'].get('previous_window')
+    if isinstance(previous, dict) and previous.get('start') and previous.get('coverage') != 'unavailable':
+        before = _merge(table, {**{k: v for k, v in scope.items() if k not in ('day', 'from', 'to')},
+                                **_span(previous['start'], previous['end'])}, {}, corrupt)
+        also.append({'label': 'previous window', 'table': table, 'filter': before, 'url': table_url(table, before)})
+    # The notes are the shift's own note (its crew, from the shift record) and then its stops' comments (Codex on #151).
+    if entry['tool'] == 'get_shift_notes':
+        shift = _merge('shifts', scope, {}, corrupt)
+        also.append({'label': 'the shift record', 'table': 'shifts', 'filter': shift, 'url': table_url('shifts', shift)})
+    if also:
+        out['also'] = also
     return out
 
 

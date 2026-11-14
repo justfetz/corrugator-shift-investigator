@@ -53,7 +53,7 @@ Forbidden: shell, arbitrary SQL/code, external URLs, filesystem browsing, machin
 
 ## What each tool read
 
-Every step of an answer declares the store table it read and the filter it read it with (issue #142, `datapages.SOURCES`), so a receipt "(query N · row M)" links to the rows behind its figure in [the data browser](URLS.md#the-data-browser). The server attaches the declaration to each trace entry as `source` (`table`, `filter`, `url`, and `rows`: one `/data` address per row of each cited list); it changes no tool, no row and no answer text, and a model never sees it. The filter is the step's window (`from`, `to`, or `day` for a one-day window) or the selected production day, plus its shift when it read one; a cited row narrows it further:
+Every step of an answer declares the store table it read and the filter it read it with (issue #142, `datapages.SOURCES`), so a receipt "(query N · row M)" links to the rows behind its figure in [the data browser](URLS.md#the-data-browser). The server attaches the declaration to each trace entry as `source` (`table`, `filter`, `url`, `rows`: one `/data` address per row of each cited list, and `also`: the other rows the step read, a comparison's previous window over the same table and the notes' shift record); it changes no tool, no row and no answer text, and a model never sees it. The filter is the step's window (`from`, `to`, or `day` for a one-day window) or the selected production day, plus its shift when it read one; a cited row narrows it further:
 
 | Tool | Table | A cited row narrows to |
 | --- | --- | --- |

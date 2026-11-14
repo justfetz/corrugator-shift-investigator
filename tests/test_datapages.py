@@ -273,6 +273,30 @@ def stop_minutes(rows):
     return sum(r['seconds'] for r in rows) / 60
 
 
+def also_failure(store, entry, part, index):
+    """The rows a step also read hold the rest of what its finding states: a comparison's previous window recomputes the
+    previous value; the notes' shift record is the note before the stops (Codex on #151)."""
+    tool, data = entry['tool'], entry['data']
+    for also in entry['source'].get('also', []):
+        rows = dp.resolve(store, also['url'], limit=500_000)
+        if also['label'] == 'previous window' and tool in ('get_period_kpis', 'compare_periods') and part == 'row':
+            row = data['rows'][index]
+            if row['previous'] is not None and not near(RecordStore._kpis(tile_sums(rows))[row['metric']], row['previous']):
+                return f'{tool} row {index}: previous {row["metric"]} over {also["url"]}, the tool says {row["previous"]}'
+        elif also['label'] == 'previous window' and tool == 'get_rollstock' and part == 'row':
+            row = data['rows'][index]
+            column = 'lineal_ft'
+            got = sum(r[column] for r in rows if r['quality_id'] == row['grade'] and (r.get('web_width_in') or r.get('width_in')) == row['width_in'])
+            if row.get('previous_lineal_ft') is not None and not near(got, row['previous_lineal_ft'], 1):
+                return f'{tool} row {index}: previous feet {got} over {also["url"]}, the tool says {row["previous_lineal_ft"]}'
+        elif also['label'] == 'the shift record':
+            if len(rows) != 1 or rows[0]['crew'] not in data['rows'][0]['notes']:
+                return f'{tool}: the shift record {rows} does not hold the shift note {data["rows"][0]["notes"]!r}'
+        elif not rows and (data.get('previous_window') or {}).get('production_days_observed'):
+            return f'{tool}: the previous window {also["url"]} holds no rows'
+    return None
+
+
 def unexplained(rows):
     """The bale minus every recorded waste line, over shift rows (record_store.accounted_sqft)."""
     lines = ('trim_sqft', 'shear_sqft', 'reject_sqft', 'changeover_sqft', 'admin_sqft', 'cutoff_waste_sqft', 'stacker_waste_sqft')
@@ -458,7 +482,7 @@ def test_receipts_on_golden_answers_link_to_rows_that_hold_the_cited_figure(stor
             assert link and link.startswith('/data/'), (url, section)
             assert dp.table_url(link.split('?')[0].removeprefix('/data/'), dp.parse_filters(link.split('?')[0].removeprefix('/data/'), link.partition('?')[2])[0]) == link, link
             rows = dp.resolve(store, link, limit=500_000)
-            problem = figure_failure(entry, part, index, link, rows)
+            problem = figure_failure(entry, part, index, link, rows) or also_failure(store, entry, part, index)
             if problem:
                 failures.append(f'{url}: {problem}')
             receipts += 1

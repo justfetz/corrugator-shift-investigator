@@ -728,6 +728,7 @@ function queryBox(entry,i){
  const back=node('a','What came back ↓','came-back');back.href=`#step-${i}`;back.title='The full result of this step, below the charts';back.addEventListener('click',()=>revealStep(i));foot.append(back);
  const rows=rowsHref(entry.source);   // the table and filter this step read, in the data browser (#142)
  if(rows){ const a=node('a',`Rows: ${entry.source.table} ↗`,'came-back rows-step'); a.href=rows; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.title='The rows this query read, with their schema'; foot.append(a); }
+ for(const more of (rows&&Array.isArray(entry.source.also)?entry.source.also:[])){ const href=rowsHref(more); if(!href)continue; const a=node('a',`${more.label==='previous window'?'Previous window':'Also'}: ${more.table} ↗`,'came-back rows-step'); a.href=href; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.title=`The rows this query also read: ${more.label}`; foot.append(a); }   // the comparison window, the shift record of the notes
  d.append(foot);
  return d;
 }

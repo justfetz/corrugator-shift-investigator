@@ -1794,5 +1794,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  vm.runInContext('renderQueries(__rec.result)',ctx);
  const foot=els.queries.children.find(e=>e.id==='query-1').children.find(e=>e.className==='query-foot');
  assert.deepEqual(foot.children.filter(e=>/rows-step/.test(e.className)).map(a=>[a.textContent,a.href]),[['Rows: stops ↗','/data/stops?day=2026-09-14&shift=2']]);
+ const notesFoot=els.queries.children.find(e=>e.id==='query-3').children.find(e=>e.className==='query-foot');   // the notes also read the shift record
+ assert.deepEqual(notesFoot.children.filter(e=>/rows-step/.test(e.className)).map(a=>[a.textContent,a.href]),[['Rows: stops ↗','/data/stops?day=2026-09-14&shift=2'],['Also: shifts ↗','/data/shifts?day=2026-09-14&shift=2']]);
  console.log('UI issue-142 checks passed: /data lists the tables, a table page shows its schema with contract links, then its rows newest first with filters from the address (a day replaces a span, a repeated filter is any of its values), and its query, and a receipt links to the rows behind its figure.');
 })().catch(error=>{console.error(error);process.exit(1);});
