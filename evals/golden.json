@@ -3685,8 +3685,20 @@
     "shifts": [
      2
     ],
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+%\\*\\* of grade target · [0-9.,]+ ft/min including downtime",
+     "bullets": [
+      3,
+      5
+     ],
+     "look": [
+      2,
+      3
+     ]
+    },
     "sections_match": [
-     "^\\*\\*[0-9.]+%\\*\\* of grade target · [0-9.,]+ ft/min including downtime"
+     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest of [0-9]+ reasons · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row [0-9]+\\)$",
+     "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the slowest of [0-9]+ runs \\(query 3 · row [0-9]+\\)$"
     ],
     "sections_not_match": "ft/min including downtime; .* lineal ft\\. Maintenance"
    }
@@ -13674,6 +13686,310 @@
     "tables": [
      "get_downtime_pareto"
     ]
+   }
+  },
+  {
+   "id": "allow-the-last-stop-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How long did the last stop last?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered 41.4 minutes, the whole day's downtime: 'last' was read as the verb twice (main refused).",
+   "expect": {
+    "raises": "asks for one stop, setup or run"
+   }
+  },
+  {
+   "id": "allow-minutes-of-the-last-stacker-stop-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes did the last stop at the stacker take?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered the stacker's minutes over all its stops of the day (main refused).",
+   "expect": {
+    "raises": "asks for one stop, setup or run"
+   }
+  },
+  {
+   "id": "allow-week-before-last-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes of downtime the week before last?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered this week's 354.9 minutes: 'the week before' was consumed as a window the route never applied.",
+   "expect": {
+    "raises": "is not a window the router reads"
+   }
+  },
+  {
+   "id": "allow-the-previous-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops the previous day?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered the selected day; the router reads 'yesterday'.",
+   "expect": {
+    "raises": "is not a window the router reads"
+   }
+  },
+  {
+   "id": "allow-the-day-before-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops the day before yesterday?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered 2026-09-11, yesterday.",
+   "expect": {
+    "raises": "is not a window the router reads"
+   }
+  },
+  {
+   "id": "allow-same-day-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops on the same day last week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered 188, the whole week before.",
+   "expect": {
+    "raises": "is not a window the router reads"
+   }
+  },
+  {
+   "id": "allow-last-day-of-the-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops on the last day of the month?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered 665, the whole month.",
+   "expect": {
+    "raises": "is not a window the router reads"
+   }
+  },
+  {
+   "id": "allow-last-week-of-august-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops in the last week of August?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered 533, all of August.",
+   "expect": {
+    "raises": "is not a window the router reads"
+   }
+  },
+  {
+   "id": "allow-month-to-date-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops month to date?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused with \"'month' is a word one quantity does not read\"; the reason is the window (a calendar month is not to date).",
+   "expect": {
+    "raises": "is not a window the router reads"
+   }
+  },
+  {
+   "id": "allow-the-past-week-is-a-rolling-window",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops over the past week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused with \"'over' asks for a subset\".",
+   "expect": {
+    "raises": "rolling window"
+   }
+  },
+  {
+   "id": "allow-shift-one-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops on shift one this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered shift 2's 49 stops: 'shift one' was consumed as a shift the router never applied.",
+   "expect": {
+    "raises": "names a shift the router does not read"
+   }
+  },
+  {
+   "id": "allow-last-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops did the last shift have?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused with \"'shift' asks for a ranking\".",
+   "expect": {
+    "raises": "names a shift the router does not read"
+   }
+  },
+  {
+   "id": "allow-stops-per-day-on-monday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops per day did we have on Monday this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: led with Tuesday's 36 stops: the profile consumed the weekday.",
+   "expect": {
+    "raises": "names a day the router does not read"
+   }
+  },
+  {
+   "id": "allow-stops-each-day-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops each day yesterday?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: led with Monday 2026-09-07, the week of yesterday, for one day.",
+   "expect": {
+    "raises": "over a week or longer"
+   }
+  },
+  {
+   "id": "allow-minutes-stopped-on-average-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "On average, how many minutes were we stopped this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered 2.71 minutes per stop: 'stopped' is no stop to average over, and ff8ad77 refused.",
+   "expect": {
+    "raises": "The average stop of a window is minutes per stop"
+   }
+  },
+  {
+   "id": "why-where-is-downtime-coming-from-keeps-the-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Where is the downtime coming from this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: answered all shifts; where it comes from is an investigation, on the shift control.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&by=place",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+ min\\*\\* at .+, the largest of [0-9]+ places · "
+    ]
+   }
+  },
+  {
+   "id": "why-what-is-causing-the-stops-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What is causing the stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused, while \"what's driving\" got the review.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "why-where-are-stops-coming-from-is-the-place-pareto",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Where are our stops coming from this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&by=place",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+ min\\*\\* at .+, the largest of [0-9]+ places · "
+    ]
+   }
+  },
+  {
+   "id": "why-so-many-stops-per-day-is-the-review",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Why were there so many stops per day this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused with \"'why' is a word one quantity does not read\".",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=review&window=week",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of scheduled minutes in maintenance and operator downtime · "
+    ]
+   }
+  },
+  {
+   "id": "allow-how-many-times-did-we-stop",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many times did we stop this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused ('times'); ff8ad77 answered.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "allow-setups-we-have-done",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many setups have we done this month?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused ('done').",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=month&metric=setups",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ setups\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "allow-stops-the-stacker-caused",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops did the stacker cause this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused ('cause').",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=stacker",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops?\\*\\* for Stacker · "
+    }
+   }
+  },
+  {
+   "id": "allow-stacker-related-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stacker related stops this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused ('related').",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=stacker",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops?\\*\\* for Stacker · "
+    }
+   }
+  },
+  {
+   "id": "allow-stops-this-week-and-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops this week and last week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused ('and'); the count carries the week before beside it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "allow-feet-of-paper",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many feet of paper did we run this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused ('paper'); the lineal feet run are the paper's.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=lineal_ft",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "allow-i-need-the-number-of-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "I need the number of stops this week",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's probe of the draft: refused ('need').",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
    }
   }
  ]
