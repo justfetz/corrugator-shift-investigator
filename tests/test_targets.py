@@ -3,6 +3,7 @@ the dry-end denominator, each grade's speed baseline, the downtime review with i
 and the two lenses on the cost model's levers. The value goldens recompute the review and the speed lever a second
 way (evals/make_value_goldens.py); these tests hold the rules from outside the tools."""
 import json
+import re
 from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
@@ -559,3 +560,32 @@ def test_the_card_reads_a_tile_without_its_band_against_the_owners_numbers():
     config = targets.client_config()
     assert config['dry_end'] == {'home_run': 0.75, 'target': 1.0, 'flag': 1.25, 'unit': '% of yield'}
     assert config['maintenance']['flag'] == config['operator']['flag'] == 2.5
+
+
+def test_side_trim_is_ranked_on_the_money_cards_and_marked_as_the_supervisor_lens_marks_it(store, monkeypatch):
+    """Issue #135 (the owner, 2026-11-12): on the shift's and the day's money cards side trim stays a ranked recorded loss,
+    in the total, with the control the supervisor lens gives it, both read from targets.json's trim band lever."""
+    rates = cost_model.effective()
+    analysis = store.day_analysis(DAY)
+    try:
+        shift, day = cost_model.shift_dollars(analysis, 2, rates), cost_model.day_dollars(analysis, rates)
+    finally:
+        analysis.close()
+    lens = cost_model.opportunities(store, {'period': 'day', 'anchor': DAY}, 2, rates, 'supervisor')
+    lever = next(r for r in lens['rows'] if r['kind'] == 'trim')
+    assert lever['control'] == targets.BANDS['trim']['lever'] == 'schedule-driven' and lever['rank'] is None
+    for data in (shift, day):
+        trim = [r for r in data['rows'] if r['kind'] == 'trim']
+        assert len(trim) == 1 and (trim[0]['control'], trim[0]['control_note']) == (lever['control'], lever['control_note'])
+        assert trim[0]['apart'] is None and isinstance(trim[0]['rank'], int)   # ranked among the recorded losses, not apart
+        assert data['total_usd'] == round(sum(r['usd'] for r in data['rows'] if not r['apart']), 2) and trim[0]['usd'] > 0
+        # no other gap carries a control: the apart gaps say theirs in `apart`, and the rest are controllable losses
+        assert [r['gap'] for r in data['rows'] if 'control' in r] == ['Side trim']
+    # the tag follows the band's lever, never text of its own: a controllable trim band ranks trim untagged
+    monkeypatch.setitem(cost_model.CONTROL, 'trim', ('controllable', 'the order mix and its web widths'))
+    sections = ask(store, 'Where did the money go this shift?')['sections']
+    line = next(s for s in sections if '. Side trim: **$' in s)
+    assert ' · schedule-driven' not in line and ' · controllable' not in line
+    monkeypatch.undo()
+    line = next(s for s in ask(store, 'Where did the money go this shift?')['sections'] if '. Side trim: **$' in s)
+    assert re.match(r'^- \d+\. Side trim: \*\*\$[\d,]+\*\* · \$[\d,]+/yr · schedule-driven \(query 1 · row \d+\)$', line), line

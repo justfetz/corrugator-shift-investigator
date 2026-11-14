@@ -1260,7 +1260,12 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const cfg=golden.cfg, Money=require('../src/investigator/web/money.js');
  // the client formula, from the stored quantities, gives the stored figures (evals/make_client_money.py wrote both)
  const again=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,Money.parse(golden.rates,cfg)),cfg);
- assert.deepEqual(again.rows.map(r=>Object.fromEntries(Object.keys(golden.output.rows[0]).map(k=>[k,r[k]]))),golden.output.rows,'money.js drifted from evals/client_money.json: rerun evals/make_client_money.py');
+ assert.deepEqual(again.rows.map((r,i)=>Object.fromEntries(Object.keys(golden.output.rows[i]).map(k=>[k,r[k]]))),golden.output.rows,'money.js drifted from evals/client_money.json: rerun evals/make_client_money.py');
+ // issue #135: side trim keeps its control through the re-price (the tool row's, targets.json's trim band lever), stays
+ // ranked among the recorded losses and in their total; no other gap carries one
+ assert.deepEqual(again.rows.filter(r=>'control' in r).map(r=>[r.gap,r.control,typeof r.rank]),[['Side trim','schedule-driven','number']],'only side trim carries a control, ranked');
+ assert.deepEqual(golden.output.rows.filter(r=>'control' in r).map(r=>[r.gap,r.control]),[['Side trim','schedule-driven']],'the client golden holds the tag');
+ assert.equal(again.total_usd,Money.round(again.rows.reduce((s,r)=>s+r.usd,0),2),'side trim is still a recorded loss: the total adds every ranked gap');
  for(const k of Object.keys(golden.output).filter(k=>k!=='rows'))assert.deepEqual(again[k],golden.output[k],k);
  // Python's rounding: a tie goes to the even digit, never upward as toFixed would
  assert.deepEqual([Money.fixed(4382.5,0),Money.fixed(4383.5,0),Money.fixed(0.125,2),Money.fixed(2.25,1),Money.fixed(1234567.891,2),Money.money(4382.5)],['4382','4384','0.12','2.2','1234567.89','$4,382']);
@@ -1306,7 +1311,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // the opportunities panel: bars of $/yr by gap, ranked, the formula on hover, a table flip
  const panel=els.money.children[0]; assert.match(panel.className,/money-panel/);
  const svg=walk(panel).find(e=>e.tag==='svg'), vals=walk(svg).filter(e=>/\bval\b/.test(e.class||''));
- assert.equal(vals.length,8);assert.equal(vals[0].textContent,'$3.02M/yr');assert.match(vals[0]['aria-label'],/^Side trim: \$4,521 · \$3,020,103\/yr at this rate\. 82,194\.9 sq ft = 82\.195 MSF x \$55\/MSF paper/);
+ assert.equal(vals.length,8);assert.equal(vals[0].textContent,'$3.02M/yr');assert.match(vals[0]['aria-label'],/^Side trim: \$4,521 · \$3,020,103\/yr at this rate · schedule-driven\. 82,194\.9 sq ft = 82\.195 MSF x \$55\/MSF paper/);   // side trim's bar is first, ranked, and says it is schedule-driven, from its row's control (issue #135)
+ assert.ok(vals.slice(1).every(v=>!/schedule-driven|external/.test(v['aria-label'])),'no other gap of this shift is marked');
  const flip=walk(panel).find(e=>e.tag==='button'&&e.textContent==='Table'); flip.events.click();
  const table=walk(panel).find(e=>e.tag==='table'); assert.equal(walk(table).filter(e=>e.tag==='tr').length,17);   // the same sixteen rows (the changeover rejects, the waste boards and moisture among them), and the header
  walk(panel).find(e=>e.tag==='button'&&e.textContent==='Bars').events.click();
@@ -1513,6 +1519,17 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   assert.equal(now.total_usd,Money.round(now.rows.filter(r=>!r.apart).reduce((s,r)=>s+r.usd,0),2));
   assert.ok(prose.includes(`${Money.money(now.total_usd)} of recorded losses · ${Money.money(now.total_usd_per_year)} per year at the post's volumes · ${Money.money(now.all_in_usd)} all in`),'the headline states both totals at the new rates');
   assert.ok(prose.includes(`Downtime: Planned maintenance (scheduled): ${Money.money(pmNow.usd)}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered, as its reason and its kind (owner ruling (c) on PR #123)');
+  // issue #135: side trim stays ranked among the recorded losses, tagged schedule-driven from its row's control (targets.json's
+  // trim band lever); at $5,000/hr it is re-priced (still first here; the parity test in tests/test_money_ui.py moves it to
+  // second on 2026-09-16 shift 3) and keeps the tag on its line and on its bar, and still counts in the total
+  const trimNow=now.rows.find(r=>r.kind==='trim');
+  assert.ok(trimNow.control==='schedule-driven'&&typeof trimNow.rank==='number'&&!trimNow.apart,'side trim keeps its control and its rank');
+  assert.ok(prose.includes(`${trimNow.rank}. Side trim: ${Money.money(trimNow.usd)} · ${Money.money(trimNow.usd_per_year)}/yr · schedule-driven`),'the ranked trim line keeps the tag at the new rates');
+  const q=apart.trace.findIndex(e=>e.tool==='get_shift_dollars'), lines=Money.repriceSections(apart.sections,apart.trace.map((e,i)=>i===q?{tool:e.tool,before:d,after:now}:null),Money.effective(cfg,{machine_usd_hour:5000}),cfg);
+  assert.deepEqual(lines.filter(l=>/ · schedule-driven \(query /.test(l)).map(l=>l.slice(0,l.indexOf(':'))),[`- ${trimNow.rank}. Side trim`],'only the trim line is tagged, ranked: '+lines.join(' | '));
+  const trimBar=walk(els.money.children[0]).find(e=>/\bval\b/.test(e.class||'')&&/^Side trim: /.test(e['aria-label']||''));
+  assert.ok(trimBar&&/ · schedule-driven\. /.test(trimBar['aria-label']),'the trim bar says schedule-driven: '+(trimBar&&trimBar['aria-label']));
+  assert.ok(bars().indexOf('Side trim')<bars().length-1,'and stays among the ranked bars, before the gap apart');
   els['rates-reset'].events.click();
  }
 
