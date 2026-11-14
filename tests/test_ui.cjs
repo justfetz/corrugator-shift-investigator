@@ -263,6 +263,13 @@ console.log('UI unit checks passed: scope sentence, weekend rejection, segments,
  assert.ok(walk(elements.tables).some(e=>e.className==='query-link'&&e.href==='#query-1'));   // so does the table
  vm.runInContext("showTable({title:'get_rankings',shift:2,coverage:'incomplete',source_result_id:'r:2',rows:[]})",context);   // an empty (withheld) table still links back
  assert.ok(walk(elements.tables.children[elements.tables.children.length-1]).some(e=>e.className==='query-link'&&e.href==='#query-1'));
+ // a Pareto table names its split as a string (group_by:'reason'); the semantic title must not treat it as a list, or every
+ // period Pareto page throws before it paints (data.group_by.join is not a function, found on main after #148)
+ {const before=elements.tables.children.length;
+  vm.runInContext("showTable({title:'get_downtime_pareto',shift:2,group_by:'reason',coverage:'complete',source_result_id:'r:1',rows:[{category:'Stacker',stops:3,minutes:5.5}]})",context);
+  assert.equal(elements.tables.children.length,before+1);
+  vm.runInContext("showTable({title:'semantic_query',label:'Downtime minutes',group_by:['grade','shift'],coverage:'complete',rows:[{grade:'26-C',shift:2,value:5}]})",context);
+  assert.match(elements.tables.children[elements.tables.children.length-1].children[0].textContent,/Downtime minutes by grade and shift: semantic model rows/);}
  const copyAll=walk(q[q.length-1]).find(e=>e.textContent==='Copy all SQL');copyAll.events.click();
  assert.match(copied[1],/^-- query 1: get_downtime_breakdown\(shift=2, group_by=reason\)\nSELECT reason/);assert.match(copied[1],/\n\n-- query 2: get_shift_notes\(shift=2\)\nSELECT notes/);
  while(frames.length)frames.shift()();                                        // after the paint: the per-step rows exist, with the ids the boxes point at
