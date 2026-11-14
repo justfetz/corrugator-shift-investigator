@@ -642,7 +642,7 @@ def test_the_parser_reads_the_routers_request_phrases_and_no_moved_function_word
     assert not set(moved) & agent.FUNCTION_WORDS and not set(moved) & P.FILLER
     for question in ('Could you tell me which shift had the most stops this week?', 'I want to know which grade had the most setups this month',
                      'Which shift racked up the most stops this week?', 'Can you show me which shift had the most stops this week?',
-                     'Compare shift 1 to shift 2 on stops this week', 'What percent of downtime went to maintenance this week?'):
+                     'Compare shift 1 to shift 2 on stops this week'):
         assert reading(store, question).complete, question
     for question in ('Which shift can run the most setups this week?', 'Which grade will run the most setups this week?',
                      'Which shift had the most stops so far this week?', 'Which shift was up the most this week?',
@@ -654,13 +654,16 @@ def test_the_parser_reads_the_routers_request_phrases_and_no_moved_function_word
 
 
 def test_a_standing_refusal_and_who_logged_reach_no_further_than_issue_153(store):
-    """The reviewer's probe of this round: the Pareto grouped stands only for a stop reason, place or kind beside it ("planned stops by
-    reason"); a second split and a comparison the semantic split carries are the parser's. "Logged by" is refused over a hand route only
+    """The reviewer's probe of this round: beside the Pareto grouped a stop reason, place or kind stands ("planned stops by reason"), and
+    so does a comparison, which #159 pins; a second split is the parser's. "Logged by" is refused over a hand route only
     when a stop is counted and the words are a verb: "maintenance report", "the operator notes" keep the hand router's answer."""
     for question in ('How many stops by reason by shift this week?', 'Minutes of downtime by place for each shift this week',
-                     'Stops by kind by shift this week', 'How many stops by kind this month versus last month?'):
+                     'Stops by kind by shift this week'):
         request, _ = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
         assert request['intent'] == 'semantic', question
+    for question in ('How many stops by reason this week compared with last week?', 'How many stops by kind this month versus last month?'):
+        with pytest.raises(ValueError, match='does not carry beside it'):   # #159 pins it (tests/test_quantity_questions.py)
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
     for question in ('Maintenance report this week', 'Show the operator notes for this week', 'What did maintenance report this week?',
                      'Downtime by reason, maintenance notes this week'):
         context = Context(DAY, 2, scope='shift')

@@ -18531,36 +18531,6 @@
    "note": "Catch-up after #159 (PR #155), the reviewer's probe of 7ec1fea: a second split beside the Pareto grouped was made a standing refusal ('by' asks for a grouping), so the parser's split by reason and shift (answered at e3fc7e6) was refused. Only a stop reason, place or kind left beside the Pareto grouped stands."
   },
   {
-   "id": "semantic-stops-by-reason-compared-with-last-week",
-   "type": "routing",
-   "mode": "offline",
-   "question": "How many stops by reason this week compared with last week?",
-   "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=reason&compare=prev",
-    "status": "complete",
-    "tools": [
-     {
-      "tool": "semantic_query",
-      "arguments": {
-       "measure": "stops",
-       "group_by": [
-        "reason"
-       ],
-       "filters": {}
-      }
-     }
-    ],
-    "sections_match": [
-     "^Stops this week: \\*\\*[0-9][0-9,]* stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ stops the week before"
-    ],
-    "tools_only": [
-     "semantic_query",
-     "render_chart"
-    ]
-   },
-   "note": "Catch-up after #159 (PR #155), the reviewer's probe of 7ec1fea: the Pareto counted carries no window before, so #159 refuses the comparison for it; the semantic split carries it beside each reason. 7ec1fea made that refusal stand over the split."
-  },
-  {
    "id": "semantic-compare-32-c-to-26-c",
    "type": "routing",
    "mode": "offline",
@@ -18589,36 +18559,6 @@
     ]
    },
    "note": "Catch-up after #159 (PR #155), the probe of moved function words: 'to' is not a function word after #159, so the parser left the question to the hand router, whose answer was the week's MSF by grade (main's too). Beside a comparison said, 'to' joins the two compared."
-  },
-  {
-   "id": "semantic-percent-of-downtime-went-to-maintenance",
-   "type": "routing",
-   "mode": "offline",
-   "question": "What percent of downtime went to maintenance this week?",
-   "expect": {
-    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=kind&share=Maintenance",
-    "status": "complete",
-    "tools": [
-     {
-      "tool": "semantic_query",
-      "arguments": {
-       "measure": "downtime_minutes",
-       "group_by": [
-        "kind"
-       ],
-       "filters": {}
-      }
-     }
-    ],
-    "tools_only": [
-     "semantic_query",
-     "render_chart"
-    ],
-    "sections_match": [
-     "^Maintenance was [0-9][0-9,.]*% of the downtime this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
-    ]
-   },
-   "note": "Catch-up after #159 (PR #155), the probe of moved function words: 'went' is not a function word after #159; 'went to' is the router's own connector (FILTER_CONNECTOR). Refused at f1ed88b; main answered with the review."
   }
  ]
 }

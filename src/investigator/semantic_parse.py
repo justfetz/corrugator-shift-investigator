@@ -35,10 +35,7 @@ LOSS = ('lost', 'lose', 'losing', 'down')
 # ... of which these are cues before a value or a dimension, and are consumed with it
 PLACE_CUES = ('at', 'on', 'in')
 REASON_CUES = ('for', 'from', 'to', 'due', 'caused', 'because', 'triggered', 'related')
-# ("went to maintenance": the router's FILTER_CONNECTOR reads the same verb; "go" and "went" are not function words after issue #153, and
-# "going to" is a future, a plan: never consumed here)
-CONNECTOR = (r"\b(?:(?:caused|triggered|brought\s+on|due|related|attributed|coded|charged)\s+(?:by|to|from)"
-             r"|(?:went|gone)\s+to(?!\s+(?:have|be|run|make|do|get|go|see|need|cut)\b)|because\s+of)\b")
+CONNECTOR = (r"\b(?:(?:caused|triggered|brought\s+on|due|related|attributed|coded|charged)\s+(?:by|to|from)|because\s+of)\b")
 # The closed table of ranking, grouping, comparison and statistic words (the issue's "closed set"): the model holds measures,
 # dimensions and values, never these.
 RANK = {'most': 'most', 'top': 'most', 'highest': 'most', 'biggest': 'most', 'largest': 'most', 'greatest': 'most', 'max': 'most',

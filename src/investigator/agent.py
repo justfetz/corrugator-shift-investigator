@@ -1111,8 +1111,8 @@ THIS_DAY_TEXT = "'{words}' names the selected production day, and the Period con
 class Standing(ValueError):
     """A refusal of something the question said that no answer reads (issue #153): two windows, "during the day" beside another window,
     a hedge before a cause, a plan, a capacity or a span said in words ("how far", "up to"), the line running, "this shift" with no shift
-    selected, who logged a stop, "this day" or "the period" under a ranged Period control, a comparison one quantity's answer does not
-    carry, and a stop reason, place or kind left beside the Pareto grouped. It stands over the semantic model's parser (issue #144): a
+    selected, who logged a stop, "this day" or "the period" under a ranged Period control, a comparison one quantity's answer or the
+    Pareto grouped does not carry, and a stop reason, place or kind left beside the Pareto grouped. It stands over the semantic model's parser (issue #144): a
     complete reading of the other words is still not the question asked, so it never answers in its place (the coordinator on PR #155,
     after #159). A window named in words no route reads ("so far", "until now", "the week before last") is a plain refusal: the parser
     refuses the same words on its own."""
@@ -1719,10 +1719,9 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
                 logged = re.search(KIND_LOGGED, lower)
                 if logged:   # "how many stops did maintenance log by kind": who logged a stop is not recorded (row 9)
                     raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain='how many operator stops'))
-            # its windows stand (comparison_gate raises them as Standing); a window before that the Pareto counted does not carry, and a
-            # second split ("by reason by shift"), are the Pareto's own limits, which the semantic model's split does not share; a stop
-            # reason, place or kind beside it ("planned stops by reason") stands (the goldens of #159 pin it)
-            comparison_gate(lower, group, gated['period'], asked=asked)
+                comparison_gate(lower, group, gated['period'], asked=asked)   # its windows, and a window before it does not carry (#153)
+            # a stop reason, place or kind beside it ("planned stops by reason") stands, as #159's goldens pin it; a second split ("by reason
+            # by shift") is the Pareto's own limit, which the semantic model's split does not share
             allow_list(lower, group, stands=('filter',))
             window = gated
         if not pareto and months:
