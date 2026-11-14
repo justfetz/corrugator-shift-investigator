@@ -107,7 +107,7 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   ("so far") are not, so a URL that answers one fails. The words read but never applied fail too: a duration answered as
   downtime that names no stop or downtime, or names run time, uptime or the line on ("how long was the machine on",
   "minutes of machine time", "run time per stop"); a comparison the answer does not carry beside it (sheets, each day's
-  stops or downtime, a grade's totals, the Pareto grouped), or of other windows than the answered one and the one just
+  stops or downtime, a grade's totals, the Pareto counted), or of other windows than the answered one and the one just
   before it, of the same length ("last week versus the week before", "this week versus last month"); "this shift" or "my
   shift" with no shift in the address; a kind said of who logged the stops ("the stops the operators logged"); a window
   said in words ("for the period", "this day") that is not the answered one; a number and its cause asked together ("how

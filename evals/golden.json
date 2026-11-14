@@ -14438,6 +14438,149 @@
    "expect": {
     "raises": "names the selected production day"
    }
+  },
+  {
+   "id": "unapplied-the-line-going-down-is-downtime",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How long did the line go down this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, refused once 'go' left the table: 'go down' is the line stopping; main at 3cefa4d answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=downtime_minutes",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ minutes\\*\\* of downtime · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-up-versus-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Were stops up this week versus last week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, refused once 'up' left the table: a rise beside a comparison is the comparison; main at 3cefa4d answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-so-how-many-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "So how many stops this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, refused once 'so' left the table: a leading 'so' is a filler, never 'so far'; main at 3cefa4d answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-can-you-tell-me-said-last",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What's the number of stops this week, can you tell me?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, refused once 'can' left the table: 'can you' asks the assistant wherever it stands; main at 3cefa4d answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-that-can-be-attributed-to-the-stacker",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops can be attributed to the stacker this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, refused once 'can' left the table: 'can be attributed to' is the filter's connector; main at 3cefa4d answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=stacker",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops?\\*\\* for Stacker · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-minutes-at-each-place-versus-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes of downtime at each place this week compared with last week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, refused as carrying no window before, while the Pareto in minutes carries the previous minutes on every row; main at 3cefa4d answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=week&by=place",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,.]+ min\\*\\* at .*, the largest of [0-9]+ (places|reasons)"
+    ]
+   }
+  },
+  {
+   "id": "unapplied-what-drove-the-number-of-stops-is-an-investigation",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What drove the number of stops this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, refused as a number and its cause together: 'the number of' named in an investigation is its subject; main at 3cefa4d answered the same (kept).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&unit=count",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,]+ stops?\\*\\* at .*, the largest of [0-9]+ (places|reasons)"
+    ]
+   }
+  },
+  {
+   "id": "unapplied-may-i-see-is-a-request",
+   "type": "routing",
+   "mode": "offline",
+   "question": "May I see how many stops this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, 'may I' is a request, never the month of May; main at 3cefa4d answered **512 stops**, May 2026's.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "unapplied-stops-maintenance-logged-by-kind-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops did maintenance log by kind this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, who logged a stop is not recorded, on the Pareto grouped by kind too; main at 3cefa4d answered the kind Pareto, **92 stops** at Operator.",
+   "expect": {
+    "raises": "who logged the stops"
+   }
+  },
+  {
+   "id": "unapplied-stops-for-the-period-under-a-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops for the period?",
+   "period": "week",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, under the week's Period control 'the period' could be the 4-4-5 period or the selected week; main at 3cefa4d answered the week's **131 stops**, read as the selected window.",
+   "expect": {
+    "raises": "could be the 4-4-5 accounting period"
+   }
+  },
+  {
+   "id": "unapplied-how-long-between-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How long do we go between stops this week?",
+   "note": "Issue #153 (hotfix after PR 143): the reviewer subagent's probe of the draft, the time between stops is run time, never the minutes stopped; main at 3cefa4d answered **354.9 minutes** of downtime.",
+   "expect": {
+    "raises": "asks how long the line ran or was up"
+   }
   }
  ]
 }

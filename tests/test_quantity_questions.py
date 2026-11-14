@@ -714,8 +714,10 @@ FILTER_WORDS = '|'.join(pattern for pattern, _ in agent.PLACE_WORDS + agent.REAS
 READ_PHRASES = (*agent.CONSUMED_ALWAYS, *(pattern for words in agent.METRIC_WORDS.values() for pattern in words), agent.COUNT_ASK,
                 agent.DURATION_ASK, agent.FEET_ASK, r"\bhow\s+(many|much)\b", r"\b(the\s+)?(number|count|total)\s+of\b", agent.HOW_DID_GO,
                 agent.PER_WORD, r"\ba\s+day\b", r"\b(make|made|produced?|run|ran)\b(?=.*\bper\b)",
-                rf"\b((at|on|by|to|from|for|of|due\s+to|caused\s+by)\s+)?(the\s+)?({FILTER_WORDS})", r"\b(on|of|for)\s+\d{2,3}-?(c|bc|eb)\b",
-                agent.WINDOW_COMPARE, agent.COMPARED_TO_SAID, agent.PREVIOUS_WINDOW)
+                rf"\b((at|on|by|to|from|for|of|due\s+to|caused\s+by)\s+)?(the\s+)?({FILTER_WORDS})",
+                agent.FILTER_CONNECTOR.replace('zfilteredz', f'({FILTER_WORDS})'), r"\b(on|of|for)\s+\d{2,3}-?(c|bc|eb)\b",
+                agent.WINDOW_COMPARE, agent.COMPARED_TO_SAID, agent.PREVIOUS_WINDOW,
+                r"\b(can|could|would|will)\s+(you|u)\s+(please\s+)?(tell|show|give|let|list|pull|find|count|check|get|say)\b")
 
 
 def free_function_words(question):
@@ -848,6 +850,17 @@ def test_the_runner_catches_the_hotfix_rows_wrong_answers():
     ('How many operator stops were logged this week?', 'operator_stops'), ('How many stops were caused by operators this week?', 'operator_stops'),
     ('How many stops this week compared to last week?', 'stops'), ('How many stops last week and the week before?', 'stops'),
     ('How many stops in August versus the month before?', 'stops'), ('How many stops in September versus last month?', 'stops'),
+    # the reviewer subagent's probe of the draft: each was refused once its word left the table, and main answered it right
+    ('How long did the line go down this week?', 'downtime_minutes'), ('How long did the stacker go down this week?', 'downtime_minutes'),
+    ('How long did we go down for maintenance this week?', 'maintenance_minutes'), ('Were stops up this week versus last week?', 'stops'),
+    ('Did setups go up this week versus last week?', 'setups'), ('Did stops go down this week versus last week?', 'stops'),
+    ('So how many stops this week?', 'stops'), ('So, how many setups did we run this week?', 'setups'),
+    ('I need you to tell me how many stops this week', 'stops'), ("What's the number of stops this week, can you tell me?", 'stops'),
+    ('How many stops this week could you tell me?', 'stops'), ('Tell me the number of stops this week, can you?', 'stops'),
+    ('How many stops can be attributed to the stacker this week?', 'stops'), ('How many setups did we have to run this week?', 'setups'),
+    ('May I see how many stops this week?', 'stops'), ('How many stops during last week?', 'stops'),
+    ("I'd like to know how many stops this week", 'stops'), ('Need the number of stops this week', 'stops'),
+    ('How many stops during the whole week?', 'stops'), ('How many stops for the period?', 'stops'),
 ])
 def test_what_the_hotfix_reads_still_answers(question, metric):
     """The words the hotfix reads where they are applied keep answering: a window after a preposition, a request said first, a particle,
@@ -855,3 +868,33 @@ def test_what_the_hotfix_reads_still_answers(question, metric):
     url, request, _ = landing(question)
     assert url and f'metric={metric}' in url, (question, url or request)
     assert not catch_all_failures(question, url), (question, url)
+
+
+@pytest.mark.parametrize('question, period, refusal', [
+    ('How many stops are we going to have this week?', 'day', "'going to' asks for a plan"),
+    ('How long do we go between stops this week?', 'day', 'asks how long the line ran'),
+    ('How long did we go without a stop this week?', 'day', 'asks how long the line ran'),
+    ('How many stops this week compared to normal?', 'day', "'compared' asks for a ranking or a comparison"),
+    ('How many minutes of stacker downtime went to maintenance this week?', 'day', 'is not one stop reason, place or kind'),
+    ('How many stops did maintenance log by kind this week?', 'day', 'who logged the stops'),
+    ('How many stops for the period?', 'week', 'could be the 4-4-5 accounting period'),
+    ('How many stops this day?', 'month', 'names the selected production day'),
+    ('How many stops by reason this week versus last week?', 'day', 'does not carry beside it'),
+])
+def test_a_hotfix_refusal_names_the_true_reason(question, period, refusal):
+    """The reviewer subagent's probe of the draft: a plan said with "going to", run time said as the time between stops, a comparison
+    with normal, a filter beside a verb, who logged a stop on the Pareto by kind, "the period" or "this day" the Period control could
+    mean otherwise, and a comparison of the counted Pareto: each is refused with what it asks for, never another family's reason."""
+    url, text, _ = landing(question, period=period)
+    assert url is None and refusal in text, (question, url, text)
+
+
+def test_an_investigation_that_names_a_number_is_not_two_questions():
+    """"What drove the number of stops" asks a cause of a number, an investigation; "how many stops and why" asks both."""
+    for question in ('What drove the number of stops this week?', 'What caused the number of stops this week?',
+                     'Why was the number of stops so high this week?'):
+        url = landing(question)[0]
+        assert url and 'measure=pareto' in url and '/shift/2' in url, (question, url)
+        assert not catch_all_failures(question, url), (question, url)
+    for question in ('How many stops and why this week?', 'Why so many stops and how many minutes this week?', 'How much downtime and why this week?'):
+        assert landing(question)[0] is None, question
