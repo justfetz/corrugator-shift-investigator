@@ -118,15 +118,18 @@ COUNT_ASKED = r'\b(?:how many|number of|count of|total)\b.*'
 # A ratio is in the unit it names ("minutes per setup" is not feet per setup, "feet per stop" is not the stops; the coordinator's
 # re-review of PR 143, item 1); a bare "per setup" is the run length in feet.
 PER_SPAN = r'(set-?up|paper change|wet[- ]end|order|stop|day|week|run|hour|minute)s?\b'
-NAMED_PER = (r'\b(lineal feet|lineal ft|lineal|feet|ft|footage|length|minutes|mins|time|downtime|msf|volume|output|throughput|production|'
-             r'sq ft|square feet|sheets|stops|setups?|paper changes?|splices?|jams?|hours|dollars)\s+per\s+(?:production\s+)?' + PER_SPAN)
 PER_NUMERATOR = {'lineal feet': 'ft', 'lineal ft': 'ft', 'lineal': 'ft', 'feet': 'ft', 'ft': 'ft', 'footage': 'ft', 'length': 'ft',
                  'minutes': 'min(?:utes)?', 'mins': 'min(?:utes)?', 'time': 'min(?:utes)?', 'downtime': 'min(?:utes)?', 'sq ft': 'sq ft',
                  'square feet': 'sq ft', 'volume': 'MSF', 'output': 'MSF', 'throughput': 'MSF', 'production': 'MSF'}
 PER_DENOMINATOR = {'wet end': 'paper change', 'wet-end': 'paper change', 'day': '(?:production )?day', 'minute': 'min(?:ute)?'}
-# Any other word right before a "per" names its numerator too ("cost per setup" is not feet per setup; round 4 of the coordinator's
-# review of PR 143, item 2), so an answer in another unit fails; a filler, a volume verb or a window is a bare "per" ("what was our
-# per setup", "how much did we make per day"), and a speed per anything is the speed answer.
+# The numerator of a "per" is the last unit or countable noun before it in its clause ("how much downtime did we have per stop" is
+# minutes per stop; round 5 of the coordinator's review, item 3), a duration asked with none named is minutes ("how long are we down
+# per stop"), and with neither, any other word right before the "per" names its numerator ("cost per setup" is not feet per setup;
+# round 4, item 2), so an answer in another unit fails; a filler, a volume verb or a window is a bare "per" ("what was our per setup",
+# "how much did we make per day"), and a speed per anything is the speed answer.
+PER_NOUN = re.compile(r'\b(lineal feet|lineal ft|square feet|sq ft|lineal|feet|ft|footage|length|minutes|mins|time|downtime|msf|volume|'
+                      r'output|throughput|production|sheets|stops|stoppages|setups?|set-ups?|paper changes?|splices?|jams?|hours|dollars)\b',
+                      re.I)
 ANY_PER = r"\b([a-z']+)\s+per\s+(?:production\s+)?" + PER_SPAN
 BARE_PER = (r"^(what|whats|what's|was|is|were|are|our|my|the|we|us|did|do|does|how|much|many|average|avg|mean|typical|overall|run|ran|"
             r"running|make|made|making|produce|produced|producing|get|got|go|went|this|that|its|it's|a|an|on|of|for|in|at|so|far|today|"
@@ -135,10 +138,18 @@ BARE_PER = (r"^(what|whats|what's|was|is|were|are|our|my|the|we|us|did|do|does|h
 
 def named_per(question):
     """The headline pattern of a ratio the question names ("feet per stop" wants `ft per stop`), or None."""
-    named = re.search(NAMED_PER, question, re.I) or re.search(ANY_PER, question, re.I)
-    if not named or re.search(BARE_PER, named[1].lower()):
+    named = re.search(ANY_PER, question, re.I)
+    if not named:
         return None
-    numerator, denominator = named[1].lower(), re.sub(r'set-?up', 'setup', named[2].lower())
+    clause = re.split(r'[,;:?.!]|\band\b|\bversus\b|\bvs\b', question[:named.end(1)], flags=re.I)[-1]
+    nouns = PER_NOUN.findall(clause)
+    if re.search(r'\b(?:speeds?|pace|fpm|fast\w*|slow\w*)\b', clause, re.I):
+        return None   # "average speed per day": the speed answer
+    numerator = (nouns[-1].lower() if nouns else 'minutes' if re.search(r'\bhow long\b|\bhow much time\b', clause, re.I) else
+                 None if re.search(BARE_PER, named[1].lower()) else named[1].lower())
+    if numerator is None:
+        return None
+    numerator, denominator = re.sub(r'set-ups?', 'setups', numerator), re.sub(r'set-?up', 'setup', named[2].lower())
     if (numerator, denominator) == ('stops', 'day'):
         return r'\bstops\b'   # the stops of each production day (the stops profile), led by the day with the most: not a ratio
     if numerator in ('minutes', 'mins', 'downtime') and denominator == 'day':
@@ -152,9 +163,13 @@ ASKED_UNITS = (# an average stop is minutes per stop; an average setup or run le
                # passes; the longest or shortest of anything is no total (round 4 of the coordinator's review of PR 143, item 4)
                (r'\b(?:average|avg|mean|typical)\s+(?:[a-z/-]+\s+){0,3}?(?:stop|stoppage)\b'
                 r'|\b(?:average|avg|mean|typical)\s+(?:length|duration|time) of (?:a |the |our )?(?:stop|stoppage)s?\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
-               (r'\b(?:average|avg|mean|typical)\s+(?:set-?up|changeover|paper change|order change|run)s?\s+(?:length|duration|time)s?\b'
-                r'|\b(?:average|avg|mean|typical)\s+(?:length|duration|time) of (?:a |the |our )?(?:set-?up|changeover|paper change|order change|run)s?\b',
-                r'\bmin(?:utes)?(?: per |/)(?:setup|changeover|paper change|order change|run)\b'),
+               # ... and a run length is the router's own feet per setup ("average run length"; round 5, item 3)
+               (r'\brun length\b', r'\bft(?: per |/)setup\b'),
+               (r'\b(?:average|avg|mean|typical)\s+(?:set-?up|changeover|paper change|order change)s?\s+(?:length|duration|time)s?\b'
+                r'|\b(?:average|avg|mean|typical)\s+(?:length|duration|time) of (?:a |the |our )?(?:set-?up|changeover|paper change|order change)s?\b',
+                r'\bmin(?:utes)?(?: per |/)(?:setup|changeover|paper change|order change)\b'),
+               # feet a minute is the speed (round 5, item 5)
+               (r'\b(?:feet|ft) (?:a|an|per) min(?:ute)?\b', r'\bft/min\b'),
                (r'\b(?:longest|shortest|maximum|minimum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|'
                 r'order changes?)\b', r'\b(?:longest|shortest|maximum|minimum)\b'),
                # an average of a count or a total is a ratio, never the total ('average stops this week')
@@ -189,6 +204,82 @@ RANKED_SHIFT = (r'\b(?:slowest|fastest|quickest|best|worst|top|strongest|weakest
                 r'|\bshifts?\s+with\s+the\s+(?:most|least|fewest|highest|lowest|best|worst)\b')
 
 
+# The plain-quantity gate (round 5 of the coordinator's review of PR 143), stated on the URL. One quantity (measure=quantity) is a
+# window's total or a ratio the records keep, so once the question loses what that URL consumed (the ask word "how long", the ratio's
+# "per" and the average it is, the percent of a waste line, the words of the reason, place or waste line it filters by, the window, a
+# window compared with the one before, and the shift), no word of this closed vocabulary may be left: one that is asks for a ranking,
+# a grouping, a statistic, a subset or a percent, which one total does not answer.
+QUALIFIER_VOCABULARY = {
+    'ranking': ('which', 'what shift', 'most', 'fewest', 'least', 'highest', 'lowest', 'best', 'worst', 'rank', 'top', 'number one',
+                'most common', 'biggest', 'compare', 'comparison', 'versus', 'vs', 'better'),
+    'grouping': ('by', 'each', 'every', 'per', 'a day', 'daily', 'across', 'type', 'category', 'categories', 'splicer', 'knife',
+                 'knives', 'day', 'shift by shift'),
+    'statistic': ('average', 'avg', 'mean', 'median', 'typical', 'maximum', 'max', 'minimum', 'longest', 'shortest'),
+    'subset': ('long', 'short', 'longer than', 'over N'),
+    'percent': ('percent', 'percentage', 'share', '%'),
+}
+_AVG = r'(?:average|avg|mean|typical)'
+_DAYS = r'\b(?:per (?:production )?days?|(?:each|every|a|by) (?:production )?day|day by day)\b|\bdaily\b'
+QUANTITY_CONSUMES = {   # what each metric's answer is, besides its noun: a ratio's "per" (and the average it is)
+    'minutes_per_stop': (rf'\b{_AVG}\s+(?:stop|stoppage)\s+(?:length|duration|time)s?\b',
+                         rf'\b{_AVG}\s+(?:length|duration|time) of (?:a |the |our |each )?(?:stop|stoppage)s?\b',
+                         rf'\b{_AVG}\s+(?:stop|stoppage)(?=\s*$|\s*[?.!,]|\s+(?:this|that|last|on|in|for|during|over|across|of|was|is|were)\b)',
+                         rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?per\s+(?:stop|stoppage)s?\b', r'\bper\s+(?:stop|stoppage)s?\b'),
+    'lineal_per_setup': (rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?per\s+set-?ups?\b', rf'\b{_AVG}\s+run length\b', r'\bper\s+set-?ups?\b'),
+    'lineal_per_paper_change': (rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?per\s+(?:paper changes?|wet[- ]ends?)\b',
+                                r'\bper\s+(?:paper changes?|wet[- ]ends?)\b'),
+    'msf_per_day': (rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?(?:{_DAYS})', _DAYS),
+    'downtime_per_day': (_DAYS,),
+    'waste_pct': (r'\bpercent(?:age)?\b|%',),
+}
+QUANTITY_CONSUMES_ALWAYS = (
+    r'\bhow long\b', r'\bcaused by\b',
+    r'\b(?:this|that|the|last|previous|prior|same|selected|whole|full|entire|production)\s+(?:production\s+)?day(?:\s+before)?\b',
+    r'\b(?:across|over|during|for)\s+(?:the|this|last|that|a|all)\s+(?:week|month|period|day)\b',
+    r'\b(?:(?:on|for|by|in|during|from)\s+)?(?:the\s+)?(?:shift\s*(?:[1-3]|one|two|three)|(?:first|second|third|1st|2nd|3rd)\s+shift|'
+    r'(?:this|that|my|our|the)\s+shift)\b',
+    r'\b(?:(?:across|on|for|over|in)\s+)?all\s+(?:the\s+|three\s+)*shifts\b|\bacross\s+(?:the\s+)?shifts\b|\bshifts\s+(?:together|combined)\b')
+# a window compared with the one before ("compare stops this week to last week", "versus last week"), never the shifts compared
+QUANTITY_WINDOW_COMPARED = (r'\b(?:compar\w*|versus|vs|better|worse)\b(?=(?:.*\b(?:to|with|against|versus|vs|than))?\s+(?:the\s+)?'
+                            r'(?:last|previous|prior|week before|month before|day before)\b)')
+
+
+def qualifier_regex(word):
+    """One word of the vocabulary, whole, with its plural and verb forms ("ranked", "comparing", "types"); "over N" any number."""
+    if word == '%':
+        return '%'
+    stem = re.escape(word).replace('N', r'\d[\d,]*')
+    return rf"(?<![a-z]){stem[:-1] + '(?:e|es|ed|ing|er|ers)' if word.endswith('e') else stem + '(?:s|es|ed|ing|er)?'}(?![a-z])"
+
+
+# A ratio kept for all stops or for the line (minutes per stop, each day's downtime, feet per setup) answers no one stop reason,
+# place or kind (round 5, item 2): one named beside it is never the whole's figure
+RATIO_QUANTITIES = ('minutes_per_stop', 'downtime_per_day', 'lineal_per_setup', 'lineal_per_paper_change', 'msf_per_day')
+STOP_FILTER = (r'\b(maintenance|operator|stacker|splicers?|knife|knives|slitter|jams?|glue|starch|steam|outages?|raw material|'
+               r'double backer|single facer|glue dams?|missed splices?)\b')
+
+
+def plain_quantity_failures(question, url):
+    """The gate on one quantity's URL: a ratio asked of one stop reason, place or kind, or the qualifier left in the question
+    once the URL's own words are consumed, as a failure."""
+    params = dict(parse_qsl(urlsplit(url).query))
+    text = question.lower()
+    named = re.search(STOP_FILTER, text)
+    if params.get('metric') in RATIO_QUANTITIES and named:
+        return [f'{question[:60]!r} names {named[0]!r} but lands on {params["metric"]}, kept for all stops together: a ratio asked of one '
+                'stop reason, place or kind is refused, never the whole\'s figure']
+    filtered = [rf'\b{re.escape(word)}s?\b' for key in ('reason', 'place', 'waste') for word in params.get(key, '').split('-') if word]
+    compared = () if re.search(r'\bshifts\b', re.sub(QUANTITY_CONSUMES_ALWAYS[-1], ' ', text)) else (QUANTITY_WINDOW_COMPARED,)
+    for pattern in (*QUANTITY_CONSUMES.get(params.get('metric'), ()), *filtered, *compared, *QUANTITY_CONSUMES_ALWAYS):
+        text = re.sub(pattern, ' ', text)
+    left = min(((m.start(), family, m[0]) for family, words in QUALIFIER_VOCABULARY.items() for word in words
+                for m in [re.search(qualifier_regex(word), text)] if m), default=None)
+    if left is None:
+        return []
+    return [f'{question[:60]!r} asks {left[2]!r} ({left[1]}) but lands on one quantity ({params.get("metric")}): a qualifier left once the '
+            'quantity, its filters, the window and the shift are removed is a different question, refused or answered by its own route']
+
+
 def catch_all_failures(question, url):
     """A question naming a countable noun or a unit, or asking "how many" of anything, that resolved to the KPI summary; or a
     quantity asked ("how many", "how much", "how long", a unit) that resolved to the overview or the summary, which answer "why
@@ -201,6 +292,8 @@ def catch_all_failures(question, url):
         if grouped:
             failures.append(f'{question[:60]!r} asks {grouped[0]!r} but lands on one quantity (measure=quantity): a breakdown, a grouping '
                             'or a ranked shift is never one total')
+        else:
+            failures.extend(plain_quantity_failures(question, url))   # round 5: the plain-quantity gate
     if re.search(r'/shift/\d\?measure=(quantity|stops)(&|$)', url or '') and not re.search(r'\bshifts?\b', question, re.I):
         failures.append(f'{question[:60]!r} names no shift but is answered for the selected one ({url}): a quantity answers every shift')
     if failures:

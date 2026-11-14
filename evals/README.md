@@ -82,6 +82,15 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   (`measure=quantity`) never answers a breakdown, a grouping ("at each place", "by reason"), a comparison of shifts or a
   shift named by its rank ("the slowest shift"), and a quantity measure (`measure=quantity`, or `measure=stops`, the stops
   of each production day) is never answered for the selected shift when the question names no shift.
+  The plain-quantity gate states the general rule on the URL (round 5 of the review of PR 143): once the question loses
+  what its `measure=quantity` URL consumed (the ask word "how long", the ratio's "per" and the average it is, a waste
+  line's percent, the words of `reason=`, `place=` or `waste=`, the window, a window compared with the one before, and
+  the shift), no word of a closed vocabulary may be left: a ranking (which, most, fewest, best, worst, rank, top, most
+  common, compare, versus, better …), a grouping (by, each, every, per, a day, daily, across, type, category, splicer,
+  knife, day …), a statistic (average, mean, median, typical, maximum, minimum, longest, shortest), a subset (long, short,
+  longer than, over N) or a percent (percent, percentage, share, %). And a ratio kept for all stops or for the line
+  (minutes per stop, each day's downtime, feet per setup) never answers a question that names one stop reason, place or
+  kind.
 - **the unit asked opens the answer**: a count or unit question ("how many setups", "number of paper changes", "how
   many minutes of …", "minutes per stop", "feet per setup", "how many lineal feet") carries that unit in its headline
   (the first section with a bold figure that is not a bullet), in its lead clause, the text before the first ` · `, so a
@@ -91,9 +100,11 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   MSF; a ratio in the unit it names ("minutes per setup" wants minutes per setup, never feet per setup; "feet per stop" wants
   ft per stop, never the stops; "MSF per day" wants MSF per production day; any other word before "per" is its numerator,
   so "cost per setup" wants cost per setup and only a refusal passes; "per minute" too, so "square feet per minute" is never
-  the speed). "Stops per day" and "downtime per day" are the stops or minutes of each production day, not a ratio. An
-  average or typical stop wants minutes per stop, an average of a total or of a setup's length a ratio, and the longest or
-  shortest of anything says so: an answer of the window's total fails each.
+  the speed). The numerator is the last unit or countable noun before "per" in its clause ("how much downtime did we have
+  per stop" wants minutes per stop), and a duration asked with none named is minutes ("how long are we down per stop").
+  "Stops per day" and "downtime per day" are the stops or minutes of each production day, not a ratio. An average or
+  typical stop wants minutes per stop, an average of a total or of a setup's length a ratio, a run length feet per setup,
+  feet a minute the speed, and the longest or shortest of anything says so: an answer of the window's total fails each.
 
 `tests/test_quantity_questions.py` runs both over the issue's catch-all audit as well: the issue's seven rows, the owner's
 interview phrasings and every count or unit phrasing that landed on the KPI summary before; each lands on a measure that

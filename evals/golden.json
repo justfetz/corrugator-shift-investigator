@@ -11384,7 +11384,7 @@
    "question": "What percent of stops were at the stacker this week?",
    "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (percent of stops): answered 39 stops at the stacker, a count where a percent was asked.",
    "expect": {
-    "raises": "asks for a percent"
+    "raises": "asks for a share of a whole"
    }
   },
   {
@@ -11394,7 +11394,7 @@
    "question": "What share of stops were maintenance this week?",
    "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (percent of stops): answered 37 maintenance stops, a count where a share was asked.",
    "expect": {
-    "raises": "asks for a percent"
+    "raises": "asks for a share of a whole"
    }
   },
   {
@@ -11404,7 +11404,7 @@
    "question": "What percentage of setups were order changes this week?",
    "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (percent): answered 571 order changes, a count where a percent was asked.",
    "expect": {
-    "raises": "asks for a percent"
+    "raises": "asks for a share of a whole"
    }
   },
   {

@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from investigator.agent import (GRADE_QUANTITIES, QUANTITY_HELP, QUANTITY_METRICS, RANKED_TEXT, SETUP_SPEED, WASTE_KEYS, Agent, Context,
-                                catch_all_guard, parse_request, question_scope, quantity_request, route, slug)
+from investigator.agent import (GRADE_QUANTITIES, QUALIFIERS, QUANTITY_HELP, QUANTITY_METRICS, RANKED_TEXT, SETUP_SPEED, WASTE_KEYS, Agent,
+                                Context, catch_all_guard, parse_request, question_scope, quantity_request, route, slug)
 from investigator.fixture import GRADES
 from investigator.records import STOP_PLACES, STOP_REASONS
 from investigator.record_store import default_store
@@ -20,7 +20,7 @@ from investigator.urls import canonical_url, page_url, redirect_for, resolve_url
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'evals'))
-from run import asked_unit_failures, catch_all_failures  # noqa: E402
+from run import QUALIFIER_VOCABULARY, asked_unit_failures, catch_all_failures  # noqa: E402
 
 DAY = '2026-09-14'
 GOLDEN = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
@@ -110,13 +110,14 @@ def landing(question, scope='shift', shift=2, period='day', day=DAY):
 def test_the_guard_flags_a_quantity_question_on_the_kpi_summary():
     """The rule in evals/run.py, held to the URLs main resolved the issue's rows to (its table), and to the questions the
     KPI summary is for."""
-    for question, url in [('how many setups did we run last week', '/corr/1/week/2026-09-07/shift/2?measure=kpis'),
-                          ('how many order changes this week', '/corr/1/day/2026-09-14/shift/2?measure=kpis&window=week'),
-                          ('what was our lineal per setup last week', '/corr/1/week/2026-09-07/shift/2?measure=kpis'),
-                          ('how many minutes of downtime this month', '/corr/1/day/2026-09-14?measure=kpis&window=month')]:
+    for question, url, metric in [('how many setups did we run last week', '/corr/1/week/2026-09-07/shift/2?measure=kpis', 'setups'),
+                                  ('how many order changes this week', '/corr/1/day/2026-09-14/shift/2?measure=kpis&window=week', 'order_changes'),
+                                  ('what was our lineal per setup last week', '/corr/1/week/2026-09-07/shift/2?measure=kpis', 'lineal_per_setup'),
+                                  ('how many minutes of downtime this month', '/corr/1/day/2026-09-14?measure=kpis&window=month', 'downtime_minutes')]:
         assert catch_all_failures(question, url), question
-        # the same quantity over every shift, as a question that names no shift is answered (round 4, item 8)
-        assert not catch_all_failures(question, url.replace('measure=kpis', 'measure=quantity&metric=setups').replace('/shift/2', '')), question
+        # the same quantity over every shift, as a question that names no shift is answered (round 4, item 8); its own metric, since
+        # the plain-quantity gate (round 5) reads what the metric consumes ("per setup" is the ratio's, not the setup count's)
+        assert not catch_all_failures(question, url.replace('measure=kpis', f'measure=quantity&metric={metric}').replace('/shift/2', '')), question
     for question in ('Compare this month to last', 'How did September go versus August?', 'How did shift 3 go this month?', 'Compare all shifts'):
         assert not catch_all_failures(question, '/corr/1/day/2026-09-14?measure=kpis&window=month'), question
 
@@ -451,3 +452,126 @@ def test_a_count_or_unit_golden_states_its_headline():
         patterns = [expect.get('shape', {}).get('headline_match', '')] + (
             [expect['sections_match']] if isinstance(expect.get('sections_match'), str) else expect.get('sections_match', []))
         assert any(p.startswith('^\\*\\*') for p in patterns), case['id']
+
+
+# ---- Round 5 of the coordinator's review of PR 143: the plain-quantity gate. One quantity is a window's total, or a ratio the
+# records keep: once the route's own words are removed (the ask word, the noun and unit, its filters, the window and the shift),
+# no word of this closed vocabulary may be left. The review lists it; the spellings of its words ("vs", "avg", "comparison",
+# "categories", "knives") are entries of their own, and the forms of a word (plural, past, -ing, -er) are the pattern's.
+VOCABULARY = {
+    'ranking': ['which', 'what shift', 'most', 'fewest', 'least', 'highest', 'lowest', 'best', 'worst', 'rank', 'top', 'number one',
+                'most common', 'biggest', 'compare', 'comparison', 'versus', 'vs', 'better'],
+    'grouping': ['by', 'each', 'every', 'per', 'a day', 'daily', 'across', 'type', 'category', 'categories', 'splicer', 'knife', 'knives',
+                 'day', 'shift by shift'],
+    'statistic': ['average', 'avg', 'mean', 'median', 'typical', 'maximum', 'max', 'minimum', 'longest', 'shortest'],
+    'subset': ['long', 'short', 'longer than', 'over N'],
+    'percent': ['percent', 'percentage', 'share', '%'],
+}
+WEEK_SETUPS = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=setups'
+
+
+def test_the_gate_vocabulary_is_closed_and_the_router_and_the_runner_state_the_same_one():
+    """One table in the router (agent.QUALIFIERS) and one in the runner (run.QUALIFIER_VOCABULARY), each the review's list."""
+    assert {family: list(words) for family, words in QUALIFIERS.items()} == VOCABULARY
+    assert {family: list(words) for family, words in QUALIFIER_VOCABULARY.items()} == VOCABULARY
+
+
+# a word that needs an object to read as a question ("by type", "across reasons", "per MSF", "over 10")
+OBJECT = {'by': 'by type', 'across': 'across reasons', 'per': 'per MSF', 'over N': 'over 10'}
+
+
+@pytest.mark.parametrize('family, word', [(family, word) for family, words in VOCABULARY.items() for word in words])
+def test_every_qualifier_left_over_is_refused_by_the_router_and_failed_by_the_runner(family, word):
+    """Each word of the vocabulary, put into a plain count, takes the count off the quantity route (refused, or another route
+    answers it), and the runner fails the count's own URL for it."""
+    question = f"how many setups {OBJECT.get(word, word)} this week"
+    url, refusal, _ = landing(question)
+    assert url is None or 'measure=quantity' not in url, (question, url)
+    assert catch_all_failures(question, WEEK_SETUPS), question
+
+
+@pytest.mark.parametrize('case', [c for c in GOLDEN if c['id'].startswith('gate-') and c['type'] == 'refusal'], ids=lambda c: c['id'])
+def test_a_gate_refusal_names_what_it_answers_in_at_most_three_questions_that_answer(case):
+    """A refusal of round 5 names what the route answers instead, at most three questions, and each of them is answered."""
+    url, refusal, _ = landing(case['question'], shift=case.get('shift', 2), scope=case.get('scope', 'shift'))
+    assert url is None and case['expect']['raises'] in refusal, (case['question'], url, refusal)
+    asks = re.findall(r"'([^']* this week)'", refusal)
+    assert 1 <= len(asks) <= 3 and QUANTITY_HELP not in refusal or 'not a ratio the records keep' in refusal, refusal
+    for ask in asks:
+        assert landing(ask)[0], (ask, landing(ask)[1])
+
+
+@pytest.mark.parametrize('question, scope, metric', [
+    ('How long did knife jams take this week?', 'shift', 'downtime_minutes'), ('Compare stops this week to last week', 'shift', 'stops'),
+    ('How many stops this week versus last week?', 'shift', 'stops'), ('How many stops at splicer 3 this week?', 'shift', 'stops'),
+    ('How many stops on the upper knife this week?', 'shift', 'stops'), ('How many stops caused by the stacker this week?', 'shift', 'stops'),
+    ('How many setups across all shifts this week?', 'day', 'setups'), ('Average minutes per stop last month', 'shift', 'minutes_per_stop'),
+    ('How long is our average stop?', 'shift', 'minutes_per_stop'), ('Average stop length this week', 'shift', 'minutes_per_stop'),
+    ('Average run length this week', 'shift', 'lineal_per_setup'), ('What percent was shear this week?', 'shift', 'waste_pct'),
+    ('How many stops did shift 2 have compared with last week?', 'shift', 'stops'), ('Average MSF per day this week', 'shift', 'msf_per_day'),
+    ('Downtime by day this week', 'shift', 'downtime_per_day'), ('Daily downtime this week', 'shift', 'downtime_per_day'),
+    ('How much downtime did we have per stop this week?', 'shift', 'minutes_per_stop'),
+    ('How many minutes do we lose per stop this week?', 'shift', 'minutes_per_stop'),
+    ('How long are we down per stop this week?', 'shift', 'minutes_per_stop'),
+    ('How did shift 1 go compared with last week on lineal per paper change?', 'shift', 'lineal_per_paper_change'),
+])
+def test_what_the_route_consumes_is_never_a_qualifier_left(question, scope, metric):
+    """The ask word, the ratio's per and average, the filter's own words ("knife jams", "splicer 3", "caused by the stacker"), the
+    window, a window compared with the one before and all shifts are the route's: the quantity answers, and the runner agrees."""
+    url, request, _ = landing(question, scope=scope, shift=1 if 'shift 1' in question else 2)
+    assert url and f'metric={metric}' in url, (question, url or request)
+    assert not catch_all_failures(question, url), (question, url)
+
+
+@pytest.mark.parametrize('noun', ['count', 'frequency', 'rate', 'interval', 'cost', 'place', 'location', 'reason'])
+def test_an_average_stop_is_its_length_and_nothing_else(noun):
+    """Round 5, item 2: "average stop count / frequency / rate / interval / cost / place / location / reason" is not a length, so
+    not minutes per stop; the runner fails minutes per stop for it."""
+    question = f'Average stop {noun} this week'
+    url, refusal, _ = landing(question)
+    assert url is None and "'average' asks for a statistic" in refusal, (question, url, refusal)
+    assert catch_all_failures(question, '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop'), question
+    for length in ('Average stop length this week', 'Average stop time this week', 'Average length of a stop this week',
+                   'What was our average stop on shift 2 this week?'):
+        assert landing(length)[0].endswith('metric=minutes_per_stop'), length
+
+
+@pytest.mark.parametrize('question, metric', [
+    ('Stacker minutes per stop this week', 'minutes_per_stop'), ('Minutes per stop at splicer 3 this week', 'minutes_per_stop'),
+    ('Knife jam minutes per stop this week', 'minutes_per_stop'), ('Maintenance downtime per day this week', 'downtime_per_day'),
+    ('Operator downtime per day this week', 'downtime_per_day'), ('Downtime per day at the stacker this week', 'downtime_per_day'),
+    ('Feet per setup at the stacker this week', 'lineal_per_setup'),
+])
+def test_a_ratio_kept_for_all_stops_is_never_asked_of_one_reason_place_or_kind(question, metric):
+    """Round 5, item 2: minutes per stop and each production day's downtime are kept for all stops together; asked of one stop
+    reason, place or kind they are refused, never answered with every stop's figure, and the runner fails that figure."""
+    url, refusal, _ = landing(question)
+    assert url is None and 'is kept for' in refusal, (question, url, refusal)
+    assert catch_all_failures(question, f'/corr/1/day/2026-09-14?measure=quantity&window=week&metric={metric}'), question
+
+
+def test_the_runner_catches_round_5s_wrong_answers_and_passes_the_right_ones():
+    """The rules in evals/run.py, held to the answers a7c9b44 gave the round-5 review's questions (each fails), and to the right
+    answers its runner failed (each passes)."""
+    week = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric='
+    for question, metric in (('Which shift had the most setups this week?', 'setups'), ('How did the shifts compare on stops this week?', 'stops'),
+                             ('Stops by type this week', 'stops'), ('Stops each day this week', 'stops'), ('How many long stops this week?', 'stops'),
+                             ('Stops per 1000 ft this week', 'stops'), ('Stacker minutes per stop this week', 'minutes_per_stop'),
+                             ('Maintenance downtime per day this week', 'downtime_per_day'), ('Average stop cost this week', 'minutes_per_stop'),
+                             ('Average stop reason this week', 'minutes_per_stop'), ('Median stop length this week', 'downtime_minutes'),
+                             ('What was the most common stop this week?', 'stops'), ('How many stops over 10 minutes this week?', 'stops'),
+                             ('Daily setups this week', 'setups'), ('What share of stops were maintenance this week?', 'maintenance_stops')):
+        assert catch_all_failures(question, week + metric), question
+    assert catch_all_failures('What percent of stops were at the stacker this week?', week + 'stops&place=stacker')
+    assert catch_all_failures('Minutes per stop at splicer 3 this week', week + 'minutes_per_stop')
+    assert asked_unit_failures('How many feet a minute did we run this week?', ['**4,196,531 lineal ft** · -142,225 vs 4,338,756 the week before'])
+    assert not asked_unit_failures('How many feet a minute did we run this week?', ['**613.1 ft/min** without stops · -26.9 vs 640.0 ft/min'])
+    minutes = ['**2.71 minutes per stop** · +0.47 vs 2.24 the week before, worse']
+    for question in ('How much downtime did we have per stop this week?', 'How many minutes do we lose per stop this week?',
+                     'How long are we down per stop this week?'):   # item 3 (A4): right answers the runner failed
+        assert not asked_unit_failures(question, minutes) and not catch_all_failures(question, week + 'minutes_per_stop'), question
+    feet = ['**7,273.0 ft per setup** · +113.3 vs 7,159.7 the week before, better']
+    assert not asked_unit_failures('Average run length this week', feet)
+    assert not catch_all_failures('Average run length this week', week + 'lineal_per_setup')
+    assert asked_unit_failures('Average run length this week', ['**577 setups** · -29 vs 606 the week before'])
+

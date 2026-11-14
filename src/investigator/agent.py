@@ -305,7 +305,7 @@ MONEY_REJECT_WORDS = rf"\b(rejects?|warp|bond|misalignment|{MOISTURE_WORDS}|{CRA
 
 # Measure words decide the intent; grouping words (by grade, by width, by crew) only choose the breakdown.
 # "running" alone ("which grades are we running") is not a speed word: "how fast are we running" carries one.
-SPEED_WORDS = r"\b(speeds?|fpm|ft/min|(feet|ft) per min(ute)?|fast|faster|fastest|pace|slow|slower|slowest)\b"
+SPEED_WORDS = r"\b(speeds?|fpm|ft/min|(feet|ft) (per|a|an) min(ute)?|fast|faster|fastest|pace|slow|slower|slowest)\b"
 # A volume cue next to a speed word ("how much 275-BC did we run", "which grade ran the most") keeps it volume.
 # The cue is attached to a volume ask: a loose "most", "share" or "how much" ("which shift lost the most
 # speed", "how much speed did we lose", "what share of time were we at speed") leaves the question speed.
@@ -493,7 +493,7 @@ PER_FILLER = (r"^(what|whats|what's|was|is|were|are|our|my|the|we|us|did|do|does
 PER_RATIOS = ("feet per setup, feet per paper change, minutes per stop, MSF per production day and the downtime minutes of each "
               "production day")
 # A speed asked in its unit is the speed answer, never the lineal feet a count of feet would be ("how many feet per minute")
-SPEED_UNIT = r"\b(feet|ft) per min(ute)?\b|\bft/min\b|\bfpm\b"
+SPEED_UNIT = r"\b(feet|ft) (per|a|an) min(ute)?\b|\bft/min\b|\bfpm\b"   # "feet a minute" too (round 5, item 5)
 REJECT_SHEETS = (r"\b(rejects?|rejected|bad|scrap|waste|warp|warped|bond|misalignment|moisture|quality|dry[- ]end|damaged)\b")
 FEET_ASK = r"\bhow (many|much) (lineal )?(feet|ft|footage)\b|\blineal (feet|ft|footage)\b|\bfootage\b"
 # A ratio named is the quantity asked, whatever the verb ("what was our lineal per setup last week"): PER_KEPT, and the run length
@@ -583,8 +583,15 @@ LONGEST_TEXT = ("No tool returns the longest or shortest stop, setup or run: the
 # An average stop ("average stop length", "a typical stop", "how long is our average stop") is minutes per stop, a ratio kept
 # for all stops together (round 4, item 4); an average of anything else timed is refused with where it is answered.
 AVERAGE_ASK = r"\b(average|avg|mean|typical)\b"
-AVERAGE_STOP = (r"\b(average|avg|mean|typical)\s+([a-z/-]+\s+){0,3}?(stop|stoppage)\b"
-                r"|\b(average|avg|mean|typical)\s+(length|duration|time) of (a |the |our )?(stops?|stoppages?)\b")
+# An average stop is its length only (round 5, item 2): "average stop", "average stop length / duration / time", "the average length
+# of a stop", followed by nothing but a window or a verb. "Average stop count / frequency / rate / interval / cost / place /
+# location / reason" are not lengths: AVERAGE_OF_STOP still sees them, and they are refused as the statistic they ask for.
+AVERAGE_STOP = (r"\b(average|avg|mean|typical)\s+(stop|stoppage)\s+(length|duration|time)s?\b"
+                r"|\b(average|avg|mean|typical)\s+(length|duration|time) of (a |the |our |each )?(stops?|stoppages?)\b"
+                r"|\b(average|avg|mean|typical)\s+(stop|stoppage)\b(?!\s+(?!(this|that|last|on|in|for|during|over|across|of|was|is|were|"
+                r"lasted|last|took|take|takes)\b)[a-z])")
+AVERAGE_OF_STOP = (r"\b(average|avg|mean|typical)\s+([a-z/-]+\s+){0,3}?(stop|stoppage)\b"
+                   r"|\b(average|avg|mean|typical)\s+(length|duration|time) of (a |the |our )?(stops?|stoppages?)\b")
 AVERAGE_TEXT = ("The average stop of a window is minutes per stop ('what was our average stop this week'); each stop reason's minutes "
                 "per stop are in the downtime review, beside its minutes and stops ('downtime by reason this week'), a place's or a "
                 "kind's stops and minutes are their own ('how many minutes of downtime at the stacker this week'), and how long a setup "
@@ -639,6 +646,119 @@ WASTE_MSF = ("The waste lines are kept in square feet and a percent of gross; on
 WASTE_SQFT = ("Square feet are kept for the waste lines (trim, shear, each dry-end reason, the bale): ask 'how many square feet "
               "of trim this week'; volume is in MSF, 'how much did we make this week'. ")
 
+# ---- The plain-quantity gate (round 5 of the coordinator's review of PR 143). One quantity is a window's total, or a ratio the
+# records keep. The route answers it only when the question is plain: once the gate removes what the route consumed (the ask
+# word, the quantity's noun and unit, the filters it applies, the window and the shift), no word of this closed vocabulary may be
+# left. One left over asks a different question ("which shift had the most setups", "stops by type", "median stop length", "how
+# many long stops", "what percent of stops were at the stacker"), so the route refuses it and names what it answers, with at most
+# three questions to ask. One table and one check (plain_quantity_gate); evals/run.py states the same rule on the URL, and
+# tests/test_quantity_questions.py lists the vocabulary.
+QUALIFIERS = {
+    'ranking': ('which', 'what shift', 'most', 'fewest', 'least', 'highest', 'lowest', 'best', 'worst', 'rank', 'top', 'number one',
+                'most common', 'biggest', 'compare', 'comparison', 'versus', 'vs', 'better'),
+    'grouping': ('by', 'each', 'every', 'per', 'a day', 'daily', 'across', 'type', 'category', 'categories', 'splicer', 'knife',
+                 'knives', 'day', 'shift by shift'),
+    'statistic': ('average', 'avg', 'mean', 'median', 'typical', 'maximum', 'max', 'minimum', 'longest', 'shortest'),
+    'subset': ('long', 'short', 'longer than', 'over N'),
+    'percent': ('percent', 'percentage', 'share', '%'),
+}
+QUALIFIER_ASKS = {'ranking': 'a ranking or a comparison', 'grouping': 'a grouping or a rate', 'statistic': 'a statistic',
+                  'subset': 'a subset', 'percent': 'a share of a whole'}
+# What each family is answered by instead (at most three questions with the plain total the gate names first)
+QUALIFIER_ANSWERS = {'ranking': ("which downtime reason cost the most minutes this week", "how many setups on shift 1 this week"),
+                     'grouping': ("how many stops by reason this week", "stops per day this week"),
+                     'statistic': ("what was our average stop this week", "downtime by reason this week"),
+                     'subset': ("what was our average stop this week", "which downtime reason cost the most minutes this week"),
+                     'percent': ("what percent downtime this week", "how many stops by reason this week")}
+
+
+def qualifier_pattern(word):
+    """A word of the vocabulary as a pattern: whole words, with its plural and verb forms ("ranked", "comparing", "types"), and
+    "over N" any number."""
+    if word == '%':
+        return r"%"
+    stem = re.escape(word).replace('N', r"\d[\d,]*")
+    forms = stem[:-1] + "(e|es|ed|ing|er|ers)" if word.endswith('e') else stem + "(s|es|ed|ing|er)?"
+    return rf"(?<![a-z]){forms}(?![a-z])"
+
+
+QUALIFIER_PATTERNS = tuple((family, word, qualifier_pattern(word)) for family, words in QUALIFIERS.items() for word in words)
+# What the route consumes, whatever it answers: "how long" (a duration asked), the window, a window compared with the one before
+# (what one quantity carries beside it), the shift named or all shifts, and "caused by" before a filter
+AVG = r"(average|avg|mean|typical)"
+WINDOW_DAY = r"\b(this|that|the|last|previous|prior|same|selected|whole|full|entire|production)\s+(production\s+)?day(\s+before)?\b"
+WINDOW_SPAN = r"\b(across|over|during|for)\s+(the|this|last|that|a|all)\s+(week|month|period|day)\b"
+WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse)\b(?=(.*\b(to|with|against|versus|vs|than))?\s+(the\s+)?(last|previous|prior|"
+                  r"week before|month before|day before)\b)")
+SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(shift\s*([1-3]|one|two|three)|(first|second|third|1st|2nd|3rd)\s+shift|"
+               r"(this|that|my|our|the)\s+shift)\b")
+SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\bacross\s+(the\s+)?shifts\b|\bshifts\s+(together|combined)\b"
+CONSUMED_ALWAYS = (r"\bhow long\b", WINDOW_DAY, WINDOW_SPAN, SHIFT_NAMED, SHIFTS_ALL, r"\bcaused by\b")
+# ... and what each metric consumes: a ratio its "per" (and the average it is), a percent of a waste line its percent
+CONSUMED_BY = {
+    'minutes_per_stop': (AVERAGE_STOP, rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+(stop|stoppage)s?\b", r"\bper\s+(stop|stoppage)s?\b"),
+    'lineal_per_setup': (rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+set-?ups?\b", rf"\b{AVG}\s+run length\b", r"\bper\s+set-?ups?\b"),
+    'lineal_per_paper_change': (rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+(paper changes?|wet[- ]ends?)\b",
+                                r"\bper\s+(paper changes?|wet[- ]ends?)\b"),
+    'msf_per_day': (rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+(production\s+)?days?\b", r"\bper\s+(production\s+)?days?\b"),
+    'downtime_per_day': (r"\bper\s+(production\s+)?days?\b",),
+    'waste_pct': (r"\bpercent(age)?\b|%",),
+}
+# A ratio kept for all stops, or for the line, takes no stop reason, place or kind (round 5, item 2): never the whole's figure
+RATIO_FILTER_TEXT = {
+    'minutes_per_stop': ("Minutes per stop is kept for all stops together, not for one stop reason, place or kind: ask its stops and minutes "
+                         "('how many minutes of downtime at the stacker this week'), each reason's minutes per stop ('downtime by reason this "
+                         "week') or every stop's ('minutes per stop this week')."),
+    'downtime_per_day': ("Each production day's downtime is kept for all stops together, not for one stop reason, place or kind: ask its "
+                         "minutes over the window ('how many minutes of maintenance downtime this week'), each production day's downtime "
+                         "('downtime per day this week') or the reasons ranked ('which downtime reason cost the most minutes this week')."),
+}
+RATIO_FILTER_LINE = ("{ratio} is kept for the line, not for one stop reason, place or kind: ask the place's or reason's stops and "
+                     "minutes ('how many minutes of downtime at the stacker this week') or the line's {plain} ('{plain} this week').")
+# The plain question of each quantity, which a refusal names first
+PLAIN = {'setups': 'how many setups', 'paper_changes': 'how many paper changes', 'order_changes': 'how many order changes',
+         'lineal_per_setup': 'feet per setup', 'lineal_per_paper_change': 'feet per paper change', 'lineal_ft': 'how many lineal feet',
+         'msf_per_day': 'MSF per day', 'stops': 'how many stops', 'downtime_minutes': 'how many minutes of downtime',
+         'minutes_per_stop': 'minutes per stop', 'maintenance_minutes': 'how many minutes of maintenance downtime',
+         'operator_minutes': 'how many minutes of operator downtime', 'maintenance_stops': 'how many maintenance stops',
+         'operator_stops': 'how many operator stops', 'sheets': 'how many sheets', 'bale_msf': 'how much waste in MSF',
+         'waste_sqft': 'how many square feet of trim', 'waste_pct': 'what percent was trim', 'downtime_per_day': 'downtime per day'}
+NAMED_FILTER = tuple(pattern for pattern, _ in PLACE_WORDS + REASON_WORDS) + (r"\bmaintenance\b", r"\boperator\b")
+
+
+def qualifier_refusal(family, word, metric=None):
+    """The refusal of one qualifier left over: what it asks for, that one quantity is a window's total, and at most three
+    questions to ask instead (the plain total first, when the route had one)."""
+    asks = ((f"{PLAIN[metric]} this week",) if metric in PLAIN else ()) + QUALIFIER_ANSWERS[family]
+    quoted = [f"'{q}'" for q in dict.fromkeys(asks)][:3]
+    return (f"'{word}' asks for {QUALIFIER_ASKS[family]}, which one quantity does not answer: one quantity is a window's total, or a "
+            f"ratio the records keep. Ask {', '.join(quoted[:-1])} or {quoted[-1]}.")
+
+
+def qualifier_left(text):
+    """(family, word) of the first word of the closed vocabulary in `text`, or None."""
+    found = [(m.start(), family, m[0]) for family, _, pattern in QUALIFIER_PATTERNS for m in [re.search(pattern, text)] if m]
+    return min(found)[1:] if found else None
+
+
+def plain_quantity_gate(lower, lead):
+    """Raise when one quantity (a lead of measure=quantity) is not the plain quantity asked: a ratio kept for all stops or for
+    the line asked of one stop reason, place or kind, or a qualifier left once the route's own words are removed."""
+    metric = lead['metric']
+    if metric in RATIO_METRICS and metric != 'waste_pct' and any(re.search(p, lower) for p in NAMED_FILTER):
+        raise ValueError(RATIO_FILTER_TEXT.get(metric) or RATIO_FILTER_LINE.format(ratio=initial(PLAIN[metric]), plain=PLAIN[metric]))
+    text = lower
+    applied = [pattern for key, table in (('reason', REASON_WORDS), ('place', PLACE_WORDS)) if key in lead
+               for pattern, name in table if name == lead[key] or name.format(lead[key].rsplit(' ', 1)[-1]) == lead[key]]
+    applied += [pattern for pattern, key in WASTE_WORDS if key == lead.get('waste')]
+    # a window compared with the one before is consumed, never shifts compared ("how did the shifts compare on stops last week")
+    compared = () if re.search(r"\bshifts\b", re.sub(SHIFTS_ALL, ' ', text)) else (WINDOW_COMPARE,)
+    for pattern in (*CONSUMED_BY.get(metric, ()), *applied, *compared, *CONSUMED_ALWAYS):
+        text = re.sub(pattern, ' ', text)
+    left = qualifier_left(text)
+    if left:
+        raise ValueError(qualifier_refusal(*left, metric=metric))
+
 
 def named_grade(lower):
     """The one board grade a question names by its code ("32-C", "275-bc"), or None (none, or more than one)."""
@@ -665,6 +785,18 @@ def initial(text):
     return text[:1].upper() + text[1:]
 
 
+# The day words of the grouping vocabulary ask for each production day, as "per day" does (round 5, item 1): "stops each day" is
+# the stops of each production day, "downtime by day" and "daily downtime" each day's downtime, "setups a day" a ratio not kept.
+DAY_GROUP = r"\b(each|every|a|by)\s+(production\s+)?day\b(?!\s+of\s+the\s+week)|\bday by day\b"
+
+
+def per_day(lower):
+    """`lower` with each day word of the grouping vocabulary read as "per day": "daily X" as "X per day"."""
+    lower = re.sub(DAY_GROUP, 'per day', lower)
+    lower = re.sub(rf"\bdaily\s+((?:[a-z/-]+\s+){{0,2}}?{PER_NOUNS})", r"\1 per day", lower)
+    return re.sub(r"\bdaily\b", 'per day', lower)
+
+
 def per_ratio(lower):
     """The ratio a question's "per" names (PER_KEPT: feet per setup or per paper change, minutes per stop, MSF per production
     day, the downtime of each production day), None when it names none, or a ValueError for a ratio the records do not keep
@@ -675,7 +807,8 @@ def per_ratio(lower):
         if re.search(SPEED_WORDS, clause):
             continue   # "average speed per day": the speed answer
         nouns = re.findall(PER_NOUNS, clause)
-        numerator = nouns[-1] if nouns else None
+        # a duration asked with no unit named is in minutes: "how long are we down per stop" is minutes per stop (round 5, item 3)
+        numerator = nouns[-1] if nouns else 'minutes' if re.search(r"\bhow long\b|\bhow much time\b", clause) else None
         if re.match(r"min", den) and numerator and re.search(r"^(lineal|feet|ft|footage)$", numerator):
             continue   # "how many feet per minute": the speed answer (SPEED_UNIT); "square feet per minute" is not kept
         for den_pattern, kept, metric in PER_KEPT:
@@ -738,8 +871,11 @@ def _quantity_lead(lower, assume_count):
                     or 'operator' in lower or re.search(GROUPED, lower))
         if re.search(AVERAGE_STOP, lower) and not narrowed:
             return {'metric': 'minutes_per_stop'}
-        if re.search(AVERAGE_STOP, lower) or minutes or re.search(r"\b(length|duration)s?\b", lower):
-            raise ValueError((SETUP_TIME if re.search(SETUP_NOUNS, lower) and not re.search(AVERAGE_STOP, lower) else AVERAGE_TEXT)
+        if re.search(AVERAGE_OF_STOP, lower) and not narrowed:
+            # "average stop cost / reason / count / frequency / location": not a length, so not minutes per stop (round 5, item 2)
+            raise ValueError(qualifier_refusal('statistic', re.search(AVERAGE_ASK, lower)[0], 'minutes_per_stop'))
+        if re.search(AVERAGE_OF_STOP, lower) or minutes or re.search(r"\b(length|duration)s?\b", lower):
+            raise ValueError((SETUP_TIME if re.search(SETUP_NOUNS, lower) and not re.search(AVERAGE_OF_STOP, lower) else AVERAGE_TEXT)
                              + QUANTITY_HELP)
     count = count or assume_count
     if minutes and re.search(SLOW_TIMED, lower):   # "how long were we slow": never the minutes stopped (the re-review, item 2)
@@ -839,6 +975,7 @@ def catch_all_guard(lower, request):
 
 def parse_period_request(lower, current, shifts):
     """Route plain period phrasing to the store tools; None when the question is about one day."""
+    lower = per_day(lower)   # "stops each day", "downtime by day", "daily downtime": each production day, as "per day" (round 5, item 1)
     months = [MONTH_NAMES[m] for m in re.findall(r"\b(" + "|".join(MONTH_NAMES) + r")\b", lower)]
     fiscal = bool(re.search(r"\bfiscal\b|\baccounting period\b|4-4-5|\b445\b|\b(this|last|previous|prior|current) period\b|\bperiod (over|vs|versus|to|against) period\b|\bp(1[0-3]|[1-9])\b", lower))
     period = 'fiscal' if fiscal else 'month' if months or re.search(r"\bmonth(s|ly)?\b", lower) else 'week' if re.search(r"\bweek(s|ly)?\b", lower) else None
@@ -953,6 +1090,7 @@ def parse_period_request(lower, current, shifts):
                 raise ValueError(f"Stops, downtime, order changes and sheets are recorded by shift, reason, place and knife, not by grade: "
                                  f"ask 'how many setups on {grade_code} this week', or 'volume by grade this week'. " + QUANTITY_HELP)
             lead = {**lead, 'grade': grade_code}
+        plain_quantity_gate(lower, lead)   # nothing but the quantity asked: no ranking, grouping, statistic, subset or percent left
         if lead['metric'] == 'downtime_per_day' and window['period'] == 'day':
             # the downtime of each production day is the stops profile's, over the week when no window is named, as "stops per
             # day" is (round 4 of the coordinator's review, item 9)
@@ -1246,7 +1384,7 @@ def quantity_default(text, lower, current, shifts, day, period, read):
     # a quantity measure (one quantity, the stops of each production day) takes it with or without an ask word: "stops per day this
     # week" and "how many stops per day this week" read the same scope (round 4 of the coordinator's review, item 8)
     # "lineal feet per minute" is the speed, not a count of feet: it keeps the controls as "feet per minute" does
-    asked = re.sub(r"\b(lineal |linear )?(feet|ft) per min(ute)?s?\b|\bft/min\b", "fpm", lower)
+    asked = re.sub(r"\b(lineal |linear )?(feet|ft) (per|a|an) min(ute)?s?\b|\bft/min\b", "fpm", lower)
     return request.get('intent') in ('period_quantity', 'period_stops') or bool(re.search(QUANTITY_SCOPE_ASK, asked) and not MONEY.search(lower)
                                                                                and request.get('intent') != 'period_trend')
 
