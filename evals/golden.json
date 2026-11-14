@@ -14810,6 +14810,34 @@
      "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
     }
    }
+  },
+  {
+   "id": "unapplied-what-is-driving-overall-how-many-stops-is-an-investigation",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What is driving, overall, how many stops we had this week?",
+   "note": "Issue #153 (hotfix after PR 143): the Codex review of PR 159, the number is the object of the cause asked, one question, whatever commas sit between; the PR's first head answered a refusal as a number and its cause together.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=pareto&window=week&unit=count",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9,]+ stops?\\*\\* at .*, the largest of [0-9]+ (places|reasons)"
+    ]
+   }
+  },
+  {
+   "id": "unapplied-machine-time-lost-to-downtime-is-downtime",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes of machine time were lost to downtime this week?",
+   "note": "Issue #153 (hotfix after PR 143): the Codex review of PR 159, time said lost to downtime is the downtime, whatever it is called; the PR's first head answered a refusal as run time.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=downtime_minutes",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,.]+ minutes\\*\\* of downtime · "
+    }
+   }
   }
  ]
 }

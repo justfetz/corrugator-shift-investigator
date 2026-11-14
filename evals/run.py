@@ -234,7 +234,7 @@ _PER_DAY = r'\b(?:per (?:production )?days?|a day)\b|\bdaily\b'
 _EACH_DAY = (r"\b(?:per (?:production )?days?|(?:each|every|a|by) (?:production )?day(?:'s)?|day by day)\b|\bdaily\b"
              r"|\b(?:each|every) day's\b")
 _STOP = r'\bstop(?:s|ped|page|pages)?\b|\b(?:go|goes|went|gone|going)\s+down\b'   # "go down" is the line stopping
-_MINUTES = (r'\b(?:go|goes|went|gone|going)\s+down\b|\b(?:minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(?:s|ped|page|pages)?|take|takes|took|taking|'
+_MINUTES = (r'\b(?:lost|lose|loses|losing|went|gone)\s+to\s+(?:downtime|down\s*time|stops|stoppages)\b|\b(?:go|goes|went|gone|going)\s+down\b|\b(?:minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(?:s|ped|page|pages)?|take|takes|took|taking|'
             r'spend|spent)\b|\blasted\b'   # "last" the verb only: "how long did stops last", never "the last stop"
             r'|\blasts?\b(?!\s+(?:stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))')
 _FEET = r'\b(?:lineal|linear|feet|foot|ft|footage)\b'
@@ -390,8 +390,8 @@ def read_but_unapplied_failures(question, url):
         said = re.sub(r'\bper\s+(?:stop|stoppage)s?\b', ' ', text) if metric == 'minutes_per_stop' else text
         connectors = without_rise(re.sub(r'\b(?:went|gone|go|goes|going)\s+to\b|\b(?:rack|racks|racked|racking|add|adds|added|adding)\s+up\b',
                                                         ' ', text))
-        running = (re.search(RUN_TIME_SAID, text) or re.search(r'\b(?:between|without|before|until|till)\s+(?:a\s+|any\s+|the\s+|each\s+)?'
-                                                                r'(?:stop|stops|stoppages?|stopping|downtime)\b', text)
+        running = ((re.search(RUN_TIME_SAID, text) if not re.search(DOWN_SAID, said) else None)   # "machine time lost to downtime" is downtime
+                   or re.search(r'\b(?:between|without|before|until|till)\s+(?:a\s+|any\s+|the\s+|each\s+)?(?:stop|stops|stoppages?|stopping|downtime)\b', text)
                    or (not re.search(DOWN_SAID, said) and re.search(RUNNING_SAID, connectors)))
         if running:
             failures.append(f'{question[:60]!r} asks how long the line ran ({running[0]!r}) but lands on {metric}: run time is never downtime')
@@ -596,6 +596,8 @@ def catch_all_failures(question, url):
     if re.search(r'[?&]measure=pareto(&|$)', url or ''):
         failures.extend(grouped_pareto_failures(question, url))   # issue #153, row 3: the grouped Pareto is the allow-list's too
     if re.search(INVESTIGATION, question, re.I) and re.search(NUMBER_ASKED, question, re.I) and re.search(r'\band\b|[,;]|[?.!]\s*\S|\s[-–—]+\s|[–—]', question, re.I) and url and \
+            not re.search(r"\bwhat\s*(?:(?:is|was|are|were|'s)\s+)?(?:driving|drove|drives|caused|causes|causing|behind|led\s+to|leads\s+to)\b[\s,;:–—-]*"
+                          r'(?:[a-z]+[\s,;:–—-]+){0,2}how\s+(?:many|much|long|often)\b', question, re.I) and \
             not re.search(r'[?&]measure=quantity(&|$)', url):
         # a number and its cause together (issue #153, row 7): two questions, never one reason's stops or minutes
         failures.append(f'{question[:60]!r} asks for a number and its cause together but lands on {url}, led by one reason or a summary')

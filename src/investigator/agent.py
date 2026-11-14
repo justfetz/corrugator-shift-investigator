@@ -815,7 +815,7 @@ WINDOW_TEXT = ("'{words}' is not a window the router reads: one quantity reads t
 # The measure's own words, by metric: its noun and unit, the "per <denominator>" of a kept ratio and the average a kept ratio is
 STOP_NOUN = r"\bstop(s|ped|page|pages)?\b|\b(go|goes|went|gone|going)\s+down\b"
 LAST_VERB = r"\blasts?\b(?!\s+(stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))|\blasted\b"
-MINUTE_WORDS = (r"\b(go|goes|went|gone|going)\s+down\b|\b(minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(s|ped|page|pages)?|take|takes|took|taking|"
+MINUTE_WORDS = (r"\b(lost|lose|loses|losing|went|gone)\s+to\s+(downtime|down\s*time|stops|stoppages)\b|\b(go|goes|went|gone|going)\s+down\b|\b(minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(s|ped|page|pages)?|take|takes|took|taking|"
                 r"spend|spent)\b|" + LAST_VERB)   # "last" the verb ("how long did stops last"), never "the last stop" 
 FEET_WORDS = r"\b(lineal|linear|feet|foot|ft|footage)\b"
 AVG_ANY = r"\b(on\s+(the\s+)?)?(averag(e|es|ed|ing)|avg|mean|typical(ly)?)\b"
@@ -1053,7 +1053,10 @@ KIND_LOGGED_TEXT = ("'{words}' could mean who logged the stops, which the record
                     "kept. Ask '{plain} this week' for the stops coded as that kind, or 'how many stops this week' for every stop logged.")
 # A number and its cause asked together (row 7): "how many stops and why" is two questions, never one reason's stops
 NUMBER_AND_WHY = r"\bhow\s+(many|much|long|often)\b"   # "what drove the number of stops" is an investigation
-TWO_PARTS = r"\band\b|[,;]|[?.!]\s*\S|\s[-–—]+\s|[–—]"   # joined: "how many stops and why", "why so many stops, how many"; "what is driving how many stops we had" is one
+TWO_PARTS = r"\band\b|[,;]|[?.!]\s*\S|\s[-–—]+\s|[–—]"
+# ... unless the number is the object of the cause asked ("what is driving, overall, how many stops we had"): one question
+CAUSE_OF_NUMBER = (r"\bwhat\s*((is|was|are|were|'s)\s+)?(driving|drove|drives|caused|causes|causing|behind|led\s+to|leads\s+to)\b[\s,;:–—-]*"
+                   r"([a-z]+[\s,;:–—-]+){0,2}how\s+(many|much|long|often)\b")   # joined: "how many stops and why", "why so many stops, how many"; "what is driving how many stops we had" is one
 NUMBER_AND_WHY_TEXT = ("This asks for a number and for its cause together: ask one at a time, the number first ('how many stops this week', "
                        "'how many minutes of downtime this week'), then the cause ('why were there so many stops this week').")
 
@@ -1120,10 +1123,11 @@ def duration_gate(lower, lead):
     metric = lead['metric']
     if metric not in DURATION_METRICS:
         return
-    run = re.search(RUN_TIME, lower) or re.search(RUN_BETWEEN, lower)
+    said = re.sub(r"\bper\s+(stop|stoppage)s?\b", ' ', lower) if metric == 'minutes_per_stop' else lower
+    # run time, unless the question says it was lost to downtime ("minutes of machine time lost to downtime"); between stops always
+    run = re.search(RUN_BETWEEN, lower) or (re.search(RUN_TIME, lower) if not re.search(DOWN_SAID, said) else None)
     if run:
         raise ValueError(RUN_TIME_TEXT.format(words=run[0]))
-    said = re.sub(r"\bper\s+(stop|stoppage)s?\b", ' ', lower) if metric == 'minutes_per_stop' else lower
     if re.search(DOWN_SAID, said):
         return
     # "went to maintenance" is a connector and "rack up" a particle, never the line running
@@ -1387,7 +1391,7 @@ def parse_period_request(lower, current, shifts, named_day=None):
     """Route plain period phrasing to the store tools; None when the question is about one day. `named_day` is the words of the
     one production day the question itself named ("yesterday"), which question_scope moved the scope to."""
     asks_why = bool(re.search(WHY_ASK, lower))   # an investigation: never a quantity route (round 6, item 3)
-    if asks_why and re.search(NUMBER_AND_WHY, lower) and re.search(TWO_PARTS, lower):
+    if asks_why and re.search(NUMBER_AND_WHY, lower) and re.search(TWO_PARTS, lower) and not re.search(CAUSE_OF_NUMBER, lower):
         raise ValueError(NUMBER_AND_WHY_TEXT)   # "how many stops and why": two questions, never one reason's stops (issue #153, row 7)
     if not asks_why:
         lower = per_day(lower)   # "stops each day", "downtime by day", "daily downtime": each production day, as "per day" (round 5, item 1)

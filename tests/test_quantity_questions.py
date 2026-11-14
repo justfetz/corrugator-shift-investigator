@@ -865,6 +865,9 @@ def test_the_runner_catches_the_hotfix_rows_wrong_answers():
     ('Were stops up this week?', 'stops'), ('Did setups go up this week?', 'setups'), ('How much did stops go up this week?', 'stops'),
     ('Did minutes per stop go up this week versus last week?', 'minutes_per_stop'), ('How many stops this week so?', 'stops'),
     ('How many stops, so, this week?', 'stops'), ('How many stops can you see this week?', 'stops'),
+    # the Codex review of PR 159: time said lost to downtime is downtime, whatever it is called
+    ('How many minutes of machine time were lost to downtime this week?', 'downtime_minutes'),
+    ('How many minutes did we lose to stops this week?', 'downtime_minutes'),
 ])
 def test_what_the_hotfix_reads_still_answers(question, metric):
     """The words the hotfix reads where they are applied keep answering: a window after a preposition, a request said first, a particle,
@@ -900,7 +903,8 @@ def test_a_hotfix_refusal_names_the_true_reason(question, period, refusal):
 def test_an_investigation_that_names_a_number_is_not_two_questions():
     """"What drove the number of stops" asks a cause of a number, an investigation; "how many stops and why" asks both."""
     for question in ('What drove the number of stops this week?', 'What caused the number of stops this week?',
-                     'Why was the number of stops so high this week?', 'What is driving how many stops we had this week?'):
+                     'Why was the number of stops so high this week?', 'What is driving how many stops we had this week?',
+                     'What is driving, overall, how many stops we had this week?'):
         url = landing(question)[0]
         assert url and 'measure=pareto' in url and '/shift/2' in url, (question, url)
         assert not catch_all_failures(question, url), (question, url)
