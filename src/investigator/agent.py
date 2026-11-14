@@ -977,9 +977,10 @@ def leftover_family(word):
     return 'subset' if re.fullmatch(r"\d[\d,.]*", word) else None
 
 
-def allow_list(lower, lead):
+def allow_list(lower, lead, stands=()):
     """Raise unless every word of `lower` is consumed by the quantity `lead` (unconsumed): a rolling window is refused with the
-    windows the records keep, any other leftover word with what it asks for and at most three questions that answer."""
+    windows the records keep, any other leftover word with what it asks for and at most three questions that answer. A plan, a
+    capacity, the line running or a span said in words, and a word of a family in `stands`, is refused as Standing."""
     metric = lead['metric']
     rolling = re.search(ROLLING_WINDOW, lower)
     if rolling:
@@ -1007,13 +1008,12 @@ def allow_list(lower, lead):
     if found is None:
         raise ValueError(leftover_refusal(None, ' '.join(phrases[0]), metric))
     phrase, word, family = found
-    if family in ('plan', 'state', 'span'):
-        raise Standing(leftover_refusal(family, ' '.join(phrase), metric))   # what ran in a window answers none of them (Standing)
+    error = Standing if family in ('plan', 'state', 'span', *stands) else ValueError   # what ran in a window answers no plan (Standing)
     if family in LEFTOVER_ASKS:
         # the word as said: "what shift", "which shift", "over 10", "under 2"
         said = re.search(rf"\b((what|which)\s+)?{re.escape(word)}(\s+\d[\d,.]*)?(?![a-z])", lower)
-        raise ValueError(leftover_refusal(family, said[0] if said and word in ('shift', 'over', 'under', 'above', 'below') else word, metric))
-    raise ValueError(leftover_refusal(family, ' '.join(phrase), metric))
+        raise error(leftover_refusal(family, said[0] if said and word in ('shift', 'over', 'under', 'above', 'below') else word, metric))
+    raise error(leftover_refusal(family, ' '.join(phrase), metric))
 
 
 # ---- Words the gate consumed but no route applied (issue #153, the hotfix after PR 143). Each is now read by the code that applies it,
@@ -1110,10 +1110,12 @@ THIS_DAY_TEXT = "'{words}' names the selected production day, and the Period con
 
 class Standing(ValueError):
     """A refusal of something the question said that no answer reads (issue #153): two windows, "during the day" beside another window,
-    a hedge before a cause, a plan, a capacity or a span to date, the line running, "this shift" with no shift selected, who logged a
-    stop, "this day" or "the period" under a ranged Period control, a comparison the answer does not carry, and a word left beside the
-    Pareto grouped. It stands over the semantic model's parser (issue #144): a complete reading of the other words is still not the
-    question asked, so it never answers in its place (the coordinator on PR #155, after #159)."""
+    a hedge before a cause, a plan, a capacity or a span said in words ("how far", "up to"), the line running, "this shift" with no shift
+    selected, who logged a stop, "this day" or "the period" under a ranged Period control, a comparison one quantity's answer does not
+    carry, and a stop reason, place or kind left beside the Pareto grouped. It stands over the semantic model's parser (issue #144): a
+    complete reading of the other words is still not the question asked, so it never answers in its place (the coordinator on PR #155,
+    after #159). A window named in words no route reads ("so far", "until now", "the week before last") is a plain refusal: the parser
+    refuses the same words on its own."""
 
 
 @contextmanager
@@ -1186,15 +1188,15 @@ def comparison_gate(lower, lead, period, named_month=False, asked=None):
     daytime = re.search(DAYTIME_SAID, asked)
     other = daytime and next((words for start, end, words, _ in windows if end <= daytime.start() or start >= daytime.end()), None)
     if other:
-        raise ValueError(DAYTIME_TEXT.format(words=daytime[0], other=other.strip(), plain=PLAIN.get(lead['metric'], 'how many stops')))
+        raise Standing(DAYTIME_TEXT.format(words=daytime[0], other=other.strip(), plain=PLAIN.get(lead['metric'], 'how many stops')))
     if not window_compared(lower):
         second = next((w for w in windows if w[3] != windows[0][3]), None) if windows else None
         modal = re.search(MODAL_MAY, asked)
         if second and modal and 'may' in (windows[0][2], second[2]):
-            raise ValueError(MAY_TEXT.format(said=modal[0], other=(second if windows[0][2] == 'may' else windows[0])[2].strip(),
+            raise Standing(MAY_TEXT.format(said=modal[0], other=(second if windows[0][2] == 'may' else windows[0])[2].strip(),
                                              plain=PLAIN.get(lead['metric'], 'how many stops')))
         if second:
-            raise ValueError(TWO_SAID_TEXT.format(words=asked[windows[0][0]:second[1]], first=windows[0][2].strip(), second=second[2].strip(),
+            raise Standing(TWO_SAID_TEXT.format(words=asked[windows[0][0]:second[1]], first=windows[0][2].strip(), second=second[2].strip(),
                                                   plain=PLAIN.get(lead['metric'], 'how many stops')))
         return
     windows = windows_said(lower)
@@ -1216,7 +1218,7 @@ def comparison_gate(lower, lead, period, named_month=False, asked=None):
         what = "a month and the month before the selected day's"
     else:
         return
-    raise ValueError(TWO_WINDOWS_TEXT.format(words=words, what=what, plain=PLAIN.get(metric, 'how many stops')))
+    raise Standing(TWO_WINDOWS_TEXT.format(words=words, what=what, plain=PLAIN.get(metric, 'how many stops')))
 
 
 def deictic_gate(lower, lead, current, shifts):
@@ -1711,14 +1713,17 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
             # a count or minutes grouped by reason, place or kind answers only when every word is read (issue #153, row 3): the Pareto
             # applies no stop reason, place, kind (but the kinds it groups by), subset or comparison
             group = {'metric': 'stops_by_group' if measure == 'count' else 'minutes_by_group', 'group': group_by}
-            with standing():   # a word beside the Pareto grouped ("planned stops by reason"): refused, never a reading of the rest
+            with standing():
                 deictic_gate(lower, group, current, shifts)
                 gated_window(PLAIN[group['metric']])
                 logged = re.search(KIND_LOGGED, lower)
                 if logged:   # "how many stops did maintenance log by kind": who logged a stop is not recorded (row 9)
                     raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain='how many operator stops'))
-                comparison_gate(lower, group, gated['period'], asked=asked)
-                allow_list(lower, group)
+            # its windows stand (comparison_gate raises them as Standing); a window before that the Pareto counted does not carry, and a
+            # second split ("by reason by shift"), are the Pareto's own limits, which the semantic model's split does not share; a stop
+            # reason, place or kind beside it ("planned stops by reason") stands (the goldens of #159 pin it)
+            comparison_gate(lower, group, gated['period'], asked=asked)
+            allow_list(lower, group, stands=('filter',))
             window = gated
         if not pareto and months:
             window = {"period": "month", "anchor": month_start(months[0])}   # "downtime in August": that month, the latest such on or before the day

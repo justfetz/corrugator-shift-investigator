@@ -81,6 +81,7 @@ TOP_N = r"\b(top|bottom)\s+(\d{1,2}|" + '|'.join(agent.WORD_NUMBERS) + r")\b"
 SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\bshifts\s+(together|combined)\b|\bevery\s+shift\s+together\b"
 THIS_SHIFT = r"\b(this|that|my|our|the)\s+shift\b"
 PER_DAY = r"\bper\s+(production\s+)?day\b|\ba\s+day\b"
+LOGGED_VERB = r"\b(logged|recorded|entered|reported|noted|written)\b"   # who logged a stop, said as a verb (agent.KIND_LOGGED)
 # the window before, beside the asked one: "versus last week", "than the week before", "compare ... to last week"
 PREVIOUS = (r"\b(?:versus|vs\.?|compared\s+(?:to|with)|than|against|to|with)\s+(?:the\s+)?(?:last|previous|prior)\s+(?:production\s+)?(?:week|month|day|period)\b"
             r"|\b(?:versus|vs\.?|compared\s+(?:to|with)|than|against)\s+the\s+(?:week|month|day|period)\s+before\b")
@@ -331,13 +332,14 @@ def _read(reading, text, context, store, mdl):
     for pattern in (agent.REQUEST_LEAD, agent.MODAL_YOU, agent.DID_HAVE_TO, agent.UP_PARTICLE):
         lower, _ = _consume(pattern, lower, used, 'request')
     # What the question said that no answer reads (issue #153, read as the hand router reads it): refused once the measure is read, so
-    # the questions it offers name it; each sets a cue that refuses it over a hand route too. Who logged a stop is not recorded, its kind
-    # is: "the stops the operators logged" is never the Operator kind's stops.
+    # the questions it offers name it. Who logged a stop is not recorded, its kind is: "the stops the operators logged" is never the
+    # Operator kind's stops. Refused over a hand route only when a stop is counted or timed and the words are a verb ("which shift had the
+    # most stops logged by operators", "stops the operators did log"), never over "maintenance report this week", "the operator notes"
+    # or "downtime by reason, maintenance notes", where they may be a noun.
     said = []
-    logged = re.search(agent.KIND_LOGGED, lower)
+    lower, logged = _consume(agent.KIND_LOGGED, lower, used, 'logged')   # the rest is read, so a complete reading is known
     if logged:
-        reading.cues.add('said')
-        said.append((f"'{logged[0]}' could mean who logged the stops, which the records do not keep: a stop's kind (maintenance or "
+        said.append((f"'{logged[0][0].strip()}' could mean who logged the stops, which the records do not keep: a stop's kind (maintenance or "
                      "operator) is kept", lambda word, window: [f'operator stops {window}', f'maintenance stops {window}', f'stops by kind {window}']))
     # a percent of the shift or of the scheduled time is the measure's percent of the scheduled minutes (downtime %), never a share
     # of the downtime (the review of PR #155: "what percent of the shift was maintenance downtime" is 1.80% of shift 2, the hand
@@ -463,6 +465,9 @@ def _read(reading, text, context, store, mdl):
             raise
         reading.query = None
     if deictic and reading.query is not None:
+        reading.cues.add('said')
+    if logged and reading.measure in mdl.measures and mdl.measure_entities(reading.measure)[0] == 'stop' \
+            and (re.search(LOGGED_VERB, logged[0][0]) or re.search(r"\b(did|do|does)\b.*\b(log|record|enter|report|note)\b", text.lower())):
         reading.cues.add('said')
     if said:
         text, asks = said[0]
