@@ -410,8 +410,8 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     assert asked_by_address and all('question' not in c and (c['type'] == 'refusal' or c['expect']['url'].startswith('/corr/1/')) for c in asked_by_address)
     # main's 147 + issue #100's 14 + issue #101's 27 + issue #135's 2 + 129 issue #113 count, unit and scope cases + 20 issue #153 hotfix
     # cases + issue #144's 45 semantic questions and 39 refusals the semantic model now answers + the review of PR #155's 22 questions, less
-    # the 2 refusals it restored and the 1 case it removed, + its second review's 7 + the catch-up after #159's 5
-    assert len(routing) == 454 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # the 2 refusals it restored and the 1 case it removed, + its second review's 7 + the catch-up after #159's 7
+    assert len(routing) == 456 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)
