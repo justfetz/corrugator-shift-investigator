@@ -13991,6 +13991,30 @@
      "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
     }
    }
+  },
+  {
+   "id": "allow-stops-last-week-and-this-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops last week and this week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's re-run of the fix: refused with \"'last week' is not a window the router reads\" while its mirror answered; the count carries the week before beside it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "allow-stops-in-a-week-is-a-rate",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops in a week?",
+   "note": "Issue #113 (exact over summary): round 6 of the coordinator's review, the reviewer subagent's re-run of the fix: refused with \"'week' is a word one quantity does not read\"; a typical week is a rate.",
+   "expect": {
+    "raises": "asks for a grouping or a rate"
+   }
   }
  ]
 }
