@@ -47,7 +47,7 @@ import duckdb
 
 from . import records as R
 from . import targets
-from .analysis import Analysis, load_rows
+from .analysis import DUCKDB_CONFIG, Analysis, load_rows
 from .fixture import GRADES
 from .synth import generate_days, weekdays_between, window_bounds
 
@@ -461,7 +461,7 @@ class RecordStore:
         self._day_blobs = {}         # production day -> its pickled record objects, unpickled on first use
         self._lock = threading.RLock()
         self._baselines = {}   # (first, last) of a trailing year -> each grade's sustained speed (grade_speed_baselines)
-        self._db = duckdb.connect(":memory:", config={"threads": 2})
+        self._db = duckdb.connect(":memory:", config=DUCKDB_CONFIG)   # join filter pushdown off: analysis.DUCKDB_CONFIG
         for table, columns in TABLES.items():
             self._db.execute(f"CREATE TABLE {table} ({columns})")
         self._db.execute(f"CREATE TABLE shift_kpis ({_SHIFT_KPIS_COLUMNS})")
@@ -1919,7 +1919,7 @@ def build_prebuilt(folder, seed=DEFAULT_SEED, window=None, machine_id=DEFAULT_MA
     for stale in (store, folder / "store.duckdb.wal"):
         if stale.exists():
             stale.unlink()
-    db = duckdb.connect(str(store))
+    db = duckdb.connect(str(store), config=DUCKDB_CONFIG)
     try:
         for table, columns in TABLES.items():
             db.execute(f"CREATE TABLE {table} ({columns})")

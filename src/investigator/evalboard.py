@@ -296,7 +296,8 @@ class EvalBoard:
 
     def _case(self, case, last):
         value = case['type'] == 'value'
-        turns = case.get('turns') or ([case['question']] if case.get('question') else [])
+        # a URL case (issue #117) asks by its address
+        turns = case.get('turns') or ([case['question']] if case.get('question') else [case['url']] if case.get('url') else [])
         runs = []
         for planned, provider in self.plan:
             if planned is not case:
@@ -315,6 +316,9 @@ class EvalBoard:
                'shift': case.get('shift', 2), 'period': case.get('period', 'day'), 'corrupt': bool(case.get('corrupt')),
                'note': case.get('note'), 'known_defect': case.get('known_defect'),
                'expected': describe_expect(case.get('expect', {})), 'runs': runs}
+        if case.get('url') and 'url' in case.get('expect', {}):   # an address is asked as itself, never typed into /q
+            out['expected'] = [f'The address answers at its canonical form {case["expect"]["url"]} (issue #117)'
+                               if line.startswith('Typed into /q') else line for line in out['expected']]
         if 'expect_live' in case:
             out['expected_live'] = describe_expect(case['expect_live'])
         return out
@@ -384,7 +388,7 @@ class EvalBoard:
                 outcome, failures, note, ms, results = self._run(case, provider)
             finally:
                 self.runner.close_datasets()
-        turns = case.get('turns') or [case.get('question') or f'value golden: {case.get("tool")}']
+        turns = case.get('turns') or [case.get('question') or case.get('url') or f'value golden: {case.get("tool")}']
         out = {'id': row, 'case': case['id'], 'type': case['type'], 'mode': 'offline' if provider is None else 'live',
                'provider': None if provider in (None, '?') else provider, 'outcome': outcome, 'failures': failures, 'note': note,
                'ms': round(ms, 1), 'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), 'model_called': False,

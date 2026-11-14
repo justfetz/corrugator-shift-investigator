@@ -64,7 +64,9 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'src'))
 
-from investigator.agent import PERIOD_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
+from investigator.agent import PERIOD_TOOLS, STORE_TOOLS, TOOL_SCHEMAS, Agent, Context, question_scope  # noqa: E402
+from investigator import semantic  # noqa: E402
+from investigator.urls import resolve_url  # noqa: E402
 from investigator import judge as judging  # noqa: E402
 from investigator.cost_model import parse_rates  # noqa: E402
 from investigator import targets as owner_targets  # noqa: E402  the owner's bands (targets.json), read as data
@@ -89,6 +91,9 @@ THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 
 DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
+# the semantic model's compiler (issue #117) is no planner's tool: only a case that asks by its address, or a value case
+# that calls it, may run it, so a model that names it anywhere else still fails the unknown-tool invariant
+SEMANTIC_TOOL_NAMES = TOOL_NAMES | {semantic.TOOL}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
 # The stated rules an answer may print beside its figures: 480 scheduled minutes a shift, the 12 minutes a downtime flag
 # takes of them, and the downtime and per-setup trim flags, read from the owner's targets.json (issue #101) so a changed
@@ -234,6 +239,8 @@ def via_url(case, expect, turns, redirect_only=False):
     `redirect_only` checks the resolution alone (a live case that records a URL)."""
     failures, results, after, ms, error, location = [], [], [], 0.0, None, None
     period = case.get('period', 'day')
+    if case.get('url'):
+        return via_address(case, expect)
     for text in turns:
         params = [('day', case.get('day', DEFAULT_DAY)), ('shift', case.get('shift', 2)), ('scope', case.get('scope', 'shift')),
                   ('period', 'accounting' if period == 'fiscal' else period)]
@@ -275,12 +282,38 @@ def via_url(case, expect, turns, redirect_only=False):
     return results, error, failures, ms
 
 
+def via_address(case, expect):
+    """A URL case (issue #117) over GET: its address answers as the in-process run did, or a hand-typed spelling
+    redirects to `expect.url` and that address answers. Same return as `via_url`."""
+    failures, results, ms, error, location = [], None, 0.0, None, case['url']
+    status, headers, body = http_get(case['url'])
+    if status == 302 and 'Location' in headers:
+        location = headers['Location']
+        status, headers, body = http_get(location)
+    if status == 400:
+        error = json.loads(body)['error']
+    elif status != 200:
+        failures.append(f'GET {location} answered {status}')
+    else:
+        timing = re.search(r'dur=([0-9.]+)', headers.get('Server-Timing', ''))
+        ms = float(timing[1]) if timing else 0.0
+        result = json.loads(body)
+        if result.get('url') != location:
+            failures.append(f'the answer names {result.get("url")!r} as its address, served at {location!r}')
+        results = [result]
+    want = expect.get('url')
+    if want and error is None and bare_url(location) != want:
+        failures.append(f'{case["url"]} resolves to {bare_url(location)}, expected {want}')
+    return results, error, failures, ms
+
+
 # ---------------------------------------------------------------- planners
 
 class ScriptedPlanner:
     """Issues exactly one tool call and finishes on it: the value cases go through
     the real agent loop (validation, trace, summary) without a language model."""
     mode = 'scripted single tool call (value golden); no language model'
+    semantic = True   # no model: a value case may call the semantic model's compiler (issue #117), which no model planner may
 
     def __init__(self, tool, arguments):
         self.tool, self.arguments = tool, arguments
@@ -494,14 +527,14 @@ def shape_failures(spec, sections):
     return failures
 
 
-def invariants(mode, result, analysis, allowed_shifts):
-    """Checks every case must pass, whatever its category."""
+def invariants(mode, result, analysis, allowed_shifts, tools=TOOL_NAMES):
+    """Checks every case must pass, whatever its category. `tools`: the tools the case may run."""
     failures = []
     trace = result['trace']
     if mode == 'offline' and (result['usage']['model_calls'] or result['usage']['cost_usd']):
         failures.append('offline run reported model usage')
     for step in trace:
-        if step['ok'] and step['tool'] not in TOOL_NAMES:
+        if step['ok'] and step['tool'] not in tools:
             failures.append(f'executed unknown tool {step["tool"]}')
         if step['ok'] and step['arguments'].get('shift') is not None and step['arguments']['shift'] not in allowed_shifts:
             failures.append(f'{step["tool"]} ran for shift {step["arguments"]["shift"]} outside scope {allowed_shifts}')
@@ -545,8 +578,8 @@ def invariants(mode, result, analysis, allowed_shifts):
         if paragraph['kind'] != 'limitation' and not paragraph['citations']:
             failures.append(f'{paragraph["kind"]} paragraph cites nothing')
     for table in result['tables']:
-        if table['title'] in PERIOD_TOOLS:
-            continue  # period tables are the whole store result; chart-row equality covers them above
+        if table['title'] in STORE_TOOLS:
+            continue  # period and semantic tables are the whole store result; chart-row equality covers them above
         shift = table['shift']
         full = getattr(analysis, table['title'])(shift, **({'metric': table['metric']} if 'metric' in table else {}))
         if len(table['rows']) != len(full['rows']):
@@ -1014,7 +1047,8 @@ def _run_case(case, provider, live, record, scratch):
         expect = case['expect_live']
     allowed = [shift] if scope == 'shift' else [1, 2, 3]
     results = []
-    turns = case.get('turns') or [case.get('question') or f'value golden: {case.get("tool")}']
+    # a URL case (issue #117) asks by its address: `url` is the input, answered as the server answers it
+    turns = case.get('turns') or [case.get('question') or case.get('url') or f'value golden: {case.get("tool")}']
     mode = 'live' if provider else 'offline'
     note, warnings, exchanges = '', set(), []
 
@@ -1074,6 +1108,11 @@ def _run_case(case, provider, live, record, scratch):
         started = time.perf_counter()
         try:
             for text in turns:
+                if case.get('url'):
+                    resolved = resolve_url(text, golden_store())   # the server's path: the address, resolved, then the agent
+                    turn, turn.history = resolved['context'], resolved['history']
+                    results.append(make_agent(dataset(resolved['day'], resolved['corrupt'])).ask(resolved['text'], turn, request=resolved['request']))
+                    continue
                 # The question's own shift and window win over the case's controls (issue #105), as on the server:
                 # the turn runs in the scope it names, on that day's records. A turn that stays on the controls' day
                 # carries the follow-up history back; one on another day starts its own, as /q drops the priors.
@@ -1131,8 +1170,9 @@ def score(case, expect, results, analysis, allowed, mode):
     """The invariants over every turn and the case's own expectations over the last (or, for an
     investigation, over all of them): the same scoring for the in-process and the URL answers."""
     failures = []
+    tools = SEMANTIC_TOOL_NAMES if case.get('url') or case.get('tool') == semantic.TOOL else TOOL_NAMES
     for index, result in enumerate(results):
-        failures.extend(invariants(mode, result, *answered_scope(case, expect, result, analysis, allowed, index == len(results) - 1)))
+        failures.extend(invariants(mode, result, *answered_scope(case, expect, result, analysis, allowed, index == len(results) - 1), tools=tools))
     if case['type'] == 'investigation':
         failures.extend(investigation_failures(expect, results))
     else:
