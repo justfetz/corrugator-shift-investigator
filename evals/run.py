@@ -310,8 +310,10 @@ def unconsumed_words(question, url):
     shifts_said = re.search(r'\bshifts\b', re.sub(QUANTITY_CONSUMES_ALWAYS[8], ' ', text))
     compared_to = r'\b(?:than|with|against|versus|vs|and)\b(?=\s+(?:the\s+)?(?:last|previous|prior|week before|month before|day before)\b)'
     before = r'\b(?:the\s+)?(?:last|previous|prior)\s+(?:week|month|period|day)\b|\b(?:the\s+)?(?:week|month|day|period)\s+before\b(?!\s+last)'
-    compared = (() if shifts_said or not (re.search(QUANTITY_WINDOW_COMPARED, text) or re.search(compared_to, text)) else
-                (QUANTITY_WINDOW_COMPARED, compared_to, before))   # the week before is read only beside a comparison
+    joined = (r'\b(?:this|current)\s+(week|month|period)\b.*\band\b.*\b(?:last|previous|prior)\s+\1\b'
+              r'|\b(?:last|previous|prior)\s+(week|month|period)\b.*\band\b.*\b(?:this|current)\s+\2\b')   # two windows joined
+    compared = (() if shifts_said or not (re.search(QUANTITY_WINDOW_COMPARED, text) or re.search(compared_to, text) or re.search(joined, text))
+                else (QUANTITY_WINDOW_COMPARED, compared_to, before) + ((r'\band\b',) if re.search(joined, text) else ()))   # the week before beside a comparison
     for pattern in (_FILTER_CONNECTOR, *compared, *QUANTITY_CONSUMES_ALWAYS, *QUANTITY_CONSUMES.get(metric, ())):
         text = re.sub(pattern, ' | ', text)
     left = [w for w in re.findall(r"[a-z0-9%$]+(?:[-'’][a-z0-9]+)*", text) if w not in FUNCTION_WORDS]

@@ -680,7 +680,7 @@ LEFTOVER_FAMILIES = {
     'ranking': ('which', 'most', 'fewest', 'least', 'highest', 'lowest', 'best', 'worst', 'rank', 'top', 'biggest', 'smallest',
                 'compare', 'comparison', 'versus', 'vs', 'better', 'worse', 'more', 'less', 'shift', 'shifts'),
     'grouping': ('by', 'each', 'every', 'per', 'daily', 'across', 'type', 'category', 'categories', 'distribution', 'breakdown',
-                 'split', 'rate', 'frequency', 'ratio', 'day', 'days', 'list'),
+                 'split', 'rate', 'frequency', 'ratio', 'day', 'days', 'week', 'weeks', 'month', 'months', 'year', 'years', 'list'),
     'statistic': ('average', 'avg', 'mean', 'median', 'typical', 'maximum', 'max', 'minimum', 'min', 'longest', 'shortest',
                   'percentile', 'deviation', 'variance', 'length', 'duration'),
     'subset': ('long', 'short', 'longer', 'shorter', 'over', 'under', 'below', 'above', 'brief', 'micro', 'minor', 'major',
@@ -738,6 +738,9 @@ SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\
 # ... and the word that names the window compared ("more stops than last week", "131 versus the week before")
 COMPARED_TO = r"\b(than|with|against|versus|vs|and)\b(?=\s+(the\s+)?(last|previous|prior|week before|month before|day before)\b)"
 PREVIOUS_WINDOW = r"\b(the\s+)?(last|previous|prior)\s+(week|month|period|day)\b|\b(the\s+)?(week|month|day|period)\s+before\b(?!\s+last)"
+# ... and the two windows joined in either order ("last week and this week", "this week and how many last week")
+JOINED_WINDOWS = (r"\b(this|current)\s+(week|month|period)\b.*\band\b.*\b(last|previous|prior)\s+\2\b"
+                  r"|\b(last|previous|prior)\s+(week|month|period)\b.*\band\b.*\b(this|current)\s+\5\b")
 CONSUMED_ALWAYS = (*WINDOW_WORDS, SHIFT_NAMED, SHIFTS_ALL, r"\bhow long\b", r"\bhow often\b",
                    r"\b(across|over|on|for)\s+(the\s+)?(whole\s+|entire\s+)?(line|corrugator|machine|plant)\b",
                    r"\bof\s+any\s+(type|kind|sort)\b")
@@ -746,7 +749,7 @@ ROLLING_WINDOW = (r"\b(last|past|previous|prior)\s+(\d+|few|couple(\s+of)?|sever
                   r"eleven|twelve|fourteen|thirty)\s+(production\s+)?(days?|weeks?|months?|shifts?|hours?)\b"
                   r"|\bthe\s+last\s+(week|month|year)\b(?!\s+of\b)|\bpast\s+(day|week|month|year)s?\b")   # the trailing week, not the week before
 # A window named in words the router does not apply ("the previous day", "the week before last", "month to date", "the same day")
-UNREAD_WINDOW = (r"\b(last|previous|prior|past|same|first)\s+(production\s+)?(day|week|month|period|year)\b"
+UNREAD_WINDOW = (r"\b(first|last)\s+(day|week)\s+of\s+(the\s+)?[a-z]+\b|\b(last|previous|prior|past|same|first)\s+(production\s+)?(day|week|month|period|year)\b"
                  r"|\b(day|week|month|period)\s+before(\s+(last|yesterday))?\b|\bto\s+date\b|\b[mwy]td\b|\b(day|week|month|year)s?\s+ago\b")
 WINDOW_TEXT = ("'{words}' is not a window the router reads: one quantity reads the selected production day or yesterday, a Mon-Fri "
                "week, a calendar month or a 4-4-5 period. Ask '{plain} this week', '{plain} this month' or '{plain} last week'.")
@@ -869,8 +872,9 @@ def unconsumed(lower, lead):
     # a window compared with the one before (and the week before itself) is consumed, never shifts compared ("how did the shifts
     # compare on stops last week")
     compared = ()
-    if not re.search(r"\bshifts\b", re.sub(SHIFTS_ALL, ' ', text)) and (re.search(WINDOW_COMPARE, text) or re.search(COMPARED_TO, text)):
-        compared = (WINDOW_COMPARE, COMPARED_TO, PREVIOUS_WINDOW)
+    if not re.search(r"\bshifts\b", re.sub(SHIFTS_ALL, ' ', text)) and (re.search(WINDOW_COMPARE, text) or re.search(COMPARED_TO, text)
+                                                                        or re.search(JOINED_WINDOWS, text)):
+        compared = (WINDOW_COMPARE, COMPARED_TO, PREVIOUS_WINDOW) + ((r"\band\b",) if re.search(JOINED_WINDOWS, text) else ())
     for pattern in (FILTER_CONNECTOR, *compared, *CONSUMED_ALWAYS, *METRIC_WORDS.get(metric, ())):   # the window before the measure's words
         text = re.sub(pattern, ' | ', text)
     phrases, run = [], []
@@ -1164,8 +1168,9 @@ def catch_all_guard(lower, request):
         raise ValueError(QUANTITY_HELP)
 
 
-def parse_period_request(lower, current, shifts):
-    """Route plain period phrasing to the store tools; None when the question is about one day."""
+def parse_period_request(lower, current, shifts, named_day=None):
+    """Route plain period phrasing to the store tools; None when the question is about one day. `named_day` is the words of the
+    one production day the question itself named ("yesterday"), which question_scope moved the scope to."""
     asks_why = bool(re.search(WHY_ASK, lower))   # an investigation: never a quantity route (round 6, item 3)
     if not asks_why:
         lower = per_day(lower)   # "stops each day", "downtime by day", "daily downtime": each production day, as "per day" (round 5, item 1)
@@ -1270,8 +1275,7 @@ def parse_period_request(lower, current, shifts):
         return f"{year:04d}-{month:02d}-01"
     shift = current.shift if current.scope == 'shift' else shifts[0] if len(shifts) == 1 else None
     # a day the question named ("yesterday": question_scope moved the scope to it) holds one production day, not each of a week's
-    moved = getattr(current, 'read', None) or {}
-    one_day_named = moved.get('words') if moved.get('period') == 'day' else None
+    one_day_named = named_day
     # A question that names no window gets the Period control's window (week, month, 4-4-5), else the day.
     selected = getattr(current, 'period', 'day')
     selected = None if selected == 'day' else selected
@@ -1657,6 +1661,7 @@ def _parse_request(text, current):
         raise ValueError("Enter a question of 1-2000 characters")
     lower = correct_typos(text.lower())
     read = getattr(current, 'read', None) or {}
+    named_day = read['words'] if read.get('words') and read['words'] in lower and read.get('period') == 'day' else None
     if read.get('words'):
         # question_scope moved the scope to the window these words name: in it they are the selected window
         lower = lower.replace(read['words'], READ_AS[read['period']])
@@ -1673,7 +1678,7 @@ def _parse_request(text, current):
     shifts = sorted(named_shifts(lower))   # in shift order, as the day path lists them (shifts=1,3)
     if current.scope == 'shift' and any(shift != current.shift for shift in shifts):
         raise ValueError('Selected shift only: choose Production-day comparison or change the shift control')
-    period_request = parse_period_request(lower, current, shifts)
+    period_request = parse_period_request(lower, current, shifts, named_day)
     if period_request:
         return period_request
     compare = bool(re.search(COMPARE_WORDS, lower))
