@@ -889,7 +889,7 @@ def test_a_share_a_filter_cuts_from_the_whole_denominator_carries_no_band_and_sa
     minutes = run(store, 'downtime_minutes', MONTH, filters={'grade': '26-C'})['value']
     assert close(grade['value'], minutes / run(store, 'scheduled_minutes', MONTH)['value'] * 100)
     # under one shift the denominator is that shift's minutes, and the words say so
-    assert run(store, 'downtime_pct', MONTH, shift=3, filters={'grade': '26-C'})['denominator_text'] == "all the shift's scheduled minutes"
+    assert run(store, 'downtime_pct', MONTH, shift=3, filters={'grade': '26-C'})['denominator_text'] == "all the shift's scheduled minutes in the window"
     # the stop kind alone is band_by's own: its band, against the scheduled minutes, as the downtime review reads it
     kind = run(store, 'downtime_pct', MONTH, filters={'kind': 'Maintenance'})
     assert kind['band'] == targets.band('maintenance', kind['value']) and 'denominator_text' not in kind and kind['cut'] == []
@@ -902,13 +902,18 @@ def test_a_row_cut_from_the_whole_denominator_carries_no_band_even_beside_band_b
     assert rows and all('band' not in r and r['denominator_text'] == "all the window's scheduled minutes" for r in rows)
     shifts = run(store, 'downtime_pct', MONTH, group_by=['shift'], filters={'grade': '26-C', 'kind': 'Maintenance'})
     assert 'band' not in shifts and shifts['denominator_text'] == "all the window's scheduled minutes"
-    assert all('band' not in r and r['denominator_text'] == "all the shift's scheduled minutes" for r in shifts['rows'])
+    assert all('band' not in r and r['denominator_text'] == "all the shift's scheduled minutes in the window" for r in shifts['rows'])
     families = run(store, 'dry_end_pct', MONTH, group_by=['grade', 'reject_family'], limit=200)
-    assert all('band' not in r and r['denominator_text'] == "all the board grade's yield" for r in families['rows'])
+    assert all('band' not in r and r['denominator_text'] == "all the board grade's yield in the window" for r in families['rows'])
+    # a week the window cuts short (September's first, from Monday 31 August) is the window's part of it, and says so
+    weeks = run(store, 'downtime_pct', MONTH, group_by=['week'], filters={'grade': '26-C'})
+    assert {r['denominator_text'] for r in weeks['rows']} == {"all the production week's scheduled minutes in the window"}
     assert families['band'] == targets.band('dry_end', families['value']) and 'denominator_text' not in families
 
 
 def test_the_answer_says_a_cut_share_is_read_against_the_whole_window(store):
+    """A grade or a customer has a clock or a yield of its own, so the note says the figure is not that rate; a reject family
+    has none, so its part of all the yield is all the rate it has, and the note does not say otherwise."""
     for url, head, note in (
             ('/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&grade=26-C',
              "Downtime, board grade (quality id) 26-C this month: **{v}%** of all the window's scheduled minutes (query 1)",
@@ -916,7 +921,15 @@ def test_the_answer_says_a_cut_share_is_read_against_the_whole_window(store):
             ('/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&customer=C002',
              "Dry-end rejects, customer C002 this month: **{v}%** of all the window's yield (query 1)",
              "Customer C002 cuts the dry-end rejects only, never the yield after trim and shear: the figure is the slice's part of the whole, "
-             "not its own rate, so it carries no band.")):
+             "not its own rate, so it carries no band."),
+            ('/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&reject_family=BOND',
+             "Dry-end rejects, reject family Bond this month: **{v}%** of all the window's yield (query 1)",
+             "Reject family Bond cuts the dry-end rejects only, never the yield after trim and shear: the figure is the slice's part of the whole, "
+             "so it carries no band."),
+            ('/corr/1/month/2026-09-14/shift/3?measure=semantic&m=op_maint_pct&kind=Maintenance',
+             "Downtime (operator and maintenance), stop kind Maintenance, shift 3 this month: **{v}%** of all the shift's scheduled minutes in the window (query 1)",
+             "Stop kind Maintenance cuts the operator and maintenance downtime only, never the scheduled minutes: the figure is the slice's part of the "
+             "whole, so it carries no band.")):
         resolved = resolve_url(url, store)
         analysis = store.day_analysis(resolved['day'])
         try:
@@ -971,12 +984,45 @@ def test_compare_prev_agrees_with_the_period_tools_comparison(store):
 
 def test_a_duckdb_error_is_a_refusal_never_a_server_error(store):
     """A where that passes the grammar but fails in DuckDB (a text column compared with a number) is refused with the reason,
-    as a SemanticError the agent records as a refused call, never an exception that would be a 500."""
-    spec = json.loads(S.MODEL_PATH.read_text())
-    spec['physical']['entities']['reject']['where'] = 'family > 5'
-    model = S.Model(spec)
-    with pytest.raises(S.SemanticError, match=r'^The semantic model could not run this request in DuckDB'):
-        S.run(S.SemanticQuery('reject_sqft', window=WEEK), store, mdl=model)
+    as a SemanticError the agent records as a refused call, never an exception that would be a 500: from the query, and
+    from a filter's value lookup in validate (the review of PR #148)."""
+    for where in ('family > 5', 'family = sqft'):
+        spec = json.loads(S.MODEL_PATH.read_text())
+        spec['physical']['entities']['reject']['where'] = where
+        model = S.Model(spec)
+        S._VALUES.clear()
+        for query in (S.SemanticQuery('reject_sqft', window=WEEK), S.SemanticQuery('reject_sqft', window=WEEK, filters={'reject_family': 'BOND'}),
+                      S.SemanticQuery('reject_sqft', window=WEEK, filters={'reject_reason': 'zzz'})):
+            with pytest.raises(S.SemanticError, match=r'^The semantic model could not run this request in DuckDB'):
+                S.run(query, store, mdl=model)
+    S._VALUES.clear()
+
+
+def test_rows_that_do_not_add_up_to_the_total_are_refused(store, monkeypatch):
+    """The review of PR #148 caught DuckDB 1.5.1's join filter pushdown losing a LEFT JOIN's matches under CPU contention: every
+    day of a dry-end split read 0.00% beside a 0.41% total. Every connection now runs with that optimizer off, and a result
+    whose listed rows of an additive quantity do not add up to its total is refused, never shown."""
+    from investigator.analysis import DUCKDB_CONFIG
+    assert DUCKDB_CONFIG['disabled_optimizers'] == 'join_filter_pushdown'
+    assert store._fetch("SELECT current_setting('disabled_optimizers') AS v", [])[0]['v'] == 'join_filter_pushdown'
+    analysis = store.day_analysis('2026-09-14')
+    try:
+        assert analysis._db.execute("SELECT current_setting('disabled_optimizers')").fetchone()[0] == 'join_filter_pushdown'
+    finally:
+        analysis.close()
+    days = run(store, 'dry_end_pct', MONTH, group_by=['day'], filters={'reject_family': 'BOND'})
+    assert close(sum(r['numerator'] for r in days['rows']), days['numerator']) and all(r['numerator'] > 0 for r in days['rows'])
+    real = store._fetch
+
+    def lossy(sql, params, limit=1000):   # the join's matches lost: each day's numerator read null, filled as a zero
+        rows = real(sql, params, limit)
+        return [{**r, 'numerator': 0, 'value': 0} if 'd0' in r and 'numerator' in r else r for r in rows]
+    monkeypatch.setattr(store, '_fetch', lossy)
+    with pytest.raises(S.SemanticError, match='do not add up to its total'):
+        run(store, 'dry_end_pct', MONTH, group_by=['day'], filters={'reject_family': 'BOND'})
+    with pytest.raises(S.SemanticError, match='do not add up to its total'):
+        run(store, 'downtime_pct', MONTH, group_by=['grade'])
+    run(store, 'downtime_pct', MONTH, group_by=['grade'], limit=2)   # a limited list is not the whole: not checked
 
 
 def test_no_model_planner_can_run_the_semantic_model(store):

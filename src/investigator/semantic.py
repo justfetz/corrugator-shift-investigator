@@ -708,13 +708,24 @@ def _value_sql(mdl, dim):
     return f"SELECT DISTINCT {expr} AS v FROM {entity['table']} b" + (f' WHERE {where}' if where else ''), params
 
 
+def _fetch(store, sql, params, limit):
+    """One read of the store: a DuckDB error (the model file loaded but DuckDB refuses its SQL, such as a text column
+    compared with a number) is a refusal with the reason, never an exception the server would answer with a 500 (the
+    coordinator's re-review of PR #148), whether it comes from a filter's value lookup or the query itself."""
+    try:
+        return store._fetch(sql, params, limit=limit)
+    except duckdb.Error as exc:
+        reason = str(exc).splitlines()[0][:200]
+        raise SemanticError(f'The semantic model could not run this request in DuckDB ({type(exc).__name__}: {reason})') from None
+
+
 def store_values(dim, store, mdl=None):
     """The dimension's distinct values in the store (None for a dimension with more than LOOKUP_ROWS)."""
     mdl = mdl or model()
     key = (id(store), getattr(store, 'content_hash', None), id(mdl), dim)
     if key not in _VALUES:
         sql, params = _value_sql(mdl, dim)
-        rows = store._fetch(f'SELECT v FROM ({sql}) WHERE v IS NOT NULL ORDER BY v LIMIT {LOOKUP_ROWS + 1}', params, limit=LOOKUP_ROWS + 1)
+        rows = _fetch(store, f'SELECT v FROM ({sql}) WHERE v IS NOT NULL ORDER BY v LIMIT {LOOKUP_ROWS + 1}', params, limit=LOOKUP_ROWS + 1)
         values = [r['v'] for r in rows]
         _VALUES[key] = None if len(values) > LOOKUP_ROWS else values
     return _VALUES[key]
@@ -760,11 +771,11 @@ def resolve_value(dim, value, store, mdl=None):
         raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the values are: ' + ', '.join(str(c) for c in values), values)
     # a dimension with many values (paper runs, orders): checked one by one, the nearest by similarity
     sql, params = _value_sql(mdl, dim)
-    hit = store._fetch(f'SELECT v FROM ({sql}) WHERE lower(CAST(v AS VARCHAR)) = lower(?) LIMIT 1', params + [str(value).strip()], limit=1)
+    hit = _fetch(store, f'SELECT v FROM ({sql}) WHERE lower(CAST(v AS VARCHAR)) = lower(?) LIMIT 1', params + [str(value).strip()], limit=1)
     if hit:
         return hit[0]['v']
-    near = store._fetch(f'SELECT v FROM ({sql}) WHERE v IS NOT NULL ORDER BY jaro_winkler_similarity(lower(CAST(v AS VARCHAR)), lower(?)) DESC, v LIMIT 5',
-                        params + [str(value).strip()], limit=5)
+    near = _fetch(store, f'SELECT v FROM ({sql}) WHERE v IS NOT NULL ORDER BY jaro_winkler_similarity(lower(CAST(v AS VARCHAR)), lower(?)) DESC, v LIMIT 5',
+                  params + [str(value).strip()], limit=5)
     choices = [r['v'] for r in near]
     raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the nearest: ' + ', '.join(str(c) for c in choices), choices)
 
@@ -1105,13 +1116,7 @@ def run(query, store, rates=None, mdl=None):
     trace = {'sql': [], 'parameters': []}
     fetched = {}
     for statement in compiled.statements:
-        try:
-            fetched[statement.name] = store._fetch(statement.sql, statement.params, limit=MAX_LIMIT + 1)
-        except duckdb.Error as exc:
-            # the model file loaded but DuckDB refuses its SQL (a text column compared with a number): a refusal with the
-            # reason, never an exception the server would answer with a 500 (the coordinator's re-review of PR #148)
-            reason = str(exc).splitlines()[0][:200]
-            raise SemanticError(f'The semantic model could not run this request in DuckDB ({type(exc).__name__}: {reason})') from None
+        fetched[statement.name] = _fetch(store, statement.sql, statement.params, MAX_LIMIT + 1)
         trace['sql'].append(statement.sql)
         trace['parameters'].append([_plain(p) for p in statement.params])
     rates = cost_model.effective(rates) if m['agg'] == 'priced' and (rates is None or 'values' not in rates) else rates
@@ -1136,6 +1141,7 @@ def run(query, store, rates=None, mdl=None):
         rows.append(row)
     groups = fetched['groups'][0]['groups'] if fetched.get('groups') else 0
     total = _reading(mdl, query, total_row, rates, basis, {}) if total_row else {'value': None}
+    _check_adds_up(mdl, query, rows, groups, total)
     data = {'tool': TOOL, 'measure': query.measure, 'label': m['label'], 'unit': m['unit'], 'agg': m['agg'],
             'definition': m['description'], 'entity': mdl.measure_entities(query.measure)[0], 'group_by': list(query.group_by),
             'lever': _lever(mdl, query.measure, {}, query.filters),
@@ -1161,8 +1167,14 @@ def run(query, store, rates=None, mdl=None):
     data['cut'] = total.get('cut', _cut(mdl, query, {}))
     by_rows = _cut(mdl, query, {d: None for d in query.group_by})
     data['rows_cut'] = [d for d in by_rows if d not in data['cut']]
-    data['cut_by'] = ([{'dimension': f['dimension'], 'text': f'{f["label"].lower()} {f["text"]}'} for f in data['filters'] if f['dimension'] in data['cut']] +
-                      [{'dimension': d, 'text': f'each {mdl.dimensions[d]["label"].lower()}'} for d in data['rows_cut']])
+    # a dimension of the counted records themselves (a stop's kind or reason, a reject's family) has no quantity of its own to
+    # be read against, so its figure is its rate; one that comes with another entity's records (a setup's grade, an order
+    # lane's customer) has its own clock or yield, and the figure is not that rate (the review of PR #148)
+    own = mdl.measures[m['numerator']]['entity'] if m['agg'] == 'ratio' else None
+    data['cut_by'] = ([{'dimension': f['dimension'], 'text': f'{f["label"].lower()} {f["text"]}', 'own_rate': mdl.dimensions[f['dimension']]['entity'] != own}
+                       for f in data['filters'] if f['dimension'] in data['cut']] +
+                      [{'dimension': d, 'text': f'each {mdl.dimensions[d]["label"].lower()}', 'own_rate': mdl.dimensions[d]['entity'] != own}
+                       for d in data['rows_cut']])
     data['rows_band_withheld'] = rows_band_withheld
     if rows and rows[0].get('denominator_text'):
         data['rows_unit'] = f'% of {rows[0]["denominator_text"]}' if m['unit'].startswith('%') else m['unit']
@@ -1183,6 +1195,19 @@ def run(query, store, rates=None, mdl=None):
     if m['agg'] == 'priced':
         cost_model._envelope(data, rates)
     return data
+
+
+def _check_adds_up(mdl, query, rows, groups, total):
+    """Every row of an additive quantity is listed (no LIMIT cut it): the rows' sum is the total's, which DuckDB computes in
+    a statement of its own. A join that lost its matches would read as a column of zeros beside a whole total (the review of
+    PR #148, under CPU contention; analysis.DUCKDB_CONFIG keeps that optimizer off), so a mismatch is refused, never shown."""
+    m = mdl.measures[query.measure]
+    key, part = {'ratio': ('numerator', m.get('numerator')), 'priced': ('quantity', m.get('quantity'))}.get(m['agg'], ('value', query.measure))
+    if not rows or groups != len(rows) or mdl.measures[part]['agg'] not in ADDITIVE or total.get(key) is None:
+        return
+    listed = sum(r.get(key) or 0 for r in rows)
+    if abs(listed - total[key]) > abs(total[key]) * 1e-9 + 1e-6:
+        raise SemanticError('The rows of this request do not add up to its total, so the result is refused rather than shown; ask again')
 
 
 def _reading(mdl, query, r, rates, basis, dims_values):
@@ -1238,16 +1263,17 @@ def _noun(mdl, dim):
 
 def _denominator_text(mdl, query, dims_values):
     """What a cut reading's denominator is: `all the window's scheduled minutes`, or the slice of the window it does carry
-    (`all the shift's scheduled minutes` under one shift or by shift, `all the board grade's yield` for a grade's reject
-    family)."""
+    (`all the shift's scheduled minutes in the window` under one shift or by shift, `all the board grade's yield in the
+    window` for a grade's reject family, `all the production week's ... in the window` for a week the window cuts short)."""
     m = mdl.measures[query.measure]
     denominator = mdl.measures[m['denominator']]['entity']
     slices = [d for d in dict.fromkeys([*dims_values, *query.filters]) if mdl.reach(denominator, d) is not None]
     if query.shift is not None and 'shift' not in slices:
         slices.append('shift')
-    nouns = list(dict.fromkeys(_noun(mdl, d) for d in slices)) or ['window']
+    nouns = list(dict.fromkeys(_noun(mdl, d) for d in slices))
     quantity = m['unit'].split(' of ', 1)[1] if ' of ' in m['unit'] else mdl.measures[m['denominator']]['label'].lower()
-    return f"all the {' and '.join(nouns)}'s {quantity}"
+    # a row of a time split is the window's part of its week or month (the window cuts the first and last short)
+    return f"all the {' and '.join(nouns)}'s {quantity} in the window" if nouns else f"all the window's {quantity}"
 
 
 def _previous(mdl, query, r, rates, basis):

@@ -1579,14 +1579,17 @@ class SemanticAnswer:
         who = ' and '.join(parts)
         cut_filter = bool(data.get('cut'))
         if not cut_filter:
-            what, band = "each row is its slice's part of the whole, not its own rate", ', so the rows carry no band'
+            what, band = "each row is its slice's part of the whole", ', so the rows carry no band'
         elif not data['rows']:
-            what, band = "the figure is the slice's part of the whole, not its own rate", ', so it carries no band'
+            what, band = "the figure is the slice's part of the whole", ', so it carries no band'
         else:
-            what, band = "every figure is its slice's part of the whole, not its own rate", ', so none carries a band'
+            what, band = "every figure is its slice's part of the whole", ', so none carries a band'
+        # a grade or a customer has a clock or a yield of its own, and this is not its rate; a stop kind or a reject family
+        # has none, so the part of the whole is all the rate it has (the review of PR #148)
+        rate = ', not its own rate' if any(c.get('own_rate') for c in data['cut_by']) else ''
         withheld = data.get('band_withheld') or data.get('rows_band_withheld')
         return (f'{who[:1].upper()}{who[1:]} {"cuts" if len(parts) == 1 else "cut"} the {data["numerator_label"].lower()} only, never the '
-                f'{data["denominator_label"].lower()}: {what}{band if withheld else ""}.')
+                f'{data["denominator_label"].lower()}: {what}{rate}{band if withheld else ""}.')
 
     def row_line(self, result, i, row):
         data = result['data']

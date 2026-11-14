@@ -7961,7 +7961,7 @@
    "day": "2026-09-14",
    "scope": "day",
    "shift": 2,
-   "note": "Issue #117 (semantic model, phase 1): dry-end rejects as a percent of the yield after trim and shear, by family, for one listed shift under the all-shift scope: each family is read against the whole yield (the families add up to the total). The owner's dry-end band is the total's, so it stands beside the total only, never beside a family (as the waste breakdown leaves its family rows unbanded; the review of PR for #117). The coordinator's re-review of PR #148: each family row says it is read against all the shift's yield, and a note says why it carries no band.",
+   "note": "Issue #117 (semantic model, phase 1): dry-end rejects as a percent of the yield after trim and shear, by family, for one listed shift under the all-shift scope: each family is read against the whole yield (the families add up to the total). The owner's dry-end band is the total's, so it stands beside the total only, never beside a family (as the waste breakdown leaves its family rows unbanded; the review of PR for #117). The coordinator's re-review of PR #148: each family row says it is read against all the shift's yield in the window, and a note says why it carries no band.",
    "reviewed_by": "owner-pending",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=semantic&m=dry_end_pct&by=reject_family&shifts=2",
@@ -8002,9 +8002,9 @@
      ]
     },
     "sections_match": [
-     "^- (Bond|Warp|Misalignment|Moisture|Other): \\*\\*[0-9.]+%\\*\\* of all the shift's yield \\(query 1 · row [0-4]\\)$",
+     "^- (Bond|Warp|Misalignment|Moisture|Other): \\*\\*[0-9.]+%\\*\\* of all the shift's yield in the window \\(query 1 · row [0-4]\\)$",
      "^A ratio of sums over the window, never an average of ratios\\.$",
-     "^Each reject family cuts the dry-end rejects only, never the yield after trim and shear: each row is its slice's part of the whole, not its own rate, so the rows carry no band\\.$"
+     "^Each reject family cuts the dry-end rejects only, never the yield after trim and shear: each row is its slice's part of the whole, so the rows carry no band\\.$"
     ]
    }
   },
@@ -8965,7 +8965,7 @@
    "scope": "day",
    "shift": 2,
    "period": "month",
-   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): the bond rejects against all the month's yield read \"0.41% of yield · home run\", the owner's dry-end band beside one family. The same split by=reject_family already carried none; the filter now reads the same way.",
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): the bond rejects against all the month's yield read \"0.41% of yield · home run\", the owner's dry-end band beside one family. The same split by=reject_family already carried none; the filter now reads the same way. A reject family has no yield of its own, so its part of all the yield is all the rate it has: the note withholds the band without calling the figure something other than the family's rate.",
    "reviewed_by": "owner-pending",
    "expect": {
     "url": "/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&reject_family=BOND",
@@ -8998,7 +8998,7 @@
      ]
     },
     "sections_match": [
-     "^Reject family Bond cuts the dry-end rejects only, never the yield after trim and shear: the figure is the slice's part of the whole, not its own rate, so it carries no band\\.$"
+     "^Reject family Bond cuts the dry-end rejects only, never the yield after trim and shear: the figure is the slice's part of the whole, so it carries no band\\.$"
     ],
     "sections_not_match": "· (home run|on target|over target|flag)"
    }
