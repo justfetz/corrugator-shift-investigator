@@ -35,10 +35,10 @@ LOSS = ('lost', 'lose', 'losing', 'down')
 # ... of which these are cues before a value or a dimension, and are consumed with it
 PLACE_CUES = ('at', 'on', 'in')
 REASON_CUES = ('for', 'from', 'to', 'due', 'caused', 'because', 'triggered', 'related')
-# ("went to maintenance", "stops that go to the stacker": the router's FILTER_CONNECTOR reads the same verbs; "go" and "went" are not
-# function words after issue #153)
-CONNECTOR = (r"\b(?:(?:caused|triggered|brought\s+on|due|related|attributed|coded|charged)\s+(?:by|to|from)|(?:went|gone|go|goes|going)\s+to"
-             r"|because\s+of)\b")
+# ("went to maintenance": the router's FILTER_CONNECTOR reads the same verb; "go" and "went" are not function words after issue #153, and
+# "going to" is a future, a plan: never consumed here)
+CONNECTOR = (r"\b(?:(?:caused|triggered|brought\s+on|due|related|attributed|coded|charged)\s+(?:by|to|from)"
+             r"|(?:went|gone)\s+to(?!\s+(?:have|be|run|make|do|get|go|see|need|cut)\b)|because\s+of)\b")
 # The closed table of ranking, grouping, comparison and statistic words (the issue's "closed set"): the model holds measures,
 # dimensions and values, never these.
 RANK = {'most': 'most', 'top': 'most', 'highest': 'most', 'biggest': 'most', 'largest': 'most', 'greatest': 'most', 'max': 'most',
@@ -417,6 +417,10 @@ def _read(reading, text, context, store, mdl):
         # which in the visitor's scope is another week: the review of PR #155)
         reading.window_words = read_words['words']
     # ---- the shift: one named (agent.named_shifts), the selected one ("this shift"), or all of them
+    compared_to = bool(re.search(r"\bcompar(?:e|ed|ing)\b", lower))
+    if compared_to:   # "compare shift 1 to shift 2": the two shifts compared, joined as "and" joins them (the values: below)
+        one = r"(?:shift\s*[1-3]|(?:first|second|third|1st|2nd|3rd)\s+shift)\b"
+        lower = re.sub(rf"\b({one})\s+to\s+(?=(?:the\s+)?{one})", r"\1 and ", lower)
     lower, unread_shift = _consume(agent.UNREAD_SHIFT, lower, used, 'unread shift')
     if unread_shift:
         raise Refused(f"'{unread_shift[0][0].strip()}' names a shift the semantic model does not read: name it by its number "
@@ -456,12 +460,17 @@ def _read(reading, text, context, store, mdl):
     lower = re.sub(r"\b(cost|costs|costing)(\s+us)?\s+(?=(the\s+)?(most|least|more|less)\b)", ' ', lower)   # "cost the most minutes": the verb
     lower, connectors = _consume(CONNECTOR, lower, used, 'reason cue')
     # ---- the words, longest vocabulary phrase first
-    if re.search(r"\bcompar(?:e|ed|ing)\b", lower):
-        # "compare 32-C to 26-C", "compare shift 1 to shift 2": the two compared, joined as "and" joins them. "To" is not a function word
-        # (issue #153: "to go", "need to"); only beside a comparison said is it the comparison's
-        lower = re.sub(r"\bto\b", ' and ', lower)
     vocab = vocabulary(store, mdl)
     items = _items(lower, vocab)
+    if compared_to:
+        # "compare 32-C to 26-C", "compare the stacker to the splicer": a "to" between two values of one dimension, with a comparison
+        # said, joins them as "and" does. "To" is not a function word (issue #153: "to go", "have to run"); anywhere else it is unread
+        for i, item in enumerate(items):
+            after = next((it for it in items[i + 1:] if not (it.kind == 'filler' and it.words in ('the', 'a', 'an', 'our'))), None)
+            before = _prev(items, i)
+            if item.words == 'to' and item.kind == 'unknown' and before is not None and after is not None and \
+                    {e[1] for e in _entries(before, 'value')} & {e[1] for e in _entries(after, 'value')}:
+                item.kind = 'and'
     a = {'rank': rank, 'limit': limit, 'per_day': bool(per_day), 'reason_cue': bool(connectors), 'period': period, 'anchor': anchor,
          'compare': compare, 'shifts': shifts, 'this_shift': bool(this_shift), 'all_shifts': bool(all_shifts), 'ask_unit': ask_unit,
          'ask_often': ask_often, 'loss': bool(set(tokens_of(text)) & set(LOSS))}
