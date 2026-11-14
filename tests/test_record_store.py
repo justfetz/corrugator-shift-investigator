@@ -34,7 +34,7 @@ def day_records(data, day):
             [sh for sh in data["shifts"] if sh.production_date == key])
 
 
-def test_store_is_the_rolling_year_built_once(store, data):
+def test_store_is_the_rolling_year_built_once(store, data, latency_budget):
     """1 January 2025 (the fixed start, issue #100) to INVESTIGATOR_AS_OF (2026-09-30 in tests): every weekday.
     Its hash is the one the value goldens were generated for (from synth.generate_window), and its rows
     for August and September 2026 are exactly the two months generated on their own."""
@@ -52,7 +52,7 @@ def test_store_is_the_rolling_year_built_once(store, data):
     assert store.counts["shifts"] == 3 * 456 and store.counts["setups"] > 9 * two_months["setups"]
     assert store.counts["customers"] == 41 and store.counts["reject_reasons"] == 81
     assert default_store() is store
-    assert store.boot_seconds < 60
+    assert store.boot_seconds < latency_budget(60), store.boot_seconds
 
 
 def test_shift_kpis_reconcile_to_summed_setup_records(store, data):

@@ -483,7 +483,7 @@ def test_static_files_revalidate_with_an_etag(running):
 
 # ---- issue #20: URL-addressable questions (the Datasette model) ----
 
-def test_a_typed_question_redirects_to_its_canonical_url_and_the_url_answers(running):
+def test_a_typed_question_redirects_to_its_canonical_url_and_the_url_answers(running, latency_budget):
     """GET /q resolves the question with the offline router and redirects; the canonical URL serves the page,
     the answer as .json (or with Accept: application/json), and the PDF with format=pdf. No token, no session."""
     sessions_before,reports_before=len(running.app.sessions),len(running.app.reports)
@@ -498,7 +498,7 @@ def test_a_typed_question_redirects_to_its_canonical_url_and_the_url_answers(run
     assert [t['tool'] for t in result['trace'] if t['tool']!='render_chart']==['get_shift_kpis','get_downtime_breakdown','get_wet_end_performance','get_shift_notes']
     assert result['context']['history']==[{'question':canonical,'shifts':[2],'intent':'overview'}]
     served=float(headers['Server-Timing'].split('dur=')[1])
-    assert 0<served<250, headers['Server-Timing']   # acceptance: server time under 250 ms
+    assert 0<served<latency_budget(250), headers['Server-Timing']   # acceptance: server time under 250 ms (scaled on a CI runner, #139)
     assert 'Synthetic production investigation' in result['report_markdown']
     # the same answer three ways: .json suffix, format=json, Accept header
     status,_,again=request(running,'GET','/corr/1/day/2026-09-14/shift/2.json?measure=overview')

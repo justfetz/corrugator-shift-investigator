@@ -117,7 +117,7 @@ def _fresh_process_boot(env):
     return json.loads(run.stdout.strip().splitlines()[-1])
 
 
-def test_prebuilt_year_builds_in_budget_and_boots_fast(year_folder):
+def test_prebuilt_year_builds_in_budget_and_boots_fast(year_folder, latency_budget):
     """Issue #19 asked for default_store() under 200 ms with the prebuilt folder over two months;
     issue #35 kept image boot under 300 ms over a year and the build under 2 minutes; issue #100
     (the data from 1 January 2025, about 1.75 times the year, and the record contract's larger
@@ -125,16 +125,16 @@ def test_prebuilt_year_builds_in_budget_and_boots_fast(year_folder):
     30 s to build and 350-400 ms to boot (the contract tables and shift_kpis are copied in; the
     record objects stay pickled per day until a day is read), against about 25 s to generate.
     The relative bound (under a twentieth of the generated boot) holds the claim on any machine;
-    the absolute one is the issue's budget."""
+    the absolute ones are the issue's budgets, scaled on a CI runner by latency_budget (issue #139)."""
     where, manifest = year_folder
-    assert manifest["build_seconds"] < 120, manifest["build_seconds"]
+    assert manifest["build_seconds"] < latency_budget(120), manifest["build_seconds"]
     assert manifest["window"] == [YEAR[0].isoformat(), YEAR[1].isoformat()] and manifest["production_days"] >= 450
     prebuilt = min((_fresh_process_boot({"INVESTIGATOR_PREBUILT": str(where)}) for _ in range(3)), key=lambda r: r["ms"])
     generated = default_store()   # this process's store: the same year, generated (conftest unsets INVESTIGATOR_PREBUILT)
     print(f"year: built in {manifest['build_seconds']:.1f} s; fresh-process default_store(): prebuilt {prebuilt['ms']} ms, "
           f"generated {generated.boot_seconds * 1000:.0f} ms")
     assert prebuilt["source"] == "prebuilt" and generated.boot_source == "generated"
-    assert prebuilt["ms"] < 500
+    assert prebuilt["ms"] < latency_budget(500), prebuilt
     assert prebuilt["ms"] < generated.boot_seconds * 1000 / 20
 
 

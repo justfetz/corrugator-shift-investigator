@@ -434,7 +434,7 @@ class SlowPlanner:
         pass
 
 
-def test_offline_question_is_not_delayed_by_a_live_round_in_flight(monkeypatch, tmp_path):
+def test_offline_question_is_not_delayed_by_a_live_round_in_flight(monkeypatch, tmp_path, latency_budget):
     """The acceptance test: a stub planner holds a live round for 5 s; an offline question answers in under 250 ms."""
     started, planners = threading.Event(), []
 
@@ -455,7 +455,7 @@ def test_offline_question_is_not_delayed_by_a_live_round_in_flight(monkeypatch, 
             status, _, body = post(server, ASK, public=True)
             times.append((time.perf_counter() - tick) * 1000)
             assert status == 200 and json.loads(body)['status'] == 'complete'
-        assert max(times) < 250, times
+        assert max(times) < latency_budget(250), times
         assert time.monotonic() - began < 4 and slow.is_alive()      # all five answered while the model call was still in flight
         assert planners[0].lock_held_during_call is False            # the model call does not hold the shared lock
         slow.join(15)

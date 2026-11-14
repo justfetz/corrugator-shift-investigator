@@ -131,16 +131,16 @@ def _best_of(report, *args):
     return statistics.median(times)
 
 
-def test_period_reports_are_lookups(store):
+def test_period_reports_are_lookups(store, latency_budget):
     """Issue #34: month < 150 ms and week < 100 ms (they measured 2,120 ms and 614 ms when every
-    day was rebuilt; about 18 ms and 10 ms as lookups)."""
+    day was rebuilt; about 18 ms and 10 ms as lookups). Scaled on a CI runner by latency_budget (issue #139)."""
     report = PeriodReports(store)
     for shift, scope in ((2, "shift"), (2, "day")):
         month, week = _best_of(report, "2026-09-14", shift, scope, "month"), _best_of(report, "2026-09-14", shift, scope, "week")
         accounting = _best_of(report, "2026-09-14", shift, scope, "accounting")
         print(f"{scope} {shift}: month {month:.1f} ms, week {week:.1f} ms, 4-4-5 {accounting:.1f} ms")
-        assert month < 150 and accounting < 150, (scope, month, accounting)
-        assert week < 100, (scope, week)
+        assert month < latency_budget(150) and accounting < latency_budget(150), (scope, month, accounting)
+        assert week < latency_budget(100), (scope, week)
 
 
 def _inventory():
