@@ -354,6 +354,11 @@ def test_the_runner_catches_the_wrong_answers_the_review_found():
     assert asked_unit_failures('What percent was shear this week?', ['**388,677 sq ft** of Side trim'])
     assert asked_unit_failures('How much waste in MSF this week?', ['**5.04%** of gross'])
     assert not asked_unit_failures('What was our lineal per setup last week?', ['**7,212.6 ft per setup** · -401.8 vs 7,614.4 the week before'])
+    # the longest stop is one record, never the place with the most stops (the coordinator's review of PR #155 at 74cc46f, item 4);
+    # the fewest stops in a day is that day ranked (issue #144)
+    assert asked_unit_failures('Longest stop this week', ['Stacker had the most stops this week: **39 stops** (query 1 · row 0)'])
+    assert asked_unit_failures('Maximum stop this week', ['Shift 1 had the most stops this week: **52 stops** (query 1 · row 0)'])
+    assert not asked_unit_failures('Minimum stops in a day this week', ['2026-09-18 (Fri) had the fewest stops this week: **12 stops** (query 1 · row 0)'])
     # the coordinator's re-review: a ratio answered with its numerator's count, a unit found only after the lead clause, a
     # duration asked as "how long" or in hours, "how often" on the overview, and the shift comparison
     assert asked_unit_failures('Feet per stop this week', ['**137 stops** · -39 vs 176 the week before, better'])

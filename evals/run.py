@@ -227,9 +227,11 @@ ASKED_UNITS = (# an average stop is minutes per stop; an average setup or run le
                 r'\bmin(?:utes)?(?: per |/)(?:setup|changeover|paper change|order change|run)\b'),
                # feet a minute is the speed (round 5, item 5)
                (r'\b(?:feet|ft) (?:a|an|per) min(?:ute)?\b', r'\bft/min\b'),
-               # ... or, in a day ("minimum stops in a day"), the day ranked in the same direction (issue #144: the semantic model's ranking)
+               # the longest of anything is one record, never the place or shift with the most (main's pattern; the coordinator's
+               # review of PR #155 at 74cc46f, item 4: "had the most" let "Stacker had the most stops" pass for "longest stop")
                (r'\b(?:longest|maximum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
-                r'\b(?:longest|maximum)\b|\b(?:had|tied for) the (?:most|highest)\b'),
+                r'\b(?:longest|shortest|maximum|minimum)\b'),
+               # ... the minimum in a day ("minimum stops in a day") is the day ranked fewest first (issue #144: the semantic model's ranking)
                (r'\b(?:shortest|minimum)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
                 r'\b(?:shortest|minimum)\b|\b(?:had|tied for) the (?:fewest|least|lowest)\b'),
                # an average of a count or a total is a ratio, never the total ('average stops this week')

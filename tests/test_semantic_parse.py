@@ -146,6 +146,13 @@ def test_a_share_leads_with_the_values_own_row_beyond_the_limit_and_without_reco
     ('how many stops over 10 minutes this week', "is not a word the semantic model reads"),
     ('How many stops each day yesterday', 'needs a window longer than one'),
     ('which shift lost the most speed this week', 'Speed lost is a gap'),
+    # a loss or a reject said of what ran (the coordinator's review of PR #155 at 74cc46f, item 1)
+    ('How many sheets did we lose this week', "'lose' asks what was lost"),
+    ('Which grade lost the most MSF this week', "'lost' asks what was lost"),
+    ('How many feet were rejected this week', "'rejected' names the dry-end rejects"),
+    ('How many sheets were rejected this week', "'rejected' names the dry-end rejects"),
+    ('How many setups did we produce this week', "'produce' is not a word the semantic model reads"),
+    ('Which shift spent the most downtime this week', "'spent' is not a word the semantic model reads"),
 ])
 def test_a_word_the_model_cannot_place_is_refused_with_at_most_three_questions(store, question, why):
     r = reading(store, question)
@@ -161,7 +168,8 @@ def test_every_suggestion_is_a_question_the_parser_answers(store):
                'Biggest stop this week', 'How many stops by splicer this week', 'Average downtime per shift this week',
                'Run rate this week', 'Best crew this week', 'Stops per 1000 ft this week', 'How many glue stops this week',
                'Which shift had the most stops on shift 2 this week', 'What portion of downtime was the stacker this week',
-               'Daily setups this week', 'Worst shift last week', 'Median downtime yesterday']
+               'Daily setups this week', 'Worst shift last week', 'Median downtime yesterday', 'How many sheets did we lose this week',
+               'Which grade lost the most MSF this week', 'How many feet were rejected this week', 'Which day lost the most feet this week']
     for question in refused:
         r = reading(store, question)
         assert r.suggestions, question
@@ -171,6 +179,49 @@ def test_every_suggestion_is_a_question_the_parser_answers(store):
 
 
 # ------------------------------------------------------------------ the router's use of it
+
+def test_a_loss_verb_is_read_only_of_a_loss(store):
+    """'lost' is read of downtime and the waste lines, 'rejected' of the dry-end rejects; beside what ran it is refused over the hand
+    route, which answers what ran (the coordinator's review of PR #155 at 74cc46f, item 1)."""
+    for question, measure in (('Which shift lost the most minutes this week', 'downtime_minutes'), ('How much trim did we lose this week', 'trim_sqft'),
+                              ('How much scrap was rejected this week', 'reject_sqft'), ('Which grade lost the most downtime this week', 'downtime_minutes')):
+        r = reading(store, question)
+        assert r.complete and r.query.measure == measure and ('lost' in dict(r.used) or 'lose' in dict(r.used) or 'rejected' in dict(r.used)), (question, r.refusal, r.used)
+    for question, why in (('How much MSF was rejected this week?', "'rejected' names the dry-end rejects"),
+                          ('Which grade lost the most MSF this week?', "'lost' asks what was lost"),
+                          ('Which shift lost the most sheets this week?', "'lost' asks what was lost")):
+        with pytest.raises(ValueError, match=re.escape(why)):
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+
+
+def test_a_complete_reading_never_replaces_a_domain_refusal(store):
+    """A hand refusal that gives a domain reason stands over a complete reading; one that names a structure or a word its one quantity
+    does not carry is the parser's to answer (the coordinator's review of PR #155 at 74cc46f, item 1)."""
+    sheets, ranked = reading(store, 'Sheets this week'), reading(store, 'Which shift had the most setups this week')
+    assert sheets.complete and ranked.complete
+    domain = ValueError("Rejects are recorded as square feet by reason, not as sheets (sheets only per reported sub-reason)")
+    assert P.stands(domain, sheets) and not P.router_limit(domain)
+    assert P.stands(ValueError('No tool returns the longest or shortest stop, setup or run'), sheets)
+    limit = ValueError("'which' asks for a ranking or a comparison, which one quantity does not answer: one quantity is a window's total")
+    assert P.router_limit(limit) and not P.stands(limit, ranked)
+    # the owner-pending re-points: the semantic model reads the very measure or dimension the reason says is missing
+    assert not P.stands(domain, reading(store, 'How many reject sheets yesterday?'))
+    with pytest.raises(ValueError, match='recorded as square feet by reason'):
+        parse_request('How many sheets were rejected this week?', question_scope('How many sheets were rejected this week?', Context(DAY, 2, scope='shift'),
+                                                                                  store.production_days, store), store)
+
+
+def test_a_waste_answer_leads_with_the_line_asked(store):
+    """The waste breakdown keeps "waste", a family or reason shown or compared and the line it opens with (side trim); a line it does not
+    lead with is the semantic model's (the coordinator's review of PR #155 at 74cc46f, item 3), and so are a grade split of anything but
+    MSF and a comparison the grade totals do not carry."""
+    for question, tool in (('How much trim this week?', 'get_waste_breakdown'), ('Waste this week', 'get_waste_breakdown'),
+                           ('Show warp this month', 'get_waste_breakdown'), ('Is it bond or warp this month?', 'get_waste_breakdown'),
+                           ('How much shear this week?', S.TOOL), ('How much warp this week?', S.TOOL), ('Dry end rejects this week', S.TOOL),
+                           ('How much bale this week?', S.TOOL), ('Volume by grade this week', 'get_grade_totals'),
+                           ('Lineal feet per grade this week', S.TOOL), ('MSF this week versus last week', S.TOOL)):
+        request, _, _ = answer(store, question)
+        assert request['plan'][0]['tool'] == tool, (question, request['plan'][0]['tool'])
 
 def test_the_flagship_investigations_keep_their_routes(store):
     """Why, the review, the Pareto, the waste breakdown, the money, the setup matrix and the speed variance answer as before."""
@@ -385,6 +436,16 @@ TEMPLATES = ('which {dim} had the most {m} this week', 'which {dim} had the fewe
              '{m} by {dim} yesterday', '{m} by {dim} on shift 3 this week')
 VALUE_TEMPLATES = ('how many {m} on {value} this week', 'what percent of {m} were {value} this week', '{m} for {value} this month',
                    'what percent of {m} were {value} last week')
+# the verbs a quantity is said with (the coordinator's review of PR #155 at 74cc46f, item 1): read where the measure is what they say
+# ("which shift lost the most downtime", "how much scrap was rejected"), refused beside any other, never dropped
+VERB_TEMPLATES = ('how many {m} did we lose this week', 'which {dim} lost the most {m} this week', 'how much {m} was rejected this week',
+                  'which {dim} rejected the most {m} this week', 'how much {m} did we produce this week', 'which {dim} produced the most {m} this week',
+                  'how many {m} did we spend this week', 'which {dim} took the most {m} this week', 'how many {m} did setups take this week',
+                  'which {dim} was making the most {m} this week', 'how many {m} did we experience this week', 'how many {m} were stopped this week',
+                  'which {dim} was running the most {m} this week', 'how much {m} were we losing this week')
+# The words a template says that carry no content (agent.FUNCTION_WORDS and the copulas and question words the templates use), kept
+# here apart from the parser's FILLER: a content word the parser drops fails the test even when the parser lists it as filler
+NON_CONTENT = agent.FUNCTION_WORDS | frozenset(('had', 'were', 'was', 'did', 'do'))
 
 
 def generated(store):
@@ -393,6 +454,10 @@ def generated(store):
     for template in TEMPLATES:
         for measure, mword in MEASURE_WORDS.items():
             for dim, dword in DIM_WORDS.items():
+                out.append((template.format(dim=dword, m=mword), measure, dim, None))
+    for template in VERB_TEMPLATES:
+        for measure, mword in MEASURE_WORDS.items():
+            for dim, dword in (DIM_WORDS.items() if '{dim}' in template else [(None, None)]):
                 out.append((template.format(dim=dword, m=mword), measure, dim, None))
     for template in VALUE_TEMPLATES:
         for measure, mword in MEASURE_WORDS.items():
@@ -421,7 +486,7 @@ def test_every_generated_question_uses_every_content_word_or_is_refused(store):
             continue
         answered += 1
         used = {t for words, _ in r.used for t in P.tokens_of(words)}
-        content = [t for t in P.tokens_of(question) if t not in P.FILLER]
+        content = [t for t in P.tokens_of(question) if t not in NON_CONTENT]
         assert all(t in used for t in content), (question, [t for t in content if t not in used], r.used)
         quantity = {r.query.measure, *S._parts(model, r.query.measure)}
         assert measure in quantity, (question, r.query.measure)
@@ -491,7 +556,13 @@ def test_every_generated_answer_reads_as_it_was_asked_on_the_card(store):
         r = reading(store, question)
         if not r.complete:
             continue
-        request, asked, result = answer(store, question, scope='day')
+        try:
+            request, asked, result = answer(store, question, scope='day')
+        except ValueError as exc:
+            # a domain reason the hand router gave stands over a complete reading ("what percent of scrap were Bond": the waste lines
+            # are kept as a percent of gross; the review of PR #155 at 74cc46f, item 1), never a structure or a word it does not read
+            assert not P.router_limit(exc), (question, str(exc)[:120])
+            continue
         if request['intent'] != 'semantic':
             continue   # the hand route answers it already ("how many setups on 200-C": one quantity, #113)
         data = result['trace'][0]['data']
