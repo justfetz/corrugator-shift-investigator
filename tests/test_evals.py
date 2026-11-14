@@ -351,7 +351,14 @@ def test_the_ci_scale_loosens_each_case_budget_and_never_the_p50_p95_gate(monkey
     assert [(r['outcome'], r['ms']) for r in json.loads(rows.read_text())] == [('pass', 400.0)]
     (line,) = [json.loads(text) for text in (tmp_path / 'history.jsonl').read_text().splitlines()]
     assert line['latency_ms'] == {'p50': 400.0, 'p95': 400.0} and line['exit'] == 2, line
-    assert [r['ms'] for r in json.loads((tmp_path / 'last_run.json').read_text())['rows']] == [400.0]
+    tracked = json.loads((tmp_path / 'last_run.json').read_text())
+    assert [r['ms'] for r in tracked['rows']] == [400.0]
+    # Its verdict was judged at 250 ms × 2, so both files say so (test_the_tracked_record_... refuses such a line in the repo).
+    assert line['latency_scale'] == tracked['latency_scale'] == 2 and 'do not commit it (CI refuses a scaled line)' in out, line
+    monkeypatch.setenv(env, '1')                                                        # unscaled, the record is as before
+    unscaled = golden.history_line(json.loads(rows.read_text()), 0)
+    assert 'latency_scale' not in unscaled and 'latency_scale' not in golden.last_run(json.loads(rows.read_text()), unscaled)
+    monkeypatch.setenv(env, '2')
     # The CI gate in pytest reads the same unscaled budgets: a p50 of 150 ms fails at scale 2 (a scaled gate would allow 200).
     monkeypatch.setitem(globals(), 'LATENCY_MS', {c['id']: 150.0 for c in OFFLINE})
     with pytest.raises(AssertionError, match=r'offline p50 150\.0 ms over the 100 ms budget'):
@@ -361,6 +368,15 @@ def test_the_ci_scale_loosens_each_case_budget_and_never_the_p50_p95_gate(monkey
     ci = re.findall(r"^ +INVESTIGATOR_LATENCY_SCALE: '([0-9.]+)'$", (workflows / 'tests.yml').read_text(encoding='utf-8'), re.M)
     assert len(ci) == 1 and 1 < float(ci[0]) <= golden.MAX_LATENCY_SCALE, ci
     assert [f.name for f in [*workflows.glob('*.yml'), ROOT / 'Dockerfile'] if f.name != 'tests.yml' and env in f.read_text(encoding='utf-8')] == []
+
+
+def test_the_tracked_record_was_judged_at_the_products_own_budgets():
+    """Issue #139: /evals, its badge and the case study read evals/history.jsonl and evals/last_run.json as committed. A run
+    tracked under INVESTIGATOR_LATENCY_SCALE records `latency_scale` there, since its pass / fail verdicts were judged at
+    scaled case budgets; no committed line may carry one, so CI fails the pull request that would ship a scaled verdict."""
+    history = [json.loads(raw) for raw in (ROOT / 'evals' / 'history.jsonl').read_text(encoding='utf-8').splitlines() if raw.strip()]
+    assert history and [line['ran_at'] for line in history if 'latency_scale' in line] == [], 'track again with the scale unset'
+    assert 'latency_scale' not in json.loads((ROOT / 'evals' / 'last_run.json').read_text(encoding='utf-8')), 'track again with the scale unset'
 
 
 def test_latency_budget_times_a_refusal_but_never_a_replay(monkeypatch):

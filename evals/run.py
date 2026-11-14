@@ -99,7 +99,9 @@ LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
 # the URL's server time) and every speed budget asserted in pytest by INVESTIGATOR_LATENCY_SCALE, through latency_budget()
 # (issue #139). Unset, it is 1: a developer's machine and the deployed service check the product's own budgets. It never
 # touches LATENCY_BUDGET_MS, the run's p50 / p95 (the product's promise, measured as it is), nor any measured time: the
-# table, --json, history.jsonl and last_run.json keep the times as the clock read them.
+# table, --json, history.jsonl and last_run.json keep the times as the clock read them. A tracked run under a scale also
+# records `latency_scale` on its history line and in last_run.json, since its pass / fail verdicts were judged at the
+# scaled budgets; tests/test_evals.py fails CI on a committed one, so /evals and the case study never read such a line.
 LATENCY_SCALE_ENV = 'INVESTIGATOR_LATENCY_SCALE'
 MAX_LATENCY_SCALE = 3   # loosens a budget for a slow runner, never switches one off
 
@@ -1798,7 +1800,9 @@ def main(argv=None):
               + (f'; latency p50 {line["latency_ms"]["p50"]:.0f} ms, p95 {line["latency_ms"]["p95"]:.0f} ms' if line['latency_ms']['p50'] is not None else '')
               + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items())
               + (f'; judge {line["judge"]["model"]}, ${line["judge"]["cost_per_case_usd"]:.4f} per judged case (rows in {JUDGE_LAST_RUN.relative_to(ROOT)})'
-                 if line.get('judge') and line['judge'].get('cost_per_case_usd') is not None else ''))
+                 if line.get('judge') and line['judge'].get('cost_per_case_usd') is not None else '')
+              + (f'; judged at case budgets × {scale:g} ({LATENCY_SCALE_ENV}): do not commit it (CI refuses a scaled line);'
+                 ' track it again with the scale unset' if scale != 1 else ''))
     return failed + breaches
 
 
@@ -1858,8 +1862,9 @@ LAST_RUN = ROOT / 'evals' / 'last_run.json'
 def last_run(rows, line):
     """The rows behind the newest history line: id, case, type, provider, outcome and ms per row.
     `ran_at` and `commit` are that line's, so a reader can tell the two files belong together; the
-    /evals page shows each case's result from here without running anything."""
+    /evals page shows each case's result from here without running anything. A scaled run's `latency_scale` comes along."""
     return {'ran_at': line['ran_at'], 'commit': line['commit'], 'dataset': line['dataset'],
+            **({'latency_scale': line['latency_scale']} if 'latency_scale' in line else {}),
             'rows': [{k: r[k] for k in ('id', 'case', 'type', 'provider', 'mode', 'outcome', 'ms', 'note')} for r in rows]}
 
 
@@ -1900,7 +1905,8 @@ def comparisons_withdrawn(rows):
 def history_line(rows, exit_status, judged=None):
     """One record per run: enough to tell whether a change in the planner, the prompt or the
     data moved the score, and whether it moved the clock. Live rows are scored against the
-    recordings' model; `latency_ms` is the offline p50 / p95. A judged run (`--judge`) adds `judge`:
+    recordings' model; `latency_ms` is the offline p50 / p95. A run under INVESTIGATOR_LATENCY_SCALE adds
+    `latency_scale`: its verdicts were judged at scaled case budgets (issue #139). A judged run (`--judge`) adds `judge`:
     the judge model and rubric, the pass count per criterion, the cost and the cost per judged case,
     and its agreement with the owner's grades at that time."""
     def tally(subset):
@@ -1928,7 +1934,7 @@ def history_line(rows, exit_status, judged=None):
                           'types': tally(r for r in rows if r['provider'] == provider)}
     return {'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ'), 'commit': commit, 'dataset': dataset_version()[:12],
             'cases': len(rows), 'offline': tally(r for r in rows if not r['provider']), 'latency_ms': offline_latency(rows),
-            'live': live, **({'live_ms': live_latency(rows)} if live_latency(rows) else {}),
+            **({'latency_scale': scale} if (scale := latency_scale()) != 1 else {}), 'live': live, **({'live_ms': live_latency(rows)} if live_latency(rows) else {}),
             **({'judge': judge_record(*judged)} if judged else {}), 'exit': exit_status}
 
 
