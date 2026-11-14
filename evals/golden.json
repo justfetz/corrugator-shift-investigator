@@ -11200,9 +11200,9 @@
    "type": "refusal",
    "mode": "offline",
    "question": "How many setups each day this week?",
-   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 577 setups, the week's total; setups are not kept per day.",
+   "note": "Issue #113 (exact over summary): round 5 of the coordinator's review, item 4 (grouping by day): answered 577 setups, the week's total; each day's setups is a grouping the records do not keep per day, refused by the plain-quantity gate.",
    "expect": {
-    "raises": "Setups per day is not a ratio the records keep"
+    "raises": "asks for a grouping"
    }
   },
   {
@@ -11632,6 +11632,148 @@
     "charts": 1,
     "shape": {
      "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before, (better|worse) "
+    }
+   }
+  },
+  {
+   "id": "gate-stops-per-day-at-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops per day at the stacker this week",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: answered every stop of each production day (36 stops on Tue 15 Sep), not the stacker's (as on main): the stops profile takes no reason, place or kind.",
+   "expect": {
+    "raises": "kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-stacker-stops-each-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops at the stacker each day this week?",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: answered the stacker's week total; each day is the stops profile, which takes no reason, place or kind.",
+   "expect": {
+    "raises": "kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-average-stops-per-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Average stops per day this week",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: answered the busiest day, 36 stops on Tue 15 Sep (as on main); no tool returns an average across a window's days.",
+   "expect": {
+    "raises": "No tool returns one average across"
+   }
+  },
+  {
+   "id": "gate-minutes-per-stop-at-slitter-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Minutes per stop at the slitter this week",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: answered 2.71 minutes per stop, every stop's: the slitter named without its full name was not read as a filter.",
+   "expect": {
+    "raises": "is kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-minutes-per-stop-operators-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Minutes per stop caused by operators this week",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: answered 2.71 minutes per stop, every stop's: operators (plural) was not read as the kind.",
+   "expect": {
+    "raises": "is kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-downtime-per-day-operators-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime per day caused by operators this week",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: answered every stop's downtime on the busiest day: operators (plural) was not read as the kind.",
+   "expect": {
+    "raises": "is kept for all stops together"
+   }
+  },
+  {
+   "id": "gate-each-days-downtime-is-downtime-per-day",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Each day's downtime this week",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: answered the downtime review led by a percent (as on main); each day's downtime is downtime_per_day.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=downtime_per_day",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_stops_profile",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes\\*\\* of downtime on 2026-09-1[4-8] \\(\\w{3}\\), the most of 5 production days · "
+    }
+   }
+  },
+  {
+   "id": "gate-minutes-per-stop-on-average-stays-answered",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many minutes per stop on average this week?",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: guard: an average said after the ratio is the ratio's (a kept ratio is an average).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=minutes_per_stop",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9.]+ minutes per stop\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "gate-stops-across-the-line-stays-answered",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What's the total number of stops across the line this week?",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: guard: across the line is the whole line's total.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "gate-stops-by-operators-stays-answered",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops by operators this week?",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: guard: by before the kind is the kind's connector, not a grouping.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=operator_stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ operator stops\\*\\* · "
+    }
+   }
+  },
+  {
+   "id": "gate-stops-triggered-by-stacker-stays-answered",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops triggered by the stacker this week?",
+   "note": "Issue #113 (exact over summary): round 5, the reviewer subagent's probe of the fix: guard: triggered by before the reason is the reason's connector.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops&reason=stacker",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* for Stacker · "
     }
    }
   }

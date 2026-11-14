@@ -165,9 +165,9 @@ ASKED_UNITS = (# an average stop is minutes per stop; an average setup or run le
                 r'|\b(?:average|avg|mean|typical)\s+(?:length|duration|time) of (?:a |the |our )?(?:stop|stoppage)s?\b', r'\bmin(?:utes)?(?: per |/)stop\b'),
                # ... and a run length is the router's own feet per setup ("average run length"; round 5, item 3)
                (r'\brun length\b', r'\bft(?: per |/)setup\b'),
-               (r'\b(?:average|avg|mean|typical)\s+(?:set-?up|changeover|paper change|order change)s?\s+(?:length|duration|time)s?\b'
-                r'|\b(?:average|avg|mean|typical)\s+(?:length|duration|time) of (?:a |the |our )?(?:set-?up|changeover|paper change|order change)s?\b',
-                r'\bmin(?:utes)?(?: per |/)(?:setup|changeover|paper change|order change)\b'),
+               (r'\b(?:average|avg|mean|typical)\s+(?:set-?up|changeover|paper change|order change|run)s?\s+(?:length|duration|time)s?\b'
+                r'|\b(?:average|avg|mean|typical)\s+(?:length|duration|time) of (?:a |the |our )?(?:set-?up|changeover|paper change|order change|run)s?\b',
+                r'\bmin(?:utes)?(?: per |/)(?:setup|changeover|paper change|order change|run)\b'),
                # feet a minute is the speed (round 5, item 5)
                (r'\b(?:feet|ft) (?:a|an|per) min(?:ute)?\b', r'\bft/min\b'),
                (r'\b(?:longest|shortest|maximum|minimum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|'
@@ -218,22 +218,28 @@ QUALIFIER_VOCABULARY = {
     'subset': ('long', 'short', 'longer than', 'over N'),
     'percent': ('percent', 'percentage', 'share', '%'),
 }
-_AVG = r'(?:average|avg|mean|typical)'
-_DAYS = r'\b(?:per (?:production )?days?|(?:each|every|a|by) (?:production )?day|day by day)\b|\bdaily\b'
+# A kept ratio is an average, wherever the average is said ("average minutes per stop", "feet per setup on average", "how many minutes
+# per stop did we average"); each production day's downtime is not one. A day word is each day for the stops and downtime of each
+# production day, only "per day", "a day" and "daily" for MSF per production day (MSF by day is a grouping, not the mean).
+_AVG_ANY = r'\b(?:on\s+(?:the\s+)?)?(?:averag(?:e|es|ed|ing)|avg|mean|typical(?:ly)?)\b'
+_PER_DAY = r'\b(?:per (?:production )?days?|a day)\b|\bdaily\b'
+_EACH_DAY = r"\b(?:per (?:production )?days?|(?:each|every|a|by) (?:production )?day(?:'s)?|day by day)\b|\bdaily\b"
 QUANTITY_CONSUMES = {   # what each metric's answer is, besides its noun: a ratio's "per" (and the average it is)
-    'minutes_per_stop': (rf'\b{_AVG}\s+(?:stop|stoppage)\s+(?:length|duration|time)s?\b',
-                         rf'\b{_AVG}\s+(?:length|duration|time) of (?:a |the |our |each )?(?:stop|stoppage)s?\b',
-                         rf'\b{_AVG}\s+(?:stop|stoppage)(?=\s*$|\s*[?.!,]|\s+(?:this|that|last|on|in|for|during|over|across|of|was|is|were)\b)',
-                         rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?per\s+(?:stop|stoppage)s?\b', r'\bper\s+(?:stop|stoppage)s?\b'),
-    'lineal_per_setup': (rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?per\s+set-?ups?\b', rf'\b{_AVG}\s+run length\b', r'\bper\s+set-?ups?\b'),
-    'lineal_per_paper_change': (rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?per\s+(?:paper changes?|wet[- ]ends?)\b',
-                                r'\bper\s+(?:paper changes?|wet[- ]ends?)\b'),
-    'msf_per_day': (rf'\b{_AVG}\s+(?:[a-z]+\s+){{0,2}}?(?:{_DAYS})', _DAYS),
-    'downtime_per_day': (_DAYS,),
+    'minutes_per_stop': (_AVG_ANY, r'\bper\s+(?:stop|stoppage)s?\b'),
+    'lineal_per_setup': (_AVG_ANY, r'\bper\s+set-?ups?\b'),
+    'lineal_per_paper_change': (_AVG_ANY, r'\bper\s+(?:paper changes?|wet[- ]ends?)\b'),
+    'msf_per_day': (_AVG_ANY, _PER_DAY),
+    'downtime_per_day': (_EACH_DAY,),
     'waste_pct': (r'\bpercent(?:age)?\b|%',),
 }
+# ... but an average stop is its length only (round 5, item 2): its count, frequency, rate, interval, cost, place, location or reason
+# is never minutes per stop
+NOT_A_LENGTH = r'\b(?:average|avg|mean|typical)\s+(?:stop|stoppage)\s+(?:count|frequency|rate|interval|cost|place|location|reason|number)s?\b'
 QUANTITY_CONSUMES_ALWAYS = (
-    r'\bhow long\b', r'\bcaused by\b',
+    r'\bhow long\b',
+    r'\b(?:across|over|during|in|for)\s+(?:all\s+of\s+)?(?:january|february|march|april|may|june|july|august|september|october|'
+    r'november|december)\b', r'\ball\s+(?:week|month|day|period)\s+long\b',
+    r'\b(?:across|over|on|for)\s+(?:the\s+)?(?:whole\s+|entire\s+)?(?:line|corrugator|machine|plant)\b', r'\bof\s+any\s+(?:type|kind|sort)\b',
     r'\b(?:this|that|the|last|previous|prior|same|selected|whole|full|entire|production)\s+(?:production\s+)?day(?:\s+before)?\b',
     r'\b(?:across|over|during|for)\s+(?:the|this|last|that|a|all)\s+(?:week|month|period|day)\b',
     r'\b(?:(?:on|for|by|in|during|from)\s+)?(?:the\s+)?(?:shift\s*(?:[1-3]|one|two|three)|(?:first|second|third|1st|2nd|3rd)\s+shift|'
@@ -255,8 +261,8 @@ def qualifier_regex(word):
 # A ratio kept for all stops or for the line (minutes per stop, each day's downtime, feet per setup) answers no one stop reason,
 # place or kind (round 5, item 2): one named beside it is never the whole's figure
 RATIO_QUANTITIES = ('minutes_per_stop', 'downtime_per_day', 'lineal_per_setup', 'lineal_per_paper_change', 'msf_per_day')
-STOP_FILTER = (r'\b(maintenance|operator|stacker|splicers?|knife|knives|slitter|jams?|glue|starch|steam|outages?|raw material|'
-               r'double backer|single facer|glue dams?|missed splices?)\b')
+STOP_FILTER = (r'\b(maintenance|operators?|stacker|splicers?|knife|knives|slitter|jams?|glue|starch|steam|outages?|power|raw material|'
+               r'double backer|single facer|glue dams?|missed splices?|order changes? (?:stops?|downtime)|planned|scheduled|unplanned)\b')
 
 
 def plain_quantity_failures(question, url):
@@ -268,7 +274,13 @@ def plain_quantity_failures(question, url):
     if params.get('metric') in RATIO_QUANTITIES and named:
         return [f'{question[:60]!r} names {named[0]!r} but lands on {params["metric"]}, kept for all stops together: a ratio asked of one '
                 'stop reason, place or kind is refused, never the whole\'s figure']
-    filtered = [rf'\b{re.escape(word)}s?\b' for key in ('reason', 'place', 'waste') for word in params.get(key, '').split('-') if word]
+    if params.get('metric') == 'minutes_per_stop' and re.search(NOT_A_LENGTH, text):
+        return [f'{question[:60]!r} asks {re.search(NOT_A_LENGTH, text)[0]!r}, not the length of a stop, but lands on minutes per stop']
+    # the words of the filter the URL applies, with the connector before them ("caused by the stacker", "by operators")
+    kind = ['maintenance', 'operator'] if str(params.get('metric')).startswith(('maintenance_', 'operator_')) else []
+    for word in [w for key in ('reason', 'place', 'waste') for w in params.get(key, '').split('-') if w] + kind:
+        text = re.sub(rf'\b{re.escape(word)}s?\b', ' zfilteredz ', text)
+    filtered = [r'\b(?:(?:caused|triggered|brought\s+on|lost|made|due)\s+)?(?:by|to|from)\s+(?:the\s+)?zfilteredz|zfilteredz']
     compared = () if re.search(r'\bshifts\b', re.sub(QUANTITY_CONSUMES_ALWAYS[-1], ' ', text)) else (QUANTITY_WINDOW_COMPARED,)
     for pattern in (*QUANTITY_CONSUMES.get(params.get('metric'), ()), *filtered, *compared, *QUANTITY_CONSUMES_ALWAYS):
         text = re.sub(pattern, ' ', text)
@@ -294,6 +306,9 @@ def catch_all_failures(question, url):
                             'or a ranked shift is never one total')
         else:
             failures.extend(plain_quantity_failures(question, url))   # round 5: the plain-quantity gate
+    if re.search(r'[?&]measure=stops(&|$)', url or '') and re.search(STOP_FILTER, question, re.I):
+        # each production day's stops are every stop's (round 5): never the answer to one reason's, place's or kind's
+        failures.append(f'{question[:60]!r} names {re.search(STOP_FILTER, question, re.I)[0]!r} but lands on every stop of each production day')
     if re.search(r'/shift/\d\?measure=(quantity|stops)(&|$)', url or '') and not re.search(r'\bshifts?\b', question, re.I):
         failures.append(f'{question[:60]!r} names no shift but is answered for the selected one ({url}): a quantity answers every shift')
     if failures:
@@ -321,7 +336,7 @@ def asked_unit_failures(question, sections):
     head = next((s for s in sections if '**' in s and not s.startswith('- ')), sections[0]).split(' · ')[0]
     if not re.search(want, head, re.I):
         return [f'asked for /{want}/ but the headline leads with {head[:70]!r}']
-    if re.search(r'\b(?:average|avg|mean)\b', question, re.I) and re.search(r'\bthe most of\b|\bthe only production day\b', head):
+    if re.search(r'\b(?:average|avg|mean|typical|median)\b', question, re.I) and re.search(r'\bthe most of\b|\bthe only production day\b', head):
         return [f'asked for an average but the headline leads with the busiest day: {head[:70]!r}']   # round 4, item 4
     return []
 

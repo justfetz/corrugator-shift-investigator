@@ -683,9 +683,10 @@ def qualifier_pattern(word):
 
 
 QUALIFIER_PATTERNS = tuple((family, word, qualifier_pattern(word)) for family, words in QUALIFIERS.items() for word in words)
-# What the route consumes, whatever it answers: "how long" (a duration asked), the window, a window compared with the one before
-# (what one quantity carries beside it), the shift named or all shifts, and "caused by" before a filter
-AVG = r"(average|avg|mean|typical)"
+# What the route consumes, whatever it answers: "how long" (a duration asked), the window ("across August", "all week long"), a
+# window compared with the one before (what one quantity carries beside it), the shift named or all shifts, the whole line
+# ("across the line"), and "of any type"
+MONTH_WORDS = r"(january|february|march|april|may|june|july|august|september|october|november|december)"
 WINDOW_DAY = r"\b(this|that|the|last|previous|prior|same|selected|whole|full|entire|production)\s+(production\s+)?day(\s+before)?\b"
 WINDOW_SPAN = r"\b(across|over|during|for)\s+(the|this|last|that|a|all)\s+(week|month|period|day)\b"
 WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse)\b(?=(.*\b(to|with|against|versus|vs|than))?\s+(the\s+)?(last|previous|prior|"
@@ -693,14 +694,23 @@ WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse)\b(?=(.*\b(to|with|again
 SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(shift\s*([1-3]|one|two|three)|(first|second|third|1st|2nd|3rd)\s+shift|"
                r"(this|that|my|our|the)\s+shift)\b")
 SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\bacross\s+(the\s+)?shifts\b|\bshifts\s+(together|combined)\b"
-CONSUMED_ALWAYS = (r"\bhow long\b", WINDOW_DAY, WINDOW_SPAN, SHIFT_NAMED, SHIFTS_ALL, r"\bcaused by\b")
-# ... and what each metric consumes: a ratio its "per" (and the average it is), a percent of a waste line its percent
+CONSUMED_ALWAYS = (r"\bhow long\b", WINDOW_DAY, WINDOW_SPAN, SHIFT_NAMED, SHIFTS_ALL,
+                   rf"\b(across|over|during|in|for)\s+(all\s+of\s+)?{MONTH_WORDS}\b", r"\ball\s+(week|month|day|period)\s+long\b",
+                   r"\b(across|over|on|for)\s+(the\s+)?(whole\s+|entire\s+)?(line|corrugator|machine|plant)\b",
+                   r"\bof\s+any\s+(type|kind|sort)\b")
+# The words of a filter the route applied are its own, and so is the connector before them ("caused by the stacker", "by
+# operators", "triggered by the stacker"): the filter's words become FILTERED, then the connector before it goes with it
+FILTERED = ' zfilteredz '
+FILTER_CONNECTOR = r"\b((caused|triggered|brought\s+on|lost|made|due)\s+)?(by|to|from)\s+(the\s+)?zfilteredz|zfilteredz"
+# ... and what each metric consumes: a ratio kept its "per" and the average it is, wherever the average is said ("average minutes per
+# stop", "minutes per stop on average", "how many minutes per stop did we average"); a percent of a waste line its percent. Each
+# production day's downtime is no average: "average downtime per day" is refused before the gate (DAILY_AVERAGE).
+AVG_ANY = r"\b(on\s+(the\s+)?)?(averag(e|es|ed|ing)|avg|mean|typical(ly)?)\b"
 CONSUMED_BY = {
-    'minutes_per_stop': (AVERAGE_STOP, rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+(stop|stoppage)s?\b", r"\bper\s+(stop|stoppage)s?\b"),
-    'lineal_per_setup': (rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+set-?ups?\b", rf"\b{AVG}\s+run length\b", r"\bper\s+set-?ups?\b"),
-    'lineal_per_paper_change': (rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+(paper changes?|wet[- ]ends?)\b",
-                                r"\bper\s+(paper changes?|wet[- ]ends?)\b"),
-    'msf_per_day': (rf"\b{AVG}\s+([a-z]+\s+){{0,2}}?per\s+(production\s+)?days?\b", r"\bper\s+(production\s+)?days?\b"),
+    'minutes_per_stop': (AVG_ANY, r"\bper\s+(stop|stoppage)s?\b"),
+    'lineal_per_setup': (AVG_ANY, r"\bper\s+set-?ups?\b"),
+    'lineal_per_paper_change': (AVG_ANY, r"\bper\s+(paper changes?|wet[- ]ends?)\b"),
+    'msf_per_day': (AVG_ANY, r"\bper\s+(production\s+)?days?\b"),
     'downtime_per_day': (r"\bper\s+(production\s+)?days?\b",),
     'waste_pct': (r"\bpercent(age)?\b|%",),
 }
@@ -723,7 +733,14 @@ PLAIN = {'setups': 'how many setups', 'paper_changes': 'how many paper changes',
          'operator_minutes': 'how many minutes of operator downtime', 'maintenance_stops': 'how many maintenance stops',
          'operator_stops': 'how many operator stops', 'sheets': 'how many sheets', 'bale_msf': 'how much waste in MSF',
          'waste_sqft': 'how many square feet of trim', 'waste_pct': 'what percent was trim', 'downtime_per_day': 'downtime per day'}
-NAMED_FILTER = tuple(pattern for pattern, _ in PLACE_WORDS + REASON_WORDS) + (r"\bmaintenance\b", r"\boperator\b")
+# A stop reason, place or kind named: records.STOP_REASONS and STOP_PLACES as the router reads them, the kinds, and the words of a
+# reason or place said without its full name (the slitter, power, order changes, planned or scheduled stops)
+KIND_WORDS = r"\b(maintenance|operators?)\b"
+NAMED_FILTER = tuple(pattern for pattern, _ in PLACE_WORDS + REASON_WORDS) + (
+    KIND_WORDS, r"\bslitter\b", r"\bpower\b", r"\border changes?\b", r"\b(planned|scheduled|unplanned)\b")
+PROFILE_FILTER = ("Each production day's stops are kept for all stops together, not for one stop reason, place or kind: ask its stops "
+                  "over the window ('how many stops at the stacker this week'), each production day's stops ('stops per day this week') "
+                  "or the reasons counted ('how many stops by reason this week').")
 
 
 def qualifier_refusal(family, word, metric=None):
@@ -751,9 +768,12 @@ def plain_quantity_gate(lower, lead):
     applied = [pattern for key, table in (('reason', REASON_WORDS), ('place', PLACE_WORDS)) if key in lead
                for pattern, name in table if name == lead[key] or name.format(lead[key].rsplit(' ', 1)[-1]) == lead[key]]
     applied += [pattern for pattern, key in WASTE_WORDS if key == lead.get('waste')]
+    applied += [KIND_WORDS] if metric.startswith(('maintenance_', 'operator_')) else []
+    for pattern in applied:
+        text = re.sub(pattern, FILTERED, text)
     # a window compared with the one before is consumed, never shifts compared ("how did the shifts compare on stops last week")
     compared = () if re.search(r"\bshifts\b", re.sub(SHIFTS_ALL, ' ', text)) else (WINDOW_COMPARE,)
-    for pattern in (*CONSUMED_BY.get(metric, ()), *applied, *compared, *CONSUMED_ALWAYS):
+    for pattern in (*CONSUMED_BY.get(metric, ()), FILTER_CONNECTOR, *compared, *CONSUMED_ALWAYS):
         text = re.sub(pattern, ' ', text)
     left = qualifier_left(text)
     if left:
@@ -785,16 +805,20 @@ def initial(text):
     return text[:1].upper() + text[1:]
 
 
-# The day words of the grouping vocabulary ask for each production day, as "per day" does (round 5, item 1): "stops each day" is
-# the stops of each production day, "downtime by day" and "daily downtime" each day's downtime, "setups a day" a ratio not kept.
-DAY_GROUP = r"\b(each|every|a|by)\s+(production\s+)?day\b(?!\s+of\s+the\s+week)|\bday by day\b"
+# The day words of the grouping vocabulary (round 5, item 1). "A day" and "daily X" are per day: "how many stops a day", "MSF a
+# day", "daily downtime", "daily setups" (a ratio not kept). "Each day", "every day" and "by day" ask for each production day, which
+# the answers per day of stops and downtime list (the stops profile): "stops each day", "downtime by day", "each day's downtime".
+# Of anything else they stay the grouping they are ("MSF by day", "setups each day"), never the per-day mean.
+DAY_EACH = r"\b(each|every|by)\s+(production\s+)?day\b(?!\s+of\s+the\s+week)|\bday by day\b"
 
 
 def per_day(lower):
-    """`lower` with each day word of the grouping vocabulary read as "per day": "daily X" as "X per day"."""
-    lower = re.sub(DAY_GROUP, 'per day', lower)
-    lower = re.sub(rf"\bdaily\s+((?:[a-z/-]+\s+){{0,2}}?{PER_NOUNS})", r"\1 per day", lower)
-    return re.sub(r"\bdaily\b", 'per day', lower)
+    """`lower` with the day words read as "per day" where an answer per day answers them (DAY_EACH)."""
+    lower = re.sub(r"\ba\s+day\b", 'per day', lower)
+    if re.search(DOWNTIME_WORDS + r"|\b(minutes|mins)\b", lower):
+        lower = re.sub(rf"\b(each|every)\s+day'?s\s+((?:[a-z/-]+\s+){{0,2}}?{PER_NOUNS})", r"\2 per day", lower)   # "each day's downtime"
+        lower = re.sub(DAY_EACH, 'per day', lower)
+    return re.sub(rf"\bdaily\s+((?:[a-z/-]+\s+){{0,2}}?{PER_NOUNS})", r"\1 per day", lower)
 
 
 def per_ratio(lower):
@@ -994,7 +1018,13 @@ def parse_period_request(lower, current, shifts):
                   # "how many stops by reason this week": a count grouped is the Pareto counted, not one quantity (issue #113);
                   # "how many minutes of downtime at each place" the Pareto in minutes (round 4 of the coordinator's review, item 5)
                   or grouped)
-    profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower))
+    profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower)
+                   and not re.search(r"\bper\s+(stop|stoppage)s?\b", lower))   # "minutes per stop each day": a ratio grouped by day
+    # each production day's stops are every stop's, and no average across the days (round 5): never the busiest day for either
+    if profile and re.search(AVERAGE_ASK + r"|\bmedian\b", lower):
+        raise ValueError(DAILY_AVERAGE)
+    if profile and any(re.search(pattern, lower) for pattern in NAMED_FILTER):
+        raise ValueError(PROFILE_FILTER)
     # "How much downtime last week": over a named window the downtime answer is the Pareto, as the day-shaped
     # downtime question is under a ranged Period control (period_plan), not the KPI tiles (issue #105).
     downtime = bool((period or months) and re.search(r"\bdowntime\b", lower))

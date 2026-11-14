@@ -575,3 +575,48 @@ def test_the_runner_catches_round_5s_wrong_answers_and_passes_the_right_ones():
     assert not catch_all_failures('Average run length this week', week + 'lineal_per_setup')
     assert asked_unit_failures('Average run length this week', ['**577 setups** · -29 vs 606 the week before'])
 
+
+
+# The reviewer subagent's probe of round 5: what the gate consumes keeps answering, the day words never drop a filter or turn an
+# average or a grouping into the busiest day or the mean, and the stops profile is every stop's.
+@pytest.mark.parametrize('question, metric', [
+    ('How many minutes per stop on average this week?', 'minutes_per_stop'), ('On average, how many minutes per stop this week?', 'minutes_per_stop'),
+    ('How many minutes of downtime per stop did we average this week?', 'minutes_per_stop'), ('Feet per setup on average this week', 'lineal_per_setup'),
+    ('On average how much did we make per day this week?', 'msf_per_day'), ('Daily average MSF this week', 'msf_per_day'),
+    ("What's the total number of stops across the line this week?", 'stops'), ('How many stops across the corrugator this week?', 'stops'),
+    ('How many stops across August?', 'stops'), ('How many stops this week by the stacker?', 'stops'),
+    ('How many stops triggered by the stacker this week?', 'stops'), ('How many minutes were lost by the stacker this week?', 'downtime_minutes'),
+    ('How many stops by operators this week?', 'operator_stops'), ('How many minutes was the line down all week long?', 'downtime_minutes'),
+    ('How many stops of any type this week?', 'stops'), ('How long did the average stop take this week?', 'minutes_per_stop'),
+    ("Each day's downtime this week", 'downtime_per_day'),
+])
+def test_a_plain_quantity_in_other_words_still_answers(question, metric):
+    url, request, _ = landing(question)
+    assert url and f'metric={metric}' in url, (question, url or request)
+    assert not catch_all_failures(question, url), (question, url)
+
+
+@pytest.mark.parametrize('question, refusal', [
+    ('How many stops at the stacker each day this week?', 'kept for all stops together'), ('Stacker stops by day this week', 'kept for all stops together'),
+    ('Daily operator stops this week', 'kept for all stops together'), ('Stops per day at the stacker this week', 'kept for all stops together'),
+    ('Maintenance stops per day this week', 'kept for all stops together'), ('How many stops a day on average this week?', 'No tool returns one average'),
+    ('Average stops per day this week', 'No tool returns one average'), ('Typical number of stops per day this week', 'No tool returns one average'),
+    ('Minutes per stop each day this week', "'per' asks for a grouping"), ('Daily minutes per stop this week', "'per' asks for a grouping"),
+    ('Minutes per stop at the slitter this week', 'is kept for all stops together'),
+    ('Minutes per stop for scheduled stops this week', 'is kept for all stops together'),
+    ('Minutes per stop for order changes this week', 'is kept for all stops together'),
+])
+def test_the_day_words_never_drop_a_filter_or_answer_an_average_with_the_busiest_day(question, refusal):
+    url, text, _ = landing(question)
+    assert url is None and refusal in text, (question, url, text)
+
+
+def test_a_grouping_by_day_of_anything_but_stops_or_downtime_is_never_the_per_day_mean():
+    """"MSF by day" asks for each day's MSF, a grouping, never MSF per production day (the mean); stops and downtime by day are the
+    stops profile, which lists each day. And the runner fails the stops profile for one reason, place or kind."""
+    for question in ('MSF by day this week', 'MSF each day this week', 'How much did we make each day this week?', 'Volume by day this week'):
+        url = landing(question)[0]
+        assert url is None or 'metric=msf_per_day' not in url, (question, url)
+        assert catch_all_failures(question, '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=msf_per_day'), question
+    assert catch_all_failures('Stops per day at the stacker this week', '/corr/1/day/2026-09-14?measure=stops&window=week')
+    assert not catch_all_failures('Stops per day this week', '/corr/1/day/2026-09-14?measure=stops&window=week')

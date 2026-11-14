@@ -89,8 +89,9 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   common, compare, versus, better …), a grouping (by, each, every, per, a day, daily, across, type, category, splicer,
   knife, day …), a statistic (average, mean, median, typical, maximum, minimum, longest, shortest), a subset (long, short,
   longer than, over N) or a percent (percent, percentage, share, %). And a ratio kept for all stops or for the line
-  (minutes per stop, each day's downtime, feet per setup) never answers a question that names one stop reason, place or
-  kind.
+  (minutes per stop, each day's downtime, feet per setup), or the stops of each production day (`measure=stops`), never
+  answers a question that names one stop reason, place or kind, and an average stop is its length only (its count, rate,
+  cost or reason is never minutes per stop).
 - **the unit asked opens the answer**: a count or unit question ("how many setups", "number of paper changes", "how
   many minutes of …", "minutes per stop", "feet per setup", "how many lineal feet") carries that unit in its headline
   (the first section with a bold figure that is not a bullet), in its lead clause, the text before the first ` · `, so a
