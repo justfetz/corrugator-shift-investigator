@@ -886,6 +886,10 @@ def _semantic_filters(mdl, entity, dims, measure):
             out['within'] = _semantic_bucket(dim, value)
             continue
         logical = re.fullmatch(r'\{(\w+)\}', dim['expr'])
+        if logical and owner != entity:   # a column the join itself matches on is the entity's own (a reject line's lane)
+            keys = {right: left for left, right in mdl.joins[(entity, owner)]['on']}
+            if logical.group(1) in keys:
+                owner, logical = entity, re.fullmatch(r'(\w+)', keys[logical.group(1)])
         column = logical and mdl.entities[owner]['columns'].get(logical.group(1))
         if not column or not re.fullmatch(r'\w+', column):
             raise _Unlinkable(f'{name} is an expression')

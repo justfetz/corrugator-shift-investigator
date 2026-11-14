@@ -422,9 +422,11 @@ class Analysis:
         UNION ALL SELECT 'Downtime', id, strftime(started,'%Y-%m-%d %H:%M:%S'),
         strftime(ended,'%Y-%m-%d %H:%M:%S'), kind, place, reason, seconds/60, notes, [id]
         FROM stops WHERE shift=? ORDER BY record_type DESC, start, record_id""", [shift, shift])
-        # The stops' notes apart from the shift's own (its first row): the count an answer states, and the rows its
-        # receipt opens (the #151 re-review: a count says what its link opens).
-        result["stop_notes"] = sum(1 for r in result["rows"] if r["record_type"] == "Downtime")
+        # The stops apart from the shift's own note (its first row): the count an answer states and the rows its receipt
+        # opens, and how many of them carry a comment (about half are empty; the #151 re-review: say what the link opens).
+        stops = [r for r in result["rows"] if r["record_type"] == "Downtime"]
+        result["stop_notes"] = len(stops)
+        result["stops_with_note"] = sum(1 for r in stops if (r["notes"] or "").strip())
         return result
 
     def get_rankings(self, shift, metric='speed'):

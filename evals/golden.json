@@ -9278,14 +9278,14 @@
    "mode": "offline",
    "scope": "day",
    "question": "Show the shift and downtime notes for every shift",
-   "note": "#151 re-review (the coordinator's decision): the count's receipt opens the shift's stops, and the shift's own note is in the shift record beside them, so \"13 reported notes\" linked to 12 rows. The count now says what its link opens: the stop notes, and the shift's own note named apart.",
+   "note": "#151 re-review (the coordinator's decision): the count's receipt opens the shift's stops, and the shift's own note is in the shift record beside them, so \"13 reported notes\" linked 12 rows. The count now says what its link opens: the stops, how many of them carry a comment (about half are empty), and the shift's own note named apart.",
    "reviewed_by": "owner-pending",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=notes",
     "status": "complete",
     "sections_match": [
-     "^\\*\\*[0-9]+\\*\\* stop notes and the shift's own note on shift 1 · synthetic and unverified",
-     "^- Shift 2: \\*\\*[0-9]+\\*\\* stop notes and the shift's own note \\(query"
+     "^\\*\\*[0-9]+\\*\\* stops on shift 1, [0-9]+ with a note, and the shift's own note · synthetic and unverified",
+     "^- Shift 2: \\*\\*[0-9]+\\*\\* stops, [0-9]+ with a note, and the shift's own note \\(query"
     ],
     "sections_not_match": "reported notes"
    }

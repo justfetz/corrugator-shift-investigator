@@ -431,11 +431,63 @@ class Figures:
         kind = terms.get('kind') or {'trim': 'trim', 'waste': 'waste', 'paper': 'paper'}.get(row.get('kind'), 'downtime')
         return cost_model.price(kind, quantity, self.rates, gross, minutes)[field]
 
-    def line_quantity(self, entry, row, url):
-        quantity = self._line_quantity(entry, row, url)
+    def line_quantity(self, entry, row, url, kpis=None):
+        """`kpis`: a total's receipt rows (shift_kpis), which the quantity is read from wherever they hold it."""
+        quantity = self._line_quantity(entry, row, url) if kpis is None else self._kpis_quantity(entry, row, url, kpis)
         if entry['tool'] == 'get_opportunities' and quantity is not None and not str(row.get('lever', '')).startswith('Side trim over'):
             quantity = round(quantity, 2 if row.get('unit') == 'min' else 1)   # the levers price their rows' rounded quantities
         return quantity
+
+    def _kpis_quantity(self, entry, row, url, kpis):
+        """A lever's quantity for a total, from the total's own shift_kpis rows wherever they hold it: side trim, shear,
+        the changeover and waste-board lines, each dry-end family, the bale's remainder, the speed gap's feet and stops.
+        A downtime reason and the runs under baseline are not in those rows: they come from the lever's records over the
+        receipt's scope (`url`), which total_usd first holds to the receipt's rows."""
+        label, total = row.get('lever') or row.get('gap'), lambda c: sum(r[c] for r in kpis)
+        family = re.match(r'Dry-end: (\w+)', label)
+        over = re.match(r'Side trim over the ([\d.]+)% target', label)
+        required = re.match(r'Speed gap to ([\d.]+) ft/min', label)
+        if label.startswith('Downtime: ') or label.startswith('Speed under'):
+            return self._line_quantity(entry, row, url)
+        if family:
+            return total(f'{family.group(1).lower()}_sqft')
+        if label.startswith('Changeover'):
+            return total('changeover_sqft')
+        if label.startswith('Planning / admin'):
+            return total('admin_sqft')
+        if 'waste boards' in label or label.startswith(('Cutoff-knife waste', 'Stacker waste')):
+            return (total('cutoff_waste_sqft') if label.startswith('Cutoff-knife waste') else total('stacker_waste_sqft')
+                    if label.startswith('Stacker waste') else total('cutoff_waste_sqft') + total('stacker_waste_sqft'))
+        if label.startswith('Unexplained') or label.startswith('Bale'):
+            return unexplained(kpis)
+        if over:
+            return max(0.0, round(total('trim_sqft') / total('gross_sqft') * 100, 4) - float(over.group(1))) / 100 * total('gross_sqft')
+        if label.startswith('Side trim'):
+            return total('trim_sqft')
+        if label.startswith('Shear'):
+            return total('shear_sqft')
+        if required:   # each shift's feet short of the speed over its running minutes (its setups' own stops)
+            speed = float(required.group(1))
+            return sum(max(0.0, speed * (480 - r['setup_stop_seconds'] / 60) - r['lineal_ft']) for r in kpis) / speed
+        raise Unchecked(f'no quantity for the line {label!r} in shift_kpis rows')
+
+    def total_usd(self, entry, url, field, levers):
+        """A money total from its own receipt: the step's shift_kpis rows of its day or span and shifts, each shift once,
+        priced lever by lever (_kpis_quantity). The records a downtime reason or a run comes from, over the receipt's scope,
+        must first agree with the receipt's rows on the stop seconds and lineal feet both hold."""
+        table, kpis = url.split('?')[0].removeprefix('/data/'), self.rows(url)
+        if table != 'shift_kpis' or not kpis:
+            raise WrongRows(f'a money total is read from shift_kpis rows; the receipt opens {len(kpis)} rows of {table}')
+        shifts = [(r['production_date'], r['shift']) for r in kpis]
+        if len(set(shifts)) != len(shifts):
+            raise WrongRows(f'{len(shifts) - len(set(shifts))} shifts are counted twice (both variants of a shift row)')
+        for records, column, theirs in (('stops', 'seconds', 'stop_seconds'), ('setups', 'lineal_ft', 'lineal_ft')):
+            mine = sum(r[column] for r in self.rows(self.scoped(f'/data/{records}', url)))
+            if abs(mine - sum(r[theirs] for r in kpis)) > 0.5:
+                raise WrongRows(f'the {records} over the receipt\'s scope give {mine:,.1f} {column}, its rows {sum(r[theirs] for r in kpis):,.1f}')
+        return sum(self.priced(entry, entry['data']['rows'][j], self.line_quantity(entry, entry['data']['rows'][j],
+                                                                                 self.scoped(entry['source']['rows']['row'][j], url), kpis),
+                               field, kpis) for j in levers)
 
     def _line_quantity(self, entry, row, url):
         """The quantity a priced line prices, from its own rows: stop minutes, reject sq ft, waste-board sq ft, side trim
@@ -477,13 +529,10 @@ class Figures:
             return sum(max(0.0, base[g] * run - feet) / base[g] for (_, _, g), (feet, run) in runs.items() if g in base and run)
         raise Unchecked(f'no quantity for the line {label!r}')
 
-    def lever_usd(self, entry, j, field, receipt=None):
-        """Lever j's dollars: its quantity from its own rows, or, for a total, from its own filter over the total's
-        receipt (the receipt's day, span and shifts, priced over the receipt's own rows)."""
+    def lever_usd(self, entry, j, field):
+        """Lever j's dollars: its quantity from its own rows."""
         row, url = entry['data']['rows'][j], entry['source']['rows']['row'][j]
-        if receipt is None:
-            return self.priced(entry, row, self.line_quantity(entry, row, url), field)
-        return self.priced(entry, row, self.line_quantity(entry, row, self.scoped(url, receipt)), field, self.rows(receipt))
+        return self.priced(entry, row, self.line_quantity(entry, row, url), field)
 
     # ---- speed variance: both sides from the receipt's own rows, losses at each grade's trailing-year baseline
     @staticmethod
@@ -493,21 +542,49 @@ class Figures:
         baseline. A row on neither side is one the figure is not about: the receipt is off (the reviewer's M7)."""
         data = entry['data']
         window, previous, against = data['window'], data.get('previous_window'), data['against']
-        current = [r for r in rows if window['start'] <= r['production_date'] <= window['end']]
+        # a shift explained against the baseline or the previous window reads that shift alone, on both sides
+        shift = data.get('shift') if type(data.get('shift')) is int and against != 'shift' else None
+        kept = [r for r in rows if shift is None or r['shift'] == shift]
+        current = [r for r in kept if window['start'] <= r['production_date'] <= window['end']]
         reference = []
         if against == 'shift':
             current, reference = ([r for r in current if r['shift'] == s] for s in (data['shift'], data['against_shift']))
         elif against == 'previous':
-            reference = [r for r in rows if previous['start'] <= r['production_date'] <= previous['end']]
+            reference = [r for r in kept if previous['start'] <= r['production_date'] <= previous['end']]
         if len(current) + len(reference) != len(rows):
             raise WrongRows(f'{len(rows) - len(current) - len(reference)} of its {len(rows)} rows are on neither side of {against}')
+        # each record once, as the records were generated (a period tool never reads the data-quality variant)
+        ident = [r.get('stop_id') or r.get('setup_id') or (r['production_date'], r['shift']) for r in rows]
+        if len(set(ident)) != len(ident) or any(r.get('corrupt') for r in rows):
+            raise WrongRows('the receipt holds a record twice, or the data-quality variant of a shift')
         return current, reference
+
+    def speedvar_printed(self, entry, part, index, section, value):
+        """The recomputed speed figure, signed as the section states it: the headline's gap is the reference's speed minus
+        this one's, "below" it when positive; a bucket pulls "of the gap" with the gap's sign or "the other way" against
+        it. A figure with the wrong sign comes back negative, so it never matches what is printed (the reviewer on #151)."""
+        text = BOLD.search(section).group(0)
+        after = section[section.index(text) + len(text):]
+        gap = 1 if entry['data']['direction'] == 'below' else -1
+        if part is None:
+            stated = re.search(r'\b(below|above)\b', after)
+            return value * (1 if stated and stated.group(1) == 'below' else -1)
+        if after.startswith(' of the gap'):
+            return value * gap
+        if after.startswith(' the other way'):
+            return -value * gap
+        return abs(value)   # a figure with no direction in its words
 
     def speedvar(self, entry, part, index, receipt_rows, url):
         data = entry['data']
         base = baselines(self.rows(self.also(entry, 'the trailing year')))
         speed_of = lambda g: base.get(g)
         against = data['against']
+        bucket = None if part is None else data['rows' if part == 'row' else 'details'][index]['bucket']
+        table = url.split('?')[0].removeprefix('/data/')
+        wanted = 'shift_kpis' if part is None else 'stops' if bucket in ('stops', 'planned', 'external', 'setups') else 'setups'
+        if table != wanted:   # the headline reads each side's shift rows, a stop bucket its stops, a grade bucket its setups
+            raise WrongRows(f'the {bucket or "gap"} is read from {wanted}, not {table}')
         cur, ref = self.sides(entry, receipt_rows)
         minutes = lambda rows: sum(r['scheduled_seconds'] for r in rows) / 60
 
@@ -522,7 +599,7 @@ class Figures:
                 reference = sum(speed_of(g) * m for g, m in elapsed.items()) / sum(elapsed.values())
             else:
                 reference = sum(r['lineal_ft'] for r in ref) / minutes(ref)
-            return abs(reference - current)
+            return reference - current
         # a contribution: per scheduled minute of each side (the step's own shift rows), from the receipt's rows of each side
         whole_cur, whole_ref = self.sides(entry, self.whole(entry))
         t_cur, t_ref = minutes(whole_cur), minutes(whole_ref)
@@ -543,11 +620,10 @@ class Figures:
                 out[r['quality_id']] = out.get(r['quality_id'], 0) + r['seconds'] / 60 / t
             return out
         row = data['rows' if part == 'row' else 'details'][index]
-        bucket = row['bucket']
         if bucket in ('stops', 'planned', 'external', 'setups'):
-            return abs(loss(cur, t_cur) - (loss(ref, t_ref) if against != 'baseline' else 0.0))
+            return loss(cur, t_cur) - (loss(ref, t_ref) if against != 'baseline' else 0.0)
         if bucket == 'below_baseline':
-            return abs(below(cur, t_cur) - (below(ref, t_ref) if against != 'baseline' else 0.0))
+            return below(cur, t_cur) - (below(ref, t_ref) if against != 'baseline' else 0.0)
         if bucket == 'mix':
             now = share(cur, t_cur)
             if against == 'baseline':
@@ -556,10 +632,10 @@ class Figures:
             else:
                 before = share(ref, t_ref)
             if part == 'row':
-                return abs(sum(speed_of(g) * s for g, s in before.items()) - sum(speed_of(g) * s for g, s in now.items()))
+                return sum(speed_of(g) * s for g, s in before.items()) - sum(speed_of(g) * s for g, s in now.items())
             reference_base = sum(speed_of(g) * s for g, s in before.items())   # a grade's part of the mix: its share change at its distance from the reference
             g = row['item']
-            return abs((before.get(g, 0.0) - now.get(g, 0.0)) * (speed_of(g) - reference_base))
+            return (before.get(g, 0.0) - now.get(g, 0.0)) * (speed_of(g) - reference_base)
         raise Unchecked(f'speed variance bucket {bucket}')
 
     # ---- the semantic model: its measure over the receipt's records, by the model's own expression
@@ -646,11 +722,11 @@ class Figures:
                 levers = [j for j in levers if data['rows'][j].get('control') == 'controllable']
             elif 'Dry-end waste (tag scrap)' in section:
                 levers = [j for j in levers if str(data['rows'][j]['lever']).startswith('Dry-end:')]
-            return sum(self.lever_usd(entry, j, field, url) for j in levers), False   # each lever over the total's receipt
+            return self.total_usd(entry, url, field, levers), False   # from the total's own receipt
         if tool in ('get_shift_dollars', 'get_day_dollars'):
             if part == 'row':
                 return self.priced(entry, row, self.line_quantity(entry, row, url), 'usd'), False
-            return sum(self.lever_usd(entry, j, 'usd', url) for j, r in enumerate(data['rows']) if not r.get('apart')), False
+            return self.total_usd(entry, url, 'usd', [j for j, r in enumerate(data['rows']) if not r.get('apart')]), False
         if tool == 'get_overrun':
             nominal, actual = (sum(r[c] for r in rows) for c in ('nominal_cuts', 'actual_cuts'))
             return (actual - nominal) / nominal * 100, False
@@ -719,7 +795,7 @@ class Figures:
                 cells.setdefault((r['quality_id'], r['web_width_in'] if by == 'width' else self.crew_of(r)), []).append(r)
             return sum(round(h, 2) for h in (best_fifth_hours(c) for c in cells.values()) if h is not None), False
         if tool == 'get_speed_variance':
-            return self.speedvar(entry, part, index, rows, url), False
+            return self.speedvar_printed(entry, part, index, section, self.speedvar(entry, part, index, rows, url)), False
         if tool == 'get_stops_profile':
             if part == 'weekday':   # over the production days of that weekday the receipt's span holds (a window can pass the data)
                 return len(rows) / len(self.weekdays(url)), False
@@ -757,6 +833,7 @@ class Figures:
     OF = re.compile(r'\*\*[^*]+\*\* of ([\d,]+)\b')
     RUNS_UNDER = re.compile(r'([\d,]+) of ([\d,]+) wet-end runs under their grade baseline')
     DAYS = re.compile(r' over (\d+) day\(s\)')
+    NOTED = re.compile(r'\*\* stops?(?: on shift \d)?, (\d+) with a note')
 
     def counts(self, entry, part, index, section, receipt, rows):
         """[(what, recomputed, printed)] for the numbers beside a figure that count something: the M after a bold N
@@ -773,6 +850,9 @@ class Figures:
         m = self.DAYS.search(section)
         if m and part == 'weekday':   # a weekday's "over N day(s)": the production days the receipt's span holds
             out.append(('days', len(self.weekdays(receipt['url'])), float(m.group(1))))
+        m = self.NOTED.search(section)
+        if m and entry['tool'] == 'get_shift_notes':   # "**12** stops, 6 with a note": the stops with a comment
+            out.append(('with a note', sum(1 for r in rows if (r['comment'] or '').strip()), float(m.group(1))))
         return out
 
     def _of(self, entry, index, section, receipt, rows):
@@ -868,13 +948,28 @@ def golden_case_answers():
 MONEY_TOTALS = ('get_opportunities', 'get_shift_dollars', 'get_day_dollars')
 
 
-def mutation(entry, part):
-    """(name, production days back) of the mutation a section's receipt must not survive, or None."""
+def mutations(entry, part):
+    """[(name, receipt url -> mutated url)] a section's receipt must not survive: M5 and M7; `twice`, the shift rows with
+    their data-quality variants beside them, so each shift is read twice; and against the previous window, a bucket's rows
+    of this window alone (the bug the re-review found). The reviewer's further mutations (another shift, the right scope of
+    another table, a span widened by a day) are caught as well; these stay in the runner."""
+    out = []
     if part is None and entry.get('tool') in MONEY_TOTALS:
-        return 'M5', 1
+        out += [('M5', lambda u: moved(u, 1)), ('twice', lambda u: without(u, 'corrupt'))]
     if part is None and entry.get('tool') == 'get_speed_variance':
-        return 'M7', 5   # a week: five production days
-    return None
+        out += [('M7', lambda u: moved(u, 5)), ('twice', lambda u: without(u, 'corrupt'))]   # a week: five production days
+    if part == 'row' and entry.get('tool') == 'get_speed_variance' and entry['data'].get('against') == 'previous':
+        window = entry['data']['window']
+        out.append(('this window only', lambda u: without(u, 'day', 'from', 'to', **dp._span(window['start'], window['end']))))
+    return out
+
+
+def without(url, *drop, **put):
+    """The same address with some filters dropped and others set."""
+    table = url.split('?')[0].removeprefix('/data/')
+    filters, _ = dp.parse_filters(table, url.partition('?')[2])
+    filters = {**{k: v for k, v in filters.items() if k not in drop}, **put}
+    return dp.table_url(table, filters)
 
 
 def moved(url, days):
@@ -897,7 +992,8 @@ def moved(url, days):
 
 def receipt_failures(store, urls, answers=(), mutants=None):
     """(failures, receipts checked, tools seen) over the answers of these addresses, and of these (name, answer) pairs.
-    `mutants`, a dict, collects {M5|M7: [receipts moved, caught]}: a moved receipt that still passes is a failure."""
+    `mutants`, a dict, collects {mutation: [receipts mutated, caught]}: a mutated receipt that opens other rows and still
+    passes is a failure."""
     app, figures = Workbench(store=store), Figures(store)
     failures, checked, tools = [], 0, set()
     mutants = {} if mutants is None else mutants
@@ -923,15 +1019,16 @@ def receipt_failures(store, urls, answers=(), mutants=None):
                 m = dp.REF.search(section)
                 entry = result['trace'][int(m.group(1)) - 1]
                 tools.add(entry['tool'])
-                kind = mutation(entry, m.group(2))
-                if kind and not problem:
+                for kind, mutate in ([] if problem else mutations(entry, m.group(2))):
                     receipts = list(result['receipts'])
-                    receipts[i] = {**receipts[i], 'url': moved(receipts[i]['url'], kind[1])}
+                    receipts[i] = {**receipts[i], 'url': mutate(receipts[i]['url'])}
+                    if sorted(map(str, figures.rows(receipts[i]['url']))) == sorted(map(str, figures.rows(result['receipts'][i]['url']))):
+                        continue   # the same rows (no stop of that kind in the other window): nothing to catch
                     survived = figures.check({**result, 'receipts': receipts}, i, section)
-                    tally = mutants.setdefault(kind[0], [0, 0])
+                    tally = mutants.setdefault(kind, [0, 0])
                     tally[0] += 1
                     if survived is None or survived.startswith('unchecked'):
-                        failures.append(f'{name}: {kind[0]} survived: {receipts[i]["url"]} still gives {section[:90]!r} ({survived})')
+                        failures.append(f'{name}: {kind} survived: {receipts[i]["url"]} still gives {section[:90]!r} ({survived})')
                     else:
                         tally[1] += 1
     finally:
@@ -988,7 +1085,7 @@ def test_the_re_review_reproductions_link_to_rows_that_hold_their_figures(store)
     mutants = {}
     failures, checked, _ = receipt_failures(store, RE_REVIEW, (), mutants)
     assert not failures, '\n'.join(failures)
-    assert checked > 20 and mutants['M5'][0] == mutants['M5'][1] >= 2 and mutants['M7'][0] == mutants['M7'][1] >= 2, mutants
+    assert checked > 20 and all(mutants[k][0] == mutants[k][1] >= 2 for k in ('M5', 'M7', 'twice', 'this window only')), mutants
     app = Workbench(store=store)
     try:
         gap, _ = app.answer_url(RE_REVIEW[0])   # one span holds both weeks: 683.5 ft/min before, 608.6 now
@@ -996,9 +1093,10 @@ def test_the_re_review_reproductions_link_to_rows_that_hold_their_figures(store)
         mix = next(r for s, r in zip(gap['sections'], gap['receipts']) if s.startswith('- Grade mix'))
         assert mix['url'] == '/data/setups?from=2026-09-07&to=2026-09-18&shift=2'
         notes, _ = app.answer_url(RE_REVIEW[1])
-        head = notes['sections'][0]
-        assert re.match(r"\*\*(\d+)\*\* stop notes and the shift's own note · ", head), head
-        assert int(re.match(r'\*\*(\d+)', head).group(1)) == len(dp.resolve(store, notes['receipts'][0]['url'])) == 12
+        head, stops = notes['sections'][0], dp.resolve(store, notes['receipts'][0]['url'])
+        said = re.match(r"\*\*(\d+)\*\* stops, (\d+) with a note, and the shift's own note · ", head)
+        assert said and int(said.group(1)) == len(stops) == 12, head   # the stops its link opens, about half without a comment
+        assert int(said.group(2)) == sum(1 for r in stops if r['comment'].strip()) == 6, head
     finally:
         app.close()
 
@@ -1050,7 +1148,7 @@ def test_receipts_on_golden_answers_link_to_rows_that_hold_the_bold_figure(store
     assert not failures, f'{len(failures)} of {checked}:\n' + '\n'.join(failures[:25])
     assert checked > 1000 and len(tools) >= 20, (checked, sorted(tools))
     # every money total moved a day off its rows (M5) and every speed gap a week off (M7) fails: the reviewer's mutations
-    assert all(mutants.get(k, [0])[0] >= 10 for k in ('M5', 'M7')), mutants
+    assert all(mutants.get(k, [0])[0] >= n for k, n in (('M5', 10), ('M7', 10), ('twice', 10), ('this window only', 5))), mutants
 
 
 def test_a_receipt_link_survives_a_corrupt_day_and_names_its_variant(store):
