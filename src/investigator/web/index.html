@@ -15,10 +15,10 @@
 <button type="button" id="rail-close" class="secondary rail-close">Close</button>
 <section class="panel" aria-label="Investigation scope">
 <h2 class="panel-title">Looking at</h2>
-<div class="field"><span class="field-label" id="day-label">Production day</span><div class="day-picker"><button type="button" id="day-prev" class="step" aria-label="Previous production day">‹</button><input id="day" type="date" min="2025-09-30" max="2026-09-30" value="2026-09-14" required aria-labelledby="day-label"><button type="button" id="day-next" class="step" aria-label="Next production day">›</button></div></div>
+<div class="field"><span class="field-label" id="day-label">Production day</span><div class="day-picker"><button type="button" id="day-prev" class="step" aria-label="Previous production day">‹</button><input id="day" type="date" required aria-labelledby="day-label"><button type="button" id="day-next" class="step" aria-label="Next production day">›</button></div></div>
 <p id="day-note" class="day-note" role="alert" hidden></p>
 <div class="field"><span class="field-label" id="shift-label">Shift</span><div class="seg" id="shift-seg" role="group" aria-labelledby="shift-label"></div>
-<select id="shift" hidden aria-hidden="true" tabindex="-1"><option value="1">1st / 07:00-15:00</option><option value="2" selected>2nd / 15:00-23:00</option><option value="3">3rd / 23:00-07:00</option></select>
+<select id="shift" hidden aria-hidden="true" tabindex="-1"><option value="1">1st / 07:00-15:00</option><option value="2">2nd / 15:00-23:00</option><option value="3">3rd / 23:00-07:00</option></select>
 <select id="scope" hidden aria-hidden="true" tabindex="-1"><option value="shift">One shift / 8 hours</option><option value="day">All shifts / full 24-hour day</option></select></div>
 <div class="field"><span class="field-label" id="period-label">Window</span><div class="seg" id="period-seg" role="group" aria-labelledby="period-label"></div>
 <select id="period" hidden aria-hidden="true" tabindex="-1"><option value="day">Production day</option><option value="week">Week ending on date</option><option value="month">Calendar month</option><option value="accounting">4-4-5 accounting period</option></select></div>

@@ -262,7 +262,8 @@ def test_the_image_layout_and_a_build_without_the_set(tmp_path, monkeypatch):
         assert request(server, 'GET', '/evals.json')[0] == 404 and request(server, 'GET', '/evals')[0] == 404
         assert json.loads(request(server, 'GET', '/api/config')[2])['evals'] is None
         assert run(server, {'id': 'why-slow'})[0] == 404
-        assert request(server, 'GET', '/')[0] == 200
+        status, headers, _ = request(server, 'GET', '/')   # the landing redirect (issue #137), then the page
+        assert status == 302 and request(server, 'GET', headers['Location'])[0] == 200
     finally:
         server.shutdown()
         thread.join()
