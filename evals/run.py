@@ -1438,6 +1438,103 @@ def rule_holds(rule, rows, row):
     return None
 
 
+# ---------------------------------------------------------------- the money ledger (issue #164)
+
+# The post's production days a year, read from rates.json here, not from the cost model: 1.8M MSF a year / 7,000 MSF a day.
+# The file beside the installed package (the image runs these evals from /app/evals, the package from site-packages).
+_RATES_JSON = json.loads(Path(owner_targets.__file__).with_name('rates.json').read_text())
+_ASSUMED = {a['id']: a['value'] for a in _RATES_JSON['assumptions']}
+POST_DAYS_PER_YEAR = _ASSUMED['annual_msf_per_machine'] / (_ASSUMED['volume_sqft_day'] / 1000)
+DOLLAR = re.compile(r'\$\d[\d,]*(?:\.\d+)?')
+
+
+def _dollars(value):
+    return 'unavailable' if value is None else f'${value:,.0f}'
+
+
+def _money_steps(result, tool):
+    return [s for s in result['trace'] if s['ok'] and s['tool'] == tool]
+
+
+def money_failures(expect, results):
+    """`money_checks` (issue #164, the owner's rule: no money jumping around): one window's figure reads the same in every
+    view, a shift's dollars add to its day, and a yearly figure comes only from period to date.
+
+    - `headline_figure` {tool, field}: the answer's headline states that step's field as its bold figure (the all-shifts day
+      card leads with its own day total, never one shift's).
+    - `one_yearly_figure` {tool}: every step of the tool states the same yearly figure (its `total_usd_per_year`, else its
+      `ptd_usd_per_year`), so two shifts' yearly figures can never disagree in order with their losses.
+    - `views_agree` {lever}: over two turns, the levers (`get_opportunities`, lens all) and "what does trim cost" (lens
+      ownership) of one window: the lever's figure is the ownership line's above-standard part, and the second answer states it.
+    - `yearly_from_period_to_date` {tool}: the step's yearly total is its period to date's dollars per production day x the
+      post's production days a year, lever by lever (`ptd_levers`), never the window's own.
+    - `shifts_add_to_day` {}: the day card's levers (`get_day_dollars`) are its complete shifts' (`get_shift_dollars`) added
+      up, lever by lever in quantity and in dollars to the cent per lever, so a day inside a band still prices the shifts
+      that were over it, and never a figure its shifts do not hold."""
+    failures = []
+    for check in expect.get('money_checks', []):
+        kind, last = check['check'], results[-1]
+        if kind == 'headline_figure':
+            steps = _money_steps(last, check['tool'])
+            figures = BOLD.findall(last['sections'][0]) if last['sections'] else []
+            want = _dollars(steps[0]['data'].get(check['field'])) if steps else None
+            if not steps or not figures or figures[0] != want:
+                failures.append(f'money: the headline states {figures[:1]}, not {check["tool"]} {check["field"]} {want}')
+        elif kind == 'one_yearly_figure':
+            years = []
+            for s in _money_steps(last, check['tool']):
+                data = s['data']
+                years.append(data.get('total_usd_per_year') if data.get('total_usd_per_year') is not None else data.get('ptd_usd_per_year'))
+            if not years or None in years or len(set(years)) != 1:
+                failures.append(f'money: {check["tool"]} states yearly figures {years}, not one')
+        elif kind == 'views_agree':
+            if len(results) < 2:
+                failures.append('money: views_agree needs two turns')
+                continue
+            levers = [s for s in _money_steps(results[0], 'get_opportunities') if s['data'].get('lens', 'all') == 'all']
+            owned = [s for s in _money_steps(results[1], 'get_opportunities') if s['data'].get('lens') == 'ownership']
+            lever = next((r for s in levers for r in s['data']['rows'] if r.get('key') == check['lever'] and not r.get('apart')), None)
+            line = next((r for s in owned for r in s['data']['rows'] if r.get('key') == check['lever']), None)
+            if lever is None or line is None or line.get('above_standard_usd') != lever['usd']:
+                failures.append(f'money: the {check["lever"]} lever is {lever and lever["usd"]}, the ownership line above standard '
+                                f'{line and line.get("above_standard_usd")}: one window, two figures')
+            elif not any(_dollars(lever['usd']) in DOLLAR.findall(sec) for sec in results[1]['sections']):
+                failures.append(f'money: the second answer never states the {check["lever"]} lever\'s {_dollars(lever["usd"])}')
+        elif kind == 'yearly_from_period_to_date':
+            for s in _money_steps(last, check['tool']):
+                data = s['data']
+                ptd = data.get('ptd_levers')
+                if not ptd or not data.get('ptd_days') or not data.get('ptd_label'):
+                    failures.append(f'money: {check["tool"]} names no period to date for its yearly figure')
+                    continue
+                by_hand = sum(round(r['usd'] / data['ptd_days'] * POST_DAYS_PER_YEAR) for r in ptd)
+                if data.get('ptd_usd_per_year') != by_hand:
+                    failures.append(f'money: the period to date a year is {data.get("ptd_usd_per_year")}, by hand {by_hand}')
+                stated = [data.get('total_usd_per_year'), data.get('controllable_usd_per_year')]
+                if data.get('lens', 'all') == 'all' and stated[0] is not None and stated[0] != by_hand:
+                    failures.append(f'money: the yearly total {stated[0]} is not the period to date\'s {by_hand}')
+        elif kind == 'shifts_add_to_day':
+            day = _money_steps(last, 'get_day_dollars')
+            shifts = [st['data'] for st in _money_steps(last, 'get_shift_dollars') if st['data'].get('coverage') == 'complete']
+            if len(day) != 1 or not shifts:
+                failures.append(f'money: shifts_add_to_day needs one day card and its shifts ({len(day)} day, {len(shifts)} shifts)')
+                continue
+            levers = lambda data: {r['key']: r for r in data['rows'] if not r.get('apart')}
+            whole = levers(day[0]['data'])
+            for key, row in whole.items():
+                parts = [levers(sh).get(key) for sh in shifts]
+                if None in parts:
+                    failures.append(f'money: a shift card has no {key} lever')
+                    continue
+                if abs(row['quantity'] - sum(r['quantity'] for r in parts)) > 0.0051 * len(parts):
+                    failures.append(f'money: the day\'s {key} lever is {row["quantity"]}, its shifts\' {[r["quantity"] for r in parts]}')
+                if abs((row['usd'] or 0) - sum(r['usd'] or 0 for r in parts)) > 0.01 * len(parts):
+                    failures.append(f'money: the day\'s {key} lever is {_dollars(row["usd"])}, its shifts\' {[_dollars(r["usd"]) for r in parts]}')
+        else:
+            failures.append(f'money: unknown check {kind!r}')
+    return failures
+
+
 def investigation_failures(expect, results):
     """Evidence rules over every turn, the found numbers in the prose, forbidden claims absent."""
     failures = []
@@ -1796,6 +1893,7 @@ def score(case, expect, results, analysis, allowed, mode):
         failures.extend(investigation_failures(expect, results))
     else:
         failures.extend(expectations(expect, results[-1]))
+        failures.extend(money_failures(expect, results))
         if case['type'] == 'value':
             failures.extend(value_failures(expect, results[-1]))
     turns = case.get('turns') or [case.get('question')]

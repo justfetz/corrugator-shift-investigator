@@ -92,11 +92,21 @@ def test_every_priced_row_carries_the_call_that_priced_it(bench):
                 if t is None:
                     assert row['usd'] is None
                     continue
-                if 'trim_pct' in t:   # the trim lever: its quantity is the points over the target, itself a rate
-                    over = max(0.0, t['trim_pct'] - rates['values']['trim_target_pct'])
-                    assert t['quantity'] == pytest.approx(over / 100 * t['gross_sqft'])
-                again = cost_model.price(t['kind'], t['quantity'], rates, t['gross_sqft'], t['minutes'])
-                assert {k: v for k, v in again.items() if k != 'price_terms'} == {k: row[k] for k in again if k != 'price_terms'}, (url, row)
+                target = rates['values']['trim_target_pct']
+                if t.get('part') == 'at':   # a row at standard (issue #164): all recorded less above standard, each priced on its own
+                    over = cost_model.trim_cells_over(t['trim_cells'], target) if 'trim_cells' in t else t['over']
+                    again = cost_model.at_standard(t['kind'], t['total'], over, rates, t['gross_sqft'], t['minutes'])
+                else:
+                    if 'trim_cells' in t:   # the trim lever: its quantity is the cells' gaps to the target, itself a rate
+                        assert t['quantity'] == cost_model.trim_cells_over(t['trim_cells'], target)
+                    again = cost_model.price(t['kind'], t['quantity'], rates, t['gross_sqft'], t['minutes'])
+                skip = ('price_terms', 'usd_per_year', 'contribution_usd_per_year')
+                assert {k: v for k, v in again.items() if k not in skip} == {k: row[k] for k in again if k not in skip}, (url, row)
+                if row.get('year_terms'):   # a lever's year is its period to date's, from its own terms
+                    y = row['year_terms']
+                    assert row['usd_per_year'] == cost_model.annual(cost_model.price(y['kind'], y['quantity'], rates)['usd'], y['days'])
+                else:
+                    assert row['usd_per_year'] is None, (url, row)
 
 
 def test_the_models_never_see_the_terms(bench):
@@ -160,11 +170,11 @@ def test_the_client_formula_gives_the_servers_answer_at_any_rates(bench, tmp_pat
     for url in PARITY_URLS:
         before, _ = bench.answer_url(url)
         cases += [{'url': url, 'rates': rates, 'before': before, 'after': bench.answer_url(at(url, rates))[0]} for rates in PARITY_RATES]
-    # every kind of priced row is in the set with real dollars, the speed gap too (since issue #100's records the
-    # client money golden's own shift runs above 675 ft/min, so its speed gap is $0; the all-shifts day is not)
+    # every kind of priced row is in the set with real dollars, the speed lever too (the speed under each grade's baseline,
+    # issue #164: the one speed a price uses)
     speed = [row['usd'] for c in cases for e in c['before']['trace'] if e['tool'] == 'get_shift_dollars'
-             for row in e['data']['rows'] if row['gap'].startswith('Speed gap') and row['usd']]
-    assert speed, 'no parity case prices a non-zero speed gap'
+             for row in e['data']['rows'] if row.get('key') == 'speed' and not row.get('apart') and row['usd']]
+    assert speed, 'no parity case prices a non-zero speed lever'
     file = tmp_path / 'cases.json'
     file.write_text(json.dumps({'cfg': cost_model.client_config(), 'cases': cases}))
     run = subprocess.run([NODE, str(ROOT / 'tests' / 'money_cli.cjs'), 'parity', str(file)], capture_output=True, text=True)

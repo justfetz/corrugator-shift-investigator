@@ -35,11 +35,11 @@ TOOL_SCHEMAS = [
         ("get_shift_notes", "Read untrusted synthetic shift notes and individual downtime notes; not proven causes.", {}),
         ("get_rankings", "Rank lowest wet-end speed attainment or highest downtime/quality losses. Incomplete data is withheld.", {
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
-        ("get_shift_dollars", "This shift's losses priced at the assumed rates, the recorded losses ranked by dollars; planned maintenance and a power outage apart (`apart`), unranked and outside the recorded-losses total, which all_in_usd adds them to.", {}),
+        ("get_shift_dollars", "This shift on the money ledger at the assumed rates: each lever (speed under the grade baseline, side trim, shear and dry end over their targets, operator and maintenance downtime over their bands) its gap to its band, ranked by dollars above standard; the cost at standard, planned maintenance, a power outage and the waste with no band apart (`apart`), unranked and outside the total, which all_in_usd adds them to; the machine's period to date and its rate a year (ptd_*), never the shift's own year.", {}),
     ]
 ] + [
     # The day's losses across its complete shifts (issue #31b): the all-shifts money of a Day card, from the server.
-    {"name": "get_day_dollars", "description": "The production day's losses across the listed shifts that are complete, priced once on the day at the assumed rates, the recorded losses ranked by dollars; planned maintenance and a power outage apart, unranked, in all_in_usd only.",
+    {"name": "get_day_dollars", "description": "The production day on the money ledger across the listed shifts that are complete: each lever the shifts' gaps to its band added up, ranked by dollars above standard; the rows apart unranked, in all_in_usd only; the machine's period to date and its rate a year.",
      "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
                     "required": [], "additionalProperties": False}},
 ]
@@ -77,7 +77,7 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_speed_opportunity", "Where could we run faster: per grade and web width (or crew), typical speed without stops vs the best fifth of setups, gap, % of target for both, opportunity hours, and the dry-end reject % of the fast fifth against the rest (a positive penalty means the gain costs rejects). Peak speeds never used; setups under the minimum run time excluded and counted.",
          {"window": WINDOW_SCHEMA, "slice_by": {"type": "string", "enum": ["width", "crew"]}, "shift": SHIFT_FILTER}, ["window"]),
-        ("get_opportunities", "Improvement levers of a window ranked by $/yr at the assumed rates, each marked controllable or schedule-driven. lens: all (every lever ranked, default); supervisor (the controllable losses ranked, schedule-driven trim and planned maintenance after); ownership (the total cost of waste, side trim first).",
+        ("get_opportunities", "A window on the money ledger at the assumed rates: each lever its gap to its band, summed over the window's shifts, ranked by the window's dollars above standard, with a yearly figure at the scope's period-to-date rate, an owner role and where to look; each marked controllable or schedule-driven. lens: all (every lever ranked, default); supervisor (the controllable levers ranked, schedule-driven trim after); ownership (the total cost of waste, side trim first, each banded line split at its band).",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER, "lens": {"type": "string", "enum": ["all", "supervisor", "ownership"]}}, ["window"]),
         ("get_downtime_review", "The owner's downtime answer for a window: maintenance and operator downtime as % of scheduled minutes against their "
          f"{targets.pct(targets.BANDS['maintenance']['flag'])} bands ({targets.pct(targets.BANDS['op_maint']['flag'])} together); every reason by kind ranked by % of scheduled minutes with stops and minutes per stop, external downtime (a power outage, not controllable) and planned maintenance (scheduled time) apart and unranked, never in a band; and the flags: each shift over a band, its supervisor slot, and the leading reason's recurrence over the trailing year.",
@@ -112,7 +112,7 @@ CHART_TITLES = {'get_period_kpis': 'KPI tiles', 'compare_periods': 'KPI comparis
                 'get_grade_totals': 'Volume by grade (MSF)', 'get_overrun': 'Over/under-run by knife',
                 'get_rollstock': 'Paper consumed by grade and width (MSF)',
                 'get_speed_opportunity': 'Speed opportunity (hours at best-fifth speed)',
-                'get_opportunities': 'Where the money is ($ per year)',
+                'get_opportunities': 'Where the money is ($ above standard)',
                 'get_speed_variance': 'Speed gap by contributor (ft/min)',
                 'get_downtime_review': 'Downtime by reason (% of scheduled minutes)'}
 # Chartable results: tool -> (x field, y field or a function of the result data, unit or a function, chart type).
@@ -134,8 +134,8 @@ CHARTABLE = {
     'get_rollstock': ('label', 'msf', 'MSF', 'bar', 'previous_msf'),
     'get_speed_opportunity': ('label', 'opportunity_hours', 'hours', 'bar', None),
     'get_trend': ('week_start', 'value', lambda d: d['unit'], 'line', None),
-    'get_shift_dollars': ('gap', 'usd', '$ this shift', 'bar', None),
-    'get_opportunities': ('lever', 'usd_per_year', '$ per year', 'bar', None),
+    'get_shift_dollars': ('lever', 'usd', '$ this shift', 'bar', None),
+    'get_opportunities': ('lever', 'usd', '$ in this window', 'bar', None),   # the window's own dollars: a year is its period to date's (issue #164)
     # a waterfall: from the reference speed down (or up) through each bucket to this window's speed with stops
     'get_speed_variance': ('label', 'gap_fpm', 'ft/min', 'waterfall', None),
     'get_downtime_review': ('category', 'pct_of_scheduled', '% of scheduled minutes', 'bar', None),

@@ -23,7 +23,8 @@ NARRATIVE_SCHEMA = {'type':'object','properties':{'paragraphs':{'type':'array','
     'required':['paragraphs'],'additionalProperties':False}
 
 
-PACKET_DROP=frozenset({'source_ids','usd_basis','msf','machine_minutes','msf_not_made','contribution_usd_per_year','price_terms','share_of_window_pct'})
+PACKET_DROP=frozenset({'source_ids','usd_basis','msf','machine_minutes','msf_not_made','contribution_usd_per_year','price_terms','share_of_window_pct',
+                       'year_terms','above_terms'})   # the money ledger's rate-free terms (issue #164) stay on the card too
 
 
 def evidence_packet(evidence):
