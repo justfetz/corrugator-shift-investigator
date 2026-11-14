@@ -6,11 +6,14 @@ question asked; a refusal offers at most three questions, each of which the pars
 asks several hundred questions built from templates and the model's own vocabulary; the differential tests check that a
 question's figure equals the existing tool's number for the same thing.
 """
+import json
 import re
 import time
+from pathlib import Path
 
 import pytest
 
+from investigator import agent
 from investigator import semantic as S
 from investigator import semantic_parse as P
 from investigator.agent import Agent, Context, parse_request, question_scope, route
@@ -577,3 +580,70 @@ def test_a_window_the_hand_route_would_answer_as_the_selected_day_is_refused(sto
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
     for question in ('Show downtime by reason on Monday', 'Stops per day this month: do Mondays stand out?'):
         route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+
+
+# ------------------------------------------------------------------ #159's refusals stand (the coordinator on PR #155, 2026-11-14)
+GOLDEN_CASES = json.loads((Path(__file__).resolve().parent.parent / 'evals' / 'golden.json').read_text())['cases']
+# Every refusal golden #159 (issue #153) added: words the gate consumed but no route applied. Each id starts "unapplied-".
+UNAPPLIED_REFUSALS = [c for c in GOLDEN_CASES if c['id'].startswith('unapplied-') and 'raises' in c['expect']]
+
+
+def golden_context(case):
+    return Context(case.get('day', DAY), case.get('shift', 2), scope=case.get('scope', 'shift'), period=case.get('period', 'day'))
+
+
+@pytest.mark.parametrize('case', UNAPPLIED_REFUSALS, ids=[c['id'] for c in UNAPPLIED_REFUSALS])
+def test_every_refusal_of_issue_153_stands_through_the_full_route_with_the_parser_on(store, case):
+    """Each refusal golden of #159 through the server's whole path: question_scope, the hand router, then the semantic model's parser
+    on a store it reads (the parser on, never the single-day fixture's store=False). The refusal is the golden's, word for word:
+    two windows, "during the day" beside another window, a hedge, a plan, a capacity or "so far", the line running, "this shift" under
+    All, who logged a stop, "this day" or "the period" under a ranged Period control, a comparison the answer does not carry."""
+    with pytest.raises(ValueError) as refused:
+        route(case['question'], golden_context(case), store.production_days, store)
+    assert re.search(case['expect']['raises'], str(refused.value), re.I), (case['question'], str(refused.value))
+
+
+def test_the_parser_reads_some_of_them_completely_and_the_hand_refusal_stands(store):
+    """The test above is not vacuous: the parser reads some of #159's refused questions completely ("how many planned stops by reason
+    this week" is a filtered split it could answer), and only agent.Standing keeps the hand router's refusal. The rest it refuses on its
+    own: two windows, "this shift" under All and "logged by" are refused by the parser too, so no hand route is needed to stop them."""
+    assert len(UNAPPLIED_REFUSALS) > 50
+    complete = []
+    for case in UNAPPLIED_REFUSALS:
+        moved = question_scope(case['question'], golden_context(case), store.production_days, store)
+        if P.read(case['question'], moved, store, strict=True).complete:
+            complete.append(case['id'])
+            with pytest.raises(agent.Standing):
+                agent._parse_request(case['question'], moved)
+    assert 'unapplied-planned-stops-by-reason-refused' in complete and 'unapplied-sheets-versus-last-week-refused' in complete, complete
+    for question, scope, period, why in (
+            ('Which shift had the most stops this week versus last month?', 'shift', 'day', 'windows of different lengths'),
+            ('Which shift had the most stops in August versus last month?', 'shift', 'day', "the month before the selected day's"),
+            ('Which grade had the most setups last week versus the week before?', 'shift', 'day', 'two windows before the selected one'),
+            ('Which shift had the most stops logged by operators this week?', 'shift', 'day', 'who logged the stops'),
+            ('Setups by grade this shift this week', 'day', 'day', 'no shift is selected'),
+            ('Which shift had the most stops for the period?', 'shift', 'week', 'could be the 4-4-5 accounting period'),
+            ('Which shift had the most stops this day?', 'shift', 'week', 'names the selected production day')):
+        context = Context(DAY, 2, scope=scope, period=period)
+        r = P.read(question, question_scope(question, context, store.production_days, store), store, strict=True)
+        assert not r.complete and why in r.refusal, (question, r.refusal)
+        for suggestion in r.suggestions:
+            s = reading(store, suggestion, period=period)
+            assert s.complete, (question, suggestion, s.refusal)
+        with pytest.raises(ValueError, match=re.escape(why)):
+            route(question, context, store.production_days, store)
+
+
+def test_the_parser_reads_the_routers_request_phrases_and_no_moved_function_word(store):
+    """#159 took can, could, would, will, need, want, to, go, up, went and far out of agent.FUNCTION_WORDS (a plan, a capacity, the line
+    running or a span to date), and the parser's filler is built from that table. A request said around the question is the router's own
+    phrase (REQUEST_LEAD, MODAL_YOU, DID_HAVE_TO, UP_PARTICLE) and is read; outside one each of those words is unread, never dropped."""
+    moved = ('can', 'could', 'would', 'will', 'need', 'want', 'to', 'go', 'up', 'went', 'far')
+    assert not set(moved) & agent.FUNCTION_WORDS and not set(moved) & P.FILLER
+    for question in ('Could you tell me which shift had the most stops this week?', 'I want to know which grade had the most setups this month',
+                     'Which shift racked up the most stops this week?', 'Can you show me which shift had the most stops this week?'):
+        assert reading(store, question).complete, question
+    for question in ('Which shift can run the most setups this week?', 'Which grade will run the most setups this week?',
+                     'Which shift had the most stops so far this week?', 'Which shift was up the most this week?',
+                     'Which crew needs the most setups this week?', 'Which shift had the most setups to go this week?'):
+        assert not reading(store, question).complete, question

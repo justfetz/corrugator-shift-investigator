@@ -18305,6 +18305,199 @@
      "^Weekday profile$"
     ]
    }
+  },
+  {
+   "id": "semantic-ranked-shift-this-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most stops this week versus last month?",
+   "expect": {
+    "raises": "windows of different lengths"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): the parser read this week against the week before (\"Shift 2 had the most stops this week\", compare=prev); main gave the month's Pareto. Two windows of different lengths are refused, as #159 refuses them for one quantity."
+  },
+  {
+   "id": "semantic-grade-ranked-this-month-versus-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had the most setups this month versus last week?",
+   "expect": {
+    "raises": "windows of different lengths"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): read as this month against the month before; main gave the month's MSF by grade."
+  },
+  {
+   "id": "semantic-downtime-by-place-this-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime by place this week versus last month",
+   "expect": {
+    "raises": "windows of different lengths"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): read as this week's downtime against the week before; main gave the month's Pareto by place. Refused over the hand route too."
+  },
+  {
+   "id": "semantic-ranked-shift-in-august-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most stops in August versus last month?",
+   "expect": {
+    "raises": "the month before the selected day's"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): on 14 September 'last month' is August itself: read as August against July, a comparison nobody asked for."
+  },
+  {
+   "id": "semantic-grade-ranked-last-week-versus-the-week-before-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had the most setups last week versus the week before?",
+   "expect": {
+    "raises": "two windows before the selected one"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): two windows before the selected one, which #159 refuses for one quantity; main and the parser's hand route gave this week's MSF by grade."
+  },
+  {
+   "id": "semantic-ranked-shift-logged-by-operators-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most stops logged by operators this week?",
+   "expect": {
+    "raises": "who logged the stops"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): read as the Operator kind's stops ranked by shift; who logged a stop is not recorded (#159, row 9)."
+  },
+  {
+   "id": "semantic-share-logged-by-operators-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "What share of stops were logged by operators?",
+   "expect": {
+    "raises": "who logged the stops"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): read as the Operator kind's share (\"Operator was 76.00% of the stops\"); who logged a stop is not recorded."
+  },
+  {
+   "id": "semantic-setups-by-grade-this-shift-under-all-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Setups by grade this shift this week",
+   "scope": "day",
+   "expect": {
+    "raises": "no shift is selected"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): with All shifts selected the parser read 'this shift' as shift 2 (\"Setups, shift 2 this week\"; #159 row 8, and item 9 of the 09:55 verdict); main gave the week's MSF by grade."
+  },
+  {
+   "id": "semantic-ranked-shift-for-the-period-under-a-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most stops for the period?",
+   "period": "week",
+   "expect": {
+    "raises": "could be the 4-4-5 accounting period"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): under the Week control 'the period' could be the 4-4-5 period or the week (#159); the parser read the 4-4-5 period."
+  },
+  {
+   "id": "semantic-ranked-shift-this-day-under-a-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most stops this day?",
+   "period": "week",
+   "expect": {
+    "raises": "names the selected production day"
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): under the Week control 'this day' is a production day the address cannot name (#159); the parser read the day."
+  },
+  {
+   "id": "semantic-could-you-tell-me-which-shift",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Could you tell me which shift had the most stops this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "sections_match": [
+     "^Shift [1-3] (had|tied for) the most stops this week"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): with 'could' out of the function words (#159) the parser left the question to the hand router, whose answer was shift 2's Pareto by reason. The parser now consumes the router's own request phrases (agent.REQUEST_LEAD, MODAL_YOU, DID_HAVE_TO, UP_PARTICLE)."
+  },
+  {
+   "id": "semantic-racked-up-the-most-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift racked up the most stops this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "sections_match": [
+     "^Shift [1-3] (had|tied for) the most stops this week"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): 'up' is not a function word after #159; 'rack up' is the router's particle (UP_PARTICLE). Answered with shift 2's Pareto by reason on main."
+  },
+  {
+   "id": "semantic-i-want-to-know-which-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "I want to know which grade had the most setups this month",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=setups&window=month&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "setups",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "sections_match": [
+     "^[0-9]+-[A-Z]+ (and [0-9]+-[A-Z]+ )?(had|tied for) the most setups this month"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): 'want' and 'to' are not function words after #159; 'I want to know' is the router's request lead. Answered with the month's MSF by grade on main."
   }
  ]
 }
