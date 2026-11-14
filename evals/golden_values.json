@@ -56588,6 +56588,14 @@
       "share_of_window_pct": [
        3.0506,
        null
+      ],
+      "control": [
+       "schedule-driven",
+       null
+      ],
+      "control_note": [
+       "the order mix and its web widths",
+       null
       ]
      },
      "rows:gap=Dry-end: WARP": {

@@ -509,8 +509,11 @@ def shift_dollars(analysis, shift, rates):
         gap_ft = max(0.0, required * running - k['observed_lineal_ft'])
         rows.append({'gap': f'Speed gap to {required:g} ft/min', 'kind': 'speed', 'quantity': round(gap_ft, 1), 'unit': 'lineal ft',
                      'source_ids': k['source_ids'], 'apart': None, **price('speed', gap_ft / required, rates, gross, SHIFT_MINUTES)})
+        # side trim stays a ranked recorded loss, marked with its control as the lenses mark it (targets.json's trim
+        # band lever, schedule-driven: the order and width pairing the scheduler chose; the owner, issue #135)
         rows.append({'gap': 'Side trim', 'kind': 'trim', 'quantity': round(k['trim_pct'] * gross / 100, 1), 'unit': 'sq ft',
-                     'source_ids': k['source_ids'], 'apart': None, **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
+                     'source_ids': k['source_ids'], 'apart': None, **gap_control('trim'),
+                     **price('trim', k['trim_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
         rows.append({'gap': 'Shear chops', 'kind': 'waste', 'quantity': round(k['shear_pct'] * gross / 100, 1), 'unit': 'sq ft',
                      'source_ids': k['source_ids'], 'apart': None, **price('waste', k['shear_pct'] * gross / 100, rates, gross, SHIFT_MINUTES)})
         for gap, key in (('Changeover rejects (counted with shear)', 'changeover_sqft'), ('Cutoff-knife and stacker waste boards', 'waste_board_sqft')):
@@ -550,6 +553,7 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
     for d in used:
         for r in d['rows']:
             g = gaps.setdefault(r['gap'], {'gap': r['gap'], 'kind': r['kind'], 'unit': r['unit'], 'apart': r.get('apart'),
+                                          'control': {k: r[k] for k in ('control', 'control_note') if k in r},
                                           'shown': [], 'terms': [], 'shifts': [], 'pricing': None})
             g['shown'].append(r['quantity'])
             g['shifts'].append(d['shift'])
@@ -561,7 +565,7 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
         places = 2 if g['unit'] == 'min' else 1
         quantity = round(_add(g['terms']), 2 if g['pricing'] in TIME_KINDS else 1) if g['terms'] else None
         rows.append({'gap': g['gap'], 'kind': g['kind'], 'quantity': round(_add(g['shown']), places), 'unit': g['unit'], 'shifts': g['shifts'],
-                     'apart': g['apart'], **({'apart_note': GAP_APART_NOTE[g['apart']]} if g['apart'] else {}),
+                     'apart': g['apart'], **({'apart_note': GAP_APART_NOTE[g['apart']]} if g['apart'] else {}), **g['control'],
                      **price(g['pricing'] or 'downtime', quantity, rates, gross, minutes)})
     trim = round(_add(r['price_terms']['quantity'] for d in used for r in d['rows'] if r['kind'] == 'trim' and r.get('price_terms')), 1)
     rows = rank_gaps(rows)
@@ -596,7 +600,9 @@ def family_control(family):
 # The owner's two lenses (issue #101, targets.json): which levers a supervisor controls, and why. Each reject family (the
 # five dry-end families, the changeover rejects, planning / admin) takes its label from the taxonomy; the cutoff-knife and
 # stacker boards are lost at each order change, so sequencing, as the changeover rejects are.
-CONTROL = {'speed': ('controllable', 'speed under the grade baseline'), 'trim': ('schedule-driven', 'the order mix and its web widths'),
+# Side trim's control is targets.json's trim band lever (schedule-driven), read here once for the lenses and the money
+# card's side-trim gap both (gap_control; the owner, issue #135), so the two never disagree.
+CONTROL = {'speed': ('controllable', 'speed under the grade baseline'), 'trim': (targets.BANDS['trim']['lever'], 'the order mix and its web widths'),
            'downtime': ('controllable', 'maintenance and operator downtime'), 'setup': ('controllable', 'operator downtime at order changes'),
            'scheduled': ('schedule-driven', 'planned maintenance is scheduled time'), 'shear': ('controllable', 'sequencing'),
            **{R.families()[code]['key']: family_control(code) for code in R.families()},
@@ -649,6 +655,14 @@ def dry_end_subtotal(rows, rank):
 def _control(row, key):
     row['control'], row['control_note'] = CONTROL[key]
     return row
+
+
+def gap_control(key):
+    """A money card gap's `control` and `control_note`, the lenses' own (CONTROL), for a gap ranked among the recorded
+    losses whose band the owner calls other than controllable: side trim, schedule-driven (targets.json; issue #135).
+    The answer tags its ranked line with the control; the gap stays ranked and in the recorded-losses total."""
+    control, note = CONTROL[key]
+    return {'control': control, 'control_note': note}
 
 
 def opportunities(store, window, shift, rates, lens='all'):

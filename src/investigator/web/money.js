@@ -344,6 +344,9 @@ const Money=(()=>{
  // shapes.all_in and the apart blocks of shapes.shape_dollars (the owner, PR #111)
  const ALL_IN_CLAUSE=/ · \$[\d,]+ all in, with the schedule-driven and external downtime/, APART_LABELS={'schedule-driven':'Schedule-driven, shown apart',external:'External, not controllable'};
  const allInText=d=>d.apart_gaps?` · ${money(d.all_in_usd)} all in, with the schedule-driven and external downtime`:'';
+ // shapes.gap_tag: a ranked gap the tool marks other than controllable says so on its line, from the row's own `control`
+ // (side trim, schedule-driven: targets.json's trim band lever; the owner, issue #135), which re-pricing keeps
+ const gapTag=r=>r.control&&r.control!=='controllable'?` · ${r.control}`:'';
  const APART_LINE=/^- Shift \d · (?!\d+\. ).+ · (?:schedule-driven|external), .+ \(query \d+ · row \d+\)$/;
  function refocus(sections,steps,rates,cfg){
   const dollars=steps.map((s,i)=>s&&s.tool==='get_shift_dollars'?{s,q:i+1,shift:s.before.shift}:null).filter(Boolean);
@@ -360,7 +363,7 @@ const Money=(()=>{
   const others=dollars.filter(x=>x!==focus&&x.s.after.coverage==='complete').sort((a,b)=>a.shift-b.shift)
    .map(x=>`- Shift ${x.shift}: **${money(x.s.after.total_usd)}** of recorded losses · ${money(x.s.after.total_usd_per_year)} per year${allInText(x.s.after)} (query ${x.q})`);
   const yearly=r=>r.usd_per_year!==null&&r.usd_per_year!==undefined?` · ${money(r.usd_per_year)}/yr`:'';
-  const gaps=d.rows.map((r,i)=>r.apart?null:`- Shift ${focus.shift} · ${r.rank}. ${r.gap}: **${money(r.usd)}**${yearly(r)} (query ${focus.q} · row ${i})`).filter(Boolean);
+  const gaps=d.rows.map((r,i)=>r.apart?null:`- Shift ${focus.shift} · ${r.rank}. ${r.gap}: **${money(r.usd)}**${yearly(r)}${gapTag(r)} (query ${focus.q} · row ${i})`).filter(Boolean);
   for(const [apart,label] of Object.entries(APART_LABELS)){   // the gaps apart, each group under its label (shapes.shape_dollars)
    const mine=d.rows.map((r,i)=>[r,i]).filter(([r])=>r.apart===apart);
    if(mine.length)gaps.push(label,...mine.map(([r,i])=>`- Shift ${focus.shift} · ${r.gap}: **${money(r.usd)}**${yearly(r)} · ${apart}, ${r.apart_note} (query ${focus.q} · row ${i})`));
