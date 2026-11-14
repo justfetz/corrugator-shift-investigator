@@ -64,7 +64,7 @@ A question the phrasings above do not hold is read into [the semantic model](../
 | "Which grade has the most warp?" | dry-end rejects of the warp family by board grade, largest first | `?measure=semantic&m=reject_sqft&by=grade&rank=most&reject_family=WARP` |
 | "Downtime per shift this week", "Downtime across shifts this week" | downtime in minutes by shift; the headline keeps the week's total | `?measure=semantic&m=downtime_minutes&window=week&by=shift` |
 | "How many stops by grade this week?", "Stops by type this week" | stops by board grade; stops by stop kind | `…&m=stops&window=week&by=grade`, `…&by=kind` |
-| "What percent of stops were at the stacker this week?" | stops by stop place, the share of Stacker: the card opens with it (`Stacker: **29.77%** of the stops this week · 39 stops`) | `…&m=stops&window=week&by=place&share=Stacker` |
+| "What percent of stops were at the stacker this week?" | stops by stop place, the share of Stacker: the card opens with it (`Stacker was 29.77% of the stops this week: **39 stops**`) | `…&m=stops&window=week&by=place&share=Stacker` |
 | "Most common downtime reason this week" | most common is a count: stops by stop reason, largest first | `…&m=stops&window=week&by=reason&rank=most` |
 | "Downtime on the double backer", "How many minutes of planned downtime this week?" | downtime in minutes at the place, or of the planned maintenance kind | `…&m=downtime_minutes&place=Double+backer`, `…&kind=Scheduled` |
 | "How often were we down this week?", "How often did we change paper this week?" | how often is the count: stops; paper changes | `…&m=stops&window=week`, `…&m=paper_changes&window=week` |

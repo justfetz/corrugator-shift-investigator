@@ -1818,7 +1818,8 @@ class SemanticAnswer:
         total = None
         led = self.led_head(result, where, wp, unit)   # issue #144: a ranked question names its first row, a share its value's share
         if led is not None:
-            total = 'In all' + head[len(data['label']):].replace(f'**{bold}**', bold)   # the whole, with no figure of its own
+            # the whole, with no figure of its own and no citation (a cited line carries its bold figure; this one is the envelope's total)
+            total = REF.sub('', 'In all' + head[len(data['label']):].replace(f'**{bold}**', bold))
             head = led
         bullets = [self.row_line(result, i, row) for i, row in enumerate(data['rows'])]
         if len(bullets) > SEMANTIC_FIRST:
@@ -1850,7 +1851,7 @@ class SemanticAnswer:
 
     def led_head(self, result, where, wp, unit):
         """The headline of a ranked question or a share (issue #144), citing the row it names: `Shift 3 had the most setups this
-        week: **204 setups**`, `Stacker: **39.13%** of the stops this week · 45 stops`. None when the question asked neither, or
+        week: **204 setups**`, `Stacker was 29.77% of the stops this week: **39 stops**`. None when the question asked neither, or
         the window is incomplete (rankings are withheld), or the value has no row."""
         data = result['data']
         rows = data['rows']
@@ -1862,7 +1863,8 @@ class SemanticAnswer:
                 return None
             row = rows[index]
             bold, rest = semantic_figure(row['value'], self.unit_of(row, data['unit']))
-            return f'{row["label"]}: **{f2(row["share_pct"])}%** of the {noun}{where}{wp} · {bold}{rest} {ref(result, index)}'
+            # the share asked leads the line; the bold figure is the row's own, which its records recompute (the receipt, #151)
+            return f'{row["label"]} was {f2(row["share_pct"])}% of the {noun}{where}{wp}: **{bold}**{rest} {ref(result, index)}'
         if not self.lead.get('rank') or not rows or data['window']['coverage'] != 'complete':
             return None
         row = rows[0]
