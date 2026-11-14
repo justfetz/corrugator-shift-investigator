@@ -15072,6 +15072,43 @@
      "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before"
     }
    }
+  },
+  {
+   "id": "unapplied-stops-in-the-day-this-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops in the day this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 2, 'in the day' beside another window (the reviewer subagent's probe of this round); e863f1e and main at 6484393 answered **131 stops**, the whole week's.",
+   "expect": {
+    "raises": "could be the daytime hours"
+   }
+  },
+  {
+   "id": "unapplied-stops-on-the-day-of-the-week-is-the-profile",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops on the day of the week this month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, items 1 and 2's guard: 'the day of the week' is the weekday profile, never a window (the reviewer subagent's probe of this round, which the round's first draft refused as two windows); e863f1e and main at 6484393 answered it so.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=stops&window=month",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_stops_profile",
+      "arguments": {
+       "window": {
+        "period": "month",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ stops\\*\\* on ",
+     "^Weekday profile$"
+    ]
+   }
   }
  ]
 }

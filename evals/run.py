@@ -390,10 +390,11 @@ PREVIOUS_SAID = (r'\byesterday\b|\b(?:last|previous|prior)\s+(?:production\s+)?(
                  r'|\b(?:the\s+)?(?:day|week|month|period)\s+before\b(?!\s+(?:last|yesterday)\b)')
 # ... and the window answered, said in any form the router consumes: "this week", "today", a preposition before it ("during the week",
 # "over the week", "for the week", "in the week"), "the whole week", "all week long" (the coordinator's review of e863f1e, item 1);
-# never "day of the week", "the week before" or "the day shift"
-BASE_SAID = (r'(?<!\bday of )(?<!\bdays of )\b(?:(?:across|over|during|for|in|on|through)\s+)?(?:this|that|the|current|selected|whole|full|'
+# never "the day of the week", "the end of the day", "by the day", "the week of September 14", "the week before" or "the day shift"
+BASE_SAID = (r'(?<!\bby )\b(?:(?:across|over|during|for|in|on|through)\s+)?(?:this|that|the|current|selected|whole|full|'
              r'entire|all)\s+(?:whole\s+|entire\s+|full\s+)?(?:production\s+)?(?:day|week|month|(?:accounting\s+|fiscal\s+|4-4-5\s+)?period)\b'
-             r'(?!\s+(?:before|shifts?)\b)|\btoday\b')
+             r'(?!\s+(?:before|shifts?|of)\b)|\btoday\b')
+PART_OF = r'\b(?:day|days|end|start|beginning|middle|rest|half|part|time|hours?|minutes?)\s+of\s*$'   # before "the week": a part of it
 # ... a month or a 4-4-5 period named
 NAMED_SAID = (rf'\b(?:(?:across|over|during|in|for|through|of)\s+)?(?:all\s+of\s+)?(?:the\s+month\s+of\s+)?{_MONTHS}\b'
               r'|\b(?:(?:in|for|during|over|across|through)\s+)?(?:(?:fiscal|accounting)\s+period|4-4-5|445|p(?:1[0-3]|[1-9]))\b')
@@ -402,7 +403,7 @@ DAYTIME_SAID = r'\b(?:during|in)\s+the\s+day\b(?!\s+(?:before|shifts?|of)\b)'
 # A hedge before a connector ("might be due to the stacker", "may be related to", "could have been caused by"; item 3): never the
 # coded count
 HEDGE_SAID = (r'\b(?:might|may|could)\s+(?:(?:well|possibly|also)\s+)?(?:have\s+)?(?:be|been)\b(?=\s+(?:(?:caused|triggered|brought\s+on|lost|'
-              r'made|due|related|attributed|coded|charged|put\s+down|blamed|linked|tied|traced|down|went|gone)\b|(?:by|to|from|as|because)\b))')
+              r'made|due|related|attributed|coded|charged|put\s+down|blamed|linked|tied|traced|down|went|gone)\b|(?:by|to|from|as|because|at|on|in|with)\b))')
 # A rise or a fall of the measure itself ("were stops up", "did minutes per stop go down"), never the line running
 _RISE_NOUNS = (r'(?:stops?|stoppages?|set-?ups?|paper changes?|order changes?|changeovers?|sheets?|downtime|minutes|feet|footage|msf|waste|'
                r'trim|shear|rejects?)(?:\s+per\s+[a-z-]+)?')
@@ -438,6 +439,8 @@ def windows_said(text):
     spans = []
     for pattern in (PREVIOUS_SAID, BASE_SAID, NAMED_SAID):
         for m in re.finditer(pattern, text):
+            if pattern == BASE_SAID and re.search(PART_OF, text[:m.start()]):
+                continue   # "the day of the week", "the end of the day": a part of a window, not one
             if not any(m.start() < end and start < m.end() for start, end, _, _ in spans):
                 spans.append((m.start(), m.end(), m.group(0), grain_said(m.group(0))))
     return sorted(spans)

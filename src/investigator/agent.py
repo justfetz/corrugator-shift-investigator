@@ -1041,11 +1041,13 @@ PREVIOUS_SAID = (r"\byesterday\b|\b(last|previous|prior)\s+(production\s+)?(day|
                  r"|\b(the\s+)?(day|week|month|period)\s+before\b(?!\s+(last|yesterday)\b)")
 # The window the answer is, said in words: "this week", "today", and every form WINDOW_WORDS consumes, a preposition before it
 # ("during the week", "over the week", "across the month", "for the week", "in the week"), "the whole week", "all week long" (the
-# coordinator's review of e863f1e, item 1: a window consumed is a window counted, never dropped for the other one named); "day of the
-# week", "the week before" and "the day shift" are not one
-BASE_SAID = (r"(?<!\bday of )(?<!\bdays of )\b((across|over|during|for|in|on|through)\s+)?(this|that|the|current|selected|whole|full|"
+# coordinator's review of e863f1e, item 1: a window consumed is a window counted, never dropped for the other one named); "the day of
+# the week", "the end of the day", "by the day", "the week of September 14", "the week before" and "the day shift" are not one (the
+# allow-list names their words; PART_OF)
+BASE_SAID = (r"(?<!\bby )\b((across|over|during|for|in|on|through)\s+)?(this|that|the|current|selected|whole|full|"
              r"entire|all)\s+(whole\s+|entire\s+|full\s+)?(production\s+)?(day|week|month|(accounting\s+|fiscal\s+|4-4-5\s+)?period)\b"
-             r"(?!\s+(before|shifts?)\b)|\btoday\b")
+             r"(?!\s+(before|shifts?|of)\b)|\btoday\b")
+PART_OF = r"\b(day|days|end|start|beginning|middle|rest|half|part|time|hours?|minutes?)\s+of\s*$"   # before "the week": a part of it
 # ... and a window named: a month by name, a 4-4-5 period ("in P9", "the accounting period")
 NAMED_SAID = (rf"\b((across|over|during|in|for|through|of)\s+)?(all\s+of\s+)?(the\s+month\s+of\s+)?{MONTH_WORDS}\b"
               r"|\b((in|for|during|over|across|through)\s+)?((fiscal|accounting)\s+period|4-4-5|445|p(1[0-3]|[1-9]))\b")
@@ -1053,9 +1055,16 @@ NAMED_SAID = (rf"\b((across|over|during|in|for|through|of)\s+)?(all\s+of\s+)?(th
 # production day and shift. Alone it is the production day, the window "the day" reads.
 DAYTIME_SAID = r"\b(during|in)\s+the\s+day\b(?!\s+(before|shifts?|of)\b)"
 DAYTIME_TEXT = ("'{words}' beside '{other}' could be the daytime hours, which the records do not keep: a stop is kept by its production "
-                "day and its shift. Ask '{plain} {other}' for all of it, or name a shift ('{plain} on shift 1 {other}').")
+                "day and its shift. Ask '{plain} {other}' for all of it, or name a shift, as in '{plain} on shift 1 this week'.")
 NO_COMPARE_TEXT = ("'{words}' compares with the window before, which the answer to '{plain}' does not carry beside it: ask '{plain} this "
                    "week' and '{plain} last week' one at a time.")
+# ... and two windows of different lengths said with no comparison ("stops this week during the month"): one answer is one window's
+TWO_SAID_TEXT = ("'{words}' names two windows ('{first}' and '{second}'), and one answer is one window's total: ask one at a time "
+                 "('{plain} this week', '{plain} this month' or '{plain} this period').")
+# ... one of them "may" said as a modal ("this week, may I ask", "if I may"), which the router reads as May (the month's name): named so
+MODAL_MAY = r"\bmay\s+(i|we|you|the|it|they|have|be|been|not)\b|\bif\s+(i|we|you)\s+may\b"
+MAY_TEXT = ("'{said}' reads 'may' as the month of May beside '{other}': ask '{plain} {other}' without it, or name the month ('{plain} in "
+            "May').")
 TWO_WINDOWS_TEXT = ("One quantity is one window's total with the window just before it beside, and '{words}' names {what}: ask '{plain} this "
                     "week' (last week beside it), '{plain} this month' (last month beside it) or '{plain} last week' (the week before beside it).")
 # "This shift", "my shift" with no shift selected (row 8): the selected shift has no referent under All shifts
@@ -1080,7 +1089,7 @@ NUMBER_AND_WHY_TEXT = ("This asks for a number and for its cause together: ask o
 # item 3): what the stops might be put down to, which no tool returns; the records keep the reason, place and kind each stop was coded
 # with. "Can be attributed to" is the coded count (FILTER_CONNECTOR).
 HEDGE = (r"\b(might|may|could)\s+((well|possibly|also)\s+)?(have\s+)?(be|been)\b(?=\s+((caused|triggered|brought\s+on|lost|made|due|related|"
-         r"attributed|coded|charged|put\s+down|blamed|linked|tied|traced|down|went|gone)\b|(by|to|from|as|because)\b))")
+         r"attributed|coded|charged|put\s+down|blamed|linked|tied|traced|down|went|gone)\b|(by|to|from|as|because|at|on|in|with)\b))")
 HEDGE_TEXT = ("'{words}' hedges the cause: one quantity counts what the records hold, each stop with the reason, place and kind it was coded "
               "with, never what it might have been. Ask '{asked}' for what was coded, or 'why were there so many stops this week' for what "
               "drove them.")
@@ -1115,17 +1124,21 @@ def windows_said(lower):
     spans = []
     for pattern in (PREVIOUS_SAID, BASE_SAID, NAMED_SAID):
         for m in re.finditer(pattern, lower):
+            if pattern == BASE_SAID and re.search(PART_OF, lower[:m.start()]):
+                continue   # "the day of the week", "the end of the day": a part of a window, not one
             if not any(m.start() < end and start < m.end() for start, end, _, _ in spans):
                 spans.append((m.start(), m.end(), m[0], grain_of(m[0])))
     return sorted(spans)
 
 
-def hedge_gate(lower, lead):
-    """Raise when one quantity's question hedges its cause ("how many stops might be due to the stacker"): never the coded count."""
-    hedge = re.search(HEDGE, lower)
+def hedge_gate(lower, lead, asked=None):
+    """Raise when one quantity's question hedges its cause ("how many stops might be due to the stacker"): never the coded count. The
+    question it suggests is `asked`, the question as said ("last week", "yesterday" as the question put them)."""
+    asked = asked or lower
+    hedge = re.search(HEDGE, asked)
     if hedge:
-        verb = 'was' if re.search(r"\bhow\s+much\b", lower) else 'were'
-        raise ValueError(HEDGE_TEXT.format(words=hedge[0], asked=re.sub(HEDGE, verb, lower).strip(' ?.!')))
+        verb = 'was' if re.search(r"\bhow\s+much\b", asked) else 'were'
+        raise ValueError(HEDGE_TEXT.format(words=hedge[0], asked=re.sub(r"\s+", ' ', re.sub(HEDGE, verb, asked)).strip(' ?.!')))
 
 
 def comparison_gate(lower, lead, period, named_month=False, asked=None):
@@ -1144,9 +1157,13 @@ def comparison_gate(lower, lead, period, named_month=False, asked=None):
         raise ValueError(DAYTIME_TEXT.format(words=daytime[0], other=other.strip(), plain=PLAIN.get(lead['metric'], 'how many stops')))
     if not window_compared(lower):
         second = next((w for w in windows if w[3] != windows[0][3]), None) if windows else None
+        modal = re.search(MODAL_MAY, asked)
+        if second and modal and 'may' in (windows[0][2], second[2]):
+            raise ValueError(MAY_TEXT.format(said=modal[0], other=(second if windows[0][2] == 'may' else windows[0])[2].strip(),
+                                             plain=PLAIN.get(lead['metric'], 'how many stops')))
         if second:
-            raise ValueError(TWO_WINDOWS_TEXT.format(words=asked[windows[0][0]:second[1]], what=f"two windows ('{windows[0][2]}' and '{second[2]}')",
-                                                     plain=PLAIN.get(lead['metric'], 'how many stops')))
+            raise ValueError(TWO_SAID_TEXT.format(words=asked[windows[0][0]:second[1]], first=windows[0][2].strip(), second=second[2].strip(),
+                                                  plain=PLAIN.get(lead['metric'], 'how many stops')))
         return
     windows = windows_said(lower)
     metric = lead['metric']
@@ -1597,7 +1614,7 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
             lead = {**lead, 'grade': grade_code}
         deictic_gate(lower, lead, current, shifts)   # "this shift" with no shift selected (issue #153, row 8)
         gated_window(PLAIN.get(lead['metric'], 'how many stops'))
-        hedge_gate(lower, lead)   # "might be due to the stacker": never the coded count (the review of e863f1e, item 3)
+        hedge_gate(lower, lead, asked)   # "might be due to the stacker": never the coded count (the review of e863f1e, item 3)
         answered ='month' if months else 'week' if lead['metric'] == 'downtime_per_day' and gated['period'] == 'day' else gated['period']
         comparison_gate(lower, lead, answered, bool(months) and month_start(months[0])[:7] != anchor[:7], asked)   # rows 2 and 6
         quantity_gate(lower, lead)   # every word consumed: the allow-list (round 6)

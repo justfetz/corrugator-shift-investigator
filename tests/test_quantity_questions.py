@@ -947,6 +947,7 @@ E863F1E = [
      "'during the day' beside 'yesterday' could be the daytime hours"),
     ('How many stops by reason during the day this week?', '/corr/1/day/2026-09-14?measure=pareto&window=week&unit=count',
      'could be the daytime hours'),
+    ('How many stops in the day this week?', WEEK + 'stops', "'in the day' beside 'this week' could be the daytime hours"),
     ('How many stops might be due to the stacker this week?', WEEK + 'stops&reason=stacker', "'might be' hedges the cause"),       # item 3
     ('How many stops may be due to the stacker this week?', '/corr/1/day/2026-09-14?measure=quantity&window=2026-05&metric=stops&reason=stacker',
      "'may be' hedges the cause"),
@@ -973,9 +974,27 @@ def test_every_window_said_counts_daytime_beside_a_window_and_a_hedge_refuse(que
     ('How many stops can be attributed to the stacker this week?', WEEK + 'stops&reason=stacker'),
     ('How many stops were due to the stacker this week?', WEEK + 'stops&reason=stacker'),
     ('May I see how many stops this week?', WEEK + 'stops'),
+    ('How many stops on the day of the week this month?', '/corr/1/day/2026-09-14?measure=stops&window=month'),   # never a window
+    ('How many stops this week, the day of the week?', '/corr/1/day/2026-09-14?measure=stops&window=week'),
 ])
 def test_one_window_said_through_a_preposition_still_answers(question, url):
     """One window, however it is said, or a window with the one just before it, keeps its answer; "during the day" alone is the selected
     production day, and "can be attributed to" the coded count."""
     assert landing(question)[0] == url, (question, landing(question))
     assert not catch_all_failures(question, url), (question, catch_all_failures(question, url))
+
+
+@pytest.mark.parametrize('question, refusal', [
+    ('How many stops might be due to the stacker last week?', "Ask 'how many stops were due to the stacker last week'"),
+    ('How many stops yesterday might be due to the stacker?', "Ask 'how many stops yesterday were due to the stacker'"),
+    ('How many minutes of downtime could have been caused by the stacker this week?',
+     "Ask 'how many minutes of downtime were caused by the stacker this week'"),
+    ('How many stops may be at the stacker this week?', "'may be' hedges the cause"),
+    ('How many stops this week, may I ask?', "'may i' reads 'may' as the month of May beside 'this week'"),
+    ('Stops per day during the week this month', "names two windows ('during the week' and 'this month'), and one answer is one window's total"),
+])
+def test_a_refusal_of_this_round_names_what_was_said(question, refusal):
+    """The hedge's suggestion keeps the window as said (never "this week" for "last week", never the day dropped), a modal "may" read as
+    May is named, and two windows with no comparison claim no window before beside the answer."""
+    url, text, _ = landing(question)
+    assert url is None and refusal in text, (question, url, text)
