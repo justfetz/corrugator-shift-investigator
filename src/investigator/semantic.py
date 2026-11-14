@@ -15,9 +15,10 @@ Every number a result carries is computed by DuckDB from the store; this module 
 (the answer shape formats them). A dollar figure is a DuckDB quantity priced once by `cost_model.price`, the
 same call the tools make, at the named, assumed rates.
 
-Phase 1 is additive: the offline router does not read the model yet (phase 2 wires it, after #144), and the
-analyst's tool list does not include `semantic_query`. The URL `measure=semantic&m=…&by=…&<dimension>=…`
-(urls.py, docs/URLS.md) reaches it, and `/docs/semantic-model` is rendered from the model file.
+Phase 2 (issue #144): the offline router reads a question into a SemanticQuery with semantic_parse.py, from this
+file's words, and answers it here; the analyst's tool list still does not include `semantic_query`. The URL
+`measure=semantic&m=…&by=…&<dimension>=…` (urls.py, docs/URLS.md) reaches it, and `/docs/semantic-model` is rendered
+from the model file.
 """
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
@@ -1361,8 +1362,10 @@ def model_markdown(text=None):
         entity = 'every record' if d['entity'] == '*' else d['entity']
         out.append(f'| `{d["name"]}` | {_cell(d["label"])} | {entity} | {_cell(d["description"])} |')
     out += ['', '## Synonyms', '',
-            'The plant\'s own words for a measure, a dimension or a dimension\'s value. Phase 2 of issue #117 has the offline '
-            'router and the analyst read these instead of word lists of their own.', '',
+            'The plant\'s own words for a measure, a dimension or a dimension\'s value. The offline router reads a question with '
+            'these (issue #144, `semantic_parse.py`): a question in the model\'s words, or in these, answers with the measure, '
+            'split and filters it names; a word it cannot place is refused, never dropped. A new kind of question is an entry '
+            'here plus a golden case, never a new router rule.', '',
             '| Word | Means |', '| --- | --- |']
     for m in spec['measures']:
         if m.get('synonyms'):
@@ -1372,6 +1375,24 @@ def model_markdown(text=None):
             out.append(f'| {_cell(", ".join(d["synonyms"]))} | dimension `{d["name"]}` |')
         for value, words in (d.get('value_synonyms') or {}).items():
             out.append(f'| {_cell(", ".join(words))} | {d["name"]} {_cell(value)} |')
+    from . import semantic_parse   # the parser's closed tables (issue #144); imported here, after this module has loaded
+    out += ['', '## Ranking and statistic words', '',
+            'The one table of words the parser reads that are not the model\'s: they rank, split, compare or ask a share, '
+            'and the statistics the model does not define are refused with questions that answer.', '',
+            '| Words | Read as |', '| --- | --- |',
+            f'| {_cell(", ".join(w for w, r in semantic_parse.RANK.items() if r == "most"))} | ranked, largest first (`rank=most`) |',
+            f'| {_cell(", ".join(w for w, r in semantic_parse.RANK.items() if r == "least"))} | ranked, smallest first (`rank=least`) |',
+            f'| {_cell(", ".join(semantic_parse.SPEED_RANK))} | a speed ranked (speed without stops) |',
+            f'| {_cell(", ".join(semantic_parse.FREQUENCY))} | the count of the records ("most common reason": stops) |',
+            '| which, what (before a dimension), where (a place) | split by that dimension |',
+            f'| {_cell(", ".join(semantic_parse.GROUP))} (before a dimension), daily, weekly, monthly | split by that dimension |',
+            '| top N, bottom N | ranked, the first N rows (`top=N`) |',
+            f'| {_cell(", ".join(semantic_parse.COMPARE))} | two values of one dimension, or a plural dimension: split by it; the window before: `compare=prev` |',
+            '| percent of, share of, proportion of, fraction of | the share of a value in the total (`share=`), or each row\'s share |',
+            '| per (before a measure) | the ratio the model defines (lineal per setup, minutes per stop, volume per production day), or refused |',
+            f'| {_cell(", ".join(semantic_parse.STATISTIC))} | refused (the model keeps sums, counts and ratios of sums), unless part of a model word: '
+            '"average stop" is minutes per stop, "average speed" speed with stops |',
+            f'| {_cell(", ".join(semantic_parse.EVALUATIVE))} | refused: the model holds no direction of better |']
     out += ['', '## Levers of a slice', '',
             'A measure has its lever (the Lever column above): a measure with a band reads it from that band in targets.json '
             'and types no copy, and a measure over the same quantity (the band\'s square feet, minutes or dollars) has the same '

@@ -53,7 +53,7 @@ EVALUATIVE = ('worst', 'best', 'better', 'worse', 'good', 'bad', 'poor', 'poores
 UNITS = {('percent',): '%', ('percentage',): '%', ('%',): '%', ('pct',): '%', ('dollars',): '$', ('dollar',): '$', ('$',): '$',
          ('cost',): '$', ('costs',): '$', ('costing',): '$', ('usd',): '$', ('money',): '$', ('minutes',): 'min', ('mins',): 'min',
          ('minute',): 'min', ('square', 'feet'): 'sq ft', ('square', 'foot'): 'sq ft', ('sq', 'ft'): 'sq ft', ('sqft',): 'sq ft',
-         ('times',): 'count'}
+         ('times',): 'count', ('count',): 'count'}
 COUNT_UNITS = ('setups', 'order changes', 'paper changes', 'days', 'stops', 'sheets', 'cuts')
 # What a value of an entity's dimension asks when no measure is named ("which grade has the most warp"): the reject lines'
 # area. Stops are counted or timed, so a stop's reason alone names no measure and is refused with both.
@@ -158,8 +158,8 @@ def vocabulary(store, mdl=None):
         words = [name.replace('_', ' '), _strip_parens(d['label']), *d.get('synonyms', [])]
         for word in words:
             add(word, ('dimension', name))
-            if not word.endswith('s') and ' ' not in word and not word.startswith('by'):
-                add(word + 's', ('dimension', name))   # "grades", "reasons", "crews": the dimension, said as a set
+            if not word.endswith('s') and not word.startswith('by') and not re.search(r'[^a-z ]', word.lower()):
+                add(word + 's', ('dimension', name))   # "grades", "stop reasons", "crews": the dimension, said as a set
         if d['type'] != 'categorical' or name == 'shift':
             continue
         values = semantic.store_values(name, store, mdl) or []
@@ -509,6 +509,13 @@ def _assign(reading, items, mdl, store, a, context):
     if not pure and mixed and not (len(mixed) == 1 and _cued(items, items.index(mixed[0])) and _entries(mixed[0], 'dimension')):
         pure, mixed = [mixed[0]], mixed[1:]
         pure[0].entries = _entries(pure[0], 'measure')
+    for it in list(mixed):   # "trim and shear": a measure joined to a measure is a second measure, never a value
+        k = items.index(it)
+        if any(0 <= j < len(items) and items[j].kind == 'and' and 0 <= 2 * j - k < len(items) and items[2 * j - k] in pure
+               for j in (k - 1, k + 1)):
+            mixed.remove(it)
+            it.entries = _entries(it, 'measure')
+            pure.append(it)
     for it in mixed:
         it.entries = [e for e in it.entries if e[0] != 'measure']
     for it in pure:
@@ -601,6 +608,11 @@ def _assign(reading, items, mdl, store, a, context):
     if unit is None and a['ask_unit'] == 'min' and measure and mdl.measures[measure]['unit'] != 'ft/min' \
             and not mdl.measures[measure]['unit'].startswith('%'):
         unit = 'min'     # "how long": minutes
+    stat_word = next((w for it in pure for w in it.words.split() if w in STATISTIC), None)
+    if measure is not None and unit is not None and stat_word and _family(mdl, measure, unit) != measure:
+        # "average stop count": the model's average stop is a length; its count, cost or rate is a statistic it does not define
+        raise Refused(f"'{stat_word}' asks for a statistic the semantic model does not define: it keeps sums, counts and ratios of sums",
+                      _suggest(mdl, reading, measure, None, None))
     if measure is not None and unit is not None:
         refined = _family(mdl, measure, unit)
         if refined is None:
@@ -930,6 +942,8 @@ def covers(request, reading, context=None):
                 and (not rank or group_by == ['grade']))
     if intent == 'period_compare':
         return False   # the KPI summary answers "how did we do", never a measure the reading named
+    if intent == 'compare':   # the day's shift comparison opens with each shift's speed
+        return q.measure in SPEED_FAMILY and set(group_by) <= {'shift'} and not filters and share is None
     if intent == 'downtime':   # the day's downtime breakdown, per shift, by reason, place or kind
         return (q.measure in DOWNTIME_FAMILY + ('stops',) and group_by in ([], [request.get('group_by')]) and rank in (None, 'most')
                 and set(filters) <= {'kind'} and filters.get('kind') in (None, request.get('kind')) and share is None)

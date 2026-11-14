@@ -56,6 +56,7 @@ The facts a session needs; the procedures and decisions are in `docs/DEPLOYMENT.
 
 - Numbers come from tool results, never from prose. A narrative that states a number no tool returned is a bug, and the bug becomes a golden case.
 - Every bug becomes a golden case in `evals/golden.json` before the fix.
+- A new kind of question is a model entry plus a golden, never a new router rule.
 - The offline path never calls a model. Live calls are bounded in calls, seconds and bytes, and go only through the provider adapters.
 - Public mode never accepts a visitor key.
 - Contracts move with their code in the same PR: `docs/RECORDS.md` and `docs/RECORD_CONTRACT.md` with `records.py` and `synth.py`, `docs/AGENT_CONTRACT.md` with the tool schemas, bounds and scope checks, `docs/URLS.md` with `urls.py`.

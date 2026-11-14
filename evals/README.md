@@ -46,12 +46,12 @@ outside the clock). Failures are prefixed `URL:`; the table's note carries `URL 
 summary prints the server p50 and p95 over GET. Value cases have no question and are not sent; a
 live row checks only that its question resolves to its `expect.url`.
 
-A case may ask by its address instead of a question (issue #117: the `measure=semantic` cases, which no question
-routes to until phase 2 wires the router to the semantic model). Its `url` is the input: in process the runner
+A case may ask by its address instead of a question (issue #117: the `measure=semantic` cases; since issue #144 a question
+the semantic model's parser reads completely routes there too, and its case records that address as `expect.url`). Its `url` is the input: in process the runner
 resolves it with `urls.resolve_url` against the golden year and answers it with the agent, exactly as the server
 answers `GET /corr/…`; over GET it fetches the address itself, which must answer, or, when it is a hand-typed spelling,
 redirect to `expect.url` and answer there. Everything else (the invariants, the expectations, the shape, a refusal's
-text) is scored as for a question; only these cases and the value cases that call it may run `semantic_query`, so a model that names the compiler anywhere else still fails the unknown-tool invariant. The value cases include the semantic model's new combinations of measure, split
+text) is scored as for a question; only these cases, the value cases that call it and the offline answers of questions may run `semantic_query`, so a model planner that names the compiler still fails the unknown-tool invariant. The value cases include the semantic model's new combinations of measure, split
 and filter (`value-semantic-*`), computed by hand from the record families like every other value case.
 
 A question that names its own shift or a relative window (issue #105: "How much donwtime on 1st shift last

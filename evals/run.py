@@ -161,9 +161,11 @@ def named_per(question):
     if numerator in ('minutes', 'mins', 'downtime') and denominator == 'day':
         # the downtime of each production day, led by the day with the most minutes (round 4, item 9); a percent asked is a percent
         return r'%' if re.search(r'\bpercent(?:age)?\b|%', question, re.I) else r'\bmin(?:utes)?\b'
-    if numerator in ('setups', 'sheets', 'paper changes', 'paper change', 'stops', 'splices', 'jams') and denominator in ('day', 'week', 'order'):
-        # a count per day, per week or per order is that count split by it (issue #144: the semantic model's split), never a ratio
-        return rf'\b{re.escape(numerator)}\b'
+    if numerator in ('setups', 'sheets', 'paper changes', 'paper change', 'stops', 'splices', 'jams', 'feet', 'ft', 'lineal', 'footage') \
+            and denominator in ('day', 'week', 'order'):
+        # a count or the feet per day, per week or per order is that quantity split by it (issue #144: the semantic model's split, as
+        # no ratio of them to days is kept), never a ratio
+        return rf'\b{PER_NUMERATOR.get(numerator, re.escape(numerator))}\b'
     return (rf'\b{PER_NUMERATOR.get(numerator, re.escape(numerator))}(?: per |/)'
             rf'{PER_DENOMINATOR.get(denominator, re.escape(denominator))}\b')
 

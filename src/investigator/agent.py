@@ -101,7 +101,8 @@ PERIOD_TOOL_SCHEMAS = [
 ]
 PERIOD_TOOLS = {schema["name"] for schema in PERIOD_TOOL_SCHEMAS}
 # The tools that read the whole record store: the period tools and the semantic model's compiler (issue #117). The
-# compiler is reached by its URL (measure=semantic) and is not in TOOL_SCHEMAS, so the analyst cannot plan it yet.
+# compiler is reached by its URL (measure=semantic) and by the offline router's semantic step (issue #144, semantic_parse);
+# it is not in TOOL_SCHEMAS, so the analyst cannot plan it yet.
 STORE_TOOLS = PERIOD_TOOLS | {semantic.TOOL}
 TOOL_SCHEMAS.extend(PERIOD_TOOL_SCHEMAS)
 TOOL_SCHEMAS.append({"name": "render_chart", "description": "Chart a result from this investigation; never supply invented rows.",
