@@ -17043,6 +17043,126 @@
     ],
     "sections_not_match": "reported notes"
    }
+  },
+  {
+   "id": "semantic-a-weekday-not-the-selected-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops on Tuesday",
+   "expect": {
+    "raises": "'tuesday' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-last-monday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops last Monday",
+   "expect": {
+    "raises": "'last monday' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-this-year-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops this year",
+   "expect": {
+    "raises": "'this year' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-in-2025-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops in 2025",
+   "expect": {
+    "raises": "'in 2025' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-over-the-weekend-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops over the weekend",
+   "expect": {
+    "raises": "'weekend' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-the-day-before-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops the day before",
+   "expect": {
+    "raises": "'day before' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-the-previous-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops the previous day",
+   "expect": {
+    "raises": "'previous day' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-past-two-weeks-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime past two weeks",
+   "expect": {
+    "raises": "'past two weeks' is not a window the semantic model reads"
+   },
+   "note": "Coordinator on #144 (round 5 of the review of PR #143, listed again by the reviewer of PR #155): the window words were ignored and the selected day answered. A window the semantic model does not read is refused, never answered as the selected day."
+  },
+  {
+   "id": "semantic-share-of-downtime-was-knife-jams",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What fraction of downtime was knife jams this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=reason&share=Knife+/+slitter+jam",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Knife / slitter jam was [0-9.]+% of the downtime this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), probe: answered the review. A share of downtime of one reason leads with that reason's share; \"knife jams\" is the Knife / slitter jam reason."
+  },
+  {
+   "id": "semantic-a-split-by-shift-beside-a-named-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops by shift on shift 3 this week",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   },
+   "note": "Reviewer of PR #155 (head c8a0e04), item 8: \"by shift\" was dropped and shift 3's total answered; a split by shift beside a named shift is refused, as the hand router refuses it."
   }
  ]
 }
