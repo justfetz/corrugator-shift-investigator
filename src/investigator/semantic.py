@@ -27,6 +27,8 @@ from pathlib import Path
 import re
 import time
 
+import duckdb
+
 from . import cost_model, targets
 
 MODEL_PATH = Path(__file__).with_name('semantic_model.json')
@@ -79,7 +81,8 @@ def _physical_columns():
 
 def _where_tokens(expr, table_columns, where):
     """The tokens of an entity's `where`, refused unless it is columns of its table, literals, comparisons, AND, OR, IN,
-    NOT, IS NULL and balanced parentheses."""
+    NOT, IS NULL and balanced parentheses, put together as `_WhereGrammar` reads them (so a condition DuckDB would refuse
+    at query time, such as `family = = 'BOND'` or `family IN 'BOND'`, is refused when the model loads)."""
     tokens = _WHERE_TOKEN.findall(expr)
     if ''.join(tokens) != expr or not expr.strip():
         raise ValueError(f'{where} is not a condition of columns, comparisons and literals')
@@ -92,7 +95,102 @@ def _where_tokens(expr, table_columns, where):
             raise ValueError(f'{where} closes a parenthesis it never opened')
     if depth:
         raise ValueError(f'{where} leaves a parenthesis open')
+    _WhereGrammar([t for t in tokens if not t.isspace()], table_columns, where).condition()
     return tokens
+
+
+class _WhereGrammar:
+    """The structure of an entity's `where`, read once at load (the coordinator's re-review of PR #148):
+
+        condition  := conjunct (OR conjunct)*
+        conjunct   := factor (AND factor)*
+        factor     := NOT factor | '(' condition ')' | column test
+        test       := comparison operand | [NOT] IN '(' literal (',' literal)* ')' | IS [NOT] NULL
+        operand    := column | literal          comparison := = <> != < <= > >=
+
+    Every comparison starts with a column of the entity's table; anything else is refused with where it stopped."""
+
+    COMPARISONS = {'=', '<>', '!=', '<', '<=', '>', '>='}
+
+    def __init__(self, tokens, columns, where):
+        self.tokens, self.columns, self.where, self.i = tokens, columns, where, 0
+
+    def peek(self, word=None):
+        token = self.tokens[self.i] if self.i < len(self.tokens) else None
+        return token if word is None else (token is not None and token.lower() == word)
+
+    def take(self, word=None):
+        token = self.peek()
+        if token is None or (word is not None and token.lower() != word):
+            self.fail(f'expected {word.upper() if word and word.isalpha() else word or "more"}')
+        self.i += 1
+        return token
+
+    def fail(self, why):
+        near = ' '.join(self.tokens[self.i:self.i + 3]) or 'the end'
+        raise ValueError(f'{self.where} is not a condition the grammar reads: {why} at {near}')
+
+    def literal(self, token):
+        return token is not None and (token.startswith("'") or re.fullmatch(r'\d+(?:\.\d+)?', token) is not None)
+
+    def condition(self, top=True):
+        self.conjunct()
+        while self.peek('or'):
+            self.take()
+            self.conjunct()
+        if top and self.peek() is not None:
+            self.fail('expected AND, OR or the end')
+
+    def conjunct(self):
+        self.factor()
+        while self.peek('and'):
+            self.take()
+            self.factor()
+
+    def factor(self):
+        if self.peek('not'):
+            self.take()
+            return self.factor()
+        if self.peek() == '(':
+            self.take()
+            self.condition(top=False)
+            self.take(')')
+            return None
+        if self.peek() not in self.columns:
+            self.fail('expected a column of its table')
+        self.take()
+        return self.test()
+
+    def test(self):
+        token = self.peek()
+        if token in self.COMPARISONS:
+            self.take()
+            operand = self.peek()
+            if operand not in self.columns and not self.literal(operand):
+                self.fail('expected a column or a literal')
+            self.take()
+            return None
+        if self.peek('not') or self.peek('in'):
+            if self.peek('not'):
+                self.take()
+            self.take('in')
+            self.take('(')
+            while True:
+                if not self.literal(self.peek()):
+                    self.fail('expected a literal')
+                self.take()
+                if self.peek() != ',':
+                    break
+                self.take(',')
+            self.take(')')
+            return None
+        if self.peek('is'):
+            self.take()
+            if self.peek('not'):
+                self.take()
+            self.take('null')
+            return None
+        self.fail('expected a comparison, IN or IS NULL')
 
 
 def _where_sql(expr, alias, table_columns):
@@ -494,6 +592,7 @@ def validate(query, store=None, mdl=None):
         if dim in filters:
             raise SemanticError(f'filters name {dim} twice')
         filters[dim] = resolve_value(dim, value, store, mdl) if store is not None else value
+        _within_own_filter(mdl, measure, dim, filters[dim], store)
     shift = _shift(shift)
     if query.window is None:
         raise SemanticError('A semantic query needs a window: {"period": "day|week|month|fiscal", "anchor": "YYYY-MM-DD"}')
@@ -529,6 +628,57 @@ def validate(query, store=None, mdl=None):
 WORDS = {1: 'one', 2: 'two', 3: 'three'}
 
 
+def _parts(mdl, measure):
+    """The simple measures whose records a measure reads: itself, a ratio's numerator and denominator, a priced measure's quantity."""
+    m = mdl.measures[measure]
+    return [m['numerator'], m['denominator']] if m['agg'] == 'ratio' else [m['quantity']] if m['agg'] == 'priced' else [measure]
+
+
+def _without_filter(mdl, measure):
+    """The measure that reads what `measure` reads without its own filter (downtime_minutes for maintenance_pm_minutes,
+    downtime_pct for op_maint_pct), or None."""
+    def twin(name):
+        m = mdl.measures[name]
+        if not m.get('filter'):
+            return name
+        return next((o for o, om in mdl.measures.items() if om['agg'] == m['agg'] and om.get('entity') == m['entity']
+                     and om.get('expr') == m.get('expr') and not om.get('filter') and not om.get('above_band')), None)
+    m = mdl.measures[measure]
+    if m['agg'] in SIMPLE:
+        return twin(measure)
+    if m['agg'] == 'ratio':
+        n, d = twin(m['numerator']), twin(m['denominator'])
+        return next((o for o, om in mdl.measures.items() if om['agg'] == 'ratio' and (om['numerator'], om['denominator']) == (n, d)
+                     and om.get('scale', 1) == m.get('scale', 1)), None)
+    q = twin(m['quantity'])
+    return next((o for o, om in mdl.measures.items() if om['agg'] == 'priced' and om['quantity'] == q and om['price_kind'] == m['price_kind']), None)
+
+
+def _within_own_filter(mdl, measure, dim, value, store=None):
+    """Refuse a filter on the column a measure's own filter keeps to, with a value outside it (operator and maintenance
+    downtime of the External kind): every record it would keep is one the measure never counts, so it would read as a
+    recorded zero (the coordinator's re-review of PR #148). The refusal names the measure's own values (the ones the
+    store holds) and the measure that counts them all."""
+    spec = mdl.dimensions[dim]
+    synonyms = [c for c, words in (spec.get('value_synonyms') or {}).items() if str(value).strip().lower() in (w.lower() for w in words)]
+    for part in _parts(mdl, measure):
+        pm = mdl.measures[part]
+        for column, allowed in (pm.get('filter') or {}).items():
+            if spec['entity'] != pm['entity'] or spec['expr'] != '{' + column + '}':
+                continue
+            allowed = allowed if isinstance(allowed, list) else [allowed]
+            if any(_same(v, a) for v in [value, *synonyms] for a in allowed):
+                continue
+            held = store_values(dim, store, mdl) if store is not None else None
+            shown = [a for a in allowed if held is None or any(_same(a, h) for h in held)] or allowed
+            word = spec['label'].lower()
+            listed = ', '.join(shown[:-1]) + ' or ' + shown[-1] if len(shown) > 1 else shown[0]
+            other = _without_filter(mdl, measure)
+            ask = f'ask {other} for every {word}' if other else 'ask a measure without that filter (every measure is on /docs/semantic-model)'
+            raise SemanticError(f'{mdl.measures[measure]["label"]} ({measure}) counts only {word} {listed}: {word} {value} is outside it, '
+                                f'and would read as a recorded zero. Filter by one of those, or {ask}.', shown)
+
+
 def _shift(value):
     if value is None:
         return None
@@ -546,7 +696,6 @@ def _conflict(shift, value):
 # ---- dimension values: the store's own
 _VALUES = {}
 LOOKUP_ROWS = 500   # a dimension with more distinct values than this is checked value by value, never listed
-LISTED_VALUES = 40  # a refusal lists every value of a dimension up to this many, then says how many more
 
 
 def _value_sql(mdl, dim):
@@ -606,9 +755,9 @@ def resolve_value(dim, value, store, mdl=None):
         near = [shown[w] for w in _nearest(value, shown)]
         if near:
             raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the nearest: ' + ', '.join(str(c) for c in near), near)
-        listed = values[:LISTED_VALUES]   # nothing near: every value the records hold, or the first of a long list and how many more
-        more = f' and {len(values) - len(listed)} more' if len(values) > len(listed) else ''
-        raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the values are: ' + ', '.join(str(c) for c in listed) + more, listed)
+        # nothing near: every value the records hold (at most LOOKUP_ROWS; a longer dimension is checked value by value
+        # below), never the first of them and "N more" with nowhere to see the rest (the coordinator's re-review of PR #148)
+        raise SemanticError(f'No {spec["label"].lower()} {value!r} in the records; the values are: ' + ', '.join(str(c) for c in values), values)
     # a dimension with many values (paper runs, orders): checked one by one, the nearest by similarity
     sql, params = _value_sql(mdl, dim)
     hit = store._fetch(f'SELECT v FROM ({sql}) WHERE lower(CAST(v AS VARCHAR)) = lower(?) LIMIT 1', params + [str(value).strip()], limit=1)
@@ -956,7 +1105,13 @@ def run(query, store, rates=None, mdl=None):
     trace = {'sql': [], 'parameters': []}
     fetched = {}
     for statement in compiled.statements:
-        fetched[statement.name] = store._fetch(statement.sql, statement.params, limit=MAX_LIMIT + 1)
+        try:
+            fetched[statement.name] = store._fetch(statement.sql, statement.params, limit=MAX_LIMIT + 1)
+        except duckdb.Error as exc:
+            # the model file loaded but DuckDB refuses its SQL (a text column compared with a number): a refusal with the
+            # reason, never an exception the server would answer with a 500 (the coordinator's re-review of PR #148)
+            reason = str(exc).splitlines()[0][:200]
+            raise SemanticError(f'The semantic model could not run this request in DuckDB ({type(exc).__name__}: {reason})') from None
         trace['sql'].append(statement.sql)
         trace['parameters'].append([_plain(p) for p in statement.params])
     rates = cost_model.effective(rates) if m['agg'] == 'priced' and (rates is None or 'values' not in rates) else rates
@@ -964,12 +1119,15 @@ def run(query, store, rates=None, mdl=None):
     total_row = fetched['total'][0] if fetched['total'] and window['coverage'] != 'unavailable' else {}
     # a previous window outside the dataset is unavailable: its figures are null, never the zero its empty sums read
     available = previous is not None and previous['coverage'] != 'unavailable'
-    rows = []
+    rows, rows_band_withheld = [], False
     for r in fetched.get('groups', []):
         values = {dim: r[f'd{i}'] for i, dim in enumerate(query.group_by)}
         row = {dim: _plain(v) for dim, v in values.items()}
         row['label'] = ' · '.join(_label(mdl, dim, v) for dim, v in values.items())
-        row.update(_reading(mdl, query, r, rates, basis, values))
+        reading = _reading(mdl, query, r, rates, basis, values)
+        withheld = reading.pop('band_withheld', False)
+        rows_band_withheld = rows_band_withheld or withheld
+        row.update(reading)
         row['lever'] = _lever(mdl, query.measure, values, query.filters)
         if query.compare:
             row['previous_value'] = _previous(mdl, query, r, rates, basis) if available else None
@@ -995,9 +1153,22 @@ def run(query, store, rates=None, mdl=None):
     if m['agg'] == 'priced':
         data['quantity_unit'] = mdl.measures[m['quantity']]['unit']
         data['totals'] = [{'label': 'Total', **{k: v for k, v in total.items() if k != 'value'}, 'value': total.get('value')}]
-    for key in ('band', 'band_text'):
+    for key in ('band', 'band_text', 'denominator_text', 'band_withheld'):
         if key in total:
             data[key] = total[key]
+    # what cuts the numerator only (issue #117, the coordinator's re-review of PR #148): the total's filters, and each row's
+    # own dimensions beyond them; the answer says the figure is the slice's part of the whole, read against all of it
+    data['cut'] = total.get('cut', _cut(mdl, query, {}))
+    by_rows = _cut(mdl, query, {d: None for d in query.group_by})
+    data['rows_cut'] = [d for d in by_rows if d not in data['cut']]
+    data['cut_by'] = ([{'dimension': f['dimension'], 'text': f'{f["label"].lower()} {f["text"]}'} for f in data['filters'] if f['dimension'] in data['cut']] +
+                      [{'dimension': d, 'text': f'each {mdl.dimensions[d]["label"].lower()}'} for d in data['rows_cut']])
+    data['rows_band_withheld'] = rows_band_withheld
+    if rows and rows[0].get('denominator_text'):
+        data['rows_unit'] = f'% of {rows[0]["denominator_text"]}' if m['unit'].startswith('%') else m['unit']
+    if m['agg'] == 'ratio':
+        data['numerator_label'] = mdl.measures[m['numerator']]['label']
+        data['denominator_label'] = mdl.measures[m['denominator']]['label']
     if query.compare:
         data['previous_value'] = _previous(mdl, query, total_row, rates, basis) if available and total_row else None
         # the change is DuckDB's (cur.value - prev.value), stated only when both windows are complete, as the tools do (a
@@ -1030,19 +1201,53 @@ def _reading(mdl, query, r, rates, basis, dims_values):
     if 'share_pct' in r and m['agg'] != 'priced':
         out['share_pct'] = r['share_pct']
     band = _band_of(mdl, query.measure, dims_values, query.filters)
-    if band and dims_values:
-        # the owner's band is for the measure's own ratio: a slice read against the whole window's denominator (a reject
-        # family against all the yield, a grade's maintenance minutes against all the scheduled minutes) is a share of that
-        # ratio, not the ratio, and carries no band (the waste breakdown's family rows carry none either). A row of
-        # band_by's own dimension is that ratio (each stop kind against the scheduled minutes) and keeps its band.
-        denominator = mdl.measures[m['denominator']]['entity'] if m['agg'] == 'ratio' else None
-        whole = denominator is not None and any(mdl.reach(denominator, d) is None for d in dims_values)
-        own = (m.get('band_by') or {}).get('dimension') in dims_values
-        if whole and not own:
-            band = None
+    cut = _cut(mdl, query, dims_values)
+    if cut:
+        # the owner's band is for the measure's own ratio: a reading whose row or filter cuts the numerator and never the
+        # denominator (a reject family or a customer against all the yield, a grade's minutes against all the scheduled
+        # minutes) is the slice's part of that ratio, not the slice's own rate. It carries no band (the waste breakdown's
+        # family rows carry none either) and says what it is read against (the coordinator's re-review of PR #148: a filter
+        # cuts as a split does). band_by's own dimension (each stop kind against the scheduled minutes) is that ratio, and
+        # keeps its band unless something else cuts it.
+        out.update(cut=cut, denominator_text=_denominator_text(mdl, query, dims_values), band_withheld=bool(band))
+        band = None
     if band:
         targets.mark(out, band, out['value'])
     return out
+
+
+def _cut(mdl, query, dims_values):
+    """The dimensions of a reading (the query's filters, then its row's) that cut a ratio's numerator and never its
+    denominator: the denominator's records carry no such dimension (a grade on downtime %: the stops carry it, the
+    shifts' scheduled minutes do not), so it stays the whole. band_by's own dimension is left out: the stop kind against
+    all the scheduled minutes is the ratio its band reads."""
+    m = mdl.measures[query.measure]
+    if m['agg'] != 'ratio':
+        return []
+    denominator = mdl.measures[m['denominator']]['entity']
+    own = (m.get('band_by') or {}).get('dimension')
+    return [d for d in dict.fromkeys([*query.filters, *dims_values]) if d != own and mdl.reach(denominator, d) is None]
+
+
+def _noun(mdl, dim):
+    """A dimension's label as a noun: `board grade`, `production week`, `shift` (`period` for the 4-4-5 period, whose label
+    holds digits an answer would read as figures)."""
+    word = re.sub(r'\s*\(.*\)$', '', mdl.dimensions[dim]['label']).lower()
+    return dim if re.search(r'\d', word) else word
+
+
+def _denominator_text(mdl, query, dims_values):
+    """What a cut reading's denominator is: `all the window's scheduled minutes`, or the slice of the window it does carry
+    (`all the shift's scheduled minutes` under one shift or by shift, `all the board grade's yield` for a grade's reject
+    family)."""
+    m = mdl.measures[query.measure]
+    denominator = mdl.measures[m['denominator']]['entity']
+    slices = [d for d in dict.fromkeys([*dims_values, *query.filters]) if mdl.reach(denominator, d) is not None]
+    if query.shift is not None and 'shift' not in slices:
+        slices.append('shift')
+    nouns = list(dict.fromkeys(_noun(mdl, d) for d in slices)) or ['window']
+    quantity = m['unit'].split(' of ', 1)[1] if ' of ' in m['unit'] else mdl.measures[m['denominator']]['label'].lower()
+    return f"all the {' and '.join(nouns)}'s {quantity}"
 
 
 def _previous(mdl, query, r, rates, basis):

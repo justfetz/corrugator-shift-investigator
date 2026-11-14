@@ -844,12 +844,17 @@ def test_a_slice_read_against_the_whole_denominator_carries_no_band(store):
 
 
 def _a_value(store, measure, dim):
-    """One value of `dim` the measure's records hold in September: the first of the store's list, or for a dimension too
-    long to list (orders, paper runs) the first row of a split by it."""
+    """One value of `dim` the measure's records hold in September: the first of the store's list the measure accepts, or
+    for a dimension too long to list (orders, paper runs) the first row of a split by it."""
     values = S.store_values(dim, store)
-    if values is not None:
-        return next(v for v in values if run(store, measure, MONTH, filters={dim: v})['source_count'])
-    return run(store, measure, MONTH, group_by=[dim], limit=1)['rows'][0][dim]
+    if values is None:
+        return run(store, measure, MONTH, group_by=[dim], limit=1)['rows'][0][dim]
+    for v in values:
+        try:
+            if run(store, measure, MONTH, filters={dim: v})['source_count']:
+                return v
+        except S.SemanticError:
+            continue   # outside the measure's own filter (the External kind of operator and maintenance minutes): refused
 
 
 def test_a_share_a_filter_cuts_from_the_whole_denominator_carries_no_band_and_says_so(store):

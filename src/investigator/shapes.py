@@ -1518,9 +1518,15 @@ class SemanticAnswer:
             out += self.one(result)
         return out
 
+    @staticmethod
+    def unit_of(reading, unit):
+        """The unit a reading is read in: a share a filter or its row cuts from the whole denominator says it is read
+        against all the window's scheduled minutes or yield, never the slice's own (the coordinator's re-review of PR #148)."""
+        return f'% of {reading["denominator_text"]}' if reading.get('denominator_text') and unit.startswith('%') else unit
+
     def one(self, result):
         data = result['data']
-        unit = data['unit']
+        unit = self.unit_of(data, data['unit'])
         bold, rest = semantic_figure(data.get('value'), unit)
         where = (f', {data["filter_text"]}' if data.get('filter_text') else '') + (f', shift {data["shift"]}' if data.get('shift') else '')
         wp = self.wp(data) or ''
@@ -1542,7 +1548,7 @@ class SemanticAnswer:
         bullets = [self.row_line(result, i, row) for i, row in enumerate(data['rows'])]
         if len(bullets) > SEMANTIC_FIRST:
             bullets = bullets[:SEMANTIC_FIRST] + ['The rest, in the same order'] + bullets[SEMANTIC_FIRST:]
-        notes = []
+        notes = [self.cut_note(data)] if data.get('cut_by') else []
         if data['window']['coverage'] != 'complete':
             notes.append(f'The window is incomplete (coverage {data["window"]["coverage"]}): observed values only, and rankings are withheld.')
         if data.get('comparison', 'complete') != 'complete':
@@ -1565,9 +1571,26 @@ class SemanticAnswer:
         looks = self.looks(data)
         return [head, *bullets, *notes] + ([LOOK, *looks] if looks else [])
 
+    @staticmethod
+    def cut_note(data):
+        """What a filter or a split cuts: the numerator only, so each figure it cuts is its slice's part of the whole, not the
+        slice's own rate, and wears no band (the coordinator's re-review of PR #148)."""
+        parts = [c['text'] for c in data['cut_by']]
+        who = ' and '.join(parts)
+        cut_filter = bool(data.get('cut'))
+        if not cut_filter:
+            what, band = "each row is its slice's part of the whole, not its own rate", ', so the rows carry no band'
+        elif not data['rows']:
+            what, band = "the figure is the slice's part of the whole, not its own rate", ', so it carries no band'
+        else:
+            what, band = "every figure is its slice's part of the whole, not its own rate", ', so none carries a band'
+        withheld = data.get('band_withheld') or data.get('rows_band_withheld')
+        return (f'{who[:1].upper()}{who[1:]} {"cuts" if len(parts) == 1 else "cut"} the {data["numerator_label"].lower()} only, never the '
+                f'{data["denominator_label"].lower()}: {what}{band if withheld else ""}.')
+
     def row_line(self, result, i, row):
         data = result['data']
-        bold, rest = semantic_figure(row.get('value'), data['unit'])
+        bold, rest = semantic_figure(row.get('value'), self.unit_of(row, data['unit']))
         text = f'{row["label"]}: **{bold}**{rest}'
         if data['agg'] == 'priced' and row.get('quantity') is not None:
             q_bold, q_rest = semantic_figure(row['quantity'], data.get('quantity_unit') or 'sq ft')
@@ -1575,7 +1598,7 @@ class SemanticAnswer:
         if row.get('share_pct') is not None:
             text += f' · {f2(row["share_pct"])}% of the total'
         if data.get('previous_window') is not None and data['previous_window']['coverage'] != 'unavailable':
-            before, before_rest = semantic_figure(row.get('previous_value'), data['unit'])
+            before, before_rest = semantic_figure(row.get('previous_value'), self.unit_of(row, data['unit']))
             text += f' · previous {before}{before_rest}'
         if row.get('lever') and row['lever'] != data.get('lever'):
             text += f' · {row["lever"]}'   # a slice whose lever is not the measure's: planned maintenance, a power outage

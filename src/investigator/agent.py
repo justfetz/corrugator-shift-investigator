@@ -137,8 +137,9 @@ CHARTABLE = {
     # a waterfall: from the reference speed down (or up) through each bucket to this window's speed with stops
     'get_speed_variance': ('label', 'gap_fpm', 'ft/min', 'waterfall', None),
     'get_downtime_review': ('category', 'pct_of_scheduled', '% of scheduled minutes', 'bar', None),
-    # the semantic model's rows (issue #117): one bar per group, in the measure's own unit, the previous window beside when asked
-    semantic.TOOL: ('label', 'value', lambda d: d['unit'], 'bar', lambda d: 'previous_value' if d.get('previous_window') else None),
+    # the semantic model's rows (issue #117): one bar per group, in the measure's own unit (rows a split cuts from the whole
+    # denominator: against all of it, PR #148), the previous window beside when asked
+    semantic.TOOL: ('label', 'value', lambda d: d.get('rows_unit') or d['unit'], 'bar', lambda d: 'previous_value' if d.get('previous_window') else None),
 }
 
 # The owner's bands are read from targets.json (issue #101), never typed here.
