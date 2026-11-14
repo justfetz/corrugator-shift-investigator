@@ -13829,7 +13829,7 @@
    }
   },
   {
-   "id": "allow-minutes-stopped-on-average-refused",
+   "id": "average-minutes-stopped-refused",
    "type": "refusal",
    "mode": "offline",
    "question": "On average, how many minutes were we stopped this week?",

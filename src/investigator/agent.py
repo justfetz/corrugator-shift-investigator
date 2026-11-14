@@ -437,8 +437,8 @@ DOWNTIME_WORDS = r"\b(downtime|stops?|stoppages?)\b"
 # A question that asks why, what caused or drove something, or where it came from (round 6 of the coordinator's review of PR 143,
 # item 3) is an investigation: it never lands on a quantity route, the day words are not read as per day in it, stops in it are
 # the downtime review's as downtime is, and the shift control scopes it (the owner's scope ruling, 2026-11-13).
-WHY_ASK = (r"\bwhy\b|\bwhat\s+(caused|causes|drove|drives|is\s+driving|was\s+driving|led\s+to|leads\s+to|is\s+behind|was\s+behind)\b"
-           r"|\bwhat's\s+(causing|driving|behind)\b|\bwhere\s+(did|does|do)\b.*\bcome\s+from\b|\bwhat\s+went\s+wrong\b")
+WHY_ASK = (r"\bwhy\b|\bwhat\s+(caused|causes|drove|drives|led\s+to|leads\s+to)\b|\bwhat\s*(is|was|are|were|'s)\s+(causing|driving|behind)\b"
+           r"|\bwhere\s+(is|are|was|were|did|does|do)\b.*\bcom(e|es|ing)\s+from\b|\bwhat\s+went\s+wrong\b")
 
 
 # ---- One quantity (issue #113): a question that asks for one count or one unit ("how many setups last week", "how
@@ -672,8 +672,8 @@ FUNCTION_WORDS = frozenset((
     'what', 'how', 'many', 'much', 'number', 'count', 'total', 'totals', 'overall', 'altogether', 'combined', 'amount',
     'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
     'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked', 'up',
-    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give',
-    'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give', 'done', 'complete', 'completed',
+    'need', 'want', 'know', 'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
 # What a leftover word asks for (only the refusal's words: the allow-list refuses every word it does not consume, listed here or
 # not). The first leftover word found in a family names it; any other word is "a word one quantity does not read".
 LEFTOVER_FAMILIES = {
@@ -690,6 +690,7 @@ LEFTOVER_FAMILIES = {
                'crew', 'crews', 'team', 'wet', 'dry', 'end', 'glue', 'steam', 'stacker', 'facer', 'backer', 'maintenance',
                'operator', 'operators', 'mechanical', 'electrical'),
     'joined': ('and', 'or', 'plus', 'also'),
+    'single': ('last', 'latest', 'recent', 'first', 'single', 'previous', 'prior', 'next'),
     'weekday': ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'mondays', 'tuesdays', 'wednesdays',
                 'thursdays', 'fridays'),
 }
@@ -701,7 +702,8 @@ LEFTOVER_ANSWERS = {'ranking': ("which downtime reason cost the most minutes thi
                     'statistic': ("what was our average stop this week", "downtime by reason this week"),
                     'subset': ("what was our average stop this week", "which downtime reason cost the most minutes this week"),
                     'percent': ("what percent downtime this week", "how many stops by reason this week"),
-                    'joined': ("how many stops this week", "how many minutes of downtime this week")}
+                    'joined': ("how many stops this week", "how many minutes of downtime this week"),
+                    'single': ("what was our average stop this week", "which downtime reason cost the most minutes this week")}
 # The plain question of each quantity, which a refusal names first
 PLAIN = {'setups': 'how many setups', 'paper_changes': 'how many paper changes', 'order_changes': 'how many order changes',
          'lineal_per_setup': 'feet per setup', 'lineal_per_paper_change': 'feet per paper change', 'lineal_ft': 'how many lineal feet',
@@ -716,30 +718,43 @@ MINUTES_LIKE = ('downtime_minutes', 'maintenance_minutes', 'operator_minutes', '
 # What the route consumes. The window, a window compared with the one before (one quantity carries the previous window beside it),
 # the shift named or all of them, and the whole line said ("across the line", "of any type") are every route's.
 MONTH_WORDS = r"(january|february|march|april|may|june|july|august|september|october|november|december)"
+# (only the windows the route applies: "last week" is read as "this week" once the question has moved the scope to it, and the week
+# before is consumed only beside a comparison, PREVIOUS_WINDOW; "the previous day" or "the week before last" are left, and refused)
 WINDOW_WORDS = (
-    r"\b(this|that|the|current|selected|same|whole|full|entire|last|previous|prior)\s+(production\s+)?"
-    r"(day|week|month|(accounting\s+|fiscal\s+|4-4-5\s+)?period)(\s+before)?\b",
-    r"\b(across|over|during|for|in|on|through)\s+(the|this|last|that|a|all)\s+(production\s+)?(week|month|period|day)\b",
+    r"\b(this|that|the|current|selected|whole|full|entire)\s+(production\s+)?(day|week|month|(accounting\s+|fiscal\s+|4-4-5\s+)?period)\b",
+    r"\b(across|over|during|for|in|on|through)\s+(the|this|that|all)\s+(production\s+)?(week|month|period|day)\b",
     rf"\b((across|over|during|in|for|through)\s+)?(all\s+of\s+)?(the\s+month\s+of\s+)?{MONTH_WORDS}\b",
     r"\ball\s+(week|month|day|period)\s+long\b", r"\b(fiscal|accounting)\s+period\b|\b4-4-5\b|\b445\b|\bp(1[0-3]|[1-9])\b")
 WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse|more|fewer|less|higher|lower)(\s+(to|with|against|than))?\b"
                   r"(?=(.*\b(to|with|against|versus|vs|than))?\s+"
                   r"(the\s+)?(last|previous|prior|week before|month before|day before)\b)")
-SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(shift\s*([1-3]|one|two|three)|(first|second|third|1st|2nd|3rd)\s+shift|"
-               r"(this|that|my|our|the)\s+shift)\b")
+SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(shift\s*[1-3]|(first|second|third|1st|2nd|3rd)\s+shift|"
+               r"(this|that|my|our|the)\s+shift)\b")   # as named_shifts reads them ("shift one" is not one: refused, UNREAD_SHIFT)
+UNREAD_SHIFT = (r"\bshifts?\s+(one|two|three|[abc])\b|\b(last|previous|prior|next|other|night|day|swing|graveyard|morning|afternoon|"
+                r"evening|late|early)\s+shifts?\b")
+SHIFT_TEXT = "'{words}' names a shift the router does not read: name it by its number ('{plain} on shift 1 this week') or set the shift control."
+
 SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\bacross\s+(the\s+)?shifts\b|\bshifts\s+(together|combined)\b"
 # ... and the word that names the window compared ("more stops than last week", "131 versus the week before")
-COMPARED_TO = r"\b(than|with|against|versus|vs)\b(?=\s+(the\s+)?(last|previous|prior|week before|month before|day before)\b)"
+COMPARED_TO = r"\b(than|with|against|versus|vs|and)\b(?=\s+(the\s+)?(last|previous|prior|week before|month before|day before)\b)"
+PREVIOUS_WINDOW = r"\b(the\s+)?(last|previous|prior)\s+(week|month|period|day)\b|\b(the\s+)?(week|month|day|period)\s+before\b(?!\s+last)"
 CONSUMED_ALWAYS = (*WINDOW_WORDS, SHIFT_NAMED, SHIFTS_ALL, r"\bhow long\b", r"\bhow often\b",
                    r"\b(across|over|on|for)\s+(the\s+)?(whole\s+|entire\s+)?(line|corrugator|machine|plant)\b",
                    r"\bof\s+any\s+(type|kind|sort)\b")
 # A rolling window ("the last 7 days", "the past two weeks") is not one the records keep: refused before the words are read
 ROLLING_WINDOW = (r"\b(last|past|previous|prior)\s+(\d+|few|couple(\s+of)?|several|two|three|four|five|six|seven|eight|nine|ten|"
-                  r"eleven|twelve|fourteen|thirty)\s+(production\s+)?(days?|weeks?|months?|shifts?|hours?)\b")
+                  r"eleven|twelve|fourteen|thirty)\s+(production\s+)?(days?|weeks?|months?|shifts?|hours?)\b"
+                  r"|\bthe\s+last\s+(week|month|year)\b(?!\s+of\b)|\bpast\s+(day|week|month|year)s?\b")   # the trailing week, not the week before
+# A window named in words the router does not apply ("the previous day", "the week before last", "month to date", "the same day")
+UNREAD_WINDOW = (r"\b(last|previous|prior|past|same|first)\s+(production\s+)?(day|week|month|period|year)\b"
+                 r"|\b(day|week|month|period)\s+before(\s+(last|yesterday))?\b|\bto\s+date\b|\b[mwy]td\b|\b(day|week|month|year)s?\s+ago\b")
+WINDOW_TEXT = ("'{words}' is not a window the router reads: one quantity reads the selected production day or yesterday, a Mon-Fri "
+               "week, a calendar month or a 4-4-5 period. Ask '{plain} this week', '{plain} this month' or '{plain} last week'.")
 # The measure's own words, by metric: its noun and unit, the "per <denominator>" of a kept ratio and the average a kept ratio is
 STOP_NOUN = r"\bstop(s|ped|page|pages)?\b"
+LAST_VERB = r"\blasts?\b(?!\s+(stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))|\blasted\b"
 MINUTE_WORDS = (r"\b(minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(s|ped|page|pages)?|take|takes|took|taking|"
-                r"last|lasts|lasted|spend|spent)\b")
+                r"spend|spent)\b|" + LAST_VERB)   # "last" the verb ("how long did stops last"), never "the last stop" 
 FEET_WORDS = r"\b(lineal|linear|feet|foot|ft|footage)\b"
 AVG_ANY = r"\b(on\s+(the\s+)?)?(averag(e|es|ed|ing)|avg|mean|typical(ly)?)\b"
 PER_DAY_WORDS = r"\bper\s+(production\s+)?days?\b"
@@ -748,23 +763,22 @@ METRIC_WORDS = {
     'paper_changes': (r"\bpaper changes?\b|\bwet[- ]?ends?(\s+(changes?|runs?))?\b|\bpaper runs?\b",),
     'order_changes': (r"\border change(over)?s?\b|\bchangeovers?\b",),
     'sheets': (r"\bsheets?\b", r"\bcut\b", r"\b(at|on|off|from)\s+(the\s+)?(knife|knives)\b"),   # sheets are counted at the knife
-    'stops': (STOP_NOUN,), 'maintenance_stops': (STOP_NOUN,), 'operator_stops': (STOP_NOUN,),
+    'stops': (STOP_NOUN, r"\btimes\b"), 'maintenance_stops': (STOP_NOUN, r"\btimes\b"), 'operator_stops': (STOP_NOUN, r"\btimes\b"),
     'downtime_minutes': (MINUTE_WORDS, r"\bdowntime\s+(length|duration)s?\b"),
     'maintenance_minutes': (MINUTE_WORDS,), 'operator_minutes': (MINUTE_WORDS,),
-    'minutes_per_stop': (AVG_ANY, r"\bper\s+(stop|stoppage)s?\b", MINUTE_WORDS, r"\b(length|duration)s?\b", r"\b(last|lasts|lasted)\b",
-                         r"\b(take|takes|took)\b"),
+    'minutes_per_stop': (AVG_ANY, r"\bper\s+(stop|stoppage)s?\b", MINUTE_WORDS, r"\b(length|duration)s?\b"),
     'lineal_per_setup': (AVG_ANY, r"\bper\s+set-?ups?\b", FEET_WORDS, r"\brun\s+lengths?\b|\blengths?\b"),
     'lineal_per_paper_change': (AVG_ANY, r"\bper\s+(paper changes?|wet[- ]ends?)\b", FEET_WORDS, r"\blengths?\b"),
-    'lineal_ft': (FEET_WORDS,),
+    'lineal_ft': (FEET_WORDS, r"\bof\s+(paper|board)\b"),
     'msf_per_day': (AVG_ANY, PER_DAY_WORDS, r"\b(msf|volume|output|throughput|production|produce[ds]?|producing)\b"),
     'downtime_per_day': (PER_DAY_WORDS, MINUTE_WORDS),   # per_day has read "each day", "every day", "by day" and "daily" as per day
     'bale_msf': (r"\bmsf\b", r"\b(waste|bale[ds]?|scrap)\b"),
     'waste_sqft': (r"\bsquare f(ee|oo)t\b|\bsq\.? ?ft\b|\bsqft\b",),
     'waste_pct': (r"\bpercent(age)?\b|%", r"\bof\s+(the\s+)?gross\b"),
     # the stops of each production day (the stops profile, get_stops_profile), as the router reads it
-    # (each weekday's stops per day too: "do Mondays stand out" is what it lists)
+    # (each weekday's stops per day too: "do Mondays stand out" is what it lists; one day by its name is not)
     'stops_per_day': (PER_DAY_WORDS, STOP_NOUN, r"\bby\s+weekday\b|\bday\s+of\s+the\s+week\b|\bweekday\s+profile\b|\bweekdays?\b|"
-                      r"\bprofile\b|\bafter\s+the\s+weekend\b|\b(monday|tuesday|wednesday|thursday|friday)s?\b|\b(stand|stick)s?\s+out\b"),
+                      r"\bprofile\b|\bafter\s+the\s+weekend\b|\b(mondays|tuesdays|wednesdays|thursdays|fridays)\b|\b(stand|stick)s?\s+out\b"),
 }
 # The filter the route applied: the words of its stop reason, place, kind, waste line or grade, and the connector before them ("caused
 # by the stacker", "due to order changes", "lost to missed splices", "by operators"). A stop reason's or place's own name counts word
@@ -793,6 +807,8 @@ NAMED_FILTER = tuple(pattern for pattern, _ in PLACE_WORDS + REASON_WORDS) + (
 PROFILE_FILTER = ("Each production day's stops are kept for all stops together, not for one stop reason, place or kind: ask its stops "
                   "over the window ('how many stops at the stacker this week'), each production day's stops ('stops per day this week') "
                   "or the reasons counted ('how many stops by reason this week').")
+ONE_DAY_PROFILE = ("Each production day's stops and downtime are listed over a week or longer, and '{words}' is one production day, whose "
+                   "stops and minutes are its totals ('how many stops {words}'). Ask 'stops per day this week' or 'downtime per day this week'.")
 ROLLING_TEXT = ("A rolling window ('{words}') is not one the records keep: the windows are the production day, the Mon-Fri week, the "
                 "calendar month and the 4-4-5 period. Ask '{plain} this week', '{plain} this month' or '{plain} last week'.")
 
@@ -825,6 +841,9 @@ def leftover_refusal(family, words, metric):
                 f"and kinds are read by their full names. {ask}")
     if family == 'weekday':
         return f"'{words}' names a day the router does not read from a question: set the day control to it. {ask}"
+    if family == 'single':
+        return (f"'{words}' asks for one stop, setup or run, which no tool returns: the records answer a window's total, its minutes per "
+                f"stop and its reasons ranked. {ask}")
     return (f"'{words}' is a word one quantity does not read: it reads its measure, the stop reason, place or kind it names, the "
             f"window and the shift. {ask}")
 
@@ -845,8 +864,13 @@ def unconsumed(lower, lead):
     applied += [KIND_WORDS] if metric.startswith(('maintenance_', 'operator_')) else []
     for pattern in applied:
         text = re.sub(pattern, FILTERED, text)
-    # a window compared with the one before is consumed, never shifts compared ("how did the shifts compare on stops last week")
-    compared = () if re.search(r"\bshifts\b", re.sub(SHIFTS_ALL, ' ', text)) else (WINDOW_COMPARE, COMPARED_TO)
+    if FILTERED.strip() in text:   # "how many stops did the stacker cause", "stacker related stops"
+        text = re.sub(r"\b(cause|causes|caused|related|driven)\b", FILTERED, text)
+    # a window compared with the one before (and the week before itself) is consumed, never shifts compared ("how did the shifts
+    # compare on stops last week")
+    compared = ()
+    if not re.search(r"\bshifts\b", re.sub(SHIFTS_ALL, ' ', text)) and (re.search(WINDOW_COMPARE, text) or re.search(COMPARED_TO, text)):
+        compared = (WINDOW_COMPARE, COMPARED_TO, PREVIOUS_WINDOW)
     for pattern in (FILTER_CONNECTOR, *compared, *CONSUMED_ALWAYS, *METRIC_WORDS.get(metric, ())):   # the window before the measure's words
         text = re.sub(pattern, ' | ', text)
     phrases, run = [], []
@@ -878,6 +902,13 @@ def allow_list(lower, lead):
     phrases = unconsumed(lower, lead)
     if not phrases:
         return
+    left = {word for phrase in phrases for word in phrase}
+    plain = PLAIN.get(metric, 'how many stops')
+    # a shift or a window named in words the route left unread: the words as said ("shift one", "the week before last", "to date")
+    for pattern, text in ((UNREAD_SHIFT, SHIFT_TEXT), (UNREAD_WINDOW, WINDOW_TEXT)):
+        said = next((m[0] for m in re.finditer(pattern, lower) if set(re.findall(r"[a-z0-9]+", m[0])) & left), None)
+        if said:
+            raise ValueError(text.format(words=said, plain=plain))
     found = next(((phrase, word, leftover_family(word)) for phrase in phrases for word in phrase if leftover_family(word)), None)
     if found is None:
         raise ValueError(leftover_refusal(None, ' '.join(phrases[0]), metric))
@@ -1019,7 +1050,7 @@ def _quantity_lead(lower, assume_count):
                     or 'operator' in lower or re.search(GROUPED, lower))
         if re.search(AVERAGE_STOP, lower) and not narrowed:
             return {'metric': 'minutes_per_stop'}
-        if (minutes and re.search(STOP_NOUN, lower) and not narrowed and not re.search(SETUP_NOUNS, lower)
+        if (minutes and re.search(r"\b(stops?|stoppages?)\b", lower) and not narrowed and not re.search(SETUP_NOUNS, lower)
                 and not re.search(NOT_A_LENGTH, lower)):
             # how long a stop lasts on average ("how long did our stops last on average", "how long does a typical stop take") is
             # minutes per stop (round 6, item 6); the allow-list refuses any other word
@@ -1157,7 +1188,7 @@ def parse_period_request(lower, current, shifts):
                   # "how many minutes of downtime at each place" the Pareto in minutes (round 4 of the coordinator's review, item 5)
                   or grouped)
     profile = bool(re.search(r"\bstops?\b.*\bper (production )?day\b|\bper (production )?day\b.*\bstops?\b|by weekday|day of the week|weekday profile|after the weekend", lower)
-                   and not re.search(r"\bper\s+(stop|stoppage)s?\b", lower))   # "minutes per stop each day": a ratio grouped by day
+                   and not re.search(r"\bper\s+(stop|stoppage)s?\b", lower) and not asks_why)   # why so many stops per day: the review   # "minutes per stop each day": a ratio grouped by day
     # each production day's stops are every stop's, and no average across the days (round 5): never the busiest day for either
     if profile and re.search(AVERAGE_ASK + r"|\bmedian\b", lower):
         raise ValueError(DAILY_AVERAGE)
@@ -1238,6 +1269,9 @@ def parse_period_request(lower, current, shifts):
         year = int(anchor[:4]) - (1 if month > int(anchor[5:7]) else 0)
         return f"{year:04d}-{month:02d}-01"
     shift = current.shift if current.scope == 'shift' else shifts[0] if len(shifts) == 1 else None
+    # a day the question named ("yesterday": question_scope moved the scope to it) holds one production day, not each of a week's
+    moved = getattr(current, 'read', None) or {}
+    one_day_named = moved.get('words') if moved.get('period') == 'day' else None
     # A question that names no window gets the Period control's window (week, month, 4-4-5), else the day.
     selected = getattr(current, 'period', 'day')
     selected = None if selected == 'day' else selected
@@ -1259,6 +1293,8 @@ def parse_period_request(lower, current, shifts):
                                  f"ask 'how many setups on {grade_code} this week', or 'volume by grade this week'. " + QUANTITY_HELP)
             lead = {**lead, 'grade': grade_code}
         quantity_gate(lower, lead)   # every word consumed: the allow-list (round 6)
+        if lead['metric'] == 'downtime_per_day' and one_day_named:
+            raise ValueError(ONE_DAY_PROFILE.format(words=one_day_named))
         if lead['metric'] == 'downtime_per_day' and window['period'] == 'day':
             # the downtime of each production day is the stops profile's, over the week when no window is named, as "stops per
             # day" is (round 4 of the coordinator's review, item 9)
@@ -1330,6 +1366,8 @@ def parse_period_request(lower, current, shifts):
         intent = 'period_review'
     elif profile:
         allow_list(lower, {'metric': 'stops_per_day'})   # every word consumed (round 6): never the profile for a subset, share or statistic
+        if one_day_named:
+            raise ValueError(ONE_DAY_PROFILE.format(words=one_day_named))
         plan = [("get_stops_profile", {"window": {"period": period or selected or 'week', "anchor": anchor}, "shift": shift})]
         intent = 'period_stops'
     elif waste:

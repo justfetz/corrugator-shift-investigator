@@ -491,8 +491,8 @@ FUNCTION_WORDS_TABLE = sorted((
     'what', 'how', 'many', 'much', 'number', 'count', 'total', 'totals', 'overall', 'altogether', 'combined', 'amount',
     'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
     'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked', 'up',
-    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give',
-    'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give', 'done', 'complete', 'completed',
+    'need', 'want', 'know', 'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
 WEEK_SETUPS = '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=setups'
 
 
@@ -561,6 +561,22 @@ def test_the_runner_catches_round_6s_wrong_answers():
         assert catch_all_failures(question, url), (question, url)
     assert asked_unit_failures('How many stops for order changes this week?', ['**571 order changes** · -26 vs 597 the week before'])
     assert not asked_unit_failures('How many stops for order changes this week?', ['**19 stops** for Order change · 26.87 minutes'])
+    # the reviewer's probe of the draft: windows, shifts and "last" read but never applied, and the right answers the runner must pass
+    for question, url in (('How long did the last stop last?', '/corr/1/day/2026-09-14?measure=quantity&metric=downtime_minutes'),
+                          ('How many minutes of downtime the week before last?', week + 'downtime_minutes'),
+                          ('How many stops on the same day last week?', '/corr/1/week/2026-09-07?measure=quantity&metric=stops'),
+                          ('How many stops in the last week of August?', '/corr/1/day/2026-09-14?measure=quantity&window=2026-08&metric=stops'),
+                          ('How many stops on shift one this week?', week + 'stops'), ('How many stops month to date?', '/corr/1/day/2026-09-14?measure=quantity&window=month&metric=stops'),
+                          ('How many stops per day did we have on Monday this week?', profile),
+                          ('On average, how many minutes were we stopped this week?', week + 'minutes_per_stop')):
+        assert catch_all_failures(question, url), (question, url)
+    for question, url in (('How many setpus last week?', '/corr/1/week/2026-09-07?measure=quantity&metric=setups'),   # a typo the router reads
+                          ('How many times did we stop this week?', week + 'stops'), ('How many stops this week and last week?', week + 'stops'),
+                          ('How many stops did the stacker cause this week?', week + 'stops&reason=stacker'),
+                          ("What's behind the downtime this week?", '/corr/1/day/2026-09-14/shift/2?measure=review&window=week'),
+                          ('What is driving the downtime this week?', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week')):
+        assert not catch_all_failures(question, url), (question, url)
+    assert not asked_unit_failures('Why were there so many stops per day this week?', ['**3.32%** of scheduled minutes in maintenance and operator downtime'])
 
 
 @pytest.mark.parametrize('question, scope, metric', [

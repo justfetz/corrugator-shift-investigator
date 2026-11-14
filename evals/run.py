@@ -224,35 +224,36 @@ FUNCTION_WORDS = frozenset((
     'what', 'how', 'many', 'much', 'number', 'count', 'total', 'totals', 'overall', 'altogether', 'combined', 'amount',
     'is', 'are', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have', 'has', 'had', 'will', 'would', 'can', 'could',
     'run', 'ran', 'make', 'made', 'get', 'got', 'see', 'saw', 'log', 'logged', 'record', 'recorded', 'rack', 'racked', 'up',
-    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give',
-    'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
+    'happen', 'happened', 'occur', 'occurred', 'go', 'went', 'show', 'tell', 'give', 'done', 'complete', 'completed',
+    'need', 'want', 'know', 'of', 'in', 'on', 'at', 'for', 'to', 'from', 'so', 'far', 'please', 'line', 'corrugator', 'machine', 'plant'))
 _AVG_ANY = r'\b(?:on\s+(?:the\s+)?)?(?:averag(?:e|es|ed|ing)|avg|mean|typical(?:ly)?)\b'
 _PER_DAY = r'\b(?:per (?:production )?days?|a day)\b|\bdaily\b'
 _EACH_DAY = (r"\b(?:per (?:production )?days?|(?:each|every|a|by) (?:production )?day(?:'s)?|day by day)\b|\bdaily\b"
              r"|\b(?:each|every) day's\b")
 _STOP = r'\bstop(?:s|ped|page|pages)?\b'
 _MINUTES = (r'\b(?:minutes?|mins?|downtime|down\s*time|down|time|lost|lose|losing|stop(?:s|ped|page|pages)?|take|takes|took|taking|'
-            r'last|lasts|lasted|spend|spent)\b')
+            r'spend|spent)\b|\blasted\b'   # "last" the verb only: "how long did stops last", never "the last stop"
+            r'|\blasts?\b(?!\s+(?:stops?|stoppages?|time|times|one|shift|set-?up|run|week|month|day|period|year|\d))')
 _FEET = r'\b(?:lineal|linear|feet|foot|ft|footage)\b'
 QUANTITY_CONSUMES = {   # each metric's own words: its noun and unit, a kept ratio's "per" and the average it is
     'setups': (r'\bset-?ups?\b|\bset ups?\b',),
     'paper_changes': (r'\bpaper changes?\b|\bwet[- ]?ends?(?:\s+(?:changes?|runs?))?\b|\bpaper runs?\b',),
     'order_changes': (r'\border change(?:over)?s?\b|\bchangeovers?\b',),
     'sheets': (r'\bsheets?\b', r'\bcut\b', r'\b(?:at|on|off|from)\s+(?:the\s+)?(?:knife|knives)\b'),
-    'stops': (_STOP,), 'maintenance_stops': (_STOP,), 'operator_stops': (_STOP,),
+    'stops': (_STOP, r'\btimes\b'), 'maintenance_stops': (_STOP, r'\btimes\b'), 'operator_stops': (_STOP, r'\btimes\b'),
     'downtime_minutes': (_MINUTES, r'\bdowntime\s+(?:length|duration)s?\b'),
     'maintenance_minutes': (_MINUTES,), 'operator_minutes': (_MINUTES,),
     'minutes_per_stop': (_AVG_ANY, r'\bper\s+(?:stop|stoppage)s?\b', _MINUTES, r'\b(?:length|duration)s?\b'),
     'lineal_per_setup': (_AVG_ANY, r'\bper\s+set-?ups?\b', _FEET, r'\b(?:run\s+)?lengths?\b'),
     'lineal_per_paper_change': (_AVG_ANY, r'\bper\s+(?:paper changes?|wet[- ]ends?)\b', _FEET, r'\blengths?\b'),
-    'lineal_ft': (_FEET,),
+    'lineal_ft': (_FEET, r'\bof\s+(?:paper|board)\b'),
     'msf_per_day': (_AVG_ANY, _PER_DAY, r'\b(?:msf|volume|output|throughput|production|produce[ds]?|producing)\b'),
     'downtime_per_day': (_EACH_DAY, _MINUTES),
     'bale_msf': (r'\bmsf\b', r'\b(?:waste|bale[ds]?|scrap)\b'),
     'waste_sqft': (r'\bsquare f(?:ee|oo)t\b|\bsq\.? ?ft\b|\bsqft\b',),
     'waste_pct': (r'\bpercent(?:age)?\b|%', r'\bof\s+(?:the\s+)?gross\b'),
     'stops_per_day': (_EACH_DAY, _STOP, r'\bby\s+weekday\b|\bday\s+of\s+the\s+week\b|\bweekday\s+profile\b|\bweekdays?\b|\bprofile\b'
-                      r'|\bafter\s+the\s+weekend\b|\b(?:monday|tuesday|wednesday|thursday|friday)s?\b|\b(?:stand|stick)s?\s+out\b'),
+                      r'|\bafter\s+the\s+weekend\b|\b(?:mondays|tuesdays|wednesdays|thursdays|fridays)\b|\b(?:stand|stick)s?\s+out\b'),
 }
 # The words a filter is said with beyond its own name (a URL slug names it: reason=missed-splice, place=splicer-3, waste=dry-end)
 FILTER_SAID = {'missed-splice': r'\bmiss(?:ed|es)?\b', 'order-change': r'\border change(?:over)?s?\b|\bchangeovers?\b',
@@ -265,13 +266,13 @@ _FILTER_CONNECTOR = (r'\b(?:(?:caused|triggered|brought\s+on|lost|made|due|relat
 NOT_A_LENGTH = r'\b(?:average|avg|mean|typical)\s+(?:stop|stoppage)\s+(?:count|frequency|rate|interval|cost|place|location|reason|number)s?\b'
 _MONTHS = r'(?:january|february|march|april|may|june|july|august|september|october|november|december)'
 QUANTITY_CONSUMES_ALWAYS = (   # every route's: the window, the shift, how long or often, the whole line
-    r'\b(?:this|that|the|current|selected|same|whole|full|entire|last|previous|prior)\s+(?:production\s+)?'
-    r'(?:day|week|month|(?:accounting\s+|fiscal\s+|4-4-5\s+)?period)(?:\s+before)?\b',
-    r'\b(?:across|over|during|for|in|on|through)\s+(?:the|this|last|that|a|all)\s+(?:production\s+)?(?:week|month|period|day)\b',
+    r'\b(?:this|that|the|current|selected|whole|full|entire)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+|fiscal\s+|4-4-5\s+)?period)\b',
+    r'\b(?:(?<!the )last|previous|prior)\s+(?:week|month|(?:accounting\s+)?period)\b(?!\s+(?:before|of)\b)',   # the question's own move (issue #105)
+    r'\b(?:across|over|during|for|in|on|through)\s+(?:the|this|that|all)\s+(?:production\s+)?(?:week|month|period|day)\b',
     rf'\b(?:(?:across|over|during|in|for|through)\s+)?(?:all\s+of\s+)?(?:the\s+month\s+of\s+)?{_MONTHS}\b',
     r'\ball\s+(?:week|month|day|period)\s+long\b', r'\b(?:fiscal|accounting)\s+period\b|\b4-4-5\b|\b445\b|\bp(?:1[0-3]|[1-9])\b',
     r'\byesterday\b',
-    r'\b(?:(?:on|for|by|in|during|from)\s+)?(?:the\s+)?(?:shift\s*(?:[1-3]|one|two|three)|(?:first|second|third|1st|2nd|3rd)\s+shift|'
+    r'\b(?:(?:on|for|by|in|during|from)\s+)?(?:the\s+)?(?:shift\s*[1-3]|(?:first|second|third|1st|2nd|3rd)\s+shift|'
     r'(?:this|that|my|our|the)\s+shift)\b',
     r'\b(?:(?:across|on|for|over|in)\s+)?all\s+(?:the\s+|three\s+)*shifts\b|\bacross\s+(?:the\s+)?shifts\b|\bshifts\s+(?:together|combined)\b',
     r'\bhow long\b', r'\bhow often\b',
@@ -304,12 +305,35 @@ def unconsumed_words(question, url):
         patterns.append(r'\b(?:maintenance|operators?)\b')
     for pattern in patterns:
         text = re.sub(pattern, ' zfilteredz ', text)
-    shifts_said = re.search(r'\bshifts\b', re.sub(QUANTITY_CONSUMES_ALWAYS[7], ' ', text))
-    compared_to = r'\b(?:than|with|against|versus|vs)\b(?=\s+(?:the\s+)?(?:last|previous|prior|week before|month before|day before)\b)'
-    for pattern in (_FILTER_CONNECTOR, *(() if shifts_said else (QUANTITY_WINDOW_COMPARED, compared_to)), *QUANTITY_CONSUMES_ALWAYS,
-                    *QUANTITY_CONSUMES.get(metric, ())):
+    if 'zfilteredz' in text:   # "how many stops did the stacker cause", "stacker related stops"
+        text = re.sub(r'\b(?:cause|causes|caused|related|driven)\b', ' zfilteredz ', text)
+    shifts_said = re.search(r'\bshifts\b', re.sub(QUANTITY_CONSUMES_ALWAYS[8], ' ', text))
+    compared_to = r'\b(?:than|with|against|versus|vs|and)\b(?=\s+(?:the\s+)?(?:last|previous|prior|week before|month before|day before)\b)'
+    before = r'\b(?:the\s+)?(?:last|previous|prior)\s+(?:week|month|period|day)\b|\b(?:the\s+)?(?:week|month|day|period)\s+before\b(?!\s+last)'
+    compared = (() if shifts_said or not (re.search(QUANTITY_WINDOW_COMPARED, text) or re.search(compared_to, text)) else
+                (QUANTITY_WINDOW_COMPARED, compared_to, before))   # the week before is read only beside a comparison
+    for pattern in (_FILTER_CONNECTOR, *compared, *QUANTITY_CONSUMES_ALWAYS, *QUANTITY_CONSUMES.get(metric, ())):
         text = re.sub(pattern, ' | ', text)
-    return [w for w in re.findall(r"[a-z0-9%$]+(?:[-'’][a-z0-9]+)*", text) if w not in FUNCTION_WORDS]
+    left = [w for w in re.findall(r"[a-z0-9%$]+(?:[-'’][a-z0-9]+)*", text) if w not in FUNCTION_WORDS]
+    # a misspelt measure word the router reads as the measure ("setpus", issue #105) is read here too: one edit from a word of the
+    # question's measure, the same first letter
+    measure_words = {'setups', 'setup', 'stops', 'stop', 'minutes', 'downtime', 'sheets', 'feet', 'lineal', 'changes', 'paper', 'order'}
+    def misspelt(w):
+        if w in measure_words or w.rstrip('s') in measure_words or w + 's' in measure_words:
+            return False   # a measure word itself, spelt right, is left as it is: "stops" on an order-changes URL is unread
+        return len(w) >= 4 and any(w[0] == m[0] and _one_edit(w, m) for m in measure_words)
+    return [w for w in left if not misspelt(w)]
+
+
+def _one_edit(a, b):
+    """True when `a` is one insert, delete, substitution or swap of two neighbours from `b` (and not `b` itself)."""
+    if a == b or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        diff = [i for i in range(len(a)) if a[i] != b[i]]
+        return len(diff) == 1 or (len(diff) == 2 and diff[1] == diff[0] + 1 and a[diff[0]] == b[diff[1]] and a[diff[1]] == b[diff[0]])
+    short, long_ = (a, b) if len(a) < len(b) else (b, a)
+    return any(long_[:i] + long_[i + 1:] == short for i in range(len(long_)))
 
 
 def plain_quantity_failures(question, url):
@@ -323,6 +347,8 @@ def plain_quantity_failures(question, url):
                 'stop reason, place or kind is refused, never the whole\'s figure']
     if params.get('metric') == 'minutes_per_stop' and re.search(NOT_A_LENGTH, text):
         return [f'{question[:60]!r} asks {re.search(NOT_A_LENGTH, text)[0]!r}, not the length of a stop, but lands on minutes per stop']
+    if params.get('metric') == 'minutes_per_stop' and not re.search(r'\b(?:stops?|stoppages?)\b', text):
+        return [f'{question[:60]!r} names no stop to average over ("how many minutes were we stopped on average") but lands on minutes per stop']
     if re.search(ROLLING_WINDOW, text):
         return [f'{question[:60]!r} asks a rolling window ({re.search(ROLLING_WINDOW, text)[0]!r}), which the records do not keep, but '
                 f'lands on one quantity']
@@ -340,7 +366,8 @@ def plain_quantity_failures(question, url):
 # speed of a window (measure=fpm with window=, or under a ranged grain); a production day's per-shift answers keep the controls.
 SCOPED_NUMBER = (r'/shift/\d\?measure=(?:quantity|stops|review|pareto|waste|grade|rollstock|overrun)(?:&|$)'
                  r'|/(?:week|month|period)/[0-9-]+/shift/\d\?measure=fpm(?:&|$)|/shift/\d\?measure=fpm&(?:.*&)?window=')
-INVESTIGATION = r'\bwhy\b|\bwhat\s+(?:caused|causes|drove|drives|led\s+to)\b|\bcome\s+from\b|\bwhat\s+went\s+wrong\b|\bwhat\'s\s+(?:causing|driving)\b'
+INVESTIGATION = (r'\bwhy\b|\bwhat\s+(?:caused|causes|drove|drives|led\s+to|leads\s+to)\b|\bwhat\s*(?:is|was|are|were|\'s)\s+(?:causing|driving|behind)\b'
+                 r'|\bcom(?:e|es|ing)\s+from\b|\bwhat\s+went\s+wrong\b')
 
 
 def catch_all_failures(question, url):
@@ -384,6 +411,8 @@ def asked_unit_failures(question, sections):
     """A count or unit question whose headline's lead clause (the first section with a bold figure that is not a bullet, else
     the first section, up to its first ` · `) does not carry the unit it asked for (issue #113): "how many minutes did knife
     jams take" answered `**10 stops** · 17.62 minutes` fails (the coordinator's re-review of PR 143, item 4)."""
+    if re.search(INVESTIGATION, question, re.I):
+        return []   # "why were there so many stops per day": a cause asked, not a unit (round 6, item 3)
     want = named_per(question) or next((unit for ask, unit in ASKED_UNITS if re.search(ask, question, re.I)), None)
     if want is None or not sections:
         return []
