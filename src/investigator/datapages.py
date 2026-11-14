@@ -669,6 +669,13 @@ def _scope(entry, production_day):
     if entry.get('tool') == 'get_speed_variance' and data.get('against') == 'shift' and data.get('against_shift') in (1, 2, 3) \
             and type(shift) is int:   # a shift held against another reads both: the gap is between them (#151 review)
         out['shift'] = sorted({shift, data['against_shift']})
+    previous = data.get('previous_window') if isinstance(data, dict) else None
+    if entry.get('tool') == 'get_speed_variance' and data.get('against') == 'previous' and isinstance(window, dict) \
+            and isinstance(previous, dict) and previous.get('start') and previous['start'] < window['start']:
+        # a window held against the one before it reads both, and they are next to each other (record_store.previous_window):
+        # one span holds the gap and every bucket and detail of it, each the difference of the two windows (#151 re-review)
+        out.pop('day', None)
+        out.update({'from': previous['start'], 'to': window['end']})
     kind = args.get('kind') if entry.get('tool') == 'get_downtime_breakdown' else None
     if isinstance(kind, str) and kind:   # the breakdown read one stop kind (PM answers as Scheduled, the contract's rule)
         out['kind'] = STOP_KINDS.get(kind.lower(), kind)
@@ -734,44 +741,24 @@ def _place_reason(item):
     return {'place': place, 'reason': _stop_value('reason', reason)} if sep else {'reason': _stop_value('reason', item)}
 
 
-def _reference(row):
-    """True when a speed-variance bucket or item lost nothing on the explained side and something on the reference's
-    (a planned stop on the shift it is held against, a grade only the previous window ran)."""
-    if 'current_loss_fpm' in row:
-        return not row.get('current_loss_fpm') and bool(row.get('reference_loss_fpm'))
-    return not row.get('time_share_pct') and bool(row.get('reference_time_share_pct'))   # a grade-mix item
-
-
-def _speedvar_side(row, entry):
-    """The side whose rows a speed-variance receipt opens: the explained shift and window's, whose minutes and stops
-    the details carry, unless the bucket or item lost nothing there, when the reference's rows are what it is about."""
-    data = entry.get('data') or {}
-    if not _reference(row):
-        return {}
-    # a shift held against another already reads both shifts (_scope); the previous window is its own span
-    previous = data.get('previous_window')
-    if data.get('against') == 'previous' and isinstance(previous, dict) and previous.get('start'):
-        return {'day': None, 'from': None, 'to': None, **_span(previous['start'], previous['end'])}
-    return {}
-
-
+# A bucket or detail of a speed variance is the difference of its two sides, and the result's scope already holds both:
+# the shift it is held against (_scope widens shift to the pair) or the window before (_scope widens the span to both).
 def _speedvar_row(row, entry):
     if row.get('bucket') == 'stops':   # the unplanned stops: the reasons the bucket's details list, any of them
         reasons = sorted({_stop_value('reason', d.get('item')) for d in (entry.get('data') or {}).get('details') or []
                           if d.get('bucket') == 'stops' and d.get('item')})
-        return 'stops', {'reason': reasons or None, **_speedvar_side(row, entry)}
+        return 'stops', {'reason': reasons or None}
     if row.get('bucket') in SPEEDVAR_STOPS:
-        return 'stops', {**SPEEDVAR_STOPS[row['bucket']], **_speedvar_side(row, entry)}
-    return 'setups', _speedvar_side(row, entry)
+        return 'stops', dict(SPEEDVAR_STOPS[row['bucket']])
+    return 'setups', {}
 
 
 def _speedvar_detail(row, entry):
-    side = _speedvar_side(row, entry)
     if row.get('bucket') == 'setups':   # the order-change stops on the setups of one grade
-        return 'stops', {'reason': 'Order change', 'quality_id': row.get('item'), **side}
+        return 'stops', {'reason': 'Order change', 'quality_id': row.get('item')}
     if row.get('bucket') == 'stops' or row.get('bucket') in SPEEDVAR_STOPS:
-        return 'stops', {**SPEEDVAR_STOPS.get(row['bucket'], {}), 'reason': _stop_value('reason', row.get('item')), **side}
-    return 'setups', {'quality_id': row.get('item'), **side}
+        return 'stops', {**SPEEDVAR_STOPS.get(row['bucket'], {}), 'reason': _stop_value('reason', row.get('item'))}
+    return 'setups', {'quality_id': row.get('item')}
 
 
 def _ranking(row, entry):

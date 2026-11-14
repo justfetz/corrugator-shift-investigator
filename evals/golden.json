@@ -9142,6 +9142,154 @@
    "expect": {
     "raises": "^No customer 'C9999' in the records; the values are: C000, C001, .*, C039, C040$"
    }
+  },
+  {
+   "id": "receipt-dollars-at-visitor-rates",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Where did the money go this shift?",
+   "rates": "paper:70,hour:1500",
+   "note": "#151 re-review: a money answer priced at the visitor's rates carries them as its rate rows, and the receipt checker read only the dict form, so it recomputed these lines at the post's rates and called correct receipts wrong. tests/test_datapages.py recomputes every line and the total at the rates in the answer.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:70,hour:1500",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_shift_dollars",
+      "arguments": {
+       "shift": 2
+      }
+     }
+    ],
+    "charts": 1,
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses",
+     "^Rates: paper \\$70/MSF \\(yours\\), machine time \\$1,500/hr \\(yours\\)"
+    ]
+   }
+  },
+  {
+   "id": "receipt-speed-opportunity-total-of-rounded-cells",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-05-04",
+   "question": "Where is the speed opportunity this week?",
+   "note": "#151 re-review: the total is the sum of its cells' hours as each is printed, to two places (record_store.get_speed_opportunity); the receipt checker summed unrounded cells and missed this week's 5.19 by more than a unit of its last digit. It now rounds each cell as the tool does.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/day/2026-05-04?measure=opportunity&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_opportunity",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-05-04"
+       },
+       "slice_by": "width",
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "tables": [
+     "get_speed_opportunity"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ hours\\*\\* if every cell ran at its best-fifth speed"
+    ]
+   }
+  },
+  {
+   "id": "receipt-weekday-profile-at-the-last-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "period": "fiscal",
+   "day": "2026-09-30",
+   "question": "Stops per day",
+   "note": "#151 re-review: the period holding the data's last day runs five weeks past it, and a weekday's stops per day divide by the production days of that weekday the records hold (record_store.get_stops_profile), one each here, not the five the calendar has. The receipt checker divided by the calendar; it now counts the shift records under the receipt's own span.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/period/2026-09-30?measure=stops",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_stops_profile",
+      "arguments": {
+       "window": {
+        "period": "fiscal",
+        "anchor": "2026-09-30"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "charts": 1,
+    "tables": [
+     "get_stops_profile"
+    ],
+    "sections_match": [
+     "^Weekday profile$",
+     "^- Mon: \\*\\*[0-9.]+ stops per day\\*\\* · [0-9.]+ min per day over 1 day\\(s\\)",
+     "coverage partial"
+    ]
+   }
+  },
+  {
+   "id": "receipt-speed-opportunity-with-no-cell",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/day/2026-09-14/shift/2?measure=opportunity",
+   "scope": "shift",
+   "day": "2026-09-14",
+   "shift": 2,
+   "note": "#151 re-review: one shift of one day (the address with no window: the day it names) has no grade and width with ten setups, so the opportunity has no row and its total is zero hours; the receipt checker read the slicing from the first row and failed with an IndexError. It reads it from the step's arguments.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=opportunity",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_speed_opportunity",
+      "arguments": {
+       "window": {
+        "period": "day",
+        "anchor": "2026-09-14"
+       },
+       "slice_by": "width",
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*0\\.00 hours\\*\\* if every cell ran at its best-fifth speed",
+     "cells with fewer than 10 setups are listed in the evidence but not ranked"
+    ]
+   }
+  },
+  {
+   "id": "notes-count-says-what-its-link-opens",
+   "type": "faithfulness",
+   "mode": "offline",
+   "scope": "day",
+   "question": "Show the shift and downtime notes for every shift",
+   "note": "#151 re-review (the coordinator's decision): the count's receipt opens the shift's stops, and the shift's own note is in the shift record beside them, so \"13 reported notes\" linked to 12 rows. The count now says what its link opens: the stop notes, and the shift's own note named apart.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=notes",
+    "status": "complete",
+    "sections_match": [
+     "^\\*\\*[0-9]+\\*\\* stop notes and the shift's own note on shift 1 · synthetic and unverified",
+     "^- Shift 2: \\*\\*[0-9]+\\*\\* stop notes and the shift's own note \\(query"
+    ],
+    "sections_not_match": "reported notes"
+   }
   }
  ]
 }

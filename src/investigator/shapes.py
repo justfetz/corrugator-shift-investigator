@@ -76,6 +76,14 @@ def look(text, question):
     return f'- {text} → “{question}”'
 
 
+def notes_count(result):
+    """A shift's notes, counted as their rows lie: its stops' notes, the rows its receipt opens, and the shift's own note
+    from the shift record (get_shift_notes reads both; the #151 re-review: say what the link opens)."""
+    rows, stops = result['data']['rows'], result['data']['stop_notes']
+    own = " and the shift's own note" if any(r.get('record_type') == 'Shift' for r in rows) else ''
+    return f'**{n(stops)}** stop note{"" if stops == 1 else "s"}{own}'
+
+
 # ---- the money beside the quantities (issue #31): every dollar is a priced row's own field
 def money(value):
     return 'unavailable' if value is None else f'${value:,.0f}'
@@ -433,7 +441,7 @@ class DailyAnswer:
         if self.intent == 'matrix' and row:
             return bullet(f'Shift {shift}: **{n(row["valid_setups"])}** dry-end setups · {n(row["paper_changes"])} paper changes', k, 0)
         if self.intent == 'notes' and tools.get('get_shift_notes'):
-            return bullet(f'Shift {shift}: **{len(tools["get_shift_notes"]["data"]["rows"])}** reported notes', tools['get_shift_notes'])
+            return bullet(f'Shift {shift}: {notes_count(tools["get_shift_notes"])}', tools['get_shift_notes'])
         if self.intent == 'orders' and tools.get('get_order_matrix'):
             return bullet(f'Shift {shift}: **{len(tools["get_order_matrix"]["data"]["rows"])}** order fragments', tools['get_order_matrix'])
         if self.intent == 'ranking':
@@ -657,7 +665,7 @@ class DailyAnswer:
         notes = tools.get('get_shift_notes')
         if not notes:
             return self.shape_generic(s)
-        head = f'**{len(notes["data"]["rows"])}** reported notes{self.clause(s, low=False).split(",")[0]} · synthetic and unverified: observations, not causes {ref(notes)}'
+        head = f'{notes_count(notes)}{self.clause(s, low=False).split(",")[0]} · synthetic and unverified: observations, not causes {ref(notes)}'
         looks = [look('The downtime those stops add up to, by reason', f'Show the downtime breakdown{self.dsuffix(s)}'),
                  look('Each setup with its stops and rejects', f'Show the setup matrix{self.suffix(s)}')]
         return head, [], [], looks
