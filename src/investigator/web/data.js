@@ -121,6 +121,11 @@ function rowsCard(page){
   const body=el('tbody'); for(const r of page.rows){ const tr=el('tr'); for(const c of page.columns)tr.append(cell(page,c,r[c.name])); body.append(tr); }
   table.append(head,body); wrap.append(table); card.append(wrap);
  }
+ const reach=(page.max_page||200)*page.per_page;
+ if(page.count>Math.min(page.csv_limit,reach)){   // a receipt can select more rows than a download holds or the pages reach (#151 re-review)
+  const n=Math.min(page.csv_limit,reach).toLocaleString('en-US');
+  card.append(el('p',`This filter selects ${page.count.toLocaleString('en-US')} rows. A figure read from them counts every one, but the pages stop at page ${(page.max_page||200).toLocaleString('en-US')} and the CSV at ${n} rows, the newest ${n}: add a day, a shift or another filter to reach the rest.`,'muted data-bound'));
+ }
  const pager=el('div',undefined,'data-pager');
  if(page.newer)pager.append(link('← Newer',page.newer,'nav-btn'));
  if(page.older)pager.append(link('Older →',page.older,'nav-btn'));

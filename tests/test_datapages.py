@@ -83,6 +83,9 @@ def test_every_tool_declares_the_table_it_read():
     assert tools <= set(dp.SOURCES), tools - set(dp.SOURCES)
     for tool, (table, parts) in dp.SOURCES.items():
         assert table in dp.TABLES and set(parts) <= set(dp.PARTS), tool
+    # the semantic model's tool is reached by its address, not TOOL_SCHEMAS: its table is its measure's entity's
+    from investigator import semantic
+    assert dp.SEMANTIC_TOOL == semantic.TOOL and {e['table'] for e in semantic.model().entities.values()} <= set(dp.TABLES)
 
 
 # ------------------------------------------------------------------ the index and a table page
@@ -142,6 +145,12 @@ def test_a_table_page_is_the_schema_and_fifty_rows_newest_first(store):
     want = store._db.execute("SELECT count(*) FROM stops t JOIN shifts c USING (production_date, shift) JOIN setups g USING (setup_id) "
                              "WHERE t.production_date BETWEEN '2026-09-01' AND '2026-09-30' AND c.crew = 'Crew B' AND g.quality_id = '275-BC'").fetchone()[0]
     assert crew['count'] == want > 0 and crew['url'] == '/data/stops?from=2026-09-01&to=2026-09-30&crew=crew%20b&quality_id=275-BC'
+    # a reject line names its lane: it takes the lane's order and customer (a semantic answer by order or customer links so)
+    lanes = dp.page(store, 'rejects', 'from=2026-09-01&to=2026-09-30&customer_id=c002&counted_in=dry_end')
+    want = store._db.execute("SELECT count(*) FROM rejects r JOIN setup_orders o USING (setup_id, lane) WHERE r.production_date "
+                             "BETWEEN '2026-09-01' AND '2026-09-30' AND o.customer_id = 'C002' AND r.counted_in = 'dry_end'").fetchone()[0]
+    assert lanes['count'] == want > 0 and lanes['url'] == '/data/rejects?from=2026-09-01&to=2026-09-30&customer_id=c002&counted_in=dry_end'
+    assert dp.page(store, 'rejects', 'day=2026-09-14&order=' + order)['url'] == f'/data/rejects?day=2026-09-14&order_number={order}'
     assert dp.page(store, 'stops', 'day=2026-09-14&format=json')['url'] == '/data/stops?day=2026-09-14'   # the JSON asked for by parameter
     two = dp.page(store, 'stops', 'day=2026-09-14&shift=3,1')   # the shifts a day's money was summed over (#151 review)
     assert two['url'] == '/data/stops?day=2026-09-14&shift=1,3' and {r['shift'] for r in two['rows']} == {1, 3}
@@ -223,6 +232,8 @@ def test_fuzzed_filters_never_reach_the_sql(store):
         shape = re.sub(r'EXISTS \(SELECT 1 FROM shifts c WHERE c\.production_date = \w+\.production_date AND c\.shift = \w+\.shift '
                        r'AND lower\(c\.crew\) IN \((?:lower\(\?\)(?:, )?)+\)\)'
                        r'|EXISTS \(SELECT 1 FROM setups g WHERE g\.setup_id = \w+\.setup_id AND lower\(g\.quality_id\) IN \((?:lower\(\?\)(?:, )?)+\)\)'
+                       r'|EXISTS \(SELECT 1 FROM setup_orders o WHERE o\.setup_id = \w+\.setup_id AND o\.lane = \w+\.lane '
+                       r'AND lower\(o\.(?:order_number|customer_id)\) IN \((?:lower\(\?\)(?:, )?)+\)\)'
                        r'|lower\("\w+"\) IN \((?:lower\(\?\)(?:, )?)+\)|"\w+" IN \((?:\?(?:, )?)+\)', 'C', out['sql'])
         shapes.update(re.sub(r'"?\w+"? (=|>=|<=) \?|lower\("\w+"\) = lower\(\?\)|dayofweek\(production_date\) = \?', 'C', one).replace('rowid BETWEEN ? AND ?', 'R')
                       for one in shape.split(';\n'))
@@ -551,6 +562,44 @@ class Figures:
             return abs((before.get(g, 0.0) - now.get(g, 0.0)) * (speed_of(g) - reference_base))
         raise Unchecked(f'speed variance bucket {bucket}')
 
+    # ---- the semantic model: its measure over the receipt's records, by the model's own expression
+    @staticmethod
+    def semantic_value(name, rows):
+        """A count, a distinct count or a sum of a measure's expression over rows of its entity's table: each
+        {placeholder} read through the model's physical block, the arithmetic evaluated over the row (no SQL)."""
+        from investigator import semantic
+        mdl = semantic.model()
+        m = mdl.measures[name]
+        if m['agg'] == 'count':
+            return len(rows)
+        columns = mdl.entities[m['entity']]['columns']
+        code = re.sub(r'\{(\w+)\}', lambda x: f'({columns[x.group(1)]})', m['expr'])
+        if not re.fullmatch(r'[\w\s()+\-*/.]+', code):
+            raise Unchecked(f'semantic measure {name}: {code}')
+        values = [eval(code, {'__builtins__': {}}, {k: (0 if v is None else v) for k, v in r.items()}) for r in rows]
+        return len(set(values)) if m['agg'] == 'count_distinct' else sum(values)
+
+    def semantic(self, entry, part, index, rows):
+        """(value, exact): the measure over the receipt's records; a priced measure's quantity priced at the answer's
+        rates; a ratio's numerator over them against its denominator's records the step declares beside them."""
+        from investigator import semantic
+        data = entry['data']
+        m = semantic.model().measures[data['measure']]
+        if m['agg'] in ('count', 'count_distinct'):
+            return self.semantic_value(data['measure'], rows), True
+        if m['agg'] == 'sum':
+            return self.semantic_value(data['measure'], rows), False
+        if m['agg'] == 'priced':
+            return cost_model.price(m['price_kind'], self.semantic_value(m['quantity'], rows), self.rates)['usd'], False
+        if m['agg'] == 'ratio':
+            declared = entry['source'].get('denominator') or {}
+            url = declared.get('url') if part is None else (declared.get('rows') or [None] * (index + 1))[index]
+            if not url:
+                raise WrongRows('a ratio with no denominator declared')
+            numerator, denominator = self.semantic_value(m['numerator'], rows), self.semantic_value(m['denominator'], self.rows(url))
+            return numerator / denominator * m.get('scale', 1) if denominator else None, False
+        raise Unchecked(f'semantic agg {m["agg"]}')
+
     # ---- every tool's figures
     def expected(self, result, entry, part, index, section, receipt):
         """(value, exact) of the section's bold figure, recomputed from the receipt's rows."""
@@ -700,6 +749,8 @@ class Figures:
             return sum(r['lineal_ft'] for r in rows) / sum(r['target'] * r['seconds'] / 60 for r in rows) * 100, False
         if tool == 'get_order_matrix' and part is None:
             return len(rows), True
+        if tool == dp.SEMANTIC_TOOL:
+            return self.semantic(entry, part, index, rows)
         raise Unchecked(f'{tool} {part}: no figure check for {section[:80]!r}')
 
     # ---- "N of M": the other numbers of a count, recomputed too
@@ -924,6 +975,53 @@ def test_the_five_reproductions_link_to_rows_that_hold_their_figures(store):
         app.close()
 
 
+# The coordinator's re-review of #151 (head d182249): a speed gap against the previous window linked this window alone;
+# "13 reported notes" linked 12 stops; and the checker let a money total or a speed gap's receipt move off its rows.
+RE_REVIEW = ('/corr/1/day/2026-09-14/shift/2?measure=speedvar&window=week&against=previous',   # 1. the 74.9 ft/min gap
+             '/corr/1/day/2026-09-14/shift/2?measure=notes',                                     # 2. the notes count
+             '/corr/1/day/2026-09-14/shift/2?measure=dollars',                                   # 3. M5, a shift's money
+             '/corr/1/day/2026-09-14?measure=money&window=week',                                 # 3. M5, the levers' total
+             '/corr/1/day/2026-03-09?measure=speedvar&window=week&against=shift&shifts=3,1')     # 3. M7, a shift comparison
+
+
+def test_the_re_review_reproductions_link_to_rows_that_hold_their_figures(store):
+    mutants = {}
+    failures, checked, _ = receipt_failures(store, RE_REVIEW, (), mutants)
+    assert not failures, '\n'.join(failures)
+    assert checked > 20 and mutants['M5'][0] == mutants['M5'][1] >= 2 and mutants['M7'][0] == mutants['M7'][1] >= 2, mutants
+    app = Workbench(store=store)
+    try:
+        gap, _ = app.answer_url(RE_REVIEW[0])   # one span holds both weeks: 683.5 ft/min before, 608.6 now
+        assert gap['receipts'][0]['url'] == '/data/shift_kpis?from=2026-09-07&to=2026-09-18&shift=2&corrupt=false', gap['receipts'][0]
+        mix = next(r for s, r in zip(gap['sections'], gap['receipts']) if s.startswith('- Grade mix'))
+        assert mix['url'] == '/data/setups?from=2026-09-07&to=2026-09-18&shift=2'
+        notes, _ = app.answer_url(RE_REVIEW[1])
+        head = notes['sections'][0]
+        assert re.match(r"\*\*(\d+)\*\* stop notes and the shift's own note · ", head), head
+        assert int(re.match(r'\*\*(\d+)', head).group(1)) == len(dp.resolve(store, notes['receipts'][0]['url'])) == 12
+    finally:
+        app.close()
+
+
+def test_a_semantic_receipt_opens_its_measures_records_or_nothing(store):
+    """A semantic answer (merged from #148) links its measure's records and declares a ratio's denominator; a row the
+    browser's grammar cannot filter (a flute is part of a grade's name) has no receipt, never the whole result's rows."""
+    app = Workbench(store=store)
+    try:
+        flute, _ = app.answer_url('/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&by=flute')
+        customer, _ = app.answer_url('/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&customer=C002')
+    finally:
+        app.close()
+    rows = [r for s, r in zip(flute['sections'], flute['receipts']) if s.startswith('- ') and dp.REF.search(s)]
+    assert rows and all(r is None for r in rows), rows
+    assert flute['receipts'][0]['url'] == '/data/rejects?from=2026-09-01&to=2026-09-30&counted_in=dry_end'
+    src = customer['trace'][0]['source']
+    assert src['url'] == '/data/rejects?from=2026-09-01&to=2026-09-30&customer_id=C002&counted_in=dry_end'
+    assert src['denominator']['url'] == '/data/setups?from=2026-09-01&to=2026-09-30'   # a customer cuts the rejects, never the yield
+    failures, checked, _ = receipt_failures(store, ['/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&customer=C002'])
+    assert not failures and checked == 1, failures
+
+
 def test_a_label_reads_only_the_bullets_of_its_own_group(store):
     """A bullet under "The previous window" opens that window's rows; another step's bullets that follow the group with
     nothing between (shapes.PeriodAnswer appends each step's summary line after the lead's) are about their own window,
@@ -947,9 +1045,12 @@ def test_receipts_on_golden_answers_link_to_rows_that_hold_the_bold_figure(store
     """Every section of every offline golden answer that cites a step, by its address or not: its receipt opens rows, and
     the section's bold figure, recomputed from those rows with the receipt's filter, is the figure printed; so are the
     other numbers of a count ("N of M")."""
-    failures, checked, tools = receipt_failures(store, golden_urls(), golden_case_answers())
+    mutants = {}
+    failures, checked, tools = receipt_failures(store, golden_urls(), golden_case_answers(), mutants)
     assert not failures, f'{len(failures)} of {checked}:\n' + '\n'.join(failures[:25])
     assert checked > 1000 and len(tools) >= 20, (checked, sorted(tools))
+    # every money total moved a day off its rows (M5) and every speed gap a week off (M7) fails: the reviewer's mutations
+    assert all(mutants.get(k, [0])[0] >= 10 for k in ('M5', 'M7')), mutants
 
 
 def test_a_receipt_link_survives_a_corrupt_day_and_names_its_variant(store):

@@ -1793,6 +1793,12 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  p=await load('/data/stops','?from=2026-09-01&to=2026-09-30&shift=2',{...page,filters:{from:'2026-09-01',to:'2026-09-30',shift:2},url:'/data/stops?from=2026-09-01&to=2026-09-30&shift=2'});
  const spanGrid=walkAll(p.els['data-body'].children[1]).find(e=>e.tag==='table');
  assert.equal(spanGrid.children[1].children[0].children[col('production_date')].children[0].href,'/data/stops?day=2026-09-14&shift=2');
+ assert.ok(!walkAll(p.els['data-body']).some(e=>e.className==='muted data-bound'));   // within the bound: no note
+ // a filter past the bound (a month of dry-end rejects, a baseline year of setups): the page says the pages and the CSV
+ // stop at 10,000 rows while a figure read from the filter counts all of them (#151 re-review)
+ p=await load('/data/stops','?from=2025-09-19&to=2026-09-18',{...page,filters:{from:'2025-09-19',to:'2026-09-18'},count:15418,pages:309,url:'/data/stops?from=2025-09-19&to=2026-09-18'});
+ const bound=walkAll(p.els['data-body']).find(e=>e.className==='muted data-bound');
+ assert.equal(bound.textContent,'This filter selects 15,418 rows. A figure read from them counts every one, but the pages stop at page 200 and the CSV at 10,000 rows, the newest 10,000: add a day, a shift or another filter to reach the rest.');
  // a filter given more than once matches any of its values: a chip per value, and × drops that value alone
  p=await load('/data/stops','?reason=Stacker&reason=Missed%20splice',{...page,filters:{reason:['Missed splice','Stacker']},url:'/data/stops?reason=Missed%20splice&reason=Stacker'});
  const listChips=walkAll(p.els['data-body'].children[1]).filter(e=>e.className==='chip');

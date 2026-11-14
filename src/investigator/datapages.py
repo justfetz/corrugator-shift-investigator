@@ -17,7 +17,7 @@ Receipts (`SOURCES`, `attach_sources`): each tool declares the table and filter 
 as `source` (table, filter, url, and a url per cited row), and the page puts a link beside the receipt.
 """
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import csv
 import io
 import json
@@ -40,7 +40,9 @@ CONTRACT = '/docs/record-contract'
 METRICS = '/docs/metrics'
 # The parameters every dated table takes, before its column filters: the production day, a span, a weekday, a shift,
 # and the crew on that shift (a table without a crew column of its own reads it from `shifts`). A table that names a
-# setup but not its grade (lanes, stops, reject lines) also takes `quality_id` (`grade`), the board grade of that setup.
+# setup but not its grade (lanes, stops, reject lines) also takes `quality_id` (`grade`), the board grade of that setup,
+# and one that names a lane but not its order (reject lines) takes the lane's `order_number` and `customer_id`.
+LANE_KEYS = ('order_number', 'customer_id')
 SCOPE_PARAMS = ('day', 'from', 'to', 'weekday', 'shift', 'crew')
 SINGLE = ('day', 'from', 'to', 'weekday')   # given once; shift takes a list (shift=1,3), a column filter (and crew) may be given again
 # A word the issue and a plant use for a column: ?order=SO-... is the lane's order number, ?grade=32-C the board grade.
@@ -321,7 +323,8 @@ def filter_names(table):
     scope = [p for p in SCOPE_PARAMS if TABLES[table].dated and (p not in ('shift', 'crew') or 'shift' in kinds)
              and not (p == 'crew' and 'crew' in kinds)]
     grade = ['quality_id'] if 'setup_id' in kinds and 'quality_id' not in kinds else []   # the grade of the row's setup
-    return scope + grade + [name for name, kind in TYPES[table] if kind in FILTERABLE and name not in ('shift', 'production_date')]
+    lane = list(LANE_KEYS) if {'setup_id', 'lane'} <= set(kinds) and 'order_number' not in kinds else []   # the row's lane's order
+    return scope + grade + lane + [name for name, kind in TYPES[table] if kind in FILTERABLE and name not in ('shift', 'production_date')]
 
 
 # ---------------------------------------------------------------- the URL grammar
@@ -481,6 +484,10 @@ def _where(table, filters):
         elif name == 'quality_id' and 'quality_id' not in kinds and 'setup_id' in kinds:   # the board grade of the row's setup
             marks = ', '.join('lower(?)' for _ in values)
             clauses.append(f'EXISTS (SELECT 1 FROM setups g WHERE g.setup_id = {table}.setup_id AND lower(g.quality_id) IN ({marks}))')
+        elif name in LANE_KEYS and name not in kinds and {'setup_id', 'lane'} <= set(kinds):   # the order or customer of the row's lane
+            marks = ', '.join('lower(?)' for _ in values)
+            clauses.append(f'EXISTS (SELECT 1 FROM setup_orders o WHERE o.setup_id = {table}.setup_id AND o.lane = {table}.lane '
+                           f'AND lower(o.{name}) IN ({marks}))')
         elif kinds.get(name) == 'VARCHAR':
             clauses.append(f'lower("{name}") = lower(?)' if len(values) == 1 else f'lower("{name}") IN ({", ".join("lower(?)" for _ in values)})')
         elif name in kinds:
@@ -589,7 +596,7 @@ def page(store, table, query):
     return {'table': table, 'label': t.label, 'meaning': t.meaning, 'contract': contract_link(table),
             'columns': columns(table), 'filters': filters, 'filterable': filter_names(table), 'aliases': ALIASES,
             'rows': [{k: plain(v) for k, v in r.items()} for r in rows], 'count': count, 'page': number, 'pages': pages,
-            'per_page': PER_PAGE, 'url': table_url(table, filters, number),
+            'per_page': PER_PAGE, 'max_page': MAX_PAGE, 'url': table_url(table, filters, number),
             'newer': table_url(table, filters, number - 1) if number > 1 else None,
             'older': table_url(table, filters, number + 1) if number < pages and number < MAX_PAGE else None,
             'csv': table_url(table, filters, suffix='.csv'), 'csv_limit': CSV_LIMIT,
@@ -826,8 +833,121 @@ SOURCES = {
     'get_trend': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {'from': r.get('week_start'), 'to': r.get('week_end'), 'day': None})}),
 }
 PARTS = {'row': 'rows', 'detail': 'details', 'flag': 'flags', 'weekday': 'weekday_profile'}
+SEMANTIC_TOOL = 'semantic_query'   # semantic.TOOL: its table is its measure's entity's (_semantic_source)
 # All-shift rollstock reads the paper runs themselves, one row per run (a shift's reads the setups it ran on each run).
 ALL_SHIFT_TABLE = {'get_rollstock': ('wet_ends', {'row': lambda r, e: ('wet_ends', {'quality_id': r.get('grade'), 'web_width_in': r.get('width_in')})})}
+
+
+# ---- the semantic model's receipts (issue #117): the records each part of its measure reads, as the model's parts read
+# them (semantic._Part): the entity's table over the window and shift, the entity's own rows (a reject line counted at the
+# dry end), the measure's own rows (operator and maintenance stops), and every filter and row dimension that reaches the
+# entity, by its own column or by one many-to-one join the browser's grammar has (a setup's grade, a shift's crew, a
+# lane's order and customer). A ratio's denominator is declared beside it (`denominator`): its own entity's records, cut
+# only by the dimensions that reach them, as the model reads it (a grade cuts the downtime, never the scheduled minutes).
+# A part with no filter in the grammar (a flute, a record over a band) has no link rather than a link to other rows.
+class _Unlinkable(ValueError):
+    pass
+
+
+def _semantic_bucket(dim, value):
+    """A time bucket's own days: a week, a month or a 4-4-5 period from its first day."""
+    from .record_store import fiscal_bounds
+    start = date.fromisoformat(str(value)[:10])
+    grain = dim['grain']
+    if grain == 'week':
+        return start, start + timedelta(days=4)
+    if grain == 'month':
+        return start, (start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    return fiscal_bounds(start)[:2]
+
+
+def _semantic_filters(mdl, entity, dims, measure):
+    """{filter: value} of the browser's grammar for the records of `entity` that `measure` reads, cut by `dims`
+    ({dimension: value}, the query's filters and a row's own); a time bucket as {'within': (first, last)}."""
+    spec, table = mdl.entities[entity], mdl.entities[entity]['table']
+    allowed, out = filter_names(table), {}
+    if spec.get('where'):   # the entity's own rows: one column against one literal is all the model's wheres say today
+        match = re.fullmatch(r"(\w+) = '([^']*)'", spec['where'].strip())
+        if not match:
+            raise _Unlinkable(f'{entity} keeps its rows by {spec["where"]}')
+        out[match.group(1)] = match.group(2)
+    if measure.get('above_band'):
+        raise _Unlinkable('the records over a band')
+    for logical, value in (measure.get('filter') or {}).items():
+        out[spec['columns'][logical]] = value
+    for name, value in dims.items():
+        dim, owner = mdl.dimensions[name], mdl.reach(entity, name)
+        if owner is None:
+            continue   # it never reaches these records: the part stays the whole (a denominator's minutes for a grade)
+        if dim.get('grain') == 'day':
+            out['day'] = value
+            continue
+        if dim.get('grain'):
+            out['within'] = _semantic_bucket(dim, value)
+            continue
+        logical = re.fullmatch(r'\{(\w+)\}', dim['expr'])
+        column = logical and mdl.entities[owner]['columns'].get(logical.group(1))
+        if not column or not re.fullmatch(r'\w+', column):
+            raise _Unlinkable(f'{name} is an expression')
+        joined = {('setup', 'quality_id'): 'quality_id', ('shift', 'crew'): 'crew', ('lane', 'order_number'): 'order_number',
+                  ('lane', 'customer_id'): 'customer_id'}.get((owner, column))
+        out[column if owner == entity else joined] = value
+    for key in out:
+        if key not in allowed and key != 'within':
+            raise _Unlinkable(f'{table} has no filter {key}')
+    return out
+
+
+def _semantic_url(mdl, entity, dims, measure, scope):
+    filters = {**scope, **_semantic_filters(mdl, entity, dims, measure)}
+    within = filters.pop('within', None)
+    if within:   # a bucket inside the window: the days both hold
+        first = max(within[0].isoformat(), filters.pop('from', None) or filters.get('day') or '0000-00-00')
+        last = min(within[1].isoformat(), filters.pop('to', None) or filters.get('day') or '9999-99-99')
+        filters.pop('day', None)
+        filters.update(_span(first, last))
+    elif 'day' in filters:
+        filters.pop('from', None), filters.pop('to', None)
+    table = mdl.entities[entity]['table']
+    return table, filters, table_url(table, filters)
+
+
+def _semantic_source(entry, production_day):
+    """The source of a semantic answer: its measure's records (a ratio's numerator, a priced measure's quantity) for the
+    total and for each row, and a ratio's denominator for each."""
+    from . import semantic
+    data, mdl = entry['data'], semantic.model()
+    m = mdl.measures.get(data.get('measure'))
+    if not m:
+        return None
+    reads = m['numerator'] if m['agg'] == 'ratio' else m['quantity'] if m['agg'] == 'priced' else data['measure']
+    scope = _scope(entry, production_day)
+    filters = {f['dimension']: f['value'] for f in data.get('filters') or []}
+    group_by = data.get('group_by') or []
+
+    def link(name, dims):
+        measure = mdl.measures[name]
+        try:
+            return _semantic_url(mdl, measure['entity'], {**filters, **dims}, measure, scope)
+        except (_Unlinkable, ValueError, TypeError, KeyError):
+            return None, None, None
+    table, whole, url = link(reads, {})
+    if not url:
+        return None
+    # rows_exact: a row whose records the grammar cannot filter has no receipt, never the whole result's rows
+    out = {'table': table, 'filter': whole, 'url': url, 'rows_exact': True,
+           'rows': {'row': [link(reads, {d: r.get(d) for d in group_by})[2] for r in data.get('rows') or []]}}
+    if m['agg'] == 'ratio':
+        d_table, d_whole, d_url = link(m['denominator'], {})
+        if d_url:
+            out['denominator'] = {'table': d_table, 'url': d_url,
+                                  'rows': [link(m['denominator'], {d: r.get(d) for d in group_by})[2] for r in data.get('rows') or []]}
+            out['also'] = [{'label': 'the denominator', 'table': d_table, 'filter': d_whole, 'url': d_url}]
+    previous = data.get('previous_window')
+    if isinstance(previous, dict) and previous.get('start') and previous.get('coverage') != 'unavailable':
+        before = {**{k: v for k, v in whole.items() if k not in ('day', 'from', 'to')}, **_span(previous['start'], previous['end'])}
+        out.setdefault('also', []).append({'label': 'previous window', 'table': table, 'filter': before, 'url': table_url(table, before)})
+    return out
 
 
 def _merge(table, scope, extra, corrupt):
@@ -846,6 +966,8 @@ def _merge(table, scope, extra, corrupt):
 def source(entry, production_day, corrupt=False):
     """The table and filter a trace entry read, as a link and one link per cited row; None for a step with no rows of
     its own (render_chart) or a failed one."""
+    if entry.get('ok') and entry.get('tool') == SEMANTIC_TOOL and isinstance(entry.get('data'), dict):
+        return _semantic_source(entry, production_day)
     if not entry.get('ok') or entry.get('tool') not in SOURCES or not isinstance(entry.get('data'), dict):
         return None
     scope = _scope(entry, production_day)
@@ -1004,4 +1126,6 @@ def receipt_url(entry, part=None, row=None):
         urls = (src.get('rows') or {}).get(part) or []
         if 0 <= row < len(urls) and urls[row]:
             return urls[row]
+        if src.get('rows_exact'):
+            return None
     return src.get('url')
