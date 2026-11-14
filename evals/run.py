@@ -318,7 +318,8 @@ QUANTITY_CONSUMES = {   # each metric's own words: its noun and unit, a kept rat
 FILTER_SAID = {'missed-splice': r'\bmiss(?:ed|es)?\b', 'order-change': r'\border change(?:over)?s?\b|\bchangeovers?\b',
                'knife-slitter-jam': r'\bjams?\b', 'trim': r'\bside\b', 'shear': r'\bchops?\b',
                'dry-end': r'\bdry[- ]end\b|\brejects?\b|\bquality\b', 'bale': r'\b(?:waste|bale[ds]?|scrap)\b'}
-_FILTER_CONNECTOR = (r'\b(?:(?:(?:can|could|may|might)\s+be\s+)?(?:caused|triggered|brought\s+on|lost|made|due|related|attributed|coded|charged|went|gone|'
+# ("can be attributed to" is the coded count; "might be", "may be" or "could be due to" hedges the cause, never consumed: HEDGE_SAID)
+_FILTER_CONNECTOR = (r'\b(?:(?:can\s+be\s+)?(?:caused|triggered|brought\s+on|lost|made|due|related|attributed|coded|charged|went|gone|'
                      r'go|goes|going)\s+)?(?:by|to|from|as)\s+'
                      r'(?:the\s+)?zfilteredz|\bbecause\s+of\s+(?:the\s+)?zfilteredz|zfilteredz')
 # ... but an average stop is its length only (round 5, item 2): its count, frequency, rate, interval, cost, place, location or reason
@@ -387,7 +388,21 @@ RUNNING_SAID = (r'\b(?:run|runs|ran|running|go|goes|went|going|gone|operat(?:e|e
 # the windows said are the answered one and the one just before it, of the same length
 PREVIOUS_SAID = (r'\byesterday\b|\b(?:last|previous|prior)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+)?period)\b'
                  r'|\b(?:the\s+)?(?:day|week|month|period)\s+before\b(?!\s+(?:last|yesterday)\b)')
-BASE_SAID = r'\b(?:this|current)\s+(?:production\s+)?(?:day|week|month|(?:accounting\s+)?period)\b|\btoday\b'
+# ... and the window answered, said in any form the router consumes: "this week", "today", a preposition before it ("during the week",
+# "over the week", "for the week", "in the week"), "the whole week", "all week long" (the coordinator's review of e863f1e, item 1);
+# never "day of the week", "the week before" or "the day shift"
+BASE_SAID = (r'(?<!\bday of )(?<!\bdays of )\b(?:(?:across|over|during|for|in|on|through)\s+)?(?:this|that|the|current|selected|whole|full|'
+             r'entire|all)\s+(?:whole\s+|entire\s+|full\s+)?(?:production\s+)?(?:day|week|month|(?:accounting\s+|fiscal\s+|4-4-5\s+)?period)\b'
+             r'(?!\s+(?:before|shifts?)\b)|\btoday\b')
+# ... a month or a 4-4-5 period named
+NAMED_SAID = (rf'\b(?:(?:across|over|during|in|for|through|of)\s+)?(?:all\s+of\s+)?(?:the\s+month\s+of\s+)?{_MONTHS}\b'
+              r'|\b(?:(?:in|for|during|over|across|through)\s+)?(?:(?:fiscal|accounting)\s+period|4-4-5|445|p(?:1[0-3]|[1-9]))\b')
+# "During the day" beside another window is the daytime hours of it, which the records do not keep (item 2)
+DAYTIME_SAID = r'\b(?:during|in)\s+the\s+day\b(?!\s+(?:before|shifts?|of)\b)'
+# A hedge before a connector ("might be due to the stacker", "may be related to", "could have been caused by"; item 3): never the
+# coded count
+HEDGE_SAID = (r'\b(?:might|may|could)\s+(?:(?:well|possibly|also)\s+)?(?:have\s+)?(?:be|been)\b(?=\s+(?:(?:caused|triggered|brought\s+on|lost|'
+              r'made|due|related|attributed|coded|charged|put\s+down|blamed|linked|tied|traced|down|went|gone)\b|(?:by|to|from|as|because)\b))')
 # A rise or a fall of the measure itself ("were stops up", "did minutes per stop go down"), never the line running
 _RISE_NOUNS = (r'(?:stops?|stoppages?|set-?ups?|paper changes?|order changes?|changeovers?|sheets?|downtime|minutes|feet|footage|msf|waste|'
                r'trim|shear|rejects?)(?:\s+per\s+[a-z-]+)?')
@@ -411,10 +426,21 @@ NUMBER_ASKED = r'\bhow\s+(?:many|much|long|often)\b'   # "what drove the number 
 def grain_said(words):
     """The window grain a window phrase names ("last week" week, "yesterday" day, "the period before" fiscal, a month's name month)."""
     for grain, pattern in (('day', r'\b(?:day|yesterday|today)\b'), ('week', r'\bweek\b'), ('month', rf'\bmonth\b|\b{_MONTHS}\b'),
-                           ('fiscal', r'\bperiod\b')):
+                           ('fiscal', r'\bperiod\b|\b4-4-5\b|\b445\b|\bp(?:1[0-3]|[1-9])\b')):
         if re.search(pattern, words):
             return grain
     return None
+
+
+def windows_said(text):
+    """Every window `text` names, in order, as (start, end, words, grain): the windows before the selected one first (so "the week
+    before" is one window), the selected one in words, a month or a 4-4-5 period by name."""
+    spans = []
+    for pattern in (PREVIOUS_SAID, BASE_SAID, NAMED_SAID):
+        for m in re.finditer(pattern, text):
+            if not any(m.start() < end and start < m.end() for start, end, _, _ in spans):
+                spans.append((m.start(), m.end(), m.group(0), grain_said(m.group(0))))
+    return sorted(spans)
 
 
 def url_window(url):
@@ -449,11 +475,24 @@ def read_but_unapplied_failures(question, url):
         elif (not re.search(DOWN_SAID, said) and metric != 'minutes_per_stop' and not params.get('reason') and not params.get('place')
               and not metric.startswith(('maintenance_', 'operator_'))):
             failures.append(f'{question[:60]!r} names no stop or downtime but lands on {metric}: a duration is downtime only when asked')
+    hedge = re.search(HEDGE_SAID, text)
+    if hedge:
+        failures.append(f'{question[:60]!r} hedges the cause ({hedge.group(0)!r}) but lands on {metric}: never the coded count')
+    # every window said counts, whatever preposition it is said through (the coordinator's review of e863f1e, items 1 and 2); "may I"
+    # said first is a request, never May, as the router reads it
+    asked = re.sub(r'^(\W*(?:please\s+)?)may(\s+(?:i|we)\b)', r'\1can\2', text)
+    windows = windows_said(asked)
+    daytime = re.search(DAYTIME_SAID, asked)
+    other = daytime and next((w for start, end, w, _ in windows if end <= daytime.start() or start >= daytime.end()), None)
+    if other:
+        failures.append(f'{question[:60]!r} says {daytime.group(0)!r} beside {other.strip()!r}, the daytime hours the records do not keep, '
+                        f'but lands on {metric}')
+    elif not window_compared(asked) and len({grain for *_, grain in windows}) > 1:
+        failures.append(f'{question[:60]!r} names two windows ({", ".join(repr(w) for _, _, w, _ in windows)}) but lands on one')
     if window_compared(text):
         previous = [m.group(0) for m in re.finditer(PREVIOUS_SAID, text)]
         grain, month = url_window(url)
-        grains = {grain_said(w) for w in previous} | {grain_said(m.group(0)) for m in re.finditer(BASE_SAID, text)}
-        grains |= {'month'} if re.search(rf'\b{_MONTHS}\b', text) else set()
+        grains = {grain_said(w) for w in previous} | {grain for *_, grain in windows}
         day = re.search(r'/(\d{4}-\d{2})-\d{2}', urlsplit(url).path)
         if metric in NO_PREVIOUS or params.get('grade'):
             failures.append(f'{question[:60]!r} compares with the window before but lands on {metric or "a grade"}, which carries none beside it')

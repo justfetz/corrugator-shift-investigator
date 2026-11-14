@@ -14838,6 +14838,240 @@
      "headline_match": "^\\*\\*[0-9,.]+ minutes\\*\\* of downtime · "
     }
    }
+  },
+  {
+   "id": "unapplied-stops-during-the-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during the week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, row 2's own example with 'during the' added; e863f1e answered **665 stops**, the month's; main at 6484393 refused it on 'during'.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-setups-over-the-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Setups over the week versus last month",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1; e863f1e answered **2,614 setups**, the month's; main at 6484393 refused it on 'over'.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-downtime-across-the-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Minutes of downtime across the week versus last month",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1; e863f1e answered **1,542.2 minutes** of downtime, the month's; main at 6484393 refused it on 'across'.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-stops-this-week-during-the-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops this week during the month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, two windows and no comparison; e863f1e answered **665 stops**, the month's; main at 6484393 refused it on 'during'.",
+   "expect": {
+    "raises": "names two windows"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-week-this-period-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during the week this period?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1 (quoted there as 'During the week this period' → 608), two windows and no comparison; e863f1e answered **608 stops**, P9's; main at 6484393 refused it on 'during'.",
+   "expect": {
+    "raises": "names two windows"
+   }
+  },
+  {
+   "id": "unapplied-stops-for-the-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops for the week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, the 'for' form BASE_SAID did not count; e863f1e and main at 6484393 answered **665 stops**, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-stops-in-the-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops in the week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, the 'in' form BASE_SAID did not count; e863f1e and main at 6484393 answered **665 stops**, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-stops-the-whole-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops the whole week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, 'the whole week', which BASE_SAID did not count; e863f1e and main at 6484393 answered **665 stops**, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-stops-all-week-long-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops all week long versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, 'all week long', which BASE_SAID did not count; e863f1e and main at 6484393 answered **665 stops**, the month's.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-week-in-september-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during the week in September?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, the same root with a month named (this round's probe); e863f1e answered **665 stops**, September's; main at 6484393 refused it on 'during'.",
+   "expect": {
+    "raises": "names two windows"
+   }
+  },
+  {
+   "id": "unapplied-stops-last-month-during-the-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops last month during the week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, the same root with the month before named (this round's probe); e863f1e answered **533 stops**, August's; main at 6484393 refused it on 'during'.",
+   "expect": {
+    "raises": "names two windows"
+   }
+  },
+  {
+   "id": "unapplied-stops-per-day-during-the-week-this-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops per day during the week this month",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, the same root on each production day's stops (this round's probe); e863f1e answered the month's 22 production days; main at 6484393 refused it on 'during'.",
+   "expect": {
+    "raises": "names two windows"
+   }
+  },
+  {
+   "id": "unapplied-minutes-by-place-during-the-week-versus-last-month-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes of downtime by place during the week versus last month?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1, the same root on the Pareto grouped (this round's probe); e863f1e and main at 6484393 answered the month's Pareto by place.",
+   "expect": {
+    "raises": "names windows of different lengths"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-day-this-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during the day this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 2; e863f1e answered **131 stops**, every hour and every shift of the week; main at 6484393 refused it as a subset.",
+   "expect": {
+    "raises": "could be the daytime hours"
+   }
+  },
+  {
+   "id": "unapplied-downtime-during-the-day-this-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many minutes of downtime during the day this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 2; e863f1e answered **354.9 minutes** of downtime, the whole week's; main at 6484393 refused it as a subset.",
+   "expect": {
+    "raises": "could be the daytime hours"
+   }
+  },
+  {
+   "id": "unapplied-setups-during-the-day-this-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many setups during the day this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 2; e863f1e answered **577 setups**, the whole week's; main at 6484393 refused it as a subset.",
+   "expect": {
+    "raises": "could be the daytime hours"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-day-in-p9-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during the day in P9?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 2; e863f1e answered **608 stops**, all of P9's; main at 6484393 refused it as a subset.",
+   "expect": {
+    "raises": "could be the daytime hours"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-day-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during the day last week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 2; e863f1e answered **188 stops**, all of last week's; main at 6484393 refused it as a subset.",
+   "expect": {
+    "raises": "could be the daytime hours"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-night-this-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops during the night this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 2's guard: 'during the night' still refuses, on e863f1e and main at 6484393 alike.",
+   "expect": {
+    "raises": "'during' asks for a subset"
+   }
+  },
+  {
+   "id": "unapplied-stops-might-be-due-to-the-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops might be due to the stacker this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 3; e863f1e answered **32 stops** for Stacker, the coded count, with 'might be' consumed; main at 3cefa4d refused it on 'might'.",
+   "expect": {
+    "raises": "hedges the cause"
+   }
+  },
+  {
+   "id": "unapplied-stops-may-be-due-to-the-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops may be due to the stacker this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 3, the same hedge with 'may' (this round's probe); e863f1e and main at 6484393 answered **112 stops** for Stacker in May 2026.",
+   "expect": {
+    "raises": "hedges the cause"
+   }
+  },
+  {
+   "id": "unapplied-stops-could-be-due-to-the-stacker-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many stops could be due to the stacker this week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 3, the same hedge with 'could' (this round's probe); e863f1e answered **32 stops** for Stacker with 'could be' consumed, main at 6484393 with 'could' a function word.",
+   "expect": {
+    "raises": "hedges the cause"
+   }
+  },
+  {
+   "id": "unapplied-stops-during-the-week-versus-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops during the week versus last week?",
+   "note": "Issue #153 (hotfix after PR 143): the coordinator's review of e863f1e, item 1's guard: a window said through a preposition, compared with the one just before it, is the week with last week beside it (e863f1e answered it so; main at 6484393 refused it on 'during').",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quantity&window=week&metric=stops",
+    "status": "complete",
+    "shape": {
+     "headline_match": "^\\*\\*[0-9,]+ stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ the week before"
+    }
+   }
   }
  ]
 }

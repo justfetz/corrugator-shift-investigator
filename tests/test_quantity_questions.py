@@ -911,3 +911,71 @@ def test_an_investigation_that_names_a_number_is_not_two_questions():
     for question in ('How many stops and why this week?', 'Why so many stops and how many minutes this week?', 'How much downtime and why this week?',
                      'How many stops this week? Why?', 'How many stops this week - why so many?', 'Why so many stops this week — how many?'):
         assert landing(question)[0] is None, question
+
+
+# ---- The coordinator's review of e863f1e (issue #153): a window said through a preposition is a window counted, "during the day" beside
+# another window is the daytime, and a hedge before a connector is never consumed. Each question with the address e863f1e gave it.
+MONTH = '/corr/1/day/2026-09-14?measure=quantity&window=month&metric='
+E863F1E = [
+    ('How many stops during the week versus last month?', MONTH + 'stops', 'names windows of different lengths'),          # item 1
+    ('Setups over the week versus last month', MONTH + 'setups', 'names windows of different lengths'),
+    ('Minutes of downtime across the week versus last month', MONTH + 'downtime_minutes', 'names windows of different lengths'),
+    ('How many stops this week during the month?', MONTH + 'stops', "names two windows ('this week' and 'during the month')"),
+    ('How many stops during the week this period?', '/corr/1/day/2026-09-14?measure=quantity&window=period&metric=stops',
+     "names two windows ('during the week' and 'this period')"),
+    ('How many stops for the week versus last month?', MONTH + 'stops', 'names windows of different lengths'),
+    ('How many stops in the week versus last month?', MONTH + 'stops', 'names windows of different lengths'),
+    ('How many stops the whole week versus last month?', MONTH + 'stops', 'names windows of different lengths'),
+    ('How many stops all week long versus last month?', MONTH + 'stops', 'names windows of different lengths'),
+    ('How many stops during the week in September?', '/corr/1/day/2026-09-14?measure=quantity&window=2026-09&metric=stops',
+     "names two windows ('during the week' and 'in september')"),
+    ('How many stops last month during the week?', '/corr/1/month/2026-08-03?measure=quantity&metric=stops',
+     "names two windows ('last month' and 'during the week')"),
+    ('How many stops yesterday during the week?', '/corr/1/day/2026-09-11?measure=quantity&window=week&metric=stops',
+     "names two windows ('yesterday' and 'during the week')"),
+    ('Stops per day during the week this month', '/corr/1/day/2026-09-14?measure=stops&window=month', 'names two windows'),
+    ('How many minutes of downtime by place during the week versus last month?', '/corr/1/day/2026-09-14?measure=pareto&window=month&by=place',
+     'names windows of different lengths'),
+    ('How many stops during the day this week?', WEEK + 'stops', "'during the day' beside 'this week' could be the daytime hours"),   # item 2
+    ('How many minutes of downtime during the day this week?', WEEK + 'downtime_minutes', 'could be the daytime hours'),
+    ('How many setups during the day this week?', WEEK + 'setups', 'could be the daytime hours'),
+    ('How many stops during the day in P9?', '/corr/1/day/2026-09-14?measure=quantity&window=period&metric=stops',
+     "'during the day' beside 'in p9' could be the daytime hours"),
+    ('How many stops during the day last week?', '/corr/1/week/2026-09-07?measure=quantity&metric=stops',
+     "'during the day' beside 'last week' could be the daytime hours"),
+    ('How many stops during the day yesterday?', '/corr/1/day/2026-09-11?measure=quantity&metric=stops',
+     "'during the day' beside 'yesterday' could be the daytime hours"),
+    ('How many stops by reason during the day this week?', '/corr/1/day/2026-09-14?measure=pareto&window=week&unit=count',
+     'could be the daytime hours'),
+    ('How many stops might be due to the stacker this week?', WEEK + 'stops&reason=stacker', "'might be' hedges the cause"),       # item 3
+    ('How many stops may be due to the stacker this week?', '/corr/1/day/2026-09-14?measure=quantity&window=2026-05&metric=stops&reason=stacker',
+     "'may be' hedges the cause"),
+    ('How many stops could be due to the stacker this week?', WEEK + 'stops&reason=stacker', "'could be' hedges the cause"),
+    ('How many minutes of downtime could have been caused by the stacker this week?', WEEK + 'downtime_minutes&reason=stacker',
+     "'could have been' hedges the cause"),
+]
+
+
+@pytest.mark.parametrize('question, url, refusal', E863F1E, ids=[q for q, _, _ in E863F1E])
+def test_every_window_said_counts_daytime_beside_a_window_and_a_hedge_refuse(question, url, refusal):
+    """The router refuses with the reason, and the runner fails the address e863f1e answered the question with."""
+    landed, text, _ = landing(question)
+    assert landed is None and refusal in text, (question, landed, text)
+    assert catch_all_failures(question, url), (question, url)
+
+
+@pytest.mark.parametrize('question, url', [
+    ('How many stops during the week versus last week?', WEEK + 'stops'), ('How many stops for the week?', WEEK + 'stops'),
+    ('How many stops over the week?', WEEK + 'stops'), ('How many stops during the whole week?', WEEK + 'stops'),
+    ('How many stops all week long?', WEEK + 'stops'), ('How many stops in September versus last month?', '/corr/1/day/2026-09-14?measure=quantity&window=2026-09&metric=stops'),
+    ('How many stops last week and the week before?', '/corr/1/week/2026-09-07?measure=quantity&metric=stops'),
+    ('How many stops during the day?', '/corr/1/day/2026-09-14?measure=quantity&metric=stops'),
+    ('How many stops can be attributed to the stacker this week?', WEEK + 'stops&reason=stacker'),
+    ('How many stops were due to the stacker this week?', WEEK + 'stops&reason=stacker'),
+    ('May I see how many stops this week?', WEEK + 'stops'),
+])
+def test_one_window_said_through_a_preposition_still_answers(question, url):
+    """One window, however it is said, or a window with the one just before it, keeps its answer; "during the day" alone is the selected
+    production day, and "can be attributed to" the coded count."""
+    assert landing(question)[0] == url, (question, landing(question))
+    assert not catch_all_failures(question, url), (question, catch_all_failures(question, url))
