@@ -18498,6 +18498,67 @@
     ]
    },
    "note": "Catch-up after #159 (PR #155, coordinator 2026-11-14 15:12): 'want' and 'to' are not function words after #159; 'I want to know' is the router's request lead. Answered with the month's MSF by grade on main."
+  },
+  {
+   "id": "semantic-stops-by-reason-by-shift-is-a-split",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops by reason by shift this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=reason,shift",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "reason",
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "sections_match": [
+     "^Stops this week: \\*\\*[0-9][0-9,]* stops\\*\\*"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Catch-up after #159 (PR #155), the reviewer's probe of 7ec1fea: a second split beside the Pareto grouped was made a standing refusal ('by' asks for a grouping), so the parser's split by reason and shift (answered at e3fc7e6) was refused. Only a stop reason, place or kind left beside the Pareto grouped stands."
+  },
+  {
+   "id": "semantic-stops-by-reason-compared-with-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How many stops by reason this week compared with last week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=reason&compare=prev",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "reason"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "sections_match": [
+     "^Stops this week: \\*\\*[0-9][0-9,]* stops\\*\\* · [+-][0-9,]+ vs [0-9,]+ stops the week before"
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ]
+   },
+   "note": "Catch-up after #159 (PR #155), the reviewer's probe of 7ec1fea: the Pareto counted carries no window before, so #159 refuses the comparison for it; the semantic split carries it beside each reason. 7ec1fea made that refusal stand over the split."
   }
  ]
 }

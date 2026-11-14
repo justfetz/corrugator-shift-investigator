@@ -647,3 +647,23 @@ def test_the_parser_reads_the_routers_request_phrases_and_no_moved_function_word
                      'Which shift had the most stops so far this week?', 'Which shift was up the most this week?',
                      'Which crew needs the most setups this week?', 'Which shift had the most setups to go this week?'):
         assert not reading(store, question).complete, question
+
+
+def test_a_standing_refusal_and_who_logged_reach_no_further_than_issue_153(store):
+    """The reviewer's probe of this round: the Pareto grouped stands only for a stop reason, place or kind beside it ("planned stops by
+    reason"); a second split and a comparison the semantic split carries are the parser's. "Logged by" is refused over a hand route only
+    when a stop is counted and the words are a verb: "maintenance report", "the operator notes" keep the hand router's answer."""
+    for question in ('How many stops by reason by shift this week?', 'Minutes of downtime by place for each shift this week',
+                     'Stops by kind by shift this week', 'How many stops by kind this month versus last month?'):
+        request, _ = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        assert request['intent'] == 'semantic', question
+    for question in ('Maintenance report this week', 'Show the operator notes for this week', 'What did maintenance report this week?',
+                     'Downtime by reason, maintenance notes this week'):
+        context = Context(DAY, 2, scope='shift')
+        moved = question_scope(question, context, store.production_days, store)
+        hand = parse_request(question, moved, False)   # store False: the hand router alone
+        request, _ = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        assert request['intent'] == hand['intent'] and request.get('plan') == hand.get('plan'), question
+    for question in ('Which shift had the most stops logged by operators this week?', 'Stops the maintenance crew logged this week'):
+        with pytest.raises(ValueError, match='who logged the stops'):
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
