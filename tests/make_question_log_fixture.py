@@ -32,6 +32,11 @@ ASKED = [
     ('Why was this shift slow?', 'day', 4, 'up', None),
     ('How did this week go versus the previous one?', 'week', 2, 'up', None),
     ('speed to targte', 'day', 1, None, None),
+    # refused since #113: a count the router cannot place, or the records do not hold (and two that name nothing)
+    ('how many widgets this week', 'day', 1, None, None),
+    ('how many pallets did we ship last week', 'day', 1, None, None),
+    ('how many boards did we lose at the knife', 'day', 1, 'down', None),
+    ('tell me a joke', 'day', 1, None, None),
 ]
 
 

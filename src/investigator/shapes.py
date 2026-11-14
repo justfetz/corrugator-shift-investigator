@@ -2,8 +2,9 @@
 
 Presentation of tool results only. Every figure is a value of a tool row, or of the envelope that carries
 the rows, in one of the application's formats, or a count of rows; nothing here computes a new number.
-A shape depends on the plan that ran (the intent and the evidence) and the scope, never on the wording
-of the question, so a question and its canonical URL answer with the same sections (docs/URLS.md).
+A shape depends on the plan that ran (the intent and the evidence), the one quantity a count or unit question asked
+for (the request's `lead`, which its canonical URL carries as `measure=quantity&metric=`; issue #113) and the scope,
+never on the wording of the question, so a question and its canonical URL answer with the same sections (docs/URLS.md).
 
 The sections stay plain text, so the Markdown export, the PDF and the /evals page read them as before,
 with a light structure the client renders (docs/AGENT_CONTRACT.md, "Answer shapes"):
@@ -191,8 +192,10 @@ def argmax(rows, key):
 
 # ------------------------------------------------------------------ entry point
 
-def answer_sections(intent, evidence, context, period_tools):
-    """The sections of an offline answer: headline, bullets, caveats and where to look."""
+def answer_sections(intent, evidence, context, period_tools, lead=None):
+    """The sections of an offline answer: headline, bullets, caveats and where to look. `lead` is the one quantity a
+    count or unit question asked for (issue #113: the request's `lead`, which its canonical URL carries as
+    `measure=quantity&metric=`), so the answer opens with it."""
     intent = ALIASES.get(intent, intent)
     semantic = [r for r in evidence if r['tool'] == SEMANTIC_TOOL]   # the semantic model's own shape (issue #117)
     evidence = [r for r in evidence if r['tool'] != SEMANTIC_TOOL]
@@ -201,7 +204,7 @@ def answer_sections(intent, evidence, context, period_tools):
     lines = SemanticAnswer(semantic, context).sections() if semantic else []
     if period:
         own = intent.startswith('period_')
-        lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own).sections()
+        lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own, lead=lead).sections()
     if daily:
         own = not intent.startswith('period_') and intent != 'model'
         lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own).sections()
@@ -320,7 +323,7 @@ class DailyAnswer:
 
     def dsuffix(self, shift):
         """`suffix` for a downtime look, which also names the shift under one selected shift: a downtime question with no
-        shift is the owner's default, the previous production day across all shifts (review of #111)."""
+        shift is the owner's default, all shifts (review of #111; on the selected day since the owner's scope ruling)."""
         return self.suffix(shift) or (' for this shift' if self.context.scope == 'shift' else '')
 
     @staticmethod
@@ -890,15 +893,17 @@ class PeriodAnswer:
             'period_grade': ('get_grade_totals',), 'period_pareto': ('get_downtime_pareto',), 'period_waste': ('get_waste_breakdown',),
             'period_stops': ('get_stops_profile',), 'period_trend': ('get_trend',), 'period_rollstock': ('get_rollstock',),
             'period_overrun': ('get_overrun',), 'period_speed_opportunity': ('get_speed_opportunity',),
-            'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',)}
+            'period_money': ('get_opportunities',), 'period_speedvar': ('get_speed_variance',), 'period_review': ('get_downtime_review',),
+            'period_quantity': ('get_period_kpis', 'get_downtime_review', 'get_downtime_pareto', 'get_overrun', 'get_grade_totals',
+                                'get_waste_breakdown', 'get_stops_profile')}
 
     KPI_TOOLS = ('get_period_kpis', 'compare_periods')
     USES = {'period_overview': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'),
             'period_summary': (*KPI_TOOLS, 'get_downtime_pareto', 'get_waste_breakdown'), 'period_speed': (*KPI_TOOLS, 'get_grade_totals')}
 
-    def __init__(self, intent, evidence, context, inferred=False):
-        self.intent = intent if intent in self.LEAD else infer_period(evidence)
-        self.context, self.evidence, self.inferred = context, evidence, inferred
+    def __init__(self, intent, evidence, context, inferred=False, lead=None):
+        self.intent = intent if intent in self.LEAD and (intent != 'period_quantity' or lead) else infer_period(evidence)
+        self.context, self.evidence, self.inferred, self.lead = context, evidence, inferred, lead or {}
         self.shifts = group(evidence)
 
     def wp(self, data):
@@ -1207,10 +1212,12 @@ class PeriodAnswer:
         kind = 'pareto' if metric in ('downtime_pct', 'stops', 'minutes_per_stop') else 'speed' if 'speed' in metric else \
             'grade' if metric in ('msf_per_day', 'lineal_per_setup', 'lineal_per_paper_change') else 'waste'
         sfx = self.sfx(data)
+        sfx += ' on this shift' if self.context.scope == 'shift' and data.get('shift') else ''   # a number keeps a one-shift card's scope
         looks = {'pareto': [look('The downtime of the latest week by reason', f'Which downtime reason cost the most minutes this week{sfx}?')],
                  'speed': [look('The latest week by grade, against each grade target', f'Which grade is slowest against target this week{sfx}?')],
                  'grade': [look('The latest week by grade', f'Volume by grade this week{sfx}')],
                  'waste': [look('The latest week\'s waste by component and sub-reason', f'Waste breakdown this week{sfx}')]}[kind]
+        sfx = self.sfx(data)
         looks.append(look('The latest week\'s KPIs against the week before', f'Compare this week to last{sfx}'))
         return head, bullets, notes, looks
 
@@ -1452,9 +1459,256 @@ class PeriodAnswer:
         kinds = list(dict.fromkeys(self.SPEEDVAR_LOOKS[r['bucket']] for r in rows if r['gap_fpm'] * sign > 0)) + ['opportunity']
         return head, bullets, notes, self.window_looks(data, list(dict.fromkeys(kinds)))
 
+    # ---- one quantity (issue #113): a count or unit question opens with the quantity asked, in the unit asked, then the
+    # previous window and the band; the tiles it is read from (or the reasons, or the knives) follow, the rest folded
+    QUANTITY_WORDS = {'setups': 'setups', 'paper_changes': 'paper changes', 'order_changes': 'order changes', 'stops': 'stops',
+                      'lineal_ft': 'lineal ft', 'lineal_per_setup': 'ft per setup', 'lineal_per_paper_change': 'ft per paper change',
+                      'downtime_minutes': 'minutes', 'minutes_per_stop': 'minutes per stop', 'bale_msf': 'MSF',
+                      'msf_per_day': 'MSF per production day'}
+    QUANTITY_PLACES = {'lineal_ft': 0, 'lineal_per_setup': 1, 'lineal_per_paper_change': 1, 'downtime_minutes': 1, 'minutes_per_stop': 2,
+                       'bale_msf': 1, 'msf_per_day': 1}
+    QUANTITY_RELATED = {'setups': ('paper_changes', 'lineal_per_setup', 'lineal_ft'),
+                        'paper_changes': ('setups', 'lineal_per_paper_change', 'lineal_ft'),
+                        'order_changes': ('setups', 'paper_changes', 'lineal_per_setup'),
+                        'lineal_per_setup': ('setups', 'lineal_ft', 'lineal_per_paper_change'),
+                        'lineal_per_paper_change': ('paper_changes', 'lineal_ft', 'lineal_per_setup'),
+                        'lineal_ft': ('volume_msf', 'speed_all_fpm', 'lineal_per_setup'),
+                        'stops': ('downtime_minutes', 'minutes_per_stop', 'downtime_pct'),
+                        'downtime_minutes': ('stops', 'minutes_per_stop', 'downtime_pct'),
+                        'minutes_per_stop': ('stops', 'downtime_minutes', 'downtime_pct'),
+                        'bale_msf': ('bale_pct', 'unexplained_pct', 'volume_msf'),
+                        'msf_per_day': ('volume_msf', 'speed_all_fpm', 'downtime_pct')}
+    QUANTITY_FOLDED = ('volume_msf', 'speed_all_fpm', 'downtime_pct', 'trim_pct', 'dry_end_pct')
+    QUANTITY_NOTES = {
+        'setups': 'A setup is a dry-end record: one that runs on across a shift change is counted in both shifts (a shift split).',
+        'order_changes': 'An order change is a setup record a new knife order combination started (change code O); shift splits '
+                         'and continuations are setup records no new order started.',
+        'paper_changes': 'A paper change is a wet-end run: the distinct wet ends the setups of the window ran on.',
+        'stops': 'Every recorded stop is counted: planned maintenance and external downtime too.',
+        'downtime_minutes': 'Every recorded stop is counted: planned maintenance and external downtime too.',
+        'bale_msf': 'The bale is a scale reading of the waste baled: trim, shear and rejects together, and what the records do not explain.',
+        'msf_per_day': 'MSF per production day is the gross MSF of the window over its production days with records: the like-for-like volume when windows hold different numbers of days.'}
+    BEFORE = {'day': 'the production day before', 'week': 'the week before', 'month': 'the month before', 'fiscal': 'the period before'}
+
+    def qnum(self, metric, value):
+        if value is None:
+            return 'unavailable'
+        if isinstance(value, int):
+            return n(value)
+        return f'{value:,.{self.QUANTITY_PLACES.get(metric, 2)}f}'
+
+    def qchange(self, metric, current, previous, delta, change, data):
+        """`+30 vs 182 the week before` (`, worse` for a measure with a better direction), the previous value alone when the
+        comparison is withheld, or `previous unavailable`, never zero."""
+        before = self.BEFORE.get(data['window']['period'], 'the window before')
+        if previous is None:
+            return 'previous unavailable'
+        if delta is None:
+            return f'{self.qnum(metric, previous)} {before}'
+        signed_delta = f'{delta:+,}' if isinstance(delta, int) else f'{delta:+,.{self.QUANTITY_PLACES.get(metric, 2)}f}'
+        return f'{signed_delta} vs {self.qnum(metric, previous)} {before}' + ('' if change in (None, 'neutral') else f', {change}')
+
+    def period_quantity(self, tools, q):
+        if q['tool'] == 'get_downtime_pareto':
+            return self.quantity_of_stops(q)
+        if q['tool'] == 'get_downtime_review':
+            return self.quantity_of_kind(q)
+        if q['tool'] == 'get_overrun':
+            return self.quantity_of_sheets(q)
+        if q['tool'] == 'get_grade_totals':
+            return self.quantity_of_grade(q)
+        if q['tool'] == 'get_waste_breakdown':
+            return self.quantity_of_waste(q)
+        if q['tool'] == 'get_stops_profile':
+            return self.quantity_of_daily_downtime(q)
+        return self.quantity_of_tiles(q)
+
+    def quantity_of_daily_downtime(self, st):
+        """The downtime of each production day (get_stops_profile, round 4 of the coordinator's review of PR 143, item 9): the day
+        with the most minutes first, as "stops per day" leads with the day with the most stops, then each weekday's minutes per day."""
+        data, rows = st['data'], st['data']['rows']
+        i = argmax(rows, 'minutes')
+        if i is None:
+            return f'No production days in this window{self.where(data)} {ref(st)}', [], [], self.window_looks(data, ('pareto',))
+        r = rows[i]
+        rank = (f', the most of {len(rows)} production days' if len(rows) > 1 else ', the only production day') if self.whole(data) else ''
+        head = (f'**{pval(r["minutes"])} minutes** of downtime on {r["production_day"]} ({r["weekday"]}){self.where(data)}{rank} · '
+                f'{stops_text(r["stops"])} · {pval(r["downtime_pct"])}% of scheduled minutes {ref(st, i)}')
+        bullets = [bullet(f'{p["weekday"]}: **{pval(p["minutes_per_day"])} minutes per day** · {pval(p["stops_per_day"])} stops per day over '
+                          f'{n(p["days"])} day(s)', st, j, 'weekday')
+                   for j, p in enumerate(data.get('weekday_profile') or []) if p['days']]
+        notes = ['A weekday\'s minutes per day are its downtime minutes over the production days of that weekday in the window.']
+        return head, bullets, notes, self.window_looks(data, ('stops', 'pareto', 'trend_downtime'))
+
+    def quantity_of_tiles(self, k):
+        """A count, a length or minutes from the KPI tiles (order changes from the envelope beside them)."""
+        data, metric = k['data'], self.lead['metric']
+        where, words = self.where(data), self.QUANTITY_WORDS[metric]
+        if metric == 'order_changes':
+            head = (f'**{self.qnum(metric, data.get("order_changes"))} {words}**{where} · ' +
+                    self.qchange(metric, data.get('order_changes'), data.get('previous_order_changes'), data.get('order_changes_delta'), 'neutral', data) +
+                    f' {ref(k)}')
+        else:
+            i, row = self.metric(k, metric)
+            noun = {'downtime_minutes': ' of downtime', 'bale_msf': ' of baled waste'}.get(metric, '')
+            head = (f'**{self.qnum(metric, row["current"])} {words}**{noun}{where} · '
+                    f'{self.qchange(metric, row["current"], row["previous"], row["delta"], row["change"], data)}{band(row.get("band_text"))} {ref(k, i)}')
+        related = self.QUANTITY_RELATED[metric]
+        bullets = [self.kpi_bullet(k, m) for m in related]
+        folded = [m for m in self.QUANTITY_FOLDED if m not in related and m != metric]
+        bullets += ['The other KPI tiles', *[self.kpi_bullet(k, m) for m in folded]]
+        notes = self.kpi_notes(data) + ([self.QUANTITY_NOTES[metric]] if metric in self.QUANTITY_NOTES else [])
+        sfx = self.sfx(data)
+        if metric in ('stops', 'downtime_minutes', 'minutes_per_stop'):
+            looks = self.window_looks(data, ('pareto', 'stops', 'trend_downtime'))
+        elif metric == 'bale_msf':
+            looks = self.window_looks(data, ('waste', 'trend_trim', 'grade'))
+        elif metric == 'msf_per_day':
+            looks = self.window_looks(data, ('grade', 'trend_volume', 'stops'))
+        else:
+            looks = []
+            if data['window']['period'] == 'day' and getattr(self.context, 'period', 'day') == 'day':
+                looks.append(look('Each setup with its speed, stops and rejects', f'Show the setup matrix{sfx}'))
+            ratio = 'lineal per paper change' if metric in ('paper_changes', 'lineal_per_paper_change') else 'lineal per setup'
+            looks.append(look(f'The {ratio} week by week', f'Trend of {ratio} over eight weeks{sfx}'))
+            looks += self.window_looks(data, ('rollstock' if 'paper' in metric else 'grade',))
+        return head, bullets, notes, looks[:3]
+
+    def quantity_of_kind(self, r):
+        """Maintenance or operator downtime in minutes or stops (get_downtime_review), its reasons after it."""
+        data, rows, metric = r['data'], r['data']['rows'], self.lead['metric']
+        kind, unit = metric.split('_')
+        where = self.where(data)
+        if not data['scheduled_minutes']:
+            return f'No shifts in this window{where} {ref(r)}', [], [], self.window_looks(data, ('pareto',))
+        minutes, stops, pct = data[f'{kind}_minutes'], data[f'{kind}_stops'], data[f'{kind}_pct']
+        share = f'{pval(pct)}% of scheduled minutes{band(data[f"{kind}_band_text"])}'
+        previous = data.get(f'previous_{kind}_minutes')
+        before = self.BEFORE.get(data['window']['period'], 'the window before')
+        if unit == 'minutes':
+            head = (f'**{f2(minutes)} minutes** of {kind} downtime{where} over {stops_text(stops)} · {share} · ' +
+                    (f'{f2(previous)} minutes {before}' if previous is not None else 'previous unavailable') + f' {ref(r)}')
+        else:
+            previous_stops = data.get(f'previous_{kind}_stops')
+            head = (f'**{n(stops)} {kind} stops**{where} · {f2(minutes)} minutes, {share} · ' +
+                    (f'{n(previous_stops)} stops {before}' if previous_stops is not None else 'previous unavailable') + f' {ref(r)}')
+        # its reasons ranked as the review ranks them, the top five (the chart and the table hold every one)
+        mine = [(i, x) for i, x in enumerate(rows) if x['kind'] == kind.capitalize() and not (x['scheduled'] or x.get('external'))][:5]
+        bullets = [bullet(f'{x["reason"]}: **' + (f'{pval(x["minutes"])} minutes** over {stops_text(x["stops"])}' if unit == 'minutes' else
+                                                  f'{stops_text(x["stops"])}** · {pval(x["minutes"])} minutes') +
+                          f' · {pval(x["pct_of_scheduled"])}% of scheduled minutes · {review_previous(x)}', r, i) for i, x in mine]
+        other = 'operator' if kind == 'maintenance' else 'maintenance'
+        # the other kind beside it, as a finding of its own when the window holds fewer than three reasons of this kind
+        bullets += ([] if len(mine) < 3 else ['Beside it']) + [bullet(f'{other.capitalize()} downtime: **{f2(data[f"{other}_minutes"])} minutes** over '
+                                        f'{stops_text(data[f"{other}_stops"])} · {pval(data[f"{other}_pct"])}% of scheduled minutes'
+                                        f'{band(data[f"{other}_band_text"])}', r)]
+        if not mine:
+            bullets.insert(0, f'No {kind} stops are recorded in this window.')
+        looks = self.window_looks(data, ('pareto', 'stops', 'trend_downtime'))
+        return head, bullets, sentences(data.get('method_note')), looks
+
+    def quantity_of_stops(self, p):
+        """The stops or minutes of one stop reason or place (the Pareto grouped by it, in the unit asked)."""
+        data, rows = p['data'], p['data']['rows']
+        named = self.lead.get('reason') or self.lead.get('place')
+        count = self.lead['metric'] == 'stops'
+        unit = 'stops' if count else 'minutes'
+        where, at = self.where(data), ' at ' if 'place' in self.lead else ' for '
+        i = next((j for j, x in enumerate(rows) if x['category'] == named), None)
+        if i is not None:
+            x = rows[i]
+            fig = stops_text(x['stops']) if count else f'{pval(x["minutes"])} minutes'   # "1 stop", never "1 stops"
+            beside = f'{pval(x["minutes"])} minutes' if count else stops_text(x['stops'])
+            prev = x.get('previous_stops' if count else 'previous_minutes')
+            previous = ('previous unavailable' if prev is None else
+                        f'{stops_text(prev) if count else pval(prev) + " " + unit} {self.BEFORE.get(data["window"]["period"], "the window before")}')
+            head = f'**{fig}**{at}{named}{where} · {beside} · {pval(x["share_pct"])}% of the window\'s {unit} · {previous} {ref(p, i)}'
+        elif data['coverage'] == 'unavailable':
+            head = f'{named}: unavailable, the window holds no production days {ref(p)}'
+        else:
+            head = f'No {unit} recorded{at}{named}{where} in this window {ref(p)}'
+        # the largest other reasons (or places) of the window, as the tool ordered them, beside the one asked about
+        bullets = [bullet(f'{x["category"]}: **' + (f'{n(x["stops"])} stops** · {pval(x["minutes"])} min' if count else
+                                                     f'{pval(x["minutes"])} min** over {stops_text(x["stops"])}') + f' · {pval(x["share_pct"])}%', p, j)
+                   for j, x in enumerate(rows) if j != i][:3]
+        notes = ['Recorded reasons are symptoms, not proven causes.'] + (money_notes(p, rows[i], 'category') if i is not None else [])
+        return head, bullets, notes, self.window_looks(data, ('stops', 'trend_downtime', 'pareto'))
+
+    def quantity_of_grade(self, g):
+        """The setups, paper changes or lineal feet of one board grade (its row of the totals by grade), the other grades after."""
+        data, rows, metric, grade = g['data'], g['data']['rows'], self.lead['metric'], self.lead.get('grade')
+        where = self.where(data)
+        parts = {'setups': lambda r: f'{n(r["setups"])} setups', 'paper_changes': lambda r: f'{n(r["wet_ends"])} paper changes',
+                 'lineal_ft': lambda r: f'{f0(r["lineal_ft"])} lineal ft'}
+        i = next((j for j, r in enumerate(rows) if r['grade'] == grade), None)
+        if i is None:
+            head = f'No {grade} setups in this window{where} {ref(g)}'
+        else:
+            beside = ' · '.join(parts[m](rows[i]) for m in parts if m != metric)
+            # the totals by grade keep the previous window's volume only: its count is unavailable, said so, never zero
+            head = f'**{parts[metric](rows[i])}** of {grade}{where} · {beside} · previous unavailable {ref(g, i)}'
+        bullets = [bullet(f'{r["grade"]}: **{parts[metric](r)}** · {f1(r["volume_msf"])} MSF', g, j) for j, r in enumerate(rows) if j != i][:3]
+        notes = ['A grade counts the setups that ran it and the distinct wet-end runs they ran on; a setup that runs on across a '
+                 'shift change is counted in both shifts.',
+                 "The totals by grade carry the previous window's volume, not its setups, paper changes or lineal feet."]
+        return head, bullets, notes, self.window_looks(data, ('grade', 'speed', 'rollstock'))
+
+    def quantity_of_waste(self, w):
+        """One waste line in square feet or as a percent (get_waste_breakdown): a dry-end line as a percent of the yield after trim and
+        shear (the owner's denominator, issue #101), any other of gross; the previous window beside, the other lines after it."""
+        data, rows, metric = w['data'], w['data']['rows'], self.lead['metric']
+        where, before = self.where(data), self.BEFORE.get(data['window']['period'], 'the window before')
+        i = next((j for j, r in enumerate(rows) if r['category'] == self.lead.get('waste')), None)
+        if i is None:
+            return f'No waste recorded in this window{where} {ref(w)}', [], [], self.window_looks(data, ('waste',))
+        r = rows[i]
+        yield_based = r.get('pct_of_yield') is not None
+        share = (f'{pval(r["pct_of_yield"])}% of the yield after trim and shear' if yield_based else f'{pval(r["pct_of_gross"])}% of gross')
+        if metric == 'waste_sqft':
+            previous = f'{f0(r["previous_sqft"])} sq ft {before}' if r.get('previous_sqft') is not None else 'previous unavailable'
+            head = f'**{f0(r["sqft"])} sq ft** of {r["label"]}{where} · {share} · {previous}{band(r.get("band_text"))} {ref(w, i)}'
+        else:
+            key = 'pct_of_yield' if yield_based else 'pct_of_gross'
+            base = 'the yield after trim and shear' if yield_based else 'gross'
+            previous = f'previous {pval(r["previous_" + key])}%' if r.get('previous_' + key) is not None else 'previous unavailable'
+            head = (f'**{pval(r[key])}%** of {base} in {r["label"]}{where}{band(r.get("band_text"))} · {f0(r["sqft"])} sq ft · {previous} {ref(w, i)}')
+        if r['category'] == 'dry_end':
+            # the dry-end families it is made of, each a percent of the same yield (round 4 of the coordinator's review, item 9)
+            bullets = [bullet(f'{x["label"]}: **' + (f'{f0(x["sqft"])} sq ft** · {pval(x["pct_of_yield"])}% of the yield after trim and shear'
+                                                     if metric == 'waste_sqft' else
+                                                     f'{pval(x["pct_of_yield"])}%** of the yield after trim and shear · {f0(x["sqft"])} sq ft'), w, j)
+                       for j, x in enumerate(rows) if j != i and x.get('pct_of_yield') is not None][:5]
+        else:
+            bullets = [bullet(f'{x["label"]}: **' + (f'{f0(x["sqft"])} sq ft** · {pval(x["pct_of_gross"])}% of gross' if metric == 'waste_sqft' else
+                                                     f'{pval(x["pct_of_gross"])}%** of gross · {f0(x["sqft"])} sq ft'), w, j)
+                       for j, x in enumerate(rows) if j != i and x['category'] not in ('bale', 'unexplained', 'dry_end')][:3]
+        notes = ['Bale is a scale reading; unexplained is bale minus trim, shear and rejects.'] + (
+            ['Dry-end rejects are a percent of the yield after trim and shear, the owner\'s denominator.'] if yield_based else [])
+        return head, bullets, notes, self.window_looks(data, ('waste', 'grade', 'trend_trim' if r['category'] == 'trim' else 'trend_dry_end'))
+
+    def quantity_of_sheets(self, o):
+        """Sheets cut across all knives (get_overrun), each knife after them."""
+        data, rows = o['data'], o['data']['rows']
+        total = next((i for i, x in enumerate(rows) if x['knife'] == 'all knives'), None)
+        if total is None:
+            return f'No customer lines in this window{self.where(data)} {ref(o)}', [], [], self.window_looks(data, ('grade',))
+        x = rows[total]
+        head = (f'**{n(x["actual_sheets"])} sheets** cut across all knives{self.where(data)} · {n(x["nominal_sheets"])} nominal · '
+                f'{x["overrun_pct"] + 0.0:+.2f}% of nominal cuts {ref(o, total)}')
+        bullets = [bullet(f'{y["knife"]}: **{n(y["actual_sheets"])} sheets** · {n(y["nominal_sheets"])} nominal · {y["overrun_pct"] + 0.0:+.2f}%', o, i)
+                   for i, y in enumerate(rows) if i != total]
+        # the overrun and underrun in sheets after the knives (a double knife has only two)
+        bullets.append(bullet(f'Over nominal: **{n(x["over_sheets"])} sheets** · {n(x["under_sheets"])} under · '
+                              f'{pval(x["lines_inside_band_pct"])}% of lines inside the band', o, total))
+        notes = ['Sheets are counted at the knife: the dry-end rejects are inside them.', *sentences(data.get('band_note'))]
+        return head, bullets, notes, self.window_looks(data, ('grade', 'rollstock'))
+
     def window_looks(self, data, kinds):
         """Where-to-look lines over the same window (or the trends that end on the selected day)."""
         wp, sfx = self.wp(data), self.sfx(data)
+        # a number asked with no shift named answers every shift (the owner's scope ruling, 2026-11-13; round 4 of the coordinator's
+        # review, item 8): a one-shift card's look says "on this shift", so the look keeps the card's scope
+        own = ' on this shift' if self.context.scope == 'shift' and data.get('shift') else ''
         lines = []
         for kind in kinds:
             if kind.startswith('trend'):
@@ -1464,13 +1718,13 @@ class PeriodAnswer:
                 continue
             if wp is None:
                 continue
-            text, question = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}?'),
-                              'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}'),
-                              'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}'),
-                              'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}'),
-                              'speed': ('Each grade against its speed target', f'Which grade is slowest against target{wp}{sfx}?'),
+            text, question = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}{own}?'),
+                              'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}{own}'),
+                              'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}{own}'),
+                              'stops': ('The stops of each production day', f'Stops per day{wp}{sfx}{own}'),
+                              'speed': ('Each grade against its speed target', f'Which grade is slowest against target{wp}{sfx}{own}?'),
                               'opportunity': ('Each grade and web width against its best-fifth speed', f'Where is the speed opportunity{wp}{sfx}?'),
-                              'rollstock': ('The paper each grade and width consumed', f'How much paper did we consume{wp}{sfx}?')}[kind]
+                              'rollstock': ('The paper each grade and width consumed', f'How much paper did we consume{wp}{sfx}{own}?')}[kind]
             lines.append(look(text, question))
         return lines[:3]
 
@@ -1613,6 +1867,7 @@ class SemanticAnswer:
         if wp is None:
             return []
         kinds = SEMANTIC_LOOKS[data['entity'] + (' waste' if data['entity'] == 'setup' and data['unit'] in ('sq ft', '% of gross', '$') else '')]
+        sfx += ' on this shift' if self.context.scope == 'shift' else ''   # a number keeps a one-shift card's scope (the owner's scope ruling)
         questions = {'pareto': ('The downtime minutes by reason', f'Which downtime reason cost the most minutes{wp}{sfx}?'),
                      'waste': ('Side trim, shear and each dry-end reason', f'Waste breakdown{wp}{sfx}'),
                      'grade': ('Volume, speed and waste by grade', f'Volume by grade{wp}{sfx}'),

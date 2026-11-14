@@ -283,24 +283,25 @@ def test_a_production_days_downtime_over_all_shifts_is_the_review(store):
         assert page_url(resolve_url(url, store)) == url
 
 
-def test_downtime_with_no_scope_is_the_previous_production_day_all_shifts(store):
-    """The owner's default (review of #111): a downtime question that names no shift and no window answers the previous
-    production day, all shifts, whatever the shift control says; shift detail only when a shift is named (or a flag
-    pulls one in). A filter, a grouping or another Period control is asked of the controls as before. An address is
-    explicit, so the default moves questions only, never a URL."""
+def test_downtime_with_no_scope_is_the_selected_day_all_shifts(store):
+    """The owner's default (review of #111), as the owner's scope ruling of 2026-11-13 left it: a downtime question that names no
+    shift answers all shifts, whatever the shift control says, on the selected day when it names no window (the ruling retired
+    #101's previous production day; "yesterday" still names the day before); shift detail only when a shift is named (or a flag
+    pulls one in). A filter, a grouping, the selected day named, dollars or another Period control are asked of the controls as
+    before, and a number over a window with no shift named is every shift by the ruling. An address is explicit, so the default
+    moves questions only, never a URL."""
     days = store.production_days
 
     def address(question, day='2026-09-14', scope='shift', period='day'):
         request, context = route(question, Context(day, 2, scope=scope, period=period), days)
         return canonical_url(request, context)
-    for question in ('Show downtime by reason', 'How much downtime?', 'What were the top downtime reasons?',
-                     'What were the top downtime reasons yesterday?'):
+    for question in ('Show downtime by reason', 'How much downtime?', 'What were the top downtime reasons?'):
         for scope in ('shift', 'day'):
-            assert address(question, scope=scope) == '/corr/1/day/2026-09-11?measure=review', (question, scope)
-    assert address('Show downtime by reason', day='2026-09-21') == '/corr/1/day/2026-09-18?measure=review'
-    assert address('Show downtime by reason', day=days[0]) == f'/corr/1/day/{days[0]}?measure=review'   # no earlier day: stays
-    first = question_scope('Show downtime by reason', Context(days[0], 2), days)   # and the analyst is told the truth about it
-    assert "the previous production day" not in read_scope_text(first) and 'the first in the records' in read_scope_text(first)
+            assert address(question, scope=scope) == '/corr/1/day/2026-09-14?measure=review', (question, scope)
+    for scope in ('shift', 'day'):
+        assert address('What were the top downtime reasons yesterday?', scope=scope) == '/corr/1/day/2026-09-11?measure=review', scope
+    assert address('Show downtime by reason', day='2026-09-21') == '/corr/1/day/2026-09-21?measure=review'
+    assert address('Show downtime by reason', day=days[0]) == f'/corr/1/day/{days[0]}?measure=review'
     for question, url in (('Show downtime by reason for this shift', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           # review of #111: a shift named in words, the selected day named, a money question, another grouping
                           ('Show downtime for shift two', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
@@ -315,18 +316,20 @@ def test_downtime_with_no_scope_is_the_previous_production_day_all_shifts(store)
                           ('Show downtime by reason for shift 1', '/corr/1/day/2026-09-14/shift/1?measure=downtime'),
                           ('Show maintenance downtime by reason', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=maintenance'),
                           ('Which equipment caused the most downtime?', '/corr/1/day/2026-09-14/shift/2?measure=downtime&by=place'),
-                          ('Show downtime by reason this week', '/corr/1/day/2026-09-14/shift/2?measure=review&window=week'),
-                          ('How much downtime last week?', '/corr/1/week/2026-09-07/shift/2?measure=review'),
+                          ('Why was downtime so high?', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),   # an investigation: the shift
+                          ('Show downtime by reason this week', '/corr/1/day/2026-09-14?measure=review&window=week'),   # a number: every shift
+                          ('How much downtime last week?', '/corr/1/week/2026-09-07?measure=review'),
                           ('Why was this shift slow?', '/corr/1/day/2026-09-14/shift/2?measure=overview')):
         assert address(question) == url, question
-    assert address('Show downtime by reason', period='week') == '/corr/1/week/2026-09-14/shift/2?measure=review'
+    assert address('Show downtime by reason', period='week') == '/corr/1/week/2026-09-14?measure=review'
     assert address('What were the top downtime reasons yesterday?', period='week') == '/corr/1/day/2026-09-11?measure=review'   # yesterday is Day
-    assert address('What were the top downtime reasons for all shifts?') == '/corr/1/day/2026-09-11?measure=review'   # "all shifts" names no one shift
+    assert address('What were the top downtime reasons for all shifts?') == '/corr/1/day/2026-09-14?measure=review'   # "all shifts" names no one shift
     assert redirect_for('/corr/1/day/2026-09-14/shift/2?measure=downtime', store) is None
-    # the analyst is told which day the default chose, and why
+    # the analyst is told which scope the default chose, and why
     scoped = question_scope('Show downtime by reason', Context('2026-09-14', 2), days)
-    assert (scoped.production_day, scoped.scope, scoped.period) == ('2026-09-11', 'day', 'day')
-    assert "the owner's default applies: the previous production day, all shifts, 2026-09-11" in read_scope_text(scoped)
+    assert (scoped.production_day, scoped.scope, scoped.period) == ('2026-09-14', 'day', 'day')
+    assert "the owner's default applies: all shifts on the selected day, 2026-09-14" in read_scope_text(scoped)
+    assert "the owner's default applies: all shifts, 2026-09-11" in read_scope_text(question_scope('How much downtime yesterday?', Context('2026-09-14', 2), days))
 
 
 # ------------------------------------------------------------------ the two lenses

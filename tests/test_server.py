@@ -584,11 +584,13 @@ def test_a_moved_question_keeps_the_session_on_the_controls():
         moved=ask('Show shift 1',session)
         assert moved['url']=='/corr/1/day/2026-09-14/shift/1?measure=overview' and moved['session_id']==session
         assert [h['question'] for h in ask('Show downtime for this shift',session)['context']['history']]==['Why was this shift slow?','Show shift 1','Show downtime for this shift']
-        previous=ask('Show downtime',session)   # downtime with no scope: the previous production day, all shifts (#101)
-        assert previous['url']=='/corr/1/day/2026-09-11?measure=review' and [h['question'] for h in previous['context']['history']]==['Show downtime']
-        week=ask('How much downtime last week?',session)
-        assert week['url']=='/corr/1/week/2026-09-07/shift/2?measure=review' and [h['question'] for h in week['context']['history']]==['How much downtime last week?']
-        assert [h['question'] for h in ask('Show waste',session)['context']['history']]==['Why was this shift slow?','Show shift 1','Show downtime for this shift','Show waste']
+        # downtime with no scope: all shifts on the selected day (#101, as the owner's scope ruling of 2026-11-13 left it), a follow-up
+        same=ask('Show downtime',session)
+        assert same['url']=='/corr/1/day/2026-09-14?measure=review' and [h['question'] for h in same['context']['history']]==['Why was this shift slow?','Show shift 1','Show downtime for this shift','Show downtime']
+        week=ask('How much downtime last week?',session)   # another day: not a follow-up; a number with no shift named is every shift
+        assert week['url']=='/corr/1/week/2026-09-07?measure=review' and [h['question'] for h in week['context']['history']]==['How much downtime last week?']
+        # the conversation keeps its last four turns
+        assert [h['question'] for h in ask('Show waste',session)['context']['history']]==['Show shift 1','Show downtime for this shift','Show downtime','Show waste']
         assert app.sessions[session].shift==2 and app.sessions[session].production_day=='2026-09-14'
     finally:
         app.close()

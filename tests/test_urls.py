@@ -65,7 +65,8 @@ def test_every_golden_question_round_trips_through_its_url(case):
             assert page_url(resolved) == url and redirect_target(url, resolved) is None, url
             addressed, _ = answer(store, resolved['day'], resolved['shift'], resolved['scope'], resolved['tool_period'],
                                   resolved['corrupt'], resolved['text'], resolved['request'])
-            assert addressed == asked and (resolved['day'], resolved['scope'], resolved['shift']) == (day, scope, shift), url
+            # an all-shift address names no shift (the owner's scope ruling moves a number asked under shift 3 to every shift)
+            assert addressed == asked and (resolved['day'], resolved['scope']) == (day, scope) and (scope == 'day' or resolved['shift'] == shift), url
             break
         url = canonical_url(request, context, corrupt, store.machine_id, after)
         try:
@@ -190,8 +191,9 @@ def test_every_measure_has_a_meaning_under_every_grain():
     store = default_store()
     for grain in ('day', 'week', 'month', 'period'):
         for tail in ('', '/shift/2'):
-            for measure in [*INTENT_MEASURES.values(), *STORE_MEASURES, 'report']:
-                url = f'/corr/1/{grain}/2026-09-14{tail}?measure={measure}' + ('&metric=trim_pct' if measure == 'trend' else '')
+            for measure in [*INTENT_MEASURES.values(), *STORE_MEASURES, 'quantity', 'report']:
+                url = f'/corr/1/{grain}/2026-09-14{tail}?measure={measure}' + ('&metric=trim_pct' if measure == 'trend' else '') + \
+                    ('&metric=setups' if measure == 'quantity' else '')
                 try:
                     resolved = resolve_url(url, store)
                 except ValueError as exc:
@@ -222,6 +224,10 @@ def test_every_measure_has_a_meaning_under_every_grain():
     ('/corr/1/day/2026-09-14?measure=trend', 'metric is one of'),
     ('/corr/1/day/2026-09-14?measure=trend&metric=trim_pct&weeks=30', '1 to 26'),
     ('/corr/1/day/2026-09-14?measure=waste&metric=trim_pct', 'metric= does not apply'),
+    ('/corr/1/day/2026-09-14?measure=quantity&metric=trim_pct', 'metric is one of'),   # one quantity (issue #113): a count or a unit
+    ('/corr/1/day/2026-09-14?measure=quantity&metric=stops&reason=missed_splice', 'reason is one of'),
+    ('/corr/1/day/2026-09-14?measure=quantity&metric=setups&by=place', 'by= does not apply'),
+    ('/corr/1/day/2026-09-14?measure=review&reason=stacker', 'reason= does not apply'),
     ('/corr/1/day/2026-09-14?measure=downtime&window=week', 'window= does not apply'),
     ('/corr/1/day/2026-09-14?measure=overview&window=week&kind=maintenance', 'kind= narrows the day overview'),
     ('/corr/1/week/2026-09-14?measure=overview&kind=operator', 'kind= narrows the day overview'),
@@ -321,9 +327,10 @@ def test_every_redirect_lands_on_a_canonical_address_that_runs_the_same_plan():
     redirected = stayed = 0
     for base in (D, W, M, P):
         for scope in ('', '/shift/2'):
-            for measure in [*INTENT_MEASURES.values(), *STORE_MEASURES, 'report']:
+            for measure in [*INTENT_MEASURES.values(), *STORE_MEASURES, 'quantity', 'report']:
                 for tail in tails:
-                    url = f'{base}{scope}?measure={measure}' + ('&metric=trim_pct' if measure == 'trend' else '') + (f'&{tail}' if tail else '')
+                    url = f'{base}{scope}?measure={measure}' + ('&metric=trim_pct' if measure == 'trend' else '') + \
+                        ('&metric=stops' if measure == 'quantity' else '') + (f'&{tail}' if tail else '')
                     try:
                         resolved = resolve_url(url, store)
                     except ValueError:
