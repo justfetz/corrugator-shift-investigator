@@ -40,6 +40,10 @@ Exit status is the number of failed offline cases plus the number of live
 (provider, type) pairs under their pass-rate threshold, plus, when the run
 covers the whole offline set (no --only), one per offline latency percentile
 (p50, p95) over its budget. Skips and known defects do not count.
+
+On a shared CI runner, INVESTIGATOR_LATENCY_SCALE (default 1, at most 3; CI sets
+it in .github/workflows/tests.yml) multiplies each case's own budget. The p50 / p95
+budgets and every recorded time are never scaled (issue #139; docs/TESTING.md).
 """
 from __future__ import annotations
 
@@ -90,6 +94,53 @@ THRESHOLDS = {'routing': 0.9, 'faithfulness': 1.0, 'grounding': 1.0, 'refusal': 
 # The clock covers the agent's turns only: dataset build, fixture I/O and the checks are outside it.
 DEFAULT_MAX_MS = 250
 LATENCY_BUDGET_MS = {'p50': 100, 'p95': 250}
+# A shared CI runner is slow in bursts (a scheduling tick on two vCPUs, a full garbage collection inside the pytest
+# process), so CI multiplies each case's own budget (`expect.max_ms` or DEFAULT_MAX_MS, on the in-process clock and on
+# the URL's server time) and every speed budget asserted in pytest by INVESTIGATOR_LATENCY_SCALE, through latency_budget()
+# (issue #139). Unset, it is 1: a developer's machine and the deployed service check the product's own budgets. It never
+# touches LATENCY_BUDGET_MS, the run's p50 / p95 (the product's promise, measured as it is), nor any measured time: the
+# table, --json, history.jsonl and last_run.json keep the times as the clock read them. A tracked run under a scale also
+# records `latency_scale` on its history line and in last_run.json, since its pass / fail verdicts were judged at the
+# scaled budgets; tests/test_evals.py fails CI on a committed one, so /evals and the case study never read such a line.
+LATENCY_SCALE_ENV = 'INVESTIGATOR_LATENCY_SCALE'
+MAX_LATENCY_SCALE = 3   # loosens a budget for a slow runner, never switches one off
+
+
+class LatencyScaleError(RuntimeError):
+    """INVESTIGATOR_LATENCY_SCALE set to anything but a number from 1 to MAX_LATENCY_SCALE: refused, never read as 1.
+    Not a ValueError, so run_case's refusal handling cannot mistake it for a case's own refusal."""
+
+
+def latency_scale():
+    """The factor on each case's own budget and on pytest's speed budgets: INVESTIGATOR_LATENCY_SCALE, 1 when unset.
+    Read on every call, so a test can set it with monkeypatch."""
+    raw = os.environ.get(LATENCY_SCALE_ENV, '').strip()
+    if not raw:
+        return 1.0
+    try:
+        scale = float(raw)
+    except ValueError:
+        scale = math.nan
+    if not 1 <= scale <= MAX_LATENCY_SCALE:   # NaN and inf fail here too
+        raise LatencyScaleError(f'{LATENCY_SCALE_ENV}={raw!r}: a number from 1 to {MAX_LATENCY_SCALE}, or unset for 1')
+    return scale
+
+
+def latency_budget(ms):
+    """A case's own budget, or a speed budget a test asserts, as this run checks it: `ms` times latency_scale().
+    The one helper every per-case and pytest latency check goes through; LATENCY_BUDGET_MS never does."""
+    return ms * latency_scale()
+
+
+def over_budget(ms, budget, where=''):
+    """The failure line for a time over a case's own budget (`budget` ms, scaled by latency_budget), or None.
+    A scaled budget names the case's own figure and the factor, so a CI failure reads against the product's budget."""
+    allowed = latency_budget(budget)
+    if ms <= allowed:
+        return None
+    scale = latency_scale()
+    return f'{ms:.0f} ms{where}, budget {allowed:.0f} ms' + (f' ({budget} ms × {scale:g}, {LATENCY_SCALE_ENV})' if scale != 1 else '')
+
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
 # the semantic model's compiler (issue #117) is no planner's tool: only a case that asks by its address, or a value case
 # that calls it, may run it, so a model that names it anywhere else still fails the unknown-tool invariant
@@ -1543,23 +1594,21 @@ def url_failures(case, expect, turns, provider, analysis=None, allowed=None):
         failures.append(f'GET refused: {error[:90]!r}')
     elif results and not failures:
         URL_MS[case['id']] = ms
-        budget = expect.get('max_ms', DEFAULT_MAX_MS)
-        if ms > budget:
-            failures.append(f'{ms:.0f} ms server time, budget {budget} ms')
+        slow = over_budget(ms, expect.get('max_ms', DEFAULT_MAX_MS), ' server time')
+        if slow:
+            failures.append(slow)
         failures.extend(score(case, expect, results, analysis, allowed, 'offline'))
     return [f'URL: {f}' for f in failures]
 
 
 def latency_failures(expect, provider, ms):
-    """The case's own budget, offline only: `expect.max_ms`, default DEFAULT_MAX_MS. A live or replayed
-    run is never timed against it: a `live: true` case shares its expect with its live variant, and
-    that time is the provider's."""
+    """The case's own budget, offline only: `expect.max_ms`, default DEFAULT_MAX_MS, times latency_scale()
+    (1 unless CI sets INVESTIGATOR_LATENCY_SCALE). A live or replayed run is never timed against it: a
+    `live: true` case shares its expect with its live variant, and that time is the provider's."""
     if provider:
         return []
-    budget = expect.get('max_ms', DEFAULT_MAX_MS)
-    if ms > budget:
-        return [f'{ms:.0f} ms, budget {budget} ms']
-    return []
+    slow = over_budget(ms, expect.get('max_ms', DEFAULT_MAX_MS))
+    return [slow] if slow else []
 
 
 def percentiles(values):
@@ -1613,6 +1662,11 @@ def main(argv=None):
         # history.jsonl and last_run.json describe whole-set runs: the /evals page and the main page's badge
         # read the newest line as the score of the set, so a subset must never be appended.
         print('--track records a whole-set run; it cannot be combined with --only')
+        return 2
+    try:
+        scale = latency_scale()   # checked before any case runs: a mistyped scale fails the run, it is never read as 1
+    except LatencyScaleError as exc:
+        print(exc)
         return 2
     provider = args.provider or default_provider()
     if args.live and provider is None:
@@ -1703,6 +1757,9 @@ def main(argv=None):
                     for k in ('p50', 'p95')]
         breaches += sum(latency[k] > LATENCY_BUDGET_MS[k] for k in ('p50', 'p95'))
         print('offline latency: ' + '  '.join(verdicts))
+    if scale != 1:
+        print(f'{LATENCY_SCALE_ENV}={scale:g}: each case\'s own budget × {scale:g}; '
+              'the p50 / p95 budgets and every time above are not scaled')
     timed = live_latency(rows)
     if timed:
         print('live latency: ' + '  '.join(f'{k} {v:.0f} ms' for k, v in timed.items() if isinstance(v, (int, float)) and k != 'model_calls_max')
@@ -1743,7 +1800,9 @@ def main(argv=None):
               + (f'; latency p50 {line["latency_ms"]["p50"]:.0f} ms, p95 {line["latency_ms"]["p95"]:.0f} ms' if line['latency_ms']['p50'] is not None else '')
               + ''.join(f'; {p} ({v["model"]}): ' + ', '.join(f'{k} {c["pass"]}/{c["pass"] + c["fail"]}' for k, c in v['types'].items()) for p, v in line['live'].items())
               + (f'; judge {line["judge"]["model"]}, ${line["judge"]["cost_per_case_usd"]:.4f} per judged case (rows in {JUDGE_LAST_RUN.relative_to(ROOT)})'
-                 if line.get('judge') and line['judge'].get('cost_per_case_usd') is not None else ''))
+                 if line.get('judge') and line['judge'].get('cost_per_case_usd') is not None else '')
+              + (f'; judged at case budgets × {scale:g} ({LATENCY_SCALE_ENV}): do not commit it (CI refuses a scaled line);'
+                 ' track it again with the scale unset' if scale != 1 else ''))
     return failed + breaches
 
 
@@ -1803,8 +1862,9 @@ LAST_RUN = ROOT / 'evals' / 'last_run.json'
 def last_run(rows, line):
     """The rows behind the newest history line: id, case, type, provider, outcome and ms per row.
     `ran_at` and `commit` are that line's, so a reader can tell the two files belong together; the
-    /evals page shows each case's result from here without running anything."""
+    /evals page shows each case's result from here without running anything. A scaled run's `latency_scale` comes along."""
     return {'ran_at': line['ran_at'], 'commit': line['commit'], 'dataset': line['dataset'],
+            **({'latency_scale': line['latency_scale']} if 'latency_scale' in line else {}),
             'rows': [{k: r[k] for k in ('id', 'case', 'type', 'provider', 'mode', 'outcome', 'ms', 'note')} for r in rows]}
 
 
@@ -1845,7 +1905,8 @@ def comparisons_withdrawn(rows):
 def history_line(rows, exit_status, judged=None):
     """One record per run: enough to tell whether a change in the planner, the prompt or the
     data moved the score, and whether it moved the clock. Live rows are scored against the
-    recordings' model; `latency_ms` is the offline p50 / p95. A judged run (`--judge`) adds `judge`:
+    recordings' model; `latency_ms` is the offline p50 / p95. A run under INVESTIGATOR_LATENCY_SCALE adds
+    `latency_scale`: its verdicts were judged at scaled case budgets (issue #139). A judged run (`--judge`) adds `judge`:
     the judge model and rubric, the pass count per criterion, the cost and the cost per judged case,
     and its agreement with the owner's grades at that time."""
     def tally(subset):
@@ -1873,7 +1934,7 @@ def history_line(rows, exit_status, judged=None):
                           'types': tally(r for r in rows if r['provider'] == provider)}
     return {'ran_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%MZ'), 'commit': commit, 'dataset': dataset_version()[:12],
             'cases': len(rows), 'offline': tally(r for r in rows if not r['provider']), 'latency_ms': offline_latency(rows),
-            'live': live, **({'live_ms': live_latency(rows)} if live_latency(rows) else {}),
+            **({'latency_scale': scale} if (scale := latency_scale()) != 1 else {}), 'live': live, **({'live_ms': live_latency(rows)} if live_latency(rows) else {}),
             **({'judge': judge_record(*judged)} if judged else {}), 'exit': exit_status}
 
 

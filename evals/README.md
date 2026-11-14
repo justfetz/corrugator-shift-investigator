@@ -295,7 +295,11 @@ case count, pass / fail / skip per type for the offline cases, `latency_ms`
 recordings were made with, pass / fail / skip per type and the recorded cost. `--track` records whole-set runs only and refuses `--only`. The same
 flag rewrites `evals/last_run.json`: one row per run of that newest line (id,
 outcome, ms, note), stamped with the line's time and commit. Commit the two
-files together; `tests/test_evalboard.py` fails when they disagree. A
+files together; `tests/test_evalboard.py` fails when they disagree. Track with
+`INVESTIGATOR_LATENCY_SCALE` unset: a run tracked under the CI scale judged its
+verdicts at loosened budgets, so it writes `latency_scale` on the line and in
+`last_run.json`, and `tests/test_evals.py` fails CI on any committed line that
+carries it ([TESTING](../docs/TESTING.md)). A
 run is comparable with the one before it when the dataset hash and the model
 match, and the latency with the one before it when the machine does too; a changed prompt is flagged by the replay warning. The
 file is the answer to "did that change make the agent better or worse": read
