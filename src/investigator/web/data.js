@@ -42,7 +42,11 @@ function withFilter(name,value,drop){
  if(drop!==undefined){ const left=valuesOf(filters[name]).filter(v=>v!==drop); if(left.length)filters[name]=left.length===1?left[0]:left; else delete filters[name]; }
  else if(value===null)delete filters[name];
  else{ filters[name]=value; if(name==='day'){delete filters.from;delete filters.to;} if(name==='from'||name==='to')delete filters.day; }
- const parts=state.filterable.filter(k=>k in filters).flatMap(k=>[...valuesOf(filters[k])].sort((a,b)=>valueText(a)<valueText(b)?-1:valueText(a)>valueText(b)?1:0).map(v=>`${k}=${encodeURIComponent(valueText(v))}`));
+ const parts=state.filterable.filter(k=>k in filters).flatMap(k=>{
+  const values=[...valuesOf(filters[k])].sort((a,b)=>valueText(a)<valueText(b)?-1:valueText(a)>valueText(b)?1:0);
+  if(k==='shift')return [`shift=${[...new Set(values.flatMap(v=>valueText(v).split(',')))].sort().join(',')}`];   // shifts as one list: shift=1,3
+  return values.map(v=>`${k}=${encodeURIComponent(valueText(v))}`);
+ });
  return `/data/${state.table}`+(parts.length?'?'+parts.join('&'):'');
 }
 

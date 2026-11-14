@@ -4,7 +4,8 @@ its rows, and an answer's receipts link to the rows behind each figure.
 The schema pages are held to the record contract: every column a page shows has a unit and a meaning, and its row in
 the contract (docs/RECORD_CONTRACT.md; docs/METRICS.md for the derived shift_kpis) exists and carries the anchor the
 page links to. Filters are fuzzed: no value or name reaches the SQL text. Every receipt of every offline golden answer
-links to rows, and those rows hold the cited row's own quantity (its sum, count or ratio over them).
+links to rows, and the section's bold figure, recomputed from those rows with the receipt's own filter, is the figure
+printed (the #151 review).
 """
 import gc
 import http.client
@@ -12,6 +13,7 @@ import json
 import math
 import random
 import re
+import sys
 import time
 from pathlib import Path
 from threading import Thread
@@ -589,6 +591,7 @@ class Figures:
             if 'rejected' in after:
                 return s['reject_sqft'], False
         if tool in ('get_shift_kpis', 'get_shift_overview'):
+            lead = re.sub(r'^- (?:Shift \d · )?', '', section)   # an all-shifts answer leads each line with its shift
             if receipt['table'] == 'stops':
                 return stop_minutes(rows), False
             if receipt['table'] == 'rejects':
@@ -596,7 +599,7 @@ class Figures:
             if receipt['table'] == 'setups':
                 return runs_below_target(rows)[0], True
             (k,) = rows
-            if 'lineal ft' in text or section.lstrip('- ').startswith('Lineal feet'):
+            if 'lineal ft' in text or lead.startswith('Lineal feet'):
                 return k['lineal_ft'], False
             if text.endswith('ft/min'):
                 return k['lineal_ft'] / 480, False
@@ -610,19 +613,19 @@ class Figures:
                 return (k['maintenance_seconds'] + k['operator_seconds']) / 288, False
             if 'maintenance downtime' in after:
                 return k['maintenance_seconds'] / 288, False
-            if 'operator downtime' in after or section.lstrip('- ').startswith('Operator downtime'):
+            if 'operator downtime' in after or lead.startswith('Operator downtime'):
                 return k['operator_seconds'] / 288, False
             if 'grade target' in after:
                 return k['lineal_ft'] / k['target_ft'] * 100, False
             if text.endswith('ft/min'):
                 return k['lineal_ft'] / 480, False
-            if section.lstrip('- ').startswith('Downtime:'):
+            if lead.startswith('Downtime:'):
                 return k['stop_seconds'] / 288, False
-            if section.lstrip('- ').startswith('Dry-end waste'):
+            if lead.startswith('Dry-end waste'):
                 return k['reject_sqft'] / (k['gross_sqft'] - k['trim_sqft'] - k['shear_sqft']) * 100, False
-            if section.lstrip('- ').startswith('Good output'):
+            if lead.startswith('Good output'):
                 return good_output(rows), False
-            if 'lineal ft' in text or section.lstrip('- ').startswith('Lineal feet'):
+            if 'lineal ft' in text or lead.startswith('Lineal feet'):
                 return k['lineal_ft'], False
         if tool == 'get_shift_notes':
             return len(rows) + len(self.rows(self.also(entry, 'the shift record'))), True
@@ -670,6 +673,48 @@ class Figures:
             return len(rows), True
         raise Unchecked(f'{tool} {part}: no figure check for {section[:80]!r}')
 
+    # ---- "N of M": the other numbers of a count, recomputed too
+    OF = re.compile(r'\*\*[^*]+\*\* of ([\d,]+)\b')
+    RUNS_UNDER = re.compile(r'([\d,]+) of ([\d,]+) wet-end runs under their grade baseline')
+
+    def counts(self, entry, part, index, section, receipt, rows):
+        """[(what, recomputed, printed)] for the numbers beside a figure that count something: the M after a bold N
+        ("**14** of 14", "**1** of 783 shifts since …", "**2,563,521 sq ft** of 2,694,377 gross") and a lever's "43 of 69
+        wet-end runs under their grade baseline". A section with such a number and no rule for it is unchecked."""
+        out = []
+        m = self.OF.search(section)
+        if m:
+            out.append(('of', self._of(entry, index, section, receipt, rows), float(m.group(1).replace(',', ''))))
+        m = self.RUNS_UNDER.search(section)
+        if m:
+            under, total = self._runs_under(entry, rows)
+            out += [('runs under', under, float(m.group(1).replace(',', ''))), ('runs', total, float(m.group(2).replace(',', '')))]
+        return out
+
+    def _of(self, entry, index, section, receipt, rows):
+        if receipt['of'] == 'recurrence':   # the shift records of the trailing year the count covers (record_store._recurrence)
+            flag = entry['data']['flags'][index]
+            span = {k: v for k, v in dp._recurrence_filter(flag).items() if k in ('from', 'to', 'shift')}
+            return len(self.rows(dp.table_url('shifts', span)))
+        if receipt['table'] == 'setups' and ('grade target' in section or 'running speed' in section):
+            return len({r['wet_end_id'] for r in rows})   # the wet-end runs of those setups
+        if receipt['table'] == 'shift_kpis' and len(rows) == 1:
+            if 'trim flag' in section:
+                return rows[0]['setups']
+            if 'Good output' in section:
+                return rows[0]['gross_sqft']
+        raise Unchecked(f'{entry["tool"]}: no check for the M of {section[:80]!r}')
+
+    def _runs_under(self, entry, rows):
+        """A speed lever's wet-end runs (a run's setups on one day, run and grade) under their grade's trailing-year
+        running speed, and all of them."""
+        base, runs = baselines(self.rows(self.also(entry, 'the trailing year'))), {}
+        for r in rows:
+            key = (r['production_date'], r['wet_end_id'], r['quality_id'])
+            feet, run = runs.get(key, (0.0, 0.0))
+            runs[key] = (feet + r['lineal_ft'], run + (r['seconds'] - r['stop_seconds']) / 60)
+        return sum(1 for (_, _, g), (feet, run) in runs.items() if g in base and run and feet / run < base[g]), len(runs)
+
     def check(self, result, i, section):
         receipt = result['receipts'][i]
         m = dp.REF.search(section)
@@ -686,9 +731,17 @@ class Figures:
         text, value, decimals = printed(section)
         if exact is not True and exact is not False:   # the tool rounded to `exact` places and printed more
             decimals, exact = exact, False
-        tolerance = 10 ** -decimals * (0.5 if exact else 1.0) + 1e-6 * abs(value)
+        # A count is exact. A measure may be one unit of its last printed digit off: the tools round their rows' quantities
+        # before they sum or divide them, and the check recomputes from the unrounded rows.
+        tolerance = 10 ** -decimals * (0.5 if exact else 1.0) + 1e-9 * abs(value)
         if want is None or abs(round(want, 6) - value) > tolerance:
             return f'**{text}** but {want!r} over {receipt["url"]} ({entry["tool"]} {part} {index}): {section[:110]!r}'
+        try:
+            for what, want, got in self.counts(entry, part, index, section, receipt, self.rows(receipt['url'])):
+                if abs(want - got) > 0.5:
+                    return f'{what} {got:g} but {want!r} over {receipt["url"]} ({entry["tool"]} {part} {index}): {section[:110]!r}'
+        except Unchecked as exc:
+            return f'unchecked: {exc}'
         return None
 
 
@@ -704,24 +757,48 @@ def golden_urls():
     return sorted({c['expect']['url'] for c in cases if c.get('mode', 'offline') == 'offline' and (c.get('expect') or {}).get('url')}) + list(CORRUPT_URLS)
 
 
-def receipt_failures(store, urls):
-    """(failures, receipts checked, tools seen) over the answers of these addresses."""
+def golden_case_answers():
+    """(case id, answer) of every offline golden case with no address of its own that answers (a question asked by
+    POST, a follow-up's turns, an analyst's scripted plan): run as evals/run.py runs it, receipts attached as the
+    server attaches them. The days it opens are closed again, so later tests do not carry them (CI on #151)."""
+    sys.path.insert(0, str(ROOT / 'evals'))
+    import run as golden_run
+    cases = json.loads((ROOT / 'evals' / 'golden.json').read_text())['cases']
+    opened = set(golden_run._DATASETS)
+    try:
+        for case in cases:
+            if case.get('mode', 'offline') != 'offline' or (case.get('expect') or {}).get('url') or (case.get('expect') or {}).get('raises'):
+                continue
+            for result in golden_run.run_case_detail(case)[4]:
+                if isinstance(result, dict) and isinstance(result.get('sections'), list):
+                    yield case['id'], dp.attach_sources(result, case.get('corrupt', False))
+    finally:
+        for key in set(golden_run._DATASETS) - opened:
+            golden_run._DATASETS.pop(key).close()
+
+
+def receipt_failures(store, urls, answers=()):
+    """(failures, receipts checked, tools seen) over the answers of these addresses, and of these (name, answer) pairs."""
     app, figures = Workbench(store=store), Figures(store)
     failures, checked, tools = [], 0, set()
-    try:
+
+    def answered():
         for url in urls:
             try:
-                result, _ = app.answer_url(url)
+                yield url, app.answer_url(url)[0]
             except ValueError:
                 continue   # a refusal case: no answer, no receipt
-            assert len(result['receipts']) == len(result['sections']), url
+        yield from answers
+    try:
+        for name, result in answered():
+            assert len(result['receipts']) == len(result['sections']), name
             for i, section in enumerate(result['sections']):
                 if not dp.REF.search(section):
-                    assert result['receipts'][i] is None, (url, section)
+                    assert result['receipts'][i] is None, (name, section)
                     continue
                 problem = figures.check(result, i, section)
                 if problem:
-                    failures.append(f'{url}: {problem}')
+                    failures.append(f'{name}: {problem}')
                 checked += 1
                 tools.add(result['trace'][int(dp.REF.search(section).group(1)) - 1]['tool'])
     finally:
@@ -749,6 +826,13 @@ def test_the_five_reproductions_link_to_rows_that_hold_their_figures(store):
         money, _ = app.answer_url('/corr/1/day/2026-09-14?measure=dollars&shifts=1,3')
         day = next(e for e in money['trace'] if e['tool'] == 'get_day_dollars')
         assert day['source']['url'] == '/data/shift_kpis?day=2026-09-14&shift=1,3&corrupt=false'
+        # No section cites the day's total, so it is recomputed here: each lever's quantity from the rows it declares,
+        # priced at the answer's rates, summed over the two shifts (the whole day's three gave about $25k, not $16,774).
+        figures = Figures(store)
+        figures.rates = cost_model.effective()
+        assert {(r['production_date'], r['shift']) for r in figures.rows(day['source']['url'])} == {('2026-09-14', 1), ('2026-09-14', 3)}
+        total = sum(figures.lever_usd(day, j, 'usd') for j, r in enumerate(day['data']['rows']) if not r.get('apart'))
+        assert abs(total - day['data']['total_usd']) < 1, (total, day['data']['total_usd'])
         gap, _ = app.answer_url('/corr/1/day/2026-03-09?measure=speedvar&window=week&against=shift&shifts=3,1')
         assert gap['receipts'][0]['url'] == '/data/shift_kpis?from=2026-03-09&to=2026-03-13&shift=1,3&corrupt=false'
         review, _ = app.answer_url('/corr/1/day/2026-09-11?measure=review')
@@ -758,10 +842,30 @@ def test_the_five_reproductions_link_to_rows_that_hold_their_figures(store):
         app.close()
 
 
+def test_a_label_reads_only_the_bullets_of_its_own_group(store):
+    """A bullet under "The previous window" opens that window's rows; another step's bullets that follow the group with
+    nothing between (shapes.PeriodAnswer appends each step's summary line after the lead's) are about their own window,
+    whatever label is above them (the reviewer on #151)."""
+    app = Workbench(store=store)
+    try:
+        review, _ = app.answer_url('/corr/1/day/2026-09-11?measure=review')
+        kpis, _ = app.answer_url('/corr/1/day/2026-09-11?measure=kpis')
+    finally:
+        app.close()
+    at = review['sections'].index('The previous window')
+    n, line = len(review['trace']) + 1, dp.REF.sub('', kpis['sections'][0])   # "**7,425.2 MSF** · +356.2 vs 7,069.0 MSF, better"
+    composed = {'production_day': '2026-09-11', 'trace': [*review['trace'], kpis['trace'][0]],
+                'sections': [*review['sections'][:at + 2], f'- All shifts: {line} (query {n} · row 0)', f'- All shifts: {line} (query {n})']}
+    got = dp.receipts(composed)
+    assert got[at + 1]['of'] == 'previous window' and 'day=2026-09-10' in got[at + 1]['url'], got[at + 1]
+    assert [r['of'] for r in got[-2:]] == ['row', 'result'] and all('day=2026-09-11' in r['url'] for r in got[-2:]), got[-2:]
+
+
 def test_receipts_on_golden_answers_link_to_rows_that_hold_the_bold_figure(store):
-    """Every section of every offline golden answer that cites a step: its receipt opens rows, and the section's bold
-    figure, recomputed from those rows with the receipt's filter, is the figure printed."""
-    failures, checked, tools = receipt_failures(store, golden_urls())
+    """Every section of every offline golden answer that cites a step, by its address or not: its receipt opens rows, and
+    the section's bold figure, recomputed from those rows with the receipt's filter, is the figure printed; so are the
+    other numbers of a count ("N of M")."""
+    failures, checked, tools = receipt_failures(store, golden_urls(), golden_case_answers())
     assert not failures, f'{len(failures)} of {checked}:\n' + '\n'.join(failures[:25])
     assert checked > 1000 and len(tools) >= 20, (checked, sorted(tools))
 
@@ -879,6 +983,19 @@ def test_the_ui_data_fixtures_are_the_servers_answers(store):
     assert json.loads((FIXTURES / 'data_stops.json').read_text()) == page, f'refresh with: {DATA_REFRESH}'
     why_slow = json.loads((FIXTURES / 'why_slow.json').read_text())
     assert [e.get('source', {}).get('table') for e in why_slow['trace']] == ['shift_kpis', 'stops', 'setups', 'stops', None, None]
+    # the shift summary (a receipt per section that is not its step's) and a lens's levers (re-ranked at a visitor's rates)
+    app = Workbench(store=store)
+    try:
+        for name in ('summary', 'money_supervisor'):
+            saved = json.loads((FIXTURES / f'{name}.json').read_text())
+            fresh = json.loads(json.dumps(app.answer_url(saved['url'])[0]))
+            refresh = (f"INVESTIGATOR_AS_OF=2026-09-30 python3 -c \"import json;from investigator.server import Workbench;"
+                       f"r,_=Workbench().answer_url('{saved['url']}');r.pop('report_markdown',None);"
+                       f"json.dump(r,open('tests/ui_fixtures/{name}.json','w'),separators=(',',':'),sort_keys=True)\"")
+            assert (saved['sections'], saved['receipts']) == (fresh['sections'], fresh['receipts']), f'refresh with: {refresh}'
+            assert [e.get('source') for e in saved['trace']] == [e.get('source') for e in fresh['trace']], f'refresh with: {refresh}'
+    finally:
+        app.close()
 
 
 def test_the_docs_renderer_anchors_a_column_table_and_nothing_else():

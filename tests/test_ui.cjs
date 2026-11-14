@@ -1468,6 +1468,18 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    assert.ok(at.every((x,i)=>x>=0&&(!i||at[i-1]<x)),'every controllable lever, numbered and in rank order, across the label');
    for(const r of rest){ assert.ok(prose.includes(`${r.lever}: ${Money.money(r.usd_per_year)}/yr`),r.lever); assert.ok(!new RegExp(`\\d+\\. ${r.lever.replace(/[()]/g,'\\$&')}`).test(prose),`${r.lever} is listed unranked`); }
    assert.ok(bars.slice(-rest.length).every((bar,i)=>opens(bar,rest[i].lever)),'the panel puts the schedule-driven levers last: '+bars.join(' | '));
+   // every lever line links to its own lever's rows at these rates, wherever the re-ranking put it (#151 review): the
+   // server's receipt for the line that sat in that place opens another lever's rows
+   const served=lensed.trace.find(e=>e.tool==='get_opportunities'), shown=vm.runInContext('viewOf(thread.find(r=>r.id===openId)).sections',ctx);
+   let linked=0, elsewhere=0;
+   for(const li of walk(els.messages).filter(e=>e.tag==='li'&&(e.children||[]).some(c=>c.className==='rows-link'))){
+    const text=li.children.map(textOf).join(''), j=data.rows.findIndex(r=>text.replace(/^\d+\. /,'').startsWith(r.lever+':')); if(j<0)continue;
+    const href=li.children.find(c=>c.className==='rows-link').href; assert.equal(href,served.source.rows.row[j],`${text.slice(0,70)}: its own lever's rows`); linked++;
+    const at=shown.findIndex(x=>x.startsWith('- ')&&x.slice(2).replace(/\*\*([^*]+)\*\*/g,'$1')===text);
+    if(at>=0&&lensed.receipts[at]&&lensed.receipts[at].url!==href)elsewhere++;
+   }
+   assert.equal(linked,data.rows.length,'every lever line has its rows link');
+   assert.ok(elsewhere>=3,`the re-ranked lines that a receipt by position would send to another lever's rows: ${elsewhere}`);
   }else{
    assert.equal(rows[0].lever,'Side trim (all recorded)'); assert.equal(rows[0].rank,1);
    assert.ok(rows[0].usd_per_year<rows[1].usd_per_year,'side trim is no longer the largest at these rates, and stays first');
@@ -1785,6 +1797,15 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  p=await load('/data/stops','?reason=Stacker&reason=Missed%20splice',{...page,filters:{reason:['Missed splice','Stacker']},url:'/data/stops?reason=Missed%20splice&reason=Stacker'});
  const listChips=walkAll(p.els['data-body'].children[1]).filter(e=>e.className==='chip');
  assert.deepEqual(listChips.map(c=>[c.children[0].textContent,c.children[1].href]),[['reason = Missed splice','/data/stops?reason=Stacker'],['reason = Stacker','/data/stops?reason=Missed%20splice']]);
+ // a page filtered to a list of shifts (where a day's money over two shifts lands): its links keep the list as one
+ // parameter, as the server writes it, and × drops one shift
+ p=await load('/data/stops','?day=2026-09-14&shift=3,1',{...page,filters:{day:'2026-09-14',shift:[1,3]},url:'/data/stops?day=2026-09-14&shift=1,3'});
+ const shiftChips=walkAll(p.els['data-body'].children[1]).filter(e=>e.className==='chip');
+ assert.deepEqual(shiftChips.map(c=>[c.children[0].textContent,c.children[1].href]),[['day = 2026-09-14','/data/stops?shift=1,3'],['shift = 1','/data/stops?day=2026-09-14&shift=3'],['shift = 3','/data/stops?day=2026-09-14&shift=1']]);
+ const shiftGrid=walkAll(p.els['data-body'].children[1]).find(e=>e.tag==='table');
+ assert.equal(shiftGrid.children[1].children[0].children[col('reason')].children[0].href,`/data/stops?day=2026-09-14&shift=1,3&reason=${encodeURIComponent(page.rows[0].reason)}`);
+ const shiftForm=walkAll(p.els['data-body'].children[1]).find(e=>e.tag==='form');shiftForm.children[0].value='shift';shiftForm.children[1].value='3,2';shiftForm.events.submit({preventDefault(){}});
+ assert.deepEqual(p.assigned,['/data/stops?day=2026-09-14&shift=2,3']);
  // a refused address shows the server's reason
  p=await load('/data/stops','?shift=9',{error:'shift is 1, 2 or 3'},400);
  assert.equal(walkAll(p.els['data-body']).find(e=>e.className==='warning-note').textContent,'shift is 1, 2 or 3');
@@ -1804,6 +1825,16 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(link.target,'_blank');assert.equal(link.rel,'noopener');assert.equal(link.textContent,'');   // no text of its own: the card still reads the answer word for word
  assert.equal(textOf(bullet),whySlow.sections.find(s=>s.startsWith('- ')).slice(2).replace(/\*\*([^*]+)\*\*/g,'$1'));
  const head=msg.children.find(e=>e.className==='headline');assert.equal(head.children.find(e=>e.className==='rows-link').href,'/data/shift_kpis?day=2026-09-14&shift=2&corrupt=false');
+ // the server's receipt for a section wins over its step's rows (#151 review): the shift summary's "Other" line opens that
+ // reason's stops, its reject line the family's dry-end lines, its runs line the shift's setups, not the KPI row the step read
+ const summary=JSON.parse(fs.readFileSync('tests/ui_fixtures/summary.json','utf8')), lead=summary.trace[0].source.rows.row[0];
+ const summaryLinks=result=>{ ctx.__sum={scope:{day:'2026-09-14',shift:2,scope:'shift',period:'day'},corrupt:false,result}; vm.runInContext(`message('',__sum.result.sections,'',__sum)`,ctx);
+  const card=els.messages.children[els.messages.children.length-1]; return card.children.find(e=>e.tag==='ul').children.map(li=>[textOf(li).split(':')[0],li.children.find(e=>e.className==='rows-link').href]); };
+ assert.deepEqual(summaryLinks(summary),[['Other','/data/stops?day=2026-09-14&shift=2&reason=Other'],['WARP','/data/rejects?day=2026-09-14&shift=2&family=WARP&counted_in=dry_end'],
+  ['Wet-end runs below their grade target','/data/setups?day=2026-09-14&shift=2'],['Downtime',lead],['Dry-end waste',lead],['Good output',lead]]);
+ assert.equal(lead,'/data/shift_kpis?day=2026-09-14&shift=2&corrupt=false');
+ // receipts that do not line up with the sections are not used: each line falls back to the rows its step read
+ assert.ok(summaryLinks({...summary,receipts:summary.receipts.slice(1)}).every(([,href])=>href===lead));
  // a step without rows of its own (render_chart) or without a declaration gets no link; a link outside /data is never drawn
  assert.equal(vm.runInContext(`rowsHref({url:'https://evil.example/x'})`,ctx),null);assert.equal(vm.runInContext('rowsHref(null)',ctx),null);
  assert.equal(vm.runInContext(`rowsHref({url:'/data/stops',rows:{row:['/data/stops?reason=Other']}},'row',0)`,ctx),'/data/stops?reason=Other');
@@ -1813,5 +1844,5 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.deepEqual(foot.children.filter(e=>/rows-step/.test(e.className)).map(a=>[a.textContent,a.href]),[['Rows: stops ↗','/data/stops?day=2026-09-14&shift=2']]);
  const notesFoot=els.queries.children.find(e=>e.id==='query-3').children.find(e=>e.className==='query-foot');   // the notes also read the shift record
  assert.deepEqual(notesFoot.children.filter(e=>/rows-step/.test(e.className)).map(a=>[a.textContent,a.href]),[['Rows: stops ↗','/data/stops?day=2026-09-14&shift=2'],['Also: shifts ↗','/data/shifts?day=2026-09-14&shift=2']]);
- console.log('UI issue-142 checks passed: /data lists the tables, a table page shows its schema with contract links, then its rows newest first with filters from the address (a day replaces a span, a repeated filter is any of its values), and its query, and a receipt links to the rows behind its figure.');
+ console.log('UI issue-142 checks passed: /data lists the tables, a table page shows its schema with contract links, then its rows newest first with filters from the address (a day replaces a span, a repeated filter is any of its values), and its query; a list of shifts stays one parameter; a receipt links to the rows behind its own figure, the server receipt per section when it lines up, and a repriced lever line to the rows of its own lever.');
 })().catch(error=>{console.error(error);process.exit(1);});

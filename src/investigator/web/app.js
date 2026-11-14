@@ -42,16 +42,35 @@ function rowsHref(src,part=null,index=null){
  return typeof url==='string'&&/^\/data\/[a-z_]+(\?|$)/.test(url)?url:null;
 }
 function rowsLink(href,label='The rows behind this figure, in the data browser'){ const a=node('a',undefined,'rows-link'); a.href=href; a.setAttribute('target','_blank'); a.setAttribute('rel','noopener'); a.setAttribute('aria-label',label); a.title=label; return a; }
-// One section's inline content: text spans, the bold figure, the trailing evidence link and the link to its rows.
-// `headline` puts what follows the figure in the secondary ink; `receipt` is the server's address of the rows behind this
-// section's own figure (result.receipts, #151 review), else `trace`, whose steps name the rows they read.
-function shapedInline(text,headline=false,trace=null,receipt=null){
+// The rows behind paragraph i of a card (#151 review). A section the card shows as the server wrote it, in its place,
+// takes the server's own receipt for it (result.receipts: the rows that hold its bold figure). A line the visitor's rates
+// rewrote (Money.repriceSections re-ranks a money tool's lines and renumbers "row N" to the re-ranked rows) takes the
+// rows of the row it now cites, mapped back to the server's order through the re-priced result's byIndex; a line the
+// rates only moved keeps the receipt of the server's line with the same text. Otherwise the cited step's rows.
+function receiptHref(rec,p,i){
+ const r=rec&&rec.result; if(!r||typeof p!=='string')return null;
+ const sections=Array.isArray(r.sections)?r.sections:[], receipts=Array.isArray(r.receipts)&&r.receipts.length===sections.length?r.receipts:null;
+ if(receipts&&sections[i]===p)return rowsHref(receipts[i]);
+ const ref=SHAPE_REF.exec(p), trace=Array.isArray(r.trace)?r.trace:null, n=ref?Number(ref[1]):0, step=trace&&trace[n-1];
+ if(!ref||!step)return null;
+ const view=rec.view&&rec.view.repriced&&rec.view.of===r&&rec.view.result, now=view&&Array.isArray(view.trace)?view.trace[n-1]:null, data=now&&now.data;
+ let index=ref[3]===undefined?null:Number(ref[3]);
+ if(index!==null&&ref[2]==='row'&&data&&Array.isArray(data.byIndex)&&Array.isArray(data.rows)){
+  index=data.byIndex.indexOf(data.rows[index]); if(index<0)return null;   // the re-ranked row's place in the server's rows
+  return rowsHref(step.source,'row',index);
+ }
+ const same=sections.indexOf(p);
+ if(receipts&&same>=0&&sections.lastIndexOf(p)===same)return rowsHref(receipts[same]);
+ return rowsHref(step.source,ref[2]||null,index);
+}
+// One section's inline content: text spans, the bold figure, the trailing evidence link and the link to its rows
+// (`href`, receiptHref). `headline` puts what follows the figure in the secondary ink.
+function shapedInline(text,headline=false,href=null){
  const out=[], ref=SHAPE_REF.exec(text); let rest=ref?text.slice(0,ref.index):text, last=0, after=false;
  for(const m of rest.matchAll(/\*\*([^*]+)\*\*/g)){ if(m.index>last)out.push(node('span',rest.slice(last,m.index))); out.push(node('strong',m[1],'figure')); last=m.index+m[0].length; after=true; }
  if(last<rest.length)out.push(node('span',rest.slice(last),headline&&after?'clause':undefined));
  if(ref){
   out.push(node('span',' ')); out.push(refLink(ref[0].trim(),Number(ref[1])));
-  const step=Array.isArray(trace)?trace[Number(ref[1])-1]:null, href=rowsHref(receipt)||rowsHref(step&&step.source,ref[2]||null,ref[3]===undefined?null:Number(ref[3]));
   if(href)out.push(rowsLink(href));
  }
  return out;
@@ -95,8 +114,6 @@ function lookItem(text,rec){
 const STAYS=/data incomplete|withheld|unavailable/i;
 function message(label, paragraphs, cls='', rec=null) {
  const e=node('div',undefined,'message '+cls);if(label)e.append(node('strong',label));
- const trace=rec&&rec.result&&Array.isArray(rec.result.trace)?rec.result.trace:null;   // the receipts' rows (#142)
- const receipts=rec&&rec.result&&Array.isArray(rec.result.receipts)&&rec.result.receipts.length===paragraphs.length?rec.result.receipts:[];   // per section (#151)
  let notes=null, list=null, look=null, headline=false; // consecutive shift-note lines fold into one disclosure instead of a dump
  const lists=[], groups=[], context=[], looks=[];
  paragraphs.forEach((p,i)=>{
@@ -106,10 +123,10 @@ function message(label, paragraphs, cls='', rec=null) {
   if(p===LOOK_LABEL&&next&&next.startsWith('- ')){ list=null; look=node('ul',undefined,'look-list'); return; }   // where to look: under the charts
   if(look&&p.startsWith('- ')){ look.append(lookItem(p.slice(2),rec)); if(!looks.includes(look))looks.push(look); return; }
   look=null;
-  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2),false,trace,receipts[i]));list.append(li); return; }
+  if(p.startsWith('- ')){ if(!list){list=node('ul',undefined,'findings');e.append(list);lists.push(list);} const li=node('li');li.append(...shapedInline(p.slice(2),false,receiptHref(rec,p,i)));list.append(li); return; }
   list=null;
   if(shapeLabel(p,next)){ e.append(node('p',p,'label')); return; }
-  if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true,trace,receipts[i])); e.append(h); return; }
+  if(!headline&&p.includes('**')){ headline=true; const h=node('p',undefined,'headline'); h.append(...shapedInline(p,true,receiptHref(rec,p,i))); e.append(h); return; }
   if(lists.length&&!STAYS.test(p)){ context.push(node('p',p,'context-line')); return; }
   e.append(node('p',p));
  });

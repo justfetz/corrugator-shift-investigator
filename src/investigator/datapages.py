@@ -988,11 +988,14 @@ def _is_label(section):
 
 def receipts(result, corrupt=False):
     """One receipt per section of an answer, in section order: None for a section that cites no step. A bullet is read
-    with the label above it, so a finding under "The previous window" opens that window's rows."""
-    trace, day, out, label = result.get('trace') or [], result.get('production_day'), [], ''
+    with the label above it, so a finding under "The previous window" opens that window's rows; but only a bullet of the
+    label's own group: one citing the whole result of the step the lines above the label cite. Another step's bullets can
+    follow a group with nothing between (shapes.PeriodAnswer appends them), and they are not about its window (#151)."""
+    trace, day, out = result.get('trace') or [], result.get('production_day'), []
+    label, label_step, last_step = '', 0, 0
     for section in result.get('sections') or []:
         if _is_label(section):
-            label = section
+            label, label_step = section, last_step
         elif not (isinstance(section, str) and section.startswith('- ')):
             label = ''
         m = REF.search(section) if isinstance(section, str) else None
@@ -1000,8 +1003,10 @@ def receipts(result, corrupt=False):
         if not m or not 1 <= step <= len(trace):
             out.append(None)
             continue
-        context = f'{label}: {section}' if label and section.startswith('- ') else section
+        group = label and section.startswith('- ') and step == label_step and not m.group(2)
+        context = f'{label}: {section}' if group else section
         out.append(receipt(trace[step - 1], m.group(2), int(m.group(3)) if m.group(3) else None, context, day, corrupt))
+        last_step = step
     return out
 
 
