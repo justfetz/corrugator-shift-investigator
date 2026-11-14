@@ -257,12 +257,31 @@ def _consume(pattern, text, used, role, flags=0):
     return (re.sub(pattern, ' | ', text, flags=flags) if found else text), found
 
 
+_READINGS = {}
+READINGS_KEPT = 256   # one question is read up to five times while question_scope probes its scope: read once per scope
+
+
 def read(text, context, store=None, mdl=None, strict=False):
-    """The reading of `text` in `context` (agent.Context, after agent.question_scope moved it): a Reading. It never raises
-    for a question; a defect of the parser itself leaves the reading empty (the hand router answers), unless `strict` (tests)."""
+    """The reading of `text` in `context` (agent.Context, after agent.question_scope moved it): a Reading, which callers treat
+    as read-only (it is kept for the same question in the same scope). It never raises for a question; a defect of the parser
+    itself leaves the reading empty (the hand router answers), unless `strict` (tests)."""
+    store = store if store is not None else _default_store()
+    key = (text, context.production_day, context.shift, context.scope, getattr(context, 'period', 'day'),
+           ((getattr(context, 'read', None) or {}).get('words'), (getattr(context, 'read', None) or {}).get('period')),   # all it reads of `read`
+           id(store), getattr(store, 'content_hash', None), id(mdl), strict)
+    if key in _READINGS:
+        return _READINGS[key]
+    reading = _read_once(text, context, store, mdl, strict)
+    if len(_READINGS) >= READINGS_KEPT:
+        _READINGS.clear()
+    _READINGS[key] = reading
+    return reading
+
+
+def _read_once(text, context, store, mdl, strict):
     reading = Reading(question=text)
     try:
-        _read(reading, text, context, store if store is not None else _default_store(), mdl or semantic.model())
+        _read(reading, text, context, store, mdl or semantic.model())
     except Refused as exc:
         reading.refusal, reading.suggestions, reading.query = exc.text, exc.suggestions, None
     except semantic.SemanticError as exc:
@@ -369,7 +388,7 @@ def _entries(item, kind):
     return [e for e in item.entries if e[0] == kind]
 
 
-def _prev(items, i, skip=('the', 'a', 'an', 'our', 'each', 'every', 'per', 'by', 'of', 'all')):
+def _prev(items, i):
     """The item before i, skipping articles."""
     j = i - 1
     while j >= 0 and items[j].kind == 'filler' and items[j].words in ('the', 'a', 'an', 'our', 'its', 'their'):

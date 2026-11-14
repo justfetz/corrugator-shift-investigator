@@ -246,7 +246,6 @@ def test_every_generated_question_uses_every_content_word_or_is_refused(store):
 
 def test_a_sample_of_generated_answers_reads_as_it_was_asked_on_the_card(store):
     """On the card: the Read as line names the measure, each split and each filter; the headline leads with the measure."""
-    model = S.model()
     for question, measure, dim, value in generated(store)[::23]:
         r = reading(store, question)
         if not r.complete:
