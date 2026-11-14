@@ -46,12 +46,12 @@ outside the clock). Failures are prefixed `URL:`; the table's note carries `URL 
 summary prints the server p50 and p95 over GET. Value cases have no question and are not sent; a
 live row checks only that its question resolves to its `expect.url`.
 
-A case may ask by its address instead of a question (issue #117: the `measure=semantic` cases, which no question
-routes to until phase 2 wires the router to the semantic model). Its `url` is the input: in process the runner
+A case may ask by its address instead of a question (issue #117: the `measure=semantic` cases; since issue #144 a question
+the semantic model's parser reads completely routes there too, and its case records that address as `expect.url`). Its `url` is the input: in process the runner
 resolves it with `urls.resolve_url` against the golden year and answers it with the agent, exactly as the server
 answers `GET /corr/…`; over GET it fetches the address itself, which must answer, or, when it is a hand-typed spelling,
 redirect to `expect.url` and answer there. Everything else (the invariants, the expectations, the shape, a refusal's
-text) is scored as for a question; only these cases and the value cases that call it may run `semantic_query`, so a model that names the compiler anywhere else still fails the unknown-tool invariant. The value cases include the semantic model's new combinations of measure, split
+text) is scored as for a question; only these cases, the value cases that call it and the offline answers of questions may run `semantic_query`, so a model planner that names the compiler still fails the unknown-tool invariant. The value cases include the semantic model's new combinations of measure, split
 and filter (`value-semantic-*`), computed by hand from the record families like every other value case.
 
 A question that names its own shift or a relative window (issue #105: "How much donwtime on 1st shift last
@@ -92,7 +92,9 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   of each production day) is never answered for the selected shift when the question names no shift. Nor is any number
   (the review, the Pareto, the waste breakdown, the totals by grade, rollstock, the over/under-run, a window's speed) unless
   the question mentions a shift or asks why, what caused or drove it, or where it came from (the owner's scope ruling of
-  2026-11-13; a production day's per-shift answers keep the shift control).
+  2026-11-13; a production day's per-shift answers keep the shift control), and the selected shift's downtime breakdown
+  (`/shift/N?measure=downtime` with no split or filter) never answers a downtime question that names no shift, no day, no
+  dollars and investigates nothing (the review of PR #155: "stops" and "most common downtime reason").
   The allow-list states the general rule on the URL (round 6 of the review of PR 143): a `measure=quantity` or
   `measure=stops` URL answers only a question whose every word it consumes: the ask words, the measure's noun and unit
   (`metric=`), the words of `reason=`, `place=`, `waste=` or `grade=` and the connector before them, the window, a window
@@ -115,7 +117,17 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   per stop" wants minutes per stop), and a duration asked with none named is minutes ("how long are we down per stop").
   "Stops per day" and "downtime per day" are the stops or minutes of each production day, not a ratio. An average or
   typical stop wants minutes per stop, an average of a total or of a setup's length a ratio, a run length feet per setup,
-  feet a minute the speed, and the longest or shortest of anything says so: an answer of the window's total fails each.
+  feet a minute the speed, and the longest or shortest of anything says so: an answer of the window's total fails each
+  ("minimum stops in a day" may say so as the day ranked fewest, issue #144).
+- **a ranking is true over the rows it names** (issue #144, the reviews of PR #155): a semantic headline that says `X had the
+  most …` (fewest, least, highest, lowest; `was the largest share`) fails when a row it does not name as left out (`, leaving
+  out Planned maintenance and Power outage`) ties X (a tie named as one winner) or beats it (a fewest that is not the fewest;
+  "the unplanned" that leaves a power outage unnamed), and `X and Y tied for …` fails when a tied row is neither named nor
+  covered by "and others". Two values compared (`X had more … than Y`) fail when the line cites another row than X or Y's value
+  is the larger, `X and Y had the same …` when they differ. A tied, compared or left-out line may name those rows' labels beside
+  the row it cites.
+- **`asked_sections_match`** holds patterns only the question's own answer must match, never its address's: a question that
+  moved the window says "last week" on its card, while its address, whose controls sit on that week, says "this week".
 
 `tests/test_quantity_questions.py` runs both over the issue's catch-all audit as well: the issue's seven rows, the owner's
 interview phrasings and every count or unit phrasing that landed on the KPI summary before; each lands on a measure that

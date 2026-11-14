@@ -15,9 +15,10 @@ Every number a result carries is computed by DuckDB from the store; this module 
 (the answer shape formats them). A dollar figure is a DuckDB quantity priced once by `cost_model.price`, the
 same call the tools make, at the named, assumed rates.
 
-Phase 1 is additive: the offline router does not read the model yet (phase 2 wires it, after #144), and the
-analyst's tool list does not include `semantic_query`. The URL `measure=semantic&m=…&by=…&<dimension>=…`
-(urls.py, docs/URLS.md) reaches it, and `/docs/semantic-model` is rendered from the model file.
+Phase 2 (issue #144): the offline router reads a question into a SemanticQuery with semantic_parse.py, from this
+file's words, and answers it here; the analyst's tool list still does not include `semantic_query`. The URL
+`measure=semantic&m=…&by=…&<dimension>=…` (urls.py, docs/URLS.md) reaches it, and `/docs/semantic-model` is rendered
+from the model file.
 """
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
@@ -455,7 +456,9 @@ class SemanticQuery:
     YYYY-MM-DD}; `shift` 1-3 or None for all shifts (a `shift` filter is the same thing); `compare` None or
     'previous' (the previous window of the same kind beside every row); `order` value (largest first),
     value_asc or dimension (the dimension's own order; the default for a time, shift or lane dimension);
-    `limit` the rows returned, 1-MAX_LIMIT (the total is always over every row)."""
+    `limit` the rows returned, 1-MAX_LIMIT (the total is always over every row); `share` None or one value of the
+    single group_by dimension whose row is returned whatever the limit, a zero row when it has no records (the review
+    of PR #155: the share of a value is that value's row, never the total)."""
     measure: str
     group_by: list = field(default_factory=list)
     filters: dict = field(default_factory=dict)
@@ -464,17 +467,21 @@ class SemanticQuery:
     order: str = None
     limit: int = DEFAULT_LIMIT
     shift: int = None
+    share: object = None
 
     def to_arguments(self):
-        """The tool call's arguments: plain JSON, in a fixed order (a plan and a trace carry them)."""
-        return {'measure': self.measure, 'window': dict(self.window) if self.window else None, 'group_by': list(self.group_by),
-                'filters': dict(self.filters), 'shift': self.shift, 'compare': self.compare, 'order': self.order, 'limit': self.limit}
+        """The tool call's arguments: plain JSON, in a fixed order (a plan and a trace carry them); `share` only when set."""
+        out = {'measure': self.measure, 'window': dict(self.window) if self.window else None, 'group_by': list(self.group_by),
+               'filters': dict(self.filters), 'shift': self.shift, 'compare': self.compare, 'order': self.order, 'limit': self.limit}
+        if self.share is not None:
+            out['share'] = self.share
+        return out
 
     @classmethod
     def from_arguments(cls, arguments):
         if not isinstance(arguments, dict):
-            raise SemanticError('A semantic query is an object: measure, window, group_by, filters, shift, compare, order, limit')
-        unknown = set(arguments) - {'measure', 'window', 'group_by', 'filters', 'shift', 'compare', 'order', 'limit'}
+            raise SemanticError('A semantic query is an object: measure, window, group_by, filters, shift, compare, order, limit, share')
+        unknown = set(arguments) - {'measure', 'window', 'group_by', 'filters', 'shift', 'compare', 'order', 'limit', 'share'}
         if unknown:
             raise SemanticError(f'Unknown semantic query fields: {", ".join(sorted(unknown))}')
         values = {k: arguments[k] for k in arguments if arguments[k] is not None or k in ('compare', 'order', 'shift', 'window')}
@@ -621,8 +628,21 @@ def validate(query, store=None, mdl=None):
     limit = query.limit
     if type(limit) is not int or not 1 <= limit <= MAX_LIMIT:
         raise SemanticError(f'limit is a whole number of rows from 1 to {MAX_LIMIT}')
+    share = query.share
+    if share is not None:
+        # the share of one value: the row of that value in a split of an additive quantity, whose share DuckDB computes
+        # against the split's total
+        if len(by) != 1 or mdl.dimensions[by[0]]['type'] == 'time':
+            raise SemanticError('share names one value of the one dimension the query is split by (not a time dimension)')
+        if mdl.measures[measure]['agg'] not in ADDITIVE:
+            raise SemanticError(f'{mdl.measures[measure]["label"]} ({measure}) is not a sum or a count, so it has no share of a total')
+        if compare is not None:
+            raise SemanticError('share and compare=prev are asked one at a time')
+        if by[0] in filters:
+            raise SemanticError(f'share names a value of {by[0]}, which is also a filter: the share of a value within itself is all of it')
+        share = resolve_value(by[0], share, store, mdl) if store is not None else share
     return SemanticQuery(measure=measure, group_by=by, filters=filters, window={'period': query.window['period'], 'anchor': query.window['anchor']},
-                         compare=compare, order=order, limit=limit, shift=shift)
+                         compare=compare, order=order, limit=limit, shift=shift, share=share)
 
 
 WORDS = {1: 'one', 2: 'two', 3: 'three'}
@@ -919,7 +939,7 @@ def _aggregate(mdl, name, alias='b', entity_name=None):
 class Compiled:
     """The statements one validated query runs, in order, and how to read their rows."""
 
-    def __init__(self, query, mdl):
+    def __init__(self, query, mdl, zero_fill=False):
         self.query, self.mdl = query, mdl
         self.measure = mdl.measures[query.measure]
         _, _, start, end = _window_bounds(query.window)
@@ -928,9 +948,17 @@ class Compiled:
         if query.compare == 'previous':
             from .record_store import previous_window
             self.previous = previous_window(query.window['period'], start, end)
+        self.zero_fill = zero_fill and _fills_zeros(mdl, query)
         self.statements = []
         if query.group_by:
             self.statements.append(Statement('groups', *self._sql(query.group_by, grouped=True)))
+        if query.share is not None:
+            # the asked value's row whatever the limit, and a zero row when it has no records: DuckDB reads the share of a
+            # value from the whole split, never from the rows listed
+            body, params = self._body(query.group_by, self.window, grouped=True)
+            sql = ('SELECT ? AS d0, coalesce(t.value, 0) AS value, coalesce(t.share_pct, 0) AS share_pct, coalesce(t.source_count, 0) '
+                   f'AS source_count, t.source_ids AS source_ids FROM (SELECT 1) one LEFT JOIN ({body}) t ON t.d0 IS NOT DISTINCT FROM ?')
+            self.statements.append(Statement('share', sql, [query.share] + params + [query.share]))
         self.statements.append(Statement('total', *self._sql([], grouped=False)))
         if self.measure['agg'] == 'priced':
             for basis in PRICE_BASIS:
@@ -945,7 +973,25 @@ class Compiled:
         share = ', value / nullif(sum(value) OVER (), 0) * 100 AS share_pct' if grouped and m['agg'] in ADDITIVE else ''
         inner = (f"SELECT {', '.join(cols + [f'{_aggregate(self.mdl, name)} AS value', 'count(*) AS source_count', f'{part.ids()} AS source_ids'])} "
                  f"FROM {part.source()} WHERE {' AND '.join(part.where)}" + (' GROUP BY ALL' if cols else ''))
-        return inner, share, part.bind(*span)
+        params = part.bind(*span)
+        if grouped and self.zero_fill:
+            # a fewest ranking counts the values with no records as recorded zeros (the review of PR #155: a place with no stop
+            # had the fewest stops, never the place with one): each value of the dimension the split did not return is a row
+            # of zero, read from the store (a time dimension's: the window's scheduled days, or weeks or months)
+            values, value_params = self._zero_values(span)
+            inner = (f'SELECT * FROM ({inner}) a UNION ALL BY NAME SELECT v AS d0, 0 AS value, 0 AS source_count, NULL AS source_ids '
+                     f'FROM ({values}) vals WHERE v IS NOT NULL AND v NOT IN (SELECT d0 FROM ({inner}) seen WHERE d0 IS NOT NULL)')
+            params = params + value_params + params
+        return inner, share, params
+
+    def _zero_values(self, span):
+        """(sql listing the values a fewest ranking reads, its parameters): a categorical dimension's every value in the
+        store, a time dimension's buckets of the window's scheduled shifts (under the query's shift)."""
+        dim = self.query.group_by[0]
+        if self.mdl.dimensions[dim]['type'] != 'time':
+            return _value_sql(self.mdl, dim)
+        part = _Part(self.mdl, 'shift', [dim], {}, self.query.shift)
+        return f"SELECT DISTINCT {part.dims[0][1]} AS v FROM {part.source()} WHERE {' AND '.join(part.where)}", part.bind(*span)
 
     def _body(self, dims, span, grouped):
         """The rows of one window: the dimensions d0, d1, the value (a priced measure's quantity), a ratio's numerator
@@ -1027,10 +1073,24 @@ class Compiled:
         return f' ORDER BY value {direction} NULLS LAST, {by_keys}'
 
 
-def compile_query(query, mdl=None):
-    """The statements a validated query runs (`validate` first: compile trusts its names)."""
+def _fills_zeros(mdl, query):
+    """Whether a ranking lists the dimension's values with no records as zeros: a fewest-first split by one dimension of a
+    sum or a count (a ratio of nothing has no value), with no compare, the dimension neither filtered nor one the measure's
+    own filter keeps to (maintenance minutes by stop kind count one kind only: the others are not zeros of it)."""
+    if query.order != 'value_asc' or len(query.group_by) != 1 or query.compare or query.share is not None:
+        return False
+    m, dim = mdl.measures[query.measure], query.group_by[0]
+    if m['agg'] not in ('count', 'sum', 'count_distinct') or dim in query.filters or (dim == 'shift' and query.shift is not None):
+        return False
+    spec = mdl.dimensions[dim]
+    return not any(spec['entity'] in (m['entity'], '*') and spec['expr'] == '{' + column + '}' for column in (m.get('filter') or {}))
+
+
+def compile_query(query, mdl=None, zero_fill=False):
+    """The statements a validated query runs (`validate` first: compile trusts its names); `zero_fill` lets a fewest ranking
+    list the values with no records (`run` passes it for a dimension whose values the store can list)."""
     mdl = mdl or model()
-    return Compiled(query, mdl)
+    return Compiled(query, mdl, zero_fill)
 
 
 # ------------------------------------------------------------------ running
@@ -1110,7 +1170,8 @@ def run(query, store, rates=None, mdl=None):
     mdl = mdl or model()
     started = time.perf_counter()
     query = validate(query, store, mdl)
-    compiled = compile_query(query, mdl)
+    fill = bool(query.group_by) and (mdl.dimensions[query.group_by[0]]['type'] == 'time' or store_values(query.group_by[0], store, mdl) is not None)
+    compiled = compile_query(query, mdl, zero_fill=fill)
     m = compiled.measure
     window = store._window(query.window)
     previous = store._previous(window) if query.compare else None
@@ -1126,7 +1187,9 @@ def run(query, store, rates=None, mdl=None):
     # a previous window outside the dataset is unavailable: its figures are null, never the zero its empty sums read
     available = previous is not None and previous['coverage'] != 'unavailable'
     rows, rows_band_withheld = [], False
-    for r in fetched.get('groups', []):
+
+    def build(r):
+        nonlocal rows_band_withheld
         values = {dim: r[f'd{i}'] for i, dim in enumerate(query.group_by)}
         row = {dim: _plain(v) for dim, v in values.items()}
         row['label'] = ' · '.join(_label(mdl, dim, v) for dim, v in values.items())
@@ -1139,10 +1202,20 @@ def run(query, store, rates=None, mdl=None):
             row['previous_value'] = _previous(mdl, query, r, rates, basis) if available else None
         row['source_count'] = r['source_count']
         row['source_ids'] = list(r['source_ids'] or [])
-        rows.append(row)
+        return row
+
+    rows = [build(r) for r in fetched.get('groups', [])]
     groups = fetched['groups'][0]['groups'] if fetched.get('groups') else 0
     total = _reading(mdl, query, total_row, rates, basis, {}) if total_row else {'value': None}
     _check_adds_up(mdl, query, rows, groups, total)
+    share_row = None
+    if query.share is not None and fetched.get('share') and total_row:
+        dim = query.group_by[0]
+        share_row = next((i for i, row in enumerate(rows) if _same(row[dim], query.share) or row[dim] == query.share), None)
+        if share_row is None:
+            # below the rows listed, or no records at all (a zero row: its share is DuckDB's coalesce to zero)
+            rows.append(build(fetched['share'][0]))
+            share_row = len(rows) - 1
     data = {'tool': TOOL, 'measure': query.measure, 'label': m['label'], 'unit': m['unit'], 'agg': m['agg'],
             'definition': m['description'], 'entity': mdl.measure_entities(query.measure)[0], 'group_by': list(query.group_by),
             'lever': _lever(mdl, query.measure, {}, query.filters),
@@ -1153,6 +1226,8 @@ def run(query, store, rates=None, mdl=None):
             'dataset_version': store.content_hash, 'coverage': window['coverage'] if not previous else
             ('complete' if window['coverage'] == previous['coverage'] == 'complete' else 'unavailable' if window['coverage'] == 'unavailable' else 'partial'),
             'excluded_records': [], 'rows': rows, 'groups': groups, 'rows_shown': len(rows)}
+    if query.share is not None:
+        data['share_row'] = share_row   # the index of the asked value's row (the last when the limit or no records left it out)
     for key in ('value', 'numerator', 'denominator', 'quantity'):
         if key in total:
             data[key] = total[key]
@@ -1361,8 +1436,10 @@ def model_markdown(text=None):
         entity = 'every record' if d['entity'] == '*' else d['entity']
         out.append(f'| `{d["name"]}` | {_cell(d["label"])} | {entity} | {_cell(d["description"])} |')
     out += ['', '## Synonyms', '',
-            'The plant\'s own words for a measure, a dimension or a dimension\'s value. Phase 2 of issue #117 has the offline '
-            'router and the analyst read these instead of word lists of their own.', '',
+            'The plant\'s own words for a measure, a dimension or a dimension\'s value. The offline router reads a question with '
+            'these (issue #144, `semantic_parse.py`): a question in the model\'s words, or in these, answers with the measure, '
+            'split and filters it names; a word it cannot place is refused, never dropped. A new kind of question is an entry '
+            'here plus a golden case, never a new router rule.', '',
             '| Word | Means |', '| --- | --- |']
     for m in spec['measures']:
         if m.get('synonyms'):
@@ -1372,6 +1449,26 @@ def model_markdown(text=None):
             out.append(f'| {_cell(", ".join(d["synonyms"]))} | dimension `{d["name"]}` |')
         for value, words in (d.get('value_synonyms') or {}).items():
             out.append(f'| {_cell(", ".join(words))} | {d["name"]} {_cell(value)} |')
+    from . import semantic_parse   # the parser's closed tables (issue #144); imported here, after this module has loaded
+    out += ['', '## Ranking and statistic words', '',
+            'The one table of words the parser reads that are not the model\'s: they rank, split, compare or ask a share, '
+            'and the statistics the model does not define are refused with questions that answer.', '',
+            '| Words | Read as |', '| --- | --- |',
+            f'| {_cell(", ".join(w for w, r in semantic_parse.RANK.items() if r == "most"))} | ranked, largest first (`rank=most`) |',
+            f'| {_cell(", ".join(w for w, r in semantic_parse.RANK.items() if r == "least"))} | ranked, smallest first (`rank=least`) |',
+            f'| {_cell(", ".join(semantic_parse.SPEED_RANK))} | a speed ranked (speed without stops) |',
+            f'| {_cell(", ".join(semantic_parse.FREQUENCY))} | the count of the records ("most common reason": stops) |',
+            '| which, what (before a dimension), where (a place) | split by that dimension |',
+            f'| {_cell(", ".join(semantic_parse.GROUP))} (before a dimension), daily, weekly, monthly | split by that dimension |',
+            '| top N, bottom N | ranked, the first N rows (`top=N`) |',
+            f'| {_cell(", ".join(semantic_parse.COMPARE))} | two values of one dimension, or a plural dimension: split by it; the window before: `compare=prev` |',
+            '| percent of, share of, proportion of, fraction of, portion of, how much of | the share of a value in the total (`share=`; the '
+            'value after the verb, "were at the stacker", while one beside the measure narrows the whole), or each row\'s share (`share=each`) |',
+            '| per (before a measure) | the ratio the model defines (lineal per setup, minutes per stop, volume per production day), or refused; '
+            'per day of a count of setups or feet, and per order, paper run or customer, are refused: no ratio the records keep |',
+            f'| {_cell(", ".join(semantic_parse.STATISTIC))} | refused (the model keeps sums, counts and ratios of sums), unless part of a model word: '
+            '"average stop" is minutes per stop, "average speed" speed with stops |',
+            f'| {_cell(", ".join(semantic_parse.EVALUATIVE))} | refused: the model holds no direction of better |']
     out += ['', '## Levers of a slice', '',
             'A measure has its lever (the Lever column above): a measure with a band reads it from that band in targets.json '
             'and types no copy, and a measure over the same quantity (the band\'s square feet, minutes or dollars) has the same '

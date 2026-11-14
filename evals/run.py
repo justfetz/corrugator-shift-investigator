@@ -142,8 +142,9 @@ def over_budget(ms, budget, where=''):
     return f'{ms:.0f} ms{where}, budget {allowed:.0f} ms' + (f' ({budget} ms × {scale:g}, {LATENCY_SCALE_ENV})' if scale != 1 else '')
 
 TOOL_NAMES = {s['name'] for s in TOOL_SCHEMAS}
-# the semantic model's compiler (issue #117) is no planner's tool: only a case that asks by its address, or a value case
-# that calls it, may run it, so a model that names it anywhere else still fails the unknown-tool invariant
+# the semantic model's compiler (issue #117) is no model planner's tool: a case that asks by its address, a value case that calls it,
+# or an offline question the router reads into the semantic model (issue #144) may run it, so a model that names it still fails the
+# unknown-tool invariant
 SEMANTIC_TOOL_NAMES = TOOL_NAMES | {semantic.TOOL}
 # Numbers the prose may state that are rules, not measurements (PROCESS_CONTEXT).
 # The stated rules an answer may print beside its figures: 480 scheduled minutes a shift, the 12 minutes a downtime flag
@@ -226,8 +227,11 @@ ASKED_UNITS = (# an average stop is minutes per stop; an average setup or run le
                 r'\bmin(?:utes)?(?: per |/)(?:setup|changeover|paper change|order change|run)\b'),
                # feet a minute is the speed (round 5, item 5)
                (r'\b(?:feet|ft) (?:a|an|per) min(?:ute)?\b', r'\bft/min\b'),
-               (r'\b(?:longest|shortest|maximum|minimum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|'
-                r'order changes?)\b', r'\b(?:longest|shortest|maximum|minimum)\b'),
+               # ... or, in a day ("minimum stops in a day"), the day ranked in the same direction (issue #144: the semantic model's ranking)
+               (r'\b(?:longest|maximum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
+                r'\b(?:longest|maximum)\b|\b(?:had|tied for) the (?:most|highest)\b'),
+               (r'\b(?:shortest|minimum)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
+                r'\b(?:shortest|minimum)\b|\b(?:had|tied for) the (?:fewest|least|lowest)\b'),
                # an average of a count or a total is a ratio, never the total ('average stops this week')
                (r'\b(?:average|avg|mean)\b(?!.*\bper\b)(?=.*\b(?:stops|setups|paper changes|order changes|changeovers|sheets|feet|ft|minutes|mins)\b)',
                 r'(?: per |/)'),
@@ -419,8 +423,37 @@ def plain_quantity_failures(question, url):
 # speed of a window (measure=fpm with window=, or under a ranged grain); a production day's per-shift answers keep the controls.
 SCOPED_NUMBER = (r'/shift/\d\?measure=(?:quantity|stops|review|pareto|waste|grade|rollstock|overrun)(?:&|$)'
                  r'|/(?:week|month|period)/[0-9-]+/shift/\d\?measure=fpm(?:&|$)|/shift/\d\?measure=fpm&(?:.*&)?window=')
+# ... and the day's downtime breakdown (measure=downtime, no split or filter) under one selected shift, for a downtime question that names
+# no shift, no day, no dollars and investigates nothing: the owner's downtime default answers every shift (the review of PR #155: "stops"
+# and "most common downtime reason" answered shift 2's breakdown)
+SCOPED_DOWNTIME = r'/shift/\d\?measure=downtime$'
+SCOPED_DOWNTIME_KEPT = (r'\bshifts?\b|\bcost\w*\b|\bdollars?\b|\$|\bmoney\b|\bpriced\b|\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b'
+                        r'|\b(?:this|that|the|selected|chosen)\s+(?:selected\s+|chosen\s+|same\s+)?(?:production\s+)?day\b')
 INVESTIGATION = (r'\bwhy\b|\bwhat\s+(?:caused|causes|drove|drives|led\s+to|leads\s+to)\b|\bwhat\s*(?:is|was|are|were|\'s)\s+(?:causing|driving|behind)\b'
                  r'|\bcom(?:e|es|ing)\s+from\b|\bwhat\s+went\s+wrong\b')
+
+
+# The semantic model's answers (issue #144), stated on the URL: a question that ranks a dimension ("which shift had the most setups") keeps
+# its ranking in the address (rank=), and a share of one value ("what percent of stops were at the stacker") its value (share=), so the
+# address reproduces a card that names the winner or the share, never an unranked split.
+SEMANTIC_RANKED = (r'\b(?:which|what)\s+(?:shift|crew|grade|day|reason|place|kind|customer|flute|week|month)s?\b.*'
+                   r'\b(?:most|fewest|least|highest|lowest|biggest|smallest|slowest|fastest)\b|\btop\s+\d+\b')
+# ... a percent of the shift or of the scheduled time is a percent of the scheduled minutes, never a share of a split (the review of
+# PR #155: "what percent of the shift was maintenance downtime" is 1.80% of the shift)
+SEMANTIC_SHARE = (r'\b(?:percent(?:age)?|share|proportion|fraction)\s+of\s+(?!(?:the|this|our|my)\s+shift\b|(?:the\s+|our\s+)?scheduled\s+(?:time|minutes)\b)'
+                  r'.*\b(?:were|was|is|are)\b')
+
+
+def semantic_failures(question, url):
+    """A ranked question on measure=semantic without rank=, or a share of one value without share= (issue #144)."""
+    if not re.search(r'[?&]measure=semantic(&|$)', url or ''):
+        return []
+    failures = []
+    if re.search(SEMANTIC_RANKED, question, re.I) and not re.search(r'[?&]rank=(?:most|least)(&|$)', url):
+        failures.append(f'{question[:60]!r} ranks but lands on an unranked split ({url}): the address keeps the ranking (rank=)')
+    if re.search(SEMANTIC_SHARE, question, re.I) and not re.search(r'[?&]share=', url):
+        failures.append(f'{question[:60]!r} asks a share of one value but its address names none ({url}): share=<value>')
+    return failures
 
 
 def catch_all_failures(question, url):
@@ -445,6 +478,10 @@ def catch_all_failures(question, url):
     if re.search(SCOPED_NUMBER, url or '') and not re.search(r'\bshifts?\b', question, re.I) and not re.search(INVESTIGATION, question, re.I):
         failures.append(f'{question[:60]!r} asks for a number and names no shift but is answered for the selected one ({url}): the owner\'s '
                         'scope ruling answers it for every shift')
+    if re.search(SCOPED_DOWNTIME, url or '') and not re.search(SCOPED_DOWNTIME_KEPT, question, re.I) and not re.search(INVESTIGATION, question, re.I):
+        failures.append(f'{question[:60]!r} asks about downtime and names no shift but is answered with the selected shift\'s breakdown ({url}): '
+                        'the owner\'s downtime default answers it for every shift')
+    failures.extend(semantic_failures(question, url))
     if failures:
         return failures
     named = QUANTITY_NOUN.search(question) or ASKED_UNIT.search(question) or re.search(r'\b(how many|number of|count of)\b', question, re.I)
@@ -843,6 +880,12 @@ def unprovenanced(lines, trace):
             record = records[int(index)]
             allowed = set().union(*(renderings(v) for v in record.values() if not isinstance(v, (str, list, dict))))
             names = [v for v in record.values() if isinstance(v, str)]
+            if part == 'row' and ' tied for ' in line:
+                # a tie names every row with the cited row's value (issue #144, the review of PR #155): their labels are tool output too
+                names += [r['label'] for r in records if isinstance(r.get('label'), str) and r.get('value') == record.get('value')]
+            if part == 'row' and (VERSUS_HEAD.match(line) or LEFT_OUT.search(line)):
+                # two values compared name the other row, a ranking of stops the rows it leaves out (the reviews of PR #155)
+                names += [r['label'] for r in records if isinstance(r.get('label'), str)]
         else:
             allowed = renderings(len(rows))
             if rows and 'actual_fpm' in rows[0] and 'target_fpm' in rows[0]:
@@ -860,6 +903,63 @@ def unprovenanced(lines, trace):
         for token in NUMBER.findall(rest):
             if token.rstrip(',') not in beside:
                 bad.append(f'{token!r} on a line citing query {step} {part or "result"} {index} is not from it: {line[:70]!r}')
+    return bad
+
+
+RANKED_HEAD = re.compile(r'^(?P<names>.+?) (?P<verb>had|tied for|was) the (?P<rank>most|fewest|least|highest|lowest|largest share) ')
+LEFT_OUT = re.compile(r', leaving out (?P<left>[^:]+?)(?:, [0-9.]+%)?: \*\*')
+VERSUS_HEAD = re.compile(r'^(?P<a>.+?) had (?P<word>more|a higher) .+? than (?P<rest>.+?): \*\*|^(?P<x>.+?) had the same .+?: \*\*')
+
+
+def ranked_failures(lines, trace):
+    """A ranked headline of the semantic model (issue #144, the reviews of PR #155) is true over every row it does not name as left
+    out: `X had the most ...` (fewest, least, highest, lowest; `was the largest share`) fails when a row it does not leave out (`,
+    leaving out Planned maintenance and Power outage`) has the same value (a tie named as one winner) or a value beyond it (a fewest
+    that is not the fewest: a place with no stops dropped; "the unplanned" leaving a power outage unnamed); `X and Y tied for ...`
+    fails when a tied row is neither named nor covered by "and others". Two values compared (`X had more ... than Y`) fail when Y's
+    value is the larger, `X and Y had the same ...` when the two differ."""
+    bad = []
+    for line in lines:
+        refs = EVIDENCE.findall(line)
+        if line.startswith('- ') or len(refs) != 1 or refs[0][1] != 'row':
+            continue
+        step, _, index = refs[0]
+        source = trace[int(step) - 1] if 0 < int(step) <= len(trace) else None
+        if source is None or not source['ok'] or source['tool'] != semantic.TOOL or 'share_row' in source['data']:
+            continue
+        rows, row = source['data']['rows'], source['data']['rows'][int(index)]
+        versus = VERSUS_HEAD.match(line)
+        if versus:
+            subject = versus['a'] or versus['x'].split(' and ')[0]
+            if row.get('label') != subject:
+                bad.append(f'the comparison in {line[:70]!r} cites {row.get("label")!r}, not the row it names first ({subject!r})')
+                continue
+            named = [r for r in rows if r is not row and r.get('label') and r['label'] in line[len(subject):]]
+            other = max(named, key=lambda r: len(r['label'])) if named else None
+            if other is None or other.get('value') is None or row.get('value') is None:
+                bad.append(f'the comparison in {line[:70]!r} names no second row')
+            elif versus['a'] and not row['value'] > other['value']:
+                bad.append(f'{versus["a"]!r} is said to have {versus["word"]} than {other["label"]!r}, which has {other["value"]!r}: {line[:70]!r}')
+            elif versus['x'] and row['value'] != other['value']:
+                bad.append(f'the two rows in {line[:70]!r} are not the same: {row["value"]!r} and {other["value"]!r}')
+            continue
+        head = RANKED_HEAD.match(line)
+        if not head:
+            continue
+        left = LEFT_OUT.search(line)
+        peers = [r for r in rows if r is not row and r.get('value') is not None and not (left and r.get('label') and r['label'] in left['left'])]
+        most = head['rank'] in ('most', 'highest', 'largest share')
+        beyond = [r for r in peers if (r['value'] > row['value'] if most else r['value'] < row['value'])]
+        if beyond:
+            listed = ', '.join(f'{r["label"]!r} ({r["value"]!r})' for r in beyond[:3])
+            bad.append(f'{head["names"]!r} is named the {head["rank"]} but the line does not leave out {listed}: {line[:70]!r}')
+        tied = [r for r in peers if r['value'] == row['value']]
+        if tied and head['verb'] in ('had', 'was'):
+            bad.append(f'{head["names"]!r} is named alone but {tied[0]["label"]!r} ties it: {line[:70]!r}')
+        elif head['verb'] == 'tied for' and 'and others' not in head['names']:
+            missing = [r['label'] for r in tied if r['label'] not in head['names']]
+            if missing or not tied:
+                bad.append(f'the tie in {line[:70]!r} leaves out {missing or "nothing tied"}')
     return bad
 
 
@@ -927,6 +1027,9 @@ def invariants(mode, result, analysis, allowed_shifts, tools=TOOL_NAMES):
     bad = unprovenanced(result['sections'], trace)
     if bad:
         failures.append('figures not from their cited row: ' + '; '.join(bad[:3]))
+    bad = ranked_failures(result['sections'], trace)
+    if bad:
+        failures.append('a ranking that does not name its extreme or its tie: ' + '; '.join(bad[:3]))
     for paragraph in result.get('narrative', []):
         bad = unfaithful_numbers([paragraph['text']], trace)
         if bad:
@@ -1485,7 +1588,7 @@ def _run_case(case, provider, live, record, scratch):
                 # carries the follow-up history back; one on another day starts its own, as /q drops the priors.
                 # against the golden year's own days (issue #35): the process's default store is the window ending
                 # yesterday, a different calendar, and building it inside the timed turn cost the first case 10 s
-                turn = context if case['type'] == 'value' else question_scope(text, context, golden_store().production_days)
+                turn = context if case['type'] == 'value' else question_scope(text, context, golden_store().production_days, golden_store())
                 results.append(run_turn(make_agent(dataset(turn.production_day, case.get('corrupt', False))), text, turn))
                 if turn is not context and turn.production_day == context.production_day:
                     context.history = turn.history
@@ -1502,6 +1605,7 @@ def _run_case(case, provider, live, record, scratch):
 
     failures = latency_failures(expect, provider, ms)
     failures.extend(score(case, expect, results, analysis, allowed, mode))
+    failures.extend(asked_failures(expect, results[-1]))
     failures.extend(url_failures(case, expect, turns, provider, analysis, allowed))
     last = results[-1]
     if provider and planned:
@@ -1537,7 +1641,8 @@ def score(case, expect, results, analysis, allowed, mode):
     """The invariants over every turn and the case's own expectations over the last (or, for an
     investigation, over all of them): the same scoring for the in-process and the URL answers."""
     failures = []
-    tools = SEMANTIC_TOOL_NAMES if case.get('url') or case.get('tool') == semantic.TOOL else TOOL_NAMES
+    # the offline router reads a question into the semantic model since issue #144 (measure=semantic); a model planner never plans it
+    tools = SEMANTIC_TOOL_NAMES if case.get('url') or case.get('tool') == semantic.TOOL or mode == 'offline' else TOOL_NAMES
     for index, result in enumerate(results):
         failures.extend(invariants(mode, result, *answered_scope(case, expect, result, analysis, allowed, index == len(results) - 1), tools=tools))
     if case['type'] == 'investigation':
@@ -1550,6 +1655,15 @@ def score(case, expect, results, analysis, allowed, mode):
     if mode == 'offline' and case.get('plan') is None and turns[-1]:
         failures.extend(asked_unit_failures(turns[-1], results[-1]['sections']))   # issue #113: the unit asked opens the answer
     return failures
+
+
+def asked_failures(expect, result):
+    """`asked_sections_match`: patterns only the question's own answer must match, never its address's. A question that moved the
+    window ("last week") says so on its card; the address, whose controls sit on that window, says "this week" (the review of PR
+    #155), so `sections_match` accepts both and this pins the question's words."""
+    patterns = expect.get('asked_sections_match') or []
+    return [f'no section of the asked answer matches /{p}/' for p in ([patterns] if isinstance(patterns, str) else patterns)
+            if not any(re.search(p, s, re.I) for s in result['sections'])]
 
 
 def answered_scope(case, expect, result, analysis, allowed, last):

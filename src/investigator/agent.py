@@ -101,7 +101,8 @@ PERIOD_TOOL_SCHEMAS = [
 ]
 PERIOD_TOOLS = {schema["name"] for schema in PERIOD_TOOL_SCHEMAS}
 # The tools that read the whole record store: the period tools and the semantic model's compiler (issue #117). The
-# compiler is reached by its URL (measure=semantic) and is not in TOOL_SCHEMAS, so the analyst cannot plan it yet.
+# compiler is reached by its URL (measure=semantic) and by the offline router's semantic step (issue #144, semantic_parse);
+# it is not in TOOL_SCHEMAS, so the analyst cannot plan it yet.
 STORE_TOOLS = PERIOD_TOOLS | {semantic.TOOL}
 TOOL_SCHEMAS.extend(PERIOD_TOOL_SCHEMAS)
 TOOL_SCHEMAS.append({"name": "render_chart", "description": "Chart a result from this investigation; never supply invented rows.",
@@ -1507,7 +1508,7 @@ def previous_window_day(grain, day, days):
     return next((d for d in days if first <= date.fromisoformat(d) <= last), None)
 
 
-def question_scope(text, current, days):
+def question_scope(text, current, days, store=None):
     """The context a question asks in: `current` itself when its words name nothing the controls do not, else a
     new Context with the shift, production day and period it names and `read` saying what moved (the analyst's
     prompt and the router read it). Follow-up history goes with it while the day is the same. A relative window
@@ -1532,7 +1533,7 @@ def question_scope(text, current, days):
         day, period = moved, grain
         read.update({'words': words, 'day': day, 'period': grain})
     scope = current.scope
-    if downtime_default(text, lower, current, shifts, relative, day, period, read):
+    if downtime_default(text, lower, current, shifts, relative, day, period, read, store):
         # The owner's default for downtime (issue #101), as the owner's scope ruling of 2026-11-13 left it: a downtime question that
         # names no shift is all shifts, whatever the shift control says, on the day it names ("yesterday") or the selected day (the
         # ruling retired #101's previous production day); shift detail only when asked (a named shift) or when a flag pulls one in.
@@ -1540,9 +1541,16 @@ def question_scope(text, current, days):
         scope, period = 'day', 'day'
         read.setdefault('day', day)
         read.setdefault('period', 'day')
-    elif scope == 'shift' and quantity_default(text, lower, current, shifts, day, period, read):
+    elif scope == 'shift' and quantity_default(text, lower, current, shifts, day, period, read, store):
         # A number asked with no shift named answers every shift together (the owner's scope ruling, 2026-11-13), over the window
         # it names or the selected one; the selected shift only when the question says "this shift" or names one.
+        scope = 'day'
+        read['all_shifts'] = True
+        read.setdefault('day', day)
+        read.setdefault('period', period)
+    elif scope == 'shift' and 'shift' not in read and split_by_shift(text, current, day, period, read, store):
+        # A question the semantic model reads as split or ranked by shift ("which shift had the most setups this week", "compare
+        # shift 1 and shift 2 stops") asks about every shift, whatever the shift control says (issue #144)
         scope = 'day'
         read['all_shifts'] = True
         read.setdefault('day', day)
@@ -1575,7 +1583,7 @@ OTHER_GROUPING = r"\bby\s+(kind|type|category|equipment|place|machine|location|s
 # trends and dollars, any question that mentions a shift ("this shift"), and the per-shift answers of a production day (its speed,
 # quality, and downtime by place or kind), whose all-shift form is the three shifts compared, led by another measure.
 NUMBER_INTENTS = frozenset(('period_quantity', 'period_stops', 'period_review', 'period_pareto', 'period_downtime', 'period_waste',
-                            'period_quality', 'period_grade', 'period_speed', 'period_rollstock', 'period_overrun'))
+                            'period_quality', 'period_grade', 'period_speed', 'period_rollstock', 'period_overrun', 'semantic'))
 
 
 def plan_tools(request):
@@ -1583,7 +1591,7 @@ def plan_tools(request):
     return [step['tool'] for step in request.get('plan') or []]
 
 
-def quantity_default(text, lower, current, shifts, day, period, read):
+def quantity_default(text, lower, current, shifts, day, period, read, store=None):
     """True when a question asked under one selected shift asks for a number and names no shift (the owner's scope ruling): its
     answer is a number (NUMBER_INTENTS) and the same answer for all shifts as for the selected one. No shift named or mentioned
     ("this shift", "the shift", "shift two"), all shifts said aside; no investigation (WHY_ASK)."""
@@ -1591,19 +1599,23 @@ def quantity_default(text, lower, current, shifts, day, period, read):
         return False
     every = Context(day, current.shift, scope='day', period=period, read={k: v for k, v in read.items() if k != 'shift'})
     try:
-        request = parse_request(text, every)
+        request = parse_request(text, every, store)
     except ValueError:
         return False
     if request.get('intent') not in NUMBER_INTENTS:
         return False
+    if request.get('intent') == 'semantic':
+        # the semantic model read the question over every shift: its number is every shift's, whatever the selected shift's hand
+        # route would have answered ("most common downtime reason" is not the selected shift's breakdown; the review of PR #155)
+        return True
     try:
-        selected = parse_request(text, Context(day, current.shift, scope='shift', period=period, read=dict(read)))
+        selected = parse_request(text, Context(day, current.shift, scope='shift', period=period, read=dict(read)), store)
     except ValueError:
         return True   # refused for the selected shift alone ("how many setups across all shifts"): all shifts answer it
     return plan_tools(selected) == plan_tools(request)
 
 
-def downtime_default(text, lower, current, shifts, relative, day, period, read):
+def downtime_default(text, lower, current, shifts, relative, day, period, read, store=None):
     """True when the owner's downtime default applies (issue #101): the Period control is on Day (or the question's
     "yesterday" moved it there), the question names no shift and no day or window other than yesterday, it asks no
     dollars, and the router would answer it over one day, once the scope is all shifts, with the downtime review. By
@@ -1619,7 +1631,7 @@ def downtime_default(text, lower, current, shifts, relative, day, period, read):
         return False
     probe = Context(day, current.shift, scope='day', period='day', read={k: v for k, v in read.items() if k != 'shift'})
     try:
-        request = parse_request(text, probe)
+        request = parse_request(text, probe, store)
     except ValueError:
         return False
     plan = request.get('plan') or []
@@ -1628,11 +1640,25 @@ def downtime_default(text, lower, current, shifts, relative, day, period, read):
     return request['intent'] != 'period_quantity' and plan[0]['tool'] == 'get_downtime_review'
 
 
-def route(text, current, days):
+def split_by_shift(text, current, day, period, read, store=None):
+    """True when the question, asked of every shift, is answered by the semantic model split or ranked by shift (issue #144)."""
+    if re.search(WHY_ASK, correct_typos(text.lower())):
+        return False
+    every = Context(day, current.shift, scope='day', period=period, read={k: v for k, v in read.items() if k != 'shift'})
+    try:
+        request = parse_request(text, every, store)
+    except ValueError:
+        return False
+    plan = request.get('plan') or []
+    return request.get('intent') == 'semantic' and 'shift' in plan[0]['arguments'].get('group_by', [])
+
+
+def route(text, current, days, store=None):
     """The offline router's whole reading of a question: the scope it names (question_scope) and the request
-    parse_request makes of it there. Returns (request, context); the agent answers the request in that context."""
-    context = question_scope(text, current, days)
-    return parse_request(text, context), context
+    parse_request makes of it there. Returns (request, context); the agent answers the request in that context.
+    `store` gives the semantic model's parser the dimension values (the process's default store when None)."""
+    context = question_scope(text, current, days, store)
+    return parse_request(text, context, store), context
 
 
 def asked_for(text):
@@ -1647,11 +1673,29 @@ def asked_for(text):
     return asked
 
 
-def parse_request(text, current):
+def parse_request(text, current, store=None):
     """The offline router: a supported question in its scope becomes a request the planner runs,
-    or a ValueError saying what to change. `asked` carries the objectives of `asked_for`."""
-    request = _parse_request(text, current)
-    catch_all_guard(correct_typos(text.lower()), request)
+    or a ValueError saying what to change. `asked` carries the objectives of `asked_for`.
+
+    The hand router reads the question first; the semantic model's parser (semantic_parse, issue #144) then reads it into
+    the model's own terms. A complete reading (every content word used) answers with measure=semantic when the hand router
+    refused the question or answers something else; a reading that asks a split, a ranking, a share or a ratio the hand
+    route drops refuses with at most three questions that answer; otherwise the hand route, or its refusal, stands.
+    The investigations (WHY_ASK) are never read by it. `store` gives the parser the dimension values (the process's default
+    store when None; False for a single-day fixture, which no semantic query can read: the hand router alone)."""
+    from . import semantic_parse
+    request, refused = None, None
+    try:
+        request = _parse_request(text, current)
+        catch_all_guard(correct_typos(text.lower()), request)
+    except ValueError as exc:
+        refused = exc
+    if isinstance(text, str) and text.strip() and len(text) <= 2000:
+        semantic_request = semantic_parse.route(text, current, store, request, refused)
+        if semantic_request is not None:
+            request, refused = semantic_request, None
+    if refused is not None:
+        raise refused
     request['asked'] = asked_for(text)
     return request
 
@@ -1999,7 +2043,8 @@ class Agent:
             raise ValueError('Enter a question of 1-2000 characters')
         with self.guard:
             if request is None:
-                request = parse_request(text, context) if isinstance(self.planner, OfflinePlanner) else {
+                # a single-day fixture has no record store, so no semantic answer could run: the hand router alone (store False)
+                request = parse_request(text, context, self.store if self.store is not None else False) if isinstance(self.planner, OfflinePlanner) else {
                     'intent': 'model', 'shifts': [context.shift], 'kind': None,
                     'group_by': 'reason', 'want_chart': True, 'asked': asked_for(text)}
             allowed_shifts, period = self._enter(context)

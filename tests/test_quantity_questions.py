@@ -193,13 +193,12 @@ def test_the_router_refuses_a_quantity_it_cannot_place_rather_than_summarize():
     ('How many boards did we lose at the stacker?', 'do not count boards'), ('How many splices did we run?', 'not every splice'),
     ('How many orders did we run?', 'distinct orders'), ('How many customers did we run this week?', 'do not count customers'),
     ('How many hours of downtime this month?', 'in minutes, not hours'), ('How many pallets did we ship?', 'no shipping'),
-    ('How many stops on 55-C this week?', 'not by grade'), ('How many order changes on 275-BC this week?', 'not by grade'),
     ('How many setups on the single facer this week?', 'counted for the line'), ('How many sheets at the stacker this week?', 'counted for the line'),
-    ('How many reject sheets this week?', 'square feet by reason'), ('How many sheets of warp this week?', 'square feet by reason'),
+    ('How many sheets of warp this week?', 'square feet by reason'),
     ('What was our minutes per setup this week?', 'not a ratio the records keep'), ('How many sheets per order this week?', 'not a ratio the records keep'),
     ('How many minutes did setups take this week?', 'setup matrix'), ('How long are our runs this week?', 'setup matrix'),
     ('How much trim in MSF this week?', 'in square feet'), ('How many square feet did we make this week?', 'Square feet are kept for the waste lines'),
-    ('How many widgets on shift 2?', 'one quantity at a time'), ('How much scrap on shift 2?', 'one quantity at a time'),
+    ('How many widgets on shift 2?', 'one quantity at a time'),
     ('Feet per stop this week', 'Feet per stop is not a ratio the records keep'), ('Setups per day this week', 'Setups per day is not a ratio'),
     ('Splices per setup this week', 'Splices per setup is not a ratio'), ('MSF per hour this week', 'MSF per hour is not a ratio'),
     ('How long were we slow on shift 2?', 'Slow is a speed'), ('How many minutes were we slow this week?', 'Slow is a speed'),
@@ -219,8 +218,7 @@ def test_the_router_refuses_a_quantity_it_cannot_place_rather_than_summarize():
     # the reviewer subagent's probe of round 4: a grouping, an average across days, a percent per day, a share of waste
     ('Average stop length by reason this week', 'the downtime review'), ('Average minutes per stop by reason this week', "the whole window's"),
     ('How long do our missed splices take on average this week?', 'the downtime review'),
-    ('Average downtime per day this week', 'No tool returns one average across'), ('Percent downtime per day this week', 'kept in minutes'),
-    ('Downtime per reason per day this week', "the whole window's"), ('How many minutes of downtime at each place per day this week?', 'not by day'),
+    ('Average downtime per day this week', 'No tool returns one average across'),
     ('How many minutes did the slowest crew lose this week?', 'A ranked shift'),
     ('Dry-end rejects as a percent of gross this week', 'a percent of the yield'), ('What percentage of waste was dry end this week?', 'not as a share'),
     ('How many setups at each place this week?', "the whole window's"), ('Stops breakdown by reason in percent this week', "the whole window's"),
@@ -236,19 +234,12 @@ def test_a_count_the_records_do_not_hold_is_refused_with_what_can_be_counted(que
 
 
 @pytest.mark.parametrize('question, scope, refusal', [
-    ('How many setups did each shift run this week?', 'day', 'one shift or all shifts together'),
     ('How many stops per shift this week?', 'shift', 'one shift or all shifts together'),
-    ('How many setups between shifts this week?', 'day', 'one shift or all shifts together'),
-    ('How many setups did shift 1 and shift 3 run this week?', 'day', 'one shift or all shifts together'),
     ('How many setups across all shifts this week?', 'shift', 'Selected shift only'),
     ('How fast did we change paper this week?', 'shift', 'per setup and per production day'),
     ('How quick were the changeovers this month?', 'day', 'per setup and per production day'),
-    ('How much scrap on shift 1 versus shift 2?', 'day', 'one quantity at a time'),
-    ('How many minutes of downtime did shift 1 have versus shift 3?', 'day', 'one shift or all shifts together'),
-    ('Compare shifts on downtime minutes', 'day', 'one shift or all shifts together'),
     ('Compare the shifts on setups this week', 'shift', 'one shift or all shifts together'),
     ('Shift comparison of stops this week', 'day', 'one shift or all shifts together'),
-    ('Compare stops across shifts this week', 'day', 'one shift or all shifts together'),
     ('How do the shifts stack up on setups this week?', 'day', 'one shift or all shifts together'),
     ('Minutes of downtime shift vs shift this week', 'day', 'one shift or all shifts together'),
     ('How many minutes of downtime did the slowest shift have this week?', 'day', 'A ranked shift'),
@@ -479,7 +470,9 @@ def test_a_count_or_unit_golden_states_its_headline():
         expect = case['expect']
         patterns = [expect.get('shape', {}).get('headline_match', '')] + (
             [expect['sections_match']] if isinstance(expect.get('sections_match'), str) else expect.get('sections_match', []))
-        assert any(p.startswith('^\\*\\*') for p in patterns), case['id']
+        # a quantity's headline opens with its figure; a semantic answer's (issue #144) with its measure's label, then the figure
+        assert any(p.startswith('^\\*\\*') or (p.startswith('^') and '\\*\\*' in p and 'measure=semantic' in expect.get('url', ''))
+                   for p in patterns), case['id']
 
 
 # ---- Round 6 of the coordinator's review of PR 143: the allow-list. A quantity answers only when every word of the question is
@@ -615,9 +608,7 @@ def test_an_average_stop_is_its_length_and_nothing_else(noun):
 
 
 @pytest.mark.parametrize('question, metric', [
-    ('Stacker minutes per stop this week', 'minutes_per_stop'), ('Minutes per stop at splicer 3 this week', 'minutes_per_stop'),
-    ('Knife jam minutes per stop this week', 'minutes_per_stop'), ('Maintenance downtime per day this week', 'downtime_per_day'),
-    ('Operator downtime per day this week', 'downtime_per_day'), ('Downtime per day at the stacker this week', 'downtime_per_day'),
+    ('Stacker minutes per stop this week', 'minutes_per_stop'),
     ('Feet per setup at the stacker this week', 'lineal_per_setup'),
 ])
 def test_a_ratio_kept_for_all_stops_is_never_asked_of_one_reason_place_or_kind(question, metric):
@@ -675,14 +666,9 @@ def test_a_plain_quantity_in_other_words_still_answers(question, metric):
 
 
 @pytest.mark.parametrize('question, refusal', [
-    ('How many stops at the stacker each day this week?', 'kept for all stops together'), ('Stacker stops by day this week', 'kept for all stops together'),
-    ('Daily operator stops this week', 'kept for all stops together'), ('Stops per day at the stacker this week', 'kept for all stops together'),
-    ('Maintenance stops per day this week', 'kept for all stops together'), ('How many stops a day on average this week?', 'No tool returns one average'),
+    ('Stacker stops by day this week', 'kept for all stops together'), ('How many stops a day on average this week?', 'No tool returns one average'),
     ('Average stops per day this week', 'No tool returns one average'), ('Typical number of stops per day this week', 'No tool returns one average'),
-    ('Minutes per stop each day this week', "'per' asks for a grouping"), ('Daily minutes per stop this week', "'per' asks for a grouping"),
-    ('Minutes per stop at the slitter this week', 'is kept for all stops together'),
     ('Minutes per stop for scheduled stops this week', 'is kept for all stops together'),
-    ('Minutes per stop for order changes this week', 'is kept for all stops together'),
 ])
 def test_the_day_words_never_drop_a_filter_or_answer_an_average_with_the_busiest_day(question, refusal):
     url, text, _ = landing(question)
@@ -698,3 +684,41 @@ def test_a_grouping_by_day_of_anything_but_stops_or_downtime_is_never_the_per_da
         assert catch_all_failures(question, '/corr/1/day/2026-09-14?measure=quantity&window=week&metric=msf_per_day'), question
     assert catch_all_failures('Stops per day at the stacker this week', '/corr/1/day/2026-09-14?measure=stops&window=week')
     assert not catch_all_failures('Stops per day this week', '/corr/1/day/2026-09-14?measure=stops&window=week')
+
+
+# ---- Issue #144: what the quantity route refused because one quantity cannot say it, the semantic model reads completely: a split by
+# shift, day, grade, reason or place, a filter the route did not apply (a grade, a place, a crew, a kind), a share, a ratio of one
+# slice. Each lands on its semantic address (measure=semantic) with the measure, split and filter the question named.
+@pytest.mark.parametrize('question, scope, parts', [
+    ('How many stops on 55-C this week?', 'shift', ('m=stops', 'grade=55-C')),
+    ('How many order changes on 275-BC this week?', 'shift', ('m=order_changes', 'grade=275-BC')),
+    ('How many reject sheets this week?', 'shift', ('m=reject_sheets',)),
+    ('How much scrap on shift 2?', 'shift', ('m=reject_sqft', '/shift/2?')),
+    ('Percent downtime per day this week', 'shift', ('m=downtime_pct', 'by=day')),
+    ('Downtime per reason per day this week', 'shift', ('m=downtime_minutes', 'by=reason,day')),
+    ('How many minutes of downtime at each place per day this week?', 'shift', ('m=downtime_minutes', 'by=place,day')),
+    ('How many setups did each shift run this week?', 'day', ('m=setups', 'by=shift')),
+    ('How many setups between shifts this week?', 'day', ('m=setups', 'by=shift')),
+    ('How many setups did shift 1 and shift 3 run this week?', 'day', ('m=setups', 'by=shift')),
+    ('How much scrap on shift 1 versus shift 2?', 'day', ('m=reject_sqft', 'by=shift')),
+    ('How many minutes of downtime did shift 1 have versus shift 3?', 'day', ('m=downtime_minutes', 'by=shift')),
+    ('Compare shifts on downtime minutes', 'day', ('m=downtime_minutes', 'by=shift')),
+    ('Compare stops across shifts this week', 'day', ('m=stops', 'by=shift')),
+    ('Minutes per stop at splicer 3 this week', 'shift', ('m=minutes_per_stop', 'place=Splicer+3')),
+    ('Knife jam minutes per stop this week', 'shift', ('m=minutes_per_stop', 'reason=Knife+/+slitter+jam')),
+    ('Maintenance downtime per day this week', 'shift', ('m=downtime_minutes', 'by=day', 'kind=Maintenance')),
+    ('Operator downtime per day this week', 'shift', ('m=downtime_minutes', 'by=day', 'kind=Operator')),
+    ('Downtime per day at the stacker this week', 'shift', ('m=downtime_minutes', 'by=day', 'place=Stacker')),
+    ('How many stops at the stacker each day this week?', 'shift', ('m=stops', 'by=day', 'place=Stacker')),
+    ('Daily operator stops this week', 'shift', ('m=stops', 'by=day', 'kind=Operator')),
+    ('Stops per day at the stacker this week', 'shift', ('m=stops', 'by=day', 'place=Stacker')),
+    ('Maintenance stops per day this week', 'shift', ('m=stops', 'by=day', 'kind=Maintenance')),
+    ('Minutes per stop each day this week', 'shift', ('m=minutes_per_stop', 'by=day')),
+    ('Daily minutes per stop this week', 'shift', ('m=minutes_per_stop', 'by=day')),
+    ('Minutes per stop at the slitter this week', 'shift', ('m=minutes_per_stop', 'place=Slitter/scorer')),
+    ('Minutes per stop for order changes this week', 'shift', ('m=minutes_per_stop', 'reason=Order+change')),
+])
+def test_a_question_one_quantity_refused_is_read_by_the_semantic_model(question, scope, parts):
+    url, request, _ = landing(question, scope=scope)
+    assert url and 'measure=semantic' in url and all(p in url for p in parts), (question, url or request)
+    assert not catch_all_failures(question, url), (question, url)
