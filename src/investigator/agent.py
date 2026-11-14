@@ -4,7 +4,7 @@ The optional model adapter implements Planner.next_step. OfflinePlanner is rule-
 it is a teaching/test driver, not an LLM or general natural-language understanding.
 """
 from collections import OrderedDict
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import json
@@ -1007,6 +1007,8 @@ def allow_list(lower, lead):
     if found is None:
         raise ValueError(leftover_refusal(None, ' '.join(phrases[0]), metric))
     phrase, word, family = found
+    if family in ('plan', 'state', 'span'):
+        raise Standing(leftover_refusal(family, ' '.join(phrase), metric))   # what ran in a window answers none of them (Standing)
     if family in LEFTOVER_ASKS:
         # the word as said: "what shift", "which shift", "over 10", "under 2"
         said = re.search(rf"\b((what|which)\s+)?{re.escape(word)}(\s+\d[\d,.]*)?(?![a-z])", lower)
@@ -1094,6 +1096,35 @@ HEDGE = (r"\b(might|may|could)\s+((well|possibly|also)\s+)?(have\s+)?(be|been)\b
 HEDGE_TEXT = ("'{words}' hedges the cause: one quantity counts what the records hold, each stop with the reason, place and kind it was coded "
               "with, never what it might have been. Ask '{asked}' for what was coded, or 'why were there so many stops this week' for what "
               "drove them.")
+
+
+# A window the gate consumes that the period words do not read ("for the day", "this day", "over the period": issue #153), applied where
+# the gate reads it, never the selected window: "this day" under a ranged Period control names the production day its address cannot,
+# and "the period" under a week or month could be the 4-4-5 period or that window. The semantic model's parser reads them the same way.
+THE_PERIOD_SAID = r"\b(the|that|whole|full|entire)\s+period\b"
+THIS_DAY_SAID = r"\b(this|that|the|current|selected|whole|full|entire)\s+(production\s+)?day\b(?!\s+(before|of\s+the\s+week)\b)"
+THE_PERIOD_TEXT = ("'{words}' could be the 4-4-5 accounting period or the {selected} the Period control selects: ask '{plain} this period' or "
+                   "'{plain} this {grain}'.")
+THIS_DAY_TEXT = "'{words}' names the selected production day, and the Period control is on the {selected}: set it to Day, or ask '{plain} this week'."
+
+
+class Standing(ValueError):
+    """A refusal of something the question said that no answer reads (issue #153): two windows, "during the day" beside another window,
+    a hedge before a cause, a plan, a capacity or a span to date, the line running, "this shift" with no shift selected, who logged a
+    stop, "this day" or "the period" under a ranged Period control, a comparison the answer does not carry, and a word left beside the
+    Pareto grouped. It stands over the semantic model's parser (issue #144): a complete reading of the other words is still not the
+    question asked, so it never answers in its place (the coordinator on PR #155, after #159)."""
+
+
+@contextmanager
+def standing():
+    """The refusals raised inside are Standing ones (a ValueError raised as Standing, its text unchanged)."""
+    try:
+        yield
+    except Standing:
+        raise
+    except ValueError as exc:
+        raise Standing(str(exc)) from exc
 
 
 def compares(lead):
@@ -1222,10 +1253,11 @@ def quantity_gate(lower, lead):
     of who logged the stops, a ratio kept for all stops or for the line asked of one stop reason, place or kind (the more specific
     refusals), or any word the route does not consume (allow_list)."""
     metric = lead['metric']
-    duration_gate(lower, lead)
-    logged = re.search(KIND_LOGGED, lower)
-    if logged and metric.startswith(('maintenance_', 'operator_')):
-        raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain=PLAIN[metric]))
+    with standing():   # the line running and who logged a stop: no reading of the other words answers them
+        duration_gate(lower, lead)
+        logged = re.search(KIND_LOGGED, lower)
+        if logged and metric.startswith(('maintenance_', 'operator_')):
+            raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain=PLAIN[metric]))
     if metric in RATIO_METRICS and metric != 'waste_pct' and any(re.search(p, lower) for p in NAMED_FILTER):
         raise ValueError(RATIO_FILTER_TEXT.get(metric) or RATIO_FILTER_LINE.format(ratio=initial(PLAIN[metric]), plain=PLAIN[metric]))
     allow_list(lower, lead)
@@ -1583,19 +1615,15 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
     window = {"period": period or selected or 'day', "anchor": anchor}
     # A window the gate consumes that the period words above do not read ("for the day", "this day", "over the period": issue #153) is
     # applied where the gate reads it, by one quantity, each production day's stops and the Pareto grouped: never the selected window
-    said = None if period or months else (
-        re.search(r"\b(the|that|whole|full|entire)\s+period\b", lower) or
-        re.search(r"\b(this|that|the|current|selected|whole|full|entire)\s+(production\s+)?day\b(?!\s+(before|of\s+the\s+week)\b)", lower))
+    said = None if period or months else re.search(THE_PERIOD_SAID, lower) or re.search(THIS_DAY_SAID, lower)
     gated = {"period": 'fiscal' if said and said[0].endswith('period') else 'day', "anchor": anchor} if said else window
     def gated_window(plain):
         """The gated routes' window; "this day" under a ranged Period control is refused (its address has no day window to name), and
         "the period" under a week or month one (it could be the 4-4-5 period or the window the Period control selects)."""
         if said and gated['period'] == 'fiscal' and selected in ('week', 'month'):
-            raise ValueError(f"'{said[0]}' could be the 4-4-5 accounting period or the {PERIOD_WORDS[selected]} the Period control selects: "
-                             f"ask '{plain} this period' or '{plain} this {selected}'.")
+            raise ValueError(THE_PERIOD_TEXT.format(words=said[0], selected=PERIOD_WORDS[selected], plain=plain, grain=selected))
         if said and gated['period'] == 'day' and selected:
-            raise ValueError(f"'{said[0]}' names the selected production day, and the Period control is on the {PERIOD_WORDS[selected]}: set "
-                             f"it to Day, or ask '{plain} this week'.")
+            raise ValueError(THIS_DAY_TEXT.format(words=said[0], selected=PERIOD_WORDS[selected], plain=plain))
         return gated
     def answer_quantity(lead):
         """One quantity over the question's window (a named month, else the window words or the Period control's), for
@@ -1613,11 +1641,12 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
                 raise ValueError(f"Stops, downtime, order changes and sheets are recorded by shift, reason, place and knife, not by grade: "
                                  f"ask 'how many setups on {grade_code} this week', or 'volume by grade this week'. " + QUANTITY_HELP)
             lead = {**lead, 'grade': grade_code}
-        deictic_gate(lower, lead, current, shifts)   # "this shift" with no shift selected (issue #153, row 8)
-        gated_window(PLAIN.get(lead['metric'], 'how many stops'))
-        hedge_gate(lower, lead, asked)   # "might be due to the stacker": never the coded count (the review of e863f1e, item 3)
-        answered ='month' if months else 'week' if lead['metric'] == 'downtime_per_day' and gated['period'] == 'day' else gated['period']
-        comparison_gate(lower, lead, answered, bool(months) and month_start(months[0])[:7] != anchor[:7], asked)   # rows 2 and 6
+        with standing():   # what the question said that no answer reads: never answered by the semantic model's reading either
+            deictic_gate(lower, lead, current, shifts)   # "this shift" with no shift selected (issue #153, row 8)
+            gated_window(PLAIN.get(lead['metric'], 'how many stops'))
+            hedge_gate(lower, lead, asked)   # "might be due to the stacker": never the coded count (the review of e863f1e, item 3)
+            answered ='month' if months else 'week' if lead['metric'] == 'downtime_per_day' and gated['period'] == 'day' else gated['period']
+            comparison_gate(lower, lead, answered, bool(months) and month_start(months[0])[:7] != anchor[:7], asked)   # rows 2 and 6
         quantity_gate(lower, lead)   # every word consumed: the allow-list (round 6)
         if lead['metric'] == 'downtime_per_day' and (one_day_named or said and gated['period'] == 'day'):
             raise ValueError(ONE_DAY_PROFILE.format(words=one_day_named or said[0]))
@@ -1682,13 +1711,14 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
             # a count or minutes grouped by reason, place or kind answers only when every word is read (issue #153, row 3): the Pareto
             # applies no stop reason, place, kind (but the kinds it groups by), subset or comparison
             group = {'metric': 'stops_by_group' if measure == 'count' else 'minutes_by_group', 'group': group_by}
-            deictic_gate(lower, group, current, shifts)
-            gated_window(PLAIN[group['metric']])
-            logged = re.search(KIND_LOGGED, lower)
-            if logged:   # "how many stops did maintenance log by kind": who logged a stop is not recorded (row 9)
-                raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain='how many operator stops'))
-            comparison_gate(lower, group, gated['period'], asked=asked)
-            allow_list(lower, group)
+            with standing():   # a word beside the Pareto grouped ("planned stops by reason"): refused, never a reading of the rest
+                deictic_gate(lower, group, current, shifts)
+                gated_window(PLAIN[group['metric']])
+                logged = re.search(KIND_LOGGED, lower)
+                if logged:   # "how many stops did maintenance log by kind": who logged a stop is not recorded (row 9)
+                    raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain='how many operator stops'))
+                comparison_gate(lower, group, gated['period'], asked=asked)
+                allow_list(lower, group)
             window = gated
         if not pareto and months:
             window = {"period": "month", "anchor": month_start(months[0])}   # "downtime in August": that month, the latest such on or before the day
@@ -1705,9 +1735,10 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
         plan = [("get_downtime_review", {"window": window, "shift": shift})]
         intent = 'period_review'
     elif profile:
-        deictic_gate(lower, {'metric': 'stops_per_day'}, current, shifts)   # issue #153, row 8
-        gated_window(PLAIN['stops_per_day'])
-        comparison_gate(lower, {'metric': 'stops_per_day'}, period or selected or 'week', asked=asked)   # no window before beside it (row 6)
+        with standing():
+            deictic_gate(lower, {'metric': 'stops_per_day'}, current, shifts)   # issue #153, row 8
+            gated_window(PLAIN['stops_per_day'])
+            comparison_gate(lower, {'metric': 'stops_per_day'}, period or selected or 'week', asked=asked)   # no window before beside it (row 6)
         allow_list(lower, {'metric': 'stops_per_day'})   # every word consumed (round 6): never the profile for a subset, share or statistic
         if one_day_named or said and gated['period'] == 'day':
             raise ValueError(ONE_DAY_PROFILE.format(words=one_day_named or said[0]))

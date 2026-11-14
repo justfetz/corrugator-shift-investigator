@@ -324,12 +324,26 @@ def _read(reading, text, context, store, mdl):
     if read_words.get('words'):
         lower = lower.replace(read_words['words'], agent.READ_AS[read_words['period']])
     lower = re.sub(r"(\d),(\d{3})\b", r"\1\2", lower)   # "1,000 feet"
+    used = reading.used
+    # a request said around the question ("could you tell me", "I want to know", "can I see", "did we have to", "rack up"): the hand
+    # router's own phrases, consumed as it consumes them. "Can", "need", "want", "to" and "up" are not function words (issue #153), so
+    # outside these a plan, a capacity or the line running is a word this parser does not read, never dropped
+    for pattern in (agent.REQUEST_LEAD, agent.MODAL_YOU, agent.DID_HAVE_TO, agent.UP_PARTICLE):
+        lower, _ = _consume(pattern, lower, used, 'request')
+    # What the question said that no answer reads (issue #153, read as the hand router reads it): refused once the measure is read, so
+    # the questions it offers name it; each sets a cue that refuses it over a hand route too. Who logged a stop is not recorded, its kind
+    # is: "the stops the operators logged" is never the Operator kind's stops.
+    said = []
+    logged = re.search(agent.KIND_LOGGED, lower)
+    if logged:
+        reading.cues.add('said')
+        said.append((f"'{logged[0]}' could mean who logged the stops, which the records do not keep: a stop's kind (maintenance or "
+                     "operator) is kept", lambda word, window: [f'operator stops {window}', f'maintenance stops {window}', f'stops by kind {window}']))
     # a percent of the shift or of the scheduled time is the measure's percent of the scheduled minutes (downtime %), never a share
     # of the downtime (the review of PR #155: "what percent of the shift was maintenance downtime" is 1.80% of shift 2, the hand
     # router's answer, never maintenance's share of the downtime); "the shift" is still the selected one
-    lower = re.sub(PERCENT_OF_SHIFT, ' percent this shift ', lower)
+    lower, percent_of_shift = re.subn(PERCENT_OF_SHIFT, ' percent this shift ', lower)
     lower = re.sub(PERCENT_OF_SCHEDULED, ' percent ', lower)
-    used = reading.used
     # ---- the window: the scope's, or the one the question names
     period, anchor, month = getattr(context, 'period', 'day') or 'day', context.production_day, None
     lower, previous = _consume(PREVIOUS, lower, used, 'compare')
@@ -340,6 +354,15 @@ def _read(reading, text, context, store, mdl):
     if previous and re.search(r"\bcompar\w*\b", lower):
         lower, _ = _consume(r"\bcompar\w*\b", lower, used, 'compare')
     compare = 'previous' if previous else None
+    if previous and not read_words.get('words'):
+        # a window before the selected one compared with the one before it ("last week versus the week before"): two windows before the
+        # selected one, as the hand router refuses them; never the selected window's figure
+        before = re.search(r"\b(?:the\s+)?(?:last|previous|prior)\s+(?:production\s+)?(?:week|month|period|day)\b", lower)
+        if before:
+            reading.cues.add('wrong window')
+            lower, _ = _consume(re.escape(before[0]), lower, used, 'window')
+            said.append((f"'{before[0].strip()}' and '{previous[0].group(0).strip()}' are two windows before the selected one: ask one window, "
+                         "or one window against the one just before it", lambda word, window: [f'{word} this week versus last week', f'{word} this week']))
     unread = re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
         wrong = re.search(WRONG_WINDOW, lower)
@@ -350,7 +373,7 @@ def _read(reading, text, context, store, mdl):
             said = re.sub(r'^the\s+', '', wrong[0].strip())
         raise Refused(f"'{said}' is not a window the semantic model reads: the windows are the production day, the "
                       "Mon-Fri week, the calendar month and the 4-4-5 period")
-    named = set()
+    named, said_windows = set(), lower
     for m in re.finditer(r"\b(" + '|'.join(agent.MONTH_NAMES) + r")\b", lower):
         number = agent.MONTH_NAMES[m[1]]
         year = int(anchor[:4]) - (1 if number > int(anchor[5:7]) else 0)
@@ -378,6 +401,7 @@ def _read(reading, text, context, store, mdl):
             used.append((read_words['words'], 'window'))
     if len(named) > 1:
         raise Refused('The question names more than one window: ask one window at a time, or one window against the one before it')
+    said += _two_windows(reading, named, previous, previous_grain, read_words, said_windows, context)
     if named:
         period, anchor, month = next(iter(named))
     elif previous_grain:
@@ -396,6 +420,14 @@ def _read(reading, text, context, store, mdl):
     lower, _ = _consume(r"\b(?:(?:on|for|by|in|during|from)\s+)?(?:the\s+)?(?:shift\s*[1-3]|(?:first|second|third|1st|2nd|3rd)\s+shift)\b",
                         lower, used, 'shift')
     lower, this_shift = _consume(r"\b(?:(?:on|for|in|during)\s+)?" + THIS_SHIFT, lower, used, 'shift')
+    deictic = False
+    if this_shift and context.scope != 'shift' and not shifts and len(this_shift) > percent_of_shift:
+        # "this shift", "my shift" with All shifts selected has no referent (issue #153, row 8): never the shift control's shift. Refused
+        # over a hand route only when the other words read completely ("setups by grade this shift": never the grades' MSF); "how did
+        # this shift go versus the previous one" keeps every shift's KPIs
+        deictic = True
+        said.append((f"'{this_shift[-1][0].strip()}' names the selected shift, and no shift is selected: choose one in the shift control, "
+                     "or name it", lambda word, window: [f'{word} on shift {context.shift} {window}', f'{word} by shift {window}']))
     lower, all_shifts = _consume(SHIFTS_ALL, lower, used, 'all shifts')
     # ---- the share, the asks and "top N" (the share first: "how much of the downtime" is a share, not an ask)
     lower, share = _consume(SHARE, lower, used, 'share')
@@ -424,8 +456,59 @@ def _read(reading, text, context, store, mdl):
     a = {'rank': rank, 'limit': limit, 'per_day': bool(per_day), 'reason_cue': bool(connectors), 'period': period, 'anchor': anchor,
          'compare': compare, 'shifts': shifts, 'this_shift': bool(this_shift), 'all_shifts': bool(all_shifts), 'ask_unit': ask_unit,
          'ask_often': ask_often, 'loss': bool(set(tokens_of(text)) & set(LOSS))}
-    _assign(reading, items, mdl, store, a, context)
+    try:
+        _assign(reading, items, mdl, store, a, context)
+    except (Refused, semantic.SemanticError):
+        if not said:
+            raise
+        reading.query = None
+    if deictic and reading.query is not None:
+        reading.cues.add('said')
+    if said:
+        text, asks = said[0]
+        word = _measure_word(mdl, reading.query.measure if reading.query else reading.measure if reading.measure in mdl.measures else 'stops')
+        reading.query = None
+        raise Refused(text, [re.sub(r'\s+', ' ', q).strip() for q in asks(word, reading.window_words)])
 
+
+def _two_windows(reading, named, previous, previous_grain, read_words, said, context):
+    """The windows said that are not one window, or one window and the one just before it (issue #153, read as the hand router reads
+    them), as [(text, asks)]: a window of another length compared ("this week versus last month"), a month named beside the selected
+    day's month before it ("August versus last month" in September), a comparison with a window before one the question already moved
+    to ("last week versus the week before"), and "the period" or "this day" under a ranged Period control (the 4-4-5 period or the
+    control's window; a production day its address cannot name). Each answers another window than the one asked: refused over a hand
+    route too (the cue 'wrong window')."""
+    selected = getattr(context, 'period', 'day') or 'day'
+    words = previous[0].group(0).strip() if previous else None
+    found = []
+    if previous and read_words.get('words'):
+        found.append((f"'{read_words['words']}' and '{words}' are two windows before the selected one: ask one window, or one window "
+                      "against the one just before it", lambda word, window: [f'{word} this week versus last week', f'{word} this week']))
+    elif previous and named:
+        grain, start, name = next(iter(named))
+        before = {'fiscal': 'period'}.get(previous_grain, previous_grain)
+        asked = _window_words(grain, name) or 'the day'
+        if grain != previous_grain:
+            found.append((f"'{asked}' and '{words}' are windows of different lengths: ask one window, or one window against the one "
+                          "just before it", lambda word, window: [f"{word} {_window_words(grain, name)}", f'{word} this {before} versus last {before}']))
+        elif name and start[:7] != context.production_day[:7] and re.search(r"\b(last|previous|prior)\s+month\b", words):
+            found.append((f"'last month' is the month before the selected day's, so '{asked} {words}' names two months that are not one "
+                          "month and the one before it: ask one month, or this month against the one before it",
+                          lambda word, window: [f'{word} in {name}', f'{word} this month versus last month']))
+    elif selected != 'day' and len(named) == 1 and not previous and not read_words.get('words') \
+            and not re.search(r"\b(fiscal|accounting|4-4-5|445|p(1[0-3]|[1-9]))\b", said):
+        grain = next(iter(named))[0]
+        the_period, this_day = re.search(agent.THE_PERIOD_SAID, said), re.search(agent.THIS_DAY_SAID, said)
+        if grain == 'fiscal' and the_period and selected in ('week', 'month'):
+            found.append((f"'{the_period[0]}' could be the 4-4-5 accounting period or the {agent.PERIOD_WORDS[selected]} the Period "
+                          "control selects", lambda word, window: [f'{word} this period', f'{word} this {selected}']))
+        elif grain == 'day' and this_day:
+            found.append((f"'{this_day[0]}' names the selected production day, and the Period control is on the "
+                          f"{agent.PERIOD_WORDS[selected]}: set it to Day",
+                          lambda word, window: [f"{word} this {'period' if selected == 'fiscal' else selected}"]))
+    if found:
+        reading.cues.add('wrong window')
+    return found
 
 def _entries(item, kind):
     return [e for e in item.entries if e[0] == kind]
@@ -1096,6 +1179,10 @@ def route(text, context, store, request, refused):
     question asks a structure the hand route drops, else None (the hand route, or its refusal, stands)."""
     if store is False or not isinstance(text, str) or not text.strip() or re.search(agent.WHY_ASK, agent.correct_typos(text.lower())):
         return None   # store False: a single-day fixture, which no semantic query can read
+    if isinstance(refused, agent.Standing):
+        # the hand router refused something said that no answer reads (two windows, "during the day", a hedge, a plan or "so far", the
+        # line running, "this shift" under All, who logged a stop; issue #153): a complete reading of the other words never answers it
+        return None
     reading = read(text, context, store)
     if reading.complete:
         if refused is not None or request is None or not covers(request, reading, context):
@@ -1112,8 +1199,9 @@ def route(text, context, store, request, refused):
     if request is None:
         return None
     intent = request.get('intent')
-    if 'wrong window' in reading.cues and intent not in NEVER_PREEMPT:
-        # "stops this year", "downtime over the weekend", "stops on Tuesday" (on a Monday): the hand route answers the selected day
+    if reading.cues & {'wrong window', 'said'} and intent not in NEVER_PREEMPT:
+        # "stops this year", "downtime over the weekend", "stops on Tuesday" (on a Monday): the hand route answers the selected day;
+        # "this week versus last month", "the stops the operators logged": it answers another window or another question
         raise ValueError(refusal_text(reading))
     if reading.cues & {'statistic asked', 'share', 'shift split'} and intent not in NEVER_PREEMPT and reading.measure not in _family_of(intent):
         # a median, an average or a share the model does not read is refused, never answered with the review or the Pareto
