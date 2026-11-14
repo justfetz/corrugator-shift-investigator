@@ -518,7 +518,7 @@ footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--rule);font-fa
 .data-page td a.facet,.data-page td a.fk{color:inherit}
 .data-page td a.fk{color:var(--brand)}
 .data-index td{max-width:none}.data-index .table-name{font-weight:600;color:var(--brand)}
-.data-page .data-schema{max-height:300px}.data-schema td{max-width:520px}.data-schema th,.data-schema td{min-width:70px}
+.data-page .data-schema{max-height:300px}.data-schema td{max-width:520px}.data-schema td .muted{font-size:11px}.data-schema th,.data-schema td{min-width:70px}
 .contract-link{font-family:var(--mono);font-size:11px;color:var(--brand);white-space:nowrap}
 .data-filters{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:2px 0 8px}
 .data-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
