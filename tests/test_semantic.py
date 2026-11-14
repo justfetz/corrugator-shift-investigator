@@ -24,7 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DAYS = ('2026-09-14', '2026-09-16', '2026-09-17')   # a Monday; the September outage day (shift 3); a planned-maintenance Thursday
 WEEK = {'period': 'week', 'anchor': '2026-09-09'}
 MONTH = {'period': 'month', 'anchor': '2026-09-14'}
-PERIOD_CASES = ((WEEK, None), (WEEK, 2), (MONTH, None), (MONTH, 3))
+FISCAL = {'period': 'fiscal', 'anchor': '2026-09-14'}   # 4-4-5 P2: 2026-08-31 to 2026-09-27, four whole weeks
+PERIOD_CASES = ((WEEK, None), (WEEK, 2), (MONTH, None), (MONTH, 3), (FISCAL, None), (FISCAL, 3))
 _DAYS = {}
 
 
@@ -119,8 +120,13 @@ def check_wet_end(measure, field):
     return check
 
 
+PERIOD_KPIS = []   # (measure, metric, places, filters) of every check_period_kpis: the time-split and compare checks reuse them
+
+
 def check_period_kpis(measure, metric, places, filters=None):
-    """get_period_kpis' tile (rounded to `places`) over weeks and months, all shifts and one."""
+    """get_period_kpis' tile (rounded to `places`) over weeks, months and 4-4-5 periods, all shifts and one."""
+    PERIOD_KPIS.append((measure, metric, places, filters or {}))
+
     def check(store):
         for window, shift in PERIOD_CASES:
             tool = next(r for r in store.get_period_kpis(window, compare=False, shift=shift)['rows'] if r['metric'] == metric)
@@ -515,8 +521,17 @@ def test_a_broken_model_file_is_refused():
     broken(lambda s: next(d for d in s['dimensions'] if d['name'] == 'reason').update(external='causes'))   # an external block targets.json lacks
     broken(lambda s: next(m for m in s['measures'] if m['name'] == 'setups_above_trim_target').update(lever='controllable'))   # over the trim flag
     broken(lambda s: next(e for e in s['entities'] if e['name'] == 'reject').update(band='not_a_band'))   # an entity band targets.json lacks
-    for where in ("family = 'BOND'; DROP TABLE stops", "kategory = 'dry_end'", "family = 'BOND' OR (sqft > 0", "sqft > 0)", "upper(family) = 'BOND'"):
+    for where in ("family = 'BOND'; DROP TABLE stops", "kategory = 'dry_end'", "family = 'BOND' OR (sqft > 0", "sqft > 0)", "upper(family) = 'BOND'",
+                  # the structure, not only the tokens (the coordinator's re-review of PR #148): each of these loaded, then failed in DuckDB
+                  "family = = 'BOND'", "family IN 'BOND'", "family IN ()", "family = 'BOND' AND", "NOT", "()", "family 'BOND'",
+                  "family IS 'BOND'", "'BOND' = family", "family = 'BOND' family = 'WARP'", "family IN ('BOND',)", "AND family = 'BOND'",
+                  "family = 'BOND' OR OR family = 'WARP'", "family IS NOT", "family NOT = 'BOND'", "(family) = 'BOND'"):
         broken(lambda s, w=where: s['physical']['entities']['reject'].update(where=w))   # a where outside its small grammar
+    for where in ("counted_in = 'dry_end'", "family IN ('BOND', 'WARP') AND NOT (sqft <= 0 OR reason IS NULL)",
+                  "family NOT IN ('OTHER') OR counted_in IS NOT NULL", "NOT NOT family = 'BOND'", "((family = 'BOND'))", "sqft > 0.5 AND sqft <> sheets"):
+        good = copy.deepcopy(spec)
+        good['physical']['entities']['reject']['where'] = where
+        S.Model(good)   # the grammar's whole reach still loads
 
 
 # ------------------------------------------------------------------ validate: refusals name the nearest choices
@@ -532,7 +547,14 @@ def test_a_broken_model_file_is_refused():
     (dict(measure='stops', group_by=['day'], compare='previous'), r'^compare=prev puts the previous window beside each row of the same slice; a split by day', None),
     (dict(measure='msf', group_by=['grade', 'week'], compare='previous'), r'a split by week has no row in common', None),
     (dict(measure='stops', filters={'day': '2026-09-14'}), r'day is a time dimension: the window sets the time', None),
-    (dict(measure='sheets', filters={'customer': 'C9999'}), r"^No customer 'C9999' in the records; the values are: C000, C001, .*, C039 and 1 more$", None),
+    (dict(measure='sheets', filters={'customer': 'C9999'}), r"^No customer 'C9999' in the records; the values are: C000, C001, .*, C039, C040$", None),
+    (dict(measure='op_maint_pct', filters={'kind': 'External'}),
+     r"^Downtime \(operator and maintenance\) \(op_maint_pct\) counts only stop kind Operator or Maintenance: stop kind External is outside it, "
+     r"and would read as a recorded zero\. Filter by one of those, or ask downtime_pct for every stop kind\.$", ['Operator', 'Maintenance']),
+    (dict(measure='maintenance_pm_minutes', filters={'kind': 'operator'}),
+     r"^Maintenance and planned maintenance \(maintenance_pm_minutes\) counts only stop kind Maintenance or Scheduled: stop kind Operator is "
+     r"outside it, and would read as a recorded zero\. Filter by one of those, or ask downtime_minutes for every stop kind\.$", ['Maintenance', 'Scheduled']),
+    (dict(measure='order_changes', filters={'kind': 'Operator'}), r'recorded per run setup, which carries no kind', None),
     (dict(measure='lineal_ft', group_by=['customer']), r'recorded per run setup, which carries no customer', None),
     (dict(measure='stops', group_by=['place', 'reason', 'kind']), r'group_by lists at most two dimensions', None),
     (dict(measure='stops', limit=0), r'limit is a whole number of rows from 1 to', None),
@@ -819,6 +841,137 @@ def test_a_slice_read_against_the_whole_denominator_carries_no_band(store):
     kinds = run(store, 'downtime_pct', WEEK, group_by=['kind'])   # band_by: each kind its own band, as the review reads it
     assert {r['kind']: r.get('band') for r in kinds['rows'] if r['kind'] in ('Maintenance', 'Operator')} == \
         {r['kind']: targets.band(r['kind'].lower(), r['value']) for r in kinds['rows'] if r['kind'] in ('Maintenance', 'Operator')}
+
+
+def _a_value(store, measure, dim):
+    """One value of `dim` the measure's records hold in September: the first of the store's list, or for a dimension too
+    long to list (orders, paper runs) the first row of a split by it."""
+    values = S.store_values(dim, store)
+    if values is not None:
+        return next(v for v in values if run(store, measure, MONTH, filters={dim: v})['source_count'])
+    return run(store, measure, MONTH, group_by=[dim], limit=1)['rows'][0][dim]
+
+
+def test_a_share_a_filter_cuts_from_the_whole_denominator_carries_no_band_and_says_so(store):
+    """The coordinator's re-review of PR #148: a filter the denominator cannot reach (a grade on downtime %, a customer or a
+    reject family on dry-end %) cuts the numerator only, so the figure is the slice's part of the window's ratio, never the
+    slice's own rate. It carries no band, says it is read against all the window's scheduled minutes or yield, and its
+    denominator is the whole window's, for every banded ratio and every such filter. band_by's own dimension (the stop
+    kind) is the ratio its band reads and keeps it."""
+    model = S.model()
+    pairs = 0
+    for name, m in model.measures.items():
+        if m['agg'] != 'ratio' or not m.get('denominator_total'):
+            continue
+        den = model.measures[m['denominator']]['entity']
+        own = (m.get('band_by') or {}).get('dimension')
+        whole = run(store, name, MONTH)
+        rows, _ = model.measure_entities(name)
+        for dim in model.dimensions:
+            if dim == own or model.dimensions[dim]['type'] == 'time' or model.reach(rows, dim) is None or model.reach(den, dim) is not None:
+                continue
+            value = _a_value(store, model.measures[m['numerator']]['name'], dim)
+            filters = {dim: value, **({own: 'Maintenance'} if own else {})}   # with the kind, the reading a band would have
+            got = run(store, name, MONTH, filters=filters)
+            pairs += 1
+            assert 'band' not in got and 'band_text' not in got, (name, filters, got.get('band_text'))
+            assert got['denominator'] == whole['denominator'], (name, filters)   # all the window's scheduled minutes or yield
+            assert got['denominator_text'] == "all the window's " + m['unit'].split(' of ', 1)[1], (name, filters)
+            assert got['cut'] == [dim] and got['band_withheld'] is bool(m.get('band') or own), (name, filters)
+    assert pairs >= 15   # the re-review counted fifteen measure-and-filter pairs that carried a band
+    # downtime % of one grade: its part of all the month's scheduled minutes, which the answer says, not 26-C's own clock
+    grade = run(store, 'downtime_pct', MONTH, filters={'grade': '26-C'})
+    minutes = run(store, 'downtime_minutes', MONTH, filters={'grade': '26-C'})['value']
+    assert close(grade['value'], minutes / run(store, 'scheduled_minutes', MONTH)['value'] * 100)
+    # under one shift the denominator is that shift's minutes, and the words say so
+    assert run(store, 'downtime_pct', MONTH, shift=3, filters={'grade': '26-C'})['denominator_text'] == "all the shift's scheduled minutes"
+    # the stop kind alone is band_by's own: its band, against the scheduled minutes, as the downtime review reads it
+    kind = run(store, 'downtime_pct', MONTH, filters={'kind': 'Maintenance'})
+    assert kind['band'] == targets.band('maintenance', kind['value']) and 'denominator_text' not in kind and kind['cut'] == []
+
+
+def test_a_row_cut_from_the_whole_denominator_carries_no_band_even_beside_band_bys_own_dimension(store):
+    """by=kind,grade: the kind is band_by's own, but the grade cuts each row's stops and never the scheduled minutes, so no
+    row carries the kind's band; by=shift with a grade filter: each shift's part of that shift's minutes."""
+    rows = run(store, 'downtime_pct', MONTH, group_by=['kind', 'grade'], limit=200)['rows']
+    assert rows and all('band' not in r and r['denominator_text'] == "all the window's scheduled minutes" for r in rows)
+    shifts = run(store, 'downtime_pct', MONTH, group_by=['shift'], filters={'grade': '26-C', 'kind': 'Maintenance'})
+    assert 'band' not in shifts and shifts['denominator_text'] == "all the window's scheduled minutes"
+    assert all('band' not in r and r['denominator_text'] == "all the shift's scheduled minutes" for r in shifts['rows'])
+    families = run(store, 'dry_end_pct', MONTH, group_by=['grade', 'reject_family'], limit=200)
+    assert all('band' not in r and r['denominator_text'] == "all the board grade's yield" for r in families['rows'])
+    assert families['band'] == targets.band('dry_end', families['value']) and 'denominator_text' not in families
+
+
+def test_the_answer_says_a_cut_share_is_read_against_the_whole_window(store):
+    for url, head, note in (
+            ('/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&grade=26-C',
+             "Downtime, board grade (quality id) 26-C this month: **{v}%** of all the window's scheduled minutes (query 1)",
+             "Board grade (quality id) 26-C cuts the downtime only, never the scheduled minutes: the figure is the slice's part of the whole, not its own rate."),
+            ('/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&customer=C002',
+             "Dry-end rejects, customer C002 this month: **{v}%** of all the window's yield (query 1)",
+             "Customer C002 cuts the dry-end rejects only, never the yield after trim and shear: the figure is the slice's part of the whole, "
+             "not its own rate, so it carries no band.")):
+        resolved = resolve_url(url, store)
+        analysis = store.day_analysis(resolved['day'])
+        try:
+            answer = Agent(analysis).ask(resolved['text'], resolved['context'], request=resolved['request'])
+        finally:
+            analysis.close()
+        data = answer['trace'][0]['data']
+        assert answer['sections'][0] == head.format(v=f'{data["value"]:.2f}') and note in answer['sections']
+
+
+TIME_SPLITS = ((FISCAL, 'week', None), (FISCAL, 'week', 3), (MONTH, 'week', None), (MONTH, 'month', None), (MONTH, 'month', 3),
+               (FISCAL, 'period', None), (FISCAL, 'period', 3))
+
+
+def test_a_time_split_agrees_with_the_period_tools_window_by_window(store):
+    """The coordinator's re-review of PR #148: each row of by=week, by=month and by=period is the tile get_period_kpis returns
+    for that week, month or 4-4-5 period, for every measure a tile checks. A row the window cuts short (September's first and
+    last weeks) is a part of its week, outside any tile, and is skipped; every whole week, month or period is compared."""
+    for window, grain, shift in TIME_SPLITS:
+        bounds = store._window(window)
+        for measure, metric, places, filters in PERIOD_KPIS:
+            result = run(store, measure, window, shift=shift, group_by=[grain], filters=filters, limit=200)
+            whole = 0
+            for row in result['rows']:
+                spec = {'period': 'fiscal' if grain == 'period' else grain, 'anchor': row[grain]}
+                inner = store._window(spec)
+                if inner['start'] < bounds['start'] or inner['end'] > bounds['end']:
+                    continue
+                tool = next(r for r in store.get_period_kpis(spec, compare=False, shift=shift)['rows'] if r['metric'] == metric)
+                assert close(row['value'], tool['current'], places), (measure, metric, window, grain, shift, row[grain], row['value'], tool['current'])
+                whole += 1
+            assert whole >= (3 if grain == 'week' else 1), (measure, window, grain, shift)
+
+
+def test_compare_prev_agrees_with_the_period_tools_comparison(store):
+    """compare=prev beside get_period_kpis(compare=True): the current and previous values, the change, the previous window and
+    whether the change is stated, for every measure a tile checks, over P2 (against P1), a week and a month, all shifts and one."""
+    for window, shift in ((FISCAL, None), (FISCAL, 3), (WEEK, None), (MONTH, 2)):
+        tool = store.get_period_kpis(window, compare=True, shift=shift)
+        tiles = {r['metric']: r for r in tool['rows']}
+        for measure, metric, places, filters in PERIOD_KPIS:
+            got = run(store, measure, window, shift=shift, filters=filters, compare='previous')
+            tile = tiles[metric]
+            assert got['previous_window']['start'] == tool['previous_window']['start'] and got['previous_window']['end'] == tool['previous_window']['end']
+            assert got['comparison'] == tool['comparison'] == 'complete', (measure, window, shift)
+            assert close(got['value'], tile['current'], places) and close(got['previous_value'], tile['previous'], places), (measure, metric, window, shift)
+            # the tile's change is of its two rounded values: a rounding step apart at most
+            assert abs(got['delta'] - tile['delta']) <= 1.01 * 10 ** -places + 1e-9, (measure, metric, window, shift, got['delta'], tile['delta'])
+            if 'band' in tile:
+                assert got.get('band') == tile['band'], (measure, metric, window, shift)
+
+
+def test_a_duckdb_error_is_a_refusal_never_a_server_error(store):
+    """A where that passes the grammar but fails in DuckDB (a text column compared with a number) is refused with the reason,
+    as a SemanticError the agent records as a refused call, never an exception that would be a 500."""
+    spec = json.loads(S.MODEL_PATH.read_text())
+    spec['physical']['entities']['reject']['where'] = 'family > 5'
+    model = S.Model(spec)
+    with pytest.raises(S.SemanticError, match=r'^The semantic model could not run this request in DuckDB'):
+        S.run(S.SemanticQuery('reject_sqft', window=WEEK), store, mdl=model)
 
 
 def test_no_model_planner_can_run_the_semantic_model(store):

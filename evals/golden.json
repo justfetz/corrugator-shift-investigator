@@ -8699,7 +8699,7 @@
      ]
     },
     "sections_match": [
-     "^- 26-C: \\*\\*[0-9.]+%\\*\\* of scheduled minutes \\(query 1 · row [0-9]\\)$"
+     "^- 26-C: \\*\\*[0-9.]+%\\*\\* of all the window's scheduled minutes \\(query 1 · row [0-9]\\)$"
     ],
     "sections_not_match": "^- .*(on target|flag:)"
    }
@@ -8811,6 +8811,335 @@
      "^- External: \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total · external \\(query 1 · row [0-3]\\)$",
      "^- Operator: \\*\\*[0-9.,]+ min\\*\\* · [0-9.]+% of the total \\(query 1 · row [0-3]\\)$"
     ]
+   }
+  },
+  {
+   "id": "semantic-filter-share-carries-no-band-grade-maintenance",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&kind=Maintenance&grade=26-C",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "period": "month",
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): 26-C's maintenance minutes against all of September's scheduled minutes (the grade cuts the stops, never the shifts' clock) read \"0.12% of scheduled minutes · on target\": a share of the maintenance percent wearing the owner's maintenance band. The kind is band_by's own dimension, so it may keep a band; the grade is not, so the figure carries none and says what it is read against.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&kind=Maintenance&grade=26-C",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_pct",
+       "group_by": [],
+       "filters": {
+        "kind": "Maintenance",
+        "grade": "26-C"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 0,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime, board grade \\(quality id\\) 26-C, stop kind Maintenance this month: \\*\\*[0-9.]+%\\*\\* of all the window's scheduled minutes \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ]
+    },
+    "sections_match": [
+     "^Board grade \\(quality id\\) 26-C cuts the downtime only, never the scheduled minutes: the figure is the slice's part of the whole, not its own rate, so it carries no band\\.$"
+    ],
+    "sections_not_match": "· (home run|on target|over target|flag)"
+   }
+  },
+  {
+   "id": "semantic-filter-share-reads-against-the-whole-window-grade",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&grade=26-C",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "period": "month",
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): 26-C's downtime against all of September's scheduled minutes read \"0.79% of scheduled minutes\", which a supervisor would rank as the best grade when, against its own clock, it is the worst (6.00% against the month's 4.87%). The line says the figure is read against all the window's scheduled minutes, never the slice's own.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&grade=26-C",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_pct",
+       "group_by": [],
+       "filters": {
+        "grade": "26-C"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 0,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime, board grade \\(quality id\\) 26-C this month: \\*\\*[0-9.]+%\\*\\* of all the window's scheduled minutes \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ]
+    },
+    "sections_match": [
+     "^Board grade \\(quality id\\) 26-C cuts the downtime only, never the scheduled minutes: the figure is the slice's part of the whole, not its own rate\\.$"
+    ],
+    "sections_not_match": "· (home run|on target|over target|flag)"
+   }
+  },
+  {
+   "id": "semantic-filter-share-carries-no-band-customer",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&customer=C002",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "period": "month",
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): one customer's rejects against all the month's yield (the yield is recorded per setup, which carries no customer) read \"0.07% of yield · home run\". It carries no band and says it is read against all the window's yield.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&customer=C002",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "dry_end_pct",
+       "group_by": [],
+       "filters": {
+        "customer": "C002"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 0,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Dry-end rejects, customer C002 this month: \\*\\*[0-9.]+%\\*\\* of all the window's yield \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ]
+    },
+    "sections_match": [
+     "^Customer C002 cuts the dry-end rejects only, never the yield after trim and shear: the figure is the slice's part of the whole, not its own rate, so it carries no band\\.$"
+    ],
+    "sections_not_match": "· (home run|on target|over target|flag)"
+   }
+  },
+  {
+   "id": "semantic-filter-share-carries-no-band-reject-family",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&reject_family=BOND",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "period": "month",
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): the bond rejects against all the month's yield read \"0.41% of yield · home run\", the owner's dry-end band beside one family. The same split by=reject_family already carried none; the filter now reads the same way.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=semantic&m=dry_end_pct&reject_family=BOND",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "dry_end_pct",
+       "group_by": [],
+       "filters": {
+        "reject_family": "BOND"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 0,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Dry-end rejects, reject family Bond this month: \\*\\*[0-9.]+%\\*\\* of all the window's yield \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ]
+    },
+    "sections_match": [
+     "^Reject family Bond cuts the dry-end rejects only, never the yield after trim and shear: the figure is the slice's part of the whole, not its own rate, so it carries no band\\.$"
+    ],
+    "sections_not_match": "· (home run|on target|over target|flag)"
+   }
+  },
+  {
+   "id": "semantic-filter-share-carries-no-band-op-maint-grade",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=op_maint_pct&grade=26-C",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "period": "month",
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): 26-C's operator and maintenance minutes against all the month's scheduled minutes read \"0.41% of scheduled minutes · on target\". It carries no band and says what it is read against.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=semantic&m=op_maint_pct&grade=26-C",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "op_maint_pct",
+       "group_by": [],
+       "filters": {
+        "grade": "26-C"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 0,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime \\(operator and maintenance\\), board grade \\(quality id\\) 26-C this month: \\*\\*[0-9.]+%\\*\\* of all the window's scheduled minutes \\(query 1\\)$",
+     "bullets": [
+      0,
+      0
+     ]
+    },
+    "sections_match": [
+     "^Board grade \\(quality id\\) 26-C cuts the operator and maintenance downtime only, never the scheduled minutes: the figure is the slice's part of the whole, not its own rate, so it carries no band\\.$"
+    ],
+    "sections_not_match": "· (home run|on target|over target|flag)"
+   }
+  },
+  {
+   "id": "semantic-split-by-kind-and-grade-rows-carry-no-band",
+   "type": "routing",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&by=kind,grade",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "period": "month",
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): downtime by stop kind and grade: the kind is band_by's own dimension, but the grade cuts each row's stops and never the scheduled minutes, so a row such as Maintenance · 26-C is the grade's part of the maintenance percent. Before the fix the kind in the row kept the maintenance band beside it; now no row carries a band and each says it is read against all the window's scheduled minutes.",
+   "reviewed_by": "owner-pending",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=semantic&m=downtime_pct&by=kind,grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_pct",
+       "group_by": [
+        "kind",
+        "grade"
+       ]
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "charts": 1,
+    "tables": [
+     "semantic_query"
+    ],
+    "shape": {
+     "headline_match": "^Downtime this month: \\*\\*[0-9.]+%\\*\\* of scheduled minutes \\(query 1\\)$",
+     "bullets": [
+      5,
+      5
+     ]
+    },
+    "sections_match": [
+     "^- Maintenance · [0-9A-Z-]+: \\*\\*[0-9.]+%\\*\\* of all the window's scheduled minutes \\(query 1 · row [0-9]+\\)$",
+     "^Each board grade \\(quality id\\) cuts the downtime only, never the scheduled minutes: each row is its slice's part of the whole, not its own rate, so the rows carry no band\\.$"
+    ],
+    "sections_not_match": "^- .*· (home run|on target|over target|flag)"
+   }
+  },
+  {
+   "id": "semantic-filter-contradicts-the-measure-op-maint-external",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=op_maint_pct&kind=External",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): a filter outside the measure's own records (operator and maintenance downtime filtered to the External kind) read \"0.00% · on target\", a recorded zero with a band. It is refused, naming the measure's own filter and the measure that counts every kind.",
+   "reviewed_by": "owner-pending",
+   "period": "month",
+   "expect": {
+    "raises": "^Downtime \\(operator and maintenance\\) \\(op_maint_pct\\) counts only stop kind Operator or Maintenance: stop kind External is outside it, and would read as a recorded zero\\. Filter by one of those, or ask downtime_pct for every stop kind\\.$"
+   }
+  },
+  {
+   "id": "semantic-filter-contradicts-the-measure-maintenance-pm-operator",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=maintenance_pm_minutes&kind=Operator",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): maintenance and planned-maintenance minutes filtered to the Operator kind read \"0.00 min\", a recorded zero for records the measure never counts. It is refused, naming the measure's own filter (the kinds this store holds) and the measure that counts every kind.",
+   "reviewed_by": "owner-pending",
+   "period": "month",
+   "expect": {
+    "raises": "^Maintenance and planned maintenance \\(maintenance_pm_minutes\\) counts only stop kind Maintenance or Scheduled: stop kind Operator is outside it, and would read as a recorded zero\\. Filter by one of those, or ask downtime_minutes for every stop kind\\.$"
+   }
+  },
+  {
+   "id": "semantic-refusal-lists-every-customer",
+   "type": "refusal",
+   "mode": "offline",
+   "url": "/corr/1/month/2026-09-14?measure=semantic&m=sheets&customer=C9999",
+   "day": "2026-09-14",
+   "scope": "day",
+   "shift": 2,
+   "note": "Issue #117 (semantic model, phase 1), the coordinator's re-review of PR #148 (head 868fdbf): a value the records do not hold, with nothing near it, on a dimension with more than forty values: the refusal said \"and 1 more\" with nowhere to see it. It lists every customer the records hold.",
+   "reviewed_by": "owner-pending",
+   "period": "month",
+   "expect": {
+    "raises": "^No customer 'C9999' in the records; the values are: C000, C001, .*, C039, C040$"
    }
   }
  ]
