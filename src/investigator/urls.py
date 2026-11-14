@@ -52,8 +52,9 @@ RANK_METRICS = ('speed', 'downtime', 'quality')
 # after `metric=`, so `unit` and `metric` sort before the dimension filters (a semantic address carries neither).
 SEMANTIC_FILTERS = tuple(d for d in semantic.model().dimensions if semantic.model().dimensions[d]['type'] != 'time' and d != 'shift')
 # A question the semantic model's parser ranked or read as a share (issue #144) keeps it in its address: `rank=most|least` (the
-# card names the first row: "Shift 3 had the most setups this week"), `top=N` (the first N rows) and `share=<value>` (the card opens
-# with that value's share of the total, by=<its dimension>).
+# card names the first row: "Shift 3 had the most setups this week"), `top=N` (the first N rows), `share=<value>` (the card opens
+# with that value's share of the total, by=<its dimension>; the query's `share` field, so its row is read whatever the limit) and
+# `share=each` (every row's share: the card opens with the largest).
 SEMANTIC_ORDERS = {'most': 'value', 'least': 'value_asc'}
 QUERY_FIELDS = ('measure', 'by', 'kind', 'unit', 'metric', 'weeks', 'window', 'compare', 'against', 'shifts', 'rank', 'lens', 'want',
                 'rates', 'corrupt', 'after', 'format', 'm', 'top', 'share', *(f for f in SEMANTIC_FILTERS if f != 'kind'), 'waste')
@@ -140,8 +141,10 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
                 params.append(('rank', lead['rank']))   # issue #144: a ranked question keeps its ranking
             if first.get('limit', semantic.DEFAULT_LIMIT) != semantic.DEFAULT_LIMIT:
                 params.append(('top', str(first['limit'])))
-            if lead.get('share') is not None:
-                params.append(('share', _semantic_text(lead['share'])))
+            if first.get('share') is not None:
+                params.append(('share', _semantic_text(first['share'])))   # one value's share: the query's own field
+            elif lead.get('shares'):
+                params.append(('share', 'each'))   # every row's share of the total (the review of PR #155)
             params.extend((dim, _semantic_text(value)) for dim, value in first['filters'].items())
             if first.get('compare') == 'previous':
                 params.append(('compare', 'prev'))
@@ -610,13 +613,16 @@ def _semantic(fields, context, window, shifts, store):
         if not re.fullmatch(r'[1-9]\d{0,2}', fields['top']) or int(fields['top']) > semantic.MAX_LIMIT or not group_by:
             raise ValueError(f'top is a number of rows from 1 to {semantic.MAX_LIMIT}, with by=<dimension>')
         limit = int(fields['top'])
+    share = fields.get('share')
+    if share == 'each':   # every row's share of the total: the card leads with the largest share (the review of PR #155)
+        if len(group_by) != 1:
+            raise ValueError('share=each reads each row of a single by= dimension as its share of the total, for a count or a sum')
+        lead['shares'], share = True, None
     query = semantic.SemanticQuery(measure=fields.get('m'), group_by=group_by, filters=filters, window=window,
-                                   compare='previous' if compare else None, order=order, limit=limit, shift=shift)
+                                   compare='previous' if compare else None, order=order, limit=limit, shift=shift, share=share)
     query = semantic.validate(query, store)
-    if 'share' in fields:   # issue #144: the share of one value of the split in the total
-        if len(query.group_by) != 1 or semantic.model().measures[query.measure]['agg'] not in semantic.ADDITIVE:
-            raise ValueError('share= names one value of a single by= dimension, for a count or a sum')
-        lead['share'] = semantic.resolve_value(query.group_by[0], fields['share'], store)
+    if lead.get('shares') and semantic.model().measures[query.measure]['agg'] not in semantic.ADDITIVE:
+        raise ValueError('share=each reads each row of a single by= dimension as its share of the total, for a count or a sum')
     request = {'intent': 'semantic', 'shifts': [shift] if shift else [], 'kind': None, 'group_by': 'reason', 'want_chart': bool(query.group_by),
                'ranking_metrics': [], 'plan': [{'tool': semantic.TOOL, 'arguments': query.to_arguments()}]}
     if lead:

@@ -92,7 +92,9 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   of each production day) is never answered for the selected shift when the question names no shift. Nor is any number
   (the review, the Pareto, the waste breakdown, the totals by grade, rollstock, the over/under-run, a window's speed) unless
   the question mentions a shift or asks why, what caused or drove it, or where it came from (the owner's scope ruling of
-  2026-11-13; a production day's per-shift answers keep the shift control).
+  2026-11-13; a production day's per-shift answers keep the shift control), and the selected shift's downtime breakdown
+  (`/shift/N?measure=downtime` with no split or filter) never answers a downtime question that names no shift, no day, no
+  dollars and investigates nothing (the review of PR #155: "stops" and "most common downtime reason").
   The allow-list states the general rule on the URL (round 6 of the review of PR 143): a `measure=quantity` or
   `measure=stops` URL answers only a question whose every word it consumes: the ask words, the measure's noun and unit
   (`metric=`), the words of `reason=`, `place=`, `waste=` or `grade=` and the connector before them, the window, a window
@@ -115,7 +117,13 @@ Two more hold "exact over summary" (issue #113), stated in `run.py` on their own
   per stop" wants minutes per stop), and a duration asked with none named is minutes ("how long are we down per stop").
   "Stops per day" and "downtime per day" are the stops or minutes of each production day, not a ratio. An average or
   typical stop wants minutes per stop, an average of a total or of a setup's length a ratio, a run length feet per setup,
-  feet a minute the speed, and the longest or shortest of anything says so: an answer of the window's total fails each.
+  feet a minute the speed, and the longest or shortest of anything says so: an answer of the window's total fails each
+  ("minimum stops in a day" may say so as the day ranked fewest, issue #144).
+- **a ranking names its extreme and its tie** (issue #144, the review of PR #155): a semantic headline that says `X had the
+  most …` (fewest, least, highest, lowest) fails when a row of the same lever ties X (a tie named as one winner) or beats it (a
+  fewest that is not the fewest), and `X and Y tied for …` fails when a tied row is neither named nor covered by "and others";
+  rows of another lever (planned maintenance, a power outage) never lead a ranking of stops. A tied headline may name every
+  tied row's label beside the row it cites.
 
 `tests/test_quantity_questions.py` runs both over the issue's catch-all audit as well: the issue's seven rows, the owner's
 interview phrasings and every count or unit phrasing that landed on the KPI summary before; each lands on a measure that

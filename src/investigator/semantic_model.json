@@ -83,7 +83,7 @@
                       "Slitter/scorer": ["slitter", "scorer", "slitter scorer"], "Steam system": ["steam", "boiler"]}},
   {"name": "reason", "label": "Stop reason", "type": "categorical", "entity": "stop", "expr": "{reason}",
    "description": "The reason logged for the stop: missed splice, knife / slitter jam, stacker, raw material, order change, glue / starch, steam / moisture, power outage, other; planned maintenance for a scheduled stop.", "synonyms": ["stop reason", "downtime reason", "cause"],
-   "value_synonyms": {"Glue / starch": ["glue", "starch"], "Knife / slitter jam": ["knife", "cut-off", "cutoff", "slitter jam", "knife jam"],
+   "value_synonyms": {"Glue / starch": ["glue", "starch"], "Knife / slitter jam": ["knife", "cut-off", "cutoff", "slitter jam", "knife jam", "slitter jams", "knife jams"],
                       "Missed splice": ["splice", "missed splices", "splicer"], "Order change": ["changeover", "order changes", "setup change"],
                       "Raw material (roll)": ["raw material", "roll", "paper"], "Steam / moisture": ["steam", "moisture"],
                       "Planned maintenance": ["pm", "planned", "scheduled"], "Power outage": ["outage", "power"]},

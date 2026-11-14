@@ -1604,6 +1604,10 @@ def quantity_default(text, lower, current, shifts, day, period, read, store=None
         return False
     if request.get('intent') not in NUMBER_INTENTS:
         return False
+    if request.get('intent') == 'semantic':
+        # the semantic model read the question over every shift: its number is every shift's, whatever the selected shift's hand
+        # route would have answered ("most common downtime reason" is not the selected shift's breakdown; the review of PR #155)
+        return True
     try:
         selected = parse_request(text, Context(day, current.shift, scope='shift', period=period, read=dict(read)), store)
     except ValueError:

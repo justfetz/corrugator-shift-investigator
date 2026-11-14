@@ -161,11 +161,6 @@ def named_per(question):
     if numerator in ('minutes', 'mins', 'downtime') and denominator == 'day':
         # the downtime of each production day, led by the day with the most minutes (round 4, item 9); a percent asked is a percent
         return r'%' if re.search(r'\bpercent(?:age)?\b|%', question, re.I) else r'\bmin(?:utes)?\b'
-    if numerator in ('setups', 'sheets', 'paper changes', 'paper change', 'stops', 'splices', 'jams', 'feet', 'ft', 'lineal', 'footage') \
-            and denominator in ('day', 'week', 'order'):
-        # a count or the feet per day, per week or per order is that quantity split by it (issue #144: the semantic model's split, as
-        # no ratio of them to days is kept), never a ratio
-        return rf'\b{PER_NUMERATOR.get(numerator, re.escape(numerator))}\b'
     return (rf'\b{PER_NUMERATOR.get(numerator, re.escape(numerator))}(?: per |/)'
             rf'{PER_DENOMINATOR.get(denominator, re.escape(denominator))}\b')
 
@@ -181,8 +176,11 @@ ASKED_UNITS = (# an average stop is minutes per stop; an average setup or run le
                 r'\bmin(?:utes)?(?: per |/)(?:setup|changeover|paper change|order change|run)\b'),
                # feet a minute is the speed (round 5, item 5)
                (r'\b(?:feet|ft) (?:a|an|per) min(?:ute)?\b', r'\bft/min\b'),
-               (r'\b(?:longest|shortest|maximum|minimum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|'
-                r'order changes?)\b', r'\b(?:longest|shortest|maximum|minimum)\b|\bhad the (?:most|fewest|least|highest|lowest)\b'),   # or ranked (#144)
+               # ... or, in a day ("minimum stops in a day"), the day ranked in the same direction (issue #144: the semantic model's ranking)
+               (r'\b(?:longest|maximum|max)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
+                r'\b(?:longest|maximum)\b|\b(?:had|tied for) the (?:most|highest)\b'),
+               (r'\b(?:shortest|minimum)\s+(?:single\s+)?(?:stops?|stoppages?|set-?ups?|runs?|changeovers?|paper changes?|order changes?)\b',
+                r'\b(?:shortest|minimum)\b|\b(?:had|tied for) the (?:fewest|least|lowest)\b'),
                # an average of a count or a total is a ratio, never the total ('average stops this week')
                (r'\b(?:average|avg|mean)\b(?!.*\bper\b)(?=.*\b(?:stops|setups|paper changes|order changes|changeovers|sheets|feet|ft|minutes|mins)\b)',
                 r'(?: per |/)'),
@@ -374,6 +372,12 @@ def plain_quantity_failures(question, url):
 # speed of a window (measure=fpm with window=, or under a ranged grain); a production day's per-shift answers keep the controls.
 SCOPED_NUMBER = (r'/shift/\d\?measure=(?:quantity|stops|review|pareto|waste|grade|rollstock|overrun)(?:&|$)'
                  r'|/(?:week|month|period)/[0-9-]+/shift/\d\?measure=fpm(?:&|$)|/shift/\d\?measure=fpm&(?:.*&)?window=')
+# ... and the day's downtime breakdown (measure=downtime, no split or filter) under one selected shift, for a downtime question that names
+# no shift, no day, no dollars and investigates nothing: the owner's downtime default answers every shift (the review of PR #155: "stops"
+# and "most common downtime reason" answered shift 2's breakdown)
+SCOPED_DOWNTIME = r'/shift/\d\?measure=downtime$'
+SCOPED_DOWNTIME_KEPT = (r'\bshifts?\b|\bcost\w*\b|\bdollars?\b|\$|\bmoney\b|\bpriced\b|\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b'
+                        r'|\b(?:this|that|the|selected|chosen)\s+(?:selected\s+|chosen\s+|same\s+)?(?:production\s+)?day\b')
 INVESTIGATION = (r'\bwhy\b|\bwhat\s+(?:caused|causes|drove|drives|led\s+to|leads\s+to)\b|\bwhat\s*(?:is|was|are|were|\'s)\s+(?:causing|driving|behind)\b'
                  r'|\bcom(?:e|es|ing)\s+from\b|\bwhat\s+went\s+wrong\b')
 
@@ -420,6 +424,9 @@ def catch_all_failures(question, url):
     if re.search(SCOPED_NUMBER, url or '') and not re.search(r'\bshifts?\b', question, re.I) and not re.search(INVESTIGATION, question, re.I):
         failures.append(f'{question[:60]!r} asks for a number and names no shift but is answered for the selected one ({url}): the owner\'s '
                         'scope ruling answers it for every shift')
+    if re.search(SCOPED_DOWNTIME, url or '') and not re.search(SCOPED_DOWNTIME_KEPT, question, re.I) and not re.search(INVESTIGATION, question, re.I):
+        failures.append(f'{question[:60]!r} asks about downtime and names no shift but is answered with the selected shift\'s breakdown ({url}): '
+                        'the owner\'s downtime default answers it for every shift')
     failures.extend(semantic_failures(question, url))
     if failures:
         return failures
@@ -819,6 +826,9 @@ def unprovenanced(lines, trace):
             record = records[int(index)]
             allowed = set().union(*(renderings(v) for v in record.values() if not isinstance(v, (str, list, dict))))
             names = [v for v in record.values() if isinstance(v, str)]
+            if part == 'row' and ' tied for ' in line:
+                # a tie names every row with the cited row's value (issue #144, the review of PR #155): their labels are tool output too
+                names += [r['label'] for r in records if isinstance(r.get('label'), str) and r.get('value') == record.get('value')]
         else:
             allowed = renderings(len(rows))
             if rows and 'actual_fpm' in rows[0] and 'target_fpm' in rows[0]:
@@ -836,6 +846,40 @@ def unprovenanced(lines, trace):
         for token in NUMBER.findall(rest):
             if token.rstrip(',') not in beside:
                 bad.append(f'{token!r} on a line citing query {step} {part or "result"} {index} is not from it: {line[:70]!r}')
+    return bad
+
+
+RANKED_HEAD = re.compile(r'^(?P<names>.+?) (?P<verb>had|tied for) the (?P<rank>most|fewest|least|highest|lowest) ')
+
+
+def ranked_failures(lines, trace):
+    """A ranked headline of the semantic model (issue #144, the review of PR #155) names the extreme of its rows and every row tied
+    with it: `X had the most ...` fails when another row of the same lever has the same value (a tie named as one winner) or a value
+    beyond it (a fewest that is not the fewest: a place with no stops left out); `X and Y tied for ...` fails when a tied row of the
+    same lever is neither named nor covered by "and others". Rows of another lever (planned maintenance, a power outage) never lead."""
+    bad = []
+    for line in lines:
+        head = RANKED_HEAD.match(line)
+        refs = EVIDENCE.findall(line)
+        if line.startswith('- ') or not head or len(refs) != 1 or refs[0][1] != 'row':
+            continue
+        step, _, index = refs[0]
+        source = trace[int(step) - 1] if 0 < int(step) <= len(trace) else None
+        if source is None or not source['ok'] or source['tool'] != semantic.TOOL or 'share_row' in source['data']:
+            continue
+        rows, row = source['data']['rows'], source['data']['rows'][int(index)]
+        peers = [r for r in rows if r is not row and r.get('lever') == row.get('lever') and r.get('value') is not None]
+        most = head['rank'] in ('most', 'highest')
+        beyond = [r for r in peers if (r['value'] > row['value'] if most else r['value'] < row['value'])]
+        if beyond:
+            bad.append(f'{head["names"]!r} is named the {head["rank"]} but {beyond[0]["label"]!r} has {beyond[0]["value"]!r}: {line[:70]!r}')
+        tied = [r for r in peers if r['value'] == row['value']]
+        if tied and head['verb'] == 'had':
+            bad.append(f'{head["names"]!r} is named alone but {tied[0]["label"]!r} ties it: {line[:70]!r}')
+        elif head['verb'] == 'tied for' and 'and others' not in head['names']:
+            missing = [r['label'] for r in tied if r['label'] not in head['names']]
+            if missing or not tied:
+                bad.append(f'the tie in {line[:70]!r} leaves out {missing or "nothing tied"}')
     return bad
 
 
@@ -903,6 +947,9 @@ def invariants(mode, result, analysis, allowed_shifts, tools=TOOL_NAMES):
     bad = unprovenanced(result['sections'], trace)
     if bad:
         failures.append('figures not from their cited row: ' + '; '.join(bad[:3]))
+    bad = ranked_failures(result['sections'], trace)
+    if bad:
+        failures.append('a ranking that does not name its extreme or its tie: ' + '; '.join(bad[:3]))
     for paragraph in result.get('narrative', []):
         bad = unfaithful_numbers([paragraph['text']], trace)
         if bad:

@@ -1777,6 +1777,13 @@ class SemanticAnswer:
         self.evidence, self.context, self.lead = evidence, context, lead or {}
 
     def wp(self, data):
+        """The window's words on the card: the question's own when it moved the window ("last week", "yesterday": the review of
+        PR #155, never "this week" for the week before), else the selected day's ("this week"; '' for the day itself)."""
+        read = getattr(self.context, 'read', None) or {}
+        window = data.get('window') or {}
+        if read.get('words') and read.get('period') == window.get('period') and 'start' in window \
+                and window['start'] <= read.get('day', self.context.production_day) <= window['end']:
+            return f' {read["words"]}'
         return PeriodAnswer.wp(self, data)
 
     def sfx(self, data):
@@ -1821,7 +1828,11 @@ class SemanticAnswer:
             # the whole, with no figure of its own and no citation (a cited line carries its bold figure; this one is the envelope's total)
             total = REF.sub('', 'In all' + head[len(data['label']):].replace(f'**{bold}**', bold))
             head = led
-        bullets = [self.row_line(result, i, row) for i, row in enumerate(data['rows'])]
+        order = list(range(len(data['rows'])))
+        if self.lead.get('rank'):
+            apart = self.apart(data)   # planned maintenance and external downtime follow the ranking of the unplanned rows
+            order = [i for i in order if i not in apart] + [i for i in order if i in apart]
+        bullets = [self.row_line(result, i, data['rows'][i]) for i in order]
         if len(bullets) > SEMANTIC_FIRST:
             bullets = bullets[:SEMANTIC_FIRST] + ['The rest, in the same order'] + bullets[SEMANTIC_FIRST:]
         notes = [total] if total else []
@@ -1833,8 +1844,10 @@ class SemanticAnswer:
             notes.append('Deltas are withheld: a window is incomplete or unavailable. Missing days are not zero production.')
         if data['group_by'] and not data['rows']:
             notes.append('No records in this window for this split.')
-        if data['groups'] > data['rows_shown']:
-            notes.append(f'The first {n(data["rows_shown"])} of {n(data["groups"])} rows are listed; the total is over every row.')
+        listed = data['rows_shown'] - (1 if data.get('share_row') == data['rows_shown'] - 1 and data['rows_shown'] > data['query'].get('limit', 0) else 0)
+        if data['groups'] > listed:
+            after = f', then {data["rows"][data["share_row"]]["label"]}\'s' if listed < data['rows_shown'] else ''
+            notes.append(f'The first {n(listed)} of {n(data["groups"])} rows are listed{after}; the total is over every row.')
         notes.append(window_head(data))
         notes.append(f'{data["label"]}: {data["definition"]}')
         notes.append(f'Lever: {data["lever"]}.')
@@ -1849,35 +1862,76 @@ class SemanticAnswer:
         looks = self.looks(data)
         return [head, *bullets, *notes] + ([LOOK, *looks] if looks else [])
 
+    @staticmethod
+    def apart(data):
+        """The rows a ranking of stops never leads with (the owner, docs/METRICS.md): planned maintenance (schedule-driven) and
+        external downtime (a power outage), when their lever is not the measure's own. Their indices; empty for any other entity."""
+        if data.get('entity') != 'stop':
+            return set()
+        return {i for i, r in enumerate(data['rows']) if r.get('lever') in ('schedule-driven', 'external') and r.get('lever') != data.get('lever')}
+
+    @staticmethod
+    def names(labels):
+        """`A`, `A and B`, `A, B and C`; more than three tied: the first three `and others` (a tie said, never a count typed)."""
+        if len(labels) > 3:
+            return ', '.join(labels[:3]) + ' and others'
+        return ', '.join(labels[:-1]) + ' and ' + labels[-1] if len(labels) > 1 else labels[0]
+
     def led_head(self, result, where, wp, unit):
         """The headline of a ranked question or a share (issue #144), citing the row it names: `Shift 3 had the most setups this
-        week: **204 setups**`, `Stacker was 29.77% of the stops this week: **39 stops**`. None when the question asked neither, or
-        the window is incomplete (rankings are withheld), or the value has no row."""
+        week: **204 setups**`, `Stacker was 29.77% of the stops this week: **39 stops**`, `Operator was the largest share of the
+        stops this week, 40.46%: **53 stops**`. Every row tied with the first is named (`Crew B and Crew C tied for the most`);
+        a ranking of stop reasons or kinds leads with the unplanned ones. None when the question asked neither, or the window
+        is incomplete (rankings are withheld), or the value has no row."""
         data = result['data']
         rows = data['rows']
         noun = re.sub(r'\s*\(.*\)$', '', data['label']).lower()
-        if self.lead.get('share') is not None and len(data['group_by']) == 1:
-            dim = data['group_by'][0]
-            index = next((i for i, r in enumerate(rows) if r.get(dim) == self.lead['share'] and r.get('share_pct') is not None), None)
-            if index is None:
-                return None
+        if data.get('share_row') is not None:
+            # one value's share: its row, which the query reads whatever the limit (a zero row when it has no records)
+            index = data['share_row']
             row = rows[index]
+            if row.get('share_pct') is None:
+                return None
             bold, rest = semantic_figure(row['value'], self.unit_of(row, data['unit']))
             # the share asked leads the line; the bold figure is the row's own, which its records recompute (the receipt, #151)
             return f'{row["label"]} was {f2(row["share_pct"])}% of the {noun}{where}{wp}: **{bold}**{rest} {ref(result, index)}'
-        if not self.lead.get('rank') or not rows or data['window']['coverage'] != 'complete':
+        if not rows or data['window']['coverage'] != 'complete':
             return None
-        row = rows[0]
+        apart = self.apart(data)
+        considered = [i for i in range(len(rows)) if i not in apart and rows[i].get('value') is not None]
+        if not considered:
+            return None
+        dim_noun = GROUP_NOUNS.get(data['group_by'][0], data['group_by'][0].replace('_', ' ')) if data['group_by'] else ''
+        if self.lead.get('shares') and all(rows[i].get('share_pct') is not None for i in considered):
+            index = max(considered, key=lambda i: rows[i]['value'])
+            tied = [i for i in considered if rows[i]['value'] == rows[index]['value']]
+            # the unplanned said only when a planned or external row would have been the largest
+            unplanned = f' of the unplanned {dim_noun}s' if any(rows[i]['value'] > rows[index]['value'] for i in apart) else ''
+            verb = 'tied for' if len(tied) > 1 else 'was'
+            bold, rest = semantic_figure(rows[index]['value'], self.unit_of(rows[index], data['unit']))
+            return (f'{self.names([rows[i]["label"] for i in tied])} {verb} the largest share of the {noun}{unplanned}{where}{wp}, '
+                    f'{f2(rows[index]["share_pct"])}%: **{bold}**{rest} {ref(result, index)}')
+        if not self.lead.get('rank'):
+            return None
+        index = considered[0]   # the rows are ranked by DuckDB (value, then the dimension's own order)
+        tied = [i for i in considered if rows[i]['value'] == rows[index]['value']]
         kind = 'ratio' if data['agg'] == 'ratio' else 'count' if data['unit'] in SEMANTIC_COUNTS else 'sum'
         word = {('most', 'count'): 'the most', ('least', 'count'): 'the fewest', ('most', 'sum'): 'the most', ('least', 'sum'): 'the least',
                 ('most', 'ratio'): 'the highest', ('least', 'ratio'): 'the lowest'}[(self.lead['rank'], kind)]
+        # a ranking of stop reasons or kinds ranks the unplanned ones (the owner, docs/METRICS.md), and says so every time
+        unplanned = (f' of the unplanned {dim_noun}s' if data.get('entity') == 'stop' and data['group_by'][0] in ('reason', 'kind')
+                     and data.get('lever') not in ('schedule-driven', 'external') else '')
+        verb = 'tied for' if len(tied) > 1 else 'had'
+        row = rows[index]
         bold, rest = semantic_figure(row['value'], self.unit_of(row, data['unit']))
-        return f'{row["label"]} had {word} {noun}{where}{wp}: **{bold}**{rest}{band(row.get("band_text"))} {ref(result, 0)}'
+        return (f'{self.names([rows[i]["label"] for i in tied])} {verb} {word} {noun}{unplanned}{where}{wp}: **{bold}**{rest}'
+                f'{band(row.get("band_text"))} {ref(result, index)}')
 
     def read_as(self, data, wp):
-        """`Read as: setups by shift, this week, all shifts, most first.` (issue #144): what the semantic query read, from the
-        result itself, so a question and its address show the same line. Every word of a question that answered is in it: the
-        parser refuses rather than drop one."""
+        """`Read as: setups by shift, Week 2026-09-14 to 2026-09-18 (Mon-Fri), all shifts, largest first.` (issue #144): what the
+        semantic query read, from the result itself, so a question and its address show the same line. The window is named by
+        its own label, its dates (the review of PR #155: "last week" is never "this week"). Every word of a question that
+        answered is in it: the parser refuses rather than drop one."""
         unit = data['unit']
         noun = re.sub(r'\s*\(.*\)$', '', data['label']).lower()
         what = noun if unit in SEMANTIC_COUNTS else f'{noun} in dollars' if unit == '$' else f'{noun} in {unit}'
@@ -1885,14 +1939,16 @@ class SemanticAnswer:
             what += f', {re.sub(r"\s*\(.*\)$", "", f["label"]).lower()} {f["text"]}'
         if data['group_by']:
             what += ' by ' + ' and '.join(GROUP_NOUNS.get(d, d.replace('_', ' ')) for d in data['group_by'])
-        parts = [what, wp.strip() if wp else data['window']['label'], f'shift {data["shift"]}' if data.get('shift') else 'all shifts']
+        parts = [what, data['window']['label'], f'shift {data["shift"]}' if data.get('shift') else 'all shifts']
         if self.lead.get('rank'):
             parts.append(('largest' if self.lead['rank'] == 'most' else 'smallest') + ' first')
-        if data['groups'] > data['rows_shown'] and data['query'].get('limit') == data['rows_shown']:
-            parts.append(f'the first {n(data["rows_shown"])}')
-        if self.lead.get('share') is not None:
-            label = next((r['label'] for r in data['rows'] if r.get(data['group_by'][0]) == self.lead['share']), None) if data['group_by'] else None
-            parts.append(f'the share of {label}' if label else 'each row\'s share of the total')
+        limit = data['query'].get('limit')
+        if limit is not None and limit < data['groups'] and limit <= data['rows_shown']:
+            parts.append(f'the first {n(limit)}')
+        if data.get('share_row') is not None:
+            parts.append(f'the share of {data["rows"][data["share_row"]]["label"]}')
+        elif self.lead.get('shares'):
+            parts.append("each row's share of the total")
         if data.get('previous_window'):
             parts.append(f'against {data["previous_window"]["label"]}')
         return 'Read as: ' + ', '.join(parts) + '.'
@@ -1935,7 +1991,9 @@ class SemanticAnswer:
         return bullet(text, result, i)
 
     def looks(self, data):
-        wp, sfx = self.wp(data), self.sfx(data)
+        # a look is asked in the card's own scope, which already moved to the window the question named: its words are that
+        # scope's ("this week" on last week's card), never the question's ("last week" there would be the week before)
+        wp, sfx = PeriodAnswer.wp(self, data), self.sfx(data)
         if wp is None:
             return []
         kinds = SEMANTIC_LOOKS[data['entity'] + (' waste' if data['entity'] == 'setup' and data['unit'] in ('sq ft', '% of gross', '$') else '')]

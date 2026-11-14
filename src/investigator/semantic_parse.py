@@ -16,6 +16,7 @@ parser reads completely. `read` returns a `Reading`; `route` is what the offline
 model, refuse, or leave the question to the hand router (`agent.parse_request`).
 """
 from dataclasses import dataclass, field
+from datetime import date
 import re
 
 from . import agent, semantic
@@ -49,6 +50,12 @@ COMPARE = ('compare', 'compared', 'comparing', 'comparison', 'versus', 'vs', 'ag
 STATISTIC = ('average', 'avg', 'mean', 'median', 'typical', 'typically', 'percentile', 'deviation', 'variance', 'longest',
              'shortest', 'std', 'stdev', 'rate', 'ratio', 'distribution')
 EVALUATIVE = ('worst', 'best', 'better', 'worse', 'good', 'bad', 'poor', 'poorest', 'strongest', 'weakest')
+SUPERLATIVE = ('worst', 'best', 'poorest', 'strongest', 'weakest')   # a ranking with no measure ("worst shift"): refused over a summary
+# The statistics a flagship answer never answers in their place ("median downtime" is not the downtime review): refused over it
+STATISTIC_ASKED = ('average', 'avg', 'mean', 'median', 'typical', 'typically', 'percentile', 'deviation', 'variance', 'std', 'stdev')
+# The dimensions "per" never splits by: "sheets per order" is a ratio of orders the records do not count (the review of PR #155),
+# never each order's sheets
+PER_RATIO_DIMS = ('order', 'wet_end', 'customer')
 # The units a measure is asked in: the measure of the same quantity in that unit (its ratio in %, its priced dollars, ...)
 UNITS = {('percent',): '%', ('percentage',): '%', ('%',): '%', ('pct',): '%', ('dollars',): '$', ('dollar',): '$', ('$',): '$',
          ('cost',): '$', ('costs',): '$', ('costing',): '$', ('usd',): '$', ('money',): '$', ('minutes',): 'min', ('mins',): 'min',
@@ -64,7 +71,10 @@ ENTITY_DEFAULT = {'reject': 'reject_sqft'}
 DIMENSION_FIRST = ('kind',)
 ASK = ((r"\bhow\s+often\b", 'count'), (r"\bhow\s+many\b", None), (r"\bnumber\s+of\b", None), (r"\bcount\s+of\b", None),
        (r"\bhow\s+long\b", 'min'), (r"\bhow\s+much\s+time\b", 'min'), (r"\bhow\s+much\b", None), (r"\btotal\b", None))
-SHARE = r"\b(?:what\s+)?(?:percent(?:age)?|%|share|proportion|fraction|portion)\s+of\b"
+SHARE = r"\b(?:what\s+)?(?:percent(?:age)?|%|share|proportion|fraction|portion)\s+of\b|\bhow\s+much\s+of\b"
+# The verb after the measure of a share: the value after it is the one whose share is asked ("what percent of maintenance stops
+# were at the stacker": the stacker's share of the maintenance stops; Codex on PR #155), a value before it narrows the whole
+COPULA = ('was', 'were', 'is', 'are')
 TOP_N = r"\b(top|bottom)\s+(\d{1,2}|" + '|'.join(agent.WORD_NUMBERS) + r")\b"
 SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\bshifts\s+(together|combined)\b|\bevery\s+shift\s+together\b"
 THIS_SHIFT = r"\b(this|that|my|our|the)\s+shift\b"
@@ -77,6 +87,12 @@ SPLIT_BY = r"\b(?:broken|break|split)\s+(?:down\s+|out\s+|up\s+)?(?:by|per)\b"
 # A window named in words this parser does not apply: refused, never read as the selected window
 UNREAD_WINDOW = (agent.UNREAD_WINDOW + r"|\b(this|last|next)\s+year\b|\bin\s+20\d\d\b|\b20\d\d\b|\bweekends?\b|\btoday\b|\btomorrow\b"
                  r"|\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b|\b(year|quarter)\b")
+# ... of which these are never the selected day, so a hand route that answers the selected day for them answers another window (round 5
+# of the coordinator's notes on #144): refused over it. A weekday is one when it is not the selected day's ("on Monday" on a Monday is
+# that day; "Mondays" asks a weekday profile, not a window).
+WRONG_WINDOW = (r"\b(this|last|next)\s+year\b|\bin\s+20\d\d\b|\bweekends?\b|\b(the\s+)?day\s+before\b|\b(the\s+)?previous\s+(production\s+)?day\b"
+                r"|\b(last|previous|next)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b"
+                r"|\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|" + agent.ROLLING_WINDOW)
 
 
 @dataclass
@@ -96,6 +112,7 @@ class Reading:
     suggestions: list = field(default_factory=list)
     measure: str = None
     window_words: str = ''
+    shares: bool = False   # a share of each row of a split ("percent of stops by kind"): the card leads with the largest share
 
     @property
     def complete(self):
@@ -317,7 +334,13 @@ def _read(reading, text, context, store, mdl):
     compare = 'previous' if previous else None
     unread = re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
-        raise Refused(f"'{unread[0].strip()}' is not a window the semantic model reads: the windows are the production day, the "
+        wrong = re.search(WRONG_WINDOW, lower)
+        weekday = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')[date.fromisoformat(context.production_day).weekday()]
+        said = unread[0].strip()
+        if wrong and wrong[0] != weekday:
+            reading.cues.add('wrong window')
+            said = re.sub(r'^the\s+', '', wrong[0].strip())
+        raise Refused(f"'{said}' is not a window the semantic model reads: the windows are the production day, the "
                       "Mon-Fri week, the calendar month and the 4-4-5 period")
     named = set()
     for m in re.finditer(r"\b(" + '|'.join(agent.MONTH_NAMES) + r")\b", lower):
@@ -337,6 +360,14 @@ def _read(reading, text, context, store, mdl):
                 named.add(('day', anchor, None))
     for pattern in agent.WINDOW_WORDS:
         lower, _ = _consume(pattern, lower, used, 'window')
+    if read_words.get('words'):
+        # the words the scope moved on ("last week", "yesterday") are the ones the question used, not their reading in that scope
+        moved = agent.READ_AS[read_words['period']]
+        hit = next((k for k, (words, role) in enumerate(used) if role == 'window' and words == moved), None) if moved else None
+        if hit is not None:
+            used[hit] = (read_words['words'], 'window')
+        elif not moved:
+            used.append((read_words['words'], 'window'))
     if len(named) > 1:
         raise Refused('The question names more than one window: ask one window at a time, or one window against the one before it')
     if named:
@@ -344,6 +375,10 @@ def _read(reading, text, context, store, mdl):
     elif previous_grain:
         period = previous_grain   # "our speed vs last week": this week against the one before
     reading.window_words = _window_words(period, month)
+    if read_words.get('words') and read_words.get('period') == period and month is None and not previous_grain:
+        # the window the question moved to keeps its own words in a suggestion ("stops by shift last week", never "this week",
+        # which in the visitor's scope is another week: the review of PR #155)
+        reading.window_words = read_words['words']
     # ---- the shift: one named (agent.named_shifts), the selected one ("this shift"), or all of them
     lower, unread_shift = _consume(agent.UNREAD_SHIFT, lower, used, 'unread shift')
     if unread_shift:
@@ -354,15 +389,15 @@ def _read(reading, text, context, store, mdl):
                         lower, used, 'shift')
     lower, this_shift = _consume(r"\b(?:(?:on|for|in|during)\s+)?" + THIS_SHIFT, lower, used, 'shift')
     lower, all_shifts = _consume(SHIFTS_ALL, lower, used, 'all shifts')
-    # ---- the asks, the share and "top N"
+    # ---- the share, the asks and "top N" (the share first: "how much of the downtime" is a share, not an ask)
+    lower, share = _consume(SHARE, lower, used, 'share')
+    if share:
+        reading.cues.add('share')
     ask_unit, ask_often = None, bool(re.search(r"\bhow\s+often\b", lower))
     for pattern, unit in ASK:
         lower, hits = _consume(pattern, lower, used, 'ask')
         if hits and ask_unit is None and unit is not None:
             ask_unit = unit
-    lower, share = _consume(SHARE, lower, used, 'share')
-    if share:
-        reading.cues.add('share')
     limit, rank = semantic.DEFAULT_LIMIT, None
     top = re.search(TOP_N, lower)
     if top:
@@ -459,8 +494,8 @@ def _cued(items, i):
     j = i - 1
     while j >= 0:
         it = items[j]
-        if it.kind in ('group', 'which', 'rank', 'speed_rank', 'compare') or it.words == 'what':
-            return True
+        if it.kind in ('group', 'which', 'rank', 'speed_rank', 'compare') or it.words == 'what' or it.words in SUPERLATIVE:
+            return True   # ... or a superlative with no measure ("best crew": the crew, ranked on a measure not named)
         if it.role in ('measure', 'unit') or it.kind in ('frequency', 'unit') or (it.kind == 'filler' and it.words in ARTICLES):
             j -= 1
             continue
@@ -479,7 +514,7 @@ def _assign(reading, items, mdl, store, a, context):
     the window, the shift, the asks, the share, "top N", "per day" and a reason's connector."""
     rank, limit, units, leftover = a['rank'], a['limit'], [], []
     statistic, evaluative, which, speed_rank, frequency, who = [], [], False, None, False, False
-    group_by, filters = [], {}
+    group_by, filters, per_ratio = [], {}, None
     for i, item in enumerate(items):
         kind = item.kind
         if kind == 'unit':
@@ -500,9 +535,13 @@ def _assign(reading, items, mdl, store, a, context):
         elif kind == 'statistic':
             statistic.append(item.words)
             reading.cues.add('statistic')
+            if item.words in STATISTIC_ASKED:
+                reading.cues.add('statistic asked')
         elif kind == 'evaluative':
             evaluative.append(item.words)
             reading.cues.add('rank')
+            if item.words in SUPERLATIVE:
+                reading.cues.add('evaluative')
         elif kind == 'compare':
             item.role = 'compare'
             reading.cues.add('compare')
@@ -574,19 +613,25 @@ def _assign(reading, items, mdl, store, a, context):
         if item.role != 'dimension':
             continue
         dim = item.value
-        if dim == 'shift' and a['shifts'] and not (which or rank or 'compare' in reading.cues):
-            item.role = 'shift'   # "shift" said beside its number
+        if dim == 'shift' and a['shifts'] and not (which or rank or 'compare' in reading.cues or _cued(items, i) or item.words in INHERENT):
+            item.role = 'shift'   # "shift" said beside its number; "by shift" beside one is a split, refused below
             continue
         nxt = items[i + 1] if i + 1 < len(items) else None
         if nxt is not None and nxt.role == 'value' and any(e[1] == dim for e in nxt.value):
             item.role, nxt.value = 'qualifier', [e for e in nxt.value if e[1] == dim]   # "stop kind Maintenance", "reason stacker"
             continue
         if _cued(items, i) or item.words in INHERENT or (item.words.endswith('s') and ('compare' in reading.cues or rank or which)):
+            if item.words == 'daily' and dim == 'day':
+                a['per_day'] = True   # "daily setups": per day, read below as the measure's ratio to the days or each day's stops
+                item.role = 'per'
+                continue
             if dim not in group_by:
                 group_by.append(dim)
             for j in range(i - 1, -1, -1):
                 if items[j].kind == 'group' and items[j].role is None:
                     items[j].role = 'group'
+                    if items[j].words == 'per' and dim in PER_RATIO_DIMS:
+                        per_ratio = item.words
                     break
                 if items[j].kind not in ('filler', 'frequency', 'unit') and items[j].role not in ('measure', 'unit', 'rank'):
                     break
@@ -639,6 +684,10 @@ def _assign(reading, items, mdl, store, a, context):
                           "semantic model", [f'{_measure_word(mdl, measure)} {reading.window_words}'.strip()])
         measure = refined
     reading.measure = measure
+    if per_ratio:
+        reading.cues.add('per')
+        raise Refused(f"{(_measure_word(mdl, measure) if measure else 'that').capitalize()} per {per_ratio} is not a ratio the semantic model "
+                      "defines: it counts no orders, paper runs or customers to divide by", _suggest(mdl, reading, measure or 'sheets', None, None))
     # ---- per: a dimension after it splits; a measure after it is a ratio the model defines, or refused
     for i, item in enumerate(items):
         if item.kind != 'group' or item.words != 'per' or item.role == 'group':
@@ -671,6 +720,12 @@ def _assign(reading, items, mdl, store, a, context):
         days = _ratio(mdl, measure, 'production_days') if measure else None
         if days:
             measure = days
+        elif measure and mdl.measure_entities(measure)[0] != 'stop' and mdl.measures[measure]['agg'] in semantic.SIMPLE:
+            # setups or feet per day is no ratio the model keeps (the review of PR #155: never each day's rows said as a rate);
+            # the stops and the downtime of each production day are the stops profile's own reading
+            raise Refused(f"{_measure_word(mdl, measure).capitalize()} per day is not a ratio the semantic model defines",
+                          [f'{_measure_word(mdl, measure)} by day {reading.window_words or "this week"}'.strip(),
+                           f'{_measure_word(mdl, measure)} {reading.window_words}'.strip()])
         elif 'day' not in group_by:
             group_by.append('day')
     reading.measure = measure
@@ -697,9 +752,13 @@ def _assign(reading, items, mdl, store, a, context):
                 exact = list(dict.fromkeys(e[1] for e in candidates if e[3]))
                 dims = exact if len(exact) == 1 else dims
         if len(dims) > 1:
-            options = [f"{_measure_word(mdl, measure or 'stops')} {'at' if d == 'place' else 'for' if d == 'reason' else 'of'} "
-                       f"{'the ' if d == 'place' else ''}{next(e[2] for e in candidates if e[1] == d)} {reading.window_words}".strip()
+            word = _measure_word(mdl, measure or 'stops')
+            options = [(f"what percent of {word} was {_value_phrase(mdl, d, next(e[2] for e in candidates if e[1] == d))} "
+                        if 'share' in reading.cues else
+                        f"{word} {'at' if d == 'place' else 'for' if d == 'reason' else 'of'} "
+                        f"{'the ' if d == 'place' else ''}{next(e[2] for e in candidates if e[1] == d)} ") + reading.window_words
                        for d in dims]
+            options = [o.strip() for o in options]
             raise Refused(f"'{item.words}' is a {' and a '.join(_dim_word(mdl, d) for d in dims)}: say which", options)
         dim = dims[0]
         value = next(e[2] for e in candidates if e[1] == dim)
@@ -731,10 +790,32 @@ def _assign(reading, items, mdl, store, a, context):
     share_value = None
     if 'share' in reading.cues:
         if filters and not group_by:
-            dim = next(iter(filters))
+            # the value after the verb is the share ("what percent of maintenance stops were at the stacker"), a value beside the
+            # measure narrows the whole; with two values and no verb between them, which share is asked is not said
+            at = {it.value[0]: i for i, it in values if it.role == 'value' and isinstance(it.value, tuple)}
+            measure_at = next((k for k, it in enumerate(items) if it.role == 'measure'), None)
+            verb = next((k for k, it in enumerate(items) if it.words in COPULA and (measure_at is None or k > measure_at)), None)
+            after = sorted((d for d in filters if verb is not None and at.get(d, -1) > verb), key=lambda d: at[d])
+            if len(filters) == 1:
+                dim = next(iter(filters))
+            elif after:
+                dim = after[0]   # the first value after the verb; one after it narrows ("were warp on 32-C": warp's share of 32-C's)
+            else:
+                word = _measure_word(mdl, measure or 'stops')
+                first, second = list(filters)[:2]
+                raise Refused('Two values are named and the share of one of them is not said: ask the share of one within the other',
+                              [f"what percent of {_label_word(mdl, first, filters[first])} {word} were {_value_phrase(mdl, second, filters[second])} "
+                               f"{reading.window_words}".strip(),
+                               f"what percent of {_label_word(mdl, second, filters[second])} {word} were {_value_phrase(mdl, first, filters[first])} "
+                               f"{reading.window_words}".strip()])
             share_value = filters.pop(dim)
             group_by.append(dim)
-        elif not group_by:
+        elif group_by:
+            if len(group_by) > 1:
+                raise Refused('A share of each row is read for a split by one dimension: ask one split at a time',
+                              _suggest(mdl, reading, measure or 'stops', group_by[0], None))
+            reading.shares = True   # "percent of stops by kind": each row's share of the total
+        else:
             raise Refused('A share is of a whole split by a dimension: name the value whose share you want, or what to split by',
                           _suggest(mdl, reading, measure or 'stops', None, None))
     if filters:
@@ -759,8 +840,9 @@ def _assign(reading, items, mdl, store, a, context):
         raise Refused("'who' could be a shift or a crew: say which", _suggest(mdl, reading, measure or 'stops', None, rank or 'most',
                                                                                  dims=['shift', 'crew']))
     if evaluative:
+        said = group_by[0] if group_by else next((it.value for it in items if it.role == 'dimension' and isinstance(it.value, str)), 'shift')
         raise Refused(f"'{evaluative[0]}' does not say which way is better: name the measure and the direction",
-                      _suggest(mdl, reading, measure, group_by[0] if group_by else 'shift', 'most'))
+                      _suggest(mdl, reading, measure, said, 'most'))
     if statistic:
         base = measure or 'stops'
         ratios = [n for n, o in mdl.measures.items() if o['agg'] == 'ratio' and base in (o['numerator'], o['denominator'])
@@ -792,6 +874,13 @@ def _assign(reading, items, mdl, store, a, context):
     if 'share' in reading.cues and mdl.measures[measure]['agg'] not in semantic.ADDITIVE:
         raise Refused(f"A share of the total is read for a count or a sum, and {_measure_word(mdl, measure)} is a ratio",
                       _suggest(mdl, reading, measure, group_by[0] if group_by else None, None))
+    if 'shift' in group_by and len(a['shifts']) == 1 and not joined:
+        # "which shift had the most stops on shift 2": the named shift is never dropped for the split (the review of PR #155)
+        said = next((w for w, role in reading.used if role == 'shift'), f'shift {a["shifts"][0]}')
+        said = re.sub(r'^(?:on|for|by|in|during|from)\s+(?:the\s+)?', '', said)
+        reading.cues.add('shift split')
+        raise Refused(f"'{said}' names one shift beside a split by shift: ask every shift, or that shift alone",
+                      _suggest(mdl, reading, measure, 'shift', rank or speed_rank) + [f'{_measure_word(mdl, measure)} on {said} {reading.window_words}'.strip()])
     # ---- the shift: a split by shift reads every shift; else the one named, the selected one, or every shift
     if 'shift' in group_by or a['all_shifts']:
         shift = None
@@ -814,11 +903,20 @@ def _assign(reading, items, mdl, store, a, context):
         order = 'value' if rank == 'most' else 'value_asc'
         reading.rank = rank
     query = semantic.SemanticQuery(measure=measure, group_by=group_by, filters=filters, window={'period': a['period'], 'anchor': a['anchor']},
-                                   compare=a['compare'], order=order, limit=limit, shift=shift)
+                                   compare=a['compare'], order=order, limit=limit, shift=shift, share=share_value)
     reading.query = semantic.validate(query, store, mdl)
-    if share_value is not None:
-        reading.share = semantic.resolve_value(group_by[0], share_value, store, mdl)
+    reading.share = reading.query.share
     reading.used += [(it.words, it.role) for it in items if it.role]
+
+
+def _value_phrase(mdl, dim, value):
+    """A value as the end of a share question says it: `at the Stacker`, `for Missed splice`, `Maintenance`."""
+    return f'at the {value}' if dim == 'place' else f'for {value}' if dim == 'reason' else str(value)
+
+
+def _label_word(mdl, dim, value):
+    """A value as a word before the measure: `maintenance stops`, `32-C setups`."""
+    return str(value).lower() if dim in ('kind', 'place', 'reason', 'reject_family', 'reject_reason') else str(value)
 
 
 def _suggest(mdl, reading, measure, dim, rank, dims=None):
@@ -862,14 +960,14 @@ def refusal_text(reading):
 
 
 def request_of(reading):
-    """The offline request for a complete reading: one semantic_query step; `lead` carries the ranking or the share the card
-    opens with (urls.py writes them as order=, top= and share=)."""
+    """The offline request for a complete reading: one semantic_query step; `lead` carries the ranking or the shares the card
+    opens with (urls.py writes them as rank= and share=each; one value's share is the query's own `share`, share=<value>)."""
     query = reading.query
     lead = {}
     if reading.rank:
         lead['rank'] = reading.rank
-    if reading.share is not None:
-        lead['share'] = reading.share
+    if reading.shares:
+        lead['shares'] = True
     request = {'intent': 'semantic', 'shifts': [query.shift] if query.shift else [], 'kind': None, 'group_by': 'reason',
                'want_chart': bool(query.group_by), 'ranking_metrics': [], 'plan': [{'tool': semantic.TOOL, 'arguments': query.to_arguments()}]}
     if lead:
@@ -937,7 +1035,8 @@ def covers(request, reading, context=None):
     per_shift = len({s['arguments'].get('shift') for s in plan}) > 1 or (not plan and intent == 'downtime' and len(request.get('shifts') or []) > 1)
     if 'shift' in group_by and per_shift:
         group_by.remove('shift')   # the hand route runs once per shift named ("downtime by reason for first shift and third shift")
-    rank, share, filters = reading.rank, reading.share, q.filters
+    rank, filters = reading.rank, q.filters
+    share = q.share if q.share is not None else ('each' if reading.shares else None)
     if intent in ('period_quantity', 'period_stops'):
         return True    # #113's allow-list: every word of the question is the route's own
     if tools and set(tools) == {'get_downtime_pareto'}:
@@ -947,9 +1046,11 @@ def covers(request, reading, context=None):
     if intent == 'period_review' or (tools and set(tools) == {'get_downtime_review'}):
         # the owner's downtime answer (issue #101): downtime by reason, ranked, maintenance and operator first; never a count, a split
         # by anything else or another filter
-        return (q.measure in DOWNTIME_FAMILY and group_by in ([], ['reason']) and set(filters) <= {'kind'}
-                and filters.get('kind') in (None, 'Maintenance', 'Operator') and share is None and rank in (None, 'most')
-                and q.limit == semantic.DEFAULT_LIMIT)
+        # bare stops ("stops", "stops yesterday") are the owner's downtime default too (the review of PR #155); "most common" is a
+        # count, which the review (ranked by minutes) does not rank
+        return ((q.measure in DOWNTIME_FAMILY and rank in (None, 'most') or q.measure == 'stops' and rank is None)
+                and group_by in ([], ['reason']) and set(filters) <= {'kind'}
+                and filters.get('kind') in (None, 'Maintenance', 'Operator') and share is None and q.limit == semantic.DEFAULT_LIMIT)
     if intent in ('period_waste', 'period_quality', 'quality') or (tools and set(tools) == {'get_waste_breakdown'}):
         # the waste breakdown and the shift's rejects: every waste line, each dry-end family and reason with its dollars
         return (q.measure in WASTE_FAMILY and set(group_by) <= set(REJECT_DIMS) and set(filters) <= set(REJECT_DIMS)
@@ -980,9 +1081,26 @@ def route(text, context, store, request, refused):
         if refused is not None or request is None or not covers(request, reading, context):
             return request_of(reading)
         return None
-    if refused is not None or request is None or reading.refusal is None:
+    if reading.refusal is None:
+        return None
+    if refused is not None:
+        # the generic help ("Offline mode supports ...") answers nothing a ranking, a share or a statistic asked: the reading's
+        # refusal names what it could not say and three questions that answer ("best crew"; the review of PR #155)
+        if str(refused).startswith('Offline mode supports') and reading.cues & (set(STRONG) - {'statistic'} | {'statistic asked', 'evaluative'}):
+            raise ValueError(refusal_text(reading))
+        return None
+    if request is None:
         return None
     intent = request.get('intent')
+    if 'wrong window' in reading.cues and intent not in NEVER_PREEMPT:
+        # "stops this year", "downtime over the weekend", "stops on Tuesday" (on a Monday): the hand route answers the selected day
+        raise ValueError(refusal_text(reading))
+    if reading.cues & {'statistic asked', 'share', 'shift split'} and intent not in NEVER_PREEMPT and reading.measure not in _family_of(intent):
+        # a median, an average or a share the model does not read is refused, never answered with the review or the Pareto
+        # ("median downtime this week", "what portion of downtime was the stacker"; the coordinator on #144)
+        raise ValueError(refusal_text(reading))
+    if 'evaluative' in reading.cues and intent in ('overview', 'summary', 'period_overview', 'period_summary', 'period_compare'):
+        raise ValueError(refusal_text(reading))   # "worst shift": no measure and no direction, never the selected shift's overview
     if reading.cues & {'who'} and intent not in NEVER_PREEMPT:
         raise ValueError(refusal_text(reading))   # "who had the most stops": never a reason Pareto
     if intent in NEVER_PREEMPT or intent in FLAGSHIP:
@@ -992,9 +1110,5 @@ def route(text, context, store, request, refused):
         raise ValueError(refusal_text(reading))   # the KPI summary never answers a measure, a ranking, a share or a statistic
     if strong and 'unknown' not in reading.cues and (reading.measure or reading.cues & {'single', 'per_quantity'}) \
             and reading.measure not in _family_of(intent):
-        raise ValueError(refusal_text(reading))
-    return None
-    strong = reading.cues & set(STRONG)
-    if (strong and (reading.measure or reading.cues & {'who', 'single', 'rank', 'per'})) or (intent == 'period_compare' and reading.cues):
         raise ValueError(refusal_text(reading))
     return None
