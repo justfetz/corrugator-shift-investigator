@@ -63,7 +63,11 @@ stops (a power outage) external, none of them priced, so the envelope's
   losses (the owner's ruling on PR #111); the planned stop's gap reads "Downtime: Planned maintenance (scheduled)",
   its reason and its kind both, as it does wherever it shows (owner, 2026-11-12). Each carries `apart` (`schedule-driven` or `external`, with an
   `apart_note`) and no rank, and the answer lists them under "Schedule-driven, shown apart" and "External, not
-  controllable", as the lenses do. Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`,
+  controllable", as the lenses do. Side trim stays ranked among the recorded losses and in their total, but its row
+  carries `control` and `control_note` (`schedule-driven`, the order mix and its web widths): the lenses' own entry
+  (`cost_model.CONTROL`), which reads the trim band's `lever` in `targets.json`, so the money card and the supervisor
+  lens never disagree. Its ranked line ends " · schedule-driven", and `web/money.js` keeps the tag when it re-prices
+  the card (the owner, 2026-11-12, issue #135). Totals: `total_usd`, `total_paper_usd`, `total_machine_time_usd`,
   `total_usd_per_year`, `total_contribution_usd` (null while the margin is not set), the recorded losses only, and
   the chips and arithmetic of them; `all_in_usd` and `all_in_usd_per_year` add the gaps apart (`apart_gaps` counts
   them), and the headline and the card's dollar line state both. Asked as "where did the money go this shift".
