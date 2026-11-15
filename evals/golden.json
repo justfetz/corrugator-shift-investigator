@@ -8090,7 +8090,7 @@
       "lever_match": "^- (?:[0-9]+\\. )?Shear chops \\(all recorded\\): "
      }
     ],
-    "max_ms": 800
+    "max_ms": 500
    }
   },
   {
@@ -8137,8 +8137,7 @@
        }
       ]
      }
-    ],
-    "max_ms": 800
+    ]
    }
   },
   {
@@ -8278,6 +8277,90 @@
     "money_checks": [
      {
       "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-quality-card-families-are-the-ledger-lines",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "day": "2026-07-09",
+   "shift": 1,
+   "url": "/corr/1/day/2026-07-09/shift/1?measure=waste",
+   "turns": [
+    "/corr/1/day/2026-07-09/shift/1?measure=quality",
+    "/corr/1/day/2026-07-09/shift/1?measure=waste"
+   ],
+   "note": "the reviewer's check of f7847cf on PR #168 (2026-11-15), finding 4: shift 1's quality card on 9 Jul 2026 printed its families on their own rounding, $426 + $352 + $214 + $76 + $36 = $1,104, while the same shift's waste breakdown printed warp at $351 (the same 5,989.1 sq ft) and the dry-end line, and the card's own dry-end tile, at $1,103. The families print the shift's dry-end kinds' whole dollars, the figures its waste breakdown and money card print.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-09/shift/1?measure=waste",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "warp on the quality card and the waste breakdown",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- WARP: \\*\\*.* · \\$([0-9,]+)"
+       },
+       {
+        "turn": 1,
+        "match": "^- Dry-end: warp: .* · \\$([0-9,]+) "
+       }
+      ]
+     },
+     {
+      "check": "same_figure",
+      "why": "the quality card's families and the dry-end line they add to",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- (?:BOND|WARP|MISALIGNMENT|MOISTURE|OTHER): \\*\\*.* · \\$([0-9,]+)",
+        "each": true
+       },
+       {
+        "turn": 1,
+        "match": "^- Dry-end rejects \\(all dry-end families\\): .* · \\$([0-9,]+) · "
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-downtime-kind-is-the-ledger-lines",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "day": "2026-07-17",
+   "shift": 1,
+   "url": "/corr/1/day/2026-07-17/shift/1?measure=dollars",
+   "turns": [
+    "/corr/1/day/2026-07-17/shift/1?measure=downtime&by=kind",
+    "/corr/1/day/2026-07-17/shift/1?measure=dollars"
+   ],
+   "note": "the reviewer's check of f7847cf on PR #168 (2026-11-15), finding 4: shift 1's downtime by kind on 17 Jul 2026 printed Operator at $180 (9.02 min, $180.33) while its operator tile and its money card printed $181, the lever's line and its line within the band added up. Each stop kind prints the ledger's whole dollars for it.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-17/shift/1?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "operator downtime on the downtime card and the money card",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Operator: .* · \\$([0-9,]+)"
+       },
+       {
+        "turn": 1,
+        "match": "^- (?:[0-9]+\\. )?Operator downtime (?:over the|within its) [0-9.]+% band: \\*\\*\\$([0-9,]+)\\*\\*",
+        "each": true
+       }
+      ]
      }
     ]
    }

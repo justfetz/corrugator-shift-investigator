@@ -393,6 +393,7 @@ const Money=(()=>{
    }
   }
   if(w&&tool==='get_waste_breakdown')for(const r of out.rows)r.usd_shown=r.usd===null||r.usd===undefined?null:w.lines[r.category];   // cost_model.waste_shown
+  if(w&&!MONEY_TOOLS.has(tool))for(const r of out.rows)if(r.shown_of&&r.usd!==null&&r.usd!==undefined)r.usd_shown=r.shown_of.reduce((a,[g,k])=>a+w[g][k],0);   // cost_model.daily_shown
   if(Array.isArray(data.tile_money))out.tile_money=data.tile_money.map(t=>{ const x=tile(t,rates,cfg); return {...x,usd_shown:tileShown(x,w)}; });
   if('provenance' in data){ out.rates=rateRows(rates,cfg); out.provenance=provenance(rates,cfg); }
   Object.defineProperty(out,'byIndex',{value:byIndex,enumerable:false});

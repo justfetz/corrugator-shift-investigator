@@ -47249,6 +47249,864 @@
    }
   },
   {
+   "id": "value-dollars-day-0216-corrupt",
+   "type": "value",
+   "mode": "offline",
+   "day": "2026-02-16",
+   "tool": "get_day_dollars",
+   "arguments": {
+    "shifts": [
+     1,
+     2,
+     3
+    ]
+   },
+   "corrupt": true,
+   "note": "The data-quality toggle on 16 Feb 2026 (the review of PR #168's fix round, finding 2): shift 2 is left out, and shifts 1 and 3 print their shares of the day's own records, the figures they print without the toggle (shift 1 $334, not the $335 a root of shifts 1 and 3 alone gave it).",
+   "expect": {
+    "coverage": "complete",
+    "row_count": 13,
+    "values": {
+     "rows:lever=Speed under the grade baseline": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       706.6,
+       0.213
+      ],
+      "usd": [
+       706.6,
+       0.213
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       190.782,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "quantity": [
+       35.33,
+       0.0051
+      ],
+      "shifts_over": [
+       2,
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       2,
+       null
+      ],
+      "usd_shown": [
+       706,
+       null
+      ]
+     },
+     "rows:lever=Side trim over the 3% target": {
+      "paper_usd": [
+       33.9295,
+       0.016555
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.016555
+      ],
+      "usd": [
+       33.9295,
+       0.016555
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       0.0,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "quantity": [
+       616.9,
+       0.051
+      ],
+      "shifts_over": [
+       1,
+       null
+      ],
+      "control": [
+       "schedule-driven",
+       null
+      ],
+      "rank": [
+       4,
+       null
+      ],
+      "usd_shown": [
+       34,
+       null
+      ]
+     },
+     "rows:lever=Shear over the 0.75% target": {
+      "paper_usd": [
+       0.0,
+       0.016929
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.016929
+      ],
+      "usd": [
+       0.0,
+       0.016929
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       0.0,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "quantity": [
+       0.0,
+       0.051
+      ],
+      "shifts_over": [
+       0,
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       6,
+       null
+      ],
+      "usd_shown": [
+       0,
+       null
+      ]
+     },
+     "rows:lever=Dry end over the 1% target": {
+      "paper_usd": [
+       718.223,
+       0.016929
+      ],
+      "machine_time_usd": [
+       48.365185,
+       0.016929
+      ],
+      "usd": [
+       766.588185,
+       0.016929
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       13.0586,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "quantity": [
+       13058.6,
+       0.051
+      ],
+      "shifts_over": [
+       2,
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       1,
+       null
+      ],
+      "usd_shown": [
+       767,
+       null
+      ]
+     },
+     "rows:lever=Operator downtime over the 2.5% band": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       83.4,
+       0.213
+      ],
+      "usd": [
+       83.4,
+       0.213
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       22.518,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "quantity": [
+       4.17,
+       0.0051
+      ],
+      "shifts_over": [
+       2,
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       3,
+       null
+      ],
+      "usd_shown": [
+       83,
+       null
+      ]
+     },
+     "rows:lever=Maintenance downtime over the 2.5% band": {
+      "paper_usd": [
+       null,
+       null
+      ],
+      "machine_time_usd": [
+       0.0,
+       0.213
+      ],
+      "usd": [
+       0.0,
+       0.213
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       0.0,
+       0.0551
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "quantity": [
+       0.0,
+       0.0051
+      ],
+      "shifts_over": [
+       0,
+       null
+      ],
+      "control": [
+       "controllable",
+       null
+      ],
+      "rank": [
+       5,
+       null
+      ],
+      "usd_shown": [
+       0,
+       null
+      ]
+     },
+     "#0": {
+      "lever": [
+       "Dry end over the 1% target",
+       null
+      ],
+      "rank": [
+       1,
+       null
+      ]
+     },
+     "rows:lever=Side trim at standard (up to 3% of gross)": {
+      "usd": [
+       8658.45,
+       0.021
+      ],
+      "quantity": [
+       157426.3,
+       0.051
+      ],
+      "apart": [
+       "at-standard",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       8658,
+       null
+      ]
+     },
+     "rows:lever=Shear at standard (up to 0.75% of gross)": {
+      "usd": [
+       1928.9,
+       0.021
+      ],
+      "quantity": [
+       32858.2,
+       0.051
+      ],
+      "apart": [
+       "at-standard",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       1929,
+       null
+      ]
+     },
+     "rows:lever=Dry end at standard (up to 1% of the yield)": {
+      "usd": [
+       2986.08,
+       0.021
+      ],
+      "quantity": [
+       50867.0,
+       0.051
+      ],
+      "apart": [
+       "at-standard",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       2986,
+       null
+      ]
+     },
+     "rows:lever=Operator downtime within its 2.5% band": {
+      "usd": [
+       480.0,
+       0.021
+      ],
+      "quantity": [
+       24.0,
+       0.0051
+      ],
+      "apart": [
+       "at-standard",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       480,
+       null
+      ]
+     },
+     "rows:lever=Maintenance downtime within its 2.5% band": {
+      "usd": [
+       138.0,
+       0.021
+      ],
+      "quantity": [
+       6.9,
+       0.0051
+      ],
+      "apart": [
+       "at-standard",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       138,
+       null
+      ]
+     },
+     "rows:lever=Changeover rejects (counted with shear)": {
+      "paper_usd": [
+       460.4325,
+       0.016929
+      ],
+      "machine_time_usd": [
+       31.005556,
+       0.016929
+      ],
+      "usd": [
+       491.438056,
+       0.016929
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       8.3715,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "apart": [
+       "no-band",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       492,
+       null
+      ]
+     },
+     "rows:lever=Cutoff-knife and stacker waste boards": {
+      "paper_usd": [
+       575.4925,
+       0.016929
+      ],
+      "machine_time_usd": [
+       38.753704,
+       0.016929
+      ],
+      "usd": [
+       614.246204,
+       0.016929
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "msf_not_made": [
+       10.4635,
+       0.5411
+      ],
+      "contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_usd_per_year": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "apart": [
+       "no-band",
+       null
+      ],
+      "rank": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       614,
+       null
+      ]
+     },
+     "buckets:bucket=Speed": {
+      "usd": [
+       706.6,
+       0.011
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       706,
+       null
+      ]
+     },
+     "buckets:bucket=Trim": {
+      "usd": [
+       33.93,
+       0.011
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       34,
+       null
+      ]
+     },
+     "buckets:bucket=Shear": {
+      "usd": [
+       0.0,
+       0.011
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       0,
+       null
+      ]
+     },
+     "buckets:bucket=Dry-end": {
+      "usd": [
+       766.59,
+       0.011
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       767,
+       null
+      ]
+     },
+     "buckets:bucket=Operator stops": {
+      "usd": [
+       83.4,
+       0.011
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       83,
+       null
+      ]
+     },
+     "buckets:bucket=Maintenance stops": {
+      "usd": [
+       0.0,
+       0.011
+      ],
+      "usd_per_year": [
+       null,
+       null
+      ],
+      "usd_shown": [
+       0,
+       null
+      ]
+     },
+     "buckets:#0": {
+      "bucket": [
+       "Dry-end",
+       null
+      ]
+     },
+     "shifts:shift=1": {
+      "coverage": [
+       "complete",
+       null
+      ],
+      "usd_shown": [
+       334,
+       null
+      ]
+     },
+     "shifts:shift=2": {
+      "coverage": [
+       "incomplete",
+       null
+      ]
+     },
+     "shifts:shift=3": {
+      "coverage": [
+       "complete",
+       null
+      ],
+      "usd_shown": [
+       1256,
+       null
+      ]
+     },
+     "details:shift=1": {
+      "usd_shown": [
+       0,
+       null
+      ],
+      "trim_pct_of_gross": [
+       2.968793,
+       0.0051
+      ],
+      "setups": [
+       46,
+       null
+      ],
+      "setups_above_trim_flag": [
+       19,
+       null
+      ],
+      "shifts_over": [
+       0,
+       null
+      ],
+      "part": [
+       "above",
+       null
+      ]
+     },
+     "details:shift=3": {
+      "usd_shown": [
+       34,
+       null
+      ],
+      "trim_pct_of_gross": [
+       3.025831,
+       0.0051
+      ],
+      "setups": [
+       45,
+       null
+      ],
+      "setups_above_trim_flag": [
+       15,
+       null
+      ],
+      "shifts_over": [
+       1,
+       null
+      ],
+      "part": [
+       "above",
+       null
+      ]
+     },
+     "$": {
+      "total_usd": [
+       1590.52,
+       0.066
+      ],
+      "levers": [
+       6,
+       null
+      ],
+      "apart_gaps": [
+       7,
+       null
+      ],
+      "at_standard_usd": [
+       14191.43,
+       0.10500000000000001
+      ],
+      "all_in_usd": [
+       16887.63426,
+       0.273
+      ],
+      "total_contribution_usd": [
+       null,
+       null
+      ],
+      "contribution_status": [
+       "margin not set",
+       null
+      ],
+      "area_sqft": [
+       13675.5,
+       0.051
+      ],
+      "area_msf": [
+       13.6755,
+       0.00051
+      ],
+      "stop_minutes": [
+       4.17,
+       0.011
+      ],
+      "speed_minutes": [
+       35.33,
+       0.0051
+      ],
+      "waste_run_minutes": [
+       2.418259,
+       0.011
+      ],
+      "machine_minutes": [
+       41.918259,
+       0.021
+      ],
+      "msf_not_made": [
+       226.3586,
+       0.0066
+      ],
+      "gross_sqft": [
+       5277599.8,
+       0.051
+      ],
+      "scheduled_minutes": [
+       960,
+       0.0051
+      ],
+      "total_usd_shown": [
+       1590,
+       null
+      ],
+      "at_standard_usd_shown": [
+       14191,
+       null
+      ],
+      "all_in_usd_shown": [
+       16887,
+       null
+      ],
+      "total_paper_usd_shown": [
+       752,
+       null
+      ],
+      "total_machine_time_usd_shown": [
+       838,
+       null
+      ],
+      "ptd_days": [
+       11,
+       null
+      ],
+      "ptd_usd": [
+       15045.72,
+       0.066
+      ],
+      "ptd_usd_shown": [
+       15046,
+       null
+      ],
+      "ptd_usd_per_year": [
+       351718,
+       6.0600000000000005
+      ],
+      "ptd_scope": [
+       "all shifts",
+       null
+      ],
+      "shift": [
+       null,
+       null
+      ],
+      "excluded_shifts": [
+       [
+        2
+       ],
+       null
+      ],
+      "total_usd_per_year": [
+       null,
+       null
+      ]
+     }
+    },
+    "excluded_records": [
+     {
+      "record_id": "CORR2026021615000001",
+      "shift": 2,
+      "error_match": "Waste/gross",
+      "raw": {
+       "trim_sqft": 99999999.0,
+       "lineal_ft": 2622.0,
+       "total_produced_sqft": 22942.5
+      }
+     }
+    ]
+   }
+  },
+  {
    "id": "value-dollars-waste-september",
    "type": "value",
    "mode": "offline",

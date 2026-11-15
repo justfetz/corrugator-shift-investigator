@@ -109,6 +109,8 @@ def money_notes(result, row=None, label=None, formula=True):
     if 'provenance' not in data:
         return []
     notes = [f'How a dollar is priced, for {stop_label(row[label])}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
+    if notes and row.get('usd_shown') is not None and result.get('tool') not in LEDGER_TOOLS:
+        notes.append(WHOLE_NOTE)   # the line prints the ledger's whole dollars, which can read a dollar off this formula (PR #168)
     return notes + [f'{data["provenance"]} {data["cost_note"]}']
 
 
@@ -205,6 +207,7 @@ def year_words(data):
 WHOLE_NOTE = ('Whole dollars that add up: figures are rounded so each card\'s parts add to its totals (largest remainder) and a shift '
               'reads the same on every card; a line can read a dollar or two off its formula.')
 TRIM_BY_SHIFT = 'Side trim by shift, explanatory (schedule-driven)'
+LEDGER_TOOLS = ('get_shift_dollars', 'get_day_dollars', 'get_opportunities')   # their notes carry WHOLE_NOTE (ledger_notes)
 
 
 def trim_by_shift_lines(d):

@@ -437,6 +437,35 @@ def waste_shown(data, terms, rates):
     return data
 
 
+# A daily breakdown row's whole dollars (the review of PR #168's fix round, finding 4): the shift's dry-end families on the
+# quality breakdown are its dry-end kinds' lines, and the stops by kind its stop lines, as the shift's money card and tiles
+# print them; a row by reason or place has no line of its own on the ledger and prints its nearest dollar.
+DAILY_SHOWN = {'get_quality_breakdown': lambda r: [['lines', r['reason'].lower()]] if str(r.get('reason', '')).lower() in DRY_END_KINDS else None,
+               'get_downtime_breakdown': lambda r: {'Operator': [['levers', 'operator'], ['at', 'operator']],
+                                                     'Maintenance': [['levers', 'maintenance'], ['at', 'maintenance']],
+                                                     'Scheduled': [['apart', 'scheduled']],
+                                                     targets.EXTERNAL_KIND: [['apart', 'external']]}.get(r.get('category'))}
+
+
+def daily_shown(analysis, tool, data, shift, rates, group_by=None):
+    """A shift's quality breakdown, or its downtime by kind, in the whole dollars the shift's money card prints (its share of
+    the day's, whole_dollars): each row's `shown_of` and `usd_shown`, and the card's `display_terms` for the browser."""
+    if tool not in DAILY_SHOWN or (tool == 'get_downtime_breakdown' and group_by != 'kind') or getattr(analysis, 'store', None) is None:
+        return data
+    _, every, _, _, root = _card(analysis, (1, 2, 3), rates)
+    cells = [c for c in every if c['shift'] == shift]
+    if not cells:
+        return data
+    terms = _shares(root, cells, rates)
+    whole = whole_dollars(terms, rates)
+    for r in data['rows']:
+        path = DAILY_SHOWN[tool](r)
+        if path and r.get('usd') is not None:
+            r['shown_of'], r['usd_shown'] = path, sum(whole[g][k] for g, k in path)
+    data['display_terms'] = terms
+    return data
+
+
 def _rank(rows, key):
     """Ranked by the whole dollars the card prints (`usd_shown`, PR #168) when a row carries them, then by `key`, then by
     name: a list never prints a larger figure below a smaller one. web/money.js rank is this."""

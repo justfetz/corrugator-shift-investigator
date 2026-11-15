@@ -1254,8 +1254,10 @@ def day_dollars_case(plain, id, day, rates_text=None, shifts=(1, 2, 3), corrupt=
     counted = [n for n in shifts if n not in bad]
     cells = [cell_of(plain, moment, n, plain.between("dry_end_setups", moment, moment, n)) for n in counted]
     s = ledger_of(cells, rates[3])
-    root = [cell_of(plain, moment, n, plain.between("dry_end_setups", moment, moment, n)) for n in (1, 2, 3) if n not in bad]
-    w = whole_by_hand(root, counted, rates)   # the day's complete shifts share its whole dollars (PR #168)
+    # the day's own records share its whole dollars (PR #168), with or without the data-quality toggle: the toggle leaves
+    # shift 2 incomplete and moves no other shift (the review of the fix round, finding 2)
+    root = [cell_of(plain, moment, n, plain.between("dry_end_setups", moment, moment, n)) for n in (1, 2, 3)]
+    w = whole_by_hand(root, counted, rates)
     values, totals, rows = ledger_values(s, rates, w=w)
     for shift in shifts:   # each shift named with its coverage; its own total is its get_shift_dollars step
         values[f"shifts:shift={shift}"] = {"coverage": exact("incomplete" if shift in bad else "complete"),
@@ -1828,6 +1830,10 @@ def build(data=None):
     cases.append(day_dollars_case(plain, "value-dollars-day-0914-corrupt", "2026-09-14", corrupt=True,
                                   note="Shift 2 holds the refused trim record: it is named in excluded_shifts and left out, and the day is priced "
                                        "over shifts 1 and 3 alone (their gross and 960 minutes), with the excluded record reported."))
+    cases.append(day_dollars_case(plain, "value-dollars-day-0216-corrupt", "2026-02-16", corrupt=True,
+                                  note="The data-quality toggle on 16 Feb 2026 (the review of PR #168's fix round, finding 2): shift 2 is left out, and "
+                                       "shifts 1 and 3 print their shares of the day's own records, the figures they print without the toggle "
+                                       "(shift 1 $334, not the $335 a root of shifts 1 and 3 alone gave it)."))
     cases.append(waste_dollars_case(plain, "value-dollars-waste-september", "month", "2026-09-14",
                                     note="What waste genuinely costs: each bucket's MSF x paper, plus the run time shear and rejects took."))
     cases.append(pareto_dollars_case(plain, "value-dollars-pareto-week-0907-shift-2", "week", "2026-09-09", 2))

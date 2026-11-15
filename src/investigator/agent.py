@@ -2152,7 +2152,8 @@ def chart_for(rid, result):
              'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
     if result['tool'] == 'get_opportunities' and data.get('lens'):
         chart['lens'] = data['lens']   # the levers' order is the lens's (issue #101): web/money.js re-ranks the chart by it
-    if data.get('display_terms') and result['tool'] in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities', 'get_waste_breakdown'):
+    if data.get('display_terms') and result['tool'] in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities', 'get_waste_breakdown',
+                                                        'get_quality_breakdown', 'get_downtime_breakdown'):
         chart['display_terms'] = data['display_terms']   # the whole dollars its bars print, re-allocated at a visitor's rates (PR #168)
     if result['tool'] == 'get_speed_variance':
         # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
@@ -2351,6 +2352,8 @@ class Agent:
         if name in cost_model.PRICED_TOOLS:
             gross = self.analysis.get_shift_kpis(shift)['rows'][0]['gross_sqft'] if name == 'get_quality_breakdown' else None
             cost_model.attach(name, data, rates, gross)
+            # the families and the stop kinds in the whole dollars the shift's money card prints (PR #168)
+            cost_model.daily_shown(self.analysis, name, data, shift, rates, arguments.get('group_by'))
         return data
 
     def ask(self, text, context, request=None, emit=None):

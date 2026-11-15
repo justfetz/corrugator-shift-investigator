@@ -298,7 +298,8 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                # the same seven calls, a day card held to whole dollars that add up and its trim by shift; the KPI and money cards
                # of one 4-4-5 period, two turns (PR #168's fix round)
                'money-day-shift-lines-add-to-the-headline', 'money-day-shift-lines-add-up-28-sep', 'money-no-yearly-figure-from-one-day',
-               'money-day-trim-by-shift-inside-the-band', 'money-ptd-label-names-its-end-day', 'money-period-operator-tile-is-the-ledger'}
+               'money-day-trim-by-shift-inside-the-band', 'money-ptd-label-names-its-end-day', 'money-period-operator-tile-is-the-ledger',
+               'money-kpi-waste-tiles-are-the-ownership-lines'}   # a week's KPI card and its ownership lens, two turns: 136 ms uncontended
 
 
 def test_heavy_cases_carry_an_explicit_offline_budget(monkeypatch):
