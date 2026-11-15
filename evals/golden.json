@@ -21140,9 +21140,9 @@
    "mode": "offline",
    "question": "Which boards had the most order change stops this week?",
    "expect": {
-    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most stops this week' or 'stops by grade this week'\\?$"
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most stops for order change this week' or 'stops for order change by grade this week'\\?$"
    },
-   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 4's guard: the measure the reading read (the stops) leads the questions offered, never the order changes that 'order change' also names. It passes at 97b81f4; the probe caught a draft of item 4 that offered 'which grade had the most order changes'. Main gave the router's 'one quantity' refusal."
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 4's guard: the measure the reading read (the stops) leads the questions offered, never the order changes that 'order change' also names. It passes at 97b81f4; the probe caught a draft of item 4 that offered 'which grade had the most order changes'. Main gave the router's 'one quantity' refusal. Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1: a question offered keeps the refusal's filters, so the stops offered are the stops for the reason Order change; 2c28fd3 offered every stop's ranking, which answers another question."
   },
   {
    "id": "semantic-which-boards-highest-line-speed-refused",
@@ -21433,6 +21433,36 @@
     ]
    },
    "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 2: the question the attainment refusal now offers, answered as offered over last week. It passes at 2c28fd3 by design; the refusal offered 'speed against grade target … last week' there, which the grades' card answered for this week."
+  },
+  {
+   "id": "semantic-which-boards-most-operator-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most operator stops this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most stops for operator this week' or 'stops for operator by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, from this round's probe: 2c28fd3 offered 'which grade had the most stops this week', every stop's ranking, which answers another question than the operator stops asked. The refusal fired before the values were read (two measures), so the questions offered now read the values said beside the measure."
+  },
+  {
+   "id": "semantic-which-boards-most-stops-on-shift-1-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most stops on shift 1 this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most stops on shift 1 this week' or 'stops on shift 1 by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, from this round's probe: 2c28fd3 offered the stops of every shift (or of the shift control's shift): a question offered keeps the one shift the refusal named."
+  },
+  {
+   "id": "semantic-which-boards-most-glue-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most glue stops this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. The semantic model keeps stops by shift, crew, grade, flute, paper run, web width, stop kind, stop place and stop reason\\.$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, from this round's probe: 'glue' names a stop place and a stop reason, so no question offered can keep it, and 2c28fd3's 'which grade had the most stops this week' drops it. None is offered; the refusal says what the model keeps of the stops."
   }
  ]
 }
