@@ -21143,6 +21143,156 @@
     "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most stops this week' or 'stops by grade this week'\\?$"
    },
    "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 4's guard: the measure the reading read (the stops) leads the questions offered, never the order changes that 'order change' also names. It passes at 97b81f4; the probe caught a draft of item 4 that offered 'which grade had the most order changes'. Main gave the router's 'one quantity' refusal."
+  },
+  {
+   "id": "semantic-which-boards-highest-line-speed-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the highest line speed this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: speed with stops is read against scheduled minutes, which carry no grade\\. Did you mean 'which shift had the highest speed with stops this week' or 'speed with stops this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered 'which shift was the fastest this week', which ranks the speed without stops (Shift 1, 649.1 ft/min) where the speed with stops ranks Shift 2 first (608.6); 97b81f4 offered 'speed with stops by grade', which the grade totals answer; main answered the week's speed without stops. A speed other than the speed without stops is named in the question offered."
+  },
+  {
+   "id": "semantic-which-boards-lowest-speed-with-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the lowest speed with stops this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: speed with stops is read against scheduled minutes, which carry no grade\\. Did you mean 'which shift had the lowest speed with stops this week' or 'speed with stops this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered 'which shift was the slowest this week', the speed without stops."
+  },
+  {
+   "id": "semantic-which-shift-highest-speed-with-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift had the highest speed with stops this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_all_fpm&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_all_fpm",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [1-3] had the highest speed with stops this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: the question semantic-which-boards-highest-line-speed-refused offers, led by the shift with the highest speed with stops."
+  },
+  {
+   "id": "semantic-crew-rejects-by-reason-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Crew rejects by reason this week",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop kind, so 'crew' cannot narrow it"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 gave _modifier's reason and offered 'dry-end rejects this week' as 'that split', but the dry-end rejects are not recorded by stop reason, so no split by reason answers. The modifier's reason needs another split the measure is recorded by; this keeps 97b81f4's refusal (main answered side trim). The misleading 'stop kind' half is on the follow-up list."
+  },
+  {
+   "id": "semantic-compare-boards-at-shear-shifts-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Compare boards at the shear on shift 1 versus shift 2 this week",
+   "expect": {
+    "raises": "^The records do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 read the shear's measure, kept for item 4, and said 'boards are ranked or split by their grade'; 'at the shear' is a stop place, and the boards compared between two shifts are a count the records do not keep (97b81f4's reason)."
+  },
+  {
+   "id": "semantic-which-boards-highest-bale-pct-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the highest bale % this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: bale % is recorded per shift, which carries no grade\\. Did you mean 'which shift had the most bale % this week' or 'bale % this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered 'which shift had the most bale', in square feet: the bale's percent shares the label 'Bale' with the square feet, so a suggestion says it by its synonym 'bale %'."
+  },
+  {
+   "id": "semantic-which-shift-most-bale-pct",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift had the most bale % this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=bale_pct&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "bale_pct",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [1-3] had the highest bale this week: \\*\\*[0-9][0-9.]*%\\*\\* of gross"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: the question semantic-which-boards-highest-bale-pct-refused offers, in percent of gross."
+  },
+  {
+   "id": "semantic-bale-msf-by-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Bale MSF by boards this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: bale msf is recorded per shift, which carries no grade\\. Did you mean 'bale msf by shift this week' or 'bale msf this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered 'baled waste by shift', which reads as the bale in square feet."
+  },
+  {
+   "id": "semantic-which-boards-highest-unexplained-pct-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the highest unexplained % this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: unexplained % is recorded per shift, which carries no grade\\. Did you mean 'which shift had the most unexplained % this week' or 'unexplained % this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered the unexplained waste in square feet."
+  },
+  {
+   "id": "semantic-shear-pct-by-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Shear % by boards this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'shear percent by grade this week' or 'shear percent this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered 'shear by grade' in square feet: the unit said after a measure kept for item 4 is read, as _assign reads it."
+  },
+  {
+   "id": "semantic-crew-trim-pct-by-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Crew trim % by shift this week",
+   "expect": {
+    "raises": "^'crew' is said before 'trim %' with no value of its own, beside the shifts split, so it is no split by crew: ask that split, or split by both\\. Did you mean 'trim percent by shift this week' or 'trim percent by shift and crew this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered 'side trim by shift', in square feet; main answered side trim's waste breakdown."
   }
  ]
 }
