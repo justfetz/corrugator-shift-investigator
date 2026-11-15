@@ -795,15 +795,20 @@ def test_the_workflow_reader_refuses_what_it_does_not_read(text):
 
 
 def test_the_documented_pool_condition_trusts_mains_two_deploy_workflows_and_nothing_else():
-    """Issue #133 (H5): the provider condition names the deploy and preview workflows by job_workflow_ref on main, in
-    the create command and in the update-oidc command the owner runs; neither workflow can be called as a reusable one
-    (a caller's job carries the callee's job_workflow_ref), and both name main's copy because neither runs a
-    pull request's own definition."""
+    """Issue #133 (H5): the provider condition names the deploy and preview workflows by workflow_ref on main, in the
+    create command and in the update-oidc command the owner runs, and maps every claim it reads (Google wants a mapping
+    for each condition field: the Codex review of PR #170); neither workflow can be called as a reusable one, and both
+    name main's copy because neither runs a pull request's own definition."""
     text = (ROOT / 'docs' / 'DEPLOYMENT.md').read_text(encoding='utf-8')
     conditions = re.findall(r'^CONDITION="(.+)"$', text, re.M)
     assert len(conditions) == 2 and len(set(conditions)) == 1, 'the create and the update command carry one condition'
     condition = conditions[0]
-    refs = re.findall(r"assertion\.job_workflow_ref == '([^']+)'", condition)
+    mappings = re.findall(r'^MAPPING="(.+)"$', text, re.M)
+    assert len(mappings) == 2 and len(set(mappings)) == 1, 'the create and the update command carry one mapping'
+    mapped = {source.removeprefix('assertion.') for source in (pair.split('=', 1)[1] for pair in mappings[0].split(','))}
+    read = set(re.findall(r'assertion\.(\w+)', condition))
+    assert read == {'repository_id', 'repository_owner_id', 'workflow_ref'} and read <= mapped, (read, mapped)
+    refs = re.findall(r"assertion\.workflow_ref == '([^']+)'", condition)
     assert refs == ['${REPO}/.github/workflows/deploy-cloudrun.yml@refs/heads/main', '${REPO}/.github/workflows/preview.yml@refs/heads/main']
     assert "assertion.repository_id == '1359219994'" in condition and "assertion.repository_owner_id == '12513697'" in condition
     assert 'assertion.repository ==' not in condition, 'a name alone follows a renamed or re-created repository'
