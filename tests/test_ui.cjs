@@ -557,6 +557,11 @@ const issue63=issue17.then(async()=>{
  vm.runInContext('renderQuestionChips();reset()',context);
  const card=elements.card, earlier=elements.earlier, canned=elements.examples.children.filter(b=>b.textContent!=='Where is the money?');   // the thread's own sequence: #31b's money question sits second in the list
  assert.equal(card.className,'card answer idle');assert.equal(elements['card-foot'].hidden,true);assert.equal(earlier.children.length,0);
+ {const idle=elements.messages.children.map(c=>c.textContent);   // the landing's first line, then how to ask (owner, issue #162)
+  assert.equal(idle[0],'How Corrugator 1 is running this period, what its waste costs and where the money is, from synthetic records you can check.');
+  assert.match(idle[1],/^Pick a question on the left/);assert.match(idle[1],/every bold figure links to the query and row behind it/);
+  assert.deepEqual(elements.messages.children.map(c=>c.className),['orient','empty']);
+  assert.ok(html.includes(`<p class="orient">${idle[0]}</p><p class="empty">${idle[1]}</p>`),'the static page shows the same two lines before the script runs');}
  assert.equal(elements.analyst.hidden,true);                                   // no server key: Ask the analyst is not offered
  const disabled=()=>[...Object.entries(elements).filter(([,e])=>e.disabled).map(([id])=>id),...elements.examples.children.filter(b=>b.disabled).map(text)];
 

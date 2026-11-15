@@ -1226,7 +1226,8 @@ let queue=Promise.resolve();   // questions go to the server one at a time, in t
 const latestRun=new Map();   // session id -> its latest run id: the only run /api/report can still print
 const clock=()=>typeof performance!=='undefined'&&performance.now?performance.now():Date.now();
 const msText=ms=>ms>=10000?`${(ms/1000).toFixed(1)} s`:`${Math.max(1,Math.round(ms))} ms`;
-const IDLE_TEXT='Pick a question on the left or type one in the box below. Each answer lands as one card at the bottom of this thread: the headline and findings, the charts, where to look, the queries behind them and the KPI tiles; earlier answers move up.';
+const ORIENT_TEXT='How Corrugator 1 is running this period, what its waste costs and where the money is, from synthetic records you can check.';   // the landing's first line (owner, issue #162)
+const IDLE_TEXT='Pick a question on the left or type one in the box below. Each answer lands as one card at the bottom of this thread, and every bold figure links to the query and row behind it; earlier answers move up.';
 function scopeWho(s){ return s.scope==='day'?'All shifts':`Shift ${s.shift}`; }
 function windowText(s){   // "Mon 14 Sep 2026"
  const d=utc(s.day); if(Number.isNaN(d.getTime()))return String(s.day);
@@ -1371,7 +1372,7 @@ function renderCard(){
  clearCard();
  shownId=rec?rec.id:null; shownKey=rec&&settled(rec)?bodyKey(rec):null;
  if(rec)rec.entry=null;   // it is the open card now, not a line of the thread
- if(!rec){card.className='card answer idle';card.setAttribute('aria-label','Answer');card.setAttribute('aria-busy','false');$('card-title').textContent='Ask about a shift';paintMeta(null);$('messages').append(node('p',IDLE_TEXT,'empty'));$('card-foot').hidden=true;latest=null;renderEarlier();scheduleFollow();return;}
+ if(!rec){card.className='card answer idle';card.setAttribute('aria-label','Answer');card.setAttribute('aria-busy','false');$('card-title').textContent='Ask about a shift';paintMeta(null);$('messages').append(node('p',ORIENT_TEXT,'orient'));$('messages').append(node('p',IDLE_TEXT,'empty'));$('card-foot').hidden=true;latest=null;renderEarlier();scheduleFollow();return;}
  $('card-title').textContent=rec.title;$('card-title').title=rec.question;paintMeta(rec);
  card.setAttribute('aria-label',`Answer: ${rec.title}`);card.setAttribute('aria-busy',String(rec.state==='pending'));
  if(rec.state==='pending'&&rec.live){card.className='card answer streaming';paintLive(rec);$('card-foot').hidden=true;latest=null;}
