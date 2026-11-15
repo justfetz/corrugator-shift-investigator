@@ -968,21 +968,32 @@ def ptd_span(plain, through):
 
 
 def ptd_of(plain, through, shift, rates):
-    """The period to date's ledger and each lever's dollars a year at this period's rate: its printed whole dollars, its
-    cells' added up (the coordinator's review of 82c0994, item 2), per production day x the post's days a year."""
+    """The period to date's ledger and each lever's dollars a year at this period's rate: each shift's printed whole dollars,
+    its cells' added up (the coordinator's review of 82c0994, item 2), per its own production day x the post's days a year, and
+    a scope of several shifts theirs added up (the review of 2510d38, item 1: the shift cards' yearly figures add to the
+    all-shifts card's)."""
     cells = cells_in(plain, *ptd_span(plain, through), shift)
     s = ledger_of(cells, rates[3])
     w = whole_by_hand(cells, [shift] if shift else [1, 2, 3], rates)
+    s["shift_days"] = {sh: len({c["day"] for c in cells if c["shift"] == sh and c["setups"]}) for sh in w["shifts"]}
+    s["whole"] = w
     out = {}
     for k in LEVERS:
         priced = money(LEVER_KIND[k], s["over"][k], None, None, rates)
         usd = round(priced["usd"][0], 2)
         margin = None if priced["contribution_usd"][0] is None else round(priced["contribution_usd"][0], 2)
         enough = s["days"] >= MIN_RATE_DAYS   # fewer production days state no yearly figure (the coordinator's default, PR #168)
-        out[k] = (usd, round(w["levers"][k] / s["days"] * DAYS_A_YEAR) if enough else None,
+        out[k] = (usd, year_by_shift(s, "levers", k),
                   None if margin is None or not enough else round(margin / s["days"] * DAYS_A_YEAR))
-    s["whole"] = w
     return s, out
+
+
+def year_by_shift(s, group, key):
+    """A period to date's yearly figure of one lever or line, by hand: each shift's printed whole dollars of it / the shift's
+    production days x the post's days a year, to the dollar, added up; none when a shift has fewer than five production days."""
+    years = [round(s["whole"]["shifts"][sh][group][key] / days * DAYS_A_YEAR) if days >= MIN_RATE_DAYS else None
+             for sh, days in s["shift_days"].items()]
+    return None if not years or None in years else sum(years)
 
 
 # ---------------------------------------------------------------- whole dollars that add up (PR #168), by hand
@@ -1416,8 +1427,9 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
     ptd_s, _ = ptd_of(plain, min(span[1], max(plain.days)), shift, rates)
     gross, scheduled = s["gross"], s["scheduled"]
     lines, plines = s["lines"], ptd_s["lines"]
-    # a line's yearly figure is its period to date's whole dollars, its cells' added up (the review of 82c0994, item 2)
-    year = lambda kind, key: round(ptd_s["whole"]["lines"][key] / ptd_s["days"] * DAYS_A_YEAR)
+    # a line's yearly figure is each shift's period-to-date whole dollars, its cells' added up (the review of 82c0994, item 2),
+    # at its own production days, the shifts' added up (the review of 2510d38, item 1)
+    year = lambda kind, key: year_by_shift(ptd_s, "lines", key)
     trim = "Side trim (all recorded)"
     levers = {trim: (money("trim", lines["trim"], gross, scheduled, rates, 0.1), "schedule-driven", year("trim", "trim"))}
     labels = (("shear", "Shear chops (all recorded)"), ("changeover", "Changeover rejects (counted with shear) (all recorded)"),

@@ -111,6 +111,13 @@ const Money=(()=>{
  const annual=(usd,days,cfg)=>usd===null||usd===undefined||!days||days<cfg.constants.min_rate_days?null:round(usd/days*cfg.constants.days_per_year,0);
  // A figure of a card's whole dollars by its path (`of`, `shown_of`): ['levers','trim'], ['lines','bond'].
  const wholeOf=(w,[g,k])=>w[g][k];
+ // cost_model.annual_of (the coordinator's review of 2510d38 on PR #168, item 1): each shift's own yearly figure, its line of the
+ // period to date's whole dollars at its own production days (`shift_days`), and a card for several shifts theirs added up, so
+ // the shift cards' yearly figures add to the all-shifts card's. Without `shift_days` (an older answer) each shift reads `days`.
+ function annualOf(w,path,shiftDays,days,cfg){
+  const own=new Map((shiftDays||w.shifts.map(e=>[e.shift,days])).map(([s,d])=>[s,d])), years=w.shifts.map(e=>annual(wholeOf(e,path),own.get(e.shift)||0,cfg));
+  return !years.length||years.some(v=>v===null)?null:round(add(years),0);
+ }
  // cost_model.trim_cells_over: the trim line above a target from the trim cells, each cell's gap to 0.1 sq ft, added left to right.
  const trimCellsOver=(cells,target)=>round(add(cells.map(([trim,gross])=>round(Math.max(0,trim-target/100*gross),1))),1);
  const pctText=(n,d)=>d?fixed(round(n/d*100,2),2):'unavailable';   // cost_model._pct_text: two decimals
@@ -131,8 +138,8 @@ const Money=(()=>{
  // (`of`, its cells' added up: the review of 82c0994 on PR #168, item 2); the contribution from its period to date's quantity.
  function yearly(yt,rates,cfg,ptdWhole){
   const qty=trimQty(yt,rates), p=price(yt.kind,qty,rates,null,null,cfg);
-  const usd=yt.of&&ptdWhole?wholeOf(ptdWhole,yt.of):p.usd;
-  return {usd_per_year:annual(usd,yt.days,cfg),contribution_usd_per_year:p.contribution_usd===null?null:annual(p.contribution_usd,yt.days,cfg),year_terms:{...yt,quantity:qty}};
+  const year=yt.of&&ptdWhole?annualOf(ptdWhole,yt.of,yt.shift_days,yt.days,cfg):annual(p.usd,yt.days,cfg);
+  return {usd_per_year:year,contribution_usd_per_year:p.contribution_usd===null?null:annual(p.contribution_usd,yt.days,cfg),year_terms:{...yt,quantity:qty}};
  }
  // The trim lever's words name the target, a rate (cost_model.lever_label, at_label, lever_records).
  const trimLabel=target=>`Side trim over the ${gText(target)}% target`, trimAtLabel=target=>`Side trim at standard (up to ${gText(target)}% of gross)`;
@@ -347,10 +354,13 @@ const Money=(()=>{
    at_standard_usd:at.length?round(add(at),2):0,all_in_usd:usd.length?round(add(usd),2):0};
  }
  // cost_model.ptd_ledger: the period to date's dollars above standard, lever by lever, its whole dollars (its cells' added up)
- // and each lever's yearly figure at this period's rate, read from its whole dollars (the review of 82c0994, item 2).
+ // and each lever's yearly figure at this period's rate, read from its whole dollars (the review of 82c0994, item 2): each
+ // shift's own at its own days (`by_shift`), and the scope's theirs added up (annualOf, the review of 2510d38, item 1).
  function ptd(terms,rates,cfg,w){
+  const own=new Map((terms.shift_days||(w?w.shifts.map(e=>[e.shift,terms.days]):[])).map(([s,d])=>[s,d]));
   const levers=terms.levers.map(l=>{ const p=price(l.kind,trimQty(l,rates),rates,null,null,cfg), shown=w?w.levers[l.key]:null;
-   return {key:l.key,usd:p.usd,usd_shown:shown,usd_per_year:annual(w?shown:p.usd,terms.days,cfg)}; });
+   const byShift=w?w.shifts.map(e=>({shift:e.shift,days:own.get(e.shift)||0,usd_shown:e.levers[l.key],usd_per_year:annual(e.levers[l.key],own.get(e.shift)||0,cfg)})):null;
+   return {key:l.key,usd:p.usd,usd_shown:shown,usd_per_year:w?annualOf(w,['levers',l.key],terms.shift_days,terms.days,cfg):annual(p.usd,terms.days,cfg),by_shift:byShift}; });
   const years=levers.map(l=>l.usd_per_year);
   return {ptd_usd:round(add(levers.map(l=>l.usd)),2),ptd_usd_per_year:years.some(v=>v===null)?null:round(add(years),0),levers};
  }
@@ -435,7 +445,7 @@ const Money=(()=>{
     out.ptd_usd=p.ptd_usd; out.ptd_usd_per_year=p.ptd_usd_per_year;
     if(pw)out.ptd_usd_shown=pw.total;
     out.ptd_terms={...data.ptd_terms,levers:data.ptd_terms.levers.map(l=>({...l,quantity:trimQty(l,rates)}))};
-    if(Array.isArray(data.ptd_levers))out.ptd_levers=data.ptd_levers.map(l=>{ const q=p.levers.find(x=>x.key===l.key); return {...l,usd:q.usd,usd_per_year:q.usd_per_year,...('usd_shown' in l?{usd_shown:q.usd_shown}:{}),...(l.key==='trim'?{lever:trimLabel(rates.values.trim_target_pct)}:{})}; });
+    if(Array.isArray(data.ptd_levers))out.ptd_levers=data.ptd_levers.map(l=>{ const q=p.levers.find(x=>x.key===l.key); return {...l,usd:q.usd,usd_per_year:q.usd_per_year,...('usd_shown' in l?{usd_shown:q.usd_shown}:{}),...('by_shift' in l?{by_shift:q.by_shift}:{}),...(l.key==='trim'?{lever:trimLabel(rates.values.trim_target_pct)}:{})}; });
    }
   }
   if(w&&tool==='get_waste_breakdown')for(const r of out.rows)r.usd_shown=r.usd===null||r.usd===undefined?null:w.lines[r.category];   // cost_model.waste_shown
@@ -574,7 +584,7 @@ const Money=(()=>{
   }
   return out;
  }
- return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,rankLedger,rankOwnership,controllable,totals,ledgerTotals,summary,bucketOf,trimCellsOver,annual,atStandard,tile,
+ return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,rankLedger,rankOwnership,controllable,totals,ledgerTotals,summary,bucketOf,trimCellsOver,annual,annualOf,atStandard,tile,
   repriceSections,contributionLine,PAPER,TIME,MONEY_TOOLS,
   nearestDollar,largestRemainder,wholeDollars,splitShown,toCents,formulaLine,printsNote};
 })();

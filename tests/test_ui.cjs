@@ -1368,7 +1368,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(ledger,/Paper 5,246 sq ft of side trim, shear and dry end above their targets = 5\.2 MSF × \$55\/MSF = \$288/);   // $288.53 prints $288 so paper and machine time add to the $502 (PR #168)
  assert.match(ledger,/Machine time 10\.7 min \(downtime over its bands 0\.0 · speed under the grade baseline 10\.0 · waste run time 0\.7\) = 57\.7 MSF not made at the required run speed at 10% downtime, 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$214/);
  assert.match(ledger,/At standard \$6,998 inside the bands this shift: the cost of the order mix and the process, shown apart, not in the total/);
- assert.match(ledger,/Total = \$502 above standard this shift · \$718,012\/yr at this period's rate \(4-4-5 P2 to date through Mon 14 Sep, all shifts: period-to-date dollars per production day × 257\.14 production days a year\) · contribution: margin not set/);
+ assert.match(ledger,/Total = \$502 above standard this shift · \$718,013\/yr at this period's rate \(4-4-5 P2 to date through Mon 14 Sep, all shifts: each shift's period-to-date dollars per production day × 257\.14 production days a year, added up\) · contribution: margin not set/);
  assert.match(ledger,/Rates: paper \$55\/MSF \(post\), machine time \$1,200\/hr \(post\), contribution margin not set \(assumption: owner to set\)/);
  assert.match(ledger,/they are not a real plant's figures/);
  // tiles: every tile that measures a loss shows its dollars, never a year (issue #164); in dollars its value is the dollars

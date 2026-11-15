@@ -142,8 +142,14 @@ def test_a_yearly_figure_comes_only_from_period_to_date(store):
     cells, _, _ = cost_model.ledger_cells(store, start, end)
     whole = cost_model.whole_dollars(cost_model.display_terms(cells, rates()), rates())
     assert [r['usd_shown'] for r in cards[0]['ptd_levers']] == [whole['levers'][k] for k in cost_model.LEVERS]
+    # each shift's own yearly figure at its own production days, the machine's theirs added up (the review of 2510d38, item 1)
+    days = {sh: len({c['production_day'] for c in cells if c['shift'] == sh and c['setups']}) for sh in (1, 2, 3)}
     assert cards[0]['ptd_days'] == ptd['days'] and cards[0]['ptd_usd_per_year'] == sum(
-        cost_model.annual(whole['levers'][k], ptd['days']) for k in cost_model.LEVERS)
+        cost_model.annual(e['levers'][k], days[e['shift']]) for k in cost_model.LEVERS for e in whole['shifts'])
+    for lever in cards[0]['ptd_levers']:
+        assert [(b['shift'], b['days'], b['usd_shown']) for b in lever['by_shift']] == [(e['shift'], days[e['shift']], e['levers'][lever['key']])
+                                                                                       for e in whole['shifts']]
+        assert lever['usd_per_year'] == sum(b['usd_per_year'] for b in lever['by_shift'])
     # shift 1's month: its own period to date, about a third of the machine's, never the machine's year
     machine = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, rates())
     first = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, 1, rates())
@@ -506,7 +512,47 @@ def test_displayed_days_add_to_their_weeks_months_periods_and_periods_to_date(st
     assert owned_lines(own[None]) == added([own[sh] for sh in (1, 2, 3)], owned_lines)
 
 
-def test_a_long_window_states_its_cents_apart_once():
+def yearly_figures(data):
+    """A money window card's printed yearly figures, keyed so the shift cards of a window can be added: each lever's and each
+    ownership line's (`usd_per_year`), and the totals a card states a year (all the levers, the controllable ones, the tag
+    scrap, the period to date)."""
+    out = {('row', r['key']): r['usd_per_year'] for r in data['rows'] if r.get('usd_per_year') is not None}
+    out.update({('card', k): data[k] for k in ('total_usd_per_year', 'controllable_usd_per_year', 'dry_end_usd_per_year', 'ptd_usd_per_year')
+                if data.get(k) is not None})
+    return out
+
+
+@pytest.mark.parametrize('text', ['', 'paper:47.5,hour:1450,margin:40,trim:2.75'])
+def test_the_shifts_yearly_figures_add_to_the_all_shifts_card(store, text):
+    """The coordinator's review of 2510d38 on PR #168, item 1: the week of 7 Sep's shift cards said $287,307 + $217,646 +
+    $229,629 = $734,582 a year and the all-shifts card $734,580; the levers missed in 14 of 22 windows, and the ownership lens's
+    all the waste recorded on 57 of 70 day cards and 20 of 22 windows. Each scope rounded its own period to date to the dollar
+    once. The all-shifts yearly figure of each lever and each line is the shifts' own printed yearly figures added up, so over
+    July to September, every day, week, month and 4-4-5 period, both lenses, the shift cards' yearly figures add to the
+    all-shifts card's, figure by figure, and every figure the all-shifts card states a year has its three shifts' beside it."""
+    r = rates(text)
+    windows = [{'period': 'day', 'anchor': d} for d in store.production_days if NESTED[0] <= d <= NESTED[1]]
+    monday = date.fromisoformat(NESTED[0]) - timedelta(days=date.fromisoformat(NESTED[0]).weekday())
+    while monday.isoformat() <= NESTED[1]:
+        windows.append({'period': 'week', 'anchor': monday.isoformat()})
+        monday += timedelta(days=7)
+    windows += [{'period': 'month', 'anchor': m} for m in ('2026-07-01', '2026-08-03', '2026-09-01')]
+    moment = date.fromisoformat(NESTED[0])
+    while moment.isoformat() <= NESTED[1]:
+        windows.append({'period': 'fiscal', 'anchor': moment.isoformat()})
+        moment = fiscal_bounds(moment)[1] + timedelta(days=1)
+    checked = 0
+    for window in windows:
+        for lens in ('all', 'ownership'):
+            cards = {sh: cost_model.opportunities(store, window, sh, r, lens) for sh in (None, 1, 2, 3)}
+            every, mine = yearly_figures(cards[None]), [yearly_figures(cards[sh]) for sh in (1, 2, 3)]
+            assert every and all(set(m) == set(every) for m in mine), (window, lens)
+            assert every == {k: sum(m[k] for m in mine) for k in every}, (window, lens)
+            # and on every card the total a year is its rows' added up, the rows each its shifts'
+            for figures in (every, *mine):
+                assert figures[('card', 'total_usd_per_year')] == sum(v for k, v in figures.items() if k[0] == 'row'), (window, lens)
+            checked += len(every)
+    assert len(windows) >= 66 + 20 and checked > 2000
     """The coordinator's review of 82c0994, item 2: a long window's whole dollars, added cell by cell, can differ from its cents
     by a few dollars; a card over several production days says so once, and a shift's or a day's card does not."""
     from investigator import shapes

@@ -1123,7 +1123,9 @@ function arithmetic(f){
  if(f.owner&&has(f.above))out.push(line('Split ',[b(Money.money(f.atStandard)),' at standard + ',b(Money.money(f.above)),' above standard, the levers\' figure + ',b(Money.money(f.noBand)),' with no band yet']));
  const total=[`= `,b(Money.money(f.total)),` ${f.owner?'the waste recorded':'above standard'} ${f.when}`];
  if(f.perShift)total.push(` (${f.perShift})`);
- if(has(f.year))total.push(' · ',b(`${Money.money(f.year)}/yr`),` at this period's rate (${f.ptdLabel}${f.levers?(f.own?`, shift ${f.own}'s own`:''):`, ${f.ptdScope}`}: period-to-date dollars per production day × ${Money.fixed(C.days_per_year,2)} production days a year)`);
+ // all shifts: each shift's own yearly figure, added up (cost_model.annual_of, the review of 2510d38 on PR #168, item 1)
+ const allShifts=f.levers?!f.own:f.ptdScope==='all shifts', each=allShifts?'each shift\'s ':'', added=allShifts?', added up':'';
+ if(has(f.year))total.push(' · ',b(`${Money.money(f.year)}/yr`),` at this period's rate (${f.ptdLabel}${f.levers?(f.own?`, shift ${f.own}'s own`:''):`, ${f.ptdScope}`}: ${each}period-to-date dollars per production day × ${Money.fixed(C.days_per_year,2)} production days a year${added})`);
  else if(f.yearNote)total.push(` · ${f.yearNote} (${f.ptdLabel})`);
  total.push(v.margin_usd_msf===null||v.margin_usd_msf===undefined?` · contribution: ${cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(v.margin_usd_msf)}/MSF, beside the dollars, not added`);
  out.push(line('Total ',total));

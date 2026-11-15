@@ -53,9 +53,14 @@ MARGIN_NOT_SET = 'margin not set'
 NOTE = ('Dollars are synthetic records priced at assumed rates (the post\'s defaults unless changed); '
         'they are not a real plant\'s figures.')
 # Said once on a card over several production days, and on its tiles (the coordinator's review of 82c0994 on PR #168, item 2):
-# its whole dollars are its cells' added up (whole_dollars), which can differ from the window priced at once in cents
-LONG_NOTE = ('Over several days these whole dollars, added shift by shift, can read several dollars off the same quantities '
-             'priced at once in cents, which the formulas and receipts state.')
+# its whole dollars are its cells' added up (whole_dollars), which can differ from the window priced at once in cents. The bound
+# is measured over the whole record, 1 Jan 2025 to 13 Nov 2026, at seven rate sets (the review of 2510d38, item 2): a card's
+# levers within $7, everything recorded and priced within $12, a line within $17.09 and all the waste recorded within $23.69
+# (September 2025 at hour:1); at the post's rates within $12.78 (4-4-5 P2 2026's waste recorded). docs/COST_MODEL.md has the
+# table. In words, never a $ figure: web/money.js re-prices every $ token of the prose.
+LONG_NOTE = ('Over several days these whole dollars, added shift by shift, can read off the same quantities priced at once in cents, '
+             'which the formulas and receipts state; over the whole record the widest gap measured is about twenty-five dollars, on a '
+             'month\'s waste recorded.')
 
 
 # ------------------------------------------------------------------ rates
@@ -215,6 +220,24 @@ def annual(usd, days):
     MIN_RATE_DAYS production days (the coordinator's default on PR #168: one day x 257 is no yearly figure; `year_note`
     says why)."""
     return None if usd is None or not days or days < MIN_RATE_DAYS else round(usd / days * DAYS_PER_YEAR, 0)
+
+
+def shift_days(cells):
+    """[[shift, production days], ...] in shift order: each shift's own production days in `cells` (a period to date's), the
+    days its own yearly figure is read over (annual_of)."""
+    return [[sh, len({c['production_day'] for c in cells if c['shift'] == sh and c['setups']})] for sh in sorted({c['shift'] for c in cells})]
+
+
+def annual_of(whole, path, days_of):
+    """A yearly figure as the shifts print it (the coordinator's review of 2510d38 on PR #168, item 1): each shift's own, its
+    line `path` of the period to date's whole dollars (`whole['shifts']`) at its own production days (`days_of`, shift_days),
+    and a card for several shifts those figures added up, so the shift cards' yearly figures add to the all-shifts card's, lever
+    by lever and line by line. A card for one shift is its own figure. None when a shift states none (`annual`: fewer than
+    MIN_RATE_DAYS production days), or without shifts. web/money.js annualOf is this."""
+    group, key = path
+    days = {sh: d for sh, d in days_of}
+    years = [annual(e[group][key], days.get(e['shift'], 0)) for e in whole['shifts']]
+    return None if not years or None in years else round(_add(years), 0)
 
 
 def trim_points_usd_per_year(points, rates=None, machines=1):
@@ -570,7 +593,8 @@ SPEEDS_NOTE = ('Two speeds, never one definition: the speed lever is each grade\
 LEDGER_NOTE = ('Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band '
                'adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this '
                'period\'s rate, period-to-date dollars per production day x the post\'s production days a year, never a shift\'s or '
-               'a day\'s own. These name where to look and whom to ask; they never prescribe a machine adjustment.')
+               'a day\'s own; for all shifts it is each shift\'s period-to-date rate added up, so the shifts\' yearly figures add to it. '
+               'These name where to look and whom to ask; they never prescribe a machine adjustment.')
 
 CELL_SQL = ("SELECT production_date, shift, coverage, setups, gross_sqft, trim_sqft, shear_sqft, reject_sqft, bond_sqft, warp_sqft, "
             "misalignment_sqft, moisture_sqft, other_sqft, changeover_sqft, cutoff_waste_sqft, stacker_waste_sqft, admin_sqft, bale_sqft, "
@@ -845,15 +869,16 @@ def _lever_row(key, s, rates, scope, stops, ptd=None, ptd_whole=None):
 
 
 def _yearly(key, ptd, rates, ptd_whole):
-    """A lever's dollars a year at this period's rate: its period-to-date whole dollars (its cells' added up, the review of
-    82c0994, item 2) per production day x the production days a year (`annual`); `year_terms` re-derive it at a visitor's
-    rates in the browser, `of` naming its line of the period to date's whole dollars (`ptd_terms.whole`)."""
+    """A lever's dollars a year at this period's rate: each shift's period-to-date whole dollars (its cells' added up, the
+    review of 82c0994, item 2) per its production day x the production days a year, the shifts' added up (annual_of, the review
+    of 2510d38, item 1); `year_terms` re-derive it at a visitor's rates in the browser, `of` naming its line of the period to
+    date's whole dollars (`ptd_terms.whole`) and `shift_days` each shift's days."""
     kind, qty = LEVER_KIND[key], ptd['over'][key]
     p = price(kind, qty, rates)
-    terms = {'kind': kind, 'quantity': qty, 'days': ptd['days'], 'of': ['levers', key],
+    terms = {'kind': kind, 'quantity': qty, 'days': ptd['days'], 'shift_days': ptd['shift_days'], 'of': ['levers', key],
              **({'trim_cells': ptd['trim_cells']} if key == 'trim' else {})}
     contribution = None if p['contribution_usd'] is None else annual(p['contribution_usd'], ptd['days'])
-    return {'usd_per_year': annual(ptd_whole['levers'][key], ptd['days']), 'contribution_usd_per_year': contribution, 'year_terms': terms}
+    return {'usd_per_year': annual_of(ptd_whole, terms['of'], ptd['shift_days']), 'contribution_usd_per_year': contribution, 'year_terms': terms}
 
 
 def at_standard(kind, total, over, rates, gross, minutes):
@@ -1199,13 +1224,18 @@ def ptd_ledger(store, through, shift, rates):
     every, _, trace = ledger_cells(store, start, end, None)
     cells = [c for c in every if shift is None or c['shift'] == shift]
     s = ledger_sums(cells, rates)
+    s['shift_days'] = shift_days(cells)
+    days = dict(s['shift_days'])
     terms = display_terms(cells, rates)
     whole = whole_dollars(terms, rates)
     levers = []
     for key in LEVERS:
         p = price(LEVER_KIND[key], s['over'][key], rates)
+        # each shift's own yearly figure, and the scope's theirs added up (the coordinator's review of 2510d38, item 1)
+        by_shift = [{'shift': e['shift'], 'days': days[e['shift']], 'usd_shown': e['levers'][key],
+                     'usd_per_year': annual(e['levers'][key], days[e['shift']])} for e in whole['shifts']]
         levers.append({'key': key, 'lever': lever_label(key, rates), 'usd': p['usd'], 'usd_shown': whole['levers'][key],
-                       'usd_per_year': annual(whole['levers'][key], s['days'])})
+                       'usd_per_year': annual_of(whole, ['levers', key], s['shift_days']), 'by_shift': by_shift})
     years = [r['usd_per_year'] for r in levers]
     out = {'ptd_label': label, 'ptd_start': start.isoformat(), 'ptd_through': end.isoformat(),
            'ptd_days': s['days'], 'ptd_scope': f'shift {shift}' if shift else 'all shifts',
@@ -1214,7 +1244,7 @@ def ptd_ledger(store, through, shift, rates):
            'ptd_usd_per_year': None if None in years else round(_add(years), 0),
            'ptd_year_note': year_note(s['days']),
            'ptd_levers': levers,
-           'ptd_terms': {'days': s['days'], 'levers': [{'key': k, 'kind': LEVER_KIND[k], 'quantity': s['over'][k],
+           'ptd_terms': {'days': s['days'], 'shift_days': s['shift_days'], 'levers': [{'key': k, 'kind': LEVER_KIND[k], 'quantity': s['over'][k],
                                                         **({'trim_cells': s['trim_cells']} if k == 'trim' else {})} for k in LEVERS],
                          'whole': terms}}
     return s, out, trace, whole
@@ -1399,11 +1429,11 @@ def _ownership_rows(s, ptd, rates, ptd_whole):
             return {'pct_of_yield': _pct(lines[key], lines['yield'], 4)}, f'{_waste_label(key)}: {_pct(lines[key], lines["yield"], 4)}% of the yield after trim and shear'
         return {'pct_of_gross': _pct(lines[key], gross, 4)}, f'{_waste_label(key)}: {_pct(lines[key], gross, 4)}% of gross'
 
-    def yearly(kind, key):   # from the period to date's whole dollars of the line, its cells' added up (82c0994, item 2)
-        p = price(kind, plines[key], rates)
+    def yearly(kind, key):   # from the period to date's whole dollars of the line, its cells' added up (82c0994, item 2),
+        p = price(kind, plines[key], rates)   # each shift's at its own days and the shifts' added up (2510d38, item 1)
         contribution = None if p['contribution_usd'] is None else annual(p['contribution_usd'], ptd['days'])
-        return {'usd_per_year': annual(ptd_whole['lines'][key], ptd['days']), 'contribution_usd_per_year': contribution,
-                'year_terms': {'kind': kind, 'quantity': plines[key], 'days': ptd['days'], 'of': ['lines', key]}}
+        return {'usd_per_year': annual_of(ptd_whole, ['lines', key], ptd['shift_days']), 'contribution_usd_per_year': contribution,
+                'year_terms': {'kind': kind, 'quantity': plines[key], 'days': ptd['days'], 'shift_days': ptd['shift_days'], 'of': ['lines', key]}}
 
     def split(row, key):
         above = price(LEVER_KIND[key], s['over'][key], rates, gross, minutes)
@@ -1580,7 +1610,8 @@ def opportunities(store, window, shift, rates, lens='all'):
                            'of the waste breakdown priced once, so the total is the waste breakdown\'s. A banded line is split at its band: '
                            'at standard, the cost of the order mix and the process; above standard, the lever\'s own figure. The dry-end '
                            'waste is the tag scrap: bond, warp, misalignment, moisture and other, one subtotal with each kind beneath it. A '
-                           'yearly figure is this period\'s rate, period-to-date dollars per production day x the post\'s production days a year.')}[lens]
+                           'yearly figure is this period\'s rate, period-to-date dollars per production day x the post\'s production days a year; '
+                           'for all shifts it is each shift\'s period-to-date rate added up, so the shifts\' yearly figures add to it.')}[lens]
     data = {'tool': 'get_opportunities', 'window': current, 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': store.content_hash, 'rows': rows, 'coverage': 'complete' if coverage == 'complete' else coverage,
             'excluded_records': [], 'source_rows': {'shifts': s['cells'], 'runs': s['runs']},

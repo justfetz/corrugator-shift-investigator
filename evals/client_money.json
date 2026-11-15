@@ -107,7 +107,7 @@
   },
   "margin_not_set": "margin not set",
   "note": "Dollars are synthetic records priced at assumed rates (the post's defaults unless changed); they are not a real plant's figures.",
-  "long_note": "Over several days these whole dollars, added shift by shift, can read several dollars off the same quantities priced at once in cents, which the formulas and receipts state."
+  "long_note": "Over several days these whole dollars, added shift by shift, can read off the same quantities priced at once in cents, which the formulas and receipts state; over the whole record the widest gap measured is about twenty-five dollars, on a month's waste recorded."
  },
  "input": {
   "production_day": "2026-09-14",
@@ -685,7 +685,7 @@
   "ptd_scope": "all shifts",
   "ptd_usd": 30716.41,
   "ptd_usd_shown": 30715,
-  "ptd_usd_per_year": 718012.0,
+  "ptd_usd_per_year": 718013.0,
   "ptd_year_note": null,
   "ptd_levers": [
    {
@@ -693,46 +693,180 @@
     "lever": "Speed under the grade baseline",
     "usd": 7762.8,
     "usd_shown": 7762,
-    "usd_per_year": 181449.0
+    "usd_per_year": 181449.0,
+    "by_shift": [
+     {
+      "shift": 1,
+      "days": 11,
+      "usd_shown": 2427,
+      "usd_per_year": 56735.0
+     },
+     {
+      "shift": 2,
+      "days": 11,
+      "usd_shown": 2581,
+      "usd_per_year": 60335.0
+     },
+     {
+      "shift": 3,
+      "days": 11,
+      "usd_shown": 2754,
+      "usd_per_year": 64379.0
+     }
+    ]
    },
    {
     "key": "trim",
     "lever": "Side trim over the 3% target",
     "usd": 16436.52,
     "usd_shown": 16436,
-    "usd_per_year": 384218.0
+    "usd_per_year": 384218.0,
+    "by_shift": [
+     {
+      "shift": 1,
+      "days": 11,
+      "usd_shown": 6801,
+      "usd_per_year": 158984.0
+     },
+     {
+      "shift": 2,
+      "days": 11,
+      "usd_shown": 4316,
+      "usd_per_year": 100894.0
+     },
+     {
+      "shift": 3,
+      "days": 11,
+      "usd_shown": 5319,
+      "usd_per_year": 124340.0
+     }
+    ]
    },
    {
     "key": "shear",
     "lever": "Shear over the 0.75% target",
     "usd": 0.0,
     "usd_shown": 0,
-    "usd_per_year": 0.0
+    "usd_per_year": 0.0,
+    "by_shift": [
+     {
+      "shift": 1,
+      "days": 11,
+      "usd_shown": 0,
+      "usd_per_year": 0.0
+     },
+     {
+      "shift": 2,
+      "days": 11,
+      "usd_shown": 0,
+      "usd_per_year": 0.0
+     },
+     {
+      "shift": 3,
+      "days": 11,
+      "usd_shown": 0,
+      "usd_per_year": 0.0
+     }
+    ]
    },
    {
     "key": "dry_end",
     "lever": "Dry end over the 1% target",
     "usd": 5303.69,
     "usd_shown": 5302,
-    "usd_per_year": 123943.0
+    "usd_per_year": 123944.0,
+    "by_shift": [
+     {
+      "shift": 1,
+      "days": 11,
+      "usd_shown": 2160,
+      "usd_per_year": 50494.0
+     },
+     {
+      "shift": 2,
+      "days": 11,
+      "usd_shown": 1653,
+      "usd_per_year": 38642.0
+     },
+     {
+      "shift": 3,
+      "days": 11,
+      "usd_shown": 1489,
+      "usd_per_year": 34808.0
+     }
+    ]
    },
    {
     "key": "operator",
     "lever": "Operator downtime over the 2.5% band",
     "usd": 1138.8,
     "usd_shown": 1140,
-    "usd_per_year": 26649.0
+    "usd_per_year": 26649.0,
+    "by_shift": [
+     {
+      "shift": 1,
+      "days": 11,
+      "usd_shown": 560,
+      "usd_per_year": 13091.0
+     },
+     {
+      "shift": 2,
+      "days": 11,
+      "usd_shown": 341,
+      "usd_per_year": 7971.0
+     },
+     {
+      "shift": 3,
+      "days": 11,
+      "usd_shown": 239,
+      "usd_per_year": 5587.0
+     }
+    ]
    },
    {
     "key": "maintenance",
     "lever": "Maintenance downtime over the 2.5% band",
     "usd": 74.6,
     "usd_shown": 75,
-    "usd_per_year": 1753.0
+    "usd_per_year": 1753.0,
+    "by_shift": [
+     {
+      "shift": 1,
+      "days": 11,
+      "usd_shown": 0,
+      "usd_per_year": 0.0
+     },
+     {
+      "shift": 2,
+      "days": 11,
+      "usd_shown": 75,
+      "usd_per_year": 1753.0
+     },
+     {
+      "shift": 3,
+      "days": 11,
+      "usd_shown": 0,
+      "usd_per_year": 0.0
+     }
+    ]
    }
   ],
   "ptd_terms": {
    "days": 11,
+   "shift_days": [
+    [
+     1,
+     11
+    ],
+    [
+     2,
+     11
+    ],
+    [
+     3,
+     11
+    ]
+   ],
    "levers": [
     {
      "key": "speed",
@@ -1896,7 +2030,7 @@
   "speeds_note": "Two speeds, never one definition: the speed lever is each grade's trailing-year baseline (targets.json), and the required speed, 675 ft/min at 10% downtime (rates.json, the post), converts machine minutes to MSF not made and is no lever.",
   "baseline_since": "2025-09-15",
   "baseline_through": "2026-09-14",
-  "method_note": "Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this period's rate, period-to-date dollars per production day x the post's production days a year, never a shift's or a day's own. These name where to look and whom to ask; they never prescribe a machine adjustment.",
+  "method_note": "Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this period's rate, period-to-date dollars per production day x the post's production days a year, never a shift's or a day's own; for all shifts it is each shift's period-to-date rate added up, so the shifts' yearly figures add to it. These name where to look and whom to ask; they never prescribe a machine adjustment.",
   "total_usd_shown": 502,
   "at_standard_usd_shown": 6998,
   "all_in_usd_shown": 7898,
@@ -2470,7 +2604,7 @@
   "at_standard_usd": 7733.38,
   "all_in_usd": 8641.92,
   "ptd_usd": 29672.23,
-  "ptd_usd_per_year": 693631,
+  "ptd_usd_per_year": 693633,
   "total_usd_shown": 474,
   "total_paper_usd_shown": 233,
   "total_machine_time_usd_shown": 241,

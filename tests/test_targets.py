@@ -559,9 +559,11 @@ def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced
     # whole dollars there, its cells' added up (the coordinator's review of 82c0994 on PR #168, item 2)
     assert lens['total_usd_per_year'] == sum(r['usd_per_year'] for r in lens['rows'])
     ptd = cost_model.whole_dollars(lens['ptd_terms']['whole'], rates)
-    for r in lens['rows']:
+    for r in lens['rows']:   # each shift's own at its own days, the shifts' added up (the review of 2510d38 on PR #168, item 1)
         terms = r['year_terms']
-        assert terms['of'] == ['lines', r['key']] and r['usd_per_year'] == cost_model.annual(ptd['lines'][r['key']], terms['days'])
+        days = dict(terms['shift_days'])
+        assert terms['of'] == ['lines', r['key']] and r['usd_per_year'] == sum(cost_model.annual(e['lines'][r['key']], days[e['shift']])
+                                                                               for e in ptd['shifts'])
     assert lens['above_standard_usd'] + lens['at_standard_usd'] + lens['no_band_usd'] == pytest.approx(lens['total_usd'], abs=0.005)
     for key in ('cutoff_waste', 'stacker_waste', 'admin', 'changeover'):
         line = next(r for r in waste['rows'] if r['category'] == key)

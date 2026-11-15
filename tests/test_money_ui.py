@@ -105,7 +105,8 @@ def test_every_priced_row_carries_the_call_that_priced_it(bench):
                 if row.get('year_terms'):   # a lever's year is its period to date's, from its own line of the period's whole dollars
                     y = row['year_terms']   # (its cells' added up: the coordinator's review of 82c0994 on PR #168, item 2)
                     pw = cost_model.whole_dollars(entry['data']['ptd_terms']['whole'], rates)
-                    assert row['usd_per_year'] == cost_model.annual(pw[y['of'][0]][y['of'][1]], y['days'])
+                    days = dict(y['shift_days'])   # each shift's own at its days, added up (the review of 2510d38, item 1)
+                    assert row['usd_per_year'] == sum(cost_model.annual(e[y['of'][0]][y['of'][1]], days[e['shift']]) for e in pw['shifts'])
                     margin = cost_model.price(y['kind'], y['quantity'], rates)['contribution_usd']
                     assert row['contribution_usd_per_year'] == (None if margin is None else cost_model.annual(margin, y['days']))
                 else:
@@ -166,7 +167,10 @@ PARITY_URLS = ('/corr/1/day/2026-09-14/shift/2?measure=dollars', '/corr/1/day/20
                '/corr/1/day/2025-01-01?measure=dollars',
                # the sweep of PR #168's review of 82c0994: on 19 Jun 2026 one shift holds the day's whole trim lever, so the day's
                # formula line and that shift's read the same at the post's rates and part at another target; the line is the day's
-               '/corr/1/day/2026-06-19?measure=dollars')
+               '/corr/1/day/2026-06-19?measure=dollars',
+               # the review of 2510d38 on PR #168, item 1: the all-shifts yearly figures are the shifts' own added up, lever by
+               # lever and line by line (the week of 7 Sep, and 7 Sep under the ownership lens)
+               '/corr/1/week/2026-09-07?measure=money', '/corr/1/day/2026-09-07?measure=money&lens=ownership')
 PARITY_RATES = ('paper:60,hour:1350.5,margin:35,trim:3.1', 'paper:41.37,hour:5000', 'margin:12.5,trim:4', 'trim:2.5',
                 'hour:1', 'paper:99999.99,margin:0.01')
 

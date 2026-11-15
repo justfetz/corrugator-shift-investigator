@@ -1673,7 +1673,8 @@ def money_failures(expect, results):
     - `same_words` {match, why}: the pattern's first group reads the same words on every turn (item 4: one period to date,
       one label, whichever card states it).
     - `yearly_from_period_to_date` also reads the period to date's printed whole dollars: its levers' `usd_shown` add to its
-      `ptd_usd_shown`, and each lever's yearly figure is its printed dollars per production day x the post's days a year."""
+      `ptd_usd_shown`, and each lever's yearly figure is each shift's printed dollars per its own production day x the post's
+      days a year (`by_shift`, whose printed dollars add to the lever's), the shifts' added up (the review of 2510d38, item 1)."""
     failures = []
     for check in expect.get('money_checks', []):
         kind, last = check['check'], results[-1]
@@ -1723,7 +1724,18 @@ def money_failures(expect, results):
                     continue
                 if sum(r['usd_shown'] for r in ptd) != data.get('ptd_usd_shown'):
                     failures.append(f'money: the period to date\'s levers print {[r["usd_shown"] for r in ptd]}, its total {data.get("ptd_usd_shown")}')
-                by_hand = sum(round(r['usd_shown'] / data['ptd_days'] * POST_DAYS_PER_YEAR) for r in ptd)
+                # each shift's own yearly figure, its printed dollars over its own production days, and the scope's theirs added
+                # up (the coordinator's review of 2510d38 on PR #168, item 1): the shift cards' yearly figures add to the
+                # all-shifts card's, lever by lever
+                if any(not r.get('by_shift') or sum(b['usd_shown'] for b in r['by_shift']) != r['usd_shown'] for r in ptd):
+                    failures.append(f'money: {check["tool"]}\'s period to date names no shifts whose printed dollars add to each lever')
+                    continue
+                lever_year = lambda r: sum(round(b['usd_shown'] / b['days'] * POST_DAYS_PER_YEAR) for b in r['by_shift'])
+                for r in ptd:
+                    if r.get('usd_per_year') != lever_year(r) or [b['usd_per_year'] for b in r['by_shift']] != [
+                            round(b['usd_shown'] / b['days'] * POST_DAYS_PER_YEAR) for b in r['by_shift']]:
+                        failures.append(f'money: the period to date\'s {r["key"]} a year is {r.get("usd_per_year")}, its shifts\' by hand {lever_year(r)}')
+                by_hand = sum(lever_year(r) for r in ptd)
                 if data.get('ptd_usd_per_year') != by_hand:
                     failures.append(f'money: the period to date a year is {data.get("ptd_usd_per_year")}, by hand {by_hand}')
                 stated = [data.get('total_usd_per_year'), data.get('controllable_usd_per_year')]
