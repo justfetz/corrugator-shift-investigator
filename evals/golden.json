@@ -19711,6 +19711,154 @@
     "raises": "'lose' asks what was lost, and lineal feet count what ran"
    },
    "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 5: pinned. A loss said of what ran is refused; main refused it as a count asked of every shift ('A count is answered for one shift')."
+  },
+  {
+   "id": "semantic-how-often-moisture-counts-the-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How often moisture this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&reason=Steam+/+moisture",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [],
+       "filters": {
+        "reason": "Steam / moisture"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Stops, stop reason Steam / moisture this week: \\*\\*[0-9]+ stops?\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: a count asked of moisture counts the stops (Steam / moisture), as at b955ca4; 0d23e4a read the reject family first, refused the count and let the waste breakdown answer '3.45% of gross in side trim'."
+  },
+  {
+   "id": "semantic-which-boards-most-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most stops this week?",
+   "expect": {
+    "raises": "The records do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: a bare 'boards' is no grade split (item 4), so 0d23e4a refused two measures and the Pareto answered '32 stops at Stacker'. A ranking of boards is a count the records do not hold (item 1)."
+  },
+  {
+   "id": "semantic-shift-most-chops-at-the-shear-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most chops at the shear this week?",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 1 was checked after an earlier refusal ('not recorded by place'), so shift 2's side trim answered (3.53%)."
+  },
+  {
+   "id": "semantic-shift-most-reject-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most reject boards this week?",
+   "expect": {
+    "raises": "The records do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 1 was checked after the two-measures refusal, so shift 2's side trim answered (3.53%)."
+  },
+  {
+   "id": "semantic-paper-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Paper waste this week",
+   "expect": {
+    "raises": "'paper' cannot narrow it"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 2: 'paper waste' is no line the model holds, and the waste breakdown answered '3.45% of gross in side trim'; only a bare 'waste' is every line."
+  },
+  {
+   "id": "semantic-baler-waste-leads-with-bale",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Baler waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=bale_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "bale_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Bale \\(scale reading\\) this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 2: 'baler waste' was two measures, so the waste breakdown answered '3.45% of gross in side trim'; it is the bale's line."
+  },
+  {
+   "id": "semantic-shift-lost-most-to-changeovers-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift lost the most to changeovers this week?",
+   "expect": {
+    "raises": "'lost'"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 3: 'to' before a count measure was unread, so shift 2's side trim answered (3.53%); a loss said of what ran is refused."
+  },
+  {
+   "id": "semantic-grade-took-most-hours-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade took the most hours this week?",
+   "expect": {
+    "raises": "'took'"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 3: 'hours' was an unread word, so the verb's cue was dropped and the grade totals answered '36,213.8 MSF across 6 grades'."
+  },
+  {
+   "id": "semantic-grade-stopped-most-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade stopped the most this week?",
+   "expect": {
+    "raises": "'stopped'"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 3: no measure was named, so the verb's cue was dropped and the grade totals answered '36,213.8 MSF across 6 grades'."
+  },
+  {
+   "id": "semantic-grade-most-hours-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had the most hours this week?",
+   "expect": {
+    "raises": "names no measure"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: the minutes/time class of item 3 without a verb: the grade totals answered '36,213.8 MSF across 6 grades'."
+  },
+  {
+   "id": "semantic-how-many-boards-by-grade-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many boards by grade this week?",
+   "expect": {
+    "raises": "The records do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: a count of boards is refused as 'how many boards' is; 0d23e4a answered 'Sheets this week: 3,614,510 sheets' by grade."
   }
  ]
 }
