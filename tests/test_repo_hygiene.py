@@ -513,18 +513,31 @@ def workflow_events(workflow):
     return {on} if isinstance(on, str) else set(on or ())
 
 
-# The stored key in any spelling (`secrets.GCP_SA_KEY`, `secrets['GCP_SA_KEY']`), and the whole secrets context, which
-# holds it too (`toJSON(secrets)`, `secrets[matrix.name]`, a bare `secrets`). A job that names only another secret
-# (the agents' Anthropic credential, HF_TOKEN) holds a credential, but not Google's: its own workflow's tests cover it.
-GOOGLE_KEY = re.compile(r'secrets\s*(?:\.\s*GCP_SA_KEY\b|\[\s*[\'"]GCP_SA_KEY[\'"]\s*\])')
-WHOLE_SECRETS = re.compile(r'\$\{\{[^}]*\bsecrets\b(?!\s*\.\s*\w|\s*\[\s*[\'"])')
+# Every `secrets` reference is taken for the Google credential except the ones named here, which are the other
+# credentials this repository's workflows hold by design (the agents' Anthropic credential, the Space mirror's token)
+# and whose own workflows' tests cover them. So the stored key in any spelling (`secrets.GCP_SA_KEY`,
+# `secrets['gcp_sa_key']`: GitHub matches names without case), a Google credential under a new name, the whole context
+# (`toJSON(secrets)`, `secrets[matrix.name]`) and `secrets: inherit` all count, and a new secret counts until it is
+# classified here.
+OTHER_SECRETS = {'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'HF_TOKEN'}
+EXPRESSION = re.compile(r'\$\{\{.*?\}\}', re.S)
+NAMED_SECRET = re.compile(r'\bsecrets\s*(?:\.\s*(\w+)|\[\s*[\'"](\w+)[\'"]\s*\])', re.I)
+
+
+def reads_google_secret(text):
+    """Whether any `${{ }}` expression in `text` reads a secret other than OTHER_SECRETS, or the whole context."""
+    for expression in EXPRESSION.findall(text):
+        rest = NAMED_SECRET.sub(lambda m: ' ' if (m.group(1) or m.group(2)).upper() in OTHER_SECRETS else ' GOOGLE ', expression)
+        if 'GOOGLE' in rest or re.search(r'\bsecrets\b', rest, re.I):
+            return True
+    return False
 
 
 def holds_google_credential(workflow, job):
-    """The job authenticates to Google: the auth action, the stored key or the whole secrets context, or gcloud's login."""
-    text = json_lib.dumps([job, workflow.get('env')]).replace('\\"', '"')
+    """The job authenticates to Google: the auth action, a secret that may be Google's (above), or gcloud's own login."""
+    text = '\n'.join(value for _, value in strings([job, workflow.get('env')]))
     return (any(str(s.get('uses') or '').startswith(AUTH_ACTION) for s in job.get('steps') or ())
-            or GOOGLE_KEY.search(text) is not None or WHOLE_SECRETS.search(text) is not None
+            or reads_google_secret(text) or str(job.get('secrets') or '').strip() == 'inherit'
             or re.search(r'gcloud\s+auth\s+(?:activate-service-account|login)', text) is not None)
 
 
@@ -573,21 +586,47 @@ def strings(value, where=''):
         yield where, value
 
 
+# The gcloud commands that upload a directory, and where they take it from: `flag` commands use --source, else the
+# working directory (run deploy: unless --image names a built image); `positional` ones take their first argument.
+UPLOAD_COMMANDS = {('run', 'deploy'): 'flag', ('run', 'jobs', 'deploy'): 'flag', ('functions', 'deploy'): 'flag',
+                   ('deploy', 'releases', 'create'): 'flag', ('builds', 'submit'): 'positional', ('app', 'deploy'): 'positional'}
+COMMAND_WORDS = {word for command in UPLOAD_COMMANDS for word in command} | {'alpha', 'beta'}
+
+
 def uploads(script, workdir):
-    """The directory each gcloud upload in a script sends to Cloud Build, resolved against its working directory."""
+    """The directory each gcloud upload in a script sends to Cloud Build, resolved against its working directory; `?`
+    when it cannot be told (a positional command with a flag written `--flag value`)."""
     found = []
     for line in script.replace('\\\n', ' ').splitlines():
-        # gcloud [alpha|beta] run deploy, run jobs deploy, functions deploy: --source, else the working directory
-        # (run: unless --image names a built image)
-        if re.search(r'\bgcloud\s+(?:(?:alpha|beta)\s+)?(?:run\s+(?:jobs\s+)?deploy|functions\s+deploy)\b', line):
-            source = re.search(r'--source[ =]["\']?([^\s"\']+)', line)
-            if source or '--image' not in line:
-                found.append(source.group(1) if source else '.')
-        submit = re.search(r'\bgcloud\s+(?:(?:alpha|beta)\s+)?(?:builds\s+submit|app\s+deploy)\b(.*)', line)
-        if submit:
-            positional = [w for w in submit.group(1).split() if not w.startswith('-')]
-            found.append(positional[0].strip('"\'') if positional else '.')
-    return [posixpath.normpath(posixpath.join(workdir, source)) for source in found]
+        for command_text in re.split(r'&&|\|\||;|\|', line):
+            for match in re.finditer(r'\bgcloud\b', command_text):
+                tokens = [token.strip('"\'') for token in command_text[match.end():].split()]
+                words, i = [], 0
+                while i < len(tokens):   # the command path: skip global flags (and a value after one), alpha and beta
+                    token = tokens[i]
+                    if token.startswith('-') and words:
+                        break   # the command's own flags start here
+                    if token.startswith('-'):
+                        i += 2 if '=' not in token and i + 1 < len(tokens) and not tokens[i + 1].startswith('-') \
+                            and tokens[i + 1] not in COMMAND_WORDS else 1
+                        continue
+                    if token not in COMMAND_WORDS:
+                        break
+                    if token not in ('alpha', 'beta'):
+                        words.append(token)
+                    i += 1
+                kind, rest = UPLOAD_COMMANDS.get(tuple(words)), tokens[i:]
+                if kind == 'flag':
+                    source = re.search(r'--source[ =]["\']?([^\s"\']+)', ' '.join(rest))
+                    if source or not (words[0] == 'run' and any(t.startswith('--image') for t in rest)):
+                        found.append(source.group(1) if source else '.')
+                elif kind == 'positional':
+                    if any(t.startswith('-') and '=' not in t and n + 1 < len(rest) and not rest[n + 1].startswith('-')
+                           for n, t in enumerate(rest)):
+                        found.append('?')
+                    else:
+                        found.append(next((t for t in rest if not t.startswith('-')), '.'))
+    return ['?' if '?' in source else posixpath.normpath(posixpath.join(workdir, source)) for source in found]
 
 
 def credential_exposures(workflow):
@@ -598,6 +637,8 @@ def credential_exposures(workflow):
         if not holds_google_credential(workflow, job):
             continue
         steps = job.get('steps') or []
+        if job.get('uses'):
+            problems.append(f'{name}: hands the credential to the reusable workflow {job["uses"]}, which this check cannot read')
         if events & PR_EVENTS:
             problems.append(f'{name}: runs on {", ".join(sorted(events & PR_EVENTS))}, so its steps are the pull request\'s own copy')
         found = checkouts(job, events)
@@ -624,7 +665,9 @@ def credential_exposures(workflow):
             if 'run' in step:
                 workdir = str(step.get('working-directory') or default_dir)
                 for upload in uploads(step['run'], workdir):
-                    if upload not in folders:
+                    if upload == '?':
+                        problems.append(f'{label} uploads with gcloud, and what it uploads cannot be told: write its flags as --flag=value')
+                    elif upload not in folders:
                         problems.append(f'{label} uploads {upload}, not a checkout of its own: the workspace root holds the '
                                         'credential file the auth step wrote')
                 if OTHER_FETCH.search(step['run']):
@@ -777,6 +820,17 @@ jobs:
     ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud functions deploy f --runtime python312\n          echo --tag'),
     ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud beta builds submit\n          echo --tag'),
     ('- name: Deploy\n        run: |\n', '- run: git fetch origin pull/41/head\n      - name: Deploy\n        run: |\n'),
+    # the reviewer's pass over that round
+    ('      - uses: google-github-actions/auth@v2\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n',
+     '      - run: python3 pr/x.py\n        env:\n          KEY: ${{ secrets.gcp_sa_key }}\n'),
+    ('      - uses: google-github-actions/auth@v2\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n',
+     "      - run: python3 pr/x.py\n        env:\n          ALL: ${{ format('{0}', toJSON(secrets)) }}\n"),
+    ('      - uses: google-github-actions/auth@v2\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n',
+     '      - run: echo "$T" > t && python3 pr/x.py\n        env:\n          CLOUDSDK_AUTH_ACCESS_TOKEN_FILE: t\n          T: ${{ secrets.GCP_TOKEN }}\n'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud --project "$P" run deploy svc --source .\n          echo --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud --quiet builds submit .\n          echo --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud app deploy --version v2\n          echo --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud deploy releases create r --delivery-pipeline=p\n          echo --tag'),
 ])
 def test_the_exposure_check_finds_each_way_in(change, finding):
     """The check is not vacuous: each edit of a safe job is found, and the safe job passes."""
@@ -784,6 +838,12 @@ def test_the_exposure_check_finds_each_way_in(change, finding):
     assert change is None or text != SAFE, change
     problems = credential_exposures(workflow_yaml.load(text))
     assert bool(problems) == (change is not None), problems
+
+
+def test_a_job_that_hands_the_secrets_to_a_reusable_workflow_is_refused():
+    """`secrets: inherit` passes the whole context, the stored key included, to a workflow this check cannot read."""
+    problems = credential_exposures(workflow_yaml.load("on:\n  push:\njobs:\n  call:\n    uses: ./.github/workflows/x.yml\n    secrets: inherit\n"))
+    assert problems == ['call: hands the credential to the reusable workflow ./.github/workflows/x.yml, which this check cannot read']
 
 
 def test_the_pre_133_preview_is_what_the_check_refuses():
@@ -855,9 +915,12 @@ def test_the_owner_is_told_to_end_the_stored_key_and_the_stale_branches_before_a
     table = agents.split('## Fix before enabling `agent-ready`', 1)[1].split('\n## ', 1)[0]
     row = next(line for line in table.splitlines() if line.startswith('| **The stored key is gone'))
     assert 'delete `GCP_SA_KEY`' in row and 'Environment' in row and "`main` only" in row and 'stale' in row
+    assert 'H5' in row and 'update-oidc' in row, 'the cutover closes it only with the condition applied'
+    assert 'does not close it' in row, 'deleting the stale branches narrows the path; only the key\'s end closes it'
     assert 'Nothing left' not in table, 'H4 is not closed on branches cut before #133'
     deployment = (ROOT / 'docs' / 'DEPLOYMENT.md').read_text(encoding='utf-8')
     assert '**Branches cut before #133 still carry the old Preview.**' in deployment
-    assert "git show \"origin/$B:.github/workflows/preview.yml\" 2>/dev/null | grep -q '^  pull_request:$'" in deployment
+    assert "git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'" in deployment
+    assert 'git grep -il gcp_sa_key "origin/$B" -- .github/workflows' in deployment and 'case "$B" in HEAD|main) continue' in deployment
     old = workflow_yaml.load(PRE_133_PREVIEW)   # what such a branch still holds
     assert workflow_events(old) == {'pull_request'} and credential_exposures(old)
