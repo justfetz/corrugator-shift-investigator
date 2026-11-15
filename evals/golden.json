@@ -19859,6 +19859,94 @@
     "raises": "The records do not count boards"
    },
    "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: a count of boards is refused as 'how many boards' is; 0d23e4a answered 'Sheets this week: 3,614,510 sheets' by grade."
+  },
+  {
+   "id": "waste-this-weeks-waste-is-the-breakdown",
+   "type": "routing",
+   "mode": "offline",
+   "question": "This week's waste",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's re-check of 87f0146: a possessive before a bare 'waste' is every line, as on main; 87f0146 refused it ('s' is not a word the semantic model reads)."
+  },
+  {
+   "id": "waste-main-waste-is-the-breakdown",
+   "type": "routing",
+   "mode": "offline",
+   "question": "What is our main waste this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's re-check of 87f0146: an unread adjective before a bare 'waste' leaves every line, as on main; 87f0146 refused it ('main' is not a word ...)."
+  },
+  {
+   "id": "waste-shift-2s-waste-is-the-breakdown",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Shift 2's waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": 2
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's re-check of 87f0146: as 'this week's waste', for shift 2; 87f0146 refused it."
+  },
+  {
+   "id": "semantic-how-many-glue-dam-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many glue dam this week?",
+   "expect": {
+    "raises": "^Offline mode answers one quantity at a time"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's re-check of 87f0146: a count asked of a word that is a stop place's synonym and a reject reason's own name is refused, as on main and at b955ca4; 87f0146 read the reject reason and answered 13,509.7 sq ft."
   }
  ]
 }
