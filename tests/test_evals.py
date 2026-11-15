@@ -411,8 +411,8 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # main's 147 + issue #100's 14 + issue #101's 27 + issue #135's 2 + 129 issue #113 count, unit and scope cases + 20 issue #153 hotfix
     # cases + issue #144's 45 semantic questions and 39 refusals the semantic model now answers + the review of PR #155's 22 questions, less
     # the 2 refusals it restored and the 1 case it removed, + its second review's 7 + the catch-up after #159's 5 + the review of 74cc46f's 6
-    # + the reviewer's checks of that round's two fix commits, 11 + the review of b955ca4's 10 + the reviewer's check of its fix, 2
-    assert len(routing) == 483 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # + the reviewer's checks of that round's two fix commits, 11 + the review of b955ca4's 10 + the reviewer's two checks of its fix, 2 + 3
+    assert len(routing) == 486 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)
