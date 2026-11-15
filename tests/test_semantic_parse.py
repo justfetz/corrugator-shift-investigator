@@ -1138,7 +1138,7 @@ def _offered(text):
 def test_every_question_a_refusal_offers_is_answered_as_asked(store):
     """Each question these refusals offer is answered as that question, not just read completely: the semantic query of the measure
     it names, split and ranked as it says, or the grades' speed card for a speed by grade or the slowest grade, whose headline is the
-    slowest. At 97b81f4, 29 refusals offered 'which grade was the fastest this week', which the card answered with the slowest grade,
+    grade slowest against its target (issue #75). At 97b81f4, 29 refusals offered 'which grade was the fastest this week', which the card answered with the slowest grade,
     and the boards refusal offered 'bale by grade', which the grade totals answered (the coordinator's review of PR #155 at 97b81f4,
     items 1, 2 and 4)."""
     for question in ('Which grade had the most wet end speed this week?', 'Which boards were fastest this week?',

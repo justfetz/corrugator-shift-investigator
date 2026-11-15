@@ -1696,8 +1696,9 @@ def covers(request, reading, context=None, store=None):
         return q.measure == 'msf' and group_by in ([], ['grade']) and not filters and not rank and share is None and not q.compare
     if intent in ('period_speed', 'speed'):
         # the grades' card leads with each grade's speed without stops against its target and carries no window before: never the
-        # elapsed speed by grade, nor "speed by grade this week versus last week". Its headline is the slowest grade, so it leads a
-        # grade ranked slowest, never the fastest ("which grade was the fastest": the coordinator's review of PR #155 at 97b81f4, item 1)
+        # elapsed speed by grade, nor "speed by grade this week versus last week". Its headline is the grade slowest against its own
+        # target (issue #75, the owner's example), so it leads a grade ranked slowest, never the fastest ("which grade was the fastest":
+        # the coordinator's review of PR #155 at 97b81f4, item 1). "The lowest speed" in ft/min is the follow-up issue's
         return (q.measure in SPEED_FAMILY and group_by in ([], ['grade']) and not filters and share is None
                 and (not rank or group_by == ['grade'] and rank == 'least')
                 and (group_by != ['grade'] or q.measure in ('speed_run_fpm', 'run_speed_to_target_pct') and not q.compare))
