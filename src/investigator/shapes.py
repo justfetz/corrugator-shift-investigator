@@ -1431,7 +1431,7 @@ class PeriodAnswer:
     def dry_end_line(o):
         """The ownership lens's dry-end subtotal: bond, warp, misalignment, moisture and other are dry-end waste, the tag scrap
         (the owner, PR #111); its dollars are the lines beneath it added up, split at the dry-end band (issue #164): above
-        standard is the dry-end lever's own figure. Each kind names its own cause on its line, so the subtotal names none."""
+        standard is the dry-end lever's own figure. Each kind names its own cause on its line below, so the subtotal names none."""
         d = o['data']
         kinds = [r for r in d['rows'] if r.get('group') == 'dry_end']
         control = 'controllable' if all(r['control'] == 'controllable' for r in kinds) else 'partly controllable'
@@ -1439,7 +1439,7 @@ class PeriodAnswer:
         return bullet(f'{d["dry_end_rank"]}. {d["dry_end_label"]}, the {n(d["dry_end_kinds"])} kinds below: **{money(shown(d, "dry_end_usd"))}** · '
                       f'{money(shown(d, "dry_end_at_standard_usd"))} at standard, {money(shown(d, "dry_end_above_standard_usd"))} above standard{over} · '
                       f'{pval(d["dry_end_pct_of_yield"])}% of the yield after trim and shear{band(d.get("dry_end_band_text"))} · '
-                      f'{control}, each kind\'s cause on its line', o)
+                      f'{control}, each kind\'s cause below', o)
 
     def money_supervisor(self, o):
         """The supervisor lens: the controllable levers ranked, each its gap to its band; side trim (schedule-driven) after,
@@ -1456,8 +1456,10 @@ class PeriodAnswer:
         trim = rows[0]
         year = f' · {money(trim["usd_per_year"])}{year_words(data)}' if trim.get('usd_per_year') is not None else ''
         over = f', {trim["over_records"]}' if trim.get('over_records') else ''
-        head = (f'Side trim costs **{money(shown(trim))}**{self.where(data)} in this window · {money(shown(trim, "at_standard_usd"))} at standard and '
-                f'{money(shown(trim, "above_standard_usd"))} above standard, the trim lever{over}{year} · {pval(trim["pct_of_gross"])}% of gross'
+        # within forty words with the shifts over the band and a shift's own yearly figure (PR #168's fix round): the window is
+        # the card's, and that above standard is the trim lever's own figure is the notes' (the lens's method note)
+        head = (f'Side trim costs **{money(shown(trim))}**{self.where(data)} · {money(shown(trim, "at_standard_usd"))} at standard and '
+                f'{money(shown(trim, "above_standard_usd"))} above standard{over}{year} · {pval(trim["pct_of_gross"])}% of gross'
                 f'{band(trim.get("band_text"))} {ref(o, 0)}')
         bullets = []
         for i, r in enumerate(rows):

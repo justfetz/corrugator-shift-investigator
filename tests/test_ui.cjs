@@ -1550,7 +1550,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    assert.equal(Money.round(now.dry_end_at_standard_usd+now.dry_end_above_standard_usd,2),now.dry_end_usd,'the subtotal split at its band (issue #164)');
    const sizes=[...rows.slice(1,first).map(r=>S(r)),S(now,'dry_end_usd'),...rows.slice(first+5).map(r=>S(r))];
    assert.ok(sizes.every((v,i)=>!i||sizes[i-1]>=v),'the groups by dollars: '+sizes.join(', '));
-   assert.ok(prose.includes(`Side trim costs ${Money.money(S(rows[0]))} in this window · ${Money.money(S(rows[0],'at_standard_usd'))} at standard and ${Money.money(S(rows[0],'above_standard_usd'))} above standard, the trim lever`),'the headline is side trim at the new rates, split at its band');
+   assert.ok(prose.includes(`Side trim costs ${Money.money(S(rows[0]))} · ${Money.money(S(rows[0],'at_standard_usd'))} at standard and ${Money.money(S(rows[0],'above_standard_usd'))} above standard, ${rows[0].over_records}`),'the headline is side trim at the new rates, split at its band');
    const sub=prose.indexOf(`${now.dry_end_rank}. Dry-end waste (tag scrap), the 5 kinds below: ${Money.money(S(now,'dry_end_usd'))} · ${Money.money(S(now,'dry_end_at_standard_usd'))} at standard, ${Money.money(S(now,'dry_end_above_standard_usd'))} above standard`);
    const kinds=dry.map(r=>prose.indexOf(`${r.lever}: ${Money.money(S(r))} · ${Money.money(r.usd_per_year)} a year`));
    assert.ok(sub>=0&&kinds.every((x,i)=>x>(i?kinds[i-1]:sub)),'the subtotal at the new rates, each kind beneath it in order');
