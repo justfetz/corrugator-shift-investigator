@@ -20414,6 +20414,172 @@
     ]
    },
    "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 5: pinned. The suggestion the refusal of 'which stop reason took the most time' offers is the Pareto that '... took the most minutes' answers."
+  },
+  {
+   "id": "semantic-how-much-shear-did-we-waste",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much shear did we waste this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=shear_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "shear_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shear chops this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4: 'waste' said as the verb of a line is that line's waste, as 'shear waste' is; main and 7b46463 answered side trim, the waste breakdown's lead (3.45% of gross)."
+  },
+  {
+   "id": "semantic-how-much-stacker-did-we-waste",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much stacker did we waste this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stacker_waste_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stacker_waste_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Stacker waste boards this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4: the stacker waste line, as 'stacker waste' reads; main and 7b46463 answered side trim."
+  },
+  {
+   "id": "semantic-the-shift-with-the-most-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "The shift with the most stops this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] (?:and Shift [123] )?(?:had|tied for) the most stops this week: \\*\\*[0-9]+ stops\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4: 'the shift' before a ranking ranks the shifts, never the selected shift; main and 7b46463 answered the reason Pareto ('11 stops at Stacker')."
+  },
+  {
+   "id": "semantic-the-shift-with-the-most-downtime",
+   "type": "routing",
+   "mode": "offline",
+   "question": "The shift with the most downtime this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "downtime_minutes",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] (?:and Shift [123] )?(?:had|tied for) the most downtime this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4: main and 7b46463 answered the downtime review (3.32% of scheduled minutes)."
+  },
+  {
+   "id": "semantic-the-shift-with-the-most-board-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "The shift with the most board rejects this week",
+   "expect": {
+    "raises": "^'board' is said before 'rejects' with no value of its own, beside the shifts ranked, so it is no split by grade"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4: 'the shift' was read as the selected shift, so 7b46463 answered '200-C had the most dry-end rejects, shift 2'; main answered side trim. It is item 1's question."
+  },
+  {
+   "id": "semantic-boards-with-the-most-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Boards with the most downtime this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'which grade had the most minutes of downtime this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4, item 4: the boards ranked after them; 7b46463 said the records do not count boards, main answered the downtime review."
+  },
+  {
+   "id": "semantic-top-3-boards-by-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Top 3 boards by downtime this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*'which grade had the most minutes of downtime this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4, item 4: as above; main answered the downtime review."
+  },
+  {
+   "id": "semantic-which-boards-most-minutes-of-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most minutes of downtime this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*'which grade had the most minutes of downtime this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4, item 4: a unit said kept the boards' check off, so main and 7b46463 answered the reason Pareto (42.93 min at Stacker)."
+  },
+  {
+   "id": "semantic-how-many-boards-per-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many boards per day this week?",
+   "expect": {
+    "raises": "^Boards per day is not a ratio the records keep"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4, item 4: main's ratio reason, which 7b46463 replaced with 'the records do not count boards'."
   }
  ]
 }
