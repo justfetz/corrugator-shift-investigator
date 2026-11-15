@@ -393,8 +393,9 @@ def period_tiles(data, reasons, rates, ledger=None):
     stop tile the stop reasons' minutes (`reasons`, the Pareto's rows of the same window and shift). A tile is what its
     figure measures, all recorded: the ownership lens's line for the same window, never a lever's above-standard part.
     The operator and maintenance tiles are the money ledger's (`ledger`, period_whole: its sums and display terms; the
-    review of PR #168, item 9): its minutes, each shift's rounded as the ledger rounds them, and its printed whole dollars,
-    the lever's line and its line at standard (and planned maintenance) added up, so the tile and the money card agree."""
+    review of PR #168, item 9): its minutes, each shift's rounded as the ledger rounds them. Every tile prints the money
+    ledger's whole dollars (tile_shown, SHOWN_OF): the lever's line and its line at standard (and planned maintenance)
+    added up, a waste tile its line's, so a tile, the money card and the waste breakdown print one figure."""
     sums = data.get('current_sums') or {}
     if not sums.get('gross_sqft'):
         return []
@@ -412,7 +413,7 @@ def period_tiles(data, reasons, rates, ledger=None):
     op = s['all']['operator'] if s else round(sums['operator_seconds'] / 60, 2)
     out.append(tile('operator_pct', [_part('downtime', op, gross, minutes)], rates, 'operator stops'))
     for t in out:
-        tile_shown(t, whole if t['metric'] in ('operator_pct', 'maintenance_pm_pct') else None)
+        tile_shown(t, whole)
     return out
 
 
@@ -423,6 +424,17 @@ def period_whole(store, window, shift, rates):
     every, _, _ = ledger_cells(store, current['start'], current['end'], None)
     mine = [c for c in every if shift is None or c['shift'] == shift]
     return ledger_sums(mine, rates), display_terms(every, [shift] if shift else [1, 2, 3], rates)
+
+
+def waste_shown(data, terms, rates):
+    """get_waste_breakdown's printed whole dollars (the review of PR #168): each line the money ledger's for the same window
+    and shift (whole_lines), the figure the ownership lens and the KPI tiles print, so the dry-end families add to the
+    dry-end line and every view prints one figure; `display_terms` re-derive them at a visitor's rates (web/money.js)."""
+    lines = whole_dollars(terms, rates)['lines']
+    for r in data['rows']:
+        r['usd_shown'] = None if r.get('usd') is None else lines[r['category']]
+    data['display_terms'] = terms
+    return data
 
 
 def _rank(rows, key):
@@ -889,6 +901,9 @@ APART_KEYS = ('scheduled', 'external', 'changeover', 'boards')   # the rows show
 APART_KIND = {'scheduled': 'downtime', 'external': 'downtime', 'changeover': 'waste', 'boards': 'waste',
               'cutoff_waste': 'waste', 'stacker_waste': 'waste'}
 BOARDS = ('cutoff_waste', 'stacker_waste')   # the ownership lens's two lines of the waste boards row
+# the waste lines whose whole dollars no lever or row apart holds: the dry-end kinds share the dry-end lever's and its row at
+# standard's, the rest print their nearest dollar; each priced as the waste breakdown prices it (WASTE_KINDS)
+LINE_TERMS = (*DRY_END_KINDS, 'admin', 'bale', 'unexplained')
 
 
 def to_cents(usd):
@@ -935,7 +950,7 @@ def whole_terms(s, shift=None):
     return {'shift': shift, 'levers': {k: s['over'][k] for k in LEVERS if k != 'trim'}, 'all': {k: s['all'][k] for k in BANDED},
             'apart': {'scheduled': s['minutes']['planned'], 'external': s['minutes']['external'], 'changeover': s['lines']['changeover'],
                       'boards': s['lines']['boards'], **{k: s['lines'][k] for k in BOARDS}},
-            'trim_cells': s['trim_cells']}
+            'lines': {k: s['lines'][k] for k in LINE_TERMS}, 'trim_cells': s['trim_cells']}
 
 
 def _cents(kind, quantity, rates):
@@ -975,7 +990,22 @@ def whole_dollars(terms, rates):
            'at_total': sum(e['at_total'] for e in each), 'apart': {k: sum(e['apart'][k] for e in each) for k in APART_KEYS},
            'boards': {k: sum(e['boards'][k] for e in each) for k in BOARDS}}
     out['all_in'] = out['total'] + out['at_total'] + sum(out['apart'].values())
+    out['lines'] = whole_lines(out, [shifts[i] for i in mine], rates)
     return out
+
+
+def whole_lines(out, mine, rates):
+    """Every waste line's whole dollars for the shifts stated (`mine`, their terms), each the figure every view of it prints
+    (the ownership lens, the waste breakdown, the KPI tiles; the review of PR #168): side trim, shear and the dry-end
+    waste their levers' whole dollars and their rows' at standard added up; the dry-end kinds that share by the largest
+    remainder, in their order; the changeover rejects and the waste boards' two lines their rows' apart; planning / admin,
+    the bale and the unexplained remainder their nearest dollar."""
+    scope = lambda k: round(_add(t['lines'][k] for t in mine), 1)
+    lines = {k: out['levers'][k] + out['at'][k] for k in AREA_LEVERS}
+    lines.update(zip(DRY_END_KINDS, largest_remainder([_cents('waste', scope(k), rates) for k in DRY_END_KINDS], lines['dry_end'])))
+    lines.update({'changeover': out['apart']['changeover'], **out['boards']})
+    lines.update({k: nearest_dollar(_cents(WASTE_KINDS[k], scope(k), rates)) for k in ('admin', 'bale', 'unexplained')})
+    return lines
 
 
 def display_terms(root_cells, scope, rates):
@@ -1069,25 +1099,41 @@ def _cards_store(analysis):
 
 
 def _card(analysis, shifts, rates):
-    """The ledger of the shifts `shifts` of the analysis's day: their cells, rows, totals, and the machine's period to date."""
+    """The ledger of the shifts `shifts` of the analysis's day: their cells, rows, totals, and the machine's period to date;
+    and the day's root (_day_root), always the day's own records, so the data-quality toggle never moves a shift it does not
+    touch (the review of PR #168: it excludes a record on one shift, and the others print what they print without it)."""
     store, corrupt = _cards_store(analysis)
     exclude = tuple(e['record_id'] for e in analysis.errors) if corrupt else ()
     cells, stops, trace = ledger_cells(store, analysis.day, analysis.day, None, corrupt, exclude)
+    root = _day_root(ledger_cells(store, analysis.day, analysis.day, None)[0] if corrupt else cells)
     cells = [c for c in cells if c['shift'] in shifts]
-    return store, cells, stops, trace
+    return store, cells, stops, trace, root
+
+
+def _shares(root, cells, rates):
+    """A day card's display terms: the root's shares for the shifts of `cells` when each cell is the root's own (the
+    same records in this view), else those cells as their own root (a shift the data-quality toggle leaves incomplete)."""
+    own = {c['shift']: c for c in root}
+    if cells and all(own.get(c['shift']) == c for c in cells):
+        return display_terms(root, [c['shift'] for c in cells], rates)
+    return display_terms(cells, [c['shift'] for c in cells], rates)
 
 
 # A tile's printed whole dollars, as the ledger prints them (PR #168): the lever's whole dollars, and for a tile of all
-# recorded its rows at standard (and apart) of the same scope, added up; web/money.js reads `shown_of` the same way.
+# recorded its rows at standard (and apart) of the same scope, added up; a waste tile its line's (whole_lines), the figure
+# the ownership lens and the waste breakdown print; web/money.js reads `shown_of` the same way.
+_STOPS = [['levers', 'operator'], ['at', 'operator'], ['levers', 'maintenance'], ['at', 'maintenance']]
 SHOWN_OF = {'observed_shift_fpm': [['levers', 'speed']], 'maintenance_pct': [['levers', 'maintenance'], ['at', 'maintenance']],
             'operator_pct': [['levers', 'operator'], ['at', 'operator']], 'dry_end_pct': [['levers', 'dry_end'], ['at', 'dry_end']],
-            'trim_pct': [['levers', 'trim'], ['at', 'trim']],
-            'maintenance_pm_pct': [['levers', 'maintenance'], ['at', 'maintenance'], ['apart', 'scheduled']]}
+            'trim_pct': [['levers', 'trim'], ['at', 'trim']], 'shear_pct': [['levers', 'shear'], ['at', 'shear']],
+            'maintenance_pm_pct': [['levers', 'maintenance'], ['at', 'maintenance'], ['apart', 'scheduled']],
+            'downtime_pct': [*_STOPS, ['apart', 'scheduled'], ['apart', 'external']],   # every stop: the four kinds the ledger holds
+            **{f'{k}_pct': [['lines', k]] for k in (*DRY_END_KINDS, 'bale', 'unexplained')}}
 
 
 def tile_shown(t, whole):
     """A tile's `usd_shown`: the ledger's printed whole dollars it is (SHOWN_OF), else its own nearest dollar."""
-    if t['metric'] in SHOWN_OF and whole is not None:
+    if t['metric'] in SHOWN_OF and whole is not None and t['usd'] is not None:
         t['shown_of'] = SHOWN_OF[t['metric']]
         t['usd_shown'] = sum(whole[group][key] for group, key in t['shown_of'])
     else:
@@ -1148,11 +1194,10 @@ def shift_dollars(analysis, shift, rates):
     the cost at standard, planned maintenance, external stops and the waste with no band apart, outside the total; the
     machine's period to date and its rate a year beside it. A shift is never annualized on its own. It prints its share
     of the day's whole dollars (whole_dollars), the figure the day card's line for it prints."""
-    store, every, stops, trace = _card(analysis, (1, 2, 3), rates)
+    store, every, stops, trace, root = _card(analysis, (1, 2, 3), rates)
     cells = [c for c in every if c['shift'] == shift]
     rows, s = [], ledger_sums(cells, rates)
-    root = _day_root(every)
-    terms = display_terms(root if any(c['shift'] == shift for c in root) else cells, [shift], rates)
+    terms = _shares(root, cells, rates)
     whole = whole_dollars(terms, rates)
     if cells:
         rows = [_lever_row(k, s, rates, f'shift {shift}', stops) for k in LEVERS] + _apart_rows(s, rates)
@@ -1183,12 +1228,12 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
     its period to date and rate a year are the machine's, the figures every shift's card states. Its whole dollars are
     its shifts' (whole_dollars), and with several shifts its side trim is listed by shift (`details`)."""
     asked = sorted(set(shifts or (1, 2, 3)))
-    store, every, stops, trace = _card(analysis, (1, 2, 3), rates)
+    store, every, stops, trace, root = _card(analysis, (1, 2, 3), rates)
     cells = [c for c in every if c['shift'] in asked]
     complete = [c for c in cells if c['coverage'] == 'complete']
     used = complete or cells
     s = ledger_sums(used, rates)
-    terms = display_terms(_day_root(every), [c['shift'] for c in used], rates)
+    terms = _shares(root, used, rates)
     whole = whole_dollars(terms, rates)
     rows = []
     if used:
@@ -1312,27 +1357,17 @@ def over_records(over, cells, target):
 
 
 def ownership_shown(rows, whole):
-    """The ownership lens's printed whole dollars (PR #168): side trim and shear are their levers' whole dollars above
-    standard and their rows' at standard added up, the figures the levers print, so the two lenses print one figure; the
-    tag scrap is the dry-end lever's and its row at standard's, its kinds sharing it by the largest remainder; the waste
-    boards' two lines share the boards row's; the changeover rejects are their row's; planning / admin and the
-    unexplained remainder, which no other view prints, are their nearest dollar. Returns the tag scrap's (above, at)."""
+    """The ownership lens's printed whole dollars (PR #168): each line the figure every view of it prints (whole_lines):
+    side trim and shear their levers' whole dollars above standard and their rows' at standard added up, so the two lenses
+    print one figure; the tag scrap the dry-end lever's and its row at standard's, its kinds sharing it; the waste boards'
+    two lines the boards row's; the changeover rejects their row's; planning / admin and the unexplained remainder their
+    nearest dollar, as the waste breakdown and the KPI tiles print them. Returns the tag scrap's (above, at)."""
     for r in rows:
         k = r['key']
         if k in ('trim', 'shear'):
             r['above_standard_usd_shown'], r['at_standard_usd_shown'] = whole['levers'][k], whole['at'][k]
-            r['usd_shown'] = whole['levers'][k] + whole['at'][k]
-        elif k == 'changeover':
-            r['usd_shown'] = whole['apart']['changeover']
-        elif k in BOARDS:
-            r['usd_shown'] = whole['boards'][k]
-        elif r.get('group') != DRY_END_GROUP:
-            r['usd_shown'] = nearest_dollar(to_cents(r['usd']))
-    kinds = sorted((r for r in rows if r.get('group') == DRY_END_GROUP), key=lambda r: DRY_END_KINDS.index(r['key']))
-    dry = (whole['levers']['dry_end'], whole['at']['dry_end'])
-    for r, v in zip(kinds, split_shown([r['usd'] for r in kinds], sum(dry))):
-        r['usd_shown'] = v
-    return dry
+        r['usd_shown'] = whole['lines'][k]
+    return whole['levers']['dry_end'], whole['at']['dry_end']
 
 
 def ownership_totals_shown(data, rows, dry):

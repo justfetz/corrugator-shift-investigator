@@ -2127,6 +2127,20 @@ DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_en
                       'get_quality_breakdown': 'Dry-end rejects by reason', 'get_shift_dollars': 'Where the money went ($)'}
 
 
+# The rate-free terms a money card's whole dollars are re-derived from at a visitor's rates (PR #168): they ride on the result
+# for the browser, never in a planner's context, which they would fill without telling a planner anything (a day card's four
+# steps carry the period to date's every shift twice).
+CARD_TERMS = ('display_terms', 'ptd_terms')
+
+
+def planner_view(result):
+    """A tool result as a planner sees it: a copy without the card's rate-free terms (CARD_TERMS)."""
+    data = result.get('data')
+    if not isinstance(data, dict) or not any(k in data for k in CARD_TERMS):
+        return deepcopy(result)
+    return deepcopy({**result, 'data': {k: v for k, v in data.items() if k not in CARD_TERMS}})
+
+
 def chart_for(rid, result):
     """The chart envelope for a chartable tool result: rows copied from the result, never supplied.
     Charts are application output; the agent draws one for every chartable piece of evidence the
@@ -2138,7 +2152,7 @@ def chart_for(rid, result):
              'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
     if result['tool'] == 'get_opportunities' and data.get('lens'):
         chart['lens'] = data['lens']   # the levers' order is the lens's (issue #101): web/money.js re-ranks the chart by it
-    if data.get('display_terms') and result['tool'] in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities'):
+    if data.get('display_terms') and result['tool'] in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities', 'get_waste_breakdown'):
         chart['display_terms'] = data['display_terms']   # the whole dollars its bars print, re-allocated at a visitor's rates (PR #168)
     if result['tool'] == 'get_speed_variance':
         # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
@@ -2319,6 +2333,9 @@ class Agent:
                 ledger = cost_model.period_whole(self.store, window, shift, rates)
                 data['tile_money'] = cost_model.period_tiles(data, reasons, rates, ledger)
                 data['display_terms'] = ledger[1]
+            if name == 'get_waste_breakdown' and data.get('gross_sqft'):
+                # each line's dollars as the money ledger prints them for the same window and shift (the review of PR #168)
+                cost_model.waste_shown(data, cost_model.period_whole(self.store, arguments['window'], shift, rates)[1], rates)
             return data
         if name == 'get_day_dollars':
             shifts = arguments.get('shifts') or [1, 2, 3]
@@ -2369,7 +2386,7 @@ class Agent:
             planner_context = {**request, 'question': text, 'production_day': context.production_day,
                 'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context) + read_scope_text(context),
                 'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
-                'history': deepcopy(history), 'results': deepcopy(list(store.values()))}
+                'history': deepcopy(history), 'results': [planner_view(r) for r in store.values()]}
             if len(json.dumps(planner_context)) > 200000:
                 status = 'context_limit'
                 break

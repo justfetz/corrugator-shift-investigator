@@ -99,7 +99,7 @@ def priced(row):
     """` · $127 ($97,795/yr)` after a quantity whose row the cost model priced; nothing for an unpriced row."""
     if row.get('usd') is None:
         return ''
-    return f' · {money(row["usd"])}' + (f' ({money(row["usd_per_year"])}/yr)' if row.get('usd_per_year') is not None else '')
+    return f' · {money(shown(row))}' + (f' ({money(row["usd_per_year"])}/yr)' if row.get('usd_per_year') is not None else '')
 
 
 def money_notes(result, row=None, label=None, formula=True):

@@ -1475,9 +1475,16 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const week=JSON.parse(fs.readFileSync('tests/ui_fixtures/money_week.json','utf8')), levers=week.trace[0].data;
  vm.runInContext(`thread.push({id:++seq,question:'Where is the money?',title:'Where is the money?',scope:{day:'2026-09-14',period:'week',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(week)},url:${JSON.stringify(week.url)},revealed:true});openId=seq;renderCard();`,ctx);
  const wline=els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
- assert.equal(textOf(wline.children[0]),`≈ ${Money.money(S(levers,'total_usd'))} above standard this week · ${Money.short(levers.total_usd_per_year)}/yr at this period's rate · ${Money.money(S(levers,'all_in_usd'))} all recorded, ${Money.money(S(levers,'at_standard_usd'))} of it at standard`);
+ assert.equal(textOf(wline.children[0]),`≈ ${Money.money(S(levers,'total_usd'))} above standard this week · ${Money.short(levers.total_usd_per_year)}/yr at this period's rate (shift 2's own) · ${Money.money(S(levers,'all_in_usd'))} all recorded, ${Money.money(S(levers,'at_standard_usd'))} of it at standard`);   // shift 2's week: its own period to date (PR #168, item 3)
+ assert.ok(all(els.ledger).includes(`/yr at this period's rate (${levers.ptd_label}, shift 2's own: period-to-date dollars per production day`),all(els.ledger));
  assert.equal(els.charts.children.length,0,'the money tool\'s own chart is the panel');
  addsUp(wline,els.ledger,'the week card');
+ // the same week for all shifts names no shift beside its yearly figure
+ const week2={...week,trace:[{...week.trace[0],data:{...levers,shift:null,ptd_scope:'all shifts'}}]};
+ vm.runInContext(`thread.push({id:++seq,question:'Where is the money?',title:'Where is the money?',scope:{day:'2026-09-14',period:'week',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(week2)},url:${JSON.stringify(week.url)},revealed:true});openId=seq;renderCard();`,ctx);
+ const w2line=els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
+ assert.ok(textOf(w2line.children[0]).includes(`/yr at this period's rate · `)&&!all(els.ledger).includes("'s own"),textOf(w2line.children[0]));
+ vm.runInContext(`thread.push({id:++seq,question:'Where is the money?',title:'Where is the money?',scope:{day:'2026-09-14',period:'week',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(week)},url:${JSON.stringify(week.url)},revealed:true});openId=seq;renderCard();`,ctx);
  const wvals=walk(els.money.children[0]).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);
  assert.deepEqual(wvals.slice(0,2),levers.rows.slice(0,2).map(r=>`${Money.money(S(r))} · ${Money.short(r.usd_per_year)}/yr`));   // the levers by this week's dollars, each with its period-to-date rate a year
  // the owner's 3% trim target (issue #101): the shifts over it make the week's trim lever at the post's rates
@@ -1552,6 +1559,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    // a rate that moves a group past the tag scrap: the subtotal line moves with its kinds and every line is renumbered
    const moved=JSON.parse(JSON.stringify(data)), unexplained=moved.rows.find(r=>r.lever.startsWith('Unexplained'));
    unexplained.price_terms.quantity=3e6;   // a remainder larger than all the dry-end waste, so at paper-heavy rates it ranks second
+   for(const t of moved.display_terms.shifts)t.lines.unexplained=1e6;   // its whole dollars are the card's terms' (cost_model.whole_lines, PR #168)
    const heavy=Money.effective(cfg,{paper_usd_msf:100,machine_usd_hour:1}), after=Money.reprice('get_opportunities',moved,heavy,cfg);
    const step={tool:'get_opportunities',before:moved,after}, q=lensed.trace.findIndex(e=>e.tool==='get_opportunities');
    const lines=Money.repriceSections(lensed.sections,lensed.trace.map((e,i)=>i===q?step:null),heavy,cfg);

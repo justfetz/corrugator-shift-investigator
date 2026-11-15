@@ -986,7 +986,9 @@ function moneyFacts(m){
   total:shownOf(d,'total_usd'), paper:shownOf(d,'total_paper_usd'), machine:shownOf(d,'total_machine_time_usd'), contribution:d.total_contribution_usd,
   // a window's yearly figure is its scope's period to date (total_usd_per_year); a shift's or a day's is the machine's (ptd_*);
   // with fewer than five production days to date there is none, and the note says why
-  year:levers?d.total_usd_per_year:d.ptd_usd_per_year, yearNote:d.ptd_year_note||null, ptd:shownOf(d,'ptd_usd'), ptdLabel:d.ptd_label, ptdScope:d.ptd_scope, ptdDays:d.ptd_days,
+  year:levers?d.total_usd_per_year:d.ptd_usd_per_year, yearNote:d.ptd_year_note||null,
+  ptd:shownOf(d,'ptd_usd'), ptdLabel:d.ptd_label, ptdScope:d.ptd_scope, ptdDays:d.ptd_days,
+  own:levers&&Number.isInteger(d.shift)?d.shift:null,   // a shift's window: its yearly figure is that shift's own period to date (PR #168, item 3)
   atStandard:shownOf(d,'at_standard_usd'), above:shownOf(d,'above_standard_usd'), noBand:shownOf(d,'no_band_usd'), apart:d.apart_gaps||0, allIn:shownOf(d,'all_in_usd'),
   buckets:(d.buckets||[]).map(b=>[b.bucket,shownOf(b,'usd')]),
   when:levers?WHEN[d.window&&d.window.period]||'this window':day?((d.shifts||[]).length===3?'this day':'these shifts'):'this shift',
@@ -1021,7 +1023,7 @@ function fillDollarLine(line,f){
  // the ownership lens's three parts, which add up to its figure (PR #168)
  if(f.owner&&has(f.above))lead.append(node('span',` · ${Money.money(f.atStandard)} at standard, ${Money.money(f.above)} above standard, ${Money.money(f.noBand)} with no band yet`,'at-standard'));
  // a yearly figure only from period to date (issue #164): a window's own scope's, a shift's or a day's the machine's
- if(has(f.year))lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',` at this period's rate${f.levers?'':` (${f.ptdLabel}, ${f.ptdScope})`}`));
+ if(has(f.year))lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',` at this period's rate${f.levers?(f.own?` (shift ${f.own}'s own)`:''):` (${f.ptdLabel}, ${f.ptdScope})`}`));
  else if(f.yearNote)lead.append(node('span',` · ${f.yearNote}`,'year-note'));
  if(!f.owner&&f.apart)lead.append(node('span',` · ${Money.money(f.allIn)} all recorded, ${Money.money(f.atStandard)} of it at standard`,'all-in'));
  const margin=f.rates.values.margin_usd_msf;   // "margin not set" is said once, in the rail; a set margin is stated beside the dollars
@@ -1120,7 +1122,7 @@ function arithmetic(f){
  if(f.owner&&has(f.above))out.push(line('Split ',[b(Money.money(f.atStandard)),' at standard + ',b(Money.money(f.above)),' above standard, the levers\' figure + ',b(Money.money(f.noBand)),' with no band yet']));
  const total=[`= `,b(Money.money(f.total)),` ${f.owner?'the waste recorded':'above standard'} ${f.when}`];
  if(f.perShift)total.push(` (${f.perShift})`);
- if(has(f.year))total.push(' · ',b(`${Money.money(f.year)}/yr`),` at this period's rate (${f.ptdLabel}${f.levers?'':`, ${f.ptdScope}`}: period-to-date dollars per production day × ${Money.fixed(C.days_per_year,2)} production days a year)`);
+ if(has(f.year))total.push(' · ',b(`${Money.money(f.year)}/yr`),` at this period's rate (${f.ptdLabel}${f.levers?(f.own?`, shift ${f.own}'s own`:''):`, ${f.ptdScope}`}: period-to-date dollars per production day × ${Money.fixed(C.days_per_year,2)} production days a year)`);
  else if(f.yearNote)total.push(` · ${f.yearNote} (${f.ptdLabel})`);
  total.push(v.margin_usd_msf===null||v.margin_usd_msf===undefined?` · contribution: ${cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(v.margin_usd_msf)}/MSF, beside the dollars, not added`);
  out.push(line('Total ',total));

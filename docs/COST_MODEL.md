@@ -91,7 +91,7 @@ A shift's card, its day's card, a week's, a period to date's and a year to date'
 
 The owner's top rule: no money jumping. Every figure a card prints agrees across views, and every set of parts it prints adds up to the total it prints, in the whole dollars printed, never only in the cents. Each printed figure is allocated from the cents by the largest-remainder method (`cost_model.whole_dollars`, `largest_remainder`; `web/money.js` allocates the same way from `display_terms`, at a visitor's rates):
 
-- **The root** is a window's every shift (for a day card and a shift card, the day's complete shifts). The root's dollars above standard print as their nearest dollar, a tie to the even dollar.
+- **The root** is a window's every shift (for a day card and a shift card, the day's complete shifts, read from the day's own records with or without the data-quality toggle, so the toggle never moves a shift it leaves complete; a shift it leaves incomplete is its own root). The root's dollars above standard print as their nearest dollar, a tie to the even dollar.
 - **Each shift's share** is its floor, plus a dollar for each of the shifts with the largest remainders, until the shares add up to the root's (a tie goes to the earlier shift).
 - **Within each shift**, its levers share the shift's whole dollars the same way. The cost at standard is a root of its own, shared among the shifts and then among each shift's rows at standard, and so is each row shown apart.
 - **A figure for several shifts**, and each of its lines, is those shifts' whole dollars added up.
@@ -105,9 +105,9 @@ So a shift prints the same whole dollars on its own card, on its day's card and 
 - paper and machine time add up to the arithmetic's total;
 - each chip is its lever's.
 
-The ownership lens prints the levers' own figures for its split: side trim, shear and the tag scrap are their lever's whole dollars above standard and their row at standard's, added up. The dry-end kinds share the tag scrap's whole dollars, and the waste boards' two lines share the boards row's. Planning / admin and the unexplained remainder, which no other view prints, print their nearest dollar, and all the waste recorded is its lines added up.
+Every waste line prints one figure in every view of it (`cost_model.whole_lines`): the ownership lens's line, the waste breakdown's line in dollars and the KPI card's tile. Side trim, shear and the dry-end waste are their lever's whole dollars above standard and their row at standard's, added up, so the ownership lens's split is the levers' own figures. The five dry-end kinds share the dry-end line's whole dollars by the largest remainder, so they add up to it on the waste breakdown, on the tiles and under the tag scrap. The changeover rejects are their row's, and the waste boards' two lines share the boards row's. Planning / admin, the bale and the unexplained remainder print their nearest dollar. All the waste recorded is its lines added up.
 
-A KPI card's operator and maintenance tiles (`get_period_kpis`, `compare_periods`) price the ledger's minutes, each shift's rounded as the ledger rounds them, and print the ledger's whole dollars: the lever's line and its line at standard added up, with planned maintenance for the maintenance tile. So the tile and the money card of the same window agree (the review's item 9: 4-4-5 P2's operator tile read $12,991 against the ledger's $12,990).
+A KPI card's tiles (`get_period_kpis`, `compare_periods`) print the money ledger's whole dollars for the same window and shift. The operator and maintenance tiles price the ledger's minutes, each shift's rounded as the ledger rounds them, and print the lever's line and its line at standard added up (with planned maintenance for the maintenance tile; the review's item 9: 4-4-5 P2's operator tile read $12,991 against the ledger's $12,990). The downtime tile is every stop line of the ledger added up. Each waste tile is its line's figure: the week of 13 Jan 2025's side trim tile read $62,760 against the ownership lens's $62,761 for the same cents before this.
 
 The cents (`usd` and every `*_usd`) stay what the formulas, the receipts (`tests/test_datapages.py`) and the value goldens recompute. The whole dollars ride beside them as `usd_shown` on each row and chip, and as `total_usd_shown`, `at_standard_usd_shown`, `all_in_usd_shown`, `total_paper_usd_shown`, `total_machine_time_usd_shown`, `controllable_usd_shown`, `ptd_usd_shown` and, under the ownership lens, `above_standard_usd_shown`, `no_band_usd_shown` and `dry_end_*_shown`, on each tile and on `details`. The prose, the dollar line, the chips, the bars, the table, the arithmetic and the tiles print them.
 
@@ -118,7 +118,7 @@ The cents (`usd` and every `*_usd`) stay what the formulas, the receipts (`tests
 
 Three checks hold it:
 
-- `displayed_sums` (`evals/run.py`) adds up the printed lines of every money answer in the golden set, as an invariant.
+- `displayed_sums` (`evals/run.py`) adds up the printed lines of every money answer in the golden set, as an invariant, and fails a card whose lines it cannot all read (a line whose wording drifted never drops out of the sum). `same_figure` and `tile_agrees` hold one figure across two views.
 - `tests/test_ui.cjs` adds up the card as drawn: the chips, the ownership split, paper and machine time, and the shifts.
 - `tests/money_cli.cjs parity` holds the browser's allocation to the server's at other rates.
 

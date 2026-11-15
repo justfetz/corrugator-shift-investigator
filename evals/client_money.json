@@ -917,6 +917,16 @@
       "cutoff_waste": 74455.3,
       "stacker_waste": 83397.8
      },
+     "lines": {
+      "bond": 325293.4,
+      "warp": 286048.4,
+      "misalignment": 162144.9,
+      "moisture": 48447.4,
+      "other": 33468.2,
+      "admin": 28898.4,
+      "bale": 4504993.4,
+      "unexplained": 179505.9
+     },
      "trim_cells": [
       [
        68565.3,
@@ -1077,6 +1087,16 @@
        "cutoff_waste": 22674.1,
        "stacker_waste": 25641.2
       },
+      "lines": {
+       "bond": 104106.5,
+       "warp": 88988.7,
+       "misalignment": 48537.3,
+       "moisture": 16021.2,
+       "other": 10900.6,
+       "admin": 7438.5,
+       "bale": 1416291.8,
+       "unexplained": 51694.0
+      },
       "trim_cells": [
        [
         68565.3,
@@ -1148,6 +1168,16 @@
        "cutoff_waste": 25220.6,
        "stacker_waste": 27464.7
       },
+      "lines": {
+       "bond": 113997.5,
+       "warp": 99080.9,
+       "misalignment": 55455.8,
+       "moisture": 16593.8,
+       "other": 12063.5,
+       "admin": 9717.6,
+       "bale": 1546439.5,
+       "unexplained": 68528.1
+      },
       "trim_cells": [
        [
         82745.6,
@@ -1218,6 +1248,16 @@
        "boards": 56852.5,
        "cutoff_waste": 26560.6,
        "stacker_waste": 30291.9
+      },
+      "lines": {
+       "bond": 107189.4,
+       "warp": 97978.8,
+       "misalignment": 58151.8,
+       "moisture": 15832.4,
+       "other": 10504.1,
+       "admin": 11742.3,
+       "bale": 1542262.1,
+       "unexplained": 59283.8
       },
       "trim_cells": [
        [
@@ -1311,6 +1351,16 @@
      "cutoff_waste": 5929.0,
      "stacker_waste": 6458.1
     },
+    "lines": {
+     "bond": 28794.6,
+     "warp": 33321.1,
+     "misalignment": 13622.4,
+     "moisture": 5291.0,
+     "other": 3153.0,
+     "admin": 3158.9,
+     "bale": 387182.7,
+     "unexplained": 9998.4
+    },
     "trim_cells": [
      [
       85281.2,
@@ -1351,6 +1401,16 @@
       "cutoff_waste": 2377.4,
       "stacker_waste": 2780.9
      },
+     "lines": {
+      "bond": 11477.8,
+      "warp": 12298.5,
+      "misalignment": 5023.1,
+      "moisture": 2812.6,
+      "other": 954.7,
+      "admin": 1018.8,
+      "bale": 145092.6,
+      "unexplained": 2730.3
+     },
      "trim_cells": [
       [
        85281.2,
@@ -1382,6 +1442,16 @@
       "cutoff_waste": 1561.5,
       "stacker_waste": 1892.5
      },
+     "lines": {
+      "bond": 10996.2,
+      "warp": 12202.0,
+      "misalignment": 4180.8,
+      "moisture": 1028.8,
+      "other": 1486.3,
+      "admin": 996.0,
+      "bale": 133741.1,
+      "unexplained": 2884.8
+     },
      "trim_cells": [
       [
        82194.9,
@@ -1412,6 +1482,16 @@
       "boards": 3774.8,
       "cutoff_waste": 1990.1,
       "stacker_waste": 1784.7
+     },
+     "lines": {
+      "bond": 6320.6,
+      "warp": 8820.6,
+      "misalignment": 4418.5,
+      "moisture": 1449.6,
+      "other": 712.0,
+      "admin": 1144.1,
+      "bale": 108349.0,
+      "unexplained": 4383.3
      },
      "trim_cells": [
       [

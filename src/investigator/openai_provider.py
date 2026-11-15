@@ -59,7 +59,7 @@ def compact_result(result):
                     'trim_over_usd','trim_over_usd_per_year','trim_over_basis','trim_over_terms','ptd_terms','ptd_levers','speeds_note',
                     'display_terms','details'):   # the terms the card's whole dollars are allocated from, side trim by shift (PR #168)
             compact['data'].pop(key,None)   # the card's money (#31b): what the card states, not what a planner chooses by
-        keep=('usd','usd_per_year') if result['tool'] in ('get_shift_dollars','get_opportunities') else ()
+        keep=('usd_shown','usd_per_year') if result['tool'] in ('get_shift_dollars','get_opportunities') else ()   # as the card prints them (PR #168)
         for row in compact['data'].get('rows',[]):
             row.pop('source_ids',None)
             for key in DOLLAR_FIELDS:

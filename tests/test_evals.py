@@ -90,8 +90,12 @@ def test_a_money_check_fails_a_case_on_a_row_without_a_key_and_never_raises():
 
 
 def test_the_printed_money_check_reads_the_whole_dollars_a_card_prints():
-    """The owner's top rule on PR #168: a card's printed parts add to its printed total, read from its lines, never its cents."""
-    trace = [{'ok': True, 'tool': 'get_day_dollars', 'data': {}}]
+    """The owner's top rule on PR #168: a card's printed parts add to its printed total, read from its lines, never its cents.
+    A line whose wording drifts fails the count of lines the card holds instead of dropping out of the sum (the review of
+    PR #168's fix round, finding 6), and so does an ownership headline the sums cannot be read from."""
+    levers = [{'key': k, 'usd': 1.0} for k in ('trim', 'dry_end', 'speed')]
+    shifts = [{'shift': n, 'coverage': 'complete', 'usd_shown': v} for n, v in ((1, 162), (2, 350), (3, 143))]
+    trace = [{'ok': True, 'tool': 'get_day_dollars', 'data': {'rows': levers, 'shifts': shifts}}]
     good = ['**$655** above standard across the three shifts (query 4)', '- Shift 1: **$162** above standard (query 1)',
             '- Shift 2: **$350** above standard (query 2)', '- Shift 3: **$143** above standard (query 3)',
             '- 1. Side trim over the 3% target: **$345** · x (query 4 · row 0)', '- 2. Dry end over the 1% target: **$296** · x (query 4 · row 1)',
@@ -99,6 +103,32 @@ def test_the_printed_money_check_reads_the_whole_dollars_a_card_prints():
     assert golden.displayed_sum_failures({'trace': trace, 'sections': good}) == []
     bad = good[:2] + ['- Shift 2: **$351** above standard (query 2)'] + good[3:]
     assert golden.displayed_sum_failures({'trace': trace, 'sections': bad}) == ['money printed: the shifts $162 + $351 + $143 = $656, printed $655']
+    drifted = good[:2] + ['- Shift 2 cost **$350** above standard (query 2)'] + good[3:]
+    assert golden.displayed_sum_failures({'trace': trace, 'sections': drifted}) == [
+        'money printed: the shifts: 2 lines read, the card holds 3', 'money printed: the shifts $162 + $143 = $305, printed $655']
+    assert golden.displayed_sum_failures({'trace': trace, 'sections': good[:-1]}) == [
+        'money printed: the levers $345 + $296 = $641, printed $655', 'money printed: 2 lever lines read, the card holds 3']
+    owner = [{'ok': True, 'tool': 'get_opportunities', 'data': {'lens': 'ownership', 'rows': levers}}]
+    assert golden.displayed_sum_failures({'trace': owner, 'sections': ['Side trim costs **$345** in this window'] + good[4:]}) == [
+        "money printed: the ownership lens's headline is not in the form its sums are read from"]
+
+
+def test_same_figure_reads_one_figure_in_two_views():
+    """`same_figure` (the review of PR #168's fix round, finding 7): one figure printed the same in two views, a pattern's
+    groups added up, and with `each` every line it matches (a breakdown's parts against the line they add to)."""
+    day = {'sections': ['**$655** above standard', '- Shift 2: **$350** above standard (query 2)']}
+    card = {'sections': ['**$350** above standard this shift (query 1)']}
+    check = {'check': 'same_figure', 'why': "shift 2's figure", 'figures': [{'turn': 0, 'match': r'^- Shift 2: \*\*\$([0-9,]+)\*\*'},
+                                                                           {'turn': 1, 'match': r'^\*\*\$([0-9,]+)\*\* above standard this shift'}]}
+    assert golden.money_failures({'money_checks': [check]}, [day, card]) == []
+    moved = {'sections': ['**$351** above standard this shift (query 1)']}
+    assert golden.money_failures({'money_checks': [check]}, [day, moved]) == ["money: shift 2's figure prints ['$350', '$351'] in its views"]
+    waste = {'sections': ['- Dry-end: bond: x · $5,018', '- Dry-end: warp: x · $3,747', '- Dry-end: other: x · $526', '- Dry-end rejects (all): x · $9,291']}
+    parts = {'check': 'same_figure', 'why': 'the families', 'figures': [{'turn': 0, 'match': r'^- Dry-end: [^:]+: .* · \$([0-9,]+)$', 'each': True},
+                                                                        {'turn': 0, 'match': r'^- Dry-end rejects [^:]+: .* · \$([0-9,]+)$'}]}
+    assert golden.money_failures({'money_checks': [parts]}, [waste]) == []
+    waste['sections'][-1] = '- Dry-end rejects (all): x · $9,290'
+    assert golden.money_failures({'money_checks': [parts]}, [waste]) == ["money: the families prints ['$9,291', '$9,290'] in its views"]
 
 
 def test_value_selectors_and_tolerances():

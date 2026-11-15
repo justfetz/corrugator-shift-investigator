@@ -279,6 +279,64 @@ def test_a_window_s_shifts_print_the_same_whole_dollars_on_every_card(store):
     assert tiles['maintenance_pm_pct']['usd_shown'] == rows[('maintenance', None)] + rows[('maintenance', 'at-standard')] + rows.get(('scheduled', 'schedule-driven'), 0)
 
 
+@pytest.mark.parametrize('window', [{'period': 'week', 'anchor': '2025-01-13'}, {'period': 'week', 'anchor': '2025-01-01'},
+                                    {'period': 'month', 'anchor': DAY}])
+@pytest.mark.parametrize('shift', [None, 2])
+@pytest.mark.parametrize('text', ['', 'paper:47.5,hour:1450,trim:2.75'])
+def test_every_view_of_a_waste_line_prints_one_figure(store, window, shift, text):
+    """The reviewer's finding 1 on PR #168's fix round: the week of 13 Jan 2025's KPI tiles printed side trim $62,760 and the
+    dry end $22,821 against the ownership lens's $62,761 and $22,822, and the first week's dry-end families $12,530 under a
+    $12,529 dry-end line. Every waste tile, the waste breakdown's line and the ownership lens's line print the money ledger's
+    whole dollars for it; the families add to the dry-end line, the stop tiles to the ledger's stop lines."""
+    r = rates(text)
+    s, terms = cost_model.period_whole(store, window, shift, r)
+    data = cost_model.attach('get_period_kpis', store.get_period_kpis(window, shift=shift), r)
+    tiles = {t['metric']: t for t in cost_model.period_tiles(data, store.get_downtime_pareto(window, 'reason', 'minutes', shift)['rows'], r, (s, terms))}
+    waste = cost_model.waste_shown(cost_model.attach('get_waste_breakdown', store.get_waste_breakdown(window, shift), r), terms, r)
+    lines = {x['category']: x['usd_shown'] for x in waste['rows']}
+    own = {x['key']: x['usd_shown'] for x in cost_model.opportunities(store, window, shift, r, 'ownership')['rows']}
+    ledger = {(x['key'], x.get('apart')): x['usd_shown'] for x in cost_model.opportunities(store, window, shift, r)['rows']}
+    for key, shown in lines.items():
+        if shown is None:
+            continue
+        if f'{key}_pct' in tiles:
+            assert tiles[f'{key}_pct']['usd_shown'] == shown, key
+        if key in own:
+            assert own[key] == shown, key
+    assert sum(lines[k] for k in cost_model.DRY_END_KINDS) == lines['dry_end']
+    for key in ('trim', 'shear', 'dry_end'):
+        assert lines[key] == ledger[(key, None)] + ledger.get((key, 'at-standard'), 0)
+    assert lines['changeover'] == ledger.get(('changeover', 'no-band'), 0)
+    assert lines['cutoff_waste'] + lines['stacker_waste'] == ledger.get(('boards', 'no-band'), 0)
+    stops = sum(ledger.get(k, 0) for k in [('operator', None), ('operator', 'at-standard'), ('maintenance', None), ('maintenance', 'at-standard'),
+                                           ('scheduled', 'schedule-driven'), ('external', 'external')])
+    assert tiles['downtime_pct']['usd_shown'] == stops
+
+
+def test_the_data_quality_toggle_moves_no_shift_it_leaves_complete(store):
+    """The reviewer's finding 2 on PR #168's fix round: on 16 Feb 2026 shift 1 is $334.36 either way, yet its card printed $334
+    without the data-quality toggle and $335 with it, the day's root having dropped the incomplete shift 2. The root is the
+    day's own records in either view. A day card asked only for the incomplete shift prints that shift's own card (finding 5)."""
+    day, r = '2026-02-16', rates()
+    plain, bad = store.day_analysis(day), store.day_analysis(day, corrupt=True)
+    try:
+        assert bad.errors and all(e.get('shift') == 2 for e in bad.errors)
+        for n in (1, 3):
+            a, b = cost_model.shift_dollars(plain, n, r), cost_model.shift_dollars(bad, n, r)
+            assert a['total_usd'] == b['total_usd']
+            assert a['total_usd_shown'] == b['total_usd_shown'] and [x['usd_shown'] for x in a['rows']] == [x['usd_shown'] for x in b['rows']]
+        whole, toggled = cost_model.day_dollars(plain, r), cost_model.day_dollars(bad, r)
+        assert toggled['excluded_shifts'] == [2]
+        mine = {e['shift']: e['usd_shown'] for e in whole['shifts']}
+        assert {e['shift']: e['usd_shown'] for e in toggled['shifts'] if 'usd_shown' in e} == {1: mine[1], 3: mine[3]}
+        assert toggled['total_usd_shown'] == mine[1] + mine[3]
+        only = cost_model.day_dollars(bad, r, (2,))
+        assert only['total_usd_shown'] == cost_model.shift_dollars(bad, 2, r)['total_usd_shown'] > 0
+    finally:
+        plain.close()
+        bad.close()
+
+
 def test_no_yearly_figure_from_fewer_than_five_production_days(store):
     """The review's item 2: on the records' first day the card stated $403,694 a year, one day x 257.14, under a period that
     began before the records. With fewer than five production days there is no yearly figure and the card says why; the

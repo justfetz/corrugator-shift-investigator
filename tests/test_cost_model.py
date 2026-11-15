@@ -137,7 +137,8 @@ def test_priced_tools_carry_dollars_the_narrative_may_cite(analysis):
     step = result['trace'][0]
     assert step['tool'] == 'get_shift_dollars' and result['status'] == 'complete'
     packet = evidence_packet([step])
-    assert {'usd', 'usd_per_year', 'paper_usd', 'machine_time_usd'} <= set(packet[0]['rows'][0])
+    assert {'usd_shown', 'usd_per_year', 'paper_usd', 'machine_time_usd'} <= set(packet[0]['rows'][0])
+    assert 'usd' not in packet[0]['rows'][0]   # the card prints whole dollars (PR #168): the writer cites those, never the cents
     downtime = agent._execute('get_downtime_breakdown', {'shift': 2, 'kind': None, 'group_by': 'reason'}, {}, rates())
     assert downtime['rows'][0]['machine_time_usd'] == pytest.approx(downtime['rows'][0]['down_minutes'] / 60 * 1200, abs=0.01)
     compact = compact_result({'result_id': 'x', 'tool': 'get_downtime_breakdown', 'ok': True, 'data': downtime})

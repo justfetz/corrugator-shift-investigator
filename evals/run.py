@@ -1501,12 +1501,20 @@ def displayed_sum_failures(result):
     if not sections or not any(s['ok'] and s['tool'] in MONEY_LEDGER_TOOLS for s in result.get('trace', [])):
         return []
     head, lines = sections[0], [s for s in sections[1:] if s.startswith('- ')]
+    steps = [s for s in result['trace'] if s['ok'] and s['tool'] in MONEY_LEDGER_TOOLS]
+    card = next((s for s in steps if s['tool'] == 'get_day_dollars'), steps[0])['data']   # the card the headline states
     bad = []
 
-    def check(what, parts, total):
+    def check(what, parts, total, want=None):
+        # `want`: how many parts the card holds, so a line whose wording drifted fails instead of dropping out of the sum
+        if want is not None and len(parts) != want:
+            bad.append(f'money printed: {what}: {len(parts)} lines read, the card holds {want}')
         if total is not None and parts and sum(parts) != total:
             bad.append(f'money printed: {what} {" + ".join(f"${p:,}" for p in parts)} = ${sum(parts):,}, printed ${total:,}')
+    details = len(card.get('details') or [])
     own = _OWN_HEAD.match(head)
+    if card.get('lens') == 'ownership' and not own and re.match(r'^Side trim costs ', head):
+        return ['money printed: the ownership lens\'s headline is not in the form its sums are read from']
     if own:
         trim, trim_at, trim_above = (_whole(x) for x in own.groups())
         check('side trim at standard + above standard', [trim_at, trim_above], trim)
@@ -1516,7 +1524,7 @@ def displayed_sum_failures(result):
         if dry:
             d, a, b = (_whole(x) for x in dry.groups())
             check('the tag scrap at standard + above standard', [a, b], d)
-            check('the dry-end kinds', kinds, d)
+            check('the dry-end kinds', kinds, d, sum(1 for r in card.get('rows') or [] if r.get('group')))
             ats.append(a)
             aboves.append(b)
         for m in map(_OWN_LINE.match, lines):
@@ -1532,10 +1540,11 @@ def displayed_sum_failures(result):
             return bad + ['money printed: the ownership lens prints no "All the waste recorded" line to add up']
         w, a, b, c = (_whole(x) for x in total.groups())
         check('all the waste: at standard + above standard + no band', [a, b, c], w)
-        check('all the waste: its lines', [trim] + ([_whole(dry.group(1))] if dry else []) + others, w)
+        check('all the waste: its lines', [trim] + ([_whole(dry.group(1))] if dry else []) + others, w,
+              1 + bool(dry) + sum(1 for r in (card.get('rows') or [])[1:] if not r.get('group')))
         check('all the waste at standard', ats, a)
         check('all the waste above standard', aboves, b)
-        check('side trim by shift', [_whole(m.group(2)) for m in map(_SHIFT_TRIM.match, lines) if m], trim)
+        check('side trim by shift', [_whole(m.group(2)) for m in map(_SHIFT_TRIM.match, lines) if m], trim, details)
         return bad
     figure = re.search(_FIG, head)
     if not figure:
@@ -1547,15 +1556,22 @@ def displayed_sum_failures(result):
     supervisor = 'in controllable levers' in head
     check('the levers' + (' (controllable)' if supervisor else ''),
           [usd for name, usd in levers if not (supervisor and name.startswith('Side trim'))], headline)
-    check('the shifts', [_whole(m.group(2)) for m in map(_SHIFT_TOTAL.match, lines) if m], headline)
+    rows = card.get('rows') or []
+    if len(levers) != sum(1 for r in rows if not r.get('apart')):
+        bad.append(f'money printed: {len(levers)} lever lines read, the card holds {sum(1 for r in rows if not r.get("apart"))}')
+    shifts = [e for e in card.get('shifts') or [] if e.get('usd_shown') is not None]
+    check('the shifts', [_whole(m.group(2)) for m in map(_SHIFT_TOTAL.match, lines) if m], headline, len(shifts) if len(shifts) > 1 else None)
     trim = next((usd for name, usd in levers if name.startswith('Side trim')), None)
-    check('side trim by shift', [_whole(m.group(2)) for m in map(_SHIFT_TRIM.match, lines) if m], trim)
+    check('side trim by shift', [_whole(m.group(2)) for m in map(_SHIFT_TRIM.match, lines) if m], trim, details)
     everything = next((_EVERYTHING.match(l) for l in lines if _EVERYTHING.match(l)), None)
+    if card.get('apart_gaps') and not everything:
+        bad.append('money printed: the card holds rows apart and prints no "Everything recorded and priced" line to add up')
     if everything:
         whole, at = (_whole(x) for x in everything.groups())
         at_rows = [_whole(m.group(2)) for m in map(_AT_LINE.match, lines) if m]
         apart = [_whole(m.group(2)) for m in map(_APART_LINE.match, lines) if m]
-        check('the rows at standard', at_rows, at)
+        check('the rows at standard', at_rows, at, sum(1 for r in rows if r.get('apart') == 'at-standard'))
+        check('the rows apart', apart, None, sum(1 for r in rows if r.get('apart') and r['apart'] != 'at-standard'))
         check('everything recorded: the levers, at standard and apart', [usd for _, usd in levers] + at_rows + apart, whole)
     return bad
 
@@ -1581,8 +1597,9 @@ def money_failures(expect, results):
       that were over it, and never a figure its shifts do not hold.
     - `displayed_sums` {} (the owner's top rule on PR #168): every turn's printed parts add to its printed totals, in the
       whole dollars printed (`displayed_sum_failures`, also run on every money answer as an invariant).
-    - `same_figure` {figures: [{turn, match}], why}: one figure printed in two views is the same whole dollars in both;
-      each `match` is a pattern whose groups are $ figures, added up (a lever and its line at standard: all recorded).
+    - `same_figure` {figures: [{turn, match, each?}], why}: one figure printed in two views is the same whole dollars in
+      both; each `match` is a pattern whose groups are $ figures, added up (a lever and its line at standard: all
+      recorded), on the first line it matches, or with `each` on every line (a breakdown's parts against their line).
     - `tile_agrees` {metric, lever_match}: turn 1's KPI tile (get_period_kpis `tile_money`, as the card prints it) is the
       last turn's ledger lines that `lever_match` picks, as printed, added up (the review of PR #168, item 9)."""
     failures = []
@@ -1591,7 +1608,9 @@ def money_failures(expect, results):
         if kind == 'headline_figure':
             steps = _money_steps(last, check['tool'])
             figures = BOLD.findall(last['sections'][0]) if last['sections'] else []
-            want = _dollars(steps[0]['data'].get(check['field'])) if steps else None
+            data = steps[0]['data'] if steps else {}
+            # the figure the card prints: its whole dollars (`<field>_shown`, PR #168), a share of its root, not the cents' rounding
+            want = _dollars(data[f'{check["field"]}_shown'] if data.get(f'{check["field"]}_shown') is not None else data.get(check['field'])) if steps else None
             if not steps or not figures or figures[0] != want:
                 failures.append(f'money: the headline states {figures[:1]}, not {check["tool"]} {check["field"]} {want}')
         elif kind == 'one_yearly_figure':
@@ -1609,11 +1628,15 @@ def money_failures(expect, results):
             owned = [s for s in _money_steps(results[1], 'get_opportunities') if s['data'].get('lens') == 'ownership']
             lever = next((r for s in levers for r in s['data']['rows'] if r.get('key') == check['lever'] and not r.get('apart')), None)
             line = next((r for s in owned for r in s['data']['rows'] if r.get('key') == check['lever']), None)
-            if lever is None or line is None or line.get('above_standard_usd') != lever['usd']:
-                failures.append(f'money: the {check["lever"]} lever is {lever and lever["usd"]}, the ownership line above standard '
-                                f'{line and line.get("above_standard_usd")}: one window, two figures')
-            elif not any(_dollars(lever['usd']) in DOLLAR.findall(sec) for sec in results[1]['sections']):
-                failures.append(f'money: the second answer never states the {check["lever"]} lever\'s {_dollars(lever["usd"])}')
+            # the cents agree, and so do the whole dollars both cards print (PR #168): the lever's line and the split's part
+            printed = lambda row, key: row.get(f'{key}_shown') if row.get(f'{key}_shown') is not None else row.get(key)
+            if lever is None or line is None or line.get('above_standard_usd') != lever['usd'] or \
+                    printed(line, 'above_standard_usd') != printed(lever, 'usd'):
+                failures.append(f'money: the {check["lever"]} lever is {lever and lever["usd"]} (prints {lever and printed(lever, "usd")}), the '
+                                f'ownership line above standard {line and line.get("above_standard_usd")} (prints '
+                                f'{line and printed(line, "above_standard_usd")}): one window, two figures')
+            elif not any(_dollars(printed(lever, 'usd')) in DOLLAR.findall(sec) for sec in results[1]['sections']):
+                failures.append(f'money: the second answer never states the {check["lever"]} lever\'s {_dollars(printed(lever, "usd"))}')
         elif kind == 'yearly_from_period_to_date':
             for s in _money_steps(last, check['tool']):
                 data = s['data']
@@ -1659,8 +1682,9 @@ def money_failures(expect, results):
             seen = []
             for spec in check['figures']:
                 sections = results[spec['turn']]['sections'] if spec['turn'] < len(results) else []
-                match = next((m for m in (re.search(spec['match'], s) for s in sections) if m), None)
-                seen.append(None if match is None else sum(_whole(g) for g in match.groups() if g is not None))
+                found = [m for m in (re.search(spec['match'], s) for s in sections) if m][:None if spec.get('each') else 1]
+                # `each`: every line the pattern matches, added up (a breakdown's parts against the line they add to)
+                seen.append(sum(_whole(g) for m in found for g in m.groups() if g is not None) if found else None)
             if None in seen or len(set(seen)) != 1:
                 failures.append(f'money: {check.get("why", "one figure")} prints {["missing" if v is None else f"${v:,}" for v in seen]} in its views')
         elif kind == 'tile_agrees':

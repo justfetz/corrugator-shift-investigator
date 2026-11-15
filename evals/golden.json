@@ -8059,6 +8059,230 @@
    }
   },
   {
+   "id": "money-kpi-waste-tiles-are-the-ownership-lines",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/week/2025-01-13?measure=kpis",
+    "/corr/1/week/2025-01-13?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 1, under the owner's top rule on #164 (no money jumping): the week of 13 Jan 2025's KPI tiles printed their own rounding, side trim $62,760 and the dry end $22,821, while the ownership lens for the same week printed \"Side trim costs **$62,761**\" and the tag scrap **$22,822** (the cents agree: 62,760.45 and 22,820.62). Every waste tile now prints the money ledger's whole dollars for its line.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "tile_agrees",
+      "metric": "trim_pct",
+      "lever_match": "^Side trim costs "
+     },
+     {
+      "check": "tile_agrees",
+      "metric": "dry_end_pct",
+      "lever_match": "^- (?:[0-9]+\\. )?Dry-end waste \\(tag scrap\\)"
+     },
+     {
+      "check": "tile_agrees",
+      "metric": "shear_pct",
+      "lever_match": "^- (?:[0-9]+\\. )?Shear chops \\(all recorded\\): "
+     }
+    ],
+    "max_ms": 800
+   }
+  },
+  {
+   "id": "money-waste-breakdown-is-the-ownership-line",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/week/2025-01-13?measure=waste",
+    "/corr/1/week/2025-01-13?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 1: the waste breakdown in dollars printed its own rounding, side trim $62,760 and the dry-end rejects $22,821 in the week of 13 Jan 2025, against the ownership lens's **$62,761** and **$22,822** for the same week. Each waste line now prints the money ledger's whole dollars.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "side trim in the waste breakdown and the ownership lens",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "of gross in side trim, the largest waste · .* · \\$([0-9,]+) · "
+       },
+       {
+        "turn": 1,
+        "match": "^Side trim costs \\*\\*\\$([0-9,]+)\\*\\*"
+       }
+      ]
+     },
+     {
+      "check": "same_figure",
+      "why": "the dry-end waste in the waste breakdown and the ownership lens",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Dry-end rejects \\(all dry-end families\\): .* · \\$([0-9,]+) · "
+       },
+       {
+        "turn": 1,
+        "match": "^- (?:[0-9]+\\. )?Dry-end waste \\(tag scrap\\)[^:]*: \\*\\*\\$([0-9,]+)\\*\\*"
+       }
+      ]
+     }
+    ],
+    "max_ms": 800
+   }
+  },
+  {
+   "id": "money-waste-families-add-to-the-dry-end-line",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-01?measure=waste",
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 1: in the records' first week (30 Dec 2024 to 3 Jan 2025) the five dry-end families printed $5,018 + $3,747 + $2,523 + $716 + $526 = $12,530 under a dry-end line of $12,529, each rounded on its own. The families now share the dry-end line's whole dollars by the largest remainder.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-01?measure=waste",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "the dry-end families and the dry-end line they add to",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Dry-end: [^:]+: \\*\\*.* · \\$([0-9,]+)(?: · |$| \\()",
+        "each": true
+       },
+       {
+        "turn": 0,
+        "match": "^- Dry-end rejects \\(all dry-end families\\): .* · \\$([0-9,]+)(?: · |$| \\()"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-toggle-moves-no-shift-it-leaves-complete",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "day": "2026-02-16",
+   "shift": 1,
+   "url": "/corr/1/day/2026-02-16/shift/1?measure=dollars&corrupt=1",
+   "turns": [
+    "/corr/1/day/2026-02-16/shift/1?measure=dollars",
+    "/corr/1/day/2026-02-16/shift/1?measure=dollars&corrupt=1"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 2: the data-quality toggle excludes a record on shift 2, yet shift 1's card on 16 Feb 2026 printed **$334** without it and **$335** with it, the same $334.36 in cents, because the day's root dropped the incomplete shift 2 and shift 1's share moved. The root is the day's own records in either view, so the toggle moves no shift it leaves complete.",
+   "expect": {
+    "url": "/corr/1/day/2026-02-16/shift/1?measure=dollars&corrupt=1",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "shift 1's figure with and without the data-quality toggle",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard this shift"
+       },
+       {
+        "turn": 1,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard this shift"
+       }
+      ]
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-levers-agree-with-trim-cost-as-printed",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-27?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/week/2025-01-27?measure=money",
+    "/corr/1/week/2025-01-27?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 3: views_agree compared the trim lever's cents rounded on their own ($1,674 for 1,674.28) with the second answer, which prints the whole dollars both cards print (**$1,675**, the week's shifts' shares added up). The check now reads the printed figures.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-27?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "views_agree",
+      "lever": "trim"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-day-line-is-the-shift-card",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-06-10",
+   "url": "/corr/1/day/2026-06-10/shift/2?measure=dollars",
+   "turns": [
+    "/corr/1/day/2026-06-10?measure=dollars",
+    "/corr/1/day/2026-06-10/shift/2?measure=dollars"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 7: the same_figure check had no case. 10 Jun's day card's line for shift 2 is the figure shift 2's own card leads with, in whole dollars (the owner's rule on #164).",
+   "expect": {
+    "url": "/corr/1/day/2026-06-10/shift/2?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "shift 2 on the day card and on its own card",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Shift 2: \\*\\*\\$([0-9,]+)\\*\\* above standard"
+       },
+       {
+        "turn": 1,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard this shift"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-day-card-with-a-long-period-to-date-completes",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-08-05",
+   "url": "/corr/1/day/2026-08-05?measure=dollars",
+   "note": "found by the sweep of PR #168's fix round (2026-11-15): with each waste line's whole dollars added to the cards' terms, 5 Aug 2026's day card (its period to date reaches back into the period before, 28 production days) stopped at the planner's 200,000-character context bound: four money steps each carried the period to date's every shift twice. The cards' rate-free terms ride on the result for the browser and stay out of the planner's context.",
+   "expect": {
+    "url": "/corr/1/day/2026-08-05?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
    "id": "week-downtime-by-reason-is-the-review",
    "type": "routing",
    "mode": "offline",

@@ -363,11 +363,15 @@ def window_tile_values(plain, span, shift, rates_text=None):
     values["tile_money:metric=maintenance_pm_pct"] = tile_parts_sum([("downtime", s["all"]["maintenance"], gross, minutes, 0),
                                                                      ("downtime", s["minutes"]["planned"], gross, minutes, 0)], rates)
     values["tile_money:metric=operator_pct"] = one("downtime", s["all"]["operator"])
-    for key, entry in values.items():   # every other tile prints its own nearest dollar
-        if entry["usd"][0] is not None:
-            entry["usd_shown"] = exact(nearest_whole(int(round(round(entry["usd"][0], 2) * 100))))
-    tile_shown(values, "tile_money:metric=operator_pct", w, [("levers", "operator"), ("at", "operator")])
-    tile_shown(values, "tile_money:metric=maintenance_pm_pct", w, [("levers", "maintenance"), ("at", "maintenance"), ("apart", "scheduled")])
+    # every tile prints the money ledger's whole dollars for its line (the review of PR #168's fix round, finding 1): the
+    # stop tiles the levers' lines and their lines at standard (and planned maintenance, external stops), each waste tile
+    # its line's, the figure the ownership lens and the waste breakdown print
+    stops = [("levers", "operator"), ("at", "operator"), ("levers", "maintenance"), ("at", "maintenance")]
+    for metric, parts in (("operator_pct", stops[:2]), ("maintenance_pm_pct", [*stops[2:], ("apart", "scheduled")]),
+                          ("downtime_pct", [*stops, ("apart", "scheduled"), ("apart", "external")]),
+                          *((f"{k}_pct", [("lines", k)]) for k in ("trim", "shear", "dry_end", *FAMILIES, "bale", "unexplained"))):
+        if values[f"tile_money:metric={metric}"]["usd"][0] is not None:
+            tile_shown(values, f"tile_money:metric={metric}", w, parts)
     return values
 
 
@@ -984,7 +988,9 @@ MIN_RATE_DAYS = 5
 
 
 def cents_of(kind, qty, rates):
-    """A priced quantity's dollars as the tool keeps them, two places, in integer cents."""
+    """A priced quantity's dollars as the tool keeps them, two places, in integer cents (a negative remainder is unpriced: 0)."""
+    if qty < 0:
+        return 0
     return int(round(round(money(kind, qty, None, None, rates)["usd"][0], 2) * 100))
 
 
@@ -1040,6 +1046,16 @@ def whole_by_hand(root, scope, rates):
            "apart": {k: add(lambda e: e["apart"][k]) for k, _, _ in APART_HAND},
            "boards": {k: add(lambda e: e["boards"][k]) for k in ("cutoff_waste", "stacker_waste")}}
     out["all_in"] = out["total"] + out["at_total"] + sum(out["apart"].values())
+    # every waste line's whole dollars, the figure each view of it prints (the review of PR #168's fix round): trim, shear and
+    # the dry end their levers' and their rows' at standard added up, the dry-end kinds sharing the dry end's in their order,
+    # the changeover rejects and the boards' two lines their rows' apart, planning / admin, the bale and the remainder their
+    # nearest dollar, each on the stated shifts' cells
+    s = ledger_of([c for c in root if c["shift"] in scope], rates[3])
+    lines = {k: out["levers"][k] + out["at"][k] for k in ("trim", "shear", "dry_end")}
+    lines.update(zip(FAMILIES, share_out([cents_of("waste", s["lines"][k], rates) for k in FAMILIES], lines["dry_end"]) if each else [0] * 5))
+    lines.update({"changeover": out["apart"]["changeover"], **out["boards"]})
+    lines.update({k: nearest_whole(cents_of(kind, s["lines"][k], rates)) for k, kind in (("admin", "waste"), ("bale", "paper"), ("unexplained", "paper"))})
+    out["lines"] = lines
     return out
 
 
@@ -1261,6 +1277,10 @@ def waste_dollars_case(plain, id, period, anchor, shift=None, rates_text=None, *
     areas = waste_areas(t)
     minutes = window_minutes(plain, span, shift)
     values = {f"category={k}": money(WASTE_PRICING.get(k, "waste"), round(a, 1), t["gross"], minutes, rates, 0.1) for k, a in areas.items()}
+    # each line prints the money ledger's whole dollars for it (the review of PR #168's fix round, finding 1)
+    w = whole_by_hand(cells_in(plain, *span), [shift] if shift else [1, 2, 3], rates)
+    for k in areas:
+        values[f"category={k}"]["usd_shown"] = exact(None if values[f"category={k}"]["usd"][0] is None else w["lines"][k])
     return case(id, "get_waste_breakdown", {"window": {"period": period, "anchor": anchor}, "shift": shift},
                 {"row_count": len(WASTE), "values": values}, day=day, note=note, rates=rates_text)
 
