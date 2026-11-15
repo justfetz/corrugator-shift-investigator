@@ -559,6 +559,155 @@ def test_a_generated_verb_question_is_answered_only_as_asked_or_refused(store):
     assert checked > 100, checked
 
 
+# Minutes or time said with a verb, and a loss to a value or a line (the coordinator's review of PR #155 at b955ca4, item 3): a refusal
+# that fired before the verb was read let the grade totals answer "which grade took the most minutes" and the waste breakdown's side trim
+# "which shift lost the most to warp". Each is refused, read with its verb, or answered by a hand route that covers the other words:
+# never one whose other words the parser cannot read either
+VERB_TIME_TEMPLATES = ('which {dim} took the most minutes this week', 'which {dim} took the most time this week',
+                       'which {dim} spent the most minutes this week', 'which {dim} spent the most time this week',
+                       'which {dim} spent the most time down this week', 'which {dim} lost the most time this week',
+                       'which {dim} lost the most minutes this week', 'which {dim} produced the most minutes this week',
+                       'which {dim} made the most minutes this week', 'which {dim} produced the most time this week')
+VERB_VALUE_TEMPLATES = ('which {dim} lost the most to {value} this week', 'which {dim} lost the most minutes to {value} this week',
+                        'which {dim} lost the most feet to {value} this week', 'how much did we lose to {value} this week')
+# what the value after "to" filters by, or the line it names; moisture's minutes are the stop reason Steam / moisture's
+LOST_TO = {'warp': ('reject_family', 'WARP'), 'bond': ('reject_family', 'BOND'), 'moisture': ('reject_family', 'MOISTURE', 'Steam / moisture'),
+           'misalignment': ('reject_family', 'MISALIGNMENT'), 'the stacker': ('reason', 'Stacker'), 'trim': (None, 'trim_sqft'),
+           'side trim': (None, 'trim_sqft'), 'shear': (None, 'shear_sqft'), 'downtime': (None, 'downtime_minutes')}
+
+
+def verb_questions():
+    out = [(t.format(dim=d), None) for t in VERB_TIME_TEMPLATES for d in DIM_WORDS.values()]
+    for template in VERB_VALUE_TEMPLATES:
+        for value, said in LOST_TO.items():
+            for d in (DIM_WORDS.values() if '{dim}' in template else [None]):
+                out.append((template.format(dim=d, value=value), said))
+    return out
+
+
+def test_a_verb_with_minutes_time_or_a_loss_to_a_value_is_answered_only_as_asked_or_refused(store):
+    verbs = P.LOSS_VERBS + P.REJECT_VERBS + P.PRODUCE_VERBS + P.UNREAD_VERBS
+    answered = refused = 0
+    for question, said in verb_questions():
+        verb = next((w for w in P.tokens_of(question) if w in verbs), None)
+        try:
+            request, context = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        except ValueError as exc:
+            refused += 1
+            hand = question_scope(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+            try:
+                agent._parse_request(question, hand)
+                stood = False
+            except ValueError as own:
+                stood = str(own) == str(exc)   # the hand router's own refusal stands ("the records do not count customers")
+            if verb in P.UNREAD_VERBS and not stood:
+                assert f"'{verb}'" in str(exc), (question, str(exc))   # else the refusal names the verb (docs/ASKING.md)
+            continue
+        answered += 1
+        if request['intent'] == 'semantic':
+            args = request['plan'][0]['arguments']
+            assert verb not in P.LOSS_VERBS or args['measure'] in P.LOSS_MEASURES, (question, args)
+            assert verb not in P.UNREAD_VERBS + P.PRODUCE_VERBS, (question, args)
+            if said and said[0]:
+                assert set(args['filters'].values()) & set(said[1:]), (question, args)   # "lost the most to warp": the warp family's
+            elif said:
+                assert args['measure'] == said[1], (question, args)                # "lost the most to trim": side trim's
+            continue
+        if request['intent'] in P.ALLOW_LISTED:
+            continue
+        # a loss is read with its "to" ("how much did we lose to trim": the breakdown leads with trim); any other verb is not read
+        rest = P.read(question if verb in P.LOSS_VERBS else re.sub(rf"\b{verb}\b", ' ', question, count=1), context, store)
+        assert rest.complete and P.covers(request, rest, context, store), (question, request['intent'])
+    assert answered > 20 and refused > 50, (answered, refused)
+
+
+def test_a_ranking_or_a_comparison_of_chops_or_boards_is_a_count_and_refused(store):
+    """A ranking, a comparison or a 'vs' of the plural noun the records keep as square feet asks a count, refused with the records'
+    reason as "how many shear chops" is, over any hand route (the coordinator's review of PR #155 at b955ca4, item 1). The waste lines'
+    own names, a unit said, a split and the singular are the square feet."""
+    templates = ('which {dim} had the most {n} this week', 'which {dim} had the fewest {n} this week', 'top 3 {dim}s by {n} this week',
+                 'compare {dim}s on {n} this week', 'most {n} by {dim} this week', 'which {dim} had the most {n}', 'top 3 {dim}s by {n}')
+    for noun, why in (('chops', 'keep shear chops as square feet, not a count'), ('shear chops', 'keep shear chops as square feet'),
+                      ('stacker boards', 'do not count boards'), ('boards', 'do not count boards')):
+        for template in templates:
+            for dim in ('shift', 'grade', 'crew', 'day'):
+                question = template.format(dim=dim, n=noun)
+                with pytest.raises(ValueError, match=why):
+                    route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        for question in (f'{noun} on shift 1 versus shift 2 this week', f'{noun} on shift 1 vs shift 2', f'{noun} this week versus last week',
+                         f'compare {noun} on 32-C and 26-C this week'):
+            with pytest.raises(ValueError, match=why):
+                route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+    for suggestion in reading(store, 'Which shift had the most chops this week?').suggestions:
+        assert reading(store, suggestion).complete, suggestion   # each question offered reads in its turn
+    for question, measure in (('Which shift had the most cutoff waste boards this week?', 'cutoff_waste_sqft'),
+                              ('Which shift had the most knife waste boards this week?', 'cutoff_waste_sqft'),
+                              ('Which shift had the most stacker waste boards this week?', 'stacker_waste_sqft'),
+                              ('Which shift had the most square feet of chops this week?', 'shear_sqft'),
+                              ('Which shift had the most chop this week?', 'shear_sqft'), ('Chops by shift this week', 'shear_sqft'),
+                              ('Which shift had the most shear this week?', 'shear_sqft')):
+        request, _, _ = answer(store, question)
+        assert request['plan'][0]['arguments']['measure'] == measure, (question, request['plan'][0])
+
+
+def test_a_line_said_with_waste_leads_with_that_line(store):
+    """"<line> waste" is that line, and a family's waste is the family's rejects: only a bare "waste" is every line, the waste breakdown
+    (the coordinator's review of PR #155 at b955ca4, item 2). "Moisture" is the reject family's own name and only a synonym of the stop
+    reason Steam / moisture, so it reads as the family, as "warp" does."""
+    for question, measure, filters in (('Dry end waste this week', 'reject_sqft', {}), ('Dry-end waste this week', 'reject_sqft', {}),
+                                       ('Shear waste this week', 'shear_sqft', {}), ('Chop waste this week', 'shear_sqft', {}),
+                                       ('Bale waste this week', 'bale_sqft', {}), ('Reject waste this week', 'reject_sqft', {}),
+                                       ('Scrap waste this week', 'reject_sqft', {}), ('Knife waste this week', 'cutoff_waste_sqft', {}),
+                                       ('Cutoff knife waste this week', 'cutoff_waste_sqft', {}), ('Admin waste this week', 'admin_sqft', {}),
+                                       ('Warp waste this week', 'reject_sqft', {'reject_family': 'WARP'}),
+                                       ('Bond waste this week', 'reject_sqft', {'reject_family': 'BOND'}),
+                                       ('Misalignment waste this week', 'reject_sqft', {'reject_family': 'MISALIGNMENT'}),
+                                       ('How much moisture this week?', 'reject_sqft', {'reject_family': 'MOISTURE'}),
+                                       ('Moisture waste this week', 'reject_sqft', {'reject_family': 'MOISTURE'})):
+        request, _, _ = answer(store, question)
+        args = request['plan'][0]['arguments']
+        assert request['plan'][0]['tool'] == S.TOOL and args['measure'] == measure and args['filters'] == filters, (question, request['plan'][0])
+    for question in ('Waste this week', 'How much waste this week?', 'Show warp waste this month', 'Show moisture this month',
+                     'Trim waste this week', 'Waste by reject family this week'):
+        request, _, _ = answer(store, question)
+        assert request['plan'][0]['tool'] == 'get_waste_breakdown', (question, request['plan'][0])
+    # the stop reason is still read where a stop is said
+    request, _, _ = answer(store, 'Moisture stops this week')
+    assert request['plan'][0]['arguments']['filters'] == {'reason': 'Steam / moisture'}, request['plan'][0]
+
+
+def test_boards_alone_are_never_the_grades(store):
+    """A bare "boards" is the sheets (the model's synonym), never the board grades said as a set: "which shift had the most cutoff waste
+    boards" is the cutoff waste by shift, never by shift and grade (the coordinator's review of PR #155 at b955ca4, item 4)."""
+    vocab = P.vocabulary(store)
+    assert ('dimension', 'grade') not in vocab[('boards',)] and ('dimension', 'grade') in vocab[('board',)]
+    assert vocab[('cutoff', 'waste', 'boards')] == [('measure', 'cutoff_waste_sqft')]
+    r = reading(store, 'Which shift had the most cutoff waste boards this week?')
+    assert r.complete and r.query.measure == 'cutoff_waste_sqft' and r.query.group_by == ['shift'], r
+    request, _, _ = answer(store, 'MSF by board this week')
+    assert request['plan'][0]['tool'] == 'get_grade_totals'   # the singular is still the grade
+
+
+def test_a_verb_a_refusal_fired_before_is_still_refused_or_covered(store):
+    """The verb's cue is set even when another refusal fires first (the coordinator's review of PR #155 at b955ca4, item 3), so route
+    refuses naming it rather than let a hand route answer something else; a hand route that answers the other words keeps them."""
+    for question, why in (('Which grade took the most minutes this week?', "'took' is not a word"),
+                          ('Which grade spent the most time down this week?', "'spent' is not a word"),
+                          ('Which grade took the most time this week?', "'took' is not a word"),
+                          ('Which grade produced the most minutes this week?', "'produced' is read only of what ran"),
+                          ('Which grade lost the most time this week?', 'names no measure'),
+                          ('Which shift lost the most feet to warp this week?', 'not recorded by reject family')):
+        with pytest.raises(ValueError, match=why):
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+    for question, tool in (('Which reason took the most minutes this week?', 'get_downtime_pareto'),
+                           ('Which place took the most minutes this week?', 'get_downtime_pareto'),
+                           ('how fast are we running between changeovers', None), ('Which grade were we running the most this month', 'get_grade_totals'),
+                           ('What did slow running cost us this week?', 'get_opportunities')):
+        request, _, _ = answer(store, question)
+        plan = request.get('plan') or []
+        assert (plan[0]['tool'] if plan else None) == tool or tool is None and request['intent'] != 'semantic', (question, request['intent'], plan[:1])
+
+
 def expected_window(store, question):
     """The window label a question's own words name, worked out apart from the parser: the selected day's week or month, the one
     before ("last week", "last month"), the production day before ("yesterday"), or the selected day itself."""
