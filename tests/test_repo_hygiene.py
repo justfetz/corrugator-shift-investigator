@@ -475,3 +475,261 @@ def test_the_deploy_fails_a_live_changelog_without_the_merged_pull_request(tmp_p
     code, out = subprocess.run([sys.executable, str(script), str(tmp_path / 'missing.html'), 'Merge pull request #128 from a/b'],
                                capture_output=True, text=True).returncode, ''
     assert code == 1
+
+
+# --- Issue #133: no job that holds the Google credential runs the pull request's code ---------------------------------
+#
+# A job that authenticates to Google may check the pull request out only as data, in a folder of its own (`pr/`), and
+# hand it to Cloud Build as `gcloud run deploy --source pr`. It runs nothing from that folder in any step: not after
+# the auth step, where the credential file is on disk, and not before it either, since a process a step starts in
+# the background outlives the step and a step can rewrite PATH or the environment of the steps after it. Its
+# definition must not be the pull request's (`pull_request` runs the PR's copy of the workflow), the workspace root,
+# where the auth step writes gha-creds-*.json, must be the base, and no upload may be the workspace root. The
+# workflows are parsed by tests/workflow_yaml.py, since CI has no YAML library.
+
+import posixpath
+
+import workflow_yaml
+
+AUTH_ACTION = 'google-github-actions/auth@'
+PR_EVENTS = {'pull_request', 'pull_request_review', 'pull_request_review_comment'}   # these run the PR's merge commit
+BASE_REFS = {'${{ github.event.repository.default_branch }}', 'main', 'refs/heads/main'}
+
+
+def workflow_events(workflow):
+    on = workflow.get('on')
+    return {on} if isinstance(on, str) else set(on or ())
+
+
+def checkouts(job, events):
+    """(path, is_base, step) for each actions/checkout step. A checkout is the base when its ref names main, or when
+    it names none (or the run's own sha) and the event is not a pull request's: push, schedule and dispatch check
+    out the commit the workflow itself came from, pull_request_target the default branch."""
+    found = []
+    for step in job.get('steps') or ():
+        if str(step.get('uses') or '').startswith('actions/checkout@'):
+            given = step.get('with') or {}
+            ref = str(given.get('ref') or '').strip()
+            path = posixpath.normpath(str(given.get('path') or '.'))
+            base = ref in BASE_REFS or (ref in ('', '${{ github.sha }}') and not events & PR_EVENTS)
+            found.append((path, base, step))
+    return found
+
+
+def inside(path, folders):
+    path = posixpath.normpath(path.removeprefix('./'))
+    return any(path == f or path.startswith(f + '/') for f in folders)
+
+
+def names_path(folder):
+    """`folder` as a path in a shell script: `pr`, `pr/x`, `./pr`, `"pr"`, `$GITHUB_WORKSPACE/pr`, not `pr-41` or `$PR`."""
+    return re.compile(r'(?<![\w.-])(?:\./)?' + re.escape(folder) + r'(?![\w.-])')
+
+
+def source_upload(folder):
+    """The one place a script may name the pull request's folder: as the source of `gcloud run deploy`."""
+    return re.compile(r'(gcloud run deploy\b[^\n]*?)--source[ =]["\']?(?:\./)?' + re.escape(folder) + r'/?["\']?(?=\s|$)')
+
+
+def credential_exposures(workflow):
+    """Every way a job that authenticates to Google lets the pull request's code near the credential, as sentences."""
+    events = workflow_events(workflow)
+    problems = []
+    for name, job in (workflow.get('jobs') or {}).items():
+        steps = job.get('steps') or []
+        if not any(str(step.get('uses') or '').startswith(AUTH_ACTION) for step in steps):
+            continue
+        if events & PR_EVENTS:
+            problems.append(f'{name}: runs on {", ".join(sorted(events & PR_EVENTS))}, so its steps are the pull request\'s own copy')
+        found = checkouts(job, events)
+        pr_folders = [path for path, base, _ in found if not base]
+        if '.' in pr_folders:
+            problems.append(f'{name}: checks the pull request out at the workspace root, where the credential file is written '
+                            'and every relative path is the pull request\'s')
+        pr_folders = [path for path in pr_folders if path != '.']
+        for path, base, step in found:
+            if not base and (step.get('with') or {}).get('persist-credentials') is not False:
+                problems.append(f'{name}: the checkout of the pull request in {path} keeps the job\'s GitHub token in its .git/config')
+        folders = [path for path, _, _ in found if path != '.']
+        default_dir = str(((job.get('defaults') or {}).get('run') or {}).get('working-directory') or '.')
+        if inside(default_dir, pr_folders):
+            problems.append(f'{name}: runs every script in the pull request\'s checkout {default_dir}')
+        for number, step in enumerate(steps, 1):
+            label = f'{name}: step {number} ({step.get("name") or step.get("uses") or "run"})'
+            uses = str(step.get('uses') or '')
+            if uses.startswith('./') and inside(uses, pr_folders):
+                problems.append(f'{label} runs an action from the pull request\'s checkout')
+            if 'run' not in step:
+                continue
+            workdir = str(step.get('working-directory') or default_dir)
+            if inside(workdir, pr_folders):
+                problems.append(f'{label} runs in the pull request\'s checkout {workdir}')
+            for folder in pr_folders:
+                script = source_upload(folder).sub(r'\1', step['run'])
+                if names_path(folder).search(script):
+                    problems.append(f'{label} names {folder}/ other than as `gcloud run deploy --source {folder}`')
+            for source in re.findall(r'--source[ =]["\']?([^\s"\']+)', step['run']):
+                upload = posixpath.normpath(posixpath.join(workdir, source))
+                if upload not in folders:
+                    problems.append(f'{label} uploads {upload}, not a checkout of its own: the workspace root holds the '
+                                    'credential file the auth step wrote')
+    return problems
+
+
+def all_workflows():
+    return {path.name: workflow_yaml.load(path.read_text(encoding='utf-8')) for path in sorted(WORKFLOWS.glob('*.yml'))}
+
+
+def test_no_job_that_holds_the_google_credential_runs_the_pull_requests_code():
+    """Issue #133 (H4): Preview ran the pull request's own .github/scripts/ after the credential was on disk."""
+    workflows = all_workflows()
+    authenticating = {(file, job) for file, wf in workflows.items() for job, spec in wf['jobs'].items()
+                      if any(str(s.get('uses') or '').startswith(AUTH_ACTION) for s in spec.get('steps') or ())}
+    assert authenticating == {('deploy-cloudrun.yml', 'deploy'), ('preview.yml', 'deploy'), ('preview.yml', 'cleanup')}, \
+        'a new job that authenticates to Google: check it here, and in the Workload Identity condition (docs/DEPLOYMENT.md)'
+    problems = {file: credential_exposures(wf) for file, wf in workflows.items()}
+    assert problems == {file: [] for file in workflows}, problems
+    preview = workflows['preview.yml']
+    assert set(workflow_events(preview)) == {'pull_request_target'}, 'main\'s copy of preview.yml runs, never the pull request\'s'
+    (pr_path, base, _), = [c for c in checkouts(preview['jobs']['deploy'], {'pull_request_target'}) if not c[1]]
+    assert pr_path == 'pr', 'the pull request is checked out into pr/, as data'
+    deploy_script = next(s['run'] for s in preview['jobs']['deploy']['steps'] if 'gcloud run deploy' in str(s.get('run')))
+    assert 'gcloud run deploy "$SERVICE" --source pr ' in deploy_script
+    for job in ('head', 'deploy', 'cleanup'):
+        condition = preview['jobs'][job]['if']
+        assert 'github.event.pull_request.head.repo.full_name == github.repository' in condition, f'{job}: a fork\'s run gets the secrets'
+        # what is previewed is the pull request merged onto main; the close job removes any same-repository PR's tag
+        assert ('github.event.pull_request.base.ref == github.event.repository.default_branch' in condition) == (job != 'cleanup'), job
+    head = preview['jobs']['head']
+    assert head['permissions'] == {'contents': 'read', 'pull-requests': 'read'} and not head.get('steps')[0].get('uses')
+    assert not any('actions/checkout' in str(s.get('uses')) for s in head['steps']), 'the head job checks out nothing'
+
+
+def test_the_main_deploy_runs_main_only_and_uploads_its_checkout_not_the_credential_file():
+    """Issue #133: a dispatch on another branch deployed that branch to production; and `--source .` from the workspace
+    root uploaded the auth step's gha-creds-*.json (in key mode the deployer's key) to Cloud Build with the source."""
+    deploy = all_workflows()['deploy-cloudrun.yml']['jobs']['deploy']
+    assert "github.ref == 'refs/heads/main'" in deploy['if']
+    assert deploy['defaults'] == {'run': {'working-directory': 'app'}}
+    assert [path for path, _, _ in checkouts(deploy, {'push'})] == ['app']
+
+
+PRE_133_PREVIEW = """\
+on:
+  pull_request:
+    types: [opened]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Allow-list the preview origins
+        run: python3 .github/scripts/preview_origins.py origins "$TAG" < /tmp/service.json
+      - name: Deploy
+        run: bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source . --no-traffic
+"""
+
+SAFE = """\
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.head.outputs.merge }}
+          path: pr
+          persist-credentials: false
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Deploy
+        run: |
+          python3 .github/scripts/preview_origins.py origins "pr-$PR" < /tmp/service.json
+          bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source pr --tag "pr-$PR" \\
+            --no-traffic --quiet
+"""
+
+
+@pytest.mark.parametrize('change, finding', [
+    (None, None),
+    ('- name: Deploy\n        run: |\n', '- name: Deploy\n        run: |\n          python3 pr/.github/scripts/preview_origins.py\n'),
+    ('- name: Deploy\n        run: |\n', '- name: Deploy\n        run: |\n          bash "$GITHUB_WORKSPACE/pr/x.sh"\n'),
+    ('- name: Deploy\n        run: |\n', '- name: Deploy\n        run: |\n          cd pr && make\n'),
+    ('- name: Deploy\n        run: |\n', '- name: Deploy\n        working-directory: pr\n        run: |\n'),
+    ('- name: Deploy\n', '- uses: ./pr/.github/actions/setup\n      - name: Deploy\n'),
+    ('- uses: google-github-actions/auth@v2\n', '- run: nohup python3 pr/watch.py &\n      - uses: google-github-actions/auth@v2\n'),
+    ('--source pr --tag', '--source . --tag'),
+    ('          path: pr\n          persist-credentials: false\n', '          path: pr\n'),
+    ('ref: ${{ needs.head.outputs.merge }}\n          path: pr\n', 'ref: ${{ github.event.pull_request.head.sha }}\n'),
+    ('pull_request_target:', 'pull_request:'),
+])
+def test_the_exposure_check_finds_each_way_in(change, finding):
+    """The check is not vacuous: each edit of a safe job is found, and the safe job passes."""
+    text = SAFE if change is None else SAFE.replace(change, finding, 1)
+    assert change is None or text != SAFE, change
+    problems = credential_exposures(workflow_yaml.load(text))
+    assert bool(problems) == (change is not None), problems
+
+
+def test_the_pre_133_preview_is_what_the_check_refuses():
+    problems = credential_exposures(workflow_yaml.load(PRE_133_PREVIEW))
+    assert any('pull_request, so its steps are the pull request\'s own copy' in p for p in problems), problems
+    assert any('at the workspace root' in p for p in problems), problems
+
+
+def test_the_workflow_reader_reads_every_workflow_as_pyyaml_does():
+    yaml = pytest.importorskip('yaml')
+
+    def on_key(value):   # YAML 1.1 reads the key `on` as true; the reader keeps it a string, as GitHub does
+        if isinstance(value, dict):
+            return {('on' if k is True else k): on_key(v) for k, v in value.items()}
+        return [on_key(v) for v in value] if isinstance(value, list) else value
+
+    for path in sorted(WORKFLOWS.glob('*.yml')):
+        text = path.read_text(encoding='utf-8')
+        assert workflow_yaml.load(text) == on_key(yaml.safe_load(text)), path.name
+    for text in (SAFE, PRE_133_PREVIEW, "a: >-\n  x\n  y\n\n  z\n   w\nb: 'it''s'\nc: [x, 'y']\nd:\n- 1\n- e: 2\n"):
+        assert workflow_yaml.load(text) == on_key(yaml.safe_load(text))
+
+
+@pytest.mark.parametrize('text', ['a: {x: 1}\n', 'a: b\n  c\n', "a: 'x\n  y'\n", 'a: &x 1\n', 'k:\n  - - 1\n', 'a: 1\na: 2\n'])
+def test_the_workflow_reader_refuses_what_it_does_not_read(text):
+    with pytest.raises(ValueError):
+        workflow_yaml.load(text)
+
+
+def test_the_documented_pool_condition_trusts_mains_two_deploy_workflows_and_nothing_else():
+    """Issue #133 (H5): the provider condition names the deploy and preview workflows by job_workflow_ref on main, in
+    the create command and in the update-oidc command the owner runs; neither workflow can be called as a reusable one
+    (a caller's job carries the callee's job_workflow_ref), and both name main's copy because neither runs a
+    pull request's own definition."""
+    text = (ROOT / 'docs' / 'DEPLOYMENT.md').read_text(encoding='utf-8')
+    conditions = re.findall(r'^CONDITION="(.+)"$', text, re.M)
+    assert len(conditions) == 2 and len(set(conditions)) == 1, 'the create and the update command carry one condition'
+    condition = conditions[0]
+    refs = re.findall(r"assertion\.job_workflow_ref == '([^']+)'", condition)
+    assert refs == ['${REPO}/.github/workflows/deploy-cloudrun.yml@refs/heads/main', '${REPO}/.github/workflows/preview.yml@refs/heads/main']
+    assert "assertion.repository_id == '1359219994'" in condition and "assertion.repository_owner_id == '12513697'" in condition
+    assert 'assertion.repository ==' not in condition, 'a name alone follows a renamed or re-created repository'
+    assert re.search(r'gcloud iam workload-identity-pools providers update-oidc github-oidc .*\n.*--attribute-condition "\$CONDITION"', text)
+    assert re.search(r'providers create-oidc github-oidc [^`]*--attribute-condition "\$CONDITION"', text)
+    assert "--attribute-condition \"assertion.repository == " not in text
+    assert 'applies once the keyless cutover (#28, below) is live' in text
+    workflows = all_workflows()
+    named = {ref.split('@')[0].rsplit('/', 1)[1] for ref in refs}
+    authenticating = {file for file, wf in workflows.items()
+                      if any(str(s.get('uses') or '').startswith(AUTH_ACTION) for j in wf['jobs'].values() for s in j.get('steps') or ())}
+    assert named == authenticating, 'every workflow that authenticates to Google is named, and only those'
+    for file in named:
+        events = workflow_events(workflows[file])
+        assert 'workflow_call' not in events and not events & PR_EVENTS, (file, events)

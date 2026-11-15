@@ -9,18 +9,29 @@
 # changes one thing: PUBLIC_DEMO_ORIGIN gains the tag form of every production origin, because
 # the server's Origin check is an exact match (.github/scripts/preview_origins.py explains).
 #
-# Both jobs authenticate like deploy-cloudrun.yml (issue #28): Workload Identity Federation when the
-# repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT are set, the
-# GCP_SA_KEY secret with a warning until then. The credential block is identical in the three jobs
-# and tests/test_repo_hygiene.py keeps it so.
+# Both jobs that deploy or clean up authenticate like deploy-cloudrun.yml (issue #28): Workload Identity
+# Federation when the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOYER_SERVICE_ACCOUNT
+# are set, the GCP_SA_KEY secret with a warning until then. The credential block is identical in the three
+# jobs and tests/test_repo_hygiene.py keeps it so.
+#
+# pull_request_target, not pull_request (issue #133). GitHub runs the default branch's copy of this file
+# (since 8 December 2025 for every base), so a pull request cannot change a step that holds the Google
+# credential. Each job checks out main at the workspace root and runs only main's .github/scripts/. The pull
+# request's code is checked out into pr/ and is only ever the source Cloud Build builds (`--source pr`): no
+# step runs a file from pr/, and the credential file the auth step writes into the workspace root
+# (gha-creds-*.json) is outside the upload (gcloud archives a symlink as a link, never its target).
+# tests/test_repo_hygiene.py fails a job that authenticates if any of its steps, before the auth step as well
+# as after it, names a path in pr/, or if it checks the pull request out at the workspace root. A pull request
+# that changes this file is previewed by main's copy until it merges. The Workload Identity condition in docs/DEPLOYMENT.md trusts main's copy of this file
+# and of deploy-cloudrun.yml only.
 name: Preview
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, closed]
 permissions:
   contents: read
   pull-requests: write
-  id-token: write   # the OIDC token Workload Identity Federation exchanges; a fork's run gets none
+  id-token: write   # the OIDC token Workload Identity Federation exchanges; a fork's run never reaches a job that asks for it
 concurrency:
   # One run per PR at a time. A new push cancels the deploy it supersedes; the close job never
   # cancels and is never skipped: it queues behind an in-flight deploy and then removes its tag.
@@ -41,29 +52,75 @@ env:
   SERVICE: ${{ vars.CLOUD_RUN_SERVICE || 'corrugator-shift-investigator' }}
   PR: ${{ github.event.pull_request.number }}
   TAG: pr-${{ github.event.pull_request.number }}
-  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+  EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
   GH_TOKEN: ${{ github.token }}
 jobs:
-  deploy:
-    # Same-repository PRs only: a fork gets neither the GCP_SA_KEY secret nor an OIDC token, and must not get a revision.
-    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
+  head:
+    # The pull request as it is now, merged onto main, found before any credential exists. Two events for one
+    # PR can arrive seconds apart (a reopen carries the head GitHub knew at close time, then a synchronize
+    # carries the new one) and the run for the OLDER head can be the one that survives the concurrency group,
+    # so every run reads the live head instead of the event's. GitHub works out the merge with main in the
+    # background after each push; a pull request that conflicts with main has none, and gets no preview (with
+    # pull_request a conflicting PR started no run at all; pull_request_target starts one, which stops here).
+    # Same-repository PRs onto main only, in every job: pull_request_target would hand a fork's run the secrets.
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == github.event.repository.default_branch && vars.GCP_PROJECT_ID != ''
     runs-on: ubuntu-latest
+    permissions:
+      contents: read        # the merge commit's parents
+      pull-requests: read   # the pull request's head and merge
+    outputs:
+      head: ${{ steps.pr.outputs.head }}
+      merge: ${{ steps.pr.outputs.merge }}
     steps:
-      - uses: actions/checkout@v4   # the PR merged onto main (refs/pull/<n>/merge): what would ship
-      - name: Deploy the pull request as it is now, even if this run was queued for an older head
-        # Two events for one PR can arrive seconds apart (a reopen carries the head GitHub knew at close
-        # time, then a synchronize carries the new one) and the run for the OLDER head can be the one
-        # that survives the concurrency group. So every run checks the live head and, when it moved,
-        # fetches the current merge ref; whichever run survives deploys the PR as it stands.
+      - name: Find the pull request's head and its merge onto main, as they are now
+        id: pr
+        # From the GitHub API alone: this job checks out nothing. `mergeable` is null while GitHub works out the
+        # merge; once it is true, merge_commit_sha is the merge of the head shown, which the parent check confirms
+        # (a lookup that fails is not a mismatch: GitHub's word on the merge stands).
         run: |
           set -euo pipefail
-          CURRENT=$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq .head.sha)
-          if [ "$CURRENT" != "$HEAD_SHA" ]; then
-            echo "::notice::the pull request's head moved from ${HEAD_SHA:0:7} to ${CURRENT:0:7} after this run was queued; deploying the current head"
-            git fetch --depth=1 origin "refs/pull/$PR/merge" && git checkout --quiet --detach FETCH_HEAD
-            echo "HEAD_SHA=${CURRENT}" >> "$GITHUB_ENV"
+          HEAD=""; MERGEABLE=""; MERGE=""; MERGED=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            LINE=$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq '[.head.sha, (.mergeable | tostring), (.merge_commit_sha // "")] | @tsv')
+            IFS=$'\t' read -r HEAD MERGEABLE MERGE <<< "$LINE"
+            [ "$MERGEABLE" = "false" ] && break
+            if [ "$MERGEABLE" = "true" ] && [[ "${MERGE:-}" =~ ^[0-9a-f]{40}$ ]]; then
+              MERGED=$(gh api "repos/${{ github.repository }}/commits/$MERGE" --jq '.parents[1].sha // ""' 2>/dev/null || true)
+              { [ -z "$MERGED" ] || [ "$MERGED" = "$HEAD" ]; } && break
+            fi
+            sleep 5
+          done
+          [[ "$HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::GitHub reported no head commit for pull request $PR"; exit 1; }
+          if [ "$HEAD" != "$EVENT_HEAD" ]; then
+            echo "::notice::the pull request's head moved from ${EVENT_HEAD:0:7} to ${HEAD:0:7} after this run was queued; deploying the current head"
           fi
-          git log -1 --format='deploying %h (%s)'
+          if [ "$MERGEABLE" = "true" ] && [[ "${MERGE:-}" =~ ^[0-9a-f]{40}$ ]] && { [ -z "$MERGED" ] || [ "$MERGED" = "$HEAD" ]; }; then
+            echo "head=${HEAD}" >> "$GITHUB_OUTPUT"
+            echo "merge=${MERGE}" >> "$GITHUB_OUTPUT"
+            echo "previewing ${HEAD:0:7} merged onto main as ${MERGE:0:7}"
+          elif [ "$MERGEABLE" = "false" ]; then
+            echo "::notice::pull request $PR conflicts with main, so there is no merge to preview; resolve the conflict and push"
+          else
+            echo "::warning::GitHub had not worked out the merge of pull request $PR's head ${HEAD:0:7} with main after a minute; push again or re-run this workflow for a preview"
+          fi
+  deploy:
+    needs: head
+    # Only with a merge commit to deploy, and for the head job's same-repository PRs onto main only: under
+    # pull_request_target a fork's run would get the GCP_SA_KEY secret and an OIDC token, so it must not reach this job.
+    if: needs.head.outputs.merge != '' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.base.ref == github.event.repository.default_branch && vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    env:
+      HEAD_SHA: ${{ needs.head.outputs.head }}   # the head the merge below carries, as the head job found it
+    steps:
+      - uses: actions/checkout@v4   # main, at the workspace root: the only scripts this job runs (.github/scripts/)
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/checkout@v4   # the pull request merged onto main, in pr/: the source Cloud Build builds, never run here
+        with:
+          ref: ${{ needs.head.outputs.merge }}
+          path: pr
+          persist-credentials: false
       - name: Choose the Google credential (keyless when the WIF variables are set; the stored key until then)
         id: gcp_auth
         # Workload Identity Federation when both repository variables are set. Otherwise the GCP_SA_KEY
@@ -114,7 +171,9 @@ jobs:
           # Through the helper: Cloud Run rejects the write when another run changed the service in
           # the second between gcloud's re-read after the build and its write; a rejected write is
           # run again (a rebuild, about a minute) instead of failing the preview.
-          bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source . --project "$PROJECT_ID" --region "$REGION" \
+          # The upload is the pull request's tree alone: the workspace root, which holds main's checkout and the
+          # credential file the auth step wrote, is not part of it.
+          bash .github/scripts/cloud_run_update.sh gcloud run deploy "$SERVICE" --source pr --project "$PROJECT_ID" --region "$REGION" \
             --no-traffic --tag "$TAG" --revision-suffix "$SUFFIX" \
             --update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}" --quiet
       - name: Smoke-test the preview and check production traffic is unchanged
@@ -182,6 +241,8 @@ jobs:
             fi
           done
   cleanup:
+    # Any same-repository PR's tag is removed, whatever its base is now (a base changed after its preview included);
+    # a fork's run never reaches the credential.
     if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository && vars.GCP_PROJECT_ID != ''
     runs-on: ubuntu-latest
     steps:
@@ -189,7 +250,9 @@ jobs:
         with:
           # The helper script is tooling, not PR content: a branch cut before preview.yml existed
           # has no .github/scripts/, and refs/pull/<n>/merge may not exist for a closed PR. main always has it.
+          # This job checks out nothing of the pull request.
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - name: Choose the Google credential (keyless when the WIF variables are set; the stored key until then)
         id: gcp_auth
         # Workload Identity Federation when both repository variables are set. Otherwise the GCP_SA_KEY

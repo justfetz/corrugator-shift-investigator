@@ -167,7 +167,7 @@ def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
     # Plain text checks, so CI (which installs only `-e . pytest`, no PyYAML) runs them too.
     text = WORKFLOW.read_text()
     assert 'types: [opened, synchronize, reopened, closed]' in text
-    assert text.count('head.repo.full_name == github.repository') == 2, 'both jobs must refuse fork PRs'
+    assert text.count('head.repo.full_name == github.repository') == 3, 'every job must refuse fork PRs (pull_request_target hands a fork the secrets)'
     assert "github.event.action != 'closed'" in text and "github.event.action == 'closed'" in text
     assert '--no-traffic --tag "$TAG" --revision-suffix "$SUFFIX"' in text
     assert '--update-env-vars "^|^PUBLIC_DEMO_ORIGIN=${ORIGINS}"' in text
@@ -180,8 +180,11 @@ def test_workflow_deploys_no_traffic_tagged_revisions_for_same_repo_prs_only():
     assert 'ref: ${{ github.event.repository.default_branch }}' in text, 'cleanup takes the helper script from main, not from a PR head that may predate it (#53)'
     assert 'ref: ${{ github.event.pull_request.head.sha }}' not in text
     assert text.index('Post the URL on the pull request') < text.index('Delete orphaned preview revisions')
-    assert 'git fetch --depth=1 origin "refs/pull/$PR/merge"' in text, 'a run queued for an older head deploys the current one'
-    assert text.index('refs/pull/$PR/merge') < text.index('google-github-actions/auth@v2'), 'the head check comes before any deploy step'
+    # A run queued for an older head deploys the current one: the head job reads the live head and its merge onto main
+    # from the API (issue #133: under pull_request_target the run's own sha is main's), and deploy checks that merge out.
+    assert 'gh api "repos/${{ github.repository }}/pulls/$PR"' in text and 'ref: ${{ needs.head.outputs.merge }}' in text
+    assert 'HEAD_SHA: ${{ needs.head.outputs.head }}' in text and 'needs: head' in text
+    assert text.index('needs.head.outputs.merge') < text.index('google-github-actions/auth@v2'), 'the head check comes before any deploy step'
 
 
 def test_main_deploy_routes_the_traffic_to_the_revision_it_named_not_to_latest():
@@ -305,7 +308,8 @@ def test_every_write_to_the_service_goes_through_the_retry_helper(workflow, writ
 def test_workflow_yaml_parses_when_pyyaml_is_available():
     yaml = pytest.importorskip('yaml')
     wf = yaml.safe_load(WORKFLOW.read_text())
-    assert set(wf['jobs']) == {'deploy', 'cleanup'}
+    assert set(wf['jobs']) == {'head', 'deploy', 'cleanup'}
+    assert wf['jobs']['deploy']['needs'] == 'head'
     assert yaml.safe_load((ROOT / '.github' / 'workflows' / 'deploy-cloudrun.yml').read_text())['jobs']['deploy']
 
 
@@ -337,3 +341,85 @@ def test_the_custom_domain_is_allow_listed_and_survives_a_preview():
     custom = 'https://shift.talktomymachine.ai'
     svc = service_json(env_origins=f'{LEGACY},{DETERMINISTIC},{custom}')
     assert po.base_origins(svc) == [LEGACY, DETERMINISTIC, custom]
+
+
+# --- the head job (issue #133): the live head and its merge onto main, from the API, before any credential ---
+
+HEAD_A, HEAD_B, MERGE_A, MERGE_B = 'a' * 40, 'b' * 40, 'c' * 40, 'd' * 40
+GH_STUB = """#!/usr/bin/env python3
+import json, os, sys
+state = json.load(open(os.environ['STUB_STATE']))
+url = sys.argv[2]
+open(os.environ['STUB_LOG'], 'a').write(url + '\\n')
+if url.endswith('/pulls/41'):
+    reply = state['pulls'].pop(0) if len(state['pulls']) > 1 else state['pulls'][0]
+    json.dump(state, open(os.environ['STUB_STATE'], 'w'))
+    print('\\t'.join(reply))
+elif '/commits/' in url:
+    parent = state['parents'].get(url.rsplit('/', 1)[1])
+    if parent is None:
+        sys.stderr.write('gh: Not Found (HTTP 404)\\n'); sys.exit(1)
+    print(parent)
+else:
+    sys.exit(2)
+"""
+
+
+def run_head_job(tmp_path, pulls, parents, event_head=HEAD_A):
+    """The head job's script against a stand-in gh (and a sleep that returns at once); returns (code, log, outputs, calls)."""
+    import workflow_yaml
+    script = workflow_yaml.load(WORKFLOW.read_text())['jobs']['head']['steps'][0]['run']
+    script = script.replace('${{ github.repository }}', 'justfetz/corrugator-shift-investigator')
+    assert '${{' not in script, 'the script reads the event through env, not expressions'
+    stub = tmp_path / 'bin'
+    stub.mkdir(exist_ok=True)
+    (stub / 'gh').write_text(GH_STUB)
+    (stub / 'sleep').write_text('#!/bin/sh\nexit 0\n')
+    for name in ('gh', 'sleep'):
+        (stub / name).chmod(0o755)
+    state, log, output = tmp_path / 'state.json', tmp_path / 'calls.log', tmp_path / 'output'
+    state.write_text(json.dumps({'pulls': pulls, 'parents': parents}))
+    log.write_text('')
+    output.write_text('')
+    env = {**os.environ, 'PATH': f'{stub}:{os.environ["PATH"]}', 'STUB_STATE': str(state), 'STUB_LOG': str(log),
+           'PR': '41', 'EVENT_HEAD': event_head, 'GITHUB_OUTPUT': str(output)}
+    proc = subprocess.run(['bash', '-c', script], env=env, capture_output=True, text=True)
+    return proc.returncode, proc.stdout + proc.stderr, output.read_text(), log.read_text().split()
+
+
+def test_the_head_job_waits_for_githubs_merge_and_names_the_head_it_carries(tmp_path):
+    code, log, output, calls = run_head_job(tmp_path, [[HEAD_A, 'null', ''], [HEAD_A, 'null', ''], [HEAD_A, 'true', MERGE_A]],
+                                            {MERGE_A: HEAD_A})
+    assert code == 0, log
+    assert output == f'head={HEAD_A}\nmerge={MERGE_A}\n'
+    assert calls.count('repos/justfetz/corrugator-shift-investigator/pulls/41') == 3 and '::' not in log
+
+
+def test_the_head_job_deploys_the_live_head_when_the_event_was_for_an_older_one(tmp_path):
+    code, log, output, _ = run_head_job(tmp_path, [[HEAD_B, 'true', MERGE_B]], {MERGE_B: HEAD_B}, event_head=HEAD_A)
+    assert code == 0 and output == f'head={HEAD_B}\nmerge={MERGE_B}\n'
+    assert '::notice::' in log and 'moved from aaaaaaa to bbbbbbb' in log
+
+
+def test_the_head_job_waits_out_a_merge_of_the_previous_head(tmp_path):
+    # GitHub can still show the merge it made of the head before the last push; the parent check waits for the new one.
+    code, log, output, calls = run_head_job(tmp_path, [[HEAD_B, 'true', MERGE_A], [HEAD_B, 'true', MERGE_B]],
+                                            {MERGE_A: HEAD_A, MERGE_B: HEAD_B}, event_head=HEAD_B)
+    assert code == 0 and output == f'head={HEAD_B}\nmerge={MERGE_B}\n', log
+    code, log, output, _ = run_head_job(tmp_path, [[HEAD_B, 'true', MERGE_A]], {MERGE_A: HEAD_A}, event_head=HEAD_B)
+    assert code == 0 and output == '' and '::warning::' in log, 'no merge of this head after a minute: no preview, said so'
+
+
+def test_the_head_job_takes_githubs_word_when_the_merge_commit_cannot_be_read(tmp_path):
+    code, log, output, _ = run_head_job(tmp_path, [[HEAD_A, 'true', MERGE_A]], {})
+    assert code == 0 and output == f'head={HEAD_A}\nmerge={MERGE_A}\n', log
+
+
+def test_a_pull_request_that_conflicts_with_main_gets_no_preview_and_a_notice(tmp_path):
+    code, log, output, calls = run_head_job(tmp_path, [[HEAD_A, 'false', '']], {})
+    assert code == 0 and output == '' and 'conflicts with main' in log and '::notice::' in log
+    assert len(calls) == 1, 'a conflict is final for this head: no waiting'
+    code, log, output, _ = run_head_job(tmp_path, [[HEAD_A, 'null', '']], {})
+    assert code == 0 and output == '' and '::warning::' in log and "had not worked out the merge" in log
+    code, log, output, _ = run_head_job(tmp_path, [['', 'null', '']], {})
+    assert code == 1 and '::error::' in log
