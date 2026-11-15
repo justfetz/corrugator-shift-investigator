@@ -21463,6 +21463,107 @@
     "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. The semantic model keeps stops by shift, crew, grade, flute, paper run, web width, stop kind, stop place and stop reason\\.$"
    },
    "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, from this round's probe: 'glue' names a stop place and a stop reason, so no question offered can keep it, and 2c28fd3's 'which grade had the most stops this week' drops it. None is offered; the refusal says what the model keeps of the stops."
+  },
+  {
+   "id": "semantic-two-windows-before-offers-the-window-asked-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had the most setups last month versus the month before?",
+   "expect": {
+    "raises": "^'last month' and 'versus the month before' are two windows before the selected one: ask one window, or one window against the one just before it\\. Did you mean 'setups last month'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: 2c28fd3 and df63d4c offered 'setups this week versus last week' and 'setups this week', another window. The question offered asks the window the words name; the quantity card answers it with the month before beside it."
+  },
+  {
+   "id": "semantic-split-by-day-of-yesterday-offers-its-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which day had the most side trim yesterday?",
+   "expect": {
+    "raises": "^A split by day needs a window longer than one day\\. Did you mean 'side trim by day last week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: on Monday 2026-09-14, yesterday is Friday 11 Sep; 2c28fd3 and df63d4c offered 'side trim by day this week' (14-18 Sep), a week without the day asked. The week offered holds it."
+  },
+  {
+   "id": "semantic-boards-slowest-incomplete-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "day": "2026-09-30",
+   "question": "Which boards were slowest this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. The semantic model keeps speed by shift, crew, grade, flute, paper run and web width\\.$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: over an incomplete week the grades' speed card opens with '6 grades observed in an incomplete window · their speeds against target, not ranked', never the slowest grade, so 'which grade was the slowest this week' and 'speed by grade this week' are not offered; 2c28fd3 and df63d4c offered both."
+  },
+  {
+   "id": "semantic-which-grade-most-production-days-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade had the most production days last week?",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=production_days&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "production_days",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^.+ the most production days (last|this) week: \\*\\*[0-9]+ days?\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: 'production days' is the measure and the day dimension said as a set; ranked right after 'the most' beside another dimension, it is the days run, never the volume ('production') split by grade and day, as 2c28fd3 and df63d4c read it ('55-C · 2026-09-16 … 1,895.2 MSF')."
+  },
+  {
+   "id": "semantic-downtime-logged-by-operators-offers-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most downtime logged by operators last week?",
+   "expect": {
+    "raises": "^'logged by operators' could mean who logged the stops, which the records do not keep: a stop's kind \\(maintenance or operator\\) is kept\\. Did you mean 'minutes of downtime for operator last week', 'minutes of downtime for maintenance last week' or 'minutes of downtime by kind last week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: the question named the downtime; 2c28fd3 and df63d4c offered the operator and maintenance stops. The questions offered name the measure asked, by kind."
+  },
+  {
+   "id": "semantic-than-keeps-the-other-filters-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had more stops at the stacker than 26-C this week?",
+   "expect": {
+    "raises": "^'than' compares with another value, excludes one or names a threshold, which the semantic model does not read: ask the split, or two values compared\\. Did you mean 'stops at the stacker this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: 2c28fd3 and df63d4c offered 'stops this week', every stop; only the value compared after 'than' is no filter, the stacker stays."
+  },
+  {
+   "id": "semantic-ambiguous-value-keeps-the-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had the most glue stops on shift 3 last week?",
+   "expect": {
+    "raises": "^'glue' is a place and a reason: say which\\. Did you mean 'stops on shift 3 at the Glue dams last week' or 'stops on shift 3 for Glue / starch last week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: 2c28fd3 and df63d4c offered each reading of 'glue' over every shift. Each keeps the shift named and every other value said."
+  },
+  {
+   "id": "semantic-which-boards-most-volume-per-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most volume per production day this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most volume per production day this week' or 'volume per production day by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's check of df63d4c: 2c28fd3 and df63d4c offered the grades' MSF, not the MSF per production day asked."
   }
  ]
 }
