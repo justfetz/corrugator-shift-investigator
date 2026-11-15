@@ -520,15 +520,29 @@ def workflow_events(workflow):
 # (`toJSON(secrets)`, `secrets[matrix.name]`) and `secrets: inherit` all count, and a new secret counts until it is
 # classified here.
 OTHER_SECRETS = {'GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'HF_TOKEN'}
-EXPRESSION = re.compile(r'\$\{\{.*?\}\}', re.S)
 NAMED_SECRET = re.compile(r'\bsecrets\s*(?:\.\s*(\w+)|\[\s*[\'"](\w+)[\'"]\s*\])', re.I)
+
+
+def expressions(text):
+    """Each `${{ … }}` in `text`, ended by the first `}}` outside a single-quoted string ('' is a quote inside one)."""
+    found, start = [], text.find('${{')
+    while start != -1:
+        i, quoted = start + 3, False
+        while i < len(text) and (quoted or not text.startswith('}}', i)):
+            quoted = (not quoted) if text[i] == "'" else quoted
+            i += 1
+        found.append(text[start:i + 2])
+        start = text.find('${{', i + 2)
+    return found
 
 
 def reads_google_secret(text):
     """Whether any `${{ }}` expression in `text` reads a secret other than OTHER_SECRETS, or the whole context."""
-    for expression in EXPRESSION.findall(text):
-        rest = NAMED_SECRET.sub(lambda m: ' ' if (m.group(1) or m.group(2)).upper() in OTHER_SECRETS else ' GOOGLE ', expression)
-        if 'GOOGLE' in rest or re.search(r'\bsecrets\b', rest, re.I):
+    for expression in expressions(text):
+        other = []
+        rest = NAMED_SECRET.sub(lambda m: ' ' if (m.group(1) or m.group(2)).upper() in OTHER_SECRETS else other.append(m) or ' ',
+                                expression)
+        if other or re.search(r'\bsecrets\b', rest, re.I):
             return True
     return False
 
@@ -602,18 +616,20 @@ def uploads(script, workdir):
             for match in re.finditer(r'\bgcloud\b', command_text):
                 tokens = [token.strip('"\'') for token in command_text[match.end():].split()]
                 words, i = [], 0
-                while i < len(tokens):   # the command path: skip global flags (and a value after one), alpha and beta
+                # The command path: its words, with flags (and a value after one) and alpha/beta skipped wherever they
+                # sit, until the words make an upload command; a word that cannot continue one ends the walk.
+                while i < len(tokens) and tuple(words) not in UPLOAD_COMMANDS:
                     token = tokens[i]
-                    if token.startswith('-') and words:
-                        break   # the command's own flags start here
                     if token.startswith('-'):
                         i += 2 if '=' not in token and i + 1 < len(tokens) and not tokens[i + 1].startswith('-') \
                             and tokens[i + 1] not in COMMAND_WORDS else 1
                         continue
-                    if token not in COMMAND_WORDS:
+                    if token in ('alpha', 'beta') and not words:
+                        i += 1
+                        continue
+                    if not any(command[:len(words) + 1] == (*words, token) for command in UPLOAD_COMMANDS):
                         break
-                    if token not in ('alpha', 'beta'):
-                        words.append(token)
+                    words.append(token)
                     i += 1
                 kind, rest = UPLOAD_COMMANDS.get(tuple(words)), tokens[i:]
                 if kind == 'flag':
@@ -831,6 +847,10 @@ jobs:
     ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud --quiet builds submit .\n          echo --tag'),
     ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud app deploy --version v2\n          echo --tag'),
     ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud deploy releases create r --delivery-pipeline=p\n          echo --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud run deploy app --source .\n          echo --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud run --project=x deploy svc --source .\n          echo --tag'),
+    ('      - uses: google-github-actions/auth@v2\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n',
+     "      - run: python3 pr/x.py\n        env:\n          ALL: ${{ format('}}', toJSON(secrets)) }}\n"),
 ])
 def test_the_exposure_check_finds_each_way_in(change, finding):
     """The check is not vacuous: each edit of a safe job is found, and the safe job passes."""
@@ -838,6 +858,19 @@ def test_the_exposure_check_finds_each_way_in(change, finding):
     assert change is None or text != SAFE, change
     problems = credential_exposures(workflow_yaml.load(text))
     assert bool(problems) == (change is not None), problems
+
+
+def test_the_upload_and_secret_readers_on_their_edges():
+    for line, expect in [('gcloud run deploy app --source .', ['.']), ('gcloud run deploy create --source .', ['.']),
+                         ('gcloud functions deploy submit --source .', ['.']), ('gcloud builds submit app', ['app']),
+                         ('gcloud run --project=x deploy svc --source .', ['.']), ('gcloud run --project x deploy svc', ['.']),
+                         ('gcloud beta run jobs deploy j', ['.']), ('gcloud run deploy s --image x', []),
+                         ('gcloud run services update s --image x', []), ('gcloud run revisions delete app --quiet', []),
+                         ('gcloud app deploy --version v2', ['?']), ('gcloud app deploy --version=v2', ['.'])]:
+        assert uploads(line, '.') == expect, line
+    assert not reads_google_secret("${{ vars.GOOGLE_PROJECT }} ${{ secrets.HF_TOKEN }} ${{ secrets['anthropic_api_key'] }}")
+    assert reads_google_secret("${{ format('}}', toJSON(secrets)) }}") and reads_google_secret('${{ secrets.Gcp_Sa_Key }}')
+    assert reads_google_secret("${{ format('{0}', secrets[matrix.name]) }}") and reads_google_secret('${{ secrets.GCP_TOKEN }}')
 
 
 def test_a_job_that_hands_the_secrets_to_a_reusable_workflow_is_refused():
@@ -895,7 +928,7 @@ def test_the_documented_pool_condition_trusts_mains_two_deploy_workflows_and_not
     assert re.search(r'gcloud iam workload-identity-pools providers update-oidc github-oidc .*\n.*--attribute-condition "\$CONDITION"', text)
     assert re.search(r'providers create-oidc github-oidc [^`]*--attribute-condition "\$CONDITION"', text)
     assert "--attribute-condition \"assertion.repository == " not in text
-    assert 'applies once the keyless cutover (#28, below) is live' in text
+    assert 'Apply the condition as soon as the provider exists, whichever credential the workflows still use.' in text
     workflows = all_workflows()
     named = {ref.split('@')[0].rsplit('/', 1)[1] for ref in refs}
     authenticating = {file for file, wf in workflows.items()
