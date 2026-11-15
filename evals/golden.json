@@ -21303,6 +21303,136 @@
     "raises": "^Dry-end rejects is not recorded by stop kind, so 'crew' cannot narrow it"
    },
    "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's re-check of 47a3f54: 47a3f54 gave _modifier's reason 'beside the reasons split ... ask that split', but the dry-end rejects are not recorded by stop reason. The modifier's reason needs every other split to be one the measure is recorded by; this keeps 97b81f4's refusal, as semantic-crew-rejects-by-reason-refused does."
+  },
+  {
+   "id": "semantic-which-boards-most-days-run-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most days run this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most days run this week' or 'days run by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 2: 2c28fd3 offered 'which grade had the most production days this week', which reads 'production' as the volume and 'days' as a split, and answered '55-C · 2026-09-16 … 1,895.2 MSF'. The production days are said 'days run', a word that reads back as them."
+  },
+  {
+   "id": "semantic-which-boards-most-attainment-last-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most attainment last week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most attainment last week' or 'attainment by grade last week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 2: 2c28fd3 offered 'which grade had the most speed against grade target last week', whose 'against … last week' the router reads as no window move, so the grades' speed card answered this week's slowest grade ('Slowest: 275-BC at 443.0 ft/min'). The speed against grade target is said 'attainment'."
+  },
+  {
+   "id": "semantic-order-changes-by-boards-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Order changes by boards yesterday",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'order changes by grade yesterday'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1: 2c28fd3 also offered 'order changes yesterday', which the orders card answers with the day's order fragments ('95 order fragments'), never its 116 order changes. A question offered is kept only when the router answers it as offered."
+  },
+  {
+   "id": "semantic-setup-minutes-by-boards-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Setup minutes by boards yesterday",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'setup minutes by grade yesterday'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1: 2c28fd3 also offered 'setup minutes yesterday', which the day's matrix answers with its setups ('49 dry-end setups'), never the setup clock. A question offered is kept only when the router answers it as offered."
+  },
+  {
+   "id": "semantic-rejected-sheets-by-boards-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Rejected sheets by boards yesterday",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'rejected sheets by grade yesterday'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1: 2c28fd3 also offered 'rejected sheets yesterday', which the shift's rejects card answers with the dry-end percent of yield ('1.01% of yield'), never the rejected sheets. A question offered is kept only when the router answers it as offered."
+  },
+  {
+   "id": "semantic-maintenance-pm-downtime-by-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Maintenance + PM downtime by boards this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'maintenance \\+ pm downtime by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1: 2c28fd3 also offered 'maintenance + pm downtime this week', which the owner's downtime review answers with maintenance and operator downtime (2.90%), never maintenance and planned maintenance (2.83%). A question offered is kept only when the router answers it as offered."
+  },
+  {
+   "id": "semantic-attainment-by-boards-yesterday-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Speed against grade target by boards yesterday",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'attainment by grade yesterday' or 'attainment yesterday'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04): 2c28fd3 offered 'speed against grade target' with no window, a question about the selected day (the router reads 'against … yesterday' as no window move, so the reading had no window words to carry). Each question offered keeps the window the refusal read, and says the measure as 'attainment'."
+  },
+  {
+   "id": "semantic-which-grade-most-days-run",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade had the most days run this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=production_days&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "production_days",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^.+ tied for the most production days this week: \\*\\*[0-9]+ days\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 2: the question the days-run refusal now offers, answered as offered: the production days ranked by grade (they tie). It passes at 2c28fd3 by design; the refusal offered 'production days' there."
+  },
+  {
+   "id": "semantic-which-grade-most-attainment-last-week",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade had the most attainment last week?",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=semantic&m=speed_to_target_pct&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_to_target_pct",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(C|BC|EB) had the highest speed against grade target (last|this) week: \\*\\*[0-9.]+%\\*\\* of target"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 2: the question the attainment refusal now offers, answered as offered over last week. It passes at 2c28fd3 by design; the refusal offered 'speed against grade target … last week' there, which the grades' card answered for this week."
   }
  ]
 }
