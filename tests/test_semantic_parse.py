@@ -1147,7 +1147,9 @@ def test_every_question_a_refusal_offers_is_answered_as_asked(store):
                      'Which boards had the most bale this week?', 'Which boards had the most unexplained waste this week?',
                      'Which boards had the most scheduled minutes this week?', 'Bale by boards this week', 'Which boards had the most shear this week?',
                      'Shear by boards this week', 'Which boards had the most order changes this week?', 'Crew rejects by shift this week',
-                     'Which shift had the most crew rejects this week?', 'Which boards took the most minutes this week?'):
+                     'Which shift had the most crew rejects this week?', 'Which boards took the most minutes this week?',
+                     'Which boards had the most shear cost this week?', 'Which boards had the most order change stops this week?',
+                     'Which boards had the most shear chops, priced this week?'):
         with pytest.raises(ValueError) as refused:
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
         offered = _offered(str(refused.value))

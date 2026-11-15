@@ -639,8 +639,11 @@ def _boards_dimension(reading, items, a):
         ranked = after is not None and (after.kind in ('rank', 'speed_rank') or after.kind == 'group' and after.words == 'by' and a.get('rank'))
         if not (split or ranked):
             continue   # "boards with the most downtime", "top 3 boards by downtime": the boards ranked, as "which boards" ranks them
-        other = next((e[1] for o in items if o is not it and o.kind == 'vocab' for e in _entries(o, 'measure') + o.said if e[1] != 'sheets'),
-                     None)
+        # a measure the reading read first ("which boards had the most order change stops": the stops), else one said as a value
+        # ("which boards had the most shear": the shear); never a dimension's word ("which day had the most boards" counts boards by day)
+        said = [o.said if not _entries(o, 'dimension') else [] for o in items]
+        other = next((e[1] for entries in ([_entries(o, 'measure') for o in items], said) for o, found in zip(items, entries)
+                      if o is not it and o.kind == 'vocab' for e in found if e[1] != 'sheets'), None)
         speed = next((SPEED_RANK[o.words] for o in items if o.kind == 'speed_rank'), None)
         if other is None and speed:
             other = 'speed_run_fpm'
@@ -812,9 +815,11 @@ def _measure_word(mdl, name):
     """How a suggestion says a measure: its first synonym when it has one, else its label."""
     m = mdl.measures[name]
     # the shear is said as "shear", never as "shear chops": a ranking or a comparison of the chops is a count the records do not hold
-    # (UNCOUNTED), so a suggestion naming them would be refused in its turn
+    # (UNCOUNTED), so a suggestion naming them would be refused in its turn; the priced shear is its synonym "shear cost" for the same
+    # reason (this round's probe of the review of PR #155 at 97b81f4: "which grade had the most shear chops, priced" offered itself)
     words = {'downtime_minutes': 'minutes of downtime', 'stops': 'stops', 'setups': 'setups', 'msf': 'MSF', 'reject_sqft': 'dry-end rejects',
-             'speed_run_fpm': 'speed', 'shear_sqft': 'shear', 'running_minutes': 'run minutes', 'elapsed_minutes': 'setup minutes'}
+             'speed_run_fpm': 'speed', 'shear_sqft': 'shear', 'shear_usd': 'shear cost', 'running_minutes': 'run minutes',
+             'elapsed_minutes': 'setup minutes'}
     return words.get(name) or _strip_parens(m['label']).lower()
 
 
