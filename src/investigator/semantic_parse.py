@@ -1173,8 +1173,9 @@ def _assign(reading, items, mdl, store, a, context):
             if measure is None:
                 continue
             dim = next((e[1] for e in _entries(item, 'dimension') if semantic._usable(mdl, measure, e[1], as_filter=False) is None), None)
-            if dim is not None and _modifier(items, i) and any(d != dim and semantic._usable(mdl, measure, d, as_filter=False) is None
-                                                               for d in group_by):
+            beside = [d for d in group_by if d != dim]   # every other split one the measure is recorded by ("crew rejects by reason": none)
+            if dim is not None and _modifier(items, i) and beside and \
+                    all(semantic._usable(mdl, measure, d, as_filter=False) is None for d in beside):
                 # "crew rejects by shift": no value of the word narrows the measure, but the word is also a dimension the measure is
                 # recorded by, said bare before it beside a split of another: _modifier's reason below, never "not recorded by stop
                 # kind" (the coordinator's review of PR #155 at 97b81f4, item 5)
