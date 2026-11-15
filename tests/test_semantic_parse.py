@@ -1237,3 +1237,141 @@ def test_the_modifier_and_the_boards_keep_their_own_reasons_where_they_do_not_ap
     assert 'modifier' not in r.cues and not r.complete, r.refusal
     with pytest.raises(ValueError, match='^The records do not count boards'):
         route('Compare boards at the shear on shift 1 versus shift 2 this week', Context(DAY, 2, scope='shift'), store.production_days, store)
+
+
+# ------------------------------------------------------------------ the questions a refusal offers are answered as offered
+
+def test_the_words_a_suggestion_says_read_back(store):
+    """The production days are offered as "days run", the speed against grade target as "attainment" and the running one as "running
+    attainment": each reads back as its measure over the window asked. "Production days" read as the volume split by day, and "speed
+    against grade target … last week" left the window on this week (the coordinator's review of PR #155 at 2c28fd3, item 2)."""
+    for measure, word in (('production_days', 'days run'), ('speed_to_target_pct', 'attainment'), ('run_speed_to_target_pct', 'running attainment')):
+        assert P._measure_word(S.model(), measure) == word
+        for question, window in ((f'which grade had the most {word} last week', {'period': 'week', 'anchor': '2026-09-07'}),
+                                 (f'{word} by grade this week', WEEK)):
+            r = reading(store, question)
+            assert r.complete and r.query.measure == measure and r.query.window == window, (question, r.refusal, r.query)
+
+
+def test_a_question_offered_is_kept_only_when_the_router_answers_it_as_offered(store):
+    """_answers_as_offered routes a question offered from the refusal's own controls: the semantic query of its measure, split, ranking,
+    filters and window, or a hand route that opens with the measure. "Order changes yesterday" is the orders card's order fragments,
+    "setup minutes yesterday" the day's setups, "rejected sheets yesterday" the dry-end percent of yield, "maintenance + pm downtime this
+    week" the review's maintenance and operator downtime: never offered (the coordinator's review of PR #155 at 2c28fd3, item 1)."""
+    mdl = S.model()
+    for question, dropped, kept in (('Order changes by boards yesterday', 'order changes yesterday', 'order changes by grade yesterday'),
+                                    ('Setup minutes by boards yesterday', 'setup minutes yesterday', 'setup minutes by grade yesterday'),
+                                    ('Rejected sheets by boards yesterday', 'rejected sheets yesterday', 'rejected sheets by grade yesterday'),
+                                    ('Maintenance + PM downtime by boards this week', 'maintenance + pm downtime this week',
+                                     'maintenance + pm downtime by grade this week')):
+        r = reading(store, question, scope='shift')
+        assert [str(s) for s in r.suggestions] == [kept], (question, r.suggestions)
+        assert dropped in [str(s) for s in r.dropped], (question, r.dropped)
+        measure = r.suggestions[0].measure
+        assert not P._answers_as_offered(P._ask(mdl, r, measure), r) and P._answers_as_offered(P._ask(mdl, r, measure, 'grade'), r)
+    # a question offered keeps the values the refusal read, its named shift and its window; with none kept, the model's own reach
+    r = reading(store, 'Which boards had the most operator stops this week?', scope='shift')
+    assert [s.filters for s in r.suggestions] == [{'kind': 'Operator'}] * 2, r.suggestions
+    r = reading(store, 'Speed against grade target by boards yesterday', scope='shift')
+    assert [str(s) for s in r.suggestions] == ['attainment by grade yesterday', 'attainment yesterday'], r.suggestions
+    r = reading(store, 'Which boards had the most glue stops this week?', scope='shift')
+    assert not r.suggestions and r.refusal.endswith('The semantic model keeps stops by shift, crew, grade, flute, paper run, web width, '
+                                                    'stop kind, stop place and stop reason'), r.refusal
+
+
+OFFER_WINDOWS = ('this week', 'last week', 'yesterday', 'this month', 'last month')
+OFFER_PAIRS = (('grade', 'shift'), ('crew', 'shift'), ('wet end', 'grade'), ('shift', 'grade'))
+OFFER_LINES = ('paper', 'splice', 'glue', 'stacker', 'knife', 'warp', 'bond', 'moisture', 'order change', 'slitter', 'double backer', 'splicer',
+               'crew', 'grade', 'roll', 'baler', 'steam', 'jam', 'maintenance')
+
+
+def _offer_phrasings():
+    """The generated set of the coordinator's review of PR #155 at 2c28fd3, item 3: the boards, a dimension said singular beside a split
+    of another, and a line's waste, for every measure's label and the word a question offered says it in, across five windows."""
+    mdl = S.model()
+    words = list(dict.fromkeys(w for name, m in mdl.measures.items() for w in (P._strip_parens(m['label']).lower(), P._measure_word(mdl, name))))
+    boards = ([f'which boards had the most {w}' for w in words] + [f'{w} by boards' for w in words]
+              + ['which boards were fastest', 'which boards were slowest', 'which boards took the most minutes'])
+    singular = [f'which {other} had the most {said} {w}' for w in words for said, other in OFFER_PAIRS] + [f'grade {w} by shift' for w in words]
+    waste = [q for v in OFFER_LINES for q in (f'{v} waste', f'how much {v} waste', f'which shift had the most {v} waste', f'{v} waste by grade')]
+    return [f'{q} {w}' for q in boards + singular + waste for w in OFFER_WINDOWS]
+
+
+_FIGURE = re.compile(r'\*\*[+$]?(-?[\d,]+(?:\.\d+)?)')
+
+
+def _figures(store, request, context, text):
+    """The bold figures of the answer to `request`, in order (the first is the one the answer opens with)."""
+    analysis = store.day_analysis(context.production_day)
+    try:
+        result = Agent(analysis).ask(text, context, request=request)
+    finally:
+        analysis.close()
+    return [float(m[1].replace(',', '')) for line in result['sections'] for m in [_FIGURE.search(line)] if m]
+
+
+def _same(a, b):
+    return abs(a - b) <= max(0.051, abs(b) * 0.001)
+
+
+def _as_offered(store, ask, refusal, controls):
+    """None when the router answers `ask`, asked from the visitor's own controls, as the question it offers; else why not. This check
+    is the test's own: the semantic plan against the question's spec, and a hand route's first figure against the semantic model's
+    first figure for that question (any row's for a split it does not rank; the grades' speed card's slowest grade is its own, issue
+    #75), never the parser's table of the hand routes."""
+    window = ask.window or refusal.window
+    window = {'period': window['period'], 'anchor': window['anchor'] or controls.production_day}
+    filters = refusal.filters if ask.filters is None else ask.filters
+    try:
+        request, asked = route(str(ask), controls, store.production_days, store)
+    except ValueError as exc:
+        return f'refused: {str(exc)[:80]}'
+    bounds = lambda w: S._window_bounds(w)[2:]   # noqa: E731
+    if request['intent'] == 'semantic':
+        args, lead = request['plan'][0]['arguments'], request.get('lead') or {}
+        got = (args['measure'], args['group_by'], lead.get('rank'), args['compare'], args.get('share'), args['filters'], bounds(args['window']))
+        want = (ask.measure, ask.group_by, ask.rank, ask.compare, ask.share, filters, bounds(window))
+        return None if got == want and (not ask.shift or args['shift'] == ask.shift) else f'planned {got}, offered {want}'
+    query = S.validate(S.SemanticQuery(measure=ask.measure, group_by=ask.group_by, filters=filters, window=window, compare=ask.compare,
+                                       order={'most': 'value', 'least': 'value_asc'}.get(ask.rank), shift=ask.shift or (asked.shift if asked.scope == 'shift' else None),
+                                       share=ask.share), store)
+    own = P.request_of(P.Reading(question=str(ask), query=query, rank=ask.rank))
+    hand, semantic = _figures(store, request, asked, str(ask)), _figures(store, own, asked, str(ask))
+    if hand and semantic and _same(hand[0], semantic[0]):
+        return None
+    card = request['intent'] == 'period_speed' and (ask.measure, ask.group_by, ask.rank) == ('speed_run_fpm', ['grade'], 'least')
+    if hand and semantic and (ask.group_by and not ask.rank or card) and any(_same(hand[0], x) for x in semantic[1:]):
+        return None
+    return f"{request['intent']} opens with {hand[:1]}, the semantic model with {semantic[:1]}"
+
+
+def test_every_question_a_generated_refusal_offers_is_answered_as_offered(store):
+    """The class, not the instances (the coordinator's review of PR #155 at 2c28fd3, item 3): every question that any refusal of the
+    generated set offers is one the reading checked, and is answered as offered when a visitor asks it next in the same controls, by
+    this test's own check. 2c28fd3 offered about fifty that answered another measure, another window or a refusal ('which grade had
+    the most production days': the volume; 'order changes yesterday': the order fragments)."""
+    controls = Context(DAY, 2, scope='shift')
+    verdicts, bad, offered_any = {}, [], 0
+    for question in _offer_phrasings():
+        try:
+            route(question, controls, store.production_days, store)
+            continue
+        except ValueError as exc:
+            offered = _offered(str(exc))
+        if not offered:
+            continue
+        offered_any += 1
+        refusal = P.read(question, question_scope(question, controls, store.production_days, store), store)
+        asks = {str(s): s for s in refusal.suggestions}
+        for text in offered:
+            ask = asks.get(text)
+            if ask is None:
+                bad.append((question, text, 'offered without the check'))
+                continue
+            key = (text, ask.measure, tuple(ask.group_by), ask.rank, repr(ask.filters), repr(ask.window), repr(refusal.window), repr(refusal.filters))
+            if key not in verdicts:
+                verdicts[key] = _as_offered(store, ask, refusal, controls)
+            if verdicts[key]:
+                bad.append((question, text, verdicts[key]))
+    assert offered_any > 1000 and len(verdicts) > 500, (offered_any, len(verdicts))
+    assert not bad, bad[:20]
