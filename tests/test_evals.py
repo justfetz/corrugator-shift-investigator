@@ -300,6 +300,14 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                'money-day-shift-lines-add-to-the-headline', 'money-day-shift-lines-add-up-28-sep', 'money-no-yearly-figure-from-one-day',
                'money-day-trim-by-shift-inside-the-band', 'money-ptd-label-names-its-end-day', 'money-period-operator-tile-is-the-ledger',
                'money-kpi-waste-tiles-are-the-ownership-lines'}   # a week's KPI card and its ownership lens, two turns: 136 ms uncontended
+# Nested windows as printed (the coordinator's review of 82c0994 on PR #168): one address a turn, each day of a week or a month,
+# each week of a period, then the window; each turn is a money card of its own with its period to date priced, so a case over
+# 250 ms carries 150 ms a turn, 500 at the least. Measured in-process / over GET on a shared 2-CPU box, three runs: September's
+# 23 day cards 1,352-1,864 / 1,596-2,315 ms; shift 3's 23 shift cards 110-386 / 1,037-1,221; the week of 7 Sep's six
+# 301-499 / 391-529; February's four period-to-date labels 218-407 / 178-378; P2's five weeks 112-189 / 214-275. The shorter
+# nested cases (a day and the next, a day's or a week's shifts, P2's day and period) stay under 250 and carry no budget.
+NESTED_CASES = {'money-week-is-its-days-7-sep', 'money-month-is-its-days-september', 'money-month-shift-3-is-its-shifts-september',
+                'money-period-is-its-weeks-p2', 'money-ptd-label-is-the-last-production-day-february'}
 
 
 def test_heavy_cases_carry_an_explicit_offline_budget(monkeypatch):
@@ -309,8 +317,9 @@ def test_heavy_cases_carry_an_explicit_offline_budget(monkeypatch):
     offline only: the live or replayed run of a live: true case shares its expect and is never timed
     against it. Checked at the product's own budgets: the CI scale (issue #139) is pinned to 1 here."""
     monkeypatch.delenv(golden.LATENCY_SCALE_ENV, raising=False)
-    assert {c['id'] for c in CASES if 'max_ms' in c['expect']} == HEAVY_CASES
+    assert {c['id'] for c in CASES if 'max_ms' in c['expect']} == HEAVY_CASES | NESTED_CASES
     assert all(c['expect']['max_ms'] == 500 for c in CASES if c['id'] in HEAVY_CASES)
+    assert all(c['expect']['max_ms'] == max(500, 150 * len(c['turns'])) for c in CASES if c['id'] in NESTED_CASES)
     assert golden.latency_failures({'max_ms': 500}, None, 499.4) == []
     assert golden.latency_failures({'max_ms': 500}, None, 500.6) == ['501 ms, budget 500 ms']
     assert golden.latency_failures({}, None, 250.6) == ['251 ms, budget 250 ms']

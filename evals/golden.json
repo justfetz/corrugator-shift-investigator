@@ -8366,6 +8366,381 @@
    }
   },
   {
+   "id": "money-formula-line-prints-the-bold-figure",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-07-13",
+   "url": "/corr/1/day/2026-07-13/shift/2?measure=dollars",
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 1: on 13 Jul shift 2 the card printed \"Side trim over the 3% target: **$512**\" while its formula line ended \"= $513\", each rounding the same $512.52 its own way (193 of 635 cards at the post's rates). The formula states the row's cents, and where the figure the card prints is not their nearest dollar it says so: \"It prints $N (whole dollars that add up).\" The invariant formula_failures holds every formula line to its row and to the line citing it.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-13/shift/2?measure=dollars",
+    "status": "complete",
+    "sections_match": [
+     "^How a dollar is priced, for Side trim over the 3% target: 9,318\\.6 sq ft = 9\\.319 MSF x \\$55/MSF paper = \\$512\\.52; contribution: margin not set\\.( It prints \\$[0-9,]+ \\(whole dollars that add up\\)\\.)?$"
+    ],
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-formula-line-prints-the-bold-figure-ownership",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-07-01",
+   "url": "/corr/1/day/2026-07-01?measure=money&lens=ownership",
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 1: 1 Jul's ownership card printed \"Side trim costs **$13,150**\" over a formula ending \"= $13,151\". The formula is in cents ($13,150.85) and says what the line prints when that is not their nearest dollar.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-01?measure=money&lens=ownership",
+    "status": "complete",
+    "sections_match": [
+     "^How a dollar is priced, for Side trim \\(all recorded\\): 239,106\\.4 sq ft = 239\\.106 MSF x \\$55/MSF paper = \\$13,150\\.85; contribution: margin not set\\.( It prints \\$[0-9,]+ \\(whole dollars that add up\\)\\.)?$"
+    ],
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-week-is-its-days-7-sep",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2026-09-07?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-07?measure=dollars",
+    "/corr/1/day/2026-09-08?measure=dollars",
+    "/corr/1/day/2026-09-09?measure=dollars",
+    "/corr/1/day/2026-09-10?measure=dollars",
+    "/corr/1/day/2026-09-11?measure=dollars",
+    "/corr/1/week/2026-09-07?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: the five day cards of the week of 7 Sep printed $2,968 + $3,148 + $1,997 + $2,276 + $2,157 = $12,546 and the week card $12,547, each window rounding from its own root. The cell, one shift of one production day, is the whole-dollar root: every day and window prints its cells' whole dollars added up. The Friday card and the week read their yearly figure from the same period to date, so they state the same one.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the days of the week of 7 Sep and the week",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     },
+     {
+      "check": "same_figure",
+      "why": "the yearly figure of P2 to date through Fri 11 Sep on the day card and the week",
+      "figures": [
+       {
+        "turn": 4,
+        "match": "^\\*\\*.* · \\$([0-9,]+) a year at this period's rate"
+       },
+       {
+        "turn": 5,
+        "match": "^\\*\\*.* · \\$([0-9,]+) a year at this period's rate"
+       }
+      ]
+     }
+    ],
+    "max_ms": 900
+   }
+  },
+  {
+   "id": "money-month-is-its-days-september",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-01?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-01?measure=dollars",
+    "/corr/1/day/2026-09-02?measure=dollars",
+    "/corr/1/day/2026-09-03?measure=dollars",
+    "/corr/1/day/2026-09-04?measure=dollars",
+    "/corr/1/day/2026-09-07?measure=dollars",
+    "/corr/1/day/2026-09-08?measure=dollars",
+    "/corr/1/day/2026-09-09?measure=dollars",
+    "/corr/1/day/2026-09-10?measure=dollars",
+    "/corr/1/day/2026-09-11?measure=dollars",
+    "/corr/1/day/2026-09-14?measure=dollars",
+    "/corr/1/day/2026-09-15?measure=dollars",
+    "/corr/1/day/2026-09-16?measure=dollars",
+    "/corr/1/day/2026-09-17?measure=dollars",
+    "/corr/1/day/2026-09-18?measure=dollars",
+    "/corr/1/day/2026-09-21?measure=dollars",
+    "/corr/1/day/2026-09-22?measure=dollars",
+    "/corr/1/day/2026-09-23?measure=dollars",
+    "/corr/1/day/2026-09-24?measure=dollars",
+    "/corr/1/day/2026-09-25?measure=dollars",
+    "/corr/1/day/2026-09-28?measure=dollars",
+    "/corr/1/day/2026-09-29?measure=dollars",
+    "/corr/1/day/2026-09-30?measure=dollars",
+    "/corr/1/month/2026-09-01?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: September's 22 day cards printed $66,790 in all and the month card $66,792. The month is its cells' whole dollars added up, so it is its days'.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-01?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "September's days and the month",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     }
+    ],
+    "max_ms": 3450
+   }
+  },
+  {
+   "id": "money-month-shift-3-is-its-shifts-september",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-01/shift/3?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-01/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-02/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-03/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-04/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-07/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-08/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-09/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-10/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-11/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-14/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-15/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-16/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-17/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-18/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-21/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-22/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-23/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-24/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-25/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-28/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-29/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-30/shift/3?measure=dollars",
+    "/corr/1/month/2026-09-01/shift/3?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: September shift 3's 22 shift cards printed $22,935 in all and its month card $22,939.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-01/shift/3?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "September shift 3's shifts and its month",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     }
+    ],
+    "max_ms": 3450
+   }
+  },
+  {
+   "id": "money-period-is-its-weeks-p2",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/period/2026-09-14?measure=money",
+   "turns": [
+    "/corr/1/week/2026-08-31?measure=money",
+    "/corr/1/week/2026-09-07?measure=money",
+    "/corr/1/week/2026-09-14?measure=money",
+    "/corr/1/week/2026-09-21?measure=money",
+    "/corr/1/period/2026-09-14?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: 4-4-5 P2 is the four weeks of 31 Aug to 25 Sep; its card prints their whole dollars added up.",
+   "expect": {
+    "url": "/corr/1/period/2026-09-14?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the weeks of P2 and the period",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     }
+    ],
+    "max_ms": 750
+   }
+  },
+  {
+   "id": "money-ptd-is-the-day-before-and-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/day/2026-09-14?measure=dollars",
+   "turns": [
+    "/corr/1/day/2026-09-11?measure=dollars",
+    "/corr/1/day/2026-09-14?measure=dollars"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: the day cards' \"part of $X above standard in … to date\" chain broke on 17 of 66 steps: the period to date through one day and the next day did not add to the period to date through the next: Fri 11 Sep's $28,569 and Mon 14 Sep's $2,148 made $28,569 + $2,148 = $30,717 against the $30,716 the Monday card printed for P2 to date. Each is its cells' whole dollars added up, so they do.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "P2 to date through Fri 11 Sep, then Mon 14 Sep, and P2 to date through Mon 14 Sep",
+      "parts": [
+       {
+        "turn": 0,
+        "match": " · part of \\$([0-9,]+) above standard in "
+       },
+       {
+        "turn": 1,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+       }
+      ],
+      "total": {
+       "turn": 1,
+       "match": " · part of \\$([0-9,]+) above standard in "
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-ownership-shifts-add-to-the-day-1-jan-2025",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2025-01-01",
+   "url": "/corr/1/day/2025-01-01?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/day/2025-01-01/shift/1?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-01/shift/2?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-01/shift/3?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-01?measure=money&lens=ownership"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 3: on 1 Jan 2025 the ownership lens's shifts printed $7,476 + $7,473 + $7,591 = $22,540 of waste and the day $22,541: planning / admin, the bale, the unexplained remainder and the dry-end kinds were rounded per window, outside the ledger. Every line is its cells' whole dollars now.",
+   "expect": {
+    "url": "/corr/1/day/2025-01-01?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "all the waste of 1 Jan 2025 by shift and for the day",
+      "match": "^- All the waste recorded: \\*\\*\\$([0-9,]+)\\*\\*"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the tag scrap of 1 Jan 2025 by shift and for the day",
+      "match": "^- (?:\\d+\\. )?Dry-end waste \\(tag scrap\\), the \\d+ kinds below: \\*\\*\\$([0-9,]+)\\*\\*"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-warp-tile-shifts-add-to-the-week-13-jan-2025",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2025-01-13",
+   "url": "/corr/1/week/2025-01-13?measure=kpis",
+   "turns": [
+    "/corr/1/week/2025-01-13/shift/1?measure=kpis",
+    "/corr/1/week/2025-01-13/shift/2?measure=kpis",
+    "/corr/1/week/2025-01-13/shift/3?measure=kpis",
+    "/corr/1/week/2025-01-13?measure=kpis"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 3: the week of 13 Jan 2025's warp tile printed $7,404, its three shifts' $2,403 + $2,562 + $2,438 = $7,403 (the moisture, bale and unexplained tiles a dollar off too). A tile is its cells' whole dollars added up.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-13?measure=kpis",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the warp tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "warp_pct"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the moisture tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "moisture_pct"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the bale tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "bale_pct"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the unexplained tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "unexplained_pct"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-ptd-label-is-the-last-production-day-february",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-02-27",
+   "url": "/corr/1/period/2026-02-02?measure=money",
+   "turns": [
+    "/corr/1/day/2026-02-27?measure=dollars",
+    "/corr/1/week/2026-02-23?measure=money",
+    "/corr/1/month/2026-02-02?measure=money",
+    "/corr/1/period/2026-02-02?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 4: one period to date, P7 of the prior year through its last production day, was labelled \"through Fri 27 Feb\" on the day and the week, \"through Sat 28 Feb\" on the month and \"through Sun 1 Mar\" on the period: a window's calendar end. The label names the last production day on or before it.",
+   "expect": {
+    "url": "/corr/1/period/2026-02-02?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_words",
+      "why": "the period to date of February 2026",
+      "match": "(4-4-5 P7 of the prior year to date through [A-Z][a-z]{2} \\d+ [A-Z][a-z]{2})"
+     }
+    ],
+    "sections_match": [
+     "from 4-4-5 P7 of the prior year to date through Fri 27 Feb, "
+    ],
+    "max_ms": 600
+   }
+  },
+  {
+   "id": "money-ptd-label-is-the-last-production-day-p2",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/period/2026-09-14?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-25?measure=dollars",
+    "/corr/1/period/2026-09-14?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 4: P2 to date was \"through Fri 25 Sep\" on the day card and \"through Sun 27 Sep\" on the period card.",
+   "expect": {
+    "url": "/corr/1/period/2026-09-14?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_words",
+      "why": "P2 to date",
+      "match": "(4-4-5 P2 to date through [A-Z][a-z]{2} \\d+ [A-Z][a-z]{2})"
+     },
+     {
+      "check": "yearly_from_period_to_date",
+      "tool": "get_opportunities"
+     }
+    ],
+    "sections_match": [
+     "from 4-4-5 P2 to date through Fri 25 Sep, 20 production days \\(query 1\\)$"
+    ]
+   }
+  },
+  {
    "id": "week-downtime-by-reason-is-the-review",
    "type": "routing",
    "mode": "offline",

@@ -1185,6 +1185,7 @@ def invariants(mode, result, analysis, allowed_shifts, tools=TOOL_NAMES):
     if bad:
         failures.append('numbers not from tool output: ' + '; '.join(bad[:3]))
     failures.extend(displayed_sum_failures(result))   # the owner's rule on PR #168: the printed parts add to the printed total
+    failures.extend(formula_failures(result))   # the formula line states its row's cents and the figure the row prints
     bad = unprovenanced(result['sections'], trace)
     if bad:
         failures.append('figures not from their cited row: ' + '; '.join(bad[:3]))
@@ -1576,6 +1577,70 @@ def displayed_sum_failures(result):
     return bad
 
 
+# ---- the formula line agrees with the figure it prices (the coordinator's review of 82c0994 on PR #168, item 1): "How a
+# dollar is priced, for <row>: <the row's usd_basis>." states the row's own total in cents, and where the figure the card
+# prints for the row is not that total's nearest dollar, the line says so: "It prints $512 (whole dollars that add up)."
+FORMULA_LEAD = 'How a dollar is priced, for '
+_FORMULA_PRINTS = re.compile(r' It prints \$([\d,]+) \(whole dollars that add up\)\.$')
+_FORMULA_TOTAL = re.compile(r'= \$([\d,]+\.\d\d)(?: at standard)?(?=;|$)')
+
+
+def _nearest_dollar(usd):
+    """cost_model.nearest_dollar of a figure's cents (a tie to the even dollar), restated so the check is its own."""
+    dollars, rest = divmod(int(round(usd * 100)), 100)
+    return dollars + (1 if rest > 50 or (rest == 50 and dollars % 2) else 0)
+
+
+def formula_failures(result):
+    """Every formula line of an answer: its row's total in cents is the formula's last figure, and the line says what the row
+    prints when that differs from the cents' nearest dollar (and only then); on a money ledger card, the line citing the row
+    prints that same figure in bold."""
+    bad, trace, sections = [], result.get('trace') or [], result.get('sections') or []
+    for line in sections:
+        if not line.startswith(FORMULA_LEAD):
+            continue
+        # a row's formula, or a result's total's (the semantic model prices its totals: "for the total: …")
+        found = [(i, j, r) for i, s in enumerate(trace) if s['ok'] and s['tool'] != 'render_chart'
+                 for j, r in [*enumerate(s['data'].get('rows') or []), *((None, x) for x in s['data'].get('totals') or [])]
+                 if isinstance(r, dict) and r.get('usd_basis') and f': {r["usd_basis"]}.' in line]
+        if not found:
+            bad.append(f'formula: no priced row holds the formula {line[:80]!r}')
+            continue
+        step, index, row = found[0]
+        totals = _FORMULA_TOTAL.findall(row['usd_basis'])
+        if row.get('usd') is not None and (not totals or totals[-1] != f'{row["usd"]:,.2f}'):
+            bad.append(f'formula: the line for {line[len(FORMULA_LEAD):][:40]!r} states {totals[-1:] or "no total"} in cents, '
+                       f'its row is ${row["usd"]:,.2f}')
+        prints = _FORMULA_PRINTS.search(line)
+        shown = row.get('usd_shown')
+        differs = shown is not None and row.get('usd') is not None and shown != _nearest_dollar(row['usd'])
+        if differs and (prints is None or _whole(prints.group(1)) != shown):
+            bad.append(f'formula: the row prints ${shown:,}, its formula ${row["usd"]:,.2f}, and the line says '
+                       f'{prints.group(0).strip() if prints else "nothing"} of it')
+        if not differs and prints is not None:
+            bad.append(f'formula: the line says {prints.group(0).strip()!r}, but its row prints its cents\' nearest dollar')
+        if trace[step]['tool'] in MONEY_LEDGER_TOOLS:
+            # the line that cites the row prints the same figure: the bold figure and the formula never disagree on one card
+            want = shown if shown is not None else _nearest_dollar(row['usd'] or 0)
+            cite = f'(query {step + 1} · row {index})'
+            for other in sections:
+                figure = re.search(_FIG, other) if other.endswith(cite) else None
+                if figure and _whole(figure.group(1)) != want:
+                    bad.append(f'formula: the line citing row {index} prints ${_whole(figure.group(1)):,}, its formula line ${want:,}')
+    return bad
+
+
+def _turn_figure(result, spec):
+    """One turn's figure for `turns_add_up`: the first $ group the pattern `match` finds on the turn's lines, or the KPI tile
+    `tile` as the card prints it (get_period_kpis `tile_money`'s `usd_shown`). None when the turn holds neither."""
+    if 'tile' in spec:
+        tiles = [t for s in _money_steps(result, 'get_period_kpis') for t in s['data'].get('tile_money', [])
+                 if spec['tile'] in (t.get('metrics') or [t['metric']])]
+        return tiles[0].get('usd_shown') if tiles else None
+    found = next((m for m in (re.search(spec['match'], s) for s in result.get('sections') or []) if m), None)
+    return _whole(next(g for g in found.groups() if g is not None)) if found else None
+
+
 def _money_steps(result, tool):
     return [s for s in result['trace'] if s['ok'] and s['tool'] == tool]
 
@@ -1601,7 +1666,14 @@ def money_failures(expect, results):
       both; each `match` is a pattern whose groups are $ figures, added up (a lever and its line at standard: all
       recorded), on the first line it matches, or with `each` on every line (a breakdown's parts against their line).
     - `tile_agrees` {metric, lever_match}: turn 1's KPI tile (get_period_kpis `tile_money`, as the card prints it) is the
-      last turn's ledger lines that `lever_match` picks, as printed, added up (the review of PR #168, item 9)."""
+      last turn's ledger lines that `lever_match` picks, as printed, added up (the review of PR #168, item 9).
+    - `turns_add_up` {match | tile, parts?, total?, why}: nested windows add up as printed: the figure each turn but the last
+      prints (the first $ group of `match`, or the KPI tile `tile`), added up, is the last turn's (the review of 82c0994,
+      items 2 and 3: the days of a week, a month or a period to date; the shifts of a day; a period to date and the next day).
+    - `same_words` {match, why}: the pattern's first group reads the same words on every turn (item 4: one period to date,
+      one label, whichever card states it).
+    - `yearly_from_period_to_date` also reads the period to date's printed whole dollars: its levers' `usd_shown` add to its
+      `ptd_usd_shown`, and each lever's yearly figure is its printed dollars per production day x the post's days a year."""
     failures = []
     for check in expect.get('money_checks', []):
         kind, last = check['check'], results[-1]
@@ -1644,7 +1716,14 @@ def money_failures(expect, results):
                 if not ptd or not data.get('ptd_days') or not data.get('ptd_label'):
                     failures.append(f'money: {check["tool"]} names no period to date for its yearly figure')
                     continue
-                by_hand = sum(round(r['usd'] / data['ptd_days'] * POST_DAYS_PER_YEAR) for r in ptd)
+                # the yearly base is the period to date's whole dollars, each lever its cells' whole dollars added up (the
+                # coordinator's review of 82c0994, item 2): the levers' printed dollars add to the printed period to date
+                if any(r.get('usd_shown') is None for r in ptd):
+                    failures.append(f'money: {check["tool"]}\'s period to date prints no whole dollars per lever to read a year from')
+                    continue
+                if sum(r['usd_shown'] for r in ptd) != data.get('ptd_usd_shown'):
+                    failures.append(f'money: the period to date\'s levers print {[r["usd_shown"] for r in ptd]}, its total {data.get("ptd_usd_shown")}')
+                by_hand = sum(round(r['usd_shown'] / data['ptd_days'] * POST_DAYS_PER_YEAR) for r in ptd)
                 if data.get('ptd_usd_per_year') != by_hand:
                     failures.append(f'money: the period to date a year is {data.get("ptd_usd_per_year")}, by hand {by_hand}')
                 stated = [data.get('total_usd_per_year'), data.get('controllable_usd_per_year')]
@@ -1701,6 +1780,26 @@ def money_failures(expect, results):
             if printed is None or not parts or printed != sum(parts):
                 failures.append(f'money: the {check["metric"]} tile prints {printed and f"${printed:,}"}, the ledger\'s lines '
                                 f'{" + ".join(f"${p:,}" for p in parts) or "none"} = ${sum(parts):,}')
+        elif kind == 'turns_add_up':
+            # nested windows (the coordinator's review of 82c0994, item 2): the figure each of the first turns prints adds up to
+            # the figure the last turn prints: the days of a week, a month or a period to date, the shifts of a day or a
+            # week, as printed. `parts` names each part's turn and pattern; else `match` (or `tile`) reads every turn but
+            # the last, and `total` (default: the same pattern) the last.
+            specs = check.get('parts') or [{'turn': i, **({'tile': check['tile']} if 'tile' in check else {'match': check['match']})}
+                                           for i in range(len(results) - 1)]
+            total_spec = check.get('total') or {'turn': len(results) - 1, **({'tile': check['tile']} if 'tile' in check else {'match': check['match']})}
+            parts = [_turn_figure(results[s['turn']], s) if s['turn'] < len(results) else None for s in specs]
+            total = _turn_figure(results[total_spec['turn']], total_spec) if total_spec['turn'] < len(results) else None
+            if None in parts or total is None or sum(parts) != total:
+                failures.append(f'money: {check.get("why", "the parts")}: '
+                                f'{" + ".join("missing" if p is None else f"${p:,}" for p in parts)} = '
+                                f'{"?" if None in parts else f"${sum(parts):,}"}, printed {"missing" if total is None else f"${total:,}"}')
+        elif kind == 'same_words':
+            # one label in every view (the coordinator's review of 82c0994, item 4): the first group the pattern finds on each
+            # turn's lines is the same words in all of them
+            seen = [next((m.group(1) for m in (re.search(check['match'], s) for s in r.get('sections') or []) if m), None) for r in results]
+            if None in seen or len(set(seen)) != 1:
+                failures.append(f'money: {check.get("why", "one label")} reads {seen} in its views')
         else:
             failures.append(f'money: unknown check {kind!r}')
     return failures
