@@ -113,8 +113,8 @@ TOP_N = r"\b(top|bottom)\s+(\d{1,2}|" + '|'.join(agent.WORD_NUMBERS) + r")\b"
 SHIFTS_ALL = r"\b((across|on|for|over|in)\s+)?all\s+(the\s+|three\s+)*shifts\b|\bshifts\s+(together|combined)\b|\bevery\s+shift\s+together\b"
 # ... never "the shift with the most", which ranks the shifts (this round's probe: "the shift with the most board rejects" read as the
 # selected shift's grades ranked)
-THIS_SHIFT = (r"\b(this|that|my|our|the)\s+shift\b(?!\s+(?:with|that\s+(?:had|has)|which\s+(?:had|has))\s+(?:the\s+)?"
-              r"(?:most|fewest|least|highest|lowest|biggest|smallest|largest|more|less|top)\b)")
+THIS_SHIFT = (r"\b(?:(this|that|my|our)\s+shift\b|(the)\s+shift\b(?!\s+(?:with|that\s+(?:had|has)|which\s+(?:had|has))\s+(?:the\s+)?"
+              r"(?:most|fewest|least|highest|lowest|biggest|smallest|largest|more|less|top)\b))")
 PER_DAY = r"\bper\s+(production\s+)?day\b|\ba\s+day\b"
 LOGGED_VERB = r"\b(logged|recorded|entered|reported|noted|written)\b"   # who logged a stop, said as a verb (agent.KIND_LOGGED)
 # the window before, beside the asked one: "versus last week", "than the week before", "compare ... to last week"
@@ -369,7 +369,9 @@ def _read(reading, text, context, store, mdl):
     lower = re.sub(r"(\d),(\d{3})\b", r"\1\2", lower)   # "1,000 feet"
     # "how much paper did we waste", "what shear do we waste": "waste" said as the verb of what is wasted is "paper waste", "shear
     # waste" (the coordinator's review of PR #155 at 7b46463, item 2); "how much did we waste" stays every line
-    lower = re.sub(r"\b(?:did|do|does)\s+(?:we|you|they|i)\s+waste\b", ' waste', lower)
+    lower = re.sub(r"\b(?:did|do|does)\s+(?:we|you|they|i)\s+waste\b|\b(?:we|you|they|i)\s+wasted\b|\b(?:was|were|got|get|been)\s+wasted\b",
+                   ' waste', lower)
+    lower = re.sub(r"\b(?:did|do|does)\s+(shift\s*[1-3]|crew\s+[a-c])\s+waste\b", r' waste on \1', lower)   # "how much paper did shift 1 waste"
     used = reading.used
     # a request said around the question ("could you tell me", "I want to know", "can I see", "did we have to", "rack up"): the hand
     # router's own phrases, consumed as it consumes them. "Can", "need", "want", "to" and "up" are not function words (issue #153), so
@@ -631,7 +633,7 @@ def _boards_dimension(reading, items, a):
             continue
         prev = _prev(items, k)
         after = next((o for o in items[k + 1:] if not (o.kind == 'filler' and o.words in ARTICLES + ('with', 'that', 'had', 'has'))), None)
-        split = prev is not None and (prev.kind == 'which' or prev.words == 'what' or prev.kind == 'group' and prev.words in SPLIT_WORDS)
+        split = prev is not None and (prev.kind in ('which', 'compare') or prev.words == 'what' or prev.kind == 'group' and prev.words in SPLIT_WORDS)
         ranked = after is not None and (after.kind in ('rank', 'speed_rank') or after.kind == 'group' and after.words == 'by' and a.get('rank'))
         if not (split or ranked):
             continue   # "boards with the most downtime", "top 3 boards by downtime": the boards ranked, as "which boards" ranks them
@@ -639,13 +641,17 @@ def _boards_dimension(reading, items, a):
         speed = next((SPEED_RANK[o.words] for o in items if o.kind == 'speed_rank'), None)
         if other is None and speed:
             other = 'speed_run_fpm'
-        if other is None:
+        timed = other is None and ('min' in (a.get('units') or []) or a.get('ask_unit') == 'min')   # "which boards took the most minutes"
+        if other is None and not timed:
             continue
         rank = (a.get('rank') or speed or next((RANK[o.words] for o in items if o.kind == 'rank'), None)
                 or ('most' if prev is not None and (prev.kind == 'which' or prev.words == 'what') else None))
-        asks = _suggest(mdl, reading, other, 'grade', rank)
-        if rank:
-            asks = [asks[0], f'{_measure_word(mdl, other)} by grade {reading.window_words}'.strip()]
+        if timed:
+            asks = _suggest(mdl, reading, None, 'grade', rank or 'most', measures=_minutes_of(mdl, None))
+        else:
+            asks = _suggest(mdl, reading, other, 'grade', rank)
+            if rank:
+                asks = [asks[0], f'{_measure_word(mdl, other)} by grade {reading.window_words}'.strip()]
         return Refused("'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade", asks)
     return None
 
@@ -658,12 +664,23 @@ def _uncounted_noun(items, a, question, compared=False):
         return None
     for k, it in enumerate(items):
         noun = next((w for w in it.words.split() if w in UNCOUNTED), None) if it.kind == 'vocab' and 'waste' not in it.words.split() else None
-        if noun is None or k + 1 < len(items) and items[k + 1].words == 'per' or a.get('per_day'):
+        if noun is None or _ratio_said(items, k) or a.get('per_day'):
             continue   # "how many boards per setup", "... per day": a ratio the records do not keep, the hand router's own reason
         if (compared or a['rank'] or a['compare'] or len(a['shifts']) > 1 or any(i.kind in ('rank', 'which', 'compare') for i in items)
                 or re.search(COUNT_ASK, question, re.I) or k and items[k - 1].kind == 'group'):
             return noun
     return None
+
+
+def _ratio_said(items, k):
+    """True when the noun at `k` is followed by "per" and a measure or a dimension "per" divides by ("boards per setup", "boards per
+    order"): a ratio. "Per" before any other dimension is a split ("boards per grade"), as "by grade" is (the reviewer's check of this
+    round)."""
+    if k + 1 >= len(items) or items[k + 1].words != 'per':
+        return False
+    rest = [it for it in items[k + 2:] if not (it.kind == 'filler' and it.words in ARTICLES)]
+    nxt = rest[0] if rest else None
+    return nxt is not None and nxt.kind == 'vocab' and (bool(_entries(nxt, 'measure')) or any(e[1] in PER_RATIO_DIMS for e in _entries(nxt, 'dimension')))
 
 
 def _line_waste(reading, items):
@@ -676,6 +693,15 @@ def _line_waste(reading, items):
         if item.kind == 'vocab' and item.words in WHOLE_WASTE and i:
             before = items[i - 1]
             if before.kind == 'vocab' and (_entries(before, 'value') or _entries(before, 'measure')):
+                reading.cues.add('line waste')
+        elif item.kind == 'vocab' and i and any(e[1] in WASTE_FAMILY for e in _entries(item, 'measure')):
+            # "knife rejects": a value before a waste line that the line is not recorded by (a stop reason before the dry-end rejects),
+            # never every line led by side trim (the reviewer's check of this round); "moisture rejects" is the family's own
+            before, mdl = items[i - 1], semantic.model()
+            line = next(e[1] for e in _entries(item, 'measure') if e[1] in WASTE_FAMILY)
+            values = _entries(before, 'value')
+            if before.kind == 'vocab' and values and not _entries(before, 'measure') and \
+                    all(semantic._usable(mdl, line, e[1], as_filter=True) is not None for e in values):
                 reading.cues.add('line waste')
 
 
@@ -773,7 +799,7 @@ def _measure_word(mdl, name):
     # the shear is said as "shear", never as "shear chops": a ranking or a comparison of the chops is a count the records do not hold
     # (UNCOUNTED), so a suggestion naming them would be refused in its turn
     words = {'downtime_minutes': 'minutes of downtime', 'stops': 'stops', 'setups': 'setups', 'msf': 'MSF', 'reject_sqft': 'dry-end rejects',
-             'speed_run_fpm': 'speed', 'shear_sqft': 'shear', 'running_minutes': 'run minutes'}
+             'speed_run_fpm': 'speed', 'shear_sqft': 'shear', 'running_minutes': 'run minutes', 'elapsed_minutes': 'setup minutes'}
     return words.get(name) or _strip_parens(m['label']).lower()
 
 
@@ -821,8 +847,8 @@ def _joined(items, i):
     j = i - 1
     while j >= 0 and items[j].kind == 'filler' and items[j].words in ARTICLES:
         j -= 1
-    if j < 1 or items[j].kind != 'and':
-        return None
+    if j < 1 or items[j].kind != 'and' or items[j].words != 'and':
+        return None   # "shift or grade" asks one or the other, never both (the reviewer's check of this round)
     k = j - 1
     while k >= 0 and items[k].kind == 'filler' and items[k].words in ARTICLES:
         k -= 1
@@ -837,6 +863,27 @@ def _modifier(items, i):
     nxt = items[i + 1] if i + 1 < len(items) else None
     return (item.words not in INHERENT and not item.words.endswith('s') and nxt is not None
             and (nxt.role == 'measure' or nxt.kind == 'unit'))
+
+
+_OFFERING = []
+
+
+def _split_answers(text, groups, context, store):
+    """True when the router answers `text` with the split by `groups`, so a refusal may offer it ("minutes of downtime by shift and
+    paper run" is refused by the hand router's "how long a run took": never offered). One level deep: a question offered is never
+    checked from inside another's check."""
+    if _OFFERING:
+        return True
+    import copy
+    _OFFERING.append(text)
+    try:
+        request, _ = agent.route(text, copy.copy(context), store.production_days, store)   # in the scope its own words name
+        plan = request.get('plan') or [{}]
+        return request.get('intent') == 'semantic' and plan[0].get('arguments', {}).get('group_by') == groups
+    except Exception:   # noqa: BLE001 - a question the router refuses is never offered
+        return False
+    finally:
+        _OFFERING.pop()
 
 
 def _assign(reading, items, mdl, store, a, context):
@@ -1247,12 +1294,18 @@ def _assign(reading, items, mdl, store, a, context):
         reading.cues.add('modifier')
         (said, noun), dim, other = (modifiers[0][0].words, modifiers[0][1].words), modifiers[0][0].value, others[0]
         word = _measure_word(mdl, measure)
-        ranked = _suggest(mdl, reading, measure, other, rank or speed_rank or ('most' if which else None))
         ranking = bool(rank or speed_rank or which)
-        raise Refused(f"'{said}' is said before '{noun}' with no value of its own, beside the {_dim_word(mdl, other)}s "
-                      f"{'ranked' if ranking else 'split'}, so it is no split by {_dim_word(mdl, dim)}: ask "
-                      f"{'the ranking' if ranking else 'that split'}, or split by both",
-                      [ranked[0], f'{word} by {_dim_word(mdl, other)} and {_dim_word(mdl, dim)} {reading.window_words}'.strip()])
+        asks = _suggest(mdl, reading, measure, other, rank or speed_rank or ('most' if which else None))[:1]
+        head = f"'{said}' is said before '{noun}' with no value of its own, beside the {_dim_word(mdl, other)}s {'ranked' if ranking else 'split'}"
+        if semantic._usable(mdl, measure, dim, as_filter=False) is not None:
+            # "which shift had the most order stops": no split by both to offer (the reviewer's check of this round)
+            raise Refused(f"{head}, and {_strip_parens(mdl.measures[measure]['label']).lower()} is not recorded by "
+                          f"{_dim_word(mdl, dim, whole=True)}: ask {'the ranking' if ranking else 'that split'}", asks)
+        both = f'{word} by {_dim_word(mdl, other)} and {_dim_word(mdl, dim)} {reading.window_words}'.strip()
+        if _split_answers(both, [other, dim], context, store):
+            raise Refused(f"{head}, so it is no split by {_dim_word(mdl, dim)}: ask {'the ranking' if ranking else 'that split'}, "
+                          "or split by both", asks + [both])
+        raise Refused(f"{head}, so it is no split by {_dim_word(mdl, dim)}: ask {'the ranking' if ranking else 'that split'}", asks)
     board = _boards_dimension(reading, items, a)
     if board is not None:
         reading.cues.add('uncounted')
@@ -1366,6 +1419,8 @@ def _minutes_of(mdl, measure):
     PR #155 at 7b46463, item 5)."""
     if measure and mdl.measure_entities(measure)[0] == 'stop':
         return ['downtime_minutes']
+    if measure == 'setups':
+        return ['elapsed_minutes', 'running_minutes']   # "which grade took the most setup time": the setup clock
     return ['running_minutes', 'downtime_minutes']
 
 
@@ -1736,6 +1791,9 @@ def route(text, context, store, request, refused):
     if 'modifier' in reading.cues and intent not in ALLOW_LISTED:
         # "which shift had the most board rejects": a dimension said bare before the measure beside a ranking of another, never the
         # waste breakdown's side trim or the two split together (the coordinator's review of PR #155 at 7b46463, item 1)
+        raise ValueError(refusal_text(reading))
+    if intent == 'period_rollstock' and reading.measure in WASTE_FAMILY:
+        # "how much rollstock waste", "how much paper was wasted": the paper consumed is no waste (the reviewer's check of this round)
         raise ValueError(refusal_text(reading))
     if 'line waste' in reading.cues and intent not in ALLOW_LISTED:
         # "paper waste", "splice waste", "baler waste", "how much paper did we waste": a line said with "waste" that the reading cannot

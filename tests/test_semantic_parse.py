@@ -1005,8 +1005,23 @@ def test_a_bare_dimension_before_the_measure_beside_a_ranking_is_no_second_split
                      'Which grade had the most crew stops this week?', 'Top 3 shifts by board stops this week'):
         r = reading(store, question)
         assert 'modifier' in r.cues and len(r.suggestions) == 2, (question, r.refusal)
-        for suggestion in r.suggestions:
-            assert reading(store, suggestion).complete, (question, suggestion)
+    # every question a refusal offers answers, and the split by both answers as that split (the reviewer's check of 2ec98b5: "stops by
+    # shift and order", "side trim by shift and customer" were offered); with no split to offer, the model's reason or the ranking alone
+    for other in ('shift', 'crew', 'grade'):
+        for dim in ('board', 'wet end', 'width', 'flute', 'lane', 'job', 'crew', 'cutoff knife', 'reason', 'place', 'order', 'customer'):
+            for measure in ('stops', 'setups', 'rejects', 'trim', 'downtime', 'MSF'):
+                question = f'which {other} had the most {dim} {measure} this week'
+                r = reading(store, question)
+                if 'modifier' not in r.cues:
+                    continue
+                for suggestion in r.suggestions:
+                    request, _ = route(suggestion, Context(DAY, 2, scope='shift'), store.production_days, store)
+                    if ' and ' in suggestion:
+                        assert request['plan'][0]['arguments']['group_by'] == [P.tokens_of(other)[0], request['plan'][0]['arguments']['group_by'][1]], (question, suggestion)
+                if len(r.suggestions) < 2:
+                    assert re.search(r"(is not recorded by|so it is no split by) .*: ask the ranking$", r.refusal), (question, r.refusal)
+    with pytest.raises(ValueError, match=r"and stops is not recorded by order: ask the ranking\. Did you mean 'which shift had the most stops this week'\?$"):
+        route('Which shift had the most order stops this week?', Context(DAY, 2, scope='shift'), store.production_days, store)
     # a split word, a value, a plural or the same dimension keep their reading
     for question, groups in (('Which shift had the most stops by grade this week?', ['shift', 'grade']),
                              ('Which shift had the most grade 26-C stops this week?', ['shift']),
@@ -1028,6 +1043,14 @@ def test_two_dimensions_joined_by_and_are_one_split(store):
         request, _ = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
         args = request['plan'][0]['arguments']
         assert (args['measure'], args['group_by']) == (measure, groups), (question, args)
+    for question in ('Stops by shift or grade this week', 'Which shift or grade had the most stops this week?'):
+        # "or" asks one or the other, never the split by both
+        try:
+            request, _ = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        except ValueError:
+            continue
+        groups = (request.get('plan') or [{}])[0].get('arguments', {}).get('group_by') or []
+        assert not (isinstance(groups, list) and len(groups) > 1), (question, groups)
 
 
 def test_a_line_said_with_waste_is_refused_over_every_hand_route(store):
@@ -1035,13 +1058,16 @@ def test_a_line_said_with_waste_is_refused_over_every_hand_route(store):
     waste breakdown (the coordinator's review of PR #155 at 7b46463, item 2), and the refusal names the stop reason, never "reason":
     the dry-end rejects are recorded by reject reason (item 3). A line's own name keeps its line."""
     for question, value in (('How much paper waste this week?', 'paper'), ('How much paper did we waste this week?', 'paper'),
-                            ('Paper waste this week', 'paper'), ('Splice waste this week', 'splice')):
+                            ('Paper waste this week', 'paper'), ('Splice waste this week', 'splice'), ('How much paper was wasted this week?', 'paper'),
+                            ('How much paper did shift 1 waste this week?', 'paper'), ('How much paper we wasted this week', 'paper'),
+                            ('Which shift had the most knife rejects this week?', 'knife')):
         with pytest.raises(ValueError, match=f"^Dry-end rejects is not recorded by stop reason, so '{value}' cannot narrow it"):
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
     for question, measure in (('How much trim did we waste this week?', None), ('How much paper did we use this week?', None),
                               ('How much did we waste this week?', None), ('How much shear did we waste this week?', 'shear_sqft'),
                               ('How much stacker did we waste this week?', 'stacker_waste_sqft'),
-                              ('What changeover did we waste this week?', 'changeover_sqft')):
+                              ('What changeover did we waste this week?', 'changeover_sqft'),
+                              ('How much shear did crew A waste this week?', 'shear_sqft'), ('How much shear was wasted this week?', 'shear_sqft')):
         # "waste" said as the verb of a line is that line's waste, as "shear waste" is; a bare "how much did we waste" is every line
         request, _ = route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
         got = request['plan'][0]['arguments'].get('measure') if request['intent'] == 'semantic' else None
@@ -1055,8 +1081,9 @@ def test_the_shift_before_a_ranking_ranks_the_shifts(store):
         r = reading(store, question)
         assert r.complete and r.query.measure == measure and r.query.group_by == ['shift'] and r.rank == 'most', (question, r.refusal)
     assert 'modifier' in reading(store, 'The shift with the most board rejects this week').cues
-    r = reading(store, 'Stops on the shift this week', scope='shift')
-    assert r.complete and r.query.shift == 2 and not r.query.group_by, r.refusal
+    for question in ('Stops on the shift this week', 'My shift with the most stops this week'):
+        r = reading(store, question, scope='shift')   # "my shift" is the selected one, ranked or not
+        assert 'shift' not in (r.query.group_by if r.query else []) and (r.query is None or r.query.shift == 2), (question, r.refusal)
 
 
 def test_boards_said_as_a_dimension_offer_the_grade(store):
@@ -1073,9 +1100,15 @@ def test_boards_said_as_a_dimension_offer_the_grade(store):
         r = reading(store, question)
         for suggestion in r.suggestions:
             assert reading(store, suggestion).complete, (question, suggestion)
-    with pytest.raises(ValueError, match='^Boards per setup is not a ratio the records keep'):
-        route('How many boards per setup this week?', Context(DAY, 2, scope='shift'), store.production_days, store)
-    for question in ('Which shift had the most boards this week?', 'How many boards by grade this week?'):
+    for question, why in (('How many boards per setup this week?', '^Boards per setup is not a ratio the records keep'),
+                          ('How many boards per day this week?', '^Boards per day is not a ratio the records keep'),
+                          ('Compare boards on downtime this week', "^'boards' is not a dimension"),
+                          ('Which boards took the most minutes this week?', "^'boards' is not a dimension.*'which grade had the most run minutes"),
+                          ('How much rollstock waste this week?', "^'rollstock' is not a word")):
+        with pytest.raises(ValueError, match=why):
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+    for question in ('Which shift had the most boards this week?', 'How many boards by grade this week?', 'How many boards per grade this week?',
+                     'How many stacker boards per grade this week?'):
         with pytest.raises(ValueError, match='do not count boards'):
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
 
@@ -1087,7 +1120,8 @@ def test_a_duration_asked_suggests_the_models_minutes(store):
     for question, first in (('Which grade took the most minutes this week?', 'which grade had the most run minutes this week'),
                             ('Which grade ran the most minutes this week?', 'which grade had the most run minutes this week'),
                             ('Which grade had the most hours this week?', 'which grade had the most run minutes this week'),
-                            ('Which stop reason took the most time this week?', 'which reason had the most minutes of downtime this week')):
+                            ('Which stop reason took the most time this week?', 'which reason had the most minutes of downtime this week'),
+                            ('Which grade took the most setup time this week?', 'which grade had the most setup minutes this week')):
         with pytest.raises(ValueError, match=f"Did you mean '{first}'"):
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
     request, _ = route('Which grade had the most run minutes this week?', Context(DAY, 2, scope='shift'), store.production_days, store)
