@@ -255,6 +255,15 @@ class Analysis:
         if type(shift) is not int or shift not in (1, 2, 3):
             raise ValueError("Shift must be 1, 2 or 3")
         start = time.perf_counter()
+        rows = self._bounded(sql, params)
+        errors = [e for e in self.errors if e["shift"] == shift]
+        return {"production_day": self.day, "shift": shift, "dataset_version": self.version,
+                "rows": rows, "coverage": "incomplete" if errors else "complete",
+                "excluded_records": errors, "trace": {"sql": sql, "parameters": params,
+                "elapsed_ms": (time.perf_counter()-start)*1000}}
+
+    def _bounded(self, sql, params):
+        """Every query's bounds (docs/AGENT_CONTRACT.md): two seconds, then interrupted; at most 1,000 rows."""
         timer = Timer(2.0, self._db.interrupt)
         timer.daemon = True
         timer.start()
@@ -270,16 +279,18 @@ class Analysis:
         finally:
             timer.cancel()
             timer.join()
-        errors = [e for e in self.errors if e["shift"] == shift]
-        return {"production_day": self.day, "shift": shift, "dataset_version": self.version,
-                "rows": rows, "coverage": "incomplete" if errors else "complete",
-                "excluded_records": errors, "trace": {"sql": sql, "parameters": params,
-                "elapsed_ms": (time.perf_counter()-start)*1000}}
+        return rows
 
     @staticmethod
-    def _kpi_sql(where, seconds):
+    def _kpi_sql(where, seconds, day=False):
         """The KPI row's query over the setups and stops `where` selects (`shift = ?` for a shift, `shift IN (...)` for a
-        day's shifts), downtime over `seconds` of scheduled time: 28800 a shift (480 minutes), the shifts' sum for a day."""
+        day's shifts), downtime over `seconds` of scheduled time: 28800 a shift (480 minutes), the shifts' sum for a day.
+        `day` adds the counts a day card leads with that a shift's card reads from its own tools (issue #177): the stops,
+        those with a note, and the order fragments (order lanes), each over the same shifts."""
+        counts = (f"""(SELECT count(*) FROM stops WHERE {where}) AS stops,
+        (SELECT count(*) FROM stops WHERE {where} AND trim(coalesce(notes, '')) <> '') AS stops_with_note,
+        (SELECT count(*) FROM orders WHERE {where}) AS order_fragments,
+        """ if day else '')
         return f"""SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
         sum(feet) AS observed_lineal_ft, sum(feet)/{seconds // 60} AS observed_shift_fpm,
@@ -300,7 +311,7 @@ class Analysis:
         sum(feet)/nullif(count(*),0) AS lineal_per_setup,
         sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
         count(*) FILTER (WHERE trim/gross*100 > {targets.TRIM_FLAG_PCT}) AS setups_above_trim_target,
-        list(id ORDER BY id) AS source_ids FROM setups WHERE {where}"""
+        {counts}list(id ORDER BY id) AS source_ids FROM setups WHERE {where}"""
 
     def get_shift_kpis(self, shift):
         """The shift's tiles. Dry-end waste is a percent of the yield after trim and shear (gross minus side
@@ -317,7 +328,8 @@ class Analysis:
         ratio of the day's sums, never an average of the shifts' percents: speed over the shifts' 480 minutes each, downtime
         over their scheduled seconds, dry-end waste over their yield after trim and shear. A shift holding an excluded record
         is named in `excluded_shifts` and left out (as get_day_dollars leaves it out); when none is complete the row covers
-        every listed shift and the coverage says so. `shifts` names each listed shift with its coverage."""
+        every listed shift and the coverage says so. `shifts` names each listed shift with its coverage. Paper changes are the
+        day's distinct paper runs, so a run that crosses a shift boundary counts once, as the period tiles count it."""
         asked = sorted(set(shifts or (1, 2, 3)))
         if not asked or any(type(s) is not int or s not in (1, 2, 3) for s in asked) or len(asked) != len(list(shifts or (1, 2, 3))):
             raise ValueError('shifts lists distinct shifts from 1, 2 and 3')
@@ -326,17 +338,20 @@ class Analysis:
         used = complete or asked
         where = 'shift IN (' + ', '.join('?' * len(used)) + ')'
         start = time.perf_counter()
-        sql = self._kpi_sql(where, 28800 * len(used))
-        params = used * 6
-        result = self._db.execute(sql, params)
-        columns = [c[0] for c in result.description]
-        rows = [dict(zip(columns, row)) for row in result.fetchall()]
+        sql = self._kpi_sql(where, 28800 * len(used), day=True)
+        params = used * 9
+        rows = self._bounded(sql, params)
+        details = []
         for row in rows:
             targets.annotate(row, targets.SHIFT_KPI_BANDS)
             row['shifts_counted'] = list(used)
             row['scheduled_minutes'] = 480 * len(used)
+            # The day's stops and order lanes are counts of other records, so each is a detail with its own receipt (the
+            # stops, the order lanes), and a card that leads with one says what its link opens (#151's rule).
+            details = [{'count': 'stops', 'stops': row.pop('stops'), 'stops_with_note': row.pop('stops_with_note')},
+                       {'count': 'order_fragments', 'order_fragments': row.pop('order_fragments')}]
         excluded = [e for e in self.errors if e['shift'] in asked]
-        return {"production_day": self.day, "shift": None, "dataset_version": self.version, "rows": rows,
+        return {"production_day": self.day, "shift": None, "dataset_version": self.version, "rows": rows, "details": details,
                 "coverage": "complete" if complete else "incomplete",
                 "excluded_records": excluded,
                 "excluded_shifts": [s for s in asked if s in bad] if complete else [],

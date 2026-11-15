@@ -330,7 +330,7 @@ class DailyAnswer:
     # The intents whose card under All leads with the day, all shifts together (issue #177, the owner's ruling of
     # 2026-11-15), and the day total each reads (agent.DAY_LEAD_INTENTS; money reads the day's dollars, #31b).
     DAY_LEAD = {'summary': 'get_day_kpis', 'overview': 'get_day_kpis', 'speed': 'get_day_kpis', 'quality': 'get_day_kpis',
-                'matrix': 'get_day_kpis', 'dollars': 'get_day_dollars'}
+                'matrix': 'get_day_kpis', 'notes': 'get_day_kpis', 'orders': 'get_day_kpis', 'dollars': 'get_day_dollars'}
 
     def __init__(self, intent, evidence, context, inferred=False, day=()):
         self.intent, self.context, self.inferred, self.generic = intent, context, inferred, False
@@ -339,6 +339,9 @@ class DailyAnswer:
         self.incomplete = [s for s, tools in self.shifts.items()
                            if any(r['data']['coverage'] != 'complete' for k, r in tools.items() if not k.startswith('all:'))]
         self.complete = [s for s in self.shifts if s not in self.incomplete]
+        # Under All a question that names no shift: all three shifts are in the scope, so the card is the day's (#177).
+        # A question naming two shifts keeps its first shift's lead (the owner has ruled on the whole day only).
+        self.whole_day = context.scope == 'day' and sorted(self.shifts) == [1, 2, 3] and len(self.complete) > 1
 
     def suffix(self, shift):
         """The words that point a where-to-look question at the focus shift when the scope is all shifts."""
@@ -418,7 +421,7 @@ class DailyAnswer:
         complete shifts and the offline planner ran it; None otherwise (one shift, an analyst's plan, a selected shift)."""
         tool = self.DAY_LEAD.get(self.intent)
         result = self.day.get(tool) if tool else None
-        if not result or self.inferred or self.context.scope != 'day' or len(self.complete) < 2:
+        if not result or self.inferred or not self.whole_day:
             return None
         if tool == 'get_day_kpis' and not result['data']['rows']:
             return None
@@ -426,8 +429,8 @@ class DailyAnswer:
 
     @staticmethod
     def across(data):
-        """` across the three shifts`, or the shifts a day total counted (a named pair; the complete ones when one holds an
-        excluded record): its `shifts` less its `excluded_shifts`."""
+        """` across the three shifts`, or the shifts a day total counted when one holds an excluded record (` across shifts 1
+        and 3`): its `shifts` less its `excluded_shifts`."""
         counted = [x['shift'] for x in data.get('shifts', []) if x['shift'] not in (data.get('excluded_shifts') or [])]
         if counted == [1, 2, 3]:
             return ' across the three shifts'
@@ -446,9 +449,21 @@ class DailyAnswer:
                     f'{f2(row["downtime_pct"])}% {down} {ref(day, 0)}')
         if self.intent == 'quality':
             return f'**{f2(row["dry_end_pct"])}%** of yield rejected at the dry end{where}{band(row["dry_end_band_text"])} {ref(day, 0)}'
-        if self.intent == 'matrix':
+        if self.intent == 'matrix':   # each shift's line gives its paper changes; the day's distinct runs would not add up to them
             per = f' · {f0(row["lineal_per_setup"])} ft per setup' if row['lineal_per_setup'] is not None else ''
-            return f'**{n(row["valid_setups"])}** dry-end setups{where} · {n(row["paper_changes"])} paper changes{per} {ref(day, 0)}'
+            return f'**{n(row["valid_setups"])}** dry-end setups{where}{per} {ref(day, 0)}'
+        counts = {d['count']: (i, d) for i, d in enumerate(day['data'].get('details') or [])}
+        if self.intent == 'notes' and 'stops' in counts:   # the day's stops: its detail, whose link opens them
+            i, d = counts['stops']
+            stops = d['stops']
+            own = all(any(r.get('record_type') == 'Shift' for r in self.shifts[s]['get_shift_notes']['data']['rows'])
+                      for s in self.complete if self.shifts[s].get('get_shift_notes'))
+            noted = f', {n(d["stops_with_note"])} with a note' if stops else ''
+            return (f'**{n(stops)}** stop{"" if stops == 1 else "s"}{where}{noted}' + (", and each shift's own note" if own else '') +
+                    f' · synthetic and unverified: observations, not causes {ref(day, i, "detail")}')
+        if self.intent == 'orders' and 'order_fragments' in counts:   # the day's order lanes: its detail, whose link opens them
+            i, d = counts['order_fragments']
+            return f'**{n(d["order_fragments"])}** order fragments{where} · demand repeats on continuing orders {ref(day, i, "detail")}'
         return f'**{f1(row["observed_shift_fpm"])} ft/min** including downtime{where} · {f1(row["speed_to_target_pct"])}% of grade target {ref(day, 0)}'
 
     def clause(self, focus, low=True):
@@ -756,10 +771,12 @@ class DailyAnswer:
         if not first:
             return self.shape_generic(s)
         r0, metric = first['data']['rows'][0], first['data'].get('metric')
-        where = self.clause(s, low=False).split(',')[0]
-        head = (f'**{f1(r0["value"])}%** of target on {r0["item"]}{where}, the lowest speed attainment {ref(first, 0)}' if metric == 'speed' else
-                f'**{f2(r0["value"])} min** at {r0["item"]}{where}, the most downtime {ref(first, 0)}' if metric == 'downtime' else
-                f'**{f1(r0["value"])} sq ft** of {r0["item"]}{where}, the most rejected area {ref(first, 0)}')
+        # under All the day's extreme across its shifts, the scope in the line and the shift on the findings (#177)
+        where, scope = ('', self.across({'shifts': [{'shift': x} for x in sorted(self.complete)]})) if self.whole_day else \
+            (self.clause(s, low=False).split(',')[0], '')
+        head = (f'**{f1(r0["value"])}%** of target on {r0["item"]}{where}, the lowest speed attainment{scope} {ref(first, 0)}' if metric == 'speed' else
+                f'**{f2(r0["value"])} min** at {r0["item"]}{where}, the most downtime{scope} {ref(first, 0)}' if metric == 'downtime' else
+                f'**{f1(r0["value"])} sq ft** of {r0["item"]}{where}, the most rejected area{scope} {ref(first, 0)}')
         bullets = []
         for ranking in rankings:
             if ranking['data']['rows']:

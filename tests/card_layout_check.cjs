@@ -2,13 +2,15 @@
 // with no layout, so a phrase that spills past the card (a delta chip read "▼ −0.03 % of yield after trim and shear" and ran
 // 113 px past a 390 px card) is measured here, in headless Chromium, against a running server:
 //   python -m investigator.server --port 7860 &   node tests/card_layout_check.cjs [base-url] [screenshot-dir] [--questions file]
-// It asks every canned question under the selected shift and All at 390, 768 and 1440 px, then each question of the optional
-// file (one per line) by its address at 390 px. It fails listing every element that ends past the card's right edge or holds
-// a line it cannot wrap. Tables, code, charts and the query list scroll on their own and are not counted.
+// It asks every canned question under the selected shift and All at 390, 768 and 1440 px, then each question of
+// tests/card_layout_questions.txt (the cards with the longest phrases: stop reasons, places, levers) and of the
+// optional file (one per line) by its address, at the same three widths. It fails listing every element that ends past the
+// card's right edge or holds a line it cannot wrap. Tables, code, charts and the query list scroll on their own and are not counted.
 // Skips (exit 0) when Playwright is not installed; CI does not run it.
 const assert=require('node:assert/strict'), fs=require('node:fs');
 let chromium; try{({chromium}=require('playwright'));}catch(e){console.log('card layout check skipped: Playwright is not installed');process.exit(0);}
-const args=process.argv.slice(2), qi=args.indexOf('--questions'), file=qi>=0?args.splice(qi,2)[1]:null;
+const args=process.argv.slice(2), qi=args.indexOf('--questions'), file=qi>=0?args.splice(qi,2)[1]:null, own=require('node:path').join(__dirname,'card_layout_questions.txt');
+const WIDTHS=[[390,844],[768,1024],[1440,1040]];
 const base=args[0]||'http://127.0.0.1:7860', shots=args[1]||null, day='2026-09-14';
 const settled=()=>document.getElementById('card').className==='card answer'&&document.getElementById('card').getAttribute('data-reveal')!=='running';
 function spills(){
@@ -16,7 +18,8 @@ function spills(){
  for(const el of card.querySelectorAll('*')){
   const r=el.getBoundingClientRect(), cs=getComputedStyle(el);
   if(!r.width||!r.height||cs.visibility==='hidden'||cs.display==='none'||el.closest('pre,svg,.chart,table,.queries,.trace,details:not([open])'))continue;
-  const past=r.right-edge>1, unwrapped=el.children.length===0&&el.scrollWidth-el.clientWidth>1&&!/auto|scroll|hidden/.test(cs.overflowX);
+  // any box whose own text runs past it (a leaf, or a line with a bold figure or a link inside it), not a scroller's
+  const past=r.right-edge>1, unwrapped=cs.display!=='inline'&&el.scrollWidth-el.clientWidth>1&&!/auto|scroll|hidden/.test(cs.overflowX);
   if(past||unwrapped)out.push({tag:el.tagName.toLowerCase(),class:String(el.className||'').slice(0,40),past:Math.round(r.right-edge),text:(el.textContent||'').trim().slice(0,90)});
  }
  return out.filter((o,i,a)=>!a.slice(0,i).some(p=>p.text===o.text));
@@ -24,7 +27,7 @@ function spills(){
 (async()=>{
  const browser=await chromium.launch({args:['--no-proxy-server']}), found=[];
  const record=async(page,where)=>{const bad=await page.evaluate(spills);if(bad.length){found.push({...where,bad:bad.slice(0,3)});if(shots)await page.screenshot({path:`${shots}/${where.width}-${String(where.label).replace(/\W+/g,'_').slice(0,60)}.png`});}};
- for(const [width,height] of [[390,844],[768,1024],[1440,1040]]){
+ for(const [width,height] of WIDTHS){
   for(const scope of ['shift','day']){
    const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
    await page.goto(`${base}/corr/1/day/${day}${scope==='shift'?'/shift/2':''}`);
@@ -38,16 +41,19 @@ function spills(){
    await page.close();
   }
  }
- if(file){
-  const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
-  for(const q of fs.readFileSync(file,'utf8').split('\n').map(s=>s.trim()).filter(s=>s&&!s.startsWith('#'))){
+ const questions=[own,...(file?[file]:[])].flatMap(f=>fs.readFileSync(f,'utf8').split('\n').map(s=>s.trim()).filter(s=>s&&!s.startsWith('#')));
+ for(const [width,height] of WIDTHS){
+  const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
+  for(const q of questions){
    await page.goto(`${base}/q?day=${day}&shift=2&scope=shift&period=day&q=${encodeURIComponent(q)}`);
    await page.waitForFunction(()=>{const c=document.getElementById('card');return c&&c.getAttribute('data-reveal')!=='running'&&/answer/.test(c.className)&&!/skeleton/.test(c.className);},null,{timeout:15000}).catch(()=>{});
-   await page.waitForTimeout(120);await record(page,{width:390,scope:'shift',label:q});
+   await page.waitForTimeout(120);
+   if(!await page.$('#card')){console.log(`note: '${q}' at ${width} px opened no answer card (${page.url()}); nothing to measure`);continue;}
+   await record(page,{width,scope:'shift',label:q});
   }
   await page.close();
  }
  await browser.close();
  assert.deepEqual(found,[],JSON.stringify(found,null,1));
- console.log(`card layout checks passed: every canned card at 390, 768 and 1440 px under one shift and All${file?', and each question of '+file+' at 390 px':''}, nothing past the card's edge.`);
+ console.log(`card layout checks passed: every canned card under one shift and All, and each question of card_layout_questions.txt${file?' and '+file:''}, at 390, 768 and 1440 px: nothing past the card's edge.`);
 })().catch(e=>{console.error(e.message);process.exit(1);});

@@ -762,6 +762,8 @@ class Figures:
                 return s['stop_seconds'] / 60, False
             if 'rejected' in after:
                 return s['reject_sqft'], False
+        if tool == 'get_day_kpis' and part == 'detail':   # the day's stops or order lanes: the rows its link opens (#151's rule)
+            return len(rows), True
         if tool == 'get_day_kpis':   # the day's row (#177): its counted shifts' rows, every figure a ratio of their sums
             shifts = [(r['production_date'], r['shift']) for r in rows]
             if len(set(shifts)) != len(shifts):

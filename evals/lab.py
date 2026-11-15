@@ -7,7 +7,8 @@
 
 A line of a text file may set its own controls before the question: `[scope=day period=week day=2026-09-16] stops by shift`.
 Controls not given take the command line's (--day, --shift, --scope shift|day|both, --period day|week|month|accounting|all),
-which default to the eval defaults: 2026-09-14, shift 2, the selected shift, Day.
+which default to the eval defaults: 2026-09-14, shift 2, the selected shift, Day; with --canned the scope defaults to both
+and the period to all, so `--canned` alone asks every canned question under one shift and All, Day, Week, Month and 4-4-5.
 
 Each question runs the server's own offline path (`Workbench.ask`: question_scope, parse_request, Agent.ask) against the golden
 store, the window the golden set is scored on. No model is called. The lab writes two files under artifacts/lab/ (gitignored):
@@ -130,8 +131,10 @@ def tools_of(result):
         args = step.get('arguments') or {}
         window = args.get('window') or args.get('current_window')
         where = f"{window['period']} {window['anchor']}" if isinstance(window, dict) else 'day'
-        shift = args.get('shift')
-        out.append(f"{step['tool']}({'shift ' + str(shift) if shift else 'all shifts' if 'shift' in args else '-'}, {where})")
+        shift, shifts = args.get('shift'), args.get('shifts')
+        read = ('shift ' + str(shift) if shift else 'all shifts' if 'shift' in args else
+                'shifts ' + ','.join(map(str, shifts)) if isinstance(shifts, list) and shifts else '-')   # a day total's shifts (#177)
+        out.append(f"{step['tool']}({read}, {where})")
     return out
 
 
@@ -152,11 +155,10 @@ def flags_of(question, controls, record):
         flags.append(f'a line over {LONG_LINE} characters')
     if any(len(w) > LONG_WORD for l in lines for w in re.split(r'\s+', CITE.sub('', l))):
         flags.append(f'an unbroken run over {LONG_WORD} characters')
-    named = SHIFT_NAMED.search(question)
-    if named and re.search(r'\d', named[0]) and controls['scope'] == 'day':
-        n = int(re.search(r'\d', named[0])[0])
-        if record['shifts'] and record['shifts'] != [n] and len(record['shifts']) != 1:
-            flags.append(f'names shift {n}, answered shifts {record["shifts"]}')
+    from investigator.agent import named_shifts   # the router's own reading of the shifts a question names
+    named = sorted(set(named_shifts(question.lower())))
+    if named and controls['scope'] == 'day' and record['shifts'] and sorted(record['shifts']) != named:
+        flags.append(f'names shift{"s" if len(named) > 1 else ""} {", ".join(map(str, named))}, answered shifts {record["shifts"]}')
     return flags
 
 
@@ -227,13 +229,17 @@ def main(argv=None):
     parser.add_argument('--ask', action='append', help='one question (repeatable)')
     parser.add_argument('--day', default=DEFAULTS['day'])
     parser.add_argument('--shift', type=int, default=DEFAULTS['shift'])
-    parser.add_argument('--scope', default=DEFAULTS['scope'], choices=('shift', 'day', 'both'), help='shift: the selected shift; day: All')
-    parser.add_argument('--period', default=DEFAULTS['period'], help='day, week, month, accounting, a comma list, or all')
+    parser.add_argument('--scope', choices=('shift', 'day', 'both'),
+                        help='shift: the selected shift; day: All (default: both with --canned, else shift)')
+    parser.add_argument('--period', help='day, week, month, accounting, a comma list, or all (default: all with --canned, else day)')
     parser.add_argument('--name', help='the output files\' name (default: lab-<UTC time>)')
     parser.add_argument('--out', type=Path, default=OUT)
     args = parser.parse_args(argv)
     if not (args.files or args.canned or args.ask):
         parser.error('give a question file, --ask or --canned')
+    # --canned alone is the page's front door: every canned question under every scope and period (the issue's criterion)
+    args.scope = args.scope or ('both' if args.canned else DEFAULTS['scope'])
+    args.period = args.period or ('all' if args.canned else DEFAULTS['period'])
     items = load(args)
     import run as runner   # the golden store: the window the golden set is scored on
     records = run(items, runner.golden_store())

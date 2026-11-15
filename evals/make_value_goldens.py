@@ -773,7 +773,11 @@ def day_total_kpi_case(plain, id, day, shifts=(1, 2, 3), corrupt=False, note="")
     stops = [st for n in counted for st in plain.between("stops", span, span, n)]
     row = kpi_row(id, setups, stops, SCHEDULED_SECONDS * len(counted))
     row.update({"shifts_counted": exact(counted), "scheduled_minutes": exact(480 * len(counted))})
-    values = {"#0": row, "$": {"shift": exact(None), "excluded_shifts": exact(sorted(bad))}}
+    values = {"#0": row, "$": {"shift": exact(None), "excluded_shifts": exact(sorted(bad))},
+              # the counts a day card leads with (notes, orders), each a detail with its own records: the shifts' stops,
+              # those with a comment, and their order lanes
+              "details:count=stops": {"stops": exact(len(stops)), "stops_with_note": exact(sum(1 for st in stops if (st.comment or "").strip()))},
+              "details:count=order_fragments": {"order_fragments": exact(sum(len(s.lanes) for s in setups))}}
     for n in shifts:
         values[f"shifts:shift={n}"] = {"coverage": exact("incomplete" if n in bad else "complete")}
     expect = {"coverage": "complete", "row_count": 1, "values": values}
@@ -1577,7 +1581,8 @@ def build(data=None):
                                     note="The day of September's power outage (third shift): the outage minutes are in the day's downtime, "
                                          "over the day's scheduled time."))
     cases.append(day_total_kpi_case(plain, "value-day-total-kpis-0914-shifts-1-3", "2026-09-14", shifts=(1, 3),
-                                    note="A question about shifts 1 and 3: their two shifts and 960 minutes, never shift 2."))
+                                    note="The tool over two listed shifts: shifts 1 and 3 and their 960 minutes, never shift 2. (The "
+                                         "offline planner asks it of all three shifts only: the owner's ruling covers a question naming no shift.)"))
     cases.append(day_total_kpi_case(plain, "value-day-total-kpis-0914-corrupt", "2026-09-14", corrupt=True,
                                     note="Shift 2 holds the refused trim record: it is named in excluded_shifts and left out, and the day "
                                          "is shifts 1 and 3 alone over their 960 minutes, with the excluded record reported."))

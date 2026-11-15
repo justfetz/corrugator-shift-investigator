@@ -37769,6 +37769,22 @@
        null
       ]
      },
+     "details:count=stops": {
+      "stops": [
+       25,
+       null
+      ],
+      "stops_with_note": [
+       11,
+       null
+      ]
+     },
+     "details:count=order_fragments": {
+      "order_fragments": [
+       204,
+       null
+      ]
+     },
      "shifts:shift=1": {
       "coverage": [
        "complete",
@@ -37936,6 +37952,22 @@
        null
       ]
      },
+     "details:count=stops": {
+      "stops": [
+       20,
+       null
+      ],
+      "stops_with_note": [
+       10,
+       null
+      ]
+     },
+     "details:count=order_fragments": {
+      "order_fragments": [
+       240,
+       null
+      ]
+     },
      "shifts:shift=1": {
       "coverage": [
        "complete",
@@ -37969,7 +38001,7 @@
      3
     ]
    },
-   "note": "A question about shifts 1 and 3: their two shifts and 960 minutes, never shift 2.",
+   "note": "The tool over two listed shifts: shifts 1 and 3 and their 960 minutes, never shift 2. (The offline planner asks it of all three shifts only: the owner's ruling covers a question naming no shift.)",
    "expect": {
     "coverage": "complete",
     "row_count": 1,
@@ -38098,6 +38130,22 @@
       ],
       "excluded_shifts": [
        [],
+       null
+      ]
+     },
+     "details:count=stops": {
+      "stops": [
+       13,
+       null
+      ],
+      "stops_with_note": [
+       5,
+       null
+      ]
+     },
+     "details:count=order_fragments": {
+      "order_fragments": [
+       138,
        null
       ]
      },
@@ -38261,6 +38309,22 @@
        [
         2
        ],
+       null
+      ]
+     },
+     "details:count=stops": {
+      "stops": [
+       13,
+       null
+      ],
+      "stops_with_note": [
+       5,
+       null
+      ]
+     },
+     "details:count=order_fragments": {
+      "order_fragments": [
+       138,
        null
       ]
      },

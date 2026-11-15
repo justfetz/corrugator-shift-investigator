@@ -43,14 +43,15 @@ TOOL_SCHEMAS = [
      "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
                     "required": [], "additionalProperties": False}},
     # The day's KPI row across its complete shifts (issue #177): under All a day card leads with the day (the owner, 2026-11-15).
-    {"name": "get_day_kpis", "description": "The production day's KPI row across the listed shifts that are complete: one query over their setups and stops, each percent a ratio of the day's sums (speed over 480 minutes a shift, downtime over their scheduled time, dry-end waste over their yield after trim and shear).",
+    {"name": "get_day_kpis", "description": "The production day's KPI row across the listed shifts that are complete: one query over their setups, stops and order lanes, each percent a ratio of the day's sums (speed over 480 minutes a shift, downtime over their scheduled time, dry-end waste over their yield after trim and shear), with the day's stops, stops with a note and order fragments.",
      "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
                     "required": [], "additionalProperties": False}},
 ]
 # The day totals the offline planner adds to an all-shifts day card: not a model's to plan (each reads every shift it lists).
 DAY_TOOLS = ('get_day_dollars', 'get_day_kpis')
-# The daily intents whose card under All leads with the day, all shifts together (issue #177, the owner's ruling of 2026-11-15).
-DAY_LEAD_INTENTS = ('summary', 'overview', 'speed', 'quality', 'matrix')
+# The daily intents whose card under All leads with the day, all shifts together (issue #177, the owner's ruling of 2026-11-15):
+# a question that names no shift, so all three shifts are in its scope.
+DAY_LEAD_INTENTS = ('summary', 'overview', 'speed', 'quality', 'matrix', 'notes', 'orders')
 # Period tools read the whole record store (a rolling year of production days) instead of one day.
 # A window is {period, anchor}: day = that Monday-Friday production day, week = the
 # Monday-Friday production week containing the anchor, month = its calendar month.
@@ -254,8 +255,8 @@ class OfflinePlanner:
 
         if intent == 'dollars' and not context.get("plan") and len(context["shifts"]) > 1:
             plan.append(("get_day_dollars", {"shifts": sorted(context["shifts"])}))   # #31b: the day's total over the shifts asked, for the card
-        if intent in DAY_LEAD_INTENTS and not context.get("plan") and len(context["shifts"]) > 1:
-            plan.append(("get_day_kpis", {"shifts": sorted(context["shifts"])}))   # #177: under All the card leads with the day
+        if intent in DAY_LEAD_INTENTS and not context.get("plan") and sorted(context["shifts"]) == [1, 2, 3]:
+            plan.append(("get_day_kpis", {"shifts": [1, 2, 3]}))   # #177: under All a question naming no shift leads with the day
         completed = [(r["tool"], r["arguments"]) for r in results]
         for tool, args in plan:
             if (tool, args) not in completed:
