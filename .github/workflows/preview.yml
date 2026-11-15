@@ -18,8 +18,10 @@
 # (since 8 December 2025 for every base), so a pull request cannot change a step that holds the Google
 # credential. Each job checks out main at the workspace root and runs only main's .github/scripts/. The pull
 # request's code is checked out into pr/ and is only ever the source Cloud Build builds (`--source pr`): no
-# step runs a file from pr/, and the credential file the auth step writes into the workspace root
-# (gha-creds-*.json) is outside the upload (gcloud archives a symlink as a link, never its target).
+# step runs a file from pr/, the credential file the auth step writes into the workspace root
+# (gha-creds-*.json) is outside the upload, and a symlink out of pr/ fails the run before the auth step
+# (gcloud's archive stores a symlinked file's contents). Values read back from the Cloud Run service, which a
+# preview's code can change, reach $GITHUB_ENV only as checked https origins (preview_origins.py).
 # tests/test_repo_hygiene.py fails a job that authenticates if any of its steps, before the auth step as well
 # as after it, names a path in pr/, or if it checks the pull request out at the workspace root. A pull request
 # that changes this file is previewed by main's copy until it merges. The Workload Identity condition in docs/DEPLOYMENT.md trusts main's copy of this file
@@ -121,6 +123,10 @@ jobs:
           ref: ${{ needs.head.outputs.merge }}
           path: pr
           persist-credentials: false
+      - name: Refuse a symlink that leaves the pull request's tree
+        # gcloud's source archive stores a symlinked file's contents, so a link from pr/ to a runner file (the
+        # credential gcloud keeps once the auth step has run) would carry it to Cloud Build. main's script reads pr/.
+        run: python3 .github/scripts/preview_origins.py links pr
       - name: Choose the Google credential (keyless when the WIF variables are set; the stored key until then)
         id: gcp_auth
         # Workload Identity Federation when both repository variables are set. Otherwise the GCP_SA_KEY
@@ -197,7 +203,8 @@ jobs:
           # The revision answers, and a POST from the preview origin passes the Origin allow-list.
           for attempt in 1 2 3 4 5 6; do
             CODE=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 60 "$PREVIEW_URL/api/health" || true)
-            echo "GET $PREVIEW_URL/api/health -> HTTP $CODE $(head -c 200 /tmp/health.json 2>/dev/null)"
+            # The body is the pull request's server's: printed on this one line, so it cannot start a workflow command.
+            echo "GET $PREVIEW_URL/api/health -> HTTP $CODE $(head -c 200 /tmp/health.json 2>/dev/null | tr -c '[:print:]' ' ')"
             [ "$CODE" = "200" ] && break
             sleep 10
           done
@@ -210,7 +217,7 @@ jobs:
                  --data "{\"question\":\"Why was this shift slow? Chart downtime by reason.\",\"day\":\"$DAY\",\"shift\":2}")
           echo "POST $PREVIEW_URL/api/ask (Origin: preview) -> HTTP $CODE"
           test "$CODE" = "200"
-          python3 -c 'import json,sys; r=json.load(open("/tmp/ask.json")); print("  status:", r.get("status"), " tool calls:", len(r.get("tool_calls") or r.get("trace") or []), " elapsed_ms:", r.get("elapsed_ms"))'
+          python3 -c 'import json,sys; r=json.load(open("/tmp/ask.json")); print("  status:", ascii(r.get("status")), " tool calls:", len(r.get("tool_calls") or r.get("trace") or []), " elapsed_ms:", ascii(r.get("elapsed_ms")))'
       - name: Post the URL on the pull request
         run: |
           set -euo pipefail

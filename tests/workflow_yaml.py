@@ -2,8 +2,9 @@
 
 CI installs only `-e . pytest`, so there is no YAML library there, and a guard that skipped without one would
 guard nothing. This reads the block style the workflows use: mappings, sequences of mappings or scalars,
-literal and folded block scalars (`|`, `|-`, `>`, `>-`), plain, single- and double-quoted scalars, flow
-sequences of scalars, and comments; `true`, `false`, `null` and integers are typed as YAML 1.2 types them
+literal and folded block scalars (`|`, `|-`, `>`, `>-`), plain, single- and double-quoted scalars (the escapes
+`\\`, `\"`, `\n` and `\t` only), flow
+sequences of plain scalars, and comments; `true`, `false`, `null` and integers are typed as YAML 1.2 types them
 (`on` stays a string). Anything else raises ValueError naming the line, so a workflow written in a form this
 does not read fails the tests instead of being read wrong. tests/test_repo_hygiene.py checks it against
 PyYAML on every workflow whenever PyYAML is installed.
@@ -111,6 +112,8 @@ def _scalar(lines, i, text, indent):
     """A scalar that starts with `text` on line i (a key's or a sequence item's value); returns (value, next line)."""
     head = text.strip()
     block = re.match(r'([|>])([+-]?)(?:\s+#.*)?$', head)
+    if block and block.group(2) == '+':
+        raise ValueError(f'line {i + 1}: keep chomping (`+`) is not read here')
     if block:
         return _block_scalar(lines, i + 1, indent, block.group(1), block.group(2))
     if head.startswith("'"):
@@ -122,11 +125,13 @@ def _scalar(lines, i, text, indent):
         end = re.match(r'"((?:[^"\\]|\\.)*)"(\s+#.*)?$', head)
         if not end:
             raise ValueError(f'line {i + 1}: a double-quoted scalar must end on its line')
+        if re.search(r'\\[^\\"nt]', end.group(1)):
+            raise ValueError(f'line {i + 1}: only the escapes \\\\ \\" \\n \\t are read here')
         return re.sub(r'\\(.)', lambda m: {'n': '\n', 't': '\t'}.get(m.group(1), m.group(1)), end.group(1)), i + 1
     if head.startswith('['):
         inner = re.match(r'\[(.*)\](\s+#.*)?$', head)
-        if not inner or any(ch in inner.group(1) for ch in '[]{}'):
-            raise ValueError(f'line {i + 1}: only a one-line flow sequence of scalars is read')
+        if not inner or any(ch in inner.group(1) for ch in '[]{}\'"#'):
+            raise ValueError(f'line {i + 1}: only a one-line flow sequence of plain scalars is read')
         return [_plain(part.strip()) for part in inner.group(1).split(',') if part.strip()], i + 1
     if head.startswith(('{', '&', '*', '!', '%', '@', '`')):
         raise ValueError(f'line {i + 1}: {head[0]!r} is not read here')
