@@ -16,6 +16,12 @@
 # Until both are set the job falls back to the GCP_SA_KEY secret and says so in a warning, so main
 # stays deployable through the cutover. One-time setup, the cutover order and the key deletion are
 # in docs/DEPLOYMENT.md; preview.yml carries the same credential block (tests/test_repo_hygiene.py).
+#
+# main only (issue #133): a dispatch on another branch deploys nothing, and the Workload Identity condition
+# (docs/DEPLOYMENT.md) accepts this file's token only when it runs main's copy. The checkout is in app/, not
+# the workspace root, because the auth step writes its credential file (gha-creds-*.json; in key mode the
+# deployer's key itself) into the workspace root and the deploy step uploads its working directory to Cloud
+# Build (`--source .`): run from app/, the upload holds the repository and nothing else.
 name: Deploy Cloud Run
 on:
   push:
@@ -29,8 +35,11 @@ permissions:
 concurrency: cloud-run-deploy
 jobs:
   deploy:
-    if: ${{ vars.GCP_PROJECT_ID != '' }}
+    if: ${{ vars.GCP_PROJECT_ID != '' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app   # the checkout; the workspace root holds the credential file
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -56,6 +65,8 @@ jobs:
       WORKBENCH_SECRET: ${{ vars.WORKBENCH_SECRET || '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: app
       - name: Changelog from the merged pull requests
         # /docs/changelog (issue #93) lists every merged pull request, this one included. Nothing here can
         # fail the deploy: the history fetch is inside this step, the step may fail (continue-on-error) or

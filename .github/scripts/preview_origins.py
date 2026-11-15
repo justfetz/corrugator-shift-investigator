@@ -13,17 +13,54 @@ reads the JSON on stdin and prints ``NAME=value`` lines for ``$GITHUB_ENV``.
     preview_origins.py orphans SERVICE SERVICE_JSON [KEEP] < revisions.json
                                        -> every pr-* revision with no tag and no traffic, oldest first,
                                           "name" or "name<TAB>latest" when Cloud Run will refuse to delete it yet
+    preview_origins.py links TREE      -> exit 1, naming each one, if a symlink in TREE resolves outside it
+
+The service description is data a preview can change (a pull request's code runs as the build's and the
+runtime's service accounts), so every value printed for $GITHUB_ENV must be an https origin or URL and
+nothing else; anything else, a newline above all, fails the step (issue #133). ``links`` reads the pull
+request's tree, never runs it: gcloud uploads a symlinked file's target, so a link out of the tree would
+carry a runner file (the credential gcloud keeps) to Cloud Build.
 
 Runs on the GitHub runner's python3 with the standard library only.
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 
 RUN_APP = re.compile(r'https://[a-z0-9.-]+\.run\.app')
+ORIGIN = re.compile(r'https://[a-z0-9.-]+(?::[0-9]+)?')
 TAG_SEPARATOR = '---'
+
+
+def checked(name: str, values: list[str]) -> list[str]:
+    """``values`` unchanged when each is an https origin; otherwise SystemExit naming the first that is not."""
+    for value in values:
+        if not ORIGIN.fullmatch(value):
+            raise SystemExit(f'::error::{name} would carry {ascii(value)}, which is not an https origin; '
+                             'nothing was written (the service description is data a preview can change)')
+    return values
+
+
+def outward_links(tree: str) -> list[tuple[str, str]]:
+    """(path, link text) for each symlink under ``tree`` (its .git excluded) that is absolute, or whose target,
+    followed to the end, is outside ``tree``. An absolute link is refused by its text alone, whatever it resolves
+    to here and now; a relative one is followed. Nothing is followed while walking."""
+    root = os.path.realpath(tree)
+    found = []
+    for dirpath, dirnames, filenames in os.walk(tree):
+        if dirpath == tree and '.git' in dirnames:
+            dirnames.remove('.git')
+        for name in dirnames + filenames:
+            path = os.path.join(dirpath, name)
+            if os.path.islink(path):
+                text = os.readlink(path)
+                target = os.path.realpath(path)
+                if os.path.isabs(text) or (target != root and not target.startswith(root + os.sep)):
+                    found.append((os.path.relpath(path, tree), text))
+    return sorted(found)
 
 
 def _env_value(service: dict, name: str) -> str:
@@ -127,15 +164,24 @@ def main(argv: list[str]) -> int:
         print(__doc__, file=sys.stderr)
         return 2
     command, args = argv[1], argv[2:]
+    if command == 'links' and len(args) == 1:
+        links = outward_links(args[0])
+        for path, target in links:
+            print(f'::error::{ascii(path)} is a symlink to {ascii(target)}, outside the pull request\'s tree; '
+                  'gcloud would upload what it points to')
+        return 1 if links else 0
     payload = json.load(sys.stdin)
     if command == 'origins' and len(args) == 1:
         tag = args[0]
-        print(f'BASE_ORIGINS={",".join(base_origins(payload))}')
-        print(f'PREVIEW_ORIGINS={",".join(preview_origins(payload, tag))}')
-        print(f'ORIGINS={allow_list(payload, tag)}')
+        base = checked('BASE_ORIGINS', base_origins(payload))
+        preview = checked('PREVIEW_ORIGINS', preview_origins(payload, tag))
+        print(f'BASE_ORIGINS={",".join(base)}')
+        print(f'PREVIEW_ORIGINS={",".join(preview)}')
+        print(f'ORIGINS={",".join(base + preview)}')
         return 0
     if command == 'url' and len(args) == 1:
-        print(f'PREVIEW_URL={preview_url(payload, args[0])}')
+        url = preview_url(payload, args[0])
+        print(f'PREVIEW_URL={",".join(checked("PREVIEW_URL", [url])) if url else ""}')
         return 0
     if command == 'revisions' and 2 <= len(args) <= 3:
         service, tag = args[0], args[1]
