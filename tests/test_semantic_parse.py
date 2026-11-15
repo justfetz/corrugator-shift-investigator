@@ -1297,6 +1297,10 @@ def _offer_phrasings(boards_only=False):
             words.setdefault(w, mdl.measure_words.get(w) or mdl.measure_words.get(w.lower()) or name)
     named = [(f'which boards had the most {w}', m) for w, m in words.items()] + [(f'{w} by boards', m) for w, m in words.items()]
     named += [('which boards were fastest', 'speed_run_fpm'), ('which boards were slowest', 'speed_run_fpm'), ('which boards took the most minutes', None)]
+    # a measure per production day: its ratio to the days where the model keeps one (the MSF per day), else none, so nothing offered
+    # may name the measure itself in its place (the reviewer subagent's re-check of e51adf7: 'stops per production day')
+    named += [(f'which boards had the most {w} per production day', P._ratio(mdl, m, 'production_days') or 'no ratio')
+              for w, m in (('stops', 'stops'), ('setups', 'setups'), ('minutes of downtime', 'downtime_minutes'), ('MSF', 'msf'), ('side trim', 'trim_sqft'))]
     if not boards_only:
         named += [(f'which {other} had the most {said} {w}', m) for w, m in words.items() for said, other in OFFER_PAIRS]
         named += [(f'grade {w} by shift', m) for w, m in words.items()]
@@ -1372,14 +1376,14 @@ def _as_asked(store, text, refusal, measure, words, controls):
     return f"{request['intent']} opens with {hand[:1]}, the semantic model with {semantic[:1]}"
 
 
-@pytest.mark.parametrize('day, boards_only', [(DAY, False), ('2026-09-30', True)])
-def test_every_question_a_generated_refusal_offers_is_answered_as_asked(store, day, boards_only):
+@pytest.mark.parametrize('day, period, boards_only', [(DAY, 'day', False), ('2026-09-30', 'day', True), ('2026-09-16', 'week', True)])
+def test_every_question_a_generated_refusal_offers_is_answered_as_asked(store, day, period, boards_only):
     """The class, not the instances (the coordinator's review of PR #155 at 2c28fd3, item 3): every question that any refusal of the
     generated set offers is one the parser checked (an Ask), and passes this test's own check when a visitor asks it next in the same
-    controls: on a day whose week and month are complete, and on the last day of the records, whose are not (the grades' speed card
-    then opens with the grades observed, unranked). 2c28fd3 offered about fifty that answered another measure, another window or a
+    controls: on a day whose week and month are complete, on the last day of the records, whose are not (the grades' speed card
+    then opens with the grades observed, unranked), and under the Week control (an unmoved 'yesterday' is still yesterday). 2c28fd3 offered about fifty that answered another measure, another window or a
     refusal ('which grade had the most production days': the volume; 'order changes yesterday': the order fragments)."""
-    controls = Context(day, 2, scope='shift')
+    controls = Context(day, 2, scope='shift', period=period)
     verdicts, bad, offered_any = {}, [], 0
     for question, measure, words in _offer_phrasings(boards_only):
         try:
