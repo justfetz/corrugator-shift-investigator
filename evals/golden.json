@@ -15109,6 +15109,299 @@
      "^Weekday profile$"
     ]
    }
+  },
+  {
+   "id": "all-day-summary-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance, downtime and waste. Show supporting charts.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The question lab (#177) found the canned summary under All leading with the weakest shift's lineal feet. The day line states the day's lineal feet, speed including downtime, percent of grade target, downtime over the day's scheduled minutes and dry-end waste over the yield after trim and shear; the weakest shift follows with its rank words.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* across the three shifts at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target · [0-9.]+% of the day down · [0-9.]+% of yield rejected at the dry end \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts · [0-9.,]+ ft/min including downtime \\(query [0-9]+ · row 0\\)$"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-why-slow-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Why was this shift slow? Chart downtime by reason.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned 'why slow' card under All leading with the weakest shift's percent of target. The day's percent of grade target leads; the weakest shift's bullet carries the rank, and its findings (largest reason, slowest run) follow, each naming the shift.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "charts": {
+     "min": 1
+    },
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of grade target across the three shifts · [0-9.,]+ ft/min including downtime · [0-9.]+% of the day down \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts",
+     "^- Shift [123] · "
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-money-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Where is the money?",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned money card under All leading with the shift that lost the most. The day's recorded losses (get_day_dollars, priced once on the day) lead, the day's gaps follow ranked by dollars, and each shift's own total is a finding, the one that lost the most saying so.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses across the three shifts · \\$[0-9,]+ per year at the post's volumes",
+     "^- Shift [123]: \\*\\*\\$[0-9,]+\\*\\* of recorded losses, the highest of the three shifts · ",
+     "^- 1\\. [^:]+: \\*\\*\\$[0-9,]+\\*\\*"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-speed-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned speed card under All leading with the weakest shift's ft/min. The day's speed including downtime and percent of grade target lead; the weakest shift follows with its rank.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime across the three shifts · [0-9.]+% of grade target \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-dry-end-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show dry-end quality waste",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned dry-end card under All leading with the shift with the most waste. The day's dry-end waste, over the day's yield after trim and shear, leads with its band; the shift with the most follows with its rank.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of yield rejected at the dry end across the three shifts( · [^(]+)? \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of yield rejected at the dry end, the highest of the three shifts"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-setup-matrix-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show setup matrix",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned setup matrix under All leading with shift 1's setups, the first shift, as if it were the day's. The day's setups, paper changes and feet per setup lead; each shift's count follows.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+\\*\\* dry-end setups across the three shifts · [0-9,]+ paper changes · [0-9,]+ ft per setup \\(query [0-9]+ · row 0\\)$",
+     "^- Shift 1: \\*\\*[0-9,]+\\*\\* dry-end setups · ",
+     "^- Shift 3: \\*\\*[0-9,]+\\*\\* dry-end setups · "
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-speed-two-named-shifts-leads-with-those-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target for shift 1 and shift 3",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. A question naming two shifts reads those two together, as the day's money already does (#31b): the line covers shifts 1 and 3 and their 960 minutes, never shift 2.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime across shifts 1 and 3 · [0-9.]+% of grade target \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [13]: \\*\\*[0-9.]+%\\*\\* of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "[Ss]hift 2"
+   }
+  },
+  {
+   "id": "all-day-incomplete-shift-left-out-of-the-day",
+   "type": "data_quality",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "corrupt": true,
+   "question": "Summarize performance, downtime and waste.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. On the data-quality demo shift 2 holds the refused trim record, so the day line covers the two complete shifts, says which, and shift 2 is reported as incomplete, never added in (the day's money does the same, #31b).",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* across shifts 1 and 3 at [0-9.,]+ ft/min including downtime",
+     "^Shift 2: data incomplete; 1 excluded records\\. Do not rank"
+    ],
+    "sections_not_match": "99,999,999"
+   }
+  },
+  {
+   "id": "selected-shift-never-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Summarize performance, downtime and waste. Show supporting charts.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. Under the selected shift the card is that shift's: no day total runs and the headline is shift 2's own.",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "sections_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* at [0-9.,]+ ft/min including downtime",
+    "sections_not_match": "across (the three shifts|shifts [123])"
+   }
   }
  ]
 }
