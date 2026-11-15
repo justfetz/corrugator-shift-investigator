@@ -21606,6 +21606,16 @@
     "raises": "^The question names no measure the semantic model holds\\. Did you mean 'which reason had the most stops yesterday' or 'which reason had the most minutes of downtime yesterday'\\?$"
    },
    "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), item 1, the reviewer subagent's re-check of e51adf7: e51adf7 read 'paper runs' ranked as the paper changes, which no stop reason records, and refused with the compiler's raw text; a measure said as a set is read ranked only where the split records it, as df63d4c did."
+  },
+  {
+   "id": "semantic-which-reason-most-production-days-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which reason had the most production days this week?",
+   "expect": {
+    "raises": "^The question names no measure the semantic model holds\\. Did you mean 'which reason had the most stops this week' or 'which reason had the most minutes of downtime this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), the reviewer subagent's narrow re-check of 67cb893: no stop reason records the production days, and the refusal named the volume ('Volume (msf) is recorded per run setup …', from 'production' inside the phrase), as df63d4c did. A phrase that is itself a measure lends no measure by its first word; the refusal is the paper runs' own."
   }
  ]
 }
