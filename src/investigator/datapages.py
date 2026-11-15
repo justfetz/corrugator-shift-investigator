@@ -814,6 +814,7 @@ SOURCES = {
     'get_rankings': ('setups', {'row': _ranking}),
     'get_shift_dollars': ('shift_kpis', {'row': lambda r, e: _line(r.get('gap'), r.get('kind'))}),
     'get_day_dollars': ('shift_kpis', {'row': lambda r, e: _line(r.get('gap'), r.get('kind'))}),
+    'get_day_kpis': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),   # the day's row: its complete shifts' records (#177)
     # period tools: the window and the shift
     'get_period_kpis': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),
     'compare_periods': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),

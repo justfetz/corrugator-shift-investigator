@@ -191,3 +191,8 @@ def test_the_day_total_is_the_offline_planners_and_stays_in_scope():
     assert scope_violation('get_day_dollars', {}, [2], 'shift', 'day', DAY) == 'Tool shift is outside the selected scope'
     assert scope_violation('get_day_dollars', {'shifts': [1, 3]}, [2], 'shift', 'day', DAY) == 'Tool shift is outside the selected scope'
     assert scope_violation('get_day_dollars', {'shifts': [1, 3]}, [1, 2, 3], 'day', 'day', DAY) is None
+    # issue #177: the day's KPI row an all-shifts card leads with is the offline planner's the same way
+    assert 'get_day_kpis' not in PLAN_TOOLS and 'get_shift_kpis' in PLAN_TOOLS
+    assert scope_violation('get_day_kpis', {}, [2], 'shift', 'day', DAY) == 'Tool shift is outside the selected scope'
+    assert scope_violation('get_day_kpis', {'shifts': [1, 3]}, [2], 'shift', 'day', DAY) == 'Tool shift is outside the selected scope'
+    assert scope_violation('get_day_kpis', {'shifts': [1, 3]}, [1, 2, 3], 'day', 'day', DAY) is None

@@ -762,6 +762,21 @@ class Figures:
                 return s['stop_seconds'] / 60, False
             if 'rejected' in after:
                 return s['reject_sqft'], False
+        if tool == 'get_day_kpis':   # the day's row (#177): its counted shifts' rows, every figure a ratio of their sums
+            shifts = [(r['production_date'], r['shift']) for r in rows]
+            if len(set(shifts)) != len(shifts):
+                raise WrongRows(f'{len(shifts) - len(set(shifts))} shifts are counted twice (both variants of a shift row)')
+            total, minutes = (lambda c: sum(r[c] for r in rows)), 480 * len(rows)
+            if text.endswith(' lineal ft'):
+                return total('lineal_ft'), False
+            if text.endswith('ft/min'):
+                return total('lineal_ft') / minutes, False
+            if 'of yield rejected at the dry end' in after:
+                return total('reject_sqft') / (total('gross_sqft') - total('trim_sqft') - total('shear_sqft')) * 100, False
+            if 'dry-end setups' in after:
+                return total('setups'), True
+            if 'grade target' in after:
+                return total('lineal_ft') / total('target_ft') * 100, False
         if tool in ('get_shift_kpis', 'get_shift_overview'):
             lead = re.sub(r'^- (?:Shift \d · )?', '', section)   # an all-shifts answer leads each line with its shift
             if receipt['table'] == 'stops':

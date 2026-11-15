@@ -36,6 +36,9 @@ PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile', 'flag
 ALIASES = {'period_downtime': 'period_pareto', 'period_quality': 'period_waste', 'period_dollars': 'period_money'}
 MARGIN_NOT_SET = 'margin not set'   # cost_model.MARGIN_NOT_SET: no owner margin, so no contribution is priced
 WORDS = {2: 'two', 3: 'three'}
+# A day's total over the shifts it lists, which the offline planner adds to an all-shifts card (agent.DAY_TOOLS): the
+# day's money (#31b) and the day's KPI row (#177). Neither has a shift of its own, so neither is grouped as one.
+DAY_TOOLS = ('get_day_dollars', 'get_day_kpis')
 TREND_NAMES = {'trim_pct': 'side trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry-end rejects', 'warp_pct': 'warp', 'bond_pct': 'bond',
                'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'other_pct': 'other dry-end rejects', 'speed_run_fpm': 'speed without stops',
                'speed_all_fpm': 'speed with stops', 'downtime_pct': 'downtime', 'stops': 'stops', 'minutes_per_stop': 'minutes per stop',
@@ -213,14 +216,15 @@ def answer_sections(intent, evidence, context, period_tools, lead=None):
     semantic = [r for r in evidence if r['tool'] == SEMANTIC_TOOL]   # the semantic model's own shape (issue #117)
     evidence = [r for r in evidence if r['tool'] != SEMANTIC_TOOL]
     period = [r for r in evidence if r['tool'] in period_tools]
-    daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] != 'get_day_dollars']   # the day's total is the card's (#31b)
+    day = [r for r in evidence if r['tool'] in DAY_TOOLS]   # the day's totals are the card's (#31b) and lead it under All (#177)
+    daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] not in DAY_TOOLS]
     lines = SemanticAnswer(semantic, context).sections() if semantic else []
     if period:
         own = intent.startswith('period_')
         lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own, lead=lead).sections()
     if daily:
         own = not intent.startswith('period_') and intent != 'model'
-        lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own).sections()
+        lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own, day=day).sections()
     return order(lines)
 
 
@@ -323,8 +327,14 @@ class DailyAnswer:
             'ranking': {KPIS, 'get_rankings'}, 'summary': {'get_shift_overview'}, 'dollars': {'get_shift_dollars'},
             'compare': {KPIS, 'get_downtime_breakdown', 'get_wet_end_performance'}}
 
-    def __init__(self, intent, evidence, context, inferred=False):
+    # The intents whose card under All leads with the day, all shifts together (issue #177, the owner's ruling of
+    # 2026-11-15), and the day total each reads (agent.DAY_LEAD_INTENTS; money reads the day's dollars, #31b).
+    DAY_LEAD = {'summary': 'get_day_kpis', 'overview': 'get_day_kpis', 'speed': 'get_day_kpis', 'quality': 'get_day_kpis',
+                'matrix': 'get_day_kpis', 'dollars': 'get_day_dollars'}
+
+    def __init__(self, intent, evidence, context, inferred=False, day=()):
         self.intent, self.context, self.inferred, self.generic = intent, context, inferred, False
+        self.day = {r['tool']: r for r in day}
         self.shifts = group(evidence)
         self.incomplete = [s for s, tools in self.shifts.items()
                            if any(r['data']['coverage'] != 'complete' for k, r in tools.items() if not k.startswith('all:'))]
@@ -384,16 +394,62 @@ class DailyAnswer:
         shape = getattr(self, 'shape_' + self.intent, None) or self.shape_speed
         head, bullets, notes, looks = shape(focus)
         bullets += self.leftovers(focus)
-        others = [] if self.intent == 'compare' else [b for s in self.complete if s != focus for b in [self.other(s)] if b]
+        day = self.day_total()
+        if day:   # under All the day leads, all shifts together; each shift follows, the focus with its rank (#177)
+            if self.intent == 'dollars':   # the day's own gaps, ranked by dollars as the day's total ranked them
+                head, bullets, notes, _ = self.shape_dollars(focus, day)
+            else:
+                head = self.day_head(day)
+            others = [b for s in self.complete for b in [self.other(s, ranked=s == focus)] if b]
+        else:
+            others = [] if self.intent == 'compare' else [b for s in self.complete if s != focus for b in [self.other(s)] if b]
         if self.inferred:   # an analyst's plan: every other shift's evidence is listed too
             others += [f'- Shift {s} · {b[2:]}' for s in self.complete if s != focus for b in self.leftovers(s, all_tools=True)]
-        if others:   # several shifts: the focus shift's findings say whose they are
+        if others and not (day and self.intent == 'dollars'):   # several shifts: the focus shift's findings say whose they are
             bullets = [f'- Shift {focus} · {b[2:]}' if b.startswith('- ') and not b.startswith('- Shift ') else b for b in bullets]
         notes = list(dict.fromkeys(notes))   # two priced results name the same rates once
         out = [head, *others, *bullets, *lines, *self.all_notes(focus), *notes]   # the reported notes stay with the findings; caveats read under the charts
         if looks:
             out += [LOOK, *looks]
         return out
+
+    def day_total(self):
+        """The day's total this card leads with under All (#177): the intent's day tool, when the scope holds several
+        complete shifts and the offline planner ran it; None otherwise (one shift, an analyst's plan, a selected shift)."""
+        tool = self.DAY_LEAD.get(self.intent)
+        result = self.day.get(tool) if tool else None
+        if not result or self.inferred or self.context.scope != 'day' or len(self.complete) < 2:
+            return None
+        if tool == 'get_day_kpis' and not result['data']['rows']:
+            return None
+        return result
+
+    @staticmethod
+    def across(data):
+        """` across the three shifts`, or the shifts a day total counted (a named pair; the complete ones when one holds an
+        excluded record): its `shifts` less its `excluded_shifts`."""
+        counted = [x['shift'] for x in data.get('shifts', []) if x['shift'] not in (data.get('excluded_shifts') or [])]
+        if counted == [1, 2, 3]:
+            return ' across the three shifts'
+        return ' across shifts ' + ' and '.join(str(x) for x in counted)
+
+    def day_head(self, day):
+        """The headline of the day (#177): the intent's measure over the day's row, its scope in the line."""
+        row, where = day['data']['rows'][0], self.across(day['data'])
+        down = 'of the day down' if where == ' across the three shifts' else f'of their {n(row["scheduled_minutes"])} scheduled minutes down'
+        if self.intent == 'summary':
+            return (f'**{f0(row["observed_lineal_ft"])} lineal ft**{where} at {f1(row["observed_shift_fpm"])} ft/min including downtime · '
+                    f'{f1(row["speed_to_target_pct"])}% of grade target · {f2(row["downtime_pct"])}% {down} · '
+                    f'{f2(row["dry_end_pct"])}% of yield rejected at the dry end {ref(day, 0)}')
+        if self.intent == 'overview':
+            return (f'**{f1(row["speed_to_target_pct"])}%** of grade target{where} · {f1(row["observed_shift_fpm"])} ft/min including downtime · '
+                    f'{f2(row["downtime_pct"])}% {down} {ref(day, 0)}')
+        if self.intent == 'quality':
+            return f'**{f2(row["dry_end_pct"])}%** of yield rejected at the dry end{where}{band(row["dry_end_band_text"])} {ref(day, 0)}'
+        if self.intent == 'matrix':
+            per = f' · {f0(row["lineal_per_setup"])} ft per setup' if row['lineal_per_setup'] is not None else ''
+            return f'**{n(row["valid_setups"])}** dry-end setups{where} · {n(row["paper_changes"])} paper changes{per} {ref(day, 0)}'
+        return f'**{f1(row["observed_shift_fpm"])} ft/min** including downtime{where} · {f1(row["speed_to_target_pct"])}% of grade target {ref(day, 0)}'
 
     def clause(self, focus, low=True):
         """`on shift 2, the lowest of the three shifts` when the scope holds several shifts; nothing for one.
@@ -435,17 +491,20 @@ class DailyAnswer:
         return lines
 
     # ---- one bullet for a shift that is not the focus
-    def other(self, shift):
+    def other(self, shift, ranked=False):
+        """A shift's own line on a card of several shifts; `ranked`: the focus shift's line under a day headline (#177),
+        which says the rank the focus was chosen by, right after the figure it was chosen by."""
         tools = self.shifts[shift]
         k, row = self.kpis(tools)
+        rank = (lambda low=True: self.rank(low)) if ranked else (lambda low=True: '')
         if self.intent in ('overview', 'speed', 'summary') and row:
-            return bullet(f'Shift {shift}: **{f1(row["speed_to_target_pct"])}%** of grade target · {f1(row["observed_shift_fpm"])} ft/min including downtime', k, 0)
+            return bullet(f'Shift {shift}: **{f1(row["speed_to_target_pct"])}%** of grade target{rank()} · {f1(row["observed_shift_fpm"])} ft/min including downtime', k, 0)
         if self.intent == 'downtime' and row:
             field = self.kind_pct(tools)
             words = {'op_maint_pct': 'maintenance and operator', 'pm_pct': 'planned maintenance'}.get(field, field[:-4])
             return bullet(f'Shift {shift}: **{f2(row[field])}%** of the shift in {words} downtime{band(row.get(field[:-4] + "_band_text"))}', k, 0)
         if self.intent == 'quality' and row:
-            return bullet(f'Shift {shift}: **{f2(row["dry_end_pct"])}%** of yield rejected at the dry end{band(row["dry_end_band_text"])}', k, 0)
+            return bullet(f'Shift {shift}: **{f2(row["dry_end_pct"])}%** of yield rejected at the dry end{rank(False)}{band(row["dry_end_band_text"])}', k, 0)
         if self.intent == 'matrix' and row:
             return bullet(f'Shift {shift}: **{n(row["valid_setups"])}** dry-end setups · {n(row["paper_changes"])} paper changes', k, 0)
         if self.intent == 'notes' and tools.get('get_shift_notes'):
@@ -457,7 +516,7 @@ class DailyAnswer:
             return self.ranked(ranking, 0, prefix=f'Shift {shift}, ') if ranking else None
         if self.intent == 'dollars' and tools.get('get_shift_dollars'):
             d = tools['get_shift_dollars']
-            return bullet(f'Shift {shift}: **{money(d["data"]["total_usd"])}** of recorded losses · {money(d["data"]["total_usd_per_year"])} per year'
+            return bullet(f'Shift {shift}: **{money(d["data"]["total_usd"])}** of recorded losses{rank(False)} · {money(d["data"]["total_usd_per_year"])} per year'
                           f'{all_in(d["data"])}', d)
         return None
 
@@ -772,13 +831,15 @@ class DailyAnswer:
         dt = tools.get('get_downtime_breakdown')
         return head, [b for b in bullets if b], self.priced_notes(dt, 'down_minutes', 'category') if dt else [], looks
 
-    def shape_dollars(self, s):
-        """Where the money went in one shift (get_shift_dollars): the total, then each gap ranked by dollars as the tool ranked it."""
-        d = self.shifts[s].get('get_shift_dollars')
+    def shape_dollars(self, s, day=None):
+        """Where the money went in one shift (get_shift_dollars): the total, then each gap ranked by dollars as the tool ranked it.
+        With `day` (get_day_dollars under All, #177), the day's: its total leads and its gaps follow, ranked as it ranked them."""
+        d = day or self.shifts[s].get('get_shift_dollars')
         if not d:
             return self.shape_generic(s)
         data, rows = d['data'], d['data']['rows']
-        head = (f'**{money(data["total_usd"])}** of recorded losses{self.clause(s, low=False)} · {money(data["total_usd_per_year"])} per year at '
+        where = self.across(data) if day else self.clause(s, low=False)
+        head = (f'**{money(data["total_usd"])}** of recorded losses{where} · {money(data["total_usd_per_year"])} per year at '
                 f'the post\'s volumes{all_in(data)} {ref(d)}')
         yearly = lambda r: f' · {money(r["usd_per_year"])}/yr' if r.get('usd_per_year') is not None else ''
         # a ranked gap the tool marks other than controllable says so (side trim, schedule-driven: the owner, issue #135)

@@ -276,13 +276,13 @@ class Analysis:
                 "excluded_records": errors, "trace": {"sql": sql, "parameters": params,
                 "elapsed_ms": (time.perf_counter()-start)*1000}}
 
-    def get_shift_kpis(self, shift):
-        """The shift's tiles. Dry-end waste is a percent of the yield after trim and shear (gross minus side
-        trim minus shear), the owner's denominator (issue #101); each banded figure carries its band
-        (`targets.SHIFT_KPI_BANDS`: `<measure>_band` and the words an answer prints, `<measure>_band_text`)."""
-        result = self._query(shift, f"""SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
+    @staticmethod
+    def _kpi_sql(where, seconds):
+        """The KPI row's query over the setups and stops `where` selects (`shift = ?` for a shift, `shift IN (...)` for a
+        day's shifts), downtime over `seconds` of scheduled time: 28800 a shift (480 minutes), the shifts' sum for a day."""
+        return f"""SELECT count(*) AS valid_setups, count(DISTINCT wet_end_id) AS paper_changes,
         sum(feet)/nullif(sum(target*seconds/60),0)*100 AS speed_to_target_pct,
-        sum(feet) AS observed_lineal_ft, sum(feet)/480 AS observed_shift_fpm,
+        sum(feet) AS observed_lineal_ft, sum(feet)/{seconds // 60} AS observed_shift_fpm,
         sum(gross) AS gross_sqft,
         sum(gross-trim-shear-rejects-coalesce(changeover,0)-coalesce(waste_boards,0)-coalesce(admin,0)) AS estimated_good_sqft,
         sum(gross-trim-shear) AS yield_sqft,
@@ -292,18 +292,56 @@ class Analysis:
         sum(trim)/nullif(sum(gross),0)*100 AS trim_pct,
         sum(shear)/nullif(sum(gross),0)*100 AS shear_pct,
         sum(rejects)/nullif(sum(gross-trim-shear),0)*100 AS dry_end_pct,
-        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Maintenance') AS maintenance_pct,
-        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Operator') AS operator_pct,
-        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind IN ('Maintenance', 'Operator')) AS op_maint_pct,
-        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ? AND kind = 'Scheduled') AS pm_pct,
-        (SELECT coalesce(sum(seconds),0)/28800*100 FROM stops WHERE shift = ?) AS downtime_pct,
+        (SELECT coalesce(sum(seconds),0)/{seconds}*100 FROM stops WHERE {where} AND kind = 'Maintenance') AS maintenance_pct,
+        (SELECT coalesce(sum(seconds),0)/{seconds}*100 FROM stops WHERE {where} AND kind = 'Operator') AS operator_pct,
+        (SELECT coalesce(sum(seconds),0)/{seconds}*100 FROM stops WHERE {where} AND kind IN ('Maintenance', 'Operator')) AS op_maint_pct,
+        (SELECT coalesce(sum(seconds),0)/{seconds}*100 FROM stops WHERE {where} AND kind = 'Scheduled') AS pm_pct,
+        (SELECT coalesce(sum(seconds),0)/{seconds}*100 FROM stops WHERE {where}) AS downtime_pct,
         sum(feet)/nullif(count(*),0) AS lineal_per_setup,
         sum(feet)/nullif(count(DISTINCT wet_end_id),0) AS lineal_per_wet_end,
         count(*) FILTER (WHERE trim/gross*100 > {targets.TRIM_FLAG_PCT}) AS setups_above_trim_target,
-        list(id ORDER BY id) AS source_ids FROM setups WHERE shift = ?""", [shift, shift, shift, shift, shift, shift])
+        list(id ORDER BY id) AS source_ids FROM setups WHERE {where}"""
+
+    def get_shift_kpis(self, shift):
+        """The shift's tiles. Dry-end waste is a percent of the yield after trim and shear (gross minus side
+        trim minus shear), the owner's denominator (issue #101); each banded figure carries its band
+        (`targets.SHIFT_KPI_BANDS`: `<measure>_band` and the words an answer prints, `<measure>_band_text`)."""
+        result = self._query(shift, self._kpi_sql('shift = ?', 28800), [shift] * 6)
         for row in result["rows"]:
             targets.annotate(row, targets.SHIFT_KPI_BANDS)
         return result
+
+    def get_day_kpis(self, shifts=(1, 2, 3)):
+        """The production day's KPI row across the listed shifts that are complete (issue #177: under All a day card leads
+        with the day, the owner's ruling of 2026-11-15). One query over those shifts' setups and stops, so every figure is a
+        ratio of the day's sums, never an average of the shifts' percents: speed over the shifts' 480 minutes each, downtime
+        over their scheduled seconds, dry-end waste over their yield after trim and shear. A shift holding an excluded record
+        is named in `excluded_shifts` and left out (as get_day_dollars leaves it out); when none is complete the row covers
+        every listed shift and the coverage says so. `shifts` names each listed shift with its coverage."""
+        asked = sorted(set(shifts or (1, 2, 3)))
+        if not asked or any(type(s) is not int or s not in (1, 2, 3) for s in asked) or len(asked) != len(list(shifts or (1, 2, 3))):
+            raise ValueError('shifts lists distinct shifts from 1, 2 and 3')
+        bad = {e['shift'] for e in self.errors}
+        complete = [s for s in asked if s not in bad]
+        used = complete or asked
+        where = 'shift IN (' + ', '.join('?' * len(used)) + ')'
+        start = time.perf_counter()
+        sql = self._kpi_sql(where, 28800 * len(used))
+        params = used * 6
+        result = self._db.execute(sql, params)
+        columns = [c[0] for c in result.description]
+        rows = [dict(zip(columns, row)) for row in result.fetchall()]
+        for row in rows:
+            targets.annotate(row, targets.SHIFT_KPI_BANDS)
+            row['shifts_counted'] = list(used)
+            row['scheduled_minutes'] = 480 * len(used)
+        excluded = [e for e in self.errors if e['shift'] in asked]
+        return {"production_day": self.day, "shift": None, "dataset_version": self.version, "rows": rows,
+                "coverage": "complete" if complete else "incomplete",
+                "excluded_records": excluded,
+                "excluded_shifts": [s for s in asked if s in bad] if complete else [],
+                "shifts": [{"shift": s, "coverage": "incomplete" if s in bad else "complete"} for s in asked],
+                "trace": {"sql": sql, "parameters": params, "elapsed_ms": (time.perf_counter() - start) * 1000}}
 
     def get_shift_overview(self, shift):
         """One bounded read bundle for a narrative covering speed, stops and waste."""

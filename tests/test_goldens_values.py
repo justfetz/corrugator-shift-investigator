@@ -32,6 +32,7 @@ def test_value_cases_cover_the_tiles_and_tools_the_brief_names():
                      'get_stops_profile', 'get_trend', 'get_grade_totals', 'get_overrun', 'get_speed_opportunity', 'get_rollstock',
                      'get_shift_kpis', 'get_downtime_breakdown', 'get_quality_breakdown',
                      'get_shift_dollars', 'get_opportunities', 'get_speed_variance', 'get_day_dollars',   # get_day_dollars: the #31b review
+                     'get_day_kpis',   # the day's KPI row an all-shifts card leads with (issue #177)
                      'get_downtime_review', 'semantic_query'}   # semantic_query: the semantic model's new combinations (issue #117)
     dollars = [c for c in cases if c['id'].startswith('value-dollars-')]
     assert len(dollars) >= 6 and any(c.get('rates') for c in dollars)   # issue #31: dollar cases, one with changed rates

@@ -287,7 +287,30 @@ const Money=(()=>{
    if(CONTRIBUTION.test(line)){ const again=money1?contributionLine(money1.after,cfg):null; if(again)out.push(again); continue; }
    out.push(repriceLine(line,steps,live));
   }
-  return reorder(out,steps);
+  return refocusDay(reorder(out,steps),steps);
+ }
+ // Under All the day leads (issue #177): the day's money (get_day_dollars) is the headline, each shift a line, and the one
+ // that lost the most says so ("…, the highest of the three shifts"), where to look pointing at it. At other rates that
+ // can be another shift: the rank clause and the where-to-look move to it, as shapes.DailyAnswer would write them; every
+ // figure is re-priced line by line before this.
+ const DAY_SHIFT=/^- Shift (\d): \*\*\$[\d,]+\*\* of recorded losses(, the \w+ of the [^·]+?)? · /;
+ function refocusDay(sections,steps){
+  const head=REF.exec(sections[0]||''), cited=head&&steps[Number(head[1])-1];
+  if(!cited||cited.tool!=='get_day_dollars')return sections;
+  const ranked=steps.map(s=>s&&s.tool==='get_shift_dollars'&&s.after.coverage==='complete'?[s.after.total_usd,s.before.shift]:null).filter(Boolean)
+   .sort((a,b)=>(a[0]-b[0])||(a[1]-b[1]));
+  if(ranked.length<2)return sections;
+  const focus=ranked[ranked.length-1][1];   // max((total, shift)): a tie goes to the later shift, as in Python
+  const at=sections.findIndex(l=>{const m=DAY_SHIFT.exec(l);return m&&m[2];});
+  if(at<0)return sections;
+  const [,old,clause]=DAY_SHIFT.exec(sections[at]), was=Number(old);
+  if(was===focus)return sections;
+  return sections.map((l,i)=>{
+   const m=DAY_SHIFT.exec(l);
+   if(i===at)return l.replace(clause+' · ',' · ');
+   if(m&&Number(m[1])===focus)return l.replace(' of recorded losses · ',` of recorded losses${clause} · `);
+   return l.replace(new RegExp(` for shift ${was}”$`),` for shift ${focus}”`);
+  });
  }
  function basisLine(line,live){
   for(const s of live)for(const [i,row] of s.before.rows.entries()){

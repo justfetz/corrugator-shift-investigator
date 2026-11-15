@@ -3750,7 +3750,7 @@
    "day": "2026-08-12",
    "scope": "day",
    "question": "Show speed to target",
-   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-12 shift 2 is lowest in percent of target (85.3%) but not in ft/min (shift 1 ran 567.6 ft/min to its 580.5): the headline must not call its ft/min the lowest. Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
+   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-12 shift 2 is lowest in percent of target (85.3%) but not in ft/min (shift 1 ran 567.6 ft/min to its 580.5): the headline must not call its ft/min the lowest. Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the rank words now sit on the focus shift's bullet, right after the percent of grade target it was chosen by, and never after its ft/min.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3758,8 +3758,11 @@
      2,
      3
     ],
-    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime on shift [123] · [0-9.]+% of grade target, the lowest of the three shifts \\(query [0-9]+ · row 0\\)$",
-    "sections_not_match": "ft/min\\*\\* including downtime on shift [123], the (lowest|lower)"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime across the three shifts · [0-9.]+% of grade target \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts · [0-9.,]+ ft/min including downtime \\(query [0-9]+ · row 0\\)$"
+    ],
+    "sections_not_match": "ft/min(\\*\\*)? including downtime( on shift [123])?, the (lowest|lower)"
    }
   },
   {
@@ -3769,7 +3772,7 @@
    "day": "2026-08-12",
    "scope": "day",
    "question": "Summarize this shift",
-   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 1 made fewer feet on 2026-08-12: 272,462 lineal ft against shift 2's 278,622). Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
+   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 1 made fewer feet on 2026-08-12: 272,462 lineal ft against shift 2's 278,622). Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the day's lineal feet lead and the rank words sit on the focus shift's bullet, after the percent of grade target it was chosen by, never after lineal feet.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3777,8 +3780,11 @@
      2,
      3
     ],
-    "sections_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [123] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lowest of the three shifts",
-    "sections_not_match": "lineal ft\\*\\* on shift [123], the (lowest|lower)"
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* across the three shifts at [0-9.,]+ ft/min including downtime · ",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts · [0-9.,]+ ft/min including downtime \\(query [0-9]+ · row 0\\)$"
+    ],
+    "sections_not_match": "lineal ft(\\*\\*)?( on shift [123]| across the three shifts)?, the (lowest|lower)"
    }
   },
   {
@@ -7570,15 +7576,16 @@
    "day": "2026-09-16",
    "scope": "day",
    "question": "Where did the money go?",
-   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Across 2026-09-16 the shifts are ranked by their recorded losses without the outage: third shift's $7,418 held the $220 outage, so without it first shift, $7,335, lost the most; the outage stays on third shift's line, apart. Seven tool calls (each shift's dollars and the day's, which prices them again), so the budget is 500 ms, as for the shift comparisons.",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Across 2026-09-16 the shifts are ranked by their recorded losses without the outage: third shift's $7,418 held the $220 outage, so without it first shift, $7,335, lost the most; the outage stays on third shift's line, apart. Seven tool calls (each shift's dollars and the day's, which prices them again), so the budget is 500 ms, as for the shift comparisons. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the day's recorded losses lead (get_day_dollars, the outage apart and in the all-in total), the day's gaps follow ranked without the outage, and first shift's line says it lost the most of the three, ranked without the outage as before; third shift's line keeps its outage in its all-in total.",
    "expect": {
     "url": "/corr/1/day/2026-09-16?measure=dollars",
     "status": "complete",
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses on shift 1, the highest of the three shifts ",
+     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses across the three shifts · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime ",
+     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* of recorded losses, the highest of the three shifts · ",
      "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 3\\)$"
     ],
-    "sections_not_match": "^- Shift [123] · [0-9]+\\. Downtime: (Planned maintenance|Power outage)",
+    "sections_not_match": "^- (Shift [123] · )?[0-9]+\\. Downtime: (Planned maintenance|Power outage)",
     "max_ms": 500
    }
   },
@@ -7624,14 +7631,14 @@
    "day": "2025-08-21",
    "scope": "day",
    "question": "Where did the money go?",
-   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). Across Thursday 2025-08-21 the focus shift's gaps are listed ranked: its side-trim line carries \" · schedule-driven\", ranked, and no other ranked line does. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage.",
+   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). Across Thursday 2025-08-21 the focus shift's gaps are listed ranked: its side-trim line carries \" · schedule-driven\", ranked, and no other ranked line does. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the gaps listed ranked are the day's own (get_day_dollars), not the focus shift's: the day's side-trim line carries \" · schedule-driven\", ranked, and no other ranked line does.",
    "expect": {
     "url": "/corr/1/day/2025-08-21?measure=dollars",
     "status": "complete",
     "sections_match": [
-     "^- Shift [123] · [0-9]+\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query [0-9]+ · row [0-9]+\\)$"
+     "^- [0-9]+\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query [0-9]+ · row [0-9]+\\)$"
     ],
-    "sections_not_match": "^- Shift [123] · Side trim|^- Shift [123] · [0-9]+\\. (?!Side trim: ).* · schedule-driven",
+    "sections_not_match": "^- (Shift [123] · )?Side trim|^- (Shift [123] · )?[0-9]+\\. (?!Side trim: ).* · schedule-driven",
     "max_ms": 500
    }
   },
@@ -15189,7 +15196,7 @@
    "reviewed_by": "owner-pending",
    "scope": "day",
    "question": "Where is the money?",
-   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned money card under All leading with the shift that lost the most. The day's recorded losses (get_day_dollars, priced once on the day) lead, the day's gaps follow ranked by dollars, and each shift's own total is a finding, the one that lost the most saying so.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned money card under All leading with the shift that lost the most. The day's recorded losses (get_day_dollars, priced once on the day) lead, the day's gaps follow ranked by dollars, and each shift's own total is a finding, the one that lost the most saying so. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -15214,7 +15221,8 @@
      "^- Shift [123]: \\*\\*\\$[0-9,]+\\*\\* of recorded losses, the highest of the three shifts · ",
      "^- 1\\. [^:]+: \\*\\*\\$[0-9,]+\\*\\*"
     ],
-    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]",
+    "max_ms": 500
    }
   },
   {

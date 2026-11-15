@@ -56,7 +56,7 @@ Every row below was resolved through the offline router on Monday 14 September, 
 | "What does trim cost?", "What's trim costing us this month?" | the ownership lens: the total cost of waste, side trim first, with its band, then every other waste line priced once (the boards and planning / admin included, so the total is the waste breakdown's); the dry-end waste (tag scrap) as one subtotal with bond, warp, misalignment, moisture and other beneath it, each with its own cause | `?measure=money&lens=ownership`, `?measure=money&window=month&lens=ownership` |
 | "Show setup matrix", "Show orders and quantities", "Show shift and downtime notes", "Show rankings" | the per-shift matrices, notes and rankings (Day only) | `?measure=setups`, `orders`, `notes`, `rank` |
 
-With All selected, "Compare all shifts" runs KPIs, downtime and speed for each shift. The example chips under *Ask in one click* are these questions; under Week, Month or 4-4-5 they say "this week", "this month" or "this period".
+With All selected, a day card whose question names no shift is about every shift together (the owner's ruling, 2026-11-15): the summary, why slow, the money, speed to target, dry-end waste and the setup matrix lead with the day, across the three shifts, and each shift follows, the one the card looks into saying its rank. Two named shifts ("shift 1 and shift 3") lead with those two together. "Compare all shifts" runs KPIs, downtime and speed for each shift. The example chips under *Ask in one click* are these questions; under Week, Month or 4-4-5 they say "this week", "this month" or "this period".
 
 ## What is refused, and why
 
