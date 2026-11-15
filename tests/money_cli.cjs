@@ -18,7 +18,8 @@ const TOTALS=['total_usd','total_paper_usd','total_machine_time_usd','total_usd_
  'apart_gaps','all_in_usd','levers','at_standard_usd','above_standard_usd','no_band_usd','dry_end_at_standard_usd','dry_end_above_standard_usd',
  'ptd_usd','ptd_usd_per_year','ptd_levers','ptd_terms',
  'total_usd_shown','total_paper_usd_shown','total_machine_time_usd_shown','at_standard_usd_shown','above_standard_usd_shown','no_band_usd_shown','all_in_usd_shown',
- 'controllable_usd_shown','dry_end_usd_shown','dry_end_at_standard_usd_shown','dry_end_above_standard_usd_shown','ptd_usd_shown','details','display_terms'];   // whole dollars that add up (PR #168)   // the money ledger: its totals and its period to date (issue #164)   // a money card's gaps apart and its all-in total (the owner, PR #111)   // the ownership lens's tag-scrap subtotal (PR #111)
+ 'controllable_usd_shown','dry_end_usd_shown','dry_end_at_standard_usd_shown','dry_end_above_standard_usd_shown','ptd_usd_shown','details','display_terms',
+ 'total_contribution_usd_shown'];   // whole dollars that add up (PR #168)   // the money ledger: its totals and its period to date (issue #164)   // a money card's gaps apart and its all-in total (the owner, PR #111)   // the ownership lens's tag-scrap subtotal (PR #111)
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function parity(file){
  const {cfg,cases}=JSON.parse(fs.readFileSync(file,'utf8')), bad=[]; let fields=0, lines=0;

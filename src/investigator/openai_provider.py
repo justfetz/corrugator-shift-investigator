@@ -57,7 +57,7 @@ def compact_result(result):
         for key in ('cost_note','rates','provenance','current_sums','tile_money','buckets','area_sqft','area_msf','stop_minutes','speed_minutes',
                     'waste_run_minutes','machine_minutes','msf_not_made','trim_pct_of_gross','trim_target_pct','trim_points_over',
                     'trim_over_usd','trim_over_usd_per_year','trim_over_basis','trim_over_terms','ptd_terms','ptd_levers','speeds_note',
-                    'display_terms','details'):   # the terms the card's whole dollars are allocated from, side trim by shift (PR #168)
+                    'display_terms','ptd_display_terms','details'):   # the terms the card's whole dollars are allocated from, side trim by shift (PR #168)
             compact['data'].pop(key,None)   # the card's money (#31b): what the card states, not what a planner chooses by
         keep=('usd_shown','usd_per_year') if result['tool'] in ('get_shift_dollars','get_opportunities') else ()   # as the card prints them (PR #168)
         for row in compact['data'].get('rows',[]):

@@ -1355,6 +1355,11 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const trimBar0=vals.find(v=>/^Side trim over the 3% target: /.test(v['aria-label'])); assert.ok(trimBar0&&/ · schedule-driven\. /.test(trimBar0['aria-label']),'side trim\'s bar says schedule-driven, from its row\'s control (issue #135)');
  assert.ok(vals.filter(v=>v!==trimBar0).every(v=>!/ · schedule-driven\. | · external\. /.test(v['aria-label'])),'no other lever of this shift is marked');
  assert.ok(vals.slice(6).every(v=>/ · shown apart: at-standard\. /.test(v['aria-label'])),'after the six levers, the cost at standard, shown apart');
+ // each bar's formula is in cents, and it says what the bar prints when that is not the cents' nearest dollar (the review of 82c0994 on PR #168, item 1)
+ for(const v of vals){ const label=v['aria-label'], cents=[...label.matchAll(/= \$([\d,]+\.\d\d)(?: at standard)?(?=;)/g)].pop(), printed=Number(v.textContent.replace(/[$,]/g,''));
+  assert.ok(cents,'a bar\'s formula states its cents: '+label);
+  const near=Money.nearestDollar(Money.toCents(Number(cents[1].replace(/,/g,''))));
+  assert.equal(label.includes(`It prints ${v.textContent} (whole dollars that add up)`),near!==printed,label); }
  const flip=walk(panel).find(e=>e.tag==='button'&&e.textContent==='Table'); flip.events.click();
  const table=walk(panel).find(e=>e.tag==='table'); assert.equal(walk(table).filter(e=>e.tag==='tr').length,g.rows.length+1);   // every row of the ledger, and the header
  walk(panel).find(e=>e.tag==='button'&&e.textContent==='Bars').events.click();
@@ -1363,7 +1368,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.match(ledger,/Paper 5,246 sq ft of side trim, shear and dry end above their targets = 5\.2 MSF × \$55\/MSF = \$288/);   // $288.53 prints $288 so paper and machine time add to the $502 (PR #168)
  assert.match(ledger,/Machine time 10\.7 min \(downtime over its bands 0\.0 · speed under the grade baseline 10\.0 · waste run time 0\.7\) = 57\.7 MSF not made at the required run speed at 10% downtime, 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$214/);
  assert.match(ledger,/At standard \$6,998 inside the bands this shift: the cost of the order mix and the process, shown apart, not in the total/);
- assert.match(ledger,/Total = \$502 above standard this shift · \$718,045\/yr at this period's rate \(4-4-5 P2 to date through Mon 14 Sep, all shifts: period-to-date dollars per production day × 257\.14 production days a year\) · contribution: margin not set/);
+ assert.match(ledger,/Total = \$502 above standard this shift · \$718,012\/yr at this period's rate \(4-4-5 P2 to date through Mon 14 Sep, all shifts: period-to-date dollars per production day × 257\.14 production days a year\) · contribution: margin not set/);
  assert.match(ledger,/Rates: paper \$55\/MSF \(post\), machine time \$1,200\/hr \(post\), contribution margin not set \(assumption: owner to set\)/);
  assert.match(ledger,/they are not a real plant's figures/);
  // tiles: every tile that measures a loss shows its dollars, never a year (issue #164); in dollars its value is the dollars
@@ -1559,7 +1564,8 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    // a rate that moves a group past the tag scrap: the subtotal line moves with its kinds and every line is renumbered
    const moved=JSON.parse(JSON.stringify(data)), unexplained=moved.rows.find(r=>r.lever.startsWith('Unexplained'));
    unexplained.price_terms.quantity=3e6;   // a remainder larger than all the dry-end waste, so at paper-heavy rates it ranks second
-   for(const t of moved.display_terms.shifts)t.lines.unexplained=1e6;   // its whole dollars are the card's terms' (cost_model.whole_lines, PR #168)
+   const at=moved.display_terms.fields.indexOf('unexplained');   // its whole dollars are its cells' (cost_model.whole_dollars, PR #168)
+   for(const row of moved.display_terms.cells)row[at]=3e6/moved.display_terms.cells.length;
    const heavy=Money.effective(cfg,{paper_usd_msf:100,machine_usd_hour:1}), after=Money.reprice('get_opportunities',moved,heavy,cfg);
    const step={tool:'get_opportunities',before:moved,after}, q=lensed.trace.findIndex(e=>e.tool==='get_opportunities');
    const lines=Money.repriceSections(lensed.sections,lensed.trace.map((e,i)=>i===q?step:null),heavy,cfg);

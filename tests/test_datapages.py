@@ -943,8 +943,9 @@ class Figures:
     @staticmethod
     def money_shown(entry, part, index, section):
         """(cents, printed whole dollars, bound) of a money ledger's bold figure (cost_model.whole_dollars, PR #168): a
-        line within a dollar of its cents for each shift it adds up (two for the ownership lens's lines, an above and an
-        at-standard share each), a little over for the cents a window priced at once differs from its shifts' by."""
+        line within a dollar of its cents for each cell it adds up, one shift of one day (the cell is the root: the review
+        of 82c0994; two for the ownership lens's lines, an above and an at-standard share each), a little over for the cents
+        a window priced at once differs from its cells' by."""
         data = entry.get('data') if isinstance(entry.get('data'), dict) else {}
         if entry.get('tool') not in ('get_opportunities', 'get_shift_dollars', 'get_day_dollars') or 'display_terms' not in data:
             return None
@@ -965,7 +966,7 @@ class Figures:
                       'controllable_usd': 2, 'dry_end_usd': 2}.get(key, 1) if not owner or key != 'total_usd' else 2 * len(data['rows']))
         if row.get('usd_shown') is None:
             return None
-        return row['usd'], row['usd_shown'], parts * max(1, len(data['display_terms']['scope'])) + 0.05
+        return row['usd'], row['usd_shown'], parts * max(1, len(data['display_terms']['cells'])) + 0.05
 
     def check(self, result, i, section):
         receipt = result['receipts'][i]

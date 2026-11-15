@@ -983,7 +983,7 @@ function moneyFacts(m){
  const perShift=day&&own.length&&own.every(Boolean)?own.map(x=>`shift ${x.data.shift} ${Money.money(shownOf(atRates(m,x),'total_usd'))}`).join(' + '):null;
  return {levers,day,owner,data:d,rows,cfg,rates,warning,lens:levers?d.lens||'all':null,
   // the whole dollars the card prints, which add up (PR #168); the cents stay in the rows' formulas
-  total:shownOf(d,'total_usd'), paper:shownOf(d,'total_paper_usd'), machine:shownOf(d,'total_machine_time_usd'), contribution:d.total_contribution_usd,
+  total:shownOf(d,'total_usd'), paper:shownOf(d,'total_paper_usd'), machine:shownOf(d,'total_machine_time_usd'), contribution:shownOf(d,'total_contribution_usd'),
   // a window's yearly figure is its scope's period to date (total_usd_per_year); a shift's or a day's is the machine's (ptd_*);
   // with fewer than five production days to date there is none, and the note says why
   year:levers?d.total_usd_per_year:d.ptd_usd_per_year, yearNote:d.ptd_year_note||null,
@@ -1041,7 +1041,8 @@ function unitLabel(r,mode,yearly){
  const year=r.year!==null&&r.year!==undefined;
  return yearly&&year?`${Money.short(r.year)}/yr`:Money.money(r.usd)+(year?` · ${Money.short(r.year)}/yr`:'');
 }
-function rowFormula(r){ return r.rows[0].usd_basis; }
+// a row's formula in cents, and the whole dollars it prints when that is not their nearest dollar (Money.printsNote, PR #168)
+function rowFormula(r){ const x=r.rows[0], note=Money.printsNote(x); return x.usd_basis+(note?` · ${note.replace(/\.$/,'')}`:''); }
 function rowRecords(r){ const x=r.rows[0]; return [x.records||(Array.isArray(x.source_ids)?`${x.source_ids.length} records`:''),x.owner?`owner role: ${x.owner}`:'',x.look_at?`look at: ${x.look_at}`:'',x.apart_note||''].filter(Boolean).join(' · '); }
 const PANEL_ROWS=8;
 // The lens orders the levers before the unit does (issue #101), as the server ranks them: under the supervisor lens the
@@ -1155,7 +1156,9 @@ function moneyOnTile(tile,valueEl,native,priced,when,slot=null){
  let text=[`${Money.money(usd)}${measure} ${when}`,year].filter(Boolean).join(' · ');
  if(mode==='usd'){ valueEl.replaceChildren(node('span',Money.money(usd))); text=[`${measure.trim()} ${when}`.trim(),native].filter(Boolean).join(' · '); }
  else if(mode==='min'){ valueEl.replaceChildren(node('span',Money.fmt(priced.machine_minutes,1)),node('small','min')); text=[Money.money(usd),year,native].filter(Boolean).join(' · '); }
- const line=slot||node('div',text,'usd'); line.textContent=text; line.title=`${priced.what}: ${priced.usd_basis}`; if(!slot)tile.append(line);
+ // its formula in cents, the whole dollars it prints when they are not their nearest dollar, and over several days the long note
+ const note=Money.printsNote(priced), long=priced.production_days>1&&costCfg()?` ${costCfg().long_note}`:'';
+ const line=slot||node('div',text,'usd'); line.textContent=text; line.title=`${priced.what}: ${priced.usd_basis}${note?'. '+note:''}${long}`; if(!slot)tile.append(line);
 }
 // ---- the charts in the unit shown: a priced chart in another unit than its own is drawn as ranked bars of that unit
 function chartUnits(chart){ const mode=unitMode(); if(!mode||!Money.priced(chart))return null; const u=String(chart.unit||''); if(mode==='min'&&u==='minutes'||mode==='pct'&&u==='% of gross')return null; return mode; }

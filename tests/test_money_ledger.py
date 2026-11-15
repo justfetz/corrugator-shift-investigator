@@ -138,8 +138,12 @@ def test_a_yearly_figure_comes_only_from_period_to_date(store):
     start, end, label = cost_model.ptd_window(store, DAY)
     assert (start.isoformat(), end.isoformat(), label) == ('2026-08-31', DAY, '4-4-5 P2 to date through Mon 14 Sep')   # its end day (PR #168)
     ptd, usd = window_ledger(store, start, end)
+    # the yearly base is the period to date's whole dollars, its cells' added up (the coordinator's review of 82c0994, item 2)
+    cells, _, _ = cost_model.ledger_cells(store, start, end)
+    whole = cost_model.whole_dollars(cost_model.display_terms(cells, rates()), rates())
+    assert [r['usd_shown'] for r in cards[0]['ptd_levers']] == [whole['levers'][k] for k in cost_model.LEVERS]
     assert cards[0]['ptd_days'] == ptd['days'] and cards[0]['ptd_usd_per_year'] == sum(
-        cost_model.annual(usd[k], ptd['days']) for k in cost_model.LEVERS)
+        cost_model.annual(whole['levers'][k], ptd['days']) for k in cost_model.LEVERS)
     # shift 1's month: its own period to date, about a third of the machine's, never the machine's year
     machine = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, rates())
     first = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, 1, rates())
@@ -230,11 +234,12 @@ def test_largest_remainder_adds_to_its_target_and_never_lifts_a_zero():
 
 @pytest.mark.parametrize('day', ['2026-06-10', '2026-09-28', '2026-08-31', '2026-09-30'])
 def test_a_day_card_prints_whole_dollars_that_add_up(store, day):
-    """The review's item 1 (10 Jun printed $655 over shift lines adding to $656): the day prints its nearest dollar, each shift
-    its share by the largest remainder, the levers its shifts' whole dollars added up; every set of parts adds to its total,
-    and each shift card prints the share its line on the day card prints."""
+    """The review's item 1 (10 Jun printed $655 over shift lines adding to $656): each shift prints its nearest dollar (the cell
+    is the root: the coordinator's review of 82c0994, item 2), the day its shifts' whole dollars added up, the levers too; every
+    set of parts adds to its total, and each shift card prints what its line on the day card prints."""
     whole, shifts = day_cards(store, day)
-    assert whole['total_usd_shown'] == cost_model.nearest_dollar(cost_model.to_cents(whole['total_usd']))
+    assert [s['total_usd_shown'] for s in shifts] == [cost_model.nearest_dollar(cost_model.to_cents(s['total_usd'])) for s in shifts]
+    assert abs(whole['total_usd_shown'] - whole['total_usd']) <= 0.5 * len(shifts) + 0.01
     assert [s['total_usd_shown'] for s in shifts] == [x['usd_shown'] for x in whole['shifts']]
     assert sum(s['total_usd_shown'] for s in shifts) == whole['total_usd_shown']
     for data in [whole, *shifts]:
@@ -387,3 +392,163 @@ def test_side_trim_by_shift_is_explanatory_and_shows_inside_the_band(store):
         assert cost_model.shift_dollars(analysis, 2, rates()).get('details') is None   # one shift: its own lever line says it
     finally:
         analysis.close()
+
+
+# ---- the coordinator's review of 82c0994 on PR #168: the cell is the whole-dollar root, so nested windows add up as printed
+
+NESTED = ('2026-07-01', '2026-09-30')   # July to September (the golden window ends 30 Sep)
+
+
+def printed_lines(data):
+    """A ledger card's printed figures, keyed so two cards of nested windows can be added: its total, each lever, each row at
+    standard and apart, everything recorded and priced, paper and machine time."""
+    out = {('total',): data['total_usd_shown'], ('at',): data['at_standard_usd_shown'], ('all_in',): data['all_in_usd_shown'],
+           ('paper',): data['total_paper_usd_shown'], ('machine',): data['total_machine_time_usd_shown']}
+    out.update({(r['key'], r.get('apart') or 'lever'): r['usd_shown'] for r in data['rows']})
+    return out
+
+
+def owned_lines(data):
+    """The ownership lens's printed figures: each line, the tag scrap, its splits, all the waste, paper and machine time."""
+    out = {(r['key'],): r['usd_shown'] for r in data['rows']}
+    out.update({(k,): data.get(f'{k}_usd_shown') or 0 for k in ('total', 'above_standard', 'at_standard', 'no_band', 'dry_end',
+                                                             'total_paper', 'total_machine_time')})
+    return out
+
+
+def added(cards, lines):
+    out = {}
+    for c in cards:
+        for k, v in lines(c).items():
+            out[k] = out.get(k, 0) + v
+    return out
+
+
+@pytest.mark.parametrize('text', ['', 'paper:47.5,hour:1450,margin:40,trim:2.75'])
+def test_displayed_days_add_to_their_weeks_months_periods_and_periods_to_date(store, text):
+    """The coordinator's review of 82c0994 on PR #168, items 2 and 3: the week of 7 Sep's five day cards printed $12,546 and
+    the week $12,547; September's days $66,790 and the month $66,792, shift 3's $22,935 and $22,939; the day cards' "part of $X"
+    chain broke on 17 steps; 1 Jan 2025's ownership lens printed $22,540 over its shifts and $22,541 for the day. The cell, one
+    shift of one day, is the whole-dollar root, so over July to September, at the post's rates and at others: each day card is
+    its shift cards, and every week, month, 4-4-5 period and period to date, for all shifts and for each shift, prints its days'
+    (or its shift cards') printed figures added up, line by line; the ownership lens's lines and the KPI tiles add up day by
+    day and shift by shift."""
+    r = rates(text)
+    cache, owned, tiled = {}, {}, {}
+
+    def tiles_of(window, shift):
+        s, terms = cost_model.period_whole(store, window, shift, r)
+        data = cost_model.attach('get_period_kpis', store.get_period_kpis(window, shift=shift), r)
+        pareto = store.get_downtime_pareto(window, 'reason', 'minutes', shift)['rows']
+        return {t['metric']: t['usd_shown'] for t in cost_model.period_tiles(data, pareto, r, (s, terms))}
+
+    def own_day(d):   # a day's ownership lens and KPI tiles, all shifts
+        if d not in owned:
+            owned[d] = cost_model.opportunities(store, {'period': 'day', 'anchor': d}, None, r, 'ownership')
+            tiled[d] = tiles_of({'period': 'day', 'anchor': d}, None)
+        return owned[d], tiled[d]
+
+    def day(d):
+        if d not in cache:
+            analysis = store.day_analysis(d)
+            try:
+                cache[d] = (cost_model.day_dollars(analysis, r), {n: cost_model.shift_dollars(analysis, n, r) for n in (1, 2, 3)})
+            finally:
+                analysis.close()
+        return cache[d]
+
+    days = [d for d in store.production_days if NESTED[0] <= d <= NESTED[1]]
+    for d in days:   # a day card is its shift cards, line by line, and so is its period to date
+        whole, shifts = day(d)
+        assert printed_lines(whole) == added(shifts.values(), printed_lines), d
+        assert [e['usd_shown'] for e in whole['shifts']] == [shifts[n]['total_usd_shown'] for n in (1, 2, 3)], d
+    windows = []
+    monday = date.fromisoformat(NESTED[0]) - timedelta(days=date.fromisoformat(NESTED[0]).weekday())
+    while monday.isoformat() <= NESTED[1]:
+        windows.append({'period': 'week', 'anchor': monday.isoformat()})
+        monday += timedelta(days=7)
+    windows += [{'period': 'month', 'anchor': m} for m in ('2026-07-01', '2026-08-03', '2026-09-01')]
+    moment = date.fromisoformat(NESTED[0])
+    while moment.isoformat() <= NESTED[1]:
+        windows.append({'period': 'fiscal', 'anchor': moment.isoformat()})
+        moment = fiscal_bounds(moment)[1] + timedelta(days=1)
+    checked = 0
+    for window in windows:
+        w = store._window(window)
+        inside = [d for d in store.production_days if w['start'] <= d <= w['end']]
+        for shift in (None, 1, 2, 3):
+            card = cost_model.opportunities(store, window, shift, r)
+            parts = [day(d)[0] if shift is None else day(d)[1][shift] for d in inside]
+            got, want = printed_lines(card), added(parts, printed_lines)
+            assert {k: v for k, v in got.items() if k[0] != 'lever'} == want, (window, shift)   # every line, the totals too
+            assert card['ptd_usd_shown'] == sum(day(d)[0]['total_usd_shown'] if shift is None else day(d)[1][shift]['total_usd_shown']
+                                                for d in store.production_days if card['ptd_start'] <= d <= card['ptd_through']), (window, shift)
+            assert [x['usd_shown'] for x in card['ptd_levers']] == [sum(levers(day(d)[0] if shift is None else day(d)[1][shift])[k]['usd_shown']
+                                                                         for d in store.production_days if card['ptd_start'] <= d <= card['ptd_through'])
+                                                                     for k in cost_model.LEVERS], (window, shift)
+            checked += 1
+        # the ownership lens and the KPI tiles (item 3): the shifts add to all shifts, and the days to the window, every line
+        own = {sh: cost_model.opportunities(store, window, sh, r, 'ownership') for sh in (None, 1, 2, 3)}
+        assert owned_lines(own[None]) == added([own[sh] for sh in (1, 2, 3)], owned_lines), window
+        assert owned_lines(own[None]) == added([own_day(d)[0] for d in inside], owned_lines), window
+        tiles = {sh: tiles_of(window, sh) for sh in (None, 1, 2, 3)}
+        assert tiles[None] == {m: sum(tiles[sh][m] for sh in (1, 2, 3)) for m in tiles[None]}, window
+        assert tiles[None] == {m: sum(own_day(d)[1][m] for d in inside) for m in tiles[None]}, window
+    assert checked == 4 * len(windows) >= 4 * 20
+    # the "part of $X" chain: a day's period to date is the day before's and the day, in one period to date
+    for before, d in zip(days, days[1:]):
+        a, b = day(before)[0], day(d)[0]
+        if a['ptd_start'] == b['ptd_start']:
+            assert b['ptd_usd_shown'] == a['ptd_usd_shown'] + b['total_usd_shown'], d
+    # 1 Jan 2025's ownership lens: its shifts add to the day, every line (item 3)
+    first = {'period': 'day', 'anchor': '2025-01-01'}
+    own = {sh: cost_model.opportunities(store, first, sh, r, 'ownership') for sh in (None, 1, 2, 3)}
+    assert owned_lines(own[None]) == added([own[sh] for sh in (1, 2, 3)], owned_lines)
+
+
+def test_a_long_window_states_its_cents_apart_once():
+    """The coordinator's review of 82c0994, item 2: a long window's whole dollars, added cell by cell, can differ from its cents
+    by a few dollars; a card over several production days says so once, and a shift's or a day's card does not."""
+    from investigator import shapes
+    assert '$' not in shapes.LONG_NOTE
+    assert shapes.long_note({'window': {'production_days_observed': 5}}) == [shapes.LONG_NOTE]
+    assert shapes.long_note({'window': {'production_days_observed': 1}}) == [] and shapes.long_note({}) == []
+
+
+def test_the_formula_line_states_its_cents_and_what_its_row_prints():
+    """The review's item 1: 13 Jul shift 2 printed "Side trim over the 3% target: **$512**" over a formula ending "= $513". The
+    formula is in cents, a waste row's ends with its paper and machine time added, and the line says what the row prints when
+    that is not the cents' nearest dollar."""
+    from investigator import shapes
+    trim = cost_model.price('trim', 9318.6, rates())
+    assert trim['usd_basis'] == '9,318.6 sq ft = 9.319 MSF x $55/MSF paper = $512.52; contribution: margin not set'
+    assert shapes.formula_line('Side trim over the 3% target', {**trim, 'usd_shown': 512}).endswith(
+        '= $512.52; contribution: margin not set. It prints $512 (whole dollars that add up).')
+    assert shapes.formula_line('Side trim over the 3% target', {**trim, 'usd_shown': 513}).endswith('margin not set.')
+    waste = cost_model.price('waste', 11218.7, rates())
+    assert waste['usd'] == round(waste['paper_usd'] + waste['machine_time_usd'], 2)
+    assert waste['usd_basis'].endswith(f'; ${waste["paper_usd"]:,.2f} + ${waste["machine_time_usd"]:,.2f} = ${waste["usd"]:,.2f}; '
+                                       'contribution: margin not set')
+
+
+def test_the_period_to_date_ends_on_its_last_production_day(store):
+    """The review's item 4: P2 to date read "through Fri 25 Sep" on the day card and "through Sun 27 Sep" on the period card,
+    and February 2026's one period to date three ways. The label names the last production day on or before `through`."""
+    assert cost_model.ptd_window(store, '2026-09-27')[1:] == (date(2026, 9, 25), '4-4-5 P2 to date through Fri 25 Sep')
+    labels = {cost_model.ptd_window(store, d)[2] for d in ('2026-02-27', '2026-02-28', '2026-03-01')}
+    assert labels == {'4-4-5 P7 of the prior year to date through Fri 27 Feb'}
+    period = cost_model.opportunities(store, {'period': 'fiscal', 'anchor': '2026-09-14'}, None, rates())
+    assert (period['ptd_through'], period['ptd_label']) == ('2026-09-25', '4-4-5 P2 to date through Fri 25 Sep')
+
+
+@pytest.mark.parametrize('text', ['', 'paper:47.5,hour:1450,margin:40,trim:2.75', 'paper:99999.99,margin:0.01', 'hour:1'])
+def test_the_whole_dollars_fast_cents_are_the_price_calls_own(text):
+    """cost_model._priced (and web/money.js priced4) is price's arithmetic without its formula text, for the thousands of calls
+    a card's cells make: the same cents as price, field for field, on every kind and on quantities that round at a half cent."""
+    import random
+    r, rng = rates(text), random.Random(168)
+    for kind in ('trim', 'waste', 'paper', 'downtime', 'speed'):
+        for q in [0.0, 0.1, 1.0, 9318.6, 11218.7, 3882.2, *(round(rng.uniform(0, 300000), rng.choice((1, 2))) for _ in range(300))]:
+            p = cost_model.price(kind, q, r)
+            assert cost_model._priced(kind, q, r) == tuple(cost_model.to_cents(p[k]) for k in ('usd', 'paper_usd', 'machine_time_usd', 'contribution_usd')), (kind, q)
+    assert cost_model._priced('waste', -1.0, r) == (0, 0, 0, 0) and cost_model._priced('trim', None, r) == (0, 0, 0, 0)

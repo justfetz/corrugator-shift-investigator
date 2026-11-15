@@ -23,6 +23,7 @@ Any other line is a plain sentence: a caveat, the window and its coverage, a rep
 import re
 
 from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
+from . import cost_model
 from .records import stop_label
 from .semantic import TOOL as SEMANTIC_TOOL
 
@@ -102,15 +103,33 @@ def priced(row):
     return f' · {money(shown(row))}' + (f' ({money(row["usd_per_year"])}/yr)' if row.get('usd_per_year') is not None else '')
 
 
+def nearest_dollar(usd):
+    """The nearest whole dollar of a figure's cents, a tie to the even dollar (cost_model.nearest_dollar of to_cents)."""
+    dollars, rest = divmod(int(round(usd * 100)), 100)
+    return dollars + (1 if rest > 50 or (rest == 50 and dollars % 2) else 0)
+
+
+def formula_line(label, row):
+    """One row's pricing formula as the cost model wrote it, in cents, and the figure the row prints when that is not the
+    cents' nearest dollar (the coordinator's review of 82c0994 on PR #168, item 1: "Side trim over the 3% target: **$512**"
+    sat over a formula ending "= $513"). web/money.js formulaLine is this."""
+    line = f'How a dollar is priced, for {label}: {row["usd_basis"]}.'
+    shown, usd = row.get('usd_shown'), row.get('usd')
+    if shown is not None and usd is not None and shown != nearest_dollar(usd):
+        line += f' It prints {money(shown)} (whole dollars that add up).'
+    return line
+
+
 def money_notes(result, row=None, label=None, formula=True):
     """The rates and the cost note on one line, after one row's pricing formula as the cost model wrote it
     (`formula=False` on a day card, which keeps the one rates line the accepted layout has)."""
     data = result['data']
     if 'provenance' not in data:
         return []
-    notes = [f'How a dollar is priced, for {stop_label(row[label])}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
+    notes = [formula_line(stop_label(row[label]), row)] if formula and row is not None and row.get('usd_basis') else []
     if notes and row.get('usd_shown') is not None and result.get('tool') not in LEDGER_TOOLS:
-        notes.append(WHOLE_NOTE)   # the line prints the ledger's whole dollars, which can read a dollar off this formula (PR #168)
+        # the line prints the ledger's whole dollars (PR #168), its cells' added up, and says so once on a long window
+        notes += [WHOLE_NOTE, *long_note(data)]
     return notes + [f'{data["provenance"]} {data["cost_note"]}']
 
 
@@ -118,7 +137,7 @@ def contribution(data):
     if data.get('contribution_status') == MARGIN_NOT_SET:
         return f'Contribution {MARGIN_NOT_SET}: without an owner margin no lost contribution is priced, so the dollars are paper and machine time.'
     if data.get('total_contribution_usd') is not None:
-        return f'Contribution {money(data["total_contribution_usd"])} at the set margin, not added to the losses above.'
+        return f'Contribution {money(shown(data, "total_contribution_usd"))} at the set margin, not added to the losses above.'
     return None
 
 
@@ -204,8 +223,9 @@ def year_words(data):
     return ' a year at this period\'s rate' + (f' (shift {data["shift"]}\'s own)' if type(data.get('shift')) is int else '')
 
 
-WHOLE_NOTE = ('Whole dollars that add up: figures are rounded so each card\'s parts add to its totals (largest remainder) and a shift '
-              'reads the same on every card; a line can read a dollar or two off its formula.')
+WHOLE_NOTE = ('Whole dollars that add up: each shift of each production day prints its nearest dollar, its lines sharing it by '
+              'the largest remainder, and every day, window and line is its shifts\' whole dollars added up.')
+LONG_NOTE = cost_model.LONG_NOTE   # said once on a card over several production days (the review of 82c0994, item 2)
 TRIM_BY_SHIFT = 'Side trim by shift, explanatory (schedule-driven)'
 LEDGER_TOOLS = ('get_shift_dollars', 'get_day_dollars', 'get_opportunities')   # their notes carry WHOLE_NOTE (ledger_notes)
 
@@ -287,8 +307,14 @@ def ledger_notes(d):
     speeds = data.get('speeds_note')
     if speeds and data.get('observed_fpm_with_stops') is not None:
         speeds += f' This window ran {f1(data["observed_fpm_with_stops"])} ft/min with stops, against neither.'
-    return ([x for x in [contribution(data), speeds] if x] + sentences(data.get('method_note')) + [WHOLE_NOTE] +
+    return ([x for x in [contribution(data), speeds] if x] + sentences(data.get('method_note')) + [WHOLE_NOTE] + long_note(data) +
             (money_notes(d, rows[0], 'lever') if rows else money_notes(d)))
+
+
+def long_note(data):
+    """LONG_NOTE on a card whose window holds more than one production day, else nothing."""
+    window = data.get('window') or {}
+    return [LONG_NOTE] if (window.get('production_days_observed') or 0) > 1 else []
 
 
 def pareto_lead(rows):
@@ -891,7 +917,7 @@ class DailyAnswer:
         words = {2: 'the two', 3: 'the three'}.get(len(counted), f'the {len(counted)}')
         head = (f'**{money(shown(data, "total_usd"))}** above standard across {words}{" complete" if self.incomplete else ""} shifts'
                 f'{ptd_clause(data)} {ref(d)}')
-        # each shift's whole dollars, its share of the day's (cost_model.whole_dollars): they add to the day's figure
+        # each shift's whole dollars, its cell's (cost_model.whole_dollars: the cell is the root): they add to the day's figure
         shifts = [bullet(f'Shift {s}: **{money(shown(self.shifts[s]["get_shift_dollars"]["data"], "total_usd"))}** above standard',
                          self.shifts[s]['get_shift_dollars']) for s in sorted(counted)]
         # where to look: the shift with the most downtime minutes and the one with the most dry-end rejects, all recorded
@@ -1472,7 +1498,7 @@ class PeriodAnswer:
                               f'{money(shown(data, "at_standard_usd"))} at standard, {money(shown(data, "above_standard_usd"))} above standard, '
                               f'{money(shown(data, "no_band_usd"))} with no band yet{self.year_clause(data, data.get("total_usd_per_year"))}', o))
         bullets += trim_by_shift_lines(o)
-        notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + [WHOLE_NOTE] + money_notes(o, trim, 'lever')
+        notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + [WHOLE_NOTE] + long_note(data) + money_notes(o, trim, 'lever')
         return head, bullets, notes, self.window_looks(data, ('trend_trim', 'waste', 'grade'))
 
     @staticmethod

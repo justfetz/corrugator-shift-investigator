@@ -109,9 +109,10 @@ def test_opportunities_rank_levers_and_name_records(store):
     assert all(r['records'] and r['owner'] and r['look_at'] for r in levers)
     trim = next(r for r in levers if r['key'] == 'trim')   # the cells' gaps to the target, each to 0.1 sq ft (issue #164)
     assert trim['quantity'] == cost_model.trim_cells_over(trim['price_terms']['trim_cells'], 3)
-    for r in levers:   # a yearly figure is the period to date's: its dollars per production day x the post's days a year
+    ptd = cost_model.whole_dollars(data['ptd_terms']['whole'], rates('trim:3'))   # the period to date's whole dollars, its cells' added up
+    for r in levers:   # a yearly figure is the period to date's: its printed dollars per production day x the post's days a year
         terms = r['year_terms']
-        assert r['usd_per_year'] == cost_model.annual(cost_model.price(terms['kind'], terms['quantity'], rates('trim:3'))['usd'], terms['days'])
+        assert terms['of'] == ['levers', r['key']] and r['usd_per_year'] == cost_model.annual(ptd['levers'][r['key']], terms['days'])
     assert 'prescribe' in data['method_note'] and data['ptd_label'].endswith(' to date through Wed 30 Sep')
 
 

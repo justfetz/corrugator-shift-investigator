@@ -555,11 +555,13 @@ def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced
     assert {r['quantity'] for r in lens['rows']} == {r['sqft'] for r in lines} and len(lens['rows']) == len(lines)
     assert {r['usd'] for r in lens['rows']} == {r['usd'] for r in lines}, 'each line priced the same way, once'
     assert lens['total_usd'] == pytest.approx(sum(r['usd'] for r in lines), abs=0.01)
-    # a yearly figure is each line's period to date at this period's rate (issue #164), never the window's own
+    # a yearly figure is each line's period to date at this period's rate (issue #164), never the window's own: its printed
+    # whole dollars there, its cells' added up (the coordinator's review of 82c0994 on PR #168, item 2)
     assert lens['total_usd_per_year'] == sum(r['usd_per_year'] for r in lens['rows'])
+    ptd = cost_model.whole_dollars(lens['ptd_terms']['whole'], rates)
     for r in lens['rows']:
         terms = r['year_terms']
-        assert r['usd_per_year'] == cost_model.annual(cost_model.price(terms['kind'], terms['quantity'], rates)['usd'], terms['days'])
+        assert terms['of'] == ['lines', r['key']] and r['usd_per_year'] == cost_model.annual(ptd['lines'][r['key']], terms['days'])
     assert lens['above_standard_usd'] + lens['at_standard_usd'] + lens['no_band_usd'] == pytest.approx(lens['total_usd'], abs=0.005)
     for key in ('cutoff_waste', 'stacker_waste', 'admin', 'changeover'):
         line = next(r for r in waste['rows'] if r['category'] == key)

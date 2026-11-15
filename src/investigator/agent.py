@@ -2130,7 +2130,7 @@ DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_en
 # The rate-free terms a money card's whole dollars are re-derived from at a visitor's rates (PR #168): they ride on the result
 # for the browser, never in a planner's context, which they would fill without telling a planner anything (a day card's four
 # steps carry the period to date's every shift twice).
-CARD_TERMS = ('display_terms', 'ptd_terms')
+CARD_TERMS = ('display_terms', 'ptd_terms', 'ptd_display_terms')
 
 
 def planner_view(result):
@@ -2155,6 +2155,9 @@ def chart_for(rid, result):
     if data.get('display_terms') and result['tool'] in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities', 'get_waste_breakdown',
                                                         'get_quality_breakdown', 'get_downtime_breakdown'):
         chart['display_terms'] = data['display_terms']   # the whole dollars its bars print, re-allocated at a visitor's rates (PR #168)
+    if result['tool'] == 'get_opportunities' and (data.get('ptd_terms') or {}).get('whole'):
+        # the period to date's cells, whose whole dollars a bar's yearly figure is read from (PR #168's review of 82c0994, item 2)
+        chart['ptd_display_terms'] = data['ptd_terms']['whole']
     if result['tool'] == 'get_speed_variance':
         # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
         start_label = {'baseline': 'Baseline speed', 'previous': 'Previous', 'shift': f"Shift {data.get('against_shift')}"}[data['against']]

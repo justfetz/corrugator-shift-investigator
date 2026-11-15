@@ -106,7 +106,8 @@
    "min_rate_days": 5
   },
   "margin_not_set": "margin not set",
-  "note": "Dollars are synthetic records priced at assumed rates (the post's defaults unless changed); they are not a real plant's figures."
+  "note": "Dollars are synthetic records priced at assumed rates (the post's defaults unless changed); they are not a real plant's figures.",
+  "long_note": "Over several days these whole dollars, added shift by shift, can read several dollars off the same quantities priced at once in cents, which the formulas and receipts state."
  },
  "input": {
   "production_day": "2026-09-14",
@@ -139,7 +140,7 @@
     "contribution_usd": null,
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
-    "usd_basis": "3,882.2 sq ft = 3.882 MSF x $55/MSF paper = $214; 3.882 MSF / 5.4 MSF per min = 0.72 min x $1,200/hr machine time = $14.38; contribution: margin not set",
+    "usd_basis": "3,882.2 sq ft = 3.882 MSF x $55/MSF paper = $213.52; 3.882 MSF / 5.4 MSF per min = 0.72 min x $1,200/hr machine time = $14.38; $213.52 + $14.38 = $227.90; contribution: margin not set",
     "share_of_window_pct": 0.1441,
     "price_terms": {
      "kind": "waste",
@@ -176,7 +177,7 @@
     "contribution_usd": null,
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
-    "usd_basis": "9.97 min x $1,200/hr machine time = $199; contribution: margin not set",
+    "usd_basis": "9.97 min x $1,200/hr machine time = $199.40; contribution: margin not set",
     "share_of_window_pct": 2.0771,
     "price_terms": {
      "kind": "speed",
@@ -330,7 +331,7 @@
     "contribution_usd": null,
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
-    "usd_basis": "0.0 sq ft = 0.000 MSF x $55/MSF paper = $0.00; 0.000 MSF / 5.4 MSF per min = 0.00 min x $1,200/hr machine time = $0.00; contribution: margin not set",
+    "usd_basis": "0.0 sq ft = 0.000 MSF x $55/MSF paper = $0.00; 0.000 MSF / 5.4 MSF per min = 0.00 min x $1,200/hr machine time = $0.00; $0.00 + $0.00 = $0.00; contribution: margin not set",
     "share_of_window_pct": 0.0,
     "price_terms": {
      "kind": "waste",
@@ -362,7 +363,7 @@
     "contribution_status": "margin not set",
     "all_recorded_usd": 4520.72,
     "above_standard_usd": 75.0,
-    "usd_basis": "$4,521 all recorded less $75.00 above standard = $4,446 at standard; contribution: margin not set",
+    "usd_basis": "$4,520.72 all recorded less $75.00 above standard = $4,445.72 at standard; contribution: margin not set",
     "share_of_window_pct": 3.0,
     "price_terms": {
      "kind": "trim",
@@ -395,15 +396,15 @@
     "paper_usd": 1430.66,
     "machine_minutes": 4.82,
     "machine_time_usd": 96.34,
-    "usd": 1526.99,
+    "usd": 1527.0,
     "usd_per_year": null,
     "msf_not_made": 26.012,
     "contribution_usd": null,
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
-    "all_recorded_usd": 1754.89,
+    "all_recorded_usd": 1754.9,
     "above_standard_usd": 227.9,
-    "usd_basis": "$1,755 all recorded less $228 above standard = $1,527 at standard; contribution: margin not set",
+    "usd_basis": "$1,754.90 all recorded less $227.90 above standard = $1,527.00 at standard; contribution: margin not set",
     "share_of_window_pct": 0.9654,
     "price_terms": {
      "kind": "waste",
@@ -438,7 +439,7 @@
     "contribution_status": "margin not set",
     "all_recorded_usd": 645.27,
     "above_standard_usd": 0.0,
-    "usd_basis": "$645 all recorded less $0.00 above standard = $645 at standard; contribution: margin not set",
+    "usd_basis": "$645.27 all recorded less $0.00 above standard = $645.27 at standard; contribution: margin not set",
     "share_of_window_pct": 0.408,
     "price_terms": {
      "kind": "waste",
@@ -473,7 +474,7 @@
     "contribution_status": "margin not set",
     "all_recorded_usd": 206.6,
     "above_standard_usd": 0.0,
-    "usd_basis": "$207 all recorded less $0.00 above standard = $207 at standard; contribution: margin not set",
+    "usd_basis": "$206.60 all recorded less $0.00 above standard = $206.60 at standard; contribution: margin not set",
     "share_of_window_pct": 2.1521,
     "price_terms": {
      "kind": "downtime",
@@ -508,7 +509,7 @@
     "contribution_status": "margin not set",
     "all_recorded_usd": 173.0,
     "above_standard_usd": 0.0,
-    "usd_basis": "$173 all recorded less $0.00 above standard = $173 at standard; contribution: margin not set",
+    "usd_basis": "$173.00 all recorded less $0.00 above standard = $173.00 at standard; contribution: margin not set",
     "share_of_window_pct": 1.8021,
     "price_terms": {
      "kind": "downtime",
@@ -541,7 +542,7 @@
     "contribution_usd": null,
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
-    "usd_basis": "3,454.0 sq ft = 3.454 MSF x $55/MSF paper = $190; 3.454 MSF / 5.4 MSF per min = 0.64 min x $1,200/hr machine time = $12.79; contribution: margin not set",
+    "usd_basis": "3,454.0 sq ft = 3.454 MSF x $55/MSF paper = $189.97; 3.454 MSF / 5.4 MSF per min = 0.64 min x $1,200/hr machine time = $12.79; $189.97 + $12.79 = $202.76; contribution: margin not set",
     "share_of_window_pct": 0.1282,
     "price_terms": {
      "kind": "waste",
@@ -571,7 +572,7 @@
     "contribution_usd": null,
     "contribution_usd_per_year": null,
     "contribution_status": "margin not set",
-    "usd_basis": "3,325.3 sq ft = 3.325 MSF x $55/MSF paper = $183; 3.325 MSF / 5.4 MSF per min = 0.62 min x $1,200/hr machine time = $12.32; contribution: margin not set",
+    "usd_basis": "3,325.3 sq ft = 3.325 MSF x $55/MSF paper = $182.89; 3.325 MSF / 5.4 MSF per min = 0.62 min x $1,200/hr machine time = $12.32; $182.89 + $12.32 = $195.21; contribution: margin not set",
     "share_of_window_pct": 0.1234,
     "price_terms": {
      "kind": "waste",
@@ -675,53 +676,59 @@
   "msf_not_made": 57.72,
   "levers": 6,
   "apart_gaps": 7,
-  "at_standard_usd": 6997.58,
-  "all_in_usd": 7897.85,
+  "at_standard_usd": 6997.59,
+  "all_in_usd": 7897.86,
   "ptd_label": "4-4-5 P2 to date through Mon 14 Sep",
   "ptd_start": "2026-08-31",
   "ptd_through": "2026-09-14",
   "ptd_days": 11,
   "ptd_scope": "all shifts",
   "ptd_usd": 30716.41,
-  "ptd_usd_shown": 30716,
-  "ptd_usd_per_year": 718045.0,
+  "ptd_usd_shown": 30715,
+  "ptd_usd_per_year": 718012.0,
   "ptd_year_note": null,
   "ptd_levers": [
    {
     "key": "speed",
     "lever": "Speed under the grade baseline",
     "usd": 7762.8,
-    "usd_per_year": 181468.0
+    "usd_shown": 7762,
+    "usd_per_year": 181449.0
    },
    {
     "key": "trim",
     "lever": "Side trim over the 3% target",
     "usd": 16436.52,
-    "usd_per_year": 384230.0
+    "usd_shown": 16436,
+    "usd_per_year": 384218.0
    },
    {
     "key": "shear",
     "lever": "Shear over the 0.75% target",
     "usd": 0.0,
+    "usd_shown": 0,
     "usd_per_year": 0.0
    },
    {
     "key": "dry_end",
     "lever": "Dry end over the 1% target",
     "usd": 5303.69,
-    "usd_per_year": 123982.0
+    "usd_shown": 5302,
+    "usd_per_year": 123943.0
    },
    {
     "key": "operator",
     "lever": "Operator downtime over the 2.5% band",
     "usd": 1138.8,
-    "usd_per_year": 26621.0
+    "usd_shown": 1140,
+    "usd_per_year": 26649.0
    },
    {
     "key": "maintenance",
     "lever": "Maintenance downtime over the 2.5% band",
     "usd": 74.6,
-    "usd_per_year": 1744.0
+    "usd_shown": 75,
+    "usd_per_year": 1753.0
    }
   ],
   "ptd_terms": {
@@ -893,424 +900,993 @@
     }
    ],
    "whole": {
-    "root": {
-     "shift": null,
-     "levers": {
-      "speed": 388.14,
-      "shear": 0.0,
-      "dry_end": 90346.7,
-      "operator": 56.94,
-      "maintenance": 3.73
-     },
-     "all": {
-      "trim": 2703400.4,
-      "shear": 459736.7,
-      "dry_end": 855402.3,
-      "operator": 386.89,
-      "maintenance": 171.27
-     },
-     "apart": {
-      "scheduled": 248.0,
-      "external": 0.0,
-      "changeover": 120196.6,
-      "boards": 157853.1,
-      "cutoff_waste": 74455.3,
-      "stacker_waste": 83397.8
-     },
-     "lines": {
-      "bond": 325293.4,
-      "warp": 286048.4,
-      "misalignment": 162144.9,
-      "moisture": 48447.4,
-      "other": 33468.2,
-      "admin": 28898.4,
-      "bale": 4504993.4,
-      "unexplained": 179505.9
-     },
-     "trim_cells": [
-      [
-       68565.3,
-       2131070.3
-      ],
-      [
-       82745.6,
-       2333533.5
-      ],
-      [
-       86776.3,
-       2677906.5
-      ],
-      [
-       76831.5,
-       2303572.7
-      ],
-      [
-       77491.9,
-       2380956.5
-      ],
-      [
-       93148.9,
-       2805495.6
-      ],
-      [
-       158672.8,
-       2631680.7
-      ],
-      [
-       53615.6,
-       1738365.1
-      ],
-      [
-       91318.9,
-       2776652.9
-      ],
-      [
-       56090.7,
-       1871393.3
-      ],
-      [
-       62208.4,
-       2027025.2
-      ],
-      [
-       96379.0,
-       2604967.9
-      ],
-      [
-       65051.4,
-       2176754.6
-      ],
-      [
-       90963.4,
-       2917459.0
-      ],
-      [
-       70439.6,
-       2218529.0
-      ],
-      [
-       72117.2,
-       2276656.6
-      ],
-      [
-       95556.6,
-       2755747.3
-      ],
-      [
-       75251.0,
-       2241946.2
-      ],
-      [
-       72998.4,
-       2182859.5
-      ],
-      [
-       105377.3,
-       2975379.9
-      ],
-      [
-       85668.1,
-       2368015.9
-      ],
-      [
-       84694.7,
-       2508501.6
-      ],
-      [
-       80574.4,
-       2698356.2
-      ],
-      [
-       89301.7,
-       2678809.2
-      ],
-      [
-       56174.7,
-       1900552.8
-      ],
-      [
-       90967.4,
-       2598068.5
-      ],
-      [
-       86703.5,
-       2570349.7
-      ],
-      [
-       64241.1,
-       1952658.6
-      ],
-      [
-       98939.8,
-       2966519.9
-      ],
-      [
-       83191.5,
-       2505974.5
-      ],
-      [
-       85281.2,
-       2671353.3
-      ],
-      [
-       82194.9,
-       2694376.9
-      ],
-      [
-       63867.6,
-       2061007.6
-      ]
-     ]
-    },
-    "shifts": [
-     {
-      "shift": 1,
-      "levers": {
-       "speed": 121.37,
-       "shear": 0.0,
-       "dry_end": 36795.5,
-       "operator": 27.96,
-       "maintenance": 0.0
-      },
-      "all": {
-       "trim": 860719.0,
-       "shear": 142378.2,
-       "dry_end": 268554.3,
-       "operator": 145.12,
-       "maintenance": 47.08
-      },
-      "apart": {
-       "scheduled": 248.0,
-       "external": 0.0,
-       "changeover": 37192.5,
-       "boards": 48315.3,
-       "cutoff_waste": 22674.1,
-       "stacker_waste": 25641.2
-      },
-      "lines": {
-       "bond": 104106.5,
-       "warp": 88988.7,
-       "misalignment": 48537.3,
-       "moisture": 16021.2,
-       "other": 10900.6,
-       "admin": 7438.5,
-       "bale": 1416291.8,
-       "unexplained": 51694.0
-      },
-      "trim_cells": [
-       [
-        68565.3,
-        2131070.3
-       ],
-       [
-        76831.5,
-        2303572.7
-       ],
-       [
-        158672.8,
-        2631680.7
-       ],
-       [
-        56090.7,
-        1871393.3
-       ],
-       [
-        65051.4,
-        2176754.6
-       ],
-       [
-        72117.2,
-        2276656.6
-       ],
-       [
-        72998.4,
-        2182859.5
-       ],
-       [
-        84694.7,
-        2508501.6
-       ],
-       [
-        56174.7,
-        1900552.8
-       ],
-       [
-        64241.1,
-        1952658.6
-       ],
-       [
-        85281.2,
-        2671353.3
-       ]
-      ]
-     },
-     {
-      "shift": 2,
-      "levers": {
-       "speed": 129.1,
-       "shear": 0.0,
-       "dry_end": 28165.4,
-       "operator": 17.07,
-       "maintenance": 3.73
-      },
-      "all": {
-       "trim": 920635.3,
-       "shear": 156816.9,
-       "dry_end": 297191.5,
-       "operator": 127.56,
-       "maintenance": 57.53
-      },
-      "apart": {
-       "scheduled": 0.0,
-       "external": 0.0,
-       "changeover": 40864.8,
-       "boards": 52685.3,
-       "cutoff_waste": 25220.6,
-       "stacker_waste": 27464.7
-      },
-      "lines": {
-       "bond": 113997.5,
-       "warp": 99080.9,
-       "misalignment": 55455.8,
-       "moisture": 16593.8,
-       "other": 12063.5,
-       "admin": 9717.6,
-       "bale": 1546439.5,
-       "unexplained": 68528.1
-      },
-      "trim_cells": [
-       [
-        82745.6,
-        2333533.5
-       ],
-       [
-        77491.9,
-        2380956.5
-       ],
-       [
-        53615.6,
-        1738365.1
-       ],
-       [
-        62208.4,
-        2027025.2
-       ],
-       [
-        90963.4,
-        2917459.0
-       ],
-       [
-        95556.6,
-        2755747.3
-       ],
-       [
-        105377.3,
-        2975379.9
-       ],
-       [
-        80574.4,
-        2698356.2
-       ],
-       [
-        90967.4,
-        2598068.5
-       ],
-       [
-        98939.8,
-        2966519.9
-       ],
-       [
-        82194.9,
-        2694376.9
-       ]
-      ]
-     },
-     {
-      "shift": 3,
-      "levers": {
-       "speed": 137.67,
-       "shear": 0.0,
-       "dry_end": 25385.8,
-       "operator": 11.91,
-       "maintenance": 0.0
-      },
-      "all": {
-       "trim": 922046.1,
-       "shear": 160541.6,
-       "dry_end": 289656.5,
-       "operator": 114.21,
-       "maintenance": 66.66
-      },
-      "apart": {
-       "scheduled": 0.0,
-       "external": 0.0,
-       "changeover": 42139.3,
-       "boards": 56852.5,
-       "cutoff_waste": 26560.6,
-       "stacker_waste": 30291.9
-      },
-      "lines": {
-       "bond": 107189.4,
-       "warp": 97978.8,
-       "misalignment": 58151.8,
-       "moisture": 15832.4,
-       "other": 10504.1,
-       "admin": 11742.3,
-       "bale": 1542262.1,
-       "unexplained": 59283.8
-      },
-      "trim_cells": [
-       [
-        86776.3,
-        2677906.5
-       ],
-       [
-        93148.9,
-        2805495.6
-       ],
-       [
-        91318.9,
-        2776652.9
-       ],
-       [
-        96379.0,
-        2604967.9
-       ],
-       [
-        70439.6,
-        2218529.0
-       ],
-       [
-        75251.0,
-        2241946.2
-       ],
-       [
-        85668.1,
-        2368015.9
-       ],
-       [
-        89301.7,
-        2678809.2
-       ],
-       [
-        86703.5,
-        2570349.7
-       ],
-       [
-        83191.5,
-        2505974.5
-       ],
-       [
-        63867.6,
-        2061007.6
-       ]
-      ]
-     }
+    "fields": [
+     "shift",
+     "speed",
+     "shear",
+     "dry_end",
+     "operator",
+     "maintenance",
+     "all_trim",
+     "all_shear",
+     "all_dry_end",
+     "all_operator",
+     "all_maintenance",
+     "apart_scheduled",
+     "apart_external",
+     "apart_changeover",
+     "apart_boards",
+     "apart_cutoff_waste",
+     "apart_stacker_waste",
+     "bond",
+     "warp",
+     "misalignment",
+     "moisture",
+     "other",
+     "admin",
+     "bale",
+     "unexplained",
+     "trim",
+     "gross"
     ],
-    "scope": [
-     1,
-     2,
-     3
+    "cells": [
+     [
+      1,
+      7.12,
+      0.0,
+      11473.9,
+      0.0,
+      0.0,
+      68565.3,
+      14440.2,
+      31954.5,
+      9.92,
+      8.35,
+      0.0,
+      0.0,
+      3388.8,
+      4946.0,
+      2288.1,
+      2657.9,
+      10315.9,
+      14691.4,
+      4359.4,
+      1553.7,
+      1034.1,
+      358.6,
+      128733.1,
+      5079.7,
+      68565.3,
+      2131070.3
+     ],
+     [
+      2,
+      24.44,
+      0.0,
+      8637.0,
+      0.0,
+      0.0,
+      82745.6,
+      12287.3,
+      31022.0,
+      7.72,
+      7.12,
+      0.0,
+      0.0,
+      3151.6,
+      4821.2,
+      2260.9,
+      2560.3,
+      9855.8,
+      14683.3,
+      4250.3,
+      1180.6,
+      1052.0,
+      311.1,
+      140794.8,
+      6456.0,
+      82745.6,
+      2333533.5
+     ],
+     [
+      3,
+      8.74,
+      0.0,
+      9681.2,
+      0.0,
+      0.0,
+      86776.3,
+      15092.1,
+      35441.6,
+      6.93,
+      10.42,
+      0.0,
+      0.0,
+      3515.4,
+      5462.3,
+      2527.2,
+      2935.1,
+      10001.3,
+      16480.9,
+      6424.0,
+      1449.4,
+      1086.0,
+      1447.6,
+      150686.3,
+      2951.0,
+      86776.3,
+      2677906.5
+     ],
+     [
+      1,
+      11.99,
+      0.0,
+      1989.3,
+      0.0,
+      0.0,
+      76831.5,
+      12133.7,
+      24135.4,
+      10.97,
+      0.0,
+      0.0,
+      0.0,
+      3399.8,
+      3933.4,
+      1943.2,
+      1990.2,
+      10829.9,
+      6612.8,
+      4776.7,
+      948.2,
+      967.8,
+      359.3,
+      123716.5,
+      2923.4,
+      76831.5,
+      2303572.7
+     ],
+     [
+      2,
+      27.02,
+      0.0,
+      1277.8,
+      0.0,
+      0.0,
+      77491.9,
+      14847.8,
+      24164.0,
+      7.08,
+      2.05,
+      0.0,
+      0.0,
+      3890.9,
+      4756.7,
+      2228.7,
+      2528.0,
+      10070.9,
+      6448.6,
+      4963.6,
+      1467.5,
+      1213.4,
+      551.5,
+      132776.9,
+      7074.1,
+      77491.9,
+      2380956.5
+     ],
+     [
+      3,
+      10.56,
+      0.0,
+      1522.8,
+      1.28,
+      0.0,
+      93148.9,
+      15428.8,
+      28492.0,
+      13.28,
+      5.23,
+      0.0,
+      0.0,
+      4658.6,
+      6084.0,
+      2782.5,
+      3301.5,
+      10708.5,
+      8796.7,
+      6200.8,
+      1825.6,
+      960.4,
+      790.8,
+      153621.2,
+      5018.1,
+      93148.9,
+      2805495.6
+     ],
+     [
+      1,
+      9.66,
+      0.0,
+      1058.0,
+      2.75,
+      0.0,
+      158672.8,
+      15309.3,
+      25635.0,
+      14.75,
+      2.27,
+      0.0,
+      0.0,
+      3835.1,
+      5677.5,
+      2622.2,
+      3055.3,
+      10009.4,
+      7508.5,
+      4798.2,
+      1977.6,
+      1341.3,
+      2100.7,
+      217681.2,
+      6450.8,
+      158672.8,
+      2631680.7
+     ],
+     [
+      2,
+      21.06,
+      0.0,
+      3182.1,
+      1.95,
+      0.0,
+      53615.6,
+      10548.3,
+      19924.1,
+      13.95,
+      8.7,
+      0.0,
+      0.0,
+      2970.1,
+      3736.9,
+      1776.0,
+      1960.9,
+      8348.7,
+      5236.4,
+      4463.9,
+      1399.1,
+      476.0,
+      514.8,
+      94230.6,
+      2920.8,
+      53615.6,
+      1738365.1
+     ],
+     [
+      3,
+      8.59,
+      0.0,
+      843.8,
+      0.0,
+      0.0,
+      91318.9,
+      16753.5,
+      27529.6,
+      9.13,
+      11.43,
+      0.0,
+      0.0,
+      4581.2,
+      6444.6,
+      3011.9,
+      3432.7,
+      11016.4,
+      7997.1,
+      6369.7,
+      1278.6,
+      867.8,
+      1180.7,
+      150797.5,
+      2989.0,
+      91318.9,
+      2776652.9
+     ],
+     [
+      1,
+      6.97,
+      0.0,
+      2865.4,
+      0.0,
+      0.0,
+      56090.7,
+      10000.5,
+      20918.4,
+      6.67,
+      4.63,
+      125.0,
+      0.0,
+      3163.3,
+      3413.4,
+      1714.4,
+      1699.0,
+      8561.6,
+      5612.6,
+      4859.5,
+      967.6,
+      917.1,
+      1094.0,
+      97331.5,
+      2651.2,
+      56090.7,
+      1871393.3
+     ],
+     [
+      2,
+      21.8,
+      0.0,
+      227.7,
+      0.0,
+      0.0,
+      62208.4,
+      11644.0,
+      19759.4,
+      9.58,
+      0.0,
+      0.0,
+      0.0,
+      2823.3,
+      4176.3,
+      2052.3,
+      2124.0,
+      7303.0,
+      6157.8,
+      3889.4,
+      1215.5,
+      1193.7,
+      744.8,
+      108755.2,
+      7399.0,
+      62208.4,
+      2027025.2
+     ],
+     [
+      3,
+      6.19,
+      0.0,
+      1069.5,
+      0.0,
+      0.0,
+      96379.0,
+      15114.4,
+      26004.2,
+      5.48,
+      2.38,
+      0.0,
+      0.0,
+      4596.1,
+      5278.0,
+      2307.4,
+      2970.6,
+      9844.0,
+      7807.4,
+      5672.6,
+      1650.0,
+      1030.2,
+      759.8,
+      154966.7,
+      6835.2,
+      96379.0,
+      2604967.9
+     ],
+     [
+      1,
+      14.14,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      65051.4,
+      10910.9,
+      18155.9,
+      11.75,
+      2.53,
+      0.0,
+      0.0,
+      2776.6,
+      3520.0,
+      1581.3,
+      1938.7,
+      5652.6,
+      6717.4,
+      3358.5,
+      1483.6,
+      943.8,
+      118.8,
+      108157.0,
+      7623.4,
+      65051.4,
+      2176754.6
+     ],
+     [
+      2,
+      24.26,
+      0.0,
+      713.2,
+      0.0,
+      0.0,
+      90963.4,
+      14425.3,
+      28833.9,
+      8.95,
+      2.85,
+      0.0,
+      0.0,
+      4482.7,
+      5657.9,
+      2749.5,
+      2908.4,
+      12955.7,
+      8822.2,
+      4995.4,
+      1218.7,
+      841.9,
+      1505.5,
+      155778.0,
+      9909.3,
+      90963.4,
+      2917459.0
+     ],
+     [
+      3,
+      11.14,
+      0.0,
+      1068.4,
+      0.0,
+      0.0,
+      70439.6,
+      13290.7,
+      22416.4,
+      11.4,
+      3.13,
+      0.0,
+      0.0,
+      3458.2,
+      4572.9,
+      2302.6,
+      2270.3,
+      8535.4,
+      7179.6,
+      4502.1,
+      1106.5,
+      1092.8,
+      1385.5,
+      120804.9,
+      5241.6,
+      70439.6,
+      2218529.0
+     ],
+     [
+      1,
+      12.71,
+      0.0,
+      5056.5,
+      15.63,
+      0.0,
+      72117.2,
+      13084.3,
+      26971.1,
+      27.63,
+      7.28,
+      0.0,
+      0.0,
+      2742.3,
+      4121.9,
+      1880.0,
+      2241.9,
+      10511.6,
+      9856.3,
+      4299.7,
+      1464.8,
+      838.7,
+      584.1,
+      126139.9,
+      6519.0,
+      72117.2,
+      2276656.6
+     ],
+     [
+      2,
+      0.15,
+      0.0,
+      4740.4,
+      0.0,
+      3.73,
+      95556.6,
+      15032.2,
+      31192.0,
+      10.4,
+      15.73,
+      0.0,
+      0.0,
+      3752.6,
+      4343.6,
+      2237.2,
+      2106.4,
+      10691.8,
+      11742.4,
+      5824.0,
+      1767.7,
+      1166.1,
+      1045.4,
+      161472.6,
+      10550.2,
+      95556.6,
+      2755747.3
+     ],
+     [
+      3,
+      10.28,
+      0.0,
+      1873.4,
+      3.75,
+      0.0,
+      75251.0,
+      15260.0,
+      23387.8,
+      15.75,
+      8.5,
+      0.0,
+      0.0,
+      3611.2,
+      5816.8,
+      2544.8,
+      3272.0,
+      7496.4,
+      10434.5,
+      3435.4,
+      1357.7,
+      663.8,
+      1224.8,
+      130916.3,
+      6364.7,
+      75251.0,
+      2241946.2
+     ],
+     [
+      1,
+      16.14,
+      0.0,
+      2766.9,
+      0.0,
+      0.0,
+      72998.4,
+      14184.2,
+      23723.7,
+      11.42,
+      5.6,
+      0.0,
+      0.0,
+      3651.1,
+      4672.5,
+      2139.9,
+      2532.6,
+      10725.6,
+      6513.3,
+      3877.7,
+      1326.0,
+      1281.1,
+      789.1,
+      122523.2,
+      2504.2,
+      72998.4,
+      2182859.5
+     ],
+     [
+      2,
+      0.17,
+      0.0,
+      742.1,
+      0.0,
+      0.0,
+      105377.3,
+      18230.9,
+      29259.8,
+      8.43,
+      4.33,
+      0.0,
+      0.0,
+      4396.1,
+      6687.0,
+      3329.5,
+      3357.5,
+      10890.2,
+      8578.5,
+      6875.2,
+      1347.1,
+      1568.8,
+      1949.8,
+      170202.6,
+      4301.7,
+      105377.3,
+      2975379.9
+     ],
+     [
+      3,
+      9.81,
+      0.0,
+      3460.6,
+      5.63,
+      0.0,
+      85668.1,
+      14228.0,
+      26141.8,
+      17.63,
+      5.97,
+      0.0,
+      0.0,
+      3663.2,
+      4483.9,
+      2124.0,
+      2359.9,
+      11423.0,
+      7193.2,
+      5249.3,
+      1579.4,
+      696.9,
+      386.0,
+      143430.1,
+      8859.1,
+      85668.1,
+      2368015.9
+     ],
+     [
+      1,
+      11.02,
+      0.0,
+      2483.8,
+      5.78,
+      0.0,
+      84694.7,
+      14751.3,
+      26574.4,
+      17.78,
+      7.42,
+      0.0,
+      0.0,
+      4420.2,
+      5044.0,
+      2261.5,
+      2782.5,
+      10196.3,
+      7768.7,
+      6259.7,
+      1360.0,
+      989.7,
+      275.5,
+      139509.8,
+      3749.7,
+      84694.7,
+      2508501.6
+     ],
+     [
+      2,
+      0.0,
+      0.0,
+      0.0,
+      8.55,
+      0.0,
+      80574.4,
+      16602.1,
+      24954.6,
+      20.55,
+      5.2,
+      0.0,
+      0.0,
+      4082.0,
+      4695.9,
+      2380.3,
+      2315.6,
+      8669.5,
+      8125.1,
+      5772.0,
+      1433.3,
+      954.7,
+      1304.8,
+      138767.7,
+      6553.9,
+      80574.4,
+      2698356.2
+     ],
+     [
+      3,
+      14.34,
+      0.0,
+      369.9,
+      1.25,
+      0.0,
+      89301.7,
+      17331.6,
+      26091.7,
+      13.25,
+      8.33,
+      0.0,
+      0.0,
+      3337.3,
+      5931.9,
+      2700.0,
+      3231.9,
+      10229.9,
+      7962.8,
+      4959.8,
+      1681.2,
+      1258.0,
+      286.9,
+      149019.1,
+      6738.0,
+      89301.7,
+      2678809.2
+     ],
+     [
+      1,
+      14.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      56174.7,
+      12722.7,
+      16887.7,
+      9.75,
+      4.1,
+      123.0,
+      0.0,
+      2839.9,
+      3805.4,
+      1809.8,
+      1995.6,
+      7320.6,
+      5594.5,
+      2087.8,
+      991.0,
+      893.8,
+      310.4,
+      100054.4,
+      7313.6,
+      56174.7,
+      1900552.8
+     ],
+     [
+      2,
+      0.0,
+      0.0,
+      4554.8,
+      5.95,
+      0.0,
+      90967.4,
+      16641.3,
+      29459.4,
+      17.95,
+      2.9,
+      0.0,
+      0.0,
+      3679.5,
+      4258.3,
+      2071.3,
+      2187.0,
+      13007.7,
+      8336.1,
+      5458.8,
+      1944.3,
+      712.5,
+      309.5,
+      147951.9,
+      2636.5,
+      90967.4,
+      2598068.5
+     ],
+     [
+      3,
+      13.78,
+      0.0,
+      1536.4,
+      0.0,
+      0.0,
+      86703.5,
+      13652.1,
+      26236.3,
+      9.98,
+      4.45,
+      0.0,
+      0.0,
+      3817.3,
+      4188.3,
+      2111.9,
+      2076.4,
+      10763.0,
+      7809.3,
+      5501.2,
+      1013.4,
+      1149.4,
+      1301.1,
+      141874.1,
+      5975.5,
+      86703.5,
+      2570349.7
+     ],
+     [
+      1,
+      16.9,
+      0.0,
+      2256.9,
+      0.0,
+      0.0,
+      64241.1,
+      10961.3,
+      21031.5,
+      8.68,
+      4.9,
+      0.0,
+      0.0,
+      2517.9,
+      4022.9,
+      2056.3,
+      1966.6,
+      8505.2,
+      5814.7,
+      4837.0,
+      1136.1,
+      738.5,
+      429.2,
+      107352.6,
+      4148.7,
+      64241.1,
+      1952658.6
+     ],
+     [
+      2,
+      0.23,
+      0.0,
+      208.1,
+      0.62,
+      0.0,
+      98939.8,
+      15565.7,
+      28728.2,
+      12.62,
+      0.0,
+      0.0,
+      0.0,
+      4310.7,
+      6097.5,
+      2573.4,
+      3524.1,
+      11208.0,
+      8748.5,
+      4782.4,
+      2591.2,
+      1398.1,
+      484.4,
+      161968.1,
+      7841.8,
+      98939.8,
+      2966519.9
+     ],
+     [
+      3,
+      11.77,
+      0.0,
+      2100.7,
+      0.0,
+      0.0,
+      83191.5,
+      13471.2,
+      26193.8,
+      7.2,
+      4.35,
+      0.0,
+      0.0,
+      4362.1,
+      4815.0,
+      2158.2,
+      2656.8,
+      10850.9,
+      7496.7,
+      5418.4,
+      1441.0,
+      986.8,
+      1835.0,
+      137796.9,
+      3928.3,
+      83191.5,
+      2505974.5
+     ],
+     [
+      1,
+      0.72,
+      0.0,
+      6844.8,
+      3.8,
+      0.0,
+      85281.2,
+      13879.8,
+      32566.7,
+      15.8,
+      0.0,
+      0.0,
+      0.0,
+      4457.5,
+      5158.3,
+      2377.4,
+      2780.9,
+      11477.8,
+      12298.5,
+      5023.1,
+      2812.6,
+      954.7,
+      1018.8,
+      145092.6,
+      2730.3,
+      85281.2,
+      2671353.3
+     ],
+     [
+      2,
+      9.97,
+      0.0,
+      3882.2,
+      0.0,
+      0.0,
+      82194.9,
+      10992.0,
+      29894.1,
+      10.33,
+      8.65,
+      0.0,
+      0.0,
+      3325.3,
+      3454.0,
+      1561.5,
+      1892.5,
+      10996.2,
+      12202.0,
+      4180.8,
+      1028.8,
+      1486.3,
+      996.0,
+      133741.1,
+      2884.8,
+      82194.9,
+      2694376.9
+     ],
+     [
+      3,
+      32.47,
+      0.0,
+      1859.1,
+      0.0,
+      0.0,
+      63867.6,
+      10919.2,
+      21721.3,
+      4.18,
+      2.47,
+      0.0,
+      0.0,
+      2538.7,
+      3774.8,
+      1990.1,
+      1784.7,
+      6320.6,
+      8820.6,
+      4418.5,
+      1449.6,
+      712.0,
+      1144.1,
+      108349.0,
+      4383.3,
+      63867.6,
+      2061007.6
+     ]
     ]
    }
   },
@@ -1326,183 +1902,67 @@
   "all_in_usd_shown": 7898,
   "total_paper_usd_shown": 288,
   "total_machine_time_usd_shown": 214,
+  "total_contribution_usd_shown": null,
   "display_terms": {
-   "root": {
-    "shift": null,
-    "levers": {
-     "speed": 43.16,
-     "shear": 0.0,
-     "dry_end": 12586.1,
-     "operator": 3.8,
-     "maintenance": 0.0
-    },
-    "all": {
-     "trim": 231343.7,
-     "shear": 35791.0,
-     "dry_end": 84182.1,
-     "operator": 30.31,
-     "maintenance": 11.12
-    },
-    "apart": {
-     "scheduled": 0.0,
-     "external": 0.0,
-     "changeover": 10321.5,
-     "boards": 12387.1,
-     "cutoff_waste": 5929.0,
-     "stacker_waste": 6458.1
-    },
-    "lines": {
-     "bond": 28794.6,
-     "warp": 33321.1,
-     "misalignment": 13622.4,
-     "moisture": 5291.0,
-     "other": 3153.0,
-     "admin": 3158.9,
-     "bale": 387182.7,
-     "unexplained": 9998.4
-    },
-    "trim_cells": [
-     [
-      85281.2,
-      2671353.3
-     ],
-     [
-      82194.9,
-      2694376.9
-     ],
-     [
-      63867.6,
-      2061007.6
-     ]
-    ]
-   },
-   "shifts": [
-    {
-     "shift": 1,
-     "levers": {
-      "speed": 0.72,
-      "shear": 0.0,
-      "dry_end": 6844.8,
-      "operator": 3.8,
-      "maintenance": 0.0
-     },
-     "all": {
-      "trim": 85281.2,
-      "shear": 13879.8,
-      "dry_end": 32566.7,
-      "operator": 15.8,
-      "maintenance": 0.0
-     },
-     "apart": {
-      "scheduled": 0.0,
-      "external": 0.0,
-      "changeover": 4457.5,
-      "boards": 5158.3,
-      "cutoff_waste": 2377.4,
-      "stacker_waste": 2780.9
-     },
-     "lines": {
-      "bond": 11477.8,
-      "warp": 12298.5,
-      "misalignment": 5023.1,
-      "moisture": 2812.6,
-      "other": 954.7,
-      "admin": 1018.8,
-      "bale": 145092.6,
-      "unexplained": 2730.3
-     },
-     "trim_cells": [
-      [
-       85281.2,
-       2671353.3
-      ]
-     ]
-    },
-    {
-     "shift": 2,
-     "levers": {
-      "speed": 9.97,
-      "shear": 0.0,
-      "dry_end": 3882.2,
-      "operator": 0.0,
-      "maintenance": 0.0
-     },
-     "all": {
-      "trim": 82194.9,
-      "shear": 10992.0,
-      "dry_end": 29894.1,
-      "operator": 10.33,
-      "maintenance": 8.65
-     },
-     "apart": {
-      "scheduled": 0.0,
-      "external": 0.0,
-      "changeover": 3325.3,
-      "boards": 3454.0,
-      "cutoff_waste": 1561.5,
-      "stacker_waste": 1892.5
-     },
-     "lines": {
-      "bond": 10996.2,
-      "warp": 12202.0,
-      "misalignment": 4180.8,
-      "moisture": 1028.8,
-      "other": 1486.3,
-      "admin": 996.0,
-      "bale": 133741.1,
-      "unexplained": 2884.8
-     },
-     "trim_cells": [
-      [
-       82194.9,
-       2694376.9
-      ]
-     ]
-    },
-    {
-     "shift": 3,
-     "levers": {
-      "speed": 32.47,
-      "shear": 0.0,
-      "dry_end": 1859.1,
-      "operator": 0.0,
-      "maintenance": 0.0
-     },
-     "all": {
-      "trim": 63867.6,
-      "shear": 10919.2,
-      "dry_end": 21721.3,
-      "operator": 4.18,
-      "maintenance": 2.47
-     },
-     "apart": {
-      "scheduled": 0.0,
-      "external": 0.0,
-      "changeover": 2538.7,
-      "boards": 3774.8,
-      "cutoff_waste": 1990.1,
-      "stacker_waste": 1784.7
-     },
-     "lines": {
-      "bond": 6320.6,
-      "warp": 8820.6,
-      "misalignment": 4418.5,
-      "moisture": 1449.6,
-      "other": 712.0,
-      "admin": 1144.1,
-      "bale": 108349.0,
-      "unexplained": 4383.3
-     },
-     "trim_cells": [
-      [
-       63867.6,
-       2061007.6
-      ]
-     ]
-    }
+   "fields": [
+    "shift",
+    "speed",
+    "shear",
+    "dry_end",
+    "operator",
+    "maintenance",
+    "all_trim",
+    "all_shear",
+    "all_dry_end",
+    "all_operator",
+    "all_maintenance",
+    "apart_scheduled",
+    "apart_external",
+    "apart_changeover",
+    "apart_boards",
+    "apart_cutoff_waste",
+    "apart_stacker_waste",
+    "bond",
+    "warp",
+    "misalignment",
+    "moisture",
+    "other",
+    "admin",
+    "bale",
+    "unexplained",
+    "trim",
+    "gross"
    ],
-   "scope": [
-    2
+   "cells": [
+    [
+     2,
+     9.97,
+     0.0,
+     3882.2,
+     0.0,
+     0.0,
+     82194.9,
+     10992.0,
+     29894.1,
+     10.33,
+     8.65,
+     0.0,
+     0.0,
+     3325.3,
+     3454.0,
+     1561.5,
+     1892.5,
+     10996.2,
+     12202.0,
+     4180.8,
+     1028.8,
+     1486.3,
+     996.0,
+     133741.1,
+     2884.8,
+     82194.9,
+     2694376.9
+    ]
    ]
   },
   "tile_money": [
@@ -1516,7 +1976,7 @@
     "usd": 199.4,
     "usd_per_year": null,
     "machine_minutes": 9.97,
-    "usd_basis": "9.97 min x $1,200/hr machine time = $199; contribution: margin not set",
+    "usd_basis": "9.97 min x $1,200/hr machine time = $199.40; contribution: margin not set",
     "parts": [
      {
       "kind": "speed",
@@ -1543,7 +2003,7 @@
     "usd": 173.0,
     "usd_per_year": null,
     "machine_minutes": 8.65,
-    "usd_basis": "8.65 min x $1,200/hr machine time = $173; contribution: margin not set",
+    "usd_basis": "8.65 min x $1,200/hr machine time = $173.00; contribution: margin not set",
     "parts": [
      {
       "kind": "downtime",
@@ -1574,7 +2034,7 @@
     "usd": 206.6,
     "usd_per_year": null,
     "machine_minutes": 10.33,
-    "usd_basis": "10.33 min x $1,200/hr machine time = $207; contribution: margin not set",
+    "usd_basis": "10.33 min x $1,200/hr machine time = $206.60; contribution: margin not set",
     "parts": [
      {
       "kind": "downtime",
@@ -1602,10 +2062,10 @@
     ],
     "what": "dry-end rejects, all recorded",
     "measure": "all recorded",
-    "usd": 1754.89,
+    "usd": 1754.88,
     "usd_per_year": null,
     "machine_minutes": 5.54,
-    "usd_basis": "10,996.2 sq ft = 10.996 MSF x $55/MSF paper = $605; 10.996 MSF / 5.4 MSF per min = 2.04 min x $1,200/hr machine time = $40.73; contribution: margin not set + 12,202.0 sq ft = 12.202 MSF x $55/MSF paper = $671; 12.202 MSF / 5.4 MSF per min = 2.26 min x $1,200/hr machine time = $45.19; contribution: margin not set + 4,180.8 sq ft = 4.181 MSF x $55/MSF paper = $230; 4.181 MSF / 5.4 MSF per min = 0.77 min x $1,200/hr machine time = $15.48; contribution: margin not set + 1,028.8 sq ft = 1.029 MSF x $55/MSF paper = $56.58; 1.029 MSF / 5.4 MSF per min = 0.19 min x $1,200/hr machine time = $3.81; contribution: margin not set + 1,486.3 sq ft = 1.486 MSF x $55/MSF paper = $81.75; 1.486 MSF / 5.4 MSF per min = 0.28 min x $1,200/hr machine time = $5.50; contribution: margin not set",
+    "usd_basis": "10,996.2 sq ft = 10.996 MSF x $55/MSF paper = $604.79; 10.996 MSF / 5.4 MSF per min = 2.04 min x $1,200/hr machine time = $40.73; $604.79 + $40.73 = $645.52; contribution: margin not set + 12,202.0 sq ft = 12.202 MSF x $55/MSF paper = $671.11; 12.202 MSF / 5.4 MSF per min = 2.26 min x $1,200/hr machine time = $45.19; $671.11 + $45.19 = $716.30; contribution: margin not set + 4,180.8 sq ft = 4.181 MSF x $55/MSF paper = $229.94; 4.181 MSF / 5.4 MSF per min = 0.77 min x $1,200/hr machine time = $15.48; $229.94 + $15.48 = $245.42; contribution: margin not set + 1,028.8 sq ft = 1.029 MSF x $55/MSF paper = $56.58; 1.029 MSF / 5.4 MSF per min = 0.19 min x $1,200/hr machine time = $3.81; $56.58 + $3.81 = $60.39; contribution: margin not set + 1,486.3 sq ft = 1.486 MSF x $55/MSF paper = $81.75; 1.486 MSF / 5.4 MSF per min = 0.28 min x $1,200/hr machine time = $5.50; $81.75 + $5.50 = $87.25; contribution: margin not set",
     "parts": [
      {
       "kind": "waste",
@@ -1660,7 +2120,7 @@
     "usd": 4520.72,
     "usd_per_year": null,
     "machine_minutes": 0.0,
-    "usd_basis": "82,194.9 sq ft = 82.195 MSF x $55/MSF paper = $4,521; contribution: margin not set",
+    "usd_basis": "82,194.9 sq ft = 82.195 MSF x $55/MSF paper = $4,520.72; contribution: margin not set",
     "parts": [
      {
       "kind": "trim",
@@ -1733,7 +2193,7 @@
     "contribution_usd": 135.88,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "3,882.2 sq ft = 3.882 MSF x $60/MSF paper = $233; 3.882 MSF / 5.4 MSF per min = 0.72 min x $1,350.5/hr machine time = $16.18; contribution 3.882 MSF not made x $35/MSF = $136 (not added)",
+    "usd_basis": "3,882.2 sq ft = 3.882 MSF x $60/MSF paper = $232.93; 3.882 MSF / 5.4 MSF per min = 0.72 min x $1,350.5/hr machine time = $16.18; $232.93 + $16.18 = $249.11; contribution 3.882 MSF not made x $35/MSF = $135.88 (not added)",
     "share_of_window_pct": 0.1441,
     "usd_shown": 249,
     "control": "controllable",
@@ -1752,7 +2212,7 @@
     "contribution_usd": 1884.33,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "9.97 min x $1,350.5/hr machine time = $224; contribution 53.838 MSF not made x $35/MSF = $1,884 (not added)",
+    "usd_basis": "9.97 min x $1,350.5/hr machine time = $224.41; contribution 53.838 MSF not made x $35/MSF = $1,884.33 (not added)",
     "share_of_window_pct": 2.0771,
     "usd_shown": 225,
     "control": "controllable",
@@ -1809,7 +2269,7 @@
     "contribution_usd": 0,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "0.0 sq ft = 0.000 MSF x $60/MSF paper = $0.00; 0.000 MSF / 5.4 MSF per min = 0.00 min x $1,350.5/hr machine time = $0.00; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added)",
+    "usd_basis": "0.0 sq ft = 0.000 MSF x $60/MSF paper = $0.00; 0.000 MSF / 5.4 MSF per min = 0.00 min x $1,350.5/hr machine time = $0.00; $0.00 + $0.00 = $0.00; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added)",
     "share_of_window_pct": 0,
     "usd_shown": 0,
     "control": "controllable",
@@ -1847,7 +2307,7 @@
     "contribution_usd": 0,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "$4,932 all recorded less $0.00 above standard = $4,932 at standard; contribution $0.00 (not added)",
+    "usd_basis": "$4,931.69 all recorded less $0.00 above standard = $4,931.69 at standard; contribution $0.00 (not added)",
     "share_of_window_pct": 3.0506,
     "usd_shown": 4932,
     "apart": "at-standard"
@@ -1864,7 +2324,7 @@
     "contribution_usd": 910.41,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "$1,918 all recorded less $249 above standard = $1,669 at standard; contribution $910 (not added)",
+    "usd_basis": "$1,918.25 all recorded less $249.11 above standard = $1,669.14 at standard; contribution $910.41 (not added)",
     "share_of_window_pct": 0.9654,
     "usd_shown": 1669,
     "apart": "at-standard"
@@ -1881,7 +2341,7 @@
     "contribution_usd": 384.72,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "$705 all recorded less $0.00 above standard = $705 at standard; contribution $385 (not added)",
+    "usd_basis": "$705.34 all recorded less $0.00 above standard = $705.34 at standard; contribution $384.72 (not added)",
     "share_of_window_pct": 0.408,
     "usd_shown": 705,
     "apart": "at-standard"
@@ -1898,7 +2358,7 @@
     "contribution_usd": 1952.37,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "$233 all recorded less $0.00 above standard = $233 at standard; contribution $1,952 (not added)",
+    "usd_basis": "$232.51 all recorded less $0.00 above standard = $232.51 at standard; contribution $1,952.37 (not added)",
     "share_of_window_pct": 2.1521,
     "usd_shown": 232,
     "apart": "at-standard"
@@ -1915,7 +2375,7 @@
     "contribution_usd": 1634.85,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "$195 all recorded less $0.00 above standard = $195 at standard; contribution $1,635 (not added)",
+    "usd_basis": "$194.70 all recorded less $0.00 above standard = $194.70 at standard; contribution $1,634.85 (not added)",
     "share_of_window_pct": 1.8021,
     "usd_shown": 195,
     "apart": "at-standard"
@@ -1932,7 +2392,7 @@
     "contribution_usd": 120.89,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "3,454.0 sq ft = 3.454 MSF x $60/MSF paper = $207; 3.454 MSF / 5.4 MSF per min = 0.64 min x $1,350.5/hr machine time = $14.40; contribution 3.454 MSF not made x $35/MSF = $121 (not added)",
+    "usd_basis": "3,454.0 sq ft = 3.454 MSF x $60/MSF paper = $207.24; 3.454 MSF / 5.4 MSF per min = 0.64 min x $1,350.5/hr machine time = $14.40; $207.24 + $14.40 = $221.64; contribution 3.454 MSF not made x $35/MSF = $120.89 (not added)",
     "share_of_window_pct": 0.1282,
     "usd_shown": 222,
     "apart": "no-band"
@@ -1949,7 +2409,7 @@
     "contribution_usd": 116.39,
     "contribution_usd_per_year": null,
     "contribution_status": "set",
-    "usd_basis": "3,325.3 sq ft = 3.325 MSF x $60/MSF paper = $200; 3.325 MSF / 5.4 MSF per min = 0.62 min x $1,350.5/hr machine time = $13.86; contribution 3.325 MSF not made x $35/MSF = $116 (not added)",
+    "usd_basis": "3,325.3 sq ft = 3.325 MSF x $60/MSF paper = $199.52; 3.325 MSF / 5.4 MSF per min = 0.62 min x $1,350.5/hr machine time = $13.86; $199.52 + $13.86 = $213.38; contribution 3.325 MSF not made x $35/MSF = $116.39 (not added)",
     "share_of_window_pct": 0.1234,
     "usd_shown": 213,
     "apart": "no-band"
@@ -2009,13 +2469,14 @@
   "msf_not_made": 57.72,
   "at_standard_usd": 7733.38,
   "all_in_usd": 8641.92,
-  "ptd_usd": 29672.24,
-  "ptd_usd_per_year": 693637,
+  "ptd_usd": 29672.23,
+  "ptd_usd_per_year": 693631,
   "total_usd_shown": 474,
   "total_paper_usd_shown": 233,
   "total_machine_time_usd_shown": 241,
   "at_standard_usd_shown": 7733,
   "all_in_usd_shown": 8642,
-  "ptd_usd_shown": 29672
+  "ptd_usd_shown": 29672,
+  "total_contribution_usd_shown": 2020
  }
 }
