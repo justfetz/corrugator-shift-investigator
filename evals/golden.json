@@ -16292,6 +16292,40 @@
      }
     ]
    }
+  },
+  {
+   "id": "money-yearly-figure-is-its-shifts-ownership-29-jan-2025",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2025-01-29",
+   "url": "/corr/1/day/2025-01-29?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/day/2025-01-29/shift/1?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-29/shift/2?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-29/shift/3?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-29?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer subagent on the round on 2510d38 of PR #168 (2026-11-15), item 1: on 29 Jan 2025 shift 2 recorded no planning / admin, so its ownership card left the line out, and with it the $15,637 a year its period to date holds, which the all-shifts card added: all the waste recorded read $5,680,409 a year for the day and $1,799,046 + $1,866,575 + $1,999,151 = $5,664,772 by shift. A line the window holds none of, but its period to date does, shows at $0 beside its yearly figure, so the shift cards' yearly figures add to the day's, line by line and in total.",
+   "expect": {
+    "url": "/corr/1/day/2025-01-29?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "all the waste of 29 Jan 2025 a year by shift and for the day",
+      "match": "^- All the waste recorded: \\*\\*\\$[0-9,]+\\*\\* across .* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "planning / admin of 29 Jan 2025 a year by shift and for the day",
+      "match": "^- (?:[0-9]+\\. )?Planning / admin \\(not production waste\\) \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
   }
  ]
 }
