@@ -16214,6 +16214,84 @@
      "^Weekday profile$"
     ]
    }
+  },
+  {
+   "id": "money-yearly-figure-is-its-shifts-week-7-sep",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2026-09-07?measure=money",
+   "turns": [
+    "/corr/1/week/2026-09-07/shift/1?measure=money",
+    "/corr/1/week/2026-09-07/shift/2?measure=money",
+    "/corr/1/week/2026-09-07/shift/3?measure=money",
+    "/corr/1/week/2026-09-07?measure=money"
+   ],
+   "note": "the coordinator's review of 2510d38 on PR #168 (2026-11-15, comment 6893513782), item 1: the week of 7 Sep's shift cards said $287,307 + $217,646 + $229,629 = $734,582 a year, but the all-shifts card said $734,580; its dry end over the 1% target read $45,206 + $36,643 + $35,486 = $117,335 a year by shift and $117,334 for all shifts, and its operator downtime $27,361 and $27,360. Each scope called annual() once on its own period-to-date whole dollars, so three roundings to the dollar did not add to the all-shifts one. The all-shifts yearly figure, for each lever and each line, is the shifts' own printed yearly figures added up.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the yearly figure of the levers of the week of 7 Sep by shift and for all shifts",
+      "match": "^\\*\\*\\$[0-9,]+\\*\\* above standard across [0-9]+ levers · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the dry-end lever's yearly figure of the week of 7 Sep by shift and for all shifts",
+      "match": "^- [0-9]+\\. Dry end over the 1% target: \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the operator lever's yearly figure of the week of 7 Sep by shift and for all shifts",
+      "match": "^- [0-9]+\\. Operator downtime over the 2\\.5% band: \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-yearly-figure-is-its-shifts-ownership-7-sep",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-07",
+   "url": "/corr/1/day/2026-09-07?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/day/2026-09-07/shift/1?measure=money&lens=ownership",
+    "/corr/1/day/2026-09-07/shift/2?measure=money&lens=ownership",
+    "/corr/1/day/2026-09-07/shift/3?measure=money&lens=ownership",
+    "/corr/1/day/2026-09-07?measure=money&lens=ownership"
+   ],
+   "note": "the coordinator's review of 2510d38 on PR #168 (2026-11-15, comment 6893513782), item 1: the ownership lens's \"All the waste recorded\" line missed its shifts on 57 of 70 day cards (up to $5) and 20 of 22 windows (up to $6). On 7 Sep its shifts said $1,933,198 + $1,916,442 + $2,081,742 = $5,931,382 a year and the day $5,931,387. Each line's all-shifts yearly figure is its shifts' own added up, so the lines and all the waste add up by shift.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-07?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "all the waste of 7 Sep a year by shift and for the day",
+      "match": "^- All the waste recorded: \\*\\*\\$[0-9,]+\\*\\* across .* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "side trim of 7 Sep a year by shift and for the day",
+      "match": "^Side trim costs \\*\\*\\$[0-9,]+\\*\\*.* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the bond line of 7 Sep a year by shift and for the day",
+      "match": "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
   }
  ]
 }
