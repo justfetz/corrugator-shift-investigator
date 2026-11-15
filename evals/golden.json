@@ -21293,6 +21293,16 @@
     "raises": "^'crew' is said before 'trim %' with no value of its own, beside the shifts split, so it is no split by crew: ask that split, or split by both\\. Did you mean 'trim percent by shift this week' or 'trim percent by shift and crew this week'\\?$"
    },
    "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's check of f992d22: f992d22 offered 'side trim by shift', in square feet; main answered side trim's waste breakdown."
+  },
+  {
+   "id": "semantic-crew-rejects-by-reason-and-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Crew rejects by reason and shift this week",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop kind, so 'crew' cannot narrow it"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), the reviewer subagent's re-check of 47a3f54: 47a3f54 gave _modifier's reason 'beside the reasons split ... ask that split', but the dry-end rejects are not recorded by stop reason. The modifier's reason needs every other split to be one the measure is recorded by; this keeps 97b81f4's refusal, as semantic-crew-rejects-by-reason-refused does."
   }
  ]
 }
