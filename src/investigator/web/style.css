@@ -220,6 +220,7 @@ button.analyst{display:inline-flex;align-items:center;gap:8px;padding:0 14px}but
 #messages{line-height:1.5;font-size:13.5px;margin:0}
 #messages:empty,#charts:empty,#heatmaps:empty,#metrics:empty,#tables:empty,#context:empty{display:none}
 .empty{color:var(--ink-3);border-left:2px solid var(--rule);padding:8px 14px;margin:0}
+.orient{color:var(--ink);font-size:1.05rem;line-height:1.45;margin:0 0 10px}
 .message{padding:0}
 .message+.message{margin-top:8px}
 .message strong{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px;font-weight:600}
