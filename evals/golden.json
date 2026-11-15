@@ -20749,6 +20749,350 @@
     "raises": "^Boards per hour is not a ratio the records keep"
    },
    "note": "Fix round on the coordinator's review of 7b46463 (PR #155), the reviewer subagent's re-check of 709035c: main's ratio reason, which 7b46463 and 709035c replaced with 'the records do not count boards'; a time word after 'per' is a ratio."
+  },
+  {
+   "id": "semantic-which-grade-was-the-fastest",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade was the fastest this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_run_fpm&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_run_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(C|BC|EB) had the highest speed without stops this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 1: the question 29 of 97b81f4's refusals offered ('which grade had the most wet end speed', 'which boards were fastest') answered 'Slowest: 275-BC at 443.0 ft/min', as main does. The grades' speed card leads with the slowest grade (by percent of its target), so it answers a grade ranked slowest, never the fastest: the grades ranked by speed without stops, the fastest first."
+  },
+  {
+   "id": "semantic-which-grade-was-fastest",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade was fastest this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_run_fpm&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_run_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(C|BC|EB) had the highest speed without stops this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 1: main and 97b81f4 answered 'Slowest: 275-BC'. The grades' speed card leads with the slowest grade (by percent of its target), so it answers a grade ranked slowest, never the fastest: the grades ranked by speed without stops, the fastest first."
+  },
+  {
+   "id": "semantic-fastest-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Fastest grade this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_run_fpm&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_run_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(C|BC|EB) had the highest speed without stops this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 1: main and 97b81f4 answered 'Slowest: 275-BC'. The grades' speed card leads with the slowest grade (by percent of its target), so it answers a grade ranked slowest, never the fastest: the grades ranked by speed without stops, the fastest first."
+  },
+  {
+   "id": "semantic-which-grade-ran-fastest",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade ran fastest this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_run_fpm&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "speed_run_fpm",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(C|BC|EB) had the highest speed without stops this week: \\*\\*[0-9][0-9,.]* ft/min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 1: main and 97b81f4 answered 'Slowest: 275-BC'. The grades' speed card leads with the slowest grade (by percent of its target), so it answers a grade ranked slowest, never the fastest: the grades ranked by speed without stops, the fastest first."
+  },
+  {
+   "id": "semantic-grade-most-wet-end-speed-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had the most wet end speed this week?",
+   "expect": {
+    "raises": "^'wet end' is said before 'speed' with no value of its own, beside the grades ranked, so it is no split by paper run: ask the ranking, or split by both\\. Did you mean 'which grade was the fastest this week'"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 1: one of the 29 refusals that offer 'which grade was the fastest this week', which answered the slowest grade at 97b81f4. The refusal is unchanged (it passes at 97b81f4); semantic-which-grade-was-the-fastest pins that the question it offers now leads with the fastest grade."
+  },
+  {
+   "id": "semantic-which-boards-fastest-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards were fastest this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade was the fastest this week' or 'speed by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 1: another of the 29 (main answered the week's speed, 613.1 ft/min). The refusal is unchanged (it passes at 97b81f4); the question it offers now leads with the fastest grade."
+  },
+  {
+   "id": "semantic-which-boards-most-bale-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most bale this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: bale is recorded per shift, which carries no grade\\. Did you mean 'which shift had the most bale this week' or 'bale this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 2: 97b81f4 offered 'bale by grade this week', which the grade totals answer (36,213.8 MSF); main answered side trim. The bale carries no grade: the model's reason, and the shifts offered."
+  },
+  {
+   "id": "semantic-which-boards-most-unexplained-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most unexplained waste this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: unexplained waste is recorded per shift, which carries no grade\\. Did you mean 'which shift had the most unexplained waste this week' or 'unexplained waste this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 2: 97b81f4 offered 'unexplained waste by grade this week', which the grade totals answer; main answered side trim. Unexplained waste carries no grade."
+  },
+  {
+   "id": "semantic-which-boards-most-scheduled-minutes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most scheduled minutes this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads, and no grade stands in for it: scheduled minutes is recorded per shift, which carries no grade\\. Did you mean 'which shift had the most scheduled minutes this week' or 'scheduled minutes this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 2: 97b81f4 offered 'scheduled minutes by grade this week', which the grade totals answer; main refused with the boards count. Scheduled minutes carry no grade."
+  },
+  {
+   "id": "semantic-which-shift-most-bale",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift had the most bale this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=bale_sqft&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "bale_sqft",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [1-3] had the most bale this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 2: the question semantic-which-boards-most-bale-refused now offers, read completely and led by the shift with the most bale."
+  },
+  {
+   "id": "semantic-edge-trim-did-we-waste",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much edge trim did we waste this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 3: 97b81f4's verb rewrite read 'edge trim' and 'waste' as two measures. Main led with side trim; 'edge trim waste' is now a synonym of side trim (trim_sqft), so the reading is side trim and the waste breakdown, which leads with it, answers as on main."
+  },
+  {
+   "id": "semantic-edge-trim-was-wasted",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much edge trim was wasted this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 3: 97b81f4's verb rewrite read 'edge trim' and 'waste' as two measures. Main led with side trim; 'edge trim waste' is now a synonym of side trim (trim_sqft), so the reading is side trim and the waste breakdown, which leads with it, answers as on main."
+  },
+  {
+   "id": "semantic-edge-trim-waste",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Edge trim waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 3: refused as two measures since an earlier round. Main led with side trim; 'edge trim waste' is now a synonym of side trim (trim_sqft), so the reading is side trim and the waste breakdown, which leads with it, answers as on main."
+  },
+  {
+   "id": "semantic-how-much-edge-trim-waste",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much edge trim waste this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=waste&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_waste_breakdown",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "shift": null
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of gross in side trim, the largest waste"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 3: refused as two measures since an earlier round. Main led with side trim; 'edge trim waste' is now a synonym of side trim (trim_sqft), so the reading is side trim and the waste breakdown, which leads with it, answers as on main."
+  },
+  {
+   "id": "semantic-which-boards-most-shear-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most shear this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most shear this week' or 'shear by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 4: 97b81f4 said 'the records do not count boards', where nothing is counted ('shear' is also a stop place, and its measure was dropped before 'boards' was read as a dimension); main answered side trim."
+  },
+  {
+   "id": "semantic-shear-by-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Shear by boards this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'shear by grade this week' or 'shear this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 4: 97b81f4 said 'the records do not count boards'; main answered side trim."
+  },
+  {
+   "id": "semantic-which-boards-most-order-changes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most order changes this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most order changes this week' or 'order changes by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 4: 97b81f4 said 'the records do not count boards' ('order changes' is also a stop reason); main gave the router's 'one quantity' refusal."
+  },
+  {
+   "id": "semantic-crew-rejects-by-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Crew rejects by shift this week",
+   "expect": {
+    "raises": "^'crew' is said before 'rejects' with no value of its own, beside the shifts split, so it is no split by crew: ask that split, or split by both\\. Did you mean 'dry-end rejects by shift this week' or 'dry-end rejects by shift and crew this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 5: 97b81f4 refused with 'not recorded by stop kind, so 'crew' cannot narrow it' ('crew' is also the Operator kind's synonym), but the dry-end rejects are recorded by crew; main answered side trim."
   }
  ]
 }

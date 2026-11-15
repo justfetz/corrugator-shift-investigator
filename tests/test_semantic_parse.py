@@ -1128,3 +1128,74 @@ def test_a_duration_asked_suggests_the_models_minutes(store):
     assert request['plan'][0]['arguments']['measure'] == 'running_minutes'
     request, _ = route('Which reason had the most minutes of downtime this week?', Context(DAY, 2, scope='shift'), store.production_days, store)
     assert request['plan'][0]['tool'] == 'get_downtime_pareto'
+
+
+def _offered(text):
+    """The questions a refusal offers: the quoted ones after "Did you mean"."""
+    return re.findall(r"'([^']+)'", text.split('Did you mean', 1)[1]) if 'Did you mean' in text else []
+
+
+def test_every_question_a_refusal_offers_is_answered_as_asked(store):
+    """Each question these refusals offer is answered as that question, not just read completely: the semantic query of the measure
+    it names, split and ranked as it says, or the grades' speed card for a speed by grade or the slowest grade, whose headline is the
+    slowest. At 97b81f4, 29 refusals offered 'which grade was the fastest this week', which the card answered with the slowest grade,
+    and the boards refusal offered 'bale by grade', which the grade totals answered (the coordinator's review of PR #155 at 97b81f4,
+    items 1, 2 and 4)."""
+    for question in ('Which grade had the most wet end speed this week?', 'Which boards were fastest this week?',
+                     'Which boards were slowest this week?', 'Which boards had the most downtime this week?',
+                     'Which boards had the most rejects this week?', 'Which boards had the most stops this week?', 'Downtime by boards this week',
+                     'Which boards had the most bale this week?', 'Which boards had the most unexplained waste this week?',
+                     'Which boards had the most scheduled minutes this week?', 'Bale by boards this week', 'Which boards had the most shear this week?',
+                     'Shear by boards this week', 'Which boards had the most order changes this week?', 'Crew rejects by shift this week',
+                     'Which shift had the most crew rejects this week?', 'Which boards took the most minutes this week?'):
+        with pytest.raises(ValueError) as refused:
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        offered = _offered(str(refused.value))
+        assert offered, (question, str(refused.value))
+        for suggestion in offered:
+            r = reading(store, suggestion)
+            assert r.complete, (question, suggestion, r.refusal)
+            request, _ = route(suggestion, Context(DAY, 2, scope='shift'), store.production_days, store)
+            if request['intent'] == 'semantic':
+                args = request['plan'][0]['arguments']
+                assert (args['measure'], args['group_by'], (request.get('lead') or {}).get('rank')) == \
+                    (r.query.measure, r.query.group_by, r.rank), (question, suggestion)
+            else:
+                assert request['intent'] in ('period_speed', 'speed') and r.query.measure in P.SPEED_FAMILY and r.rank in (None, 'least'), \
+                    (question, suggestion, request['intent'], r.rank)
+
+
+def test_a_measure_with_no_grade_is_never_offered_by_grade(store):
+    """"Which boards had the most bale" offers the shifts and gives the model's reason: the bale, the unexplained waste and the scheduled
+    minutes are recorded per shift, which carries no grade, so "bale by grade" (the grade totals' MSF) is never offered (the coordinator's
+    review of PR #155 at 97b81f4, item 2)."""
+    for question, word in (('Which boards had the most bale this week?', 'bale'), ('Bale by boards this week', 'bale'),
+                           ('Which boards had the most unexplained waste this week?', 'unexplained waste'),
+                           ('Which boards had the most scheduled minutes this week?', 'scheduled minutes')):
+        with pytest.raises(ValueError) as refused:
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        text = str(refused.value)
+        assert f'{word} is recorded per shift, which carries no grade' in text, text
+        assert _offered(text) and not any('grade' in s for s in _offered(text)), text
+
+
+def test_a_word_that_is_also_a_dimension_the_measure_is_recorded_by_is_a_modifier(store):
+    """"Crew rejects by shift": no value of "crew" (the Operator kind's synonym) narrows the dry-end rejects, but they are recorded by
+    crew, so the word said bare before them beside the shifts split is _modifier's case, never "not recorded by stop kind" (the
+    coordinator's review of PR #155 at 97b81f4, item 5). With nothing else split or ranked, and a measure "crew" does narrow, it stays
+    as it was."""
+    for question in ('Crew rejects by shift this week', 'Which shift had the most crew rejects this week?', 'Crew waste by shift this week'):
+        r = reading(store, question)
+        assert 'modifier' in r.cues and r.refusal.startswith("'crew' is said before"), (question, r.refusal)
+        assert 'stop kind' not in r.refusal, (question, r.refusal)
+    r = reading(store, 'Crew stops by shift this week')
+    assert r.complete and r.query.filters == {'kind': 'Operator'} and r.query.group_by == ['shift'], r.refusal
+
+
+def test_edge_trim_waste_is_side_trim(store):
+    """"Edge trim waste" is a synonym of side trim, as "side trim waste" is, so "how much edge trim did we waste" reads as side trim,
+    never two measures (the coordinator's review of PR #155 at 97b81f4, item 3)."""
+    for question in ('How much edge trim did we waste this week?', 'How much edge trim was wasted this week?', 'Edge trim waste this week',
+                     'How much edge trim waste this week?'):
+        r = reading(store, question)
+        assert r.complete and r.query.measure == 'trim_sqft', (question, r.refusal)
