@@ -1469,7 +1469,8 @@ def _assign(reading, items, mdl, store, a, context):
     measure = named[0] if named else None
     if measure is None:
         for item in items:
-            if item.role == 'dimension' and item.value in group_by:
+            if item.role == 'dimension' and item.value in group_by and not item.said:
+                # ... never from a phrase that is itself a measure ("production days": never the volume its first word names)
                 inside = [mdl.measure_words.get(w) for w in item.words.split()]
                 found = next((m for m in inside if m and mdl.measures[m]['agg'] in semantic.SIMPLE), None)
                 if found:
