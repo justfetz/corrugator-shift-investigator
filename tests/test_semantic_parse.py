@@ -1285,16 +1285,31 @@ OFFER_LINES = ('paper', 'splice', 'glue', 'stacker', 'knife', 'warp', 'bond', 'm
                'crew', 'grade', 'roll', 'baler', 'steam', 'jam', 'maintenance')
 
 
-def _offer_phrasings():
-    """The generated set of the coordinator's review of PR #155 at 2c28fd3, item 3: the boards, a dimension said singular beside a split
-    of another, and a line's waste, for every measure's label and the word a question offered says it in, across five windows."""
+def _offer_phrasings(boards_only=False):
+    """The generated set of the coordinator's review of PR #155 at 2c28fd3, item 3, as (question, the measure it names or None, its
+    window words): the boards, a dimension said singular beside a split of another, and a line's waste, for every measure's label and
+    the word a question offered says it in, across five windows. The measure is the model's own reading of the word, else the measure
+    it was generated from ("minutes of downtime")."""
     mdl = S.model()
-    words = list(dict.fromkeys(w for name, m in mdl.measures.items() for w in (P._strip_parens(m['label']).lower(), P._measure_word(mdl, name))))
-    boards = ([f'which boards had the most {w}' for w in words] + [f'{w} by boards' for w in words]
-              + ['which boards were fastest', 'which boards were slowest', 'which boards took the most minutes'])
-    singular = [f'which {other} had the most {said} {w}' for w in words for said, other in OFFER_PAIRS] + [f'grade {w} by shift' for w in words]
-    waste = [q for v in OFFER_LINES for q in (f'{v} waste', f'how much {v} waste', f'which shift had the most {v} waste', f'{v} waste by grade')]
-    return [f'{q} {w}' for q in boards + singular + waste for w in OFFER_WINDOWS]
+    words = {}
+    for name, m in mdl.measures.items():
+        for w in (P._strip_parens(m['label']).lower(), P._measure_word(mdl, name)):
+            words.setdefault(w, mdl.measure_words.get(w) or mdl.measure_words.get(w.lower()) or name)
+    named = [(f'which boards had the most {w}', m) for w, m in words.items()] + [(f'{w} by boards', m) for w, m in words.items()]
+    named += [('which boards were fastest', 'speed_run_fpm'), ('which boards were slowest', 'speed_run_fpm'), ('which boards took the most minutes', None)]
+    if not boards_only:
+        named += [(f'which {other} had the most {said} {w}', m) for w, m in words.items() for said, other in OFFER_PAIRS]
+        named += [(f'grade {w} by shift', m) for w, m in words.items()]
+        named += [(q, None) for v in OFFER_LINES for q in (f'{v} waste', f'how much {v} waste', f'which shift had the most {v} waste', f'{v} waste by grade')]
+    return [(f'{q} {w}', m, w) for q, m in named for w in OFFER_WINDOWS]
+
+
+def _window_of(store, words, day):
+    """The production days the window words name from the controls' day, by the calendar alone."""
+    from investigator.record_store import parse_window
+    grain = 'day' if words == 'yesterday' else words.split()[-1]
+    anchor = agent.previous_window_day(grain, day, store.production_days) if words.split()[0] in ('last', 'yesterday') else day
+    return tuple(str(d) for d in parse_window({'period': grain, 'anchor': anchor})[2:])
 
 
 _FIGURE = re.compile(r'\*\*[+$]?(-?[\d,]+(?:\.\d+)?)')
@@ -1314,64 +1329,76 @@ def _same(a, b):
     return abs(a - b) <= max(0.051, abs(b) * 0.001)
 
 
-def _as_offered(store, ask, refusal, controls):
-    """None when the router answers `ask`, asked from the visitor's own controls, as the question it offers; else why not. This check
-    is the test's own: the semantic plan against the question's spec, and a hand route's first figure against the semantic model's
-    first figure for that question (any row's for a split it does not rank; the grades' speed card's slowest grade is its own, issue
-    #75), never the parser's table of the hand routes."""
-    window = ask.window or refusal.window
-    window = {'period': window['period'], 'anchor': window['anchor'] or controls.production_day}
-    filters = refusal.filters if ask.filters is None else ask.filters
+def _as_asked(store, text, refusal, measure, words, controls):
+    """None when the router answers the question `text` that a refusal of a generated question offered, asked next from the visitor's
+    own controls, as that question: over the window the generated question's words name (a split by day refused over one day may take
+    the week that holds it), naming no value the generated question did not, of the measure it names when the refusal is the boards'
+    or a modifier's (they offer the same measure split another way), and, sent to a hand route, opening with the figure the semantic
+    model gives for it (any row's for a split it does not rank; the grades' speed card's slowest grade is its own, issue #75). This
+    check is the test's own: the question's words and the calendar, never the parser's spec of what it offered or its hand-route table."""
+    from investigator.record_store import parse_window
+    want = _window_of(store, words, controls.production_day)
     try:
-        request, asked = route(str(ask), controls, store.production_days, store)
+        request, asked = route(text, controls, store.production_days, store)
     except ValueError as exc:
         return f'refused: {str(exc)[:80]}'
-    bounds = lambda w: S._window_bounds(w)[2:]   # noqa: E731
+    own = P.read(text, asked, store)
+    if not own.complete:
+        return f'its own reading refuses: {own.refusal[:80]}'
+    q = own.query
     if request['intent'] == 'semantic':
         args, lead = request['plan'][0]['arguments'], request.get('lead') or {}
-        got = (args['measure'], args['group_by'], lead.get('rank'), args['compare'], args.get('share'), args['filters'], bounds(args['window']))
-        want = (ask.measure, ask.group_by, ask.rank, ask.compare, ask.share, filters, bounds(window))
-        return None if got == want and (not ask.shift or args['shift'] == ask.shift) else f'planned {got}, offered {want}'
-    query = S.validate(S.SemanticQuery(measure=ask.measure, group_by=ask.group_by, filters=filters, window=window, compare=ask.compare,
-                                       order={'most': 'value', 'least': 'value_asc'}.get(ask.rank), shift=ask.shift or (asked.shift if asked.scope == 'shift' else None),
-                                       share=ask.share), store)
-    own = P.request_of(P.Reading(question=str(ask), query=query, rank=ask.rank))
-    hand, semantic = _figures(store, request, asked, str(ask)), _figures(store, own, asked, str(ask))
+        if (args['measure'], args['group_by'], lead.get('rank'), args['filters']) != (q.measure, q.group_by, own.rank, q.filters):
+            return f"planned {args['measure'], args['group_by'], lead.get('rank'), args['filters']}, read {q.measure, q.group_by, own.rank, q.filters}"
+        got = tuple(str(d) for d in parse_window(args['window'])[2:])
+    else:
+        hand = P._hand_window(request, asked)
+        got = tuple(str(d) for d in parse_window({'period': hand[0], 'anchor': hand[1]})[2:]) if hand else None
+    longer = refusal.startswith('A split by') and got is not None and got[0] <= want[0] and want[1] <= got[1]
+    if got != want and not longer:
+        return f'window {got}, the question asked {want}'
+    if q.filters or q.share is not None:
+        return f'names values the question did not: {q.filters}'
+    if measure and (refusal.startswith("'boards' is not a dimension") or ' is said before ' in refusal) and q.measure != measure:
+        return f'measure {q.measure}, the question asked {measure}'
+    if request['intent'] == 'semantic':
+        return None
+    hand, semantic = _figures(store, request, asked, text), _figures(store, P.request_of(own), asked, text)
     if hand and semantic and _same(hand[0], semantic[0]):
         return None
-    card = request['intent'] == 'period_speed' and (ask.measure, ask.group_by, ask.rank) == ('speed_run_fpm', ['grade'], 'least')
-    if hand and semantic and (ask.group_by and not ask.rank or card) and any(_same(hand[0], x) for x in semantic[1:]):
+    card = request['intent'] == 'period_speed' and (q.measure, q.group_by, own.rank) == ('speed_run_fpm', ['grade'], 'least')
+    if hand and semantic and (q.group_by and not own.rank or card) and any(_same(hand[0], x) for x in semantic[1:]):
         return None
     return f"{request['intent']} opens with {hand[:1]}, the semantic model with {semantic[:1]}"
 
 
-def test_every_question_a_generated_refusal_offers_is_answered_as_offered(store):
+@pytest.mark.parametrize('day, boards_only', [(DAY, False), ('2026-09-30', True)])
+def test_every_question_a_generated_refusal_offers_is_answered_as_asked(store, day, boards_only):
     """The class, not the instances (the coordinator's review of PR #155 at 2c28fd3, item 3): every question that any refusal of the
-    generated set offers is one the reading checked, and is answered as offered when a visitor asks it next in the same controls, by
-    this test's own check. 2c28fd3 offered about fifty that answered another measure, another window or a refusal ('which grade had
-    the most production days': the volume; 'order changes yesterday': the order fragments)."""
-    controls = Context(DAY, 2, scope='shift')
+    generated set offers is one the parser checked (an Ask), and passes this test's own check when a visitor asks it next in the same
+    controls: on a day whose week and month are complete, and on the last day of the records, whose are not (the grades' speed card
+    then opens with the grades observed, unranked). 2c28fd3 offered about fifty that answered another measure, another window or a
+    refusal ('which grade had the most production days': the volume; 'order changes yesterday': the order fragments)."""
+    controls = Context(day, 2, scope='shift')
     verdicts, bad, offered_any = {}, [], 0
-    for question in _offer_phrasings():
+    for question, measure, words in _offer_phrasings(boards_only):
         try:
             route(question, controls, store.production_days, store)
             continue
         except ValueError as exc:
-            offered = _offered(str(exc))
+            text, offered = str(exc), _offered(str(exc))
         if not offered:
             continue
         offered_any += 1
-        refusal = P.read(question, question_scope(question, controls, store.production_days, store), store)
-        asks = {str(s): s for s in refusal.suggestions}
-        for text in offered:
-            ask = asks.get(text)
-            if ask is None:
-                bad.append((question, text, 'offered without the check'))
+        checked = {str(s) for s in P.read(question, question_scope(question, controls, store.production_days, store), store).suggestions}
+        for suggestion in offered:
+            if suggestion not in checked:
+                bad.append((question, suggestion, 'offered without the check'))
                 continue
-            key = (text, ask.measure, tuple(ask.group_by), ask.rank, repr(ask.filters), repr(ask.window), repr(refusal.window), repr(refusal.filters))
+            key = (suggestion, text.split('.')[0], measure, words)
             if key not in verdicts:
-                verdicts[key] = _as_offered(store, ask, refusal, controls)
+                verdicts[key] = _as_asked(store, suggestion, text, measure, words, controls)
             if verdicts[key]:
-                bad.append((question, text, verdicts[key]))
-    assert offered_any > 1000 and len(verdicts) > 500, (offered_any, len(verdicts))
+                bad.append((question, suggestion, verdicts[key]))
+    assert offered_any > (100 if boards_only else 1000) and len(verdicts) > (100 if boards_only else 500), (offered_any, len(verdicts))
     assert not bad, bad[:20]
