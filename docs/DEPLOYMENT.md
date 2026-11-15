@@ -98,15 +98,16 @@ The last line prints the condition back. The deployer's binding (`principalSet:/
 
 **The condition applies once the keyless cutover (#28, below) is live.** Until then both workflows authenticate with the stored `GCP_SA_KEY`, and the pool is not asked. The key is a repository secret, which any workflow of this repository on any branch can read. What keeps it from a pull request's code is the rest of #133: Preview runs `main`'s steps and no file of the pull request; its upload is `pr/`, not the workspace root where the auth step writes its credential file (`gha-creds-*.json`, in key mode the key itself); the `main` deploy uploads `app/` for the same reason; and the agent's token cannot push a workflow file at all (it has no `workflows` permission, [AGENTS.md](AGENTS.md)). Anyone who can push a change to a workflow file can still read the key. That ends only when the cutover deletes it, so finish the cutover before relying on the condition.
 
-**Source archives from before #133 may hold the deployer's key.** Until #133 the deploy and every preview ran `gcloud run deploy --source .` from the workspace root, so the archive gcloud uploads for Cloud Build held the auth step's credential file. In key mode that file is the service-account key. The build's service account reads those archives, and a preview's build runs the pull request's `Dockerfile` as that account. The archives sit in the bucket the deploy log names when it uploads the source: `run-sources-<project>-<region>` with a current gcloud, `<project>_cloudbuild` with an older one. Find the archives that hold it, delete them, and treat the key as exposed: the cutover's key deletion (below) ends it, or a new key in `GCP_SA_KEY` with the old one deleted until then. A current gcloud uploads a `.zip`, an older one a `.tgz`; the loop reads both, recursively, and names every object it could not read rather than passing over it:
+**Source archives from before #133 may hold the deployer's key.** Until #133 the deploy and every preview ran `gcloud run deploy --source .` from the workspace root, so the archive gcloud uploads for Cloud Build held the auth step's credential file. In key mode that file is the service-account key. The build's service account reads those archives, and a preview's build runs the pull request's `Dockerfile` as that account. The archives sit in the bucket the deploy log names when it uploads the source: `run-sources-<project>-<region>` with a current gcloud, `<project>_cloudbuild` with an older one. Find the archives that hold it, delete them, and treat the key as exposed: the cutover's key deletion (below) ends it, or a new key in `GCP_SA_KEY` with the old one deleted until then. A current gcloud uploads a `.zip`, an older one a `.tgz`; the loop reads both, recursively, and names every bucket it could not list and every object it could not read or skipped, rather than passing over them (a bucket that does not exist is expected: only one of the two names is in use):
 
 ```bash
 for BUCKET in "gs://run-sources-${PROJECT_ID}-us-central1" "gs://${PROJECT_ID}_cloudbuild"; do
-  gcloud storage ls "$BUCKET/**" 2>/dev/null | while read -r OBJ; do
+  OBJECTS=$(gcloud storage ls "$BUCKET/**") || { echo "could not list $BUCKET (above: missing, or no permission)"; continue; }
+  echo "$OBJECTS" | while read -r OBJ; do
     case "$OBJ" in
       *.zip) gcloud storage cp --quiet "$OBJ" /tmp/archive.zip && LIST=$(unzip -Z1 /tmp/archive.zip) || LIST="UNREAD" ;;
       *.tgz|*.tar.gz) LIST=$(gcloud storage cat "$OBJ" | tar -tz) || LIST="UNREAD" ;;
-      *) continue ;;
+      *) echo "skipped (not an archive): $OBJ"; continue ;;
     esac
     [ "$LIST" = "UNREAD" ] && echo "could not read $OBJ" && continue
     echo "$LIST" | grep -q 'gha-creds-' && echo "holds a credential file: $OBJ"

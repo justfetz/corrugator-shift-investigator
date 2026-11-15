@@ -456,13 +456,16 @@ def test_a_symlink_out_of_the_pull_requests_tree_fails_before_the_upload(tmp_pat
     (tree / 'src' / 'a.py').write_text('x = 1\n')
     os.symlink('a.py', tree / 'src' / 'b.py')                   # inside: fine
     os.symlink('src', tree / 'docs')                            # inside: fine
-    os.symlink('/home/runner/.config/gcloud', tree / '.git' / 'x')   # in .git, which gcloud never uploads (.gcloudignore)
+    # pr/.git is actions/checkout's own (git refuses a .git path in a tree, and persist-credentials: false leaves no token
+    # in it), so it is not the pull request's to fill; pr/.gcloudignore is, so .git may well be uploaded
+    os.symlink('/home/runner/.config/gcloud', tree / '.git' / 'x')
     run = lambda: subprocess.run([sys.executable, '-I', str(SCRIPT), 'links', str(tree)], capture_output=True, text=True)
     assert run().returncode == 0 and run().stdout == ''
     os.symlink('/home/runner/.config/gcloud/credentials.db', tree / 'creds')            # absolute, and missing until auth
     os.symlink('../../gha-creds-x.json', tree / 'src' / 'c.json')                       # up out of the tree
     os.symlink('docs/../../outside', tree / 'chain')                                     # through a link inside
+    os.symlink(str(tree / 'src' / 'a.py'), tree / 'abs')                                 # absolute: refused by its text
     proc = run()
     assert proc.returncode == 1, proc.stdout
     named = sorted(line.split("'")[1] for line in proc.stdout.splitlines())
-    assert named == ['chain', 'creds', 'src/c.json'] and all(l.startswith('::error::') for l in proc.stdout.splitlines())
+    assert named == ['abs', 'chain', 'creds', 'src/c.json'] and all(l.startswith('::error::') for l in proc.stdout.splitlines())

@@ -45,8 +45,9 @@ def checked(name: str, values: list[str]) -> list[str]:
 
 
 def outward_links(tree: str) -> list[tuple[str, str]]:
-    """(path, link text) for each symlink under ``tree`` (its .git excluded) whose target, followed to the end,
-    is outside ``tree``. Nothing is followed while walking."""
+    """(path, link text) for each symlink under ``tree`` (its .git excluded) that is absolute, or whose target,
+    followed to the end, is outside ``tree``. An absolute link is refused by its text alone, whatever it resolves
+    to here and now; a relative one is followed. Nothing is followed while walking."""
     root = os.path.realpath(tree)
     found = []
     for dirpath, dirnames, filenames in os.walk(tree):
@@ -55,9 +56,10 @@ def outward_links(tree: str) -> list[tuple[str, str]]:
         for name in dirnames + filenames:
             path = os.path.join(dirpath, name)
             if os.path.islink(path):
+                text = os.readlink(path)
                 target = os.path.realpath(path)
-                if target != root and not target.startswith(root + os.sep):
-                    found.append((os.path.relpath(path, tree), os.readlink(path)))
+                if os.path.isabs(text) or (target != root and not target.startswith(root + os.sep)):
+                    found.append((os.path.relpath(path, tree), text))
     return sorted(found)
 
 

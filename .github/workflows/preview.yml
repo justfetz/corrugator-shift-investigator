@@ -302,7 +302,9 @@ jobs:
             if grep -qiE 'NOT_FOUND|could not be found|not found' /tmp/describe.err; then echo "service $SERVICE not found; nothing to clean up"; exit 0; fi
             echo "::error::could not describe $SERVICE; a leaked preview would go unnoticed, so this fails"; exit 1
           fi
-          if [ -n "$(python3 .github/scripts/preview_origins.py url "$TAG" < /tmp/service.json | cut -d= -f2-)" ]; then
+          # Assigned first, so a tag URL the helper refuses fails the job (set -e) instead of reading as "not serving".
+          TAG_URL=$(python3 .github/scripts/preview_origins.py url "$TAG" < /tmp/service.json | cut -d= -f2-)
+          if [ -n "$TAG_URL" ]; then
             bash .github/scripts/cloud_run_update.sh gcloud run services update-traffic "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --remove-tags "$TAG" --quiet
             echo "tag $TAG removed; the preview URL no longer serves"
           else
