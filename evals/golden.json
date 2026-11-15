@@ -19275,6 +19275,442 @@
     "raises": "'than'"
    },
    "note": "Fix round on the coordinator's review of 74cc46f (PR #155), the reviewer subagent's check of 20c833d: 'other than' excludes a value, which no query reads: main and 20c833d answered every reason's downtime review."
+  },
+  {
+   "id": "semantic-shift-most-chops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most chops this week?",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; main refused with this reason, b955ca4 answered 'Shift 1 … 74,704.0 sq ft' over it."
+  },
+  {
+   "id": "semantic-most-chops-by-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "most chops by shift",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; b955ca4 answered 'Shift 1 had the most shear chops: 13,879.8 sq ft' (main: the selected shift's overview)."
+  },
+  {
+   "id": "semantic-most-chops-by-shift-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Most chops by shift this week",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; main refused with this reason, b955ca4 answered in square feet over it."
+  },
+  {
+   "id": "semantic-top-grades-by-chops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "top 3 grades by chops",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; b955ca4 answered '55-C had the most shear chops: 7,979.4 sq ft' (main: the generic help)."
+  },
+  {
+   "id": "semantic-top-grades-by-chops-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Top 3 grades by chops this week",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; main refused with this reason, b955ca4 answered '275-BC … 38,853.7 sq ft' over it."
+  },
+  {
+   "id": "semantic-compare-shifts-on-chops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "compare shifts on chops",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; b955ca4 answered 'Shear chops: 35,791.0 sq ft' (main: the day's shift comparison, led by speed)."
+  },
+  {
+   "id": "semantic-compare-shifts-on-chops-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Compare shifts on chops this week",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; main refused with this reason, b955ca4 answered in square feet over it."
+  },
+  {
+   "id": "semantic-chops-shift-1-versus-2-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "chops on shift 1 versus shift 2",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; b955ca4 answered 'Shift 1 had more shear chops than Shift 2: 13,879.8 sq ft' (main: 'Selected shift only')."
+  },
+  {
+   "id": "semantic-chops-shift-1-versus-2-week-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Chops on shift 1 versus shift 2 this week",
+   "expect": {
+    "raises": "The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking, comparison or 'vs' of the chops is a count, and the records keep the chops as square feet; b955ca4 answered 'Shift 1 had more shear chops than Shift 2 this week' (main: 'Selected shift only')."
+  },
+  {
+   "id": "semantic-shift-most-stacker-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most stacker boards this week?",
+   "expect": {
+    "raises": "The records do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: a ranking of the stacker boards is a count of boards, which the records do not hold; main refused with this reason, b955ca4 answered 'Shift 2 had the most stacker waste boards this week: 12,739.3 sq ft' over it."
+  },
+  {
+   "id": "semantic-shift-fewest-stacker-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the fewest stacker boards this week?",
+   "expect": {
+    "raises": "The records do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 1: as the most; main refused with this reason, b955ca4 answered 'Shift 3 had the least stacker waste boards this week' over it."
+  },
+  {
+   "id": "semantic-dry-end-waste-leads-with-rejects",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Dry end waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 2: 'dry end waste' reads as the dry-end rejects, and the waste breakdown answered '3.45% of gross in side trim'. Only a bare 'waste' means every line."
+  },
+  {
+   "id": "semantic-shear-waste-leads-with-shear",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Shear waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=shear_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "shear_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shear chops this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 2: the waste breakdown answered '3.45% of gross in side trim'; 'shear waste' is the shear's line."
+  },
+  {
+   "id": "semantic-bale-waste-leads-with-bale",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Bale waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=bale_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "bale_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Bale \\(scale reading\\) this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 2: the waste breakdown answered '3.45% of gross in side trim'; 'bale waste' is the bale's line."
+  },
+  {
+   "id": "semantic-warp-waste-leads-with-warp",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Warp waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&reject_family=WARP",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {
+        "reject_family": "WARP"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects, reject family Warp this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 2: 'warp waste' read completely as the warp family's rejects, and the waste breakdown answered '3.45% of gross in side trim'."
+  },
+  {
+   "id": "semantic-bond-waste-leads-with-bond",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Bond waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&reject_family=BOND",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {
+        "reject_family": "BOND"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects, reject family Bond this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 2: as warp waste: the waste breakdown answered '3.45% of gross in side trim'."
+  },
+  {
+   "id": "semantic-reject-waste-leads-with-rejects",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Reject waste this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 2: 'reject' was unread, so the waste breakdown answered '3.45% of gross in side trim'; 'reject waste' is the dry-end rejects."
+  },
+  {
+   "id": "semantic-how-much-moisture-leads-with-moisture",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much moisture this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&reject_family=MOISTURE",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [],
+       "filters": {
+        "reject_family": "MOISTURE"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects, reject family Moisture this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 2: the waste breakdown answered '3.45% of gross in side trim'. 'Moisture' is the reject family's own name and only a synonym of the stop reason Steam / moisture, so it reads as the family, as 'how much warp' does."
+  },
+  {
+   "id": "semantic-grade-took-most-minutes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade took the most minutes this week?",
+   "expect": {
+    "raises": "'took'"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 3: a refusal fired before the verb was read, so the grade totals answered '36,213.8 MSF across 6 grades'."
+  },
+  {
+   "id": "semantic-grade-spent-most-time-down-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade spent the most time down this week?",
+   "expect": {
+    "raises": "'spent'"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 3: as 'took': the grade totals answered '36,213.8 MSF across 6 grades'."
+  },
+  {
+   "id": "semantic-shift-lost-most-to-warp",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift lost the most to warp this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&by=shift&rank=most&reject_family=WARP",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {
+        "reject_family": "WARP"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] (?:and Shift [123] )?(?:had|tied for) the most dry-end rejects, reject family Warp this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 3: 'to' after 'lost the most' was unread, so the waste breakdown answered '3.53% of gross in side trim'. It is the cue of the value after it, as in 'how much did we lose to warp'."
+  },
+  {
+   "id": "semantic-shift-lost-most-to-bond",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift lost the most to bond this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&by=shift&rank=most&reject_family=BOND",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {
+        "reject_family": "BOND"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] (?:and Shift [123] )?(?:had|tied for) the most dry-end rejects, reject family Bond this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 3: as warp: the waste breakdown answered '3.53% of gross in side trim'."
+  },
+  {
+   "id": "semantic-shift-most-cutoff-waste-boards",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift had the most cutoff waste boards this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=cutoff_waste_sqft&window=week&by=shift&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "cutoff_waste_sqft",
+       "group_by": [
+        "shift"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] (?:and Shift [123] )?(?:had|tied for) the most cutoff-knife waste boards this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 4: 'boards' was read as the grade, so it answered 'Shift 3 · 55-C … 2,926.3 sq ft' (by=shift,grade). 'Cutoff waste boards' is the line's own name, as 'knife waste boards' is, and a bare 'boards' is never the grades."
+  },
+  {
+   "id": "semantic-lineal-feet-lose-by-shift-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many lineal feet did we lose by shift this week?",
+   "expect": {
+    "raises": "'lose' asks what was lost, and lineal feet count what ran"
+   },
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 5: pinned. A loss said of what ran is refused; main refused it as a count asked of every shift ('A count is answered for one shift')."
   }
  ]
 }
