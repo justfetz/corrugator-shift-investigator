@@ -519,7 +519,7 @@ def _read(reading, text, context, store, mdl):
         # yesterday": agent.RELATIVE_BASE): left unread here, but the questions offered keep it, and the router reads it from the controls
         # (the coordinator's review of PR #155 at 2c28fd3: never the selected day's question)
         rel = next(((m[0], grain) for grain, pattern in agent.RELATIVE_WINDOWS if grain == 'day' for m in [re.search(pattern, lower)] if m), None)
-        day = agent.previous_window_day('day', anchor, store.production_days) if rel and period == 'day' else None
+        day = agent.previous_window_day('day', anchor, store.production_days) if rel else None   # under any Period control
         if day:
             reading.window_words, reading.window = rel[0], {'period': 'day', 'anchor': day}
     # ---- the shift: one named (agent.named_shifts), the selected one ("this shift"), or all of them
@@ -706,8 +706,11 @@ def _boards_dimension(reading, items, a):
         unit = next((u for u in a.get('units') or [] if u not in ('count', 'min')), None)
         if other is not None and unit is not None:
             other = _family(mdl, other, unit) or other   # "shear % by boards": the shear's percent, as _assign reads the unit said
+        unkept = None
         if other is not None and a.get('per_day') and mdl.measures[other]['unit'] != 'ft/min':
-            other = _ratio(mdl, other, 'production_days')   # "volume per production day by boards": the MSF per day, never the MSF
+            # "volume per production day by boards": the MSF per day, never the MSF; a measure with no ratio to the days ("stops per
+            # production day") is offered in no other words (the reviewer subagent's re-check of e51adf7)
+            other, unkept = _ratio(mdl, other, 'production_days') or other, None if _ratio(mdl, other, 'production_days') else other
         speed = next((SPEED_RANK[o.words] for o in items if o.kind == 'speed_rank'), None)
         if other is None and speed:
             other = 'speed_run_fpm'
@@ -716,6 +719,9 @@ def _boards_dimension(reading, items, a):
             continue
         rank = (a.get('rank') or speed or next((RANK[o.words] for o in items if o.kind == 'rank'), None)
                 or ('most' if prev is not None and (prev.kind == 'which' or prev.words == 'what') else None))
+        if unkept:
+            reading.dropped.append(_ask(mdl, reading, unkept, 'grade'))   # none offered: the refusal says what the model keeps of it
+            return Refused("'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade", [])
         if not reading.filters and other is not None:
             # a refusal fired before the values were read ("which boards had the most operator stops": two measures): the questions
             # offered keep the values said beside the measure, never every stop's ranking (the coordinator's review of 2c28fd3, item 1)
@@ -977,11 +983,13 @@ def _ranked_measure(items, item):
     split) is ranked right after its ranking word beside another dimension asked as the split ("which grade had the most production
     days"): the thing counted, never a second split read with the volume its first word names (the reviewer subagent's check of the fix
     round on 2c28fd3: it offered the MSF of each grade and day)."""
-    k = items.index(item)
+    k, mdl = items.index(item), semantic.model()
     prev = _prev(items, k)
-    return (prev is not None and prev.kind == 'rank' and len(item.words.split()) > 1
-            and any(o is not item and (o.kind == 'vocab' and _entries(o, 'dimension') and not _entries(o, 'measure') or o.words in WHO)
-                    for o in items))
+    measure = next((e[1] for e in _entries(item, 'measure')), None)
+    splits = [e[1] for o in items if o is not item and o.kind == 'vocab' and not _entries(o, 'measure') for e in _entries(o, 'dimension')[:1]]
+    # ... and only where the measure is recorded by that split ("which reason had the most paper runs" keeps its own refusal)
+    return (prev is not None and prev.kind == 'rank' and len(item.words.split()) > 1 and measure is not None
+            and (any(o.words in WHO for o in items) or bool(splits) and all(semantic._usable(mdl, measure, d, as_filter=False) is None for d in splits)))
 
 
 def _joined(items, i):
@@ -1068,11 +1076,15 @@ def _narrowing(mdl, filters, shift):
 
 
 def _kinds(mdl, reading, measure):
-    """The questions offered for who logged a stop: the measure asked of each kind (a stop measure, else the stops), and split by kind,
-    keeping the refusal's other filters and the shift it named."""
-    m = measure if semantic._usable(mdl, measure, 'kind', as_filter=True) is None else 'stops'
+    """The questions offered for who logged a stop: the measure asked of each kind and split by kind, keeping the refusal's other
+    filters and the shift it named; none for a measure no stop kind narrows."""
     others = {d: v for d, v in reading.filters.items() if d != 'kind'}
-    return [_ask(mdl, reading, m, filters={**others, 'kind': kind}) for kind in ('Operator', 'Maintenance')] + [_ask(mdl, reading, m, 'kind', filters=others)]
+    if semantic._usable(mdl, measure, 'kind', as_filter=True) is not None:
+        # a measure no stop kind narrows ("dry-end rejects logged by operators"): none offered, never the stops in its place
+        reading.dropped.append(_ask(mdl, reading, measure, filters=others))
+        return []
+    return [_ask(mdl, reading, measure, filters={**others, 'kind': kind}) for kind in ('Operator', 'Maintenance')] + \
+        [_ask(mdl, reading, measure, 'kind', filters=others)]
 
 
 def _held(mdl, reading, measure, dim, period):
