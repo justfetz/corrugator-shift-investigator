@@ -20739,6 +20739,16 @@
     "raises": "^Dry-end rejects is not recorded by stop reason, so 'knife' cannot narrow it"
    },
    "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 8: a stop reason before a waste line the reading cannot narrow by it; main and 7b46463 answered side trim (3.53% of gross)."
+  },
+  {
+   "id": "semantic-how-many-boards-per-hour-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many boards per hour this week?",
+   "expect": {
+    "raises": "^Boards per hour is not a ratio the records keep"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155), the reviewer subagent's re-check of 709035c: main's ratio reason, which 7b46463 and 709035c replaced with 'the records do not count boards'; a time word after 'per' is a ratio."
   }
  ]
 }
