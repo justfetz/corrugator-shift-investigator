@@ -19594,9 +19594,9 @@
    "mode": "offline",
    "question": "Which grade took the most minutes this week?",
    "expect": {
-    "raises": "'took'"
+    "raises": "^'took' is not a word the semantic model reads.*Did you mean 'which grade had the most run minutes this week'"
    },
-   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 3: a refusal fired before the verb was read, so the grade totals answered '36,213.8 MSF across 6 grades'."
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155, 2026-11-15 00:29), item 3: a refusal fired before the verb was read, so the grade totals answered '36,213.8 MSF across 6 grades'. Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 5: the suggestions offer the model's own reading of a grade's minutes, the run minutes, never its stops or setups."
   },
   {
    "id": "semantic-grade-spent-most-time-down-refused",
@@ -19748,9 +19748,9 @@
    "mode": "offline",
    "question": "Which boards had the most stops this week?",
    "expect": {
-    "raises": "The records do not count boards"
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'which grade had the most stops this week'"
    },
-   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: a bare 'boards' is no grade split (item 4), so 0d23e4a refused two measures and the Pareto answered '32 stops at Stacker'. A ranking of boards is a count the records do not hold (item 1)."
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: a bare 'boards' is no grade split (item 4), so 0d23e4a refused two measures and the Pareto answered '32 stops at Stacker'. A ranking of boards is a count the records do not hold (item 1). Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 4: stops are named, so 'boards' is said as a dimension; it is refused as no dimension, with the grade, not as a count."
   },
   {
    "id": "semantic-shift-most-chops-at-the-shear-refused",
@@ -19778,9 +19778,9 @@
    "mode": "offline",
    "question": "Paper waste this week",
    "expect": {
-    "raises": "'paper' cannot narrow it"
+    "raises": "not recorded by stop reason, so 'paper' cannot narrow it"
    },
-   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 2: 'paper waste' is no line the model holds, and the waste breakdown answered '3.45% of gross in side trim'; only a bare 'waste' is every line."
+   "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's check of 0d23e4a: item 2: 'paper waste' is no line the model holds, and the waste breakdown answered '3.45% of gross in side trim'; only a bare 'waste' is every line. Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 3: the refusal said 'Dry-end rejects is not recorded by reason', which is false: they are recorded by reject reason. It names the stop reason now."
   },
   {
    "id": "semantic-baler-waste-leads-with-bale",
@@ -19947,6 +19947,473 @@
     "raises": "^Offline mode answers one quantity at a time"
    },
    "note": "Fix round on the coordinator's review of b955ca4 (PR #155), the reviewer subagent's re-check of 87f0146: a count asked of a word that is a stop place's synonym and a reject reason's own name is refused, as on main and at b955ca4; 87f0146 read the reject reason and answered 13,509.7 sq ft."
+  },
+  {
+   "id": "semantic-shift-most-board-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most board stops this week?",
+   "expect": {
+    "raises": "^'board' is said before 'stops' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most stops this week' or 'stops by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · 275-BC had the most stops this week: 16 stops', by=shift,grade; shift 2 had the most, 49. Main refused it). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-board-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most board setups this week?",
+   "expect": {
+    "raises": "^'board' is said before 'setups' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most setups this week' or 'setups by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 2 · 200-C had the most setups'; main refused it). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-grade-setups-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most grade setups this week?",
+   "expect": {
+    "raises": "^'grade' is said before 'setups' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most setups this week' or 'setups by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'grade' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 2 · 200-C had the most setups'; main refused it). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-board-scrap-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most board scrap this week?",
+   "expect": {
+    "raises": "^'board' is said before 'scrap' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · 26-C had the most dry-end rejects'; main refused it as a count of boards, which it does not ask). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-board-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most board rejects this week?",
+   "expect": {
+    "raises": "^'board' is said before 'rejects' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · 26-C had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-grade-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most grade rejects this week?",
+   "expect": {
+    "raises": "^'grade' is said before 'rejects' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'grade' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · 26-C had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-quality-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most quality rejects this week?",
+   "expect": {
+    "raises": "^'quality' is said before 'rejects' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'quality' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · 26-C had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-wet-end-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most wet end rejects this week?",
+   "expect": {
+    "raises": "^'wet end' is said before 'rejects' with no value of its own, beside the shifts ranked, so it is no split by paper run.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and paper run this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'wet end' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · WE20260916010 had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-board-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most board waste this week?",
+   "expect": {
+    "raises": "^'board' is said before 'waste' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift … · 26-C had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-grade-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most grade waste this week?",
+   "expect": {
+    "raises": "^'grade' is said before 'waste' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'grade' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift … · 26-C had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-wet-end-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most wet end waste this week?",
+   "expect": {
+    "raises": "^'wet end' is said before 'waste' with no value of its own, beside the shifts ranked, so it is no split by paper run.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and paper run this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'wet end' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift … · WE20260916010 had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-width-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most width waste this week?",
+   "expect": {
+    "raises": "^'width' is said before 'waste' with no value of its own, beside the shifts ranked, so it is no split by web width.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and web width this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'width' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift … · 110 in had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-flute-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most flute waste this week?",
+   "expect": {
+    "raises": "^'flute' is said before 'waste' with no value of its own, beside the shifts ranked, so it is no split by flute.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and flute this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'flute' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift … · C had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-lane-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most lane waste this week?",
+   "expect": {
+    "raises": "^'lane' is said before 'waste' with no value of its own, beside the shifts ranked, so it is no split by lane.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and lane this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'lane' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift … · Lane 2 had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-job-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most job waste this week?",
+   "expect": {
+    "raises": "^'job' is said before 'waste' with no value of its own, beside the shifts ranked, so it is no split by order.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and order this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'job' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift … · SO-2609180122 had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-board-trim-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most board trim this week?",
+   "expect": {
+    "raises": "^'board' is said before 'trim' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most side trim this week' or 'side trim by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · 275-BC had the most side trim'; main answered the waste breakdown). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-cutoff-knife-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most cutoff knife rejects this week?",
+   "expect": {
+    "raises": "^'cutoff knife' is said before 'rejects' with no value of its own, beside the shifts ranked, so it is no split by lane.*Did you mean 'which shift had the most dry-end rejects this week' or 'dry-end rejects by shift and lane this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'cutoff knife' said bare before the measure, beside the shifts ranked, was read as a second split ('Shift 1 · Lane 2 had the most dry-end rejects'; main answered side trim). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-crew-most-board-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which crew had the most board waste this week?",
+   "expect": {
+    "raises": "^'board' is said before 'waste' with no value of its own, beside the crews ranked, so it is no split by grade.*Did you mean 'which crew had the most dry-end rejects this week' or 'dry-end rejects by crew and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the crews ranked, was read as a second split ('Crew A · 26-C had the most dry-end rejects'; main answered the waste breakdown). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-top-3-shifts-by-board-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Top 3 shifts by board stops this week",
+   "expect": {
+    "raises": "^'board' is said before 'stops' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most stops this week' or 'stops by shift and grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split (the reviewer-subagent probe of this round: 'Shift 1 · 275-BC had the most stops' after 'by'). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-grade-most-crew-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade had the most crew stops this week?",
+   "expect": {
+    "raises": "^'crew' is said before 'stops' with no value of its own, beside the grades ranked, so it is no split by crew.*Did you mean 'which grade had the most stops this week' or 'stops by grade and crew this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'crew' said bare before the measure, beside the grades ranked, was read as a second split (this round's probe: '275-BC · Crew A had the most stops'). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-shift-most-board-stops-day-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most board stops?",
+   "expect": {
+    "raises": "^'board' is said before 'stops' with no value of its own, beside the shifts ranked, so it is no split by grade.*Did you mean 'which shift had the most stops' or 'stops by shift and grade'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: 'board' said bare before the measure, beside the shifts ranked, was read as a second split (the production day: 'Shift 1 · 275-BC had the most stops: 5 stops'). It names no value and asks no split of its own, so it is refused with the ranking alone and the split by both, each of which reads."
+  },
+  {
+   "id": "semantic-how-much-paper-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much paper waste this week?",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop reason, so 'paper' cannot narrow it"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 2: the line-waste guard covered the waste breakdown but not the rollstock answer, so this answered '36,213.8 MSF of paper consumed', which is no waste. 'Paper' names a stop reason, not a waste line: refused over every hand route but #113's allow-list."
+  },
+  {
+   "id": "semantic-how-much-paper-did-we-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much paper did we waste this week?",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop reason, so 'paper' cannot narrow it"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 2: 'waste' said as the verb of 'paper' is the same question as 'paper waste'; it answered the paper consumed."
+  },
+  {
+   "id": "semantic-splice-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Splice waste this week",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop reason, so 'splice' cannot narrow it"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 3: the refusal said 'not recorded by reason', which is false (the dry-end rejects are recorded by reject reason); 'splice' is a stop reason."
+  },
+  {
+   "id": "semantic-which-boards-most-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most downtime this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'which grade had the most minutes of downtime this week' or 'minutes of downtime by grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 4: 7b46463 said 'the records do not count boards', where nothing is counted; main answered the downtime review. Another measure is named, so 'boards' is said as a dimension, which it is not: the grade is offered."
+  },
+  {
+   "id": "semantic-which-boards-most-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most rejects this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'which grade had the most dry-end rejects this week' or 'dry-end rejects by grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 4: 7b46463 said 'the records do not count boards', where nothing is counted; main answered side trim. Another measure is named, so 'boards' is said as a dimension, which it is not: the grade is offered."
+  },
+  {
+   "id": "semantic-which-boards-slowest-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards were slowest this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'which grade was the slowest this week' or 'speed by grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 4: 7b46463 said 'the records do not count boards', where nothing is counted; main answered the week's speed. Another measure is named, so 'boards' is said as a dimension, which it is not: the grade is offered."
+  },
+  {
+   "id": "semantic-downtime-by-boards-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Downtime by boards this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'minutes of downtime by grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 4: 7b46463 said 'the records do not count boards', where nothing is counted; main answered the downtime review. Another measure is named, so 'boards' is said as a dimension, which it is not: the grade is offered."
+  },
+  {
+   "id": "semantic-how-many-boards-per-setup-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many boards per setup this week?",
+   "expect": {
+    "raises": "^Boards per setup is not a ratio the records keep"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 4: main's ratio reason, which 7b46463 replaced with 'the records do not count boards'."
+  },
+  {
+   "id": "semantic-grade-ran-most-minutes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade ran the most minutes this week?",
+   "expect": {
+    "raises": "Did you mean 'which grade had the most run minutes this week' or 'which grade had the most minutes of downtime this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 5: the suggestions were stops, downtime and setups; a grade's minutes are its run minutes (running_minutes by grade)."
+  },
+  {
+   "id": "semantic-stop-reason-took-most-time-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which stop reason took the most time this week?",
+   "expect": {
+    "raises": "^'took' is not a word the semantic model reads.*Did you mean 'which reason had the most minutes of downtime this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 5: the suggestion was the stops; a stop reason's time is its minutes of downtime, the Pareto that '... took the most minutes' already answers."
+  },
+  {
+   "id": "semantic-stops-by-shift-and-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Stops by shift and grade this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=shift,grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "shift",
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Stops this week: \\*\\*[0-9][0-9,]* stops\\*\\*",
+     "^- Shift [123] · [0-9]+-(?:C|BC|EB): \\*\\*[0-9]+ stops\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: the two-way split the refusal of 'which shift had the most board stops' offers. 'And' between two dimensions after 'by' was read as an unknown word ('grade' is not a word the semantic model reads), and the hand router refused it as a count for one shift; it is one split by both, as 'by shift by grade' is."
+  },
+  {
+   "id": "semantic-shift-and-grade-most-stops",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which shift and grade had the most stops this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=stops&window=week&by=shift,grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "stops",
+       "group_by": [
+        "shift",
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift [123] · [0-9]+-(?:C|BC|EB) (?:and Shift [123] · [0-9]+-(?:C|BC|EB) )?(?:had|tied for) the most stops this week: \\*\\*[0-9]+ stops\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1, this round's probe: 'which shift and grade' answered the reason Pareto ('11 stops at Stacker'), a split the question never asked. The two dimensions joined by 'and' are one ranking by both."
+  },
+  {
+   "id": "semantic-dry-end-rejects-by-shift-and-grade",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Dry-end rejects by shift and grade this week",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=reject_sqft&window=week&by=shift,grade",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "reject_sqft",
+       "group_by": [
+        "shift",
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Dry-end rejects this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*",
+     "^- Shift [123] · [0-9]+-(?:C|BC|EB): \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 1: the split the refusal of 'which shift had the most board rejects' offers. It answered side trim (3.53% of gross), the waste breakdown, with the two dimensions unread."
+  },
+  {
+   "id": "semantic-grade-most-run-minutes",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade had the most run minutes this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=running_minutes&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "running_minutes",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(?:C|BC|EB) (?:and [0-9]+-(?:C|BC|EB) )?(?:had|tied for) the most running minutes this week: \\*\\*[0-9][0-9,.]* min\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 5: pinned. The suggestion the refusals of 'which grade took / ran the most minutes' offer reads completely and answers the run minutes by grade."
+  },
+  {
+   "id": "semantic-reason-most-minutes-of-downtime-pareto",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which reason had the most minutes of downtime this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=pareto&window=week",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_downtime_pareto",
+      "arguments": {
+       "window": {
+        "period": "week",
+        "anchor": "2026-09-14"
+       },
+       "group_by": "reason",
+       "measure": "minutes",
+       "shift": null
+      }
+     }
+    ],
+    "tools_only": [
+     "get_downtime_pareto",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9][0-9,.]* min\\*\\* at [A-Z][a-z]+.*, the largest unplanned reason"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), item 5: pinned. The suggestion the refusal of 'which stop reason took the most time' offers is the Pareto that '... took the most minutes' answers."
   }
  ]
 }
