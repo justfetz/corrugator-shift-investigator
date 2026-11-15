@@ -91,6 +91,9 @@ COUNT_UNITS = ('setups', 'order changes', 'paper changes', 'days', 'stops', 'she
 # boards", "knife waste boards", "stacker waste boards") and a unit said ("square feet of chops") are the line's square feet; a split
 # ("chops by shift", "boards by grade": the sheets) and the singular ("how much chop", "which shift had the most chop") say no count.
 UNCOUNTED = ('chops', 'boards')
+# The words of a duration the parser does not read as a unit: a ranking of one ("which grade had the most hours", "which grade took the
+# most time") is refused over a hand route that does not lead with it, never the grade totals
+TIME_WORDS = ('time', 'hours', 'hour', 'hrs')
 # What a value of an entity's dimension asks when no measure is named ("which grade has the most warp"): the reject lines'
 # area. Stops are counted or timed, so a stop's reason alone names no measure and is refused with both.
 ENTITY_DEFAULT = {'reject': 'reject_sqft'}
@@ -520,17 +523,24 @@ def _read(reading, text, context, store, mdl):
         while j >= 0 and (items[j].kind in ('rank', 'filler', 'unit') or
                           items[j].kind == 'vocab' and len(_entries(items[j], 'measure')) == len(items[j].entries)):
             j -= 1
-        if item.words == 'to' and item.kind == 'unknown' and j >= 0 and items[j].words in LOSS_VERBS and after is not None and \
-                (_entries(after, 'value') or any(e[1] in LOSS_MEASURES for e in _entries(after, 'measure'))):
-            item.kind, item.role = 'filler', 'reason cue'   # ... and a "to" before a loss itself ("which shift lost the most to trim")
-            reading.cues.add('lost to')   # the parser's own reading, which no hand route has: refused over one when it is refused
+        if item.words == 'to' and item.kind == 'unknown' and j >= 0 and items[j].words in LOSS_VERBS and after is not None:
+            # the parser's own reading, which no hand route has: refused over one when the reading is refused ("which shift lost the
+            # most to changeovers", "to speed", "to slow running": never the side trim, the grade totals or one shift's speed)
+            reading.cues.add('lost to')
+            if after.kind == 'vocab':
+                item.kind, item.role = 'filler', 'reason cue'   # ... before a value or a measure ("which shift lost the most to trim")
     a = {'rank': rank, 'limit': limit, 'per_day': bool(per_day), 'reason_cue': bool(connectors), 'period': period, 'anchor': anchor,
          'compare': compare, 'shifts': shifts, 'this_shift': bool(this_shift), 'all_shifts': bool(all_shifts), 'ask_unit': ask_unit,
          'ask_often': ask_often, 'loss': bool(set(tokens_of(text)) & set(LOSS))}
     try:
         _assign(reading, items, mdl, store, a, context)
-    except (Refused, semantic.SemanticError):
-        _verb_cues(reading, items, mdl, a)   # a verb that a refusal fired before reading: route still sees it
+    except (Refused, semantic.SemanticError) as exc:
+        # what the words asked that a refusal fired before reading: a verb, a count of chops or boards, a line's waste (route sees it)
+        _verb_cues(reading, items, mdl, a)
+        late = _uncounted(reading, items, a, exc) if not said else None
+        _line_waste(reading, items)
+        if late is not None:
+            raise late from exc
         if not said:
             raise
         reading.query = None
@@ -564,8 +574,11 @@ def _verb_cues(reading, items, mdl, a):
     leftover = list(a.get('leftover') or [])
     money = '$' in (a.get('units') or [])
     named = any(_entries(it, 'measure') for it in items)
-    if any(w != 'time' for w in leftover):
+    if any(w in TIME_WORDS for w in leftover):
+        reading.cues.add('unit')   # "which grade had the most hours", "the most time down": a duration asked, which a ranking ranks
+    if any(w not in TIME_WORDS for w in leftover):
         return   # another word the parser does not read ("how fast are we running between changeovers"): the hand route decides
+    asked = measure is not None or units or leftover or any(it.kind == 'statistic' for it in items)
     for item in items:
         if item.kind != 'verb' or item.role == 'verb':
             continue
@@ -575,9 +588,50 @@ def _verb_cues(reading, items, mdl, a):
             if measure is not None and measure not in read_of and unit != 'ft/min' or measure is None and not named and not money:
                 reading.cues.add('loss')
         elif item.words in UNREAD_VERBS or item.words in PRODUCE_VERBS and (measure is None or unit not in PRODUCE_UNITS):
-            if measure is not None or units or leftover:   # "which grade produced the most minutes": what ran is not in minutes
+            # "which grade took the most", "which grade stopped the most": no hand route answers what took, spent or stopped; "running"
+            # and "produced" with nothing named are what ran ("which grade were we running the most": the grade totals)
+            if asked or item.words in UNREAD_VERBS and item.words != 'running':
                 reading.cues.add('verb')
                 reading.verb = reading.verb or item.words
+
+
+def _uncounted(reading, items, a, exc):
+    """The records' refusal of a ranking, a comparison or a 'vs' of the chops or the boards (UNCOUNTED) when another refusal fired
+    first ("which shift had the most chops at the shear", "which shift had the most reject boards", "which boards had the most stops":
+    the reviewer's check of 0d23e4a), with that refusal's questions, each read completely; else None."""
+    noun = None if 'uncounted' in reading.cues else _uncounted_noun(items, a, reading.question)
+    if noun is None:
+        return None
+    reading.cues.add('uncounted')
+    return Refused(next(text for pattern, text in agent.NOT_COUNTED if re.search(pattern, noun)), getattr(exc, 'suggestions', []))
+
+
+def _uncounted_noun(items, a, question, compared=False):
+    """The plural noun of UNCOUNTED the question counts, ranks, compares or splits by ("how many boards by grade", "which shift had
+    the most chops", "chops on shift 1 versus shift 2", "downtime by boards"), else None: never a waste line's own name ("knife waste
+    boards"), nor with a unit said ("square feet of chops")."""
+    if a.get('units'):
+        return None
+    for k, it in enumerate(items):
+        noun = next((w for w in it.words.split() if w in UNCOUNTED), None) if it.kind == 'vocab' and 'waste' not in it.words.split() else None
+        if noun is None:
+            continue
+        if (compared or a['rank'] or a['compare'] or len(a['shifts']) > 1 or any(i.kind in ('rank', 'which', 'compare') for i in items)
+                or re.search(COUNT_ASK, question, re.I) or k and items[k - 1].kind == 'group'):
+            return noun
+    return None
+
+
+def _line_waste(reading, items):
+    """'line waste' when "waste" is said after another word the reading could not place ("paper waste", "splice waste", "baler
+    waste"): only a bare "waste" is every line, so the waste breakdown never answers it in the reading's place (the reviewer's check of
+    0d23e4a, item 2)."""
+    for i, item in enumerate(items):
+        if item.kind == 'vocab' and item.words in WHOLE_WASTE and i:
+            before = items[i - 1]   # "contributions to waste": a preposition before it is no line
+            if before.kind == 'unknown' and before.words not in PLACE_CUES + REASON_CUES + ('of', 'to') or \
+                    before.kind == 'vocab' and (_entries(before, 'value') or _entries(before, 'measure')):
+                reading.cues.add('line waste')
 
 
 def _two_windows(reading, named, previous, previous_grain, read_words, said, context):
@@ -861,9 +915,10 @@ def _assign(reading, items, mdl, store, a, context):
         for _, it in values:
             entities = {mdl.dimensions[e[1]]['entity'] for e in it.value}
             # a value's own name beats a word that is only another value's synonym: "moisture" is the reject family Moisture and a
-            # synonym of the stop reason Steam / moisture, so "how much moisture" is the family's rejects (the review of b955ca4, item 2)
+            # synonym of the stop reason Steam / moisture, so "how much moisture" is the family's rejects (the review of b955ca4, item 2);
+            # a count asked ("how often moisture", "how many times glue dam") counts the stops, below, as before
             exact = {mdl.dimensions[e[1]]['entity'] for e in it.value if e[3]}
-            if len(entities) > 1 and len(exact) == 1:
+            if len(entities) > 1 and len(exact) == 1 and not (frequency or a['ask_often'] or 'count' in units):
                 entities = exact
             if len(entities) == 1 and next(iter(entities)) in ENTITY_DEFAULT:
                 measure = ENTITY_DEFAULT[next(iter(entities))]   # "warp" is a reject family only; "glue" names stops too, and is refused
@@ -1095,11 +1150,11 @@ def _assign(reading, items, mdl, store, a, context):
         reading.unused = list(dict.fromkeys(leftover))
         raise Refused(f"'{reading.unused[0]}' is not a word the semantic model reads",
                       _suggest(mdl, reading, measure, group_by[0] if group_by else None, rank or speed_rank))
-    uncounted = next((w for it in pure for w in it.words.split() if w in UNCOUNTED and 'waste' not in it.words.split()), None)
-    if uncounted and (rank or which or 'compare' in reading.cues or a['compare'] or len(a['shifts']) > 1) and not units:
+    uncounted = _uncounted_noun(items, a, reading.question, 'compare' in reading.cues)
+    if uncounted:
         # "which shift had the most chops", "compare shifts on chops", "stacker boards on shift 1 versus shift 2", "which grade had the
-        # most boards": a count of what the records do not count (UNCOUNTED), refused with their reason over any hand route, as "how
-        # many boards" is
+        # most boards", "how many boards by grade": a count of what the records do not count (UNCOUNTED), refused with their reason over
+        # any hand route, as "how many boards" is
         reading.cues.add('uncounted')
         why = next(text for pattern, text in agent.NOT_COUNTED if re.search(pattern, uncounted))
         raise Refused(why, _suggest(mdl, reading, measure, group_by[0] if group_by else None, rank or ('most' if which else None)))
@@ -1517,7 +1572,10 @@ def route(text, context, store, request, refused):
     if 'uncounted' in reading.cues:
         # "which shift had the most chops", "compare shifts on chops", "stacker boards on shift 1 versus shift 2": a count of what the
         # records keep as square feet, refused with their reason whatever the hand route answered or refused (the review of b955ca4,
-        # item 1: never the chops' square feet ranked, the overview or the speed comparison)
+        # item 1: never the chops' square feet ranked, the overview or the speed comparison); the hand router's own refusal with the
+        # same reason keeps its wording ("how many shear chops")
+        if refused is not None and str(refused).startswith(reading.refusal):
+            return None
         raise ValueError(refusal_text(reading))
     if reading.complete:
         if refused is not None and stands(refused, reading):
@@ -1555,6 +1613,10 @@ def route(text, context, store, request, refused):
         # "which day lost the most minutes to shear": a loss to a value or a line the model cannot say, never the waste breakdown's
         # side trim (the review of b955ca4, item 3)
         raise ValueError(refusal_text(reading))
+    if 'line waste' in reading.cues and intent in ('period_waste', 'period_quality', 'quality'):
+        # "paper waste", "splice waste", "baler waste": a line said with "waste" that the reading cannot place, never every line led by
+        # side trim (only a bare "waste" is the breakdown's; the review of b955ca4, item 2)
+        raise ValueError(refusal_text(reading))
     if reading.cues & {'wrong window', 'said'} and intent not in NEVER_PREEMPT:
         # "stops this year", "downtime over the weekend", "stops on Tuesday" (on a Monday): the hand route answers the selected day;
         # "this week versus last month", "the stops the operators logged": it answers another window or another question
@@ -1572,7 +1634,8 @@ def route(text, context, store, request, refused):
     strong = reading.cues & set(STRONG)
     if intent == 'period_compare' and (reading.measure or strong):
         raise ValueError(refusal_text(reading))   # the KPI summary never answers a measure, a ranking, a share or a statistic
-    if strong and 'unknown' not in reading.cues and (reading.measure or reading.cues & {'single', 'per_quantity', 'unit'}) \
+    timed = set(reading.unused) <= set(TIME_WORDS)   # "which grade had the most time down": a duration, not an unknown word
+    if strong and ('unknown' not in reading.cues or timed) and (reading.measure or reading.cues & {'single', 'per_quantity', 'unit'}) \
             and reading.measure not in _family_of(intent):
         # a ranking, a share or a statistic of a measure or a unit the hand route does not lead with ("which grade had the most minutes",
         # "which shift made the most minutes": never the grade totals' MSF)

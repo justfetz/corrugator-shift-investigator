@@ -567,17 +567,23 @@ VERB_TIME_TEMPLATES = ('which {dim} took the most minutes this week', 'which {di
                        'which {dim} spent the most minutes this week', 'which {dim} spent the most time this week',
                        'which {dim} spent the most time down this week', 'which {dim} lost the most time this week',
                        'which {dim} lost the most minutes this week', 'which {dim} produced the most minutes this week',
-                       'which {dim} made the most minutes this week', 'which {dim} produced the most time this week')
+                       'which {dim} made the most minutes this week', 'which {dim} produced the most time this week',
+                       # the reviewer's check of 0d23e4a: hours, the longest, a bare "stopped", and hours ranked with no verb
+                       'which {dim} took the most hours this week', 'which {dim} took the longest this week',
+                       'which {dim} stopped the most this week', 'which {dim} had the most hours this week',
+                       'which {dim} had the most time down this week')
 VERB_VALUE_TEMPLATES = ('which {dim} lost the most to {value} this week', 'which {dim} lost the most minutes to {value} this week',
                         'which {dim} lost the most feet to {value} this week', 'how much did we lose to {value} this week')
 # what the value after "to" filters by, or the line it names; moisture's minutes are the stop reason Steam / moisture's
 LOST_TO = {'warp': ('reject_family', 'WARP'), 'bond': ('reject_family', 'BOND'), 'moisture': ('reject_family', 'MOISTURE', 'Steam / moisture'),
            'misalignment': ('reject_family', 'MISALIGNMENT'), 'the stacker': ('reason', 'Stacker'), 'trim': (None, 'trim_sqft'),
-           'side trim': (None, 'trim_sqft'), 'shear': (None, 'shear_sqft'), 'downtime': (None, 'downtime_minutes')}
+           'side trim': (None, 'trim_sqft'), 'shear': (None, 'shear_sqft'), 'downtime': (None, 'downtime_minutes'),
+           # a loss to what ran or to a speed is refused (the reviewer's check of 0d23e4a: side trim, the grade totals, one shift's speed)
+           'changeovers': None, 'setups': None, 'speed': None, 'slow running': None}
 
 
 def verb_questions():
-    out = [(t.format(dim=d), None) for t in VERB_TIME_TEMPLATES for d in DIM_WORDS.values()]
+    out = [(t.format(dim=d), ()) for t in VERB_TIME_TEMPLATES for d in DIM_WORDS.values()]
     for template in VERB_VALUE_TEMPLATES:
         for value, said in LOST_TO.items():
             for d in (DIM_WORDS.values() if '{dim}' in template else [None]):
@@ -604,6 +610,7 @@ def test_a_verb_with_minutes_time_or_a_loss_to_a_value_is_answered_only_as_asked
                 assert f"'{verb}'" in str(exc), (question, str(exc))   # else the refusal names the verb (docs/ASKING.md)
             continue
         answered += 1
+        assert said is not None, (question, request['intent'])   # a loss to what ran or to a speed is refused
         if request['intent'] == 'semantic':
             args = request['plan'][0]['arguments']
             assert verb not in P.LOSS_VERBS or args['measure'] in P.LOSS_MEASURES, (question, args)
@@ -616,7 +623,7 @@ def test_a_verb_with_minutes_time_or_a_loss_to_a_value_is_answered_only_as_asked
         if request['intent'] in P.ALLOW_LISTED:
             continue
         # a loss is read with its "to" ("how much did we lose to trim": the breakdown leads with trim); any other verb is not read
-        rest = P.read(question if verb in P.LOSS_VERBS else re.sub(rf"\b{verb}\b", ' ', question, count=1), context, store)
+        rest = P.read(question if verb is None or verb in P.LOSS_VERBS else re.sub(rf"\b{verb}\b", ' ', question, count=1), context, store)
         assert rest.complete and P.covers(request, rest, context, store), (question, request['intent'])
     assert answered > 20 and refused > 50, (answered, refused)
 
@@ -638,6 +645,15 @@ def test_a_ranking_or_a_comparison_of_chops_or_boards_is_a_count_and_refused(sto
                          f'compare {noun} on 32-C and 26-C this week'):
             with pytest.raises(ValueError, match=why):
                 route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+    # ... and when another refusal fires first (the reviewer's check of 0d23e4a): a place, a second measure, a word unread
+    for question, why in (('Which shift had the most chops at the shear this week?', 'keep shear chops as square feet'),
+                          ('Which shift had the most waste boards this week?', 'do not count boards'),
+                          ('Which shift had the most reject boards this week?', 'do not count boards'),
+                          ('Which shift had the most bad boards this week?', 'do not count boards'),
+                          ('Which boards had the most stops this week?', 'do not count boards'),
+                          ('Downtime by boards this week', 'do not count boards'), ('How many boards by grade this week?', 'do not count boards')):
+        with pytest.raises(ValueError, match=why):
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
     for suggestion in reading(store, 'Which shift had the most chops this week?').suggestions:
         assert reading(store, suggestion).complete, suggestion   # each question offered reads in its turn
     for question, measure in (('Which shift had the most cutoff waste boards this week?', 'cutoff_waste_sqft'),
@@ -671,9 +687,15 @@ def test_a_line_said_with_waste_leads_with_that_line(store):
                      'Trim waste this week', 'Waste by reject family this week'):
         request, _, _ = answer(store, question)
         assert request['plan'][0]['tool'] == 'get_waste_breakdown', (question, request['plan'][0])
-    # the stop reason is still read where a stop is said
-    request, _, _ = answer(store, 'Moisture stops this week')
-    assert request['plan'][0]['arguments']['filters'] == {'reason': 'Steam / moisture'}, request['plan'][0]
+    # the stop reason is still read where a stop is said or counted ("how often moisture": the reviewer's check of 0d23e4a)
+    for question in ('Moisture stops this week', 'How often moisture this week?', 'How many times moisture this week?'):
+        request, _, _ = answer(store, question)
+        assert request['plan'][0]['arguments']['filters'] == {'reason': 'Steam / moisture'}, (question, request['plan'][0])
+    request, _, _ = answer(store, 'Baler waste this week')
+    assert request['plan'][0]['arguments']['measure'] == 'bale_sqft'
+    for question in ('Paper waste this week', 'Splice waste this week', 'Roll waste this week'):
+        with pytest.raises(ValueError, match='cannot narrow it'):   # no line the model holds: never every line led by side trim
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
 
 
 def test_boards_alone_are_never_the_grades(store):
