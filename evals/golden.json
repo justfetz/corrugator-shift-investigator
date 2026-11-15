@@ -21093,6 +21093,56 @@
     "raises": "^'crew' is said before 'rejects' with no value of its own, beside the shifts split, so it is no split by crew: ask that split, or split by both\\. Did you mean 'dry-end rejects by shift this week' or 'dry-end rejects by shift and crew this week'\\?$"
    },
    "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 5: 97b81f4 refused with 'not recorded by stop kind, so 'crew' cannot narrow it' ('crew' is also the Operator kind's synonym), but the dry-end rejects are recorded by crew; main answered side trim."
+  },
+  {
+   "id": "semantic-which-boards-most-shear-cost-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most shear cost this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most shear cost this week' or 'shear cost by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), this round's probe (step 6): 97b81f4 offered 'which grade had the most shear chops, priced this week', which is refused in its turn as a ranking of the chops (UNCOUNTED) and offers itself; main answered side trim. A suggestion says the priced shear by its synonym 'shear cost', as it says the shear 'shear'."
+  },
+  {
+   "id": "semantic-which-grade-most-shear-cost",
+   "type": "routing",
+   "mode": "offline",
+   "question": "Which grade had the most shear cost this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=shear_usd&window=week&by=grade&rank=most",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "shear_usd",
+       "group_by": [
+        "grade"
+       ],
+       "filters": {}
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^[0-9]+-(C|BC|EB) had the most shear chops, priced this week: \\*\\*\\$[0-9][0-9,.]*\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), this round's probe: the question semantic-which-boards-most-shear-cost-refused offers, read completely and led by the grade with the most priced shear (main answered the grade totals' MSF)."
+  },
+  {
+   "id": "semantic-which-boards-most-order-change-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards had the most order change stops this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads: boards are ranked or split by their grade\\. Did you mean 'which grade had the most stops this week' or 'stops by grade this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 97b81f4 (PR #155, 2026-11-15 07:26), item 4's guard: the measure the reading read (the stops) leads the questions offered, never the order changes that 'order change' also names. It passes at 97b81f4; the probe caught a draft of item 4 that offered 'which grade had the most order changes'. Main gave the router's 'one quantity' refusal."
   }
  ]
 }
