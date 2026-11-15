@@ -20580,6 +20580,165 @@
     "raises": "^Boards per day is not a ratio the records keep"
    },
    "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), this round's probe around items 1-4, item 4: main's ratio reason, which 7b46463 replaced with 'the records do not count boards'."
+  },
+  {
+   "id": "semantic-shift-most-order-stops-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most order stops this week?",
+   "expect": {
+    "raises": "^'order' is said before 'stops' with no value of its own, beside the shifts ranked, and stops is not recorded by order: ask the ranking\\. Did you mean 'which shift had the most stops this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 1: the refusal offered 'stops by shift and order this week', which the model cannot split (a stop carries no order). Only the ranking is offered, with the model's reason."
+  },
+  {
+   "id": "semantic-shift-most-customer-trim-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most customer trim this week?",
+   "expect": {
+    "raises": "and side trim is not recorded by customer: ask the ranking\\. Did you mean 'which shift had the most side trim this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 1: it offered 'side trim by shift and customer this week', which answered the waste breakdown."
+  },
+  {
+   "id": "semantic-shift-most-wet-end-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most wet end downtime this week?",
+   "expect": {
+    "raises": "so it is no split by paper run: ask the ranking\\. Did you mean 'which shift had the most minutes of downtime this week'\\?$"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 1: it offered 'minutes of downtime by shift and paper run this week', which the router refuses (how long a run took); a split is offered only when the router answers it as that split."
+  },
+  {
+   "id": "semantic-how-many-boards-per-grade-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many boards per grade this week?",
+   "expect": {
+    "raises": "^The records do not count boards"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 2: 'per' before a dimension is a split, as 'by grade' is, so the count of boards is refused; 2ec98b5 answered every sheet ('Sheets this week: 3,614,510 sheets')."
+  },
+  {
+   "id": "semantic-how-many-chops-per-grade-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How many chops per grade this week?",
+   "expect": {
+    "raises": "^The records keep shear chops as square feet, not a count"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 2: 2ec98b5 answered the shear's square feet."
+  },
+  {
+   "id": "semantic-stops-by-shift-or-grade-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Stops by shift or grade this week",
+   "expect": {
+    "raises": "^A count is answered for one shift or all shifts together"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 3: 'or' asks one or the other, never the split by both; 2ec98b5 joined them as 'and' does."
+  },
+  {
+   "id": "semantic-how-much-paper-was-wasted-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much paper was wasted this week?",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop reason, so 'paper'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 4: 'was wasted' is 'paper waste' too; main and 7b46463 answered the paper consumed (36,213.8 MSF)."
+  },
+  {
+   "id": "semantic-how-much-paper-did-shift-1-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much paper did shift 1 waste this week?",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop reason, so 'paper'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 4: main and 7b46463 answered shift 1's paper consumed."
+  },
+  {
+   "id": "semantic-how-much-rollstock-waste-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "How much rollstock waste this week?",
+   "expect": {
+    "raises": "^'rollstock' is not a word the semantic model reads"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 4: the rollstock answer (the paper consumed) never answers a waste measure."
+  },
+  {
+   "id": "semantic-how-much-shear-did-crew-a-waste",
+   "type": "routing",
+   "mode": "offline",
+   "question": "How much shear did crew A waste this week?",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=shear_sqft&window=week&crew=Crew+A",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "semantic_query",
+      "arguments": {
+       "measure": "shear_sqft",
+       "group_by": [],
+       "filters": {
+        "crew": "Crew A"
+       }
+      }
+     }
+    ],
+    "tools_only": [
+     "semantic_query"
+    ],
+    "sections_match": [
+     "^Shear chops, crew Crew A this week: \\*\\*[0-9][0-9,.]* sq ft\\*\\*"
+    ]
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 4: 'shear' was refused as a stop place ('not recorded by stop place, so shear cannot narrow it'), which is false: the shear is a waste line the model holds. Crew A's shear, as 'how much shear waste on crew A' reads."
+  },
+  {
+   "id": "semantic-compare-boards-on-downtime-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Compare boards on downtime this week",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'minutes of downtime by grade this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 5: the boards compared on another measure are a dimension said, not a count."
+  },
+  {
+   "id": "semantic-which-boards-took-most-minutes-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which boards took the most minutes this week?",
+   "expect": {
+    "raises": "^'boards' is not a dimension the semantic model reads.*Did you mean 'which grade had the most run minutes this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 5: a duration asked of the boards: the grade's minutes are offered, never the count reason."
+  },
+  {
+   "id": "semantic-grade-took-most-setup-time-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which grade took the most setup time this week?",
+   "expect": {
+    "raises": "Did you mean 'which grade had the most setup minutes this week'"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 6: a setup's time is the setup clock ('setup minutes'), which the model keeps by grade; 2ec98b5 offered run minutes."
+  },
+  {
+   "id": "semantic-shift-most-knife-rejects-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "question": "Which shift had the most knife rejects this week?",
+   "expect": {
+    "raises": "^Dry-end rejects is not recorded by stop reason, so 'knife' cannot narrow it"
+   },
+   "note": "Fix round on the coordinator's review of 7b46463 (PR #155, 2026-11-15 04:39), the reviewer subagent's check of 2ec98b5, gap 8: a stop reason before a waste line the reading cannot narrow by it; main and 7b46463 answered side trim (3.53% of gross)."
   }
  ]
 }
