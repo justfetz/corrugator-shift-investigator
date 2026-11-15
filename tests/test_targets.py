@@ -541,7 +541,8 @@ def test_each_reject_family_names_its_own_cause_from_the_taxonomy(store):
 
 
 @pytest.mark.parametrize('window, shift', [({'period': 'month', 'anchor': DAY}, None), ({'period': 'week', 'anchor': DAY}, 2),
-                                           ({'period': 'day', 'anchor': DAY}, None), ({'period': 'month', 'anchor': '2026-08-14'}, 3)])
+                                           ({'period': 'day', 'anchor': DAY}, None), ({'period': 'month', 'anchor': '2026-08-14'}, 3),
+                                           ({'period': 'day', 'anchor': '2025-01-29'}, 2)])   # no planning / admin that shift
 def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced_once(store, window, shift):
     """The coordinator's re-review of PR #123 (owner ruling (d): each loss priced exactly once). The ownership lens priced the
     cutoff-knife and stacker boards and planning / admin zero times; every line of the waste breakdown is a lever now, priced
@@ -552,8 +553,16 @@ def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced
     lens = cost_model.opportunities(store, window, shift, rates, 'ownership')
     waste = cost_model.attach('get_waste_breakdown', store.get_waste_breakdown(window, shift), rates)
     lines = [r for r in waste['rows'] if r['category'] not in ('dry_end', 'bale') and r['sqft'] > 0]
-    assert {r['quantity'] for r in lens['rows']} == {r['sqft'] for r in lines} and len(lens['rows']) == len(lines)
-    assert {r['usd'] for r in lens['rows']} == {r['usd'] for r in lines}, 'each line priced the same way, once'
+    held = [r for r in lens['rows'] if r['quantity'] > 0]
+    assert {r['quantity'] for r in held} == {r['sqft'] for r in lines} and len(held) == len(lines)
+    # a line the window holds none of but its period to date does shows at $0 beside its yearly figure (the round on
+    # 2510d38 of PR #168): the breakdown lists it at 0 sq ft and $0, so the lens still prices each line once
+    zero = {r['category']: r for r in waste['rows'] if r['category'] not in ('dry_end', 'bale') and r['sqft'] == 0}
+    for r in lens['rows']:
+        if r['quantity'] == 0:
+            assert r['key'] in zero and zero[r['key']]['usd'] == 0 and r['usd'] == 0 and r['usd_per_year'] > 0, r
+    assert len(lens['rows']) - len(held) == (1 if window['anchor'] == '2025-01-29' else 0)
+    assert {r['usd'] for r in held} == {r['usd'] for r in lines}, 'each line priced the same way, once'
     assert lens['total_usd'] == pytest.approx(sum(r['usd'] for r in lines), abs=0.01)
     # a yearly figure is each line's period to date at this period's rate (issue #164), never the window's own: its printed
     # whole dollars there, its cells' added up (the coordinator's review of 82c0994 on PR #168, item 2)

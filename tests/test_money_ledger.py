@@ -607,7 +607,7 @@ def test_a_long_window_reads_within_the_stated_bound_of_its_cents(store):
                 figures = [(card[a], card[b], a) for a, b in pairs if card.get(a) is not None and card.get(b) is not None]
                 figures += [(x['usd'], x['usd_shown'], x['lever']) for x in card['rows'] if x.get('usd') is not None]
                 for cents, shown, what in figures:
-                    widest = max(widest, (abs(shown - cents), (window, shift, lens, what)))
+                    widest = max(widest, (abs(shown - cents), (window, shift, lens, what)), key=lambda x: x[0])
     assert len(windows) > 120 and widest[0] < cost_model.LONG_BOUND, widest
     assert widest[0] > cost_model.LONG_BOUND - 1, widest   # the bound is the record's own, not a loose one
 
