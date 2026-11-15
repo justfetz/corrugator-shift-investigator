@@ -684,10 +684,14 @@ def test_a_line_said_with_waste_leads_with_that_line(store):
         args = request['plan'][0]['arguments']
         assert request['plan'][0]['tool'] == S.TOOL and args['measure'] == measure and args['filters'] == filters, (question, request['plan'][0])
     for question in ('Waste this week', 'How much waste this week?', 'Show warp waste this month', 'Show moisture this month',
-                     'Trim waste this week', 'Waste by reject family this week'):
+                     'Trim waste this week', 'Waste by reject family this week',
+                     # a word the model does not hold before "waste" leaves every line (the reviewer's re-check of 87f0146)
+                     "This week's waste", 'What is our main waste this week?', 'Excess waste this week', "Last month's waste"):
         request, _, _ = answer(store, question)
         assert request['plan'][0]['tool'] == 'get_waste_breakdown', (question, request['plan'][0])
     # the stop reason is still read where a stop is said or counted ("how often moisture": the reviewer's check of 0d23e4a)
+    with pytest.raises(ValueError, match='^Offline mode answers one quantity'):   # a count: never the reject reason's square feet
+        route('How many glue dam this week?', Context(DAY, 2, scope='shift'), store.production_days, store)
     for question in ('Moisture stops this week', 'How often moisture this week?', 'How many times moisture this week?'):
         request, _, _ = answer(store, question)
         assert request['plan'][0]['arguments']['filters'] == {'reason': 'Steam / moisture'}, (question, request['plan'][0])

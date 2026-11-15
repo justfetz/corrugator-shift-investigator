@@ -152,7 +152,7 @@
    "tool": "get_shift_kpis.shear_pct; get_period_kpis shear_pct", "synonyms": ["shear percent", "chop %"]},
   {"name": "changeover_sqft", "label": "Changeover rejects", "unit": "sq ft", "entity": "setup", "agg": "sum", "expr": "{changeover_sqft}",
    "description": "Board rejected at order, paper and flute changes: counted with shear and sequencing, never dry-end quality.",
-   "lever": "controllable", "tool": "get_waste_breakdown changeover sqft", "synonyms": ["changeover waste", "changeover rejects"]},
+   "lever": "controllable", "tool": "get_waste_breakdown changeover sqft", "synonyms": ["changeover waste", "changeover rejects", "order change waste", "order change rejects"]},
   {"name": "cutoff_waste_sqft", "label": "Cutoff-knife waste boards", "unit": "sq ft", "entity": "setup", "agg": "sum", "expr": "{cutoff_waste_sqft}",
    "description": "Boards lost at each lane's cutoff knife at an order change.",
    "lever": "controllable", "tool": "get_waste_breakdown cutoff_waste sqft", "synonyms": ["cutoff waste", "knife waste boards", "cutoff waste boards", "knife waste", "cutoff knife waste"]},

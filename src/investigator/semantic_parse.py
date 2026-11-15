@@ -623,14 +623,14 @@ def _uncounted_noun(items, a, question, compared=False):
 
 
 def _line_waste(reading, items):
-    """'line waste' when "waste" is said after another word the reading could not place ("paper waste", "splice waste", "baler
-    waste"): only a bare "waste" is every line, so the waste breakdown never answers it in the reading's place (the reviewer's check of
-    0d23e4a, item 2)."""
+    """'line waste' when "waste" is said after a value or a measure of the model that names no line ("paper waste", "splice waste"):
+    only a bare "waste" is every line, so the waste breakdown never answers it in the reading's place (the reviewer's check of 0d23e4a,
+    item 2). A word the model does not hold before it ("this week's waste", "our main waste", "excess waste") leaves a bare "waste",
+    every line, as on main (its re-check of 87f0146)."""
     for i, item in enumerate(items):
         if item.kind == 'vocab' and item.words in WHOLE_WASTE and i:
-            before = items[i - 1]   # "contributions to waste": a preposition before it is no line
-            if before.kind == 'unknown' and before.words not in PLACE_CUES + REASON_CUES + ('of', 'to') or \
-                    before.kind == 'vocab' and (_entries(before, 'value') or _entries(before, 'measure')):
+            before = items[i - 1]
+            if before.kind == 'vocab' and (_entries(before, 'value') or _entries(before, 'measure')):
                 reading.cues.add('line waste')
 
 
@@ -916,9 +916,12 @@ def _assign(reading, items, mdl, store, a, context):
             entities = {mdl.dimensions[e[1]]['entity'] for e in it.value}
             # a value's own name beats a word that is only another value's synonym: "moisture" is the reject family Moisture and a
             # synonym of the stop reason Steam / moisture, so "how much moisture" is the family's rejects (the review of b955ca4, item 2);
-            # a count asked ("how often moisture", "how many times glue dam") counts the stops, below, as before
+            # a count asked ("how often moisture", "how many times glue dam", "how many glue dam") is the stops', as before, and a
+            # loss ("how much did we lose to the glue dam") could be either's: refused, as before
             exact = {mdl.dimensions[e[1]]['entity'] for e in it.value if e[3]}
-            if len(entities) > 1 and len(exact) == 1 and not (frequency or a['ask_often'] or 'count' in units):
+            if len(entities) > 1 and len(exact) == 1 and not (frequency or a['ask_often'] or 'count' in units
+                                                                or re.search(COUNT_ASK, reading.question, re.I)
+                                                                or any(v.words in LOSS_VERBS for v in verbs)):
                 entities = exact
             if len(entities) == 1 and next(iter(entities)) in ENTITY_DEFAULT:
                 measure = ENTITY_DEFAULT[next(iter(entities))]   # "warp" is a reject family only; "glue" names stops too, and is refused
