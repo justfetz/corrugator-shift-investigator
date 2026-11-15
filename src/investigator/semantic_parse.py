@@ -18,6 +18,7 @@ model, refuse, or leave the question to the hand router (`agent.parse_request`).
 from dataclasses import dataclass, field
 from datetime import date
 import re
+import threading
 
 from . import agent, semantic
 
@@ -680,6 +681,8 @@ def _ratio_said(items, k):
         return False
     rest = [it for it in items[k + 2:] if not (it.kind == 'filler' and it.words in ARTICLES)]
     nxt = rest[0] if rest else None
+    if nxt is not None and (nxt.kind in ('unit', 'number') or nxt.words in TIME_WORDS):
+        return True   # "boards per hour", "per minute", "per 1,000 feet"
     return nxt is not None and nxt.kind == 'vocab' and (bool(_entries(nxt, 'measure')) or any(e[1] in PER_RATIO_DIMS for e in _entries(nxt, 'dimension')))
 
 
@@ -865,17 +868,17 @@ def _modifier(items, i):
             and (nxt.role == 'measure' or nxt.kind == 'unit'))
 
 
-_OFFERING = []
+_OFFERING = threading.local()   # per thread: the server parses under two locks at once (the reviewer's re-check of 709035c)
 
 
 def _split_answers(text, groups, context, store):
     """True when the router answers `text` with the split by `groups`, so a refusal may offer it ("minutes of downtime by shift and
     paper run" is refused by the hand router's "how long a run took": never offered). One level deep: a question offered is never
     checked from inside another's check."""
-    if _OFFERING:
+    if getattr(_OFFERING, 'text', None):
         return True
     import copy
-    _OFFERING.append(text)
+    _OFFERING.text = text
     try:
         request, _ = agent.route(text, copy.copy(context), store.production_days, store)   # in the scope its own words name
         plan = request.get('plan') or [{}]
@@ -883,7 +886,7 @@ def _split_answers(text, groups, context, store):
     except Exception:   # noqa: BLE001 - a question the router refuses is never offered
         return False
     finally:
-        _OFFERING.pop()
+        _OFFERING.text = None
 
 
 def _assign(reading, items, mdl, store, a, context):
