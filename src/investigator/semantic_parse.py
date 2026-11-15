@@ -163,6 +163,7 @@ class Reading:
     context: object = field(default=None, repr=False, compare=False)   # the scope it was read in, and the store: the check routes there
     store: object = field(default=None, repr=False, compare=False)
     dropped: list = field(default_factory=list, repr=False, compare=False)   # the questions it could have offered that were not answered as offered
+    compared: set = field(default_factory=set, repr=False, compare=False)    # the dimension of a value said after "than": compared, no filter
 
     @property
     def complete(self):
@@ -179,15 +180,17 @@ class Refused(Exception):
 
 class Ask(str):
     """A question a refusal offers, and what it asks: the measure it names, its split and ranking, the window before it compares
-    with, a share, and the window, filters and shift it keeps. `window` None is the refusal's own window, else {period, anchor} with
-    anchor None for the controls' day; `filters` None is the refusal's own filters; `shift` None compares no shift. _offer keeps it
+    with, a share, and the window, filters and shift it keeps. `window` None is the refusal's own window, else {period, anchor} (anchor
+    None: the controls' day) that holds the refusal's (a split by day of one day is offered the week), or, `reads`, one reading of
+    window words the refusal could not place ("the period" under the week control); `filters` None is the refusal's own filters;
+    `shift` None compares no shift. _offer keeps it
     only when the router answers it as that question (the coordinator's review of PR #155 at 2c28fd3, item 1)."""
 
-    def __new__(cls, text, measure, group_by=(), rank=None, compare=None, share=None, filters=None, shift=None, window=None):
+    def __new__(cls, text, measure, group_by=(), rank=None, compare=None, share=None, filters=None, shift=None, window=None, reads=False):
         self = super().__new__(cls, re.sub(r'\s+', ' ', text).strip())
         self.measure, self.group_by, self.rank, self.compare, self.share = measure, list(group_by), rank, compare, share
         self.filters = None if filters is None else dict(filters)
-        self.shift, self.window = shift, window
+        self.shift, self.window, self.reads = shift, window, reads
         return self
 
 
@@ -411,13 +414,11 @@ def _read(reading, text, context, store, mdl):
     # Operator kind's stops. Refused over a hand route only when a stop is counted or timed and the words are a verb ("which shift had the
     # most stops logged by operators", "stops the operators did log"), never over "maintenance report this week", "the operator notes"
     # or "downtime by reason, maintenance notes", where they may be a noun.
-    said = []
+    said, asked = [], None   # asked: the one window the question's words name when the reading's own is not it (window, words)
     lower, logged = _consume(agent.KIND_LOGGED, lower, used, 'logged')   # the rest is read, so a complete reading is known
     if logged:
         said.append((f"'{logged[0][0].strip()}' could mean who logged the stops, which the records do not keep: a stop's kind (maintenance or "
-                     "operator) is kept", lambda m, window: [Ask(f'operator stops {window}', 'stops', filters={'kind': 'Operator'}),
-                                                              Ask(f'maintenance stops {window}', 'stops', filters={'kind': 'Maintenance'}),
-                                                              Ask(f'stops by kind {window}', 'stops', ['kind'], filters={})]))
+                     "operator) is kept", lambda m, window: _kinds(mdl, reading, m)))
     # a percent of the shift or of the scheduled time is the measure's percent of the scheduled minutes (downtime %), never a share
     # of the downtime (the review of PR #155: "what percent of the shift was maintenance downtime" is 1.80% of shift 2, the hand
     # router's answer, never maintenance's share of the downtime); "the shift" is still the selected one
@@ -440,15 +441,26 @@ def _read(reading, text, context, store, mdl):
         if before:
             reading.cues.add('wrong window')
             lower, _ = _consume(re.escape(before[0]), lower, used, 'window')
+            # the question offered asks the one window the words name, from the controls ("setups last month": the month before beside
+            # it), never this week (the reviewer subagent's check of the fix round on 2c28fd3)
+            grain = {'period': 'fiscal'}.get(before[0].split()[-1], before[0].split()[-1])
+            day = agent.previous_window_day(grain, anchor, store.production_days)
+            if day:
+                asked = ({'period': grain, 'anchor': day}, re.sub(r'^the\s+|\s+production(?=\s)', '', before[0].strip()))
             said.append((f"'{before[0].strip()}' and '{previous[0].group(0).strip()}' are two windows before the selected one: ask one window, "
-                         "or one window against the one just before it", lambda m, window: _this_week(mdl, reading, m)))
+                         "or one window against the one just before it", lambda m, window: [_ask(mdl, reading, m)] if asked else []))
     if re.search(r"\bthan\b", lower):
         # "which grades had more setups than 26-C", "more stops than shift 1", "reasons other than the stacker": a threshold, another
         # value compared or a value excluded, which no query of the model reads; never the value ranked against itself, nor every
         # reason's downtime (the reviewer's checks of c5d840c and 20c833d). Said, so it stands over any other refusal of the words
         reading.cues |= {'said', 'than'}
+        tail = lower[re.search(r"\bthan\b", lower).end():]
+        # the value or the shift said after "than" is the one compared, never a filter; every other value and shift are kept
+        than_shift = bool(set(agent.named_shifts(tail)))
         said.append(("'than' compares with another value, excludes one or names a threshold, which the semantic model does not read: ask "
-                     "the split, or two values compared", lambda m, window: [_ask(mdl, reading, m, filters={})]))   # the value compared is no filter
+                     "the split, or two values compared",
+                     lambda m, window: [_ask(mdl, reading, m, filters={d: v for d, v in reading.filters.items() if d not in reading.compared},
+                                             shift=False if than_shift else None)]))
     unread = re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
         wrong = re.search(WRONG_WINDOW, lower)
@@ -494,7 +506,11 @@ def _read(reading, text, context, store, mdl):
         period = previous_grain   # "our speed vs last week": this week against the one before
     reading.window_words = _window_words(period, month)
     reading.window = {'period': period, 'anchor': anchor}
-    if read_words.get('words') and read_words.get('period') == period and month is None and not previous_grain:
+    if previous and read_words.get('words'):
+        asked = ({'period': read_words['period'], 'anchor': context.production_day}, read_words['words'])   # the window the words moved to
+    if asked:
+        reading.window, reading.window_words = asked
+    elif read_words.get('words') and read_words.get('period') == period and month is None and not previous_grain:
         # the window the question moved to keeps its own words in a suggestion ("stops by shift last week", never "this week",
         # which in the visitor's scope is another week: the review of PR #155)
         reading.window_words = read_words['words']
@@ -682,13 +698,16 @@ def _boards_dimension(reading, items, a):
         # a measure the reading read first ("which boards had the most order change stops": the stops), else one said as a value
         # ("which boards had the most shear": the shear); never a dimension's word ("which day had the most boards" counts boards by day),
         # nor a value said as one ("compare boards at the shear on shift 1 versus shift 2" compares a count of boards)
-        said = [o.said if not _entries(o, 'dimension') and getattr(_prev(items, j), 'words', None) not in PLACE_CUES + REASON_CUES else []
-                for j, o in enumerate(items)]
+        # ... or a phrase of the model that is a measure and a dimension said as a set ("production days by boards": the days run)
+        said = [o.said if (not _entries(o, 'dimension') or len(o.words.split()) > 1 and o.words.endswith('s'))
+                and getattr(_prev(items, j), 'words', None) not in PLACE_CUES + REASON_CUES else [] for j, o in enumerate(items)]
         other = next((e[1] for entries in ([_entries(o, 'measure') for o in items], said) for o, found in zip(items, entries)
                       if o is not it and o.kind == 'vocab' for e in found if e[1] != 'sheets'), None)
         unit = next((u for u in a.get('units') or [] if u not in ('count', 'min')), None)
         if other is not None and unit is not None:
             other = _family(mdl, other, unit) or other   # "shear % by boards": the shear's percent, as _assign reads the unit said
+        if other is not None and a.get('per_day') and mdl.measures[other]['unit'] != 'ft/min':
+            other = _ratio(mdl, other, 'production_days')   # "volume per production day by boards": the MSF per day, never the MSF
         speed = next((SPEED_RANK[o.words] for o in items if o.kind == 'speed_rank'), None)
         if other is None and speed:
             other = 'speed_run_fpm'
@@ -813,24 +832,23 @@ def _two_windows(reading, named, previous, previous_grain, read_words, said, con
     found = []
     mdl = semantic.model()
 
-    def at(m, words, period, anchor=None, compare=None):   # a question over a window of its own: the controls' (anchor None) or a month's
-        return _ask(mdl, reading, m, words=words, window={'period': period, 'anchor': anchor}, compare=compare)
+    def at(m, words, period):   # one reading of window words the reading cannot place: the 4-4-5 period, or the control's window
+        return _ask(mdl, reading, m, words=words, window={'period': period, 'anchor': None}, reads=True)
 
     if previous and read_words.get('words'):
         found.append((f"'{read_words['words']}' and '{words}' are two windows before the selected one: ask one window, or one window "
-                      "against the one just before it", lambda m, window: _this_week(mdl, reading, m)))
+                      "against the one just before it", lambda m, window: [_ask(mdl, reading, m)]))
     elif previous and named:
         grain, start, name = next(iter(named))
         before = {'fiscal': 'period'}.get(previous_grain, previous_grain)
         asked = _window_words(grain, name) or 'the day'
         if grain != previous_grain:
             found.append((f"'{asked}' and '{words}' are windows of different lengths: ask one window, or one window against the one "
-                          "just before it", lambda m, window: [at(m, _window_words(grain, name), grain, start if name else None),
-                                                               at(m, f'this {before} versus last {before}', previous_grain, compare='previous')]))
+                          "just before it", lambda m, window: [_ask(mdl, reading, m)]))   # the window named, never another
         elif name and start[:7] != context.production_day[:7] and re.search(r"\b(last|previous|prior)\s+month\b", words):
             found.append((f"'last month' is the month before the selected day's, so '{asked} {words}' names two months that are not one "
                           "month and the one before it: ask one month, or this month against the one before it",
-                          lambda m, window: [at(m, f'in {name}', 'month', start), at(m, 'this month versus last month', 'month', compare='previous')]))
+                          lambda m, window: [_ask(mdl, reading, m)]))
     elif selected != 'day' and len(named) == 1 and not previous and not read_words.get('words') \
             and not re.search(r"\b(fiscal|accounting|4-4-5|445|p(1[0-3]|[1-9]))\b", said):
         grain = next(iter(named))[0]
@@ -954,6 +972,18 @@ def _cued(items, i):
     return False
 
 
+def _ranked_measure(items, item):
+    """True when a phrase that names a measure and a dimension said as a set ("production days": the days run, and the production days
+    split) is ranked right after its ranking word beside another dimension asked as the split ("which grade had the most production
+    days"): the thing counted, never a second split read with the volume its first word names (the reviewer subagent's check of the fix
+    round on 2c28fd3: it offered the MSF of each grade and day)."""
+    k = items.index(item)
+    prev = _prev(items, k)
+    return (prev is not None and prev.kind == 'rank' and len(item.words.split()) > 1
+            and any(o is not item and (o.kind == 'vocab' and _entries(o, 'dimension') and not _entries(o, 'measure') or o.words in WHO)
+                    for o in items))
+
+
 def _joined(items, i):
     """(the 'and', the dimension before it) when the dimension at `i` is joined by "and" to the dimension before it ("by shift and
     grade", "which shift and grade"), else None: the two are one split, as "by shift by grade" is."""
@@ -991,11 +1021,11 @@ _OFFERING = threading.local()   # per thread: the server parses under two locks 
 # downtime. When none is kept, the refusal says what the model keeps of the measure. The check is offline: the router and the parser,
 # a few milliseconds a question, each verdict kept (_ANSWERED).
 
-def _ask(mdl, reading, measure, dim=None, rank=None, words=None, window=None, compare=None, filters=None, shift=None, word=None):
+def _ask(mdl, reading, measure, dim=None, rank=None, words=None, window=None, compare=None, filters=None, shift=None, word=None, reads=False):
     """One question offered, in the model's own words: `measure` (said `word`, else _measure_word), split by `dim` (a dimension or a
     list of two) or ranked on it (`rank` most or least), over `words` (the refusal's window words when None; `window` the spec when
-    they name another window), keeping the refusal's filters and the one shift it named unless `filters` or `shift` says otherwise
-    (`shift` False: none)."""
+    they name a window that holds the refusal's, or, `reads`, one reading of window words it could not place), keeping the refusal's
+    filters and the one shift it named unless `filters` or `shift` says otherwise (`shift` False: none)."""
     dims = [dim] if isinstance(dim, str) else list(dim or [])
     filters = dict(reading.filters if filters is None else filters)
     shift = None if shift is False or 'shift' in dims else (reading.shift if shift is None else shift)
@@ -1016,7 +1046,7 @@ def _ask(mdl, reading, measure, dim=None, rank=None, words=None, window=None, co
         text = f"{said} by {' and '.join(_dim_word(mdl, d) for d in dims)} {words}"
     else:
         text = f'{said} {words}'
-    return Ask(text, measure, dims, rank if dims else None, compare, filters=filters, shift=shift, window=window)
+    return Ask(text, measure, dims, rank if dims else None, compare, filters=filters, shift=shift, window=window, reads=reads)
 
 
 def _narrowing(mdl, filters, shift):
@@ -1037,11 +1067,39 @@ def _narrowing(mdl, filters, shift):
     return ' '.join(parts)
 
 
-def _this_week(mdl, reading, m):
-    """The questions offered for two windows before the selected one: this week against the one before it, or this week alone."""
-    week = {'period': 'week', 'anchor': None}
-    return [_ask(mdl, reading, m, words='this week versus last week', window=week, compare='previous'),
-            _ask(mdl, reading, m, words='this week', window=week)]
+def _kinds(mdl, reading, measure):
+    """The questions offered for who logged a stop: the measure asked of each kind (a stop measure, else the stops), and split by kind,
+    keeping the refusal's other filters and the shift it named."""
+    m = measure if semantic._usable(mdl, measure, 'kind', as_filter=True) is None else 'stops'
+    others = {d: v for d, v in reading.filters.items() if d != 'kind'}
+    return [_ask(mdl, reading, m, filters={**others, 'kind': kind}) for kind in ('Operator', 'Maintenance')] + [_ask(mdl, reading, m, 'kind', filters=others)]
+
+
+def _held(mdl, reading, measure, dim, period):
+    """The split by `dim` over the `period` window that holds the refusal's ("which day had the most side trim yesterday": side trim by
+    day over yesterday's week, said from the controls), or None when no words name that window."""
+    around = _around(reading, period)
+    return _ask(mdl, reading, measure, dim, words=around[0], window=around[1]) if around else None
+
+
+def _around(reading, period):
+    """(words, window) of the `period` window that holds the refusal's own ("a split by day needs a longer window": the week of the day
+    asked), said from the controls as "this week" or "last week" ("this month", "last month"), or None when no such words name it."""
+    from .record_store import parse_window
+    controls = _controls(reading.context, reading.store) if reading.context is not None and reading.store else None
+    if controls is None or reading.window is None:
+        return None
+    days = reading.store.production_days
+    try:
+        held = parse_window({'period': period, 'anchor': reading.window['anchor']})[2:]
+        if parse_window({'period': period, 'anchor': controls.production_day})[2:] == held:
+            return f'this {period}', {'period': period, 'anchor': reading.window['anchor']}
+        before = agent.previous_window_day(period, controls.production_day, days)
+        if before and parse_window({'period': period, 'anchor': before})[2:] == held:
+            return f'last {period}', {'period': period, 'anchor': reading.window['anchor']}
+    except ValueError:
+        return None
+    return None
 
 
 def _offer(reading, text, asks):
@@ -1118,8 +1176,13 @@ def _as_offered(ask, reading, controls, store):
             return False
         q = own.query
         ask = Ask(str(ask), q.measure, q.group_by, own.rank, q.compare, q.share, filters=q.filters, window=reading.window)
-    window = ask.window or reading.window or {'period': getattr(controls, 'period', 'day'), 'anchor': None}
-    window = {'period': window['period'], 'anchor': window['anchor'] or controls.production_day}
+    wanted = reading.window or {'period': getattr(controls, 'period', 'day'), 'anchor': None}
+    wanted = {'period': wanted['period'], 'anchor': wanted['anchor'] or controls.production_day}
+    window = wanted
+    if ask.window:
+        window = {'period': ask.window['period'], 'anchor': ask.window['anchor'] or controls.production_day}
+        if not ask.reads and not _holds(window, wanted):
+            return False   # a window of its own is offered only when it holds the one asked
     filters = reading.filters if ask.filters is None else ask.filters
     plan = request.get('plan') or []
     if request.get('intent') == 'semantic':
@@ -1137,6 +1200,16 @@ def _as_offered(ask, reading, controls, store):
             and q.share == ask.share and not own.shares and q.filters == filters and _same_window(q.window, window)
             and (not ask.shift or q.shift == ask.shift) and hand is not None
             and _same_window({'period': hand[0], 'anchor': hand[1]}, window) and _hand_leads(request, own, asked, store))
+
+
+def _holds(outer, inner):
+    """True when the window `outer` holds every production day of `inner`."""
+    from .record_store import parse_window
+    try:
+        (start, end), (first, last) = parse_window(outer)[2:], parse_window(inner)[2:]
+    except (ValueError, TypeError, KeyError):
+        return False
+    return start <= first and last <= end
 
 
 def _same_window(one, other):
@@ -1179,7 +1252,7 @@ _CONTROL_DAYS = {}
 # figure (the orders card with the order fragments, the day's matrix with its setups, the day's speed with the speed with stops, the
 # KPI summary with every tile), so a question offered that the router sends there is dropped. #113's quantity routes open with their
 # metric; the Pareto with its first row; the grade totals with the window's MSF; the grades' speed card with the speed without stops,
-# by grade led by the grade slowest against its own target (issue #75); the over/under-run card with its percent; the shift's rejects
+# by grade led by the grade slowest against its own target (issue #75) over a complete window; the over/under-run card with its percent; the shift's rejects
 # with the dry-end percent of yield; the owner's downtime review with maintenance and operator downtime as a percent of the scheduled
 # minutes; the waste breakdown with its largest line's percent of gross.
 QUANTITY_MEASURES = {'maintenance_minutes': ('downtime_minutes', {'kind': 'Maintenance'}), 'operator_minutes': ('downtime_minutes', {'kind': 'Operator'}),
@@ -1214,7 +1287,9 @@ def _hand_leads(request, own, asked, store):
     if intent == 'period_grade' and tools == ['get_grade_totals']:
         return q.measure == 'msf' and q.group_by in ([], ['grade']) and not q.filters and not rank
     if intent == 'period_speed':
-        return q.measure == 'speed_run_fpm' and not q.filters and (whole or q.group_by == ['grade'] and rank in (None, 'least'))
+        # by grade only over a complete window: an incomplete one opens with the grades observed, unranked (shapes.PeriodAnswer.whole)
+        return q.measure == 'speed_run_fpm' and not q.filters and (whole or q.group_by == ['grade'] and rank in (None, 'least')
+                                                                    and store._window(q.window)['coverage'] == 'complete')
     if intent == 'period_overrun':
         return q.measure == 'overrun_pct' and whole
     if intent == 'quality':
@@ -1234,13 +1309,16 @@ def _assign(reading, items, mdl, store, a, context):
     rank, limit, units, leftover = a['rank'], a['limit'], [], []
     a['units'], a['leftover'] = units, leftover   # what was read when a refusal fires, for _verb_cues
     statistic, evaluative, which, speed_rank, frequency, who = [], [], False, None, False, False
-    group_by, filters, per_ratio, verbs, than, modifiers = [], {}, None, [], [], []
+    group_by, filters, per_ratio, verbs, than, modifiers, compared = [], {}, None, [], [], [], []
     for i, item in enumerate(items):
         kind = item.kind
         if kind == 'verb':
             verbs.append(item)   # read once the measure is known (LOSS_VERBS, REJECT_VERBS, PRODUCE_VERBS), else refused
         elif kind == 'than':
             than.append(item)    # "more setups than 26-C": refused in _read, over any other refusal ("than last week" is PREVIOUS's)
+            after = next((o for o in items[i + 1:] if not (o.kind == 'filler' and o.words in ARTICLES)), None)
+            if after is not None:
+                compared.append(after)   # the value compared, which the questions offered do not keep
         elif kind == 'unit':
             units.append(item.value)
             item.role = 'unit'
@@ -1289,7 +1367,8 @@ def _assign(reading, items, mdl, store, a, context):
     measure_items = [it for k, it in enumerate(items) if it.kind == 'vocab' and _entries(it, 'measure') and k not in denominators]
     pure = [it for it in measure_items if len(_entries(it, 'measure')) == len(it.entries)]
     mixed = [it for it in measure_items if it not in pure]
-    if not pure and mixed and not (len(mixed) == 1 and _cued(items, items.index(mixed[0])) and _entries(mixed[0], 'dimension')):
+    if not pure and mixed and not (len(mixed) == 1 and _cued(items, items.index(mixed[0])) and _entries(mixed[0], 'dimension')
+                                   and not _ranked_measure(items, mixed[0])):
         pure, mixed = [mixed[0]], mixed[1:]
         pure[0].entries = _entries(pure[0], 'measure')
     for it in list(mixed):   # "trim and shear": a measure joined to a measure is a second measure, never a value
@@ -1472,8 +1551,7 @@ def _assign(reading, items, mdl, store, a, context):
             # setups or feet per day is no ratio the model keeps (the review of PR #155: never each day's rows said as a rate);
             # the stops and the downtime of each production day are the stops profile's own reading
             raise Refused(f"{_measure_word(mdl, measure).capitalize()} per day is not a ratio the semantic model defines",
-                          [_ask(mdl, reading, measure, 'day') if reading.window_words else
-                           _ask(mdl, reading, measure, 'day', words='this week', window={'period': 'week', 'anchor': None}),
+                          [_held(mdl, reading, measure, 'day', 'week') if a['period'] == 'day' else _ask(mdl, reading, measure, 'day'),
                            _ask(mdl, reading, measure)])
         elif 'day' not in group_by:
             group_by.append('day')
@@ -1513,17 +1591,20 @@ def _assign(reading, items, mdl, store, a, context):
         if len(dims) > 1:
             m = measure or 'stops'
             word = _measure_word(mdl, m)
-            so_far = {it.value[0]: it.value[1] for _, it in values if it.role == 'value' and isinstance(it.value, tuple)}
-            narrow = _narrowing(mdl, so_far, None)
+            # every other value the question said, read so far or after it, and the shift it named, stay in each reading offered
+            so_far = {**_values_beside(mdl, items, m, item),
+                      **{it.value[0]: it.value[1] for _, it in values if it.role == 'value' and isinstance(it.value, tuple)}}
+            narrow = _narrowing(mdl, so_far, reading.shift)
             options = []
             for d in dims:
                 value = next(e[2] for e in candidates if e[1] == d)
                 if 'share' in reading.cues:
                     options.append(Ask(f"what percent of {word} {narrow} was {_value_phrase(mdl, d, value)} {reading.window_words}", m, [d],
-                                       share=value, filters=so_far))
+                                       share=value, filters=so_far, shift=reading.shift))
                 else:
                     options.append(Ask(f"{word} {narrow} {'at' if d == 'place' else 'for' if d == 'reason' else 'of'} "
-                                       f"{'the ' if d == 'place' else ''}{value} {reading.window_words}", m, filters={**so_far, d: value}))
+                                       f"{'the ' if d == 'place' else ''}{value} {reading.window_words}", m, filters={**so_far, d: value},
+                                       shift=reading.shift))
             raise Refused(f"'{item.words}' is a {' and a '.join(_dim_word(mdl, d) for d in dims)}: say which", options)
         dim = dims[0]
         value = next(e[2] for e in candidates if e[1] == dim)
@@ -1534,6 +1615,8 @@ def _assign(reading, items, mdl, store, a, context):
         if prev is not None and prev.kind == 'group':
             prev.role = 'reason cue'
         item.role, item.value = 'value', (dim, value)
+        if any(item is o for o in compared):
+            reading.compared.add(dim)
     by_dim = {}
     for _, it in values:
         if it.role == 'value' and isinstance(it.value, tuple):
@@ -1753,8 +1836,7 @@ def _assign(reading, items, mdl, store, a, context):
         grain = mdl.dimensions[dim].get('grain')
         if grain and grains.index(grain) >= grains.index(a['period']):
             raise Refused(f"A split by {_dim_word(mdl, dim)} needs a window longer than one {_dim_word(mdl, dim)}",
-                          [_ask(mdl, reading, measure, dim, words=f'this {"week" if grain == "day" else "month"}',
-                                window={'period': 'week' if grain == 'day' else 'month', 'anchor': None})])
+                          [_held(mdl, reading, measure, dim, 'week' if grain == 'day' else 'month')])
     order = None
     if rank:
         order = 'value' if rank == 'most' else 'value_asc'
