@@ -13,7 +13,7 @@ This is for production first, and for the senior leaders they answer to. The own
 - **Three levers:** speed, waste and downtime, and what each costs. Every answer ties back to one of them. Maintenance schedules and personnel are context that explains a lever, not products of their own.
 - **Point out, then investigate.** The page says how the machine is running, what is outside its band and where the opportunities are. The analyst investigates why.
 - **Empathy is a rule.** Keep what production controls apart from what it does not (schedule-driven trim, a bad roll, a maintenance window, an outage). Never word a finding as blame.
-- **One ledger for both readers.** The superintendent and the plant manager read the same dollars, priced at named rates, with shift figures that add up to the day, the period and the year.
+- **One ledger for both readers.** The superintendent and the plant manager read the same dollars, priced at named rates. The rule (#164) is that shift figures add up to the day, the period and the year; a change that breaks that is a bug.
 - **The data is part of the job.** Downtime coded "Other", or left without a comment, is a finding too.
 
 ## What good looks like
