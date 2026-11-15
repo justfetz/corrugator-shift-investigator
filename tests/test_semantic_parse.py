@@ -1160,6 +1160,9 @@ def test_every_question_a_refusal_offers_is_answered_as_asked(store):
                 args = request['plan'][0]['arguments']
                 assert (args['measure'], args['group_by'], (request.get('lead') or {}).get('rank')) == \
                     (r.query.measure, r.query.group_by, r.rank), (question, suggestion)
+            elif request['intent'] in P.ALLOW_LISTED:
+                # #113's quantity routes: one window's total, every word their own ("minutes of downtime this week")
+                assert not r.query.group_by and r.rank is None, (question, suggestion, request['intent'])
             else:
                 assert request['intent'] in ('period_speed', 'speed') and r.query.measure in P.SPEED_FAMILY and r.rank in (None, 'least'), \
                     (question, suggestion, request['intent'], r.rank)

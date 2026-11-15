@@ -269,6 +269,7 @@ class Item:
     entries: list = field(default_factory=list)
     value: object = None
     role: str = None    # what the reading made of it
+    said: list = field(default_factory=list)   # the measure entries of a phrase read as a value here ("shear", "order changes")
 
 
 def _items(text, vocab):
@@ -638,7 +639,8 @@ def _boards_dimension(reading, items, a):
         ranked = after is not None and (after.kind in ('rank', 'speed_rank') or after.kind == 'group' and after.words == 'by' and a.get('rank'))
         if not (split or ranked):
             continue   # "boards with the most downtime", "top 3 boards by downtime": the boards ranked, as "which boards" ranks them
-        other = next((e[1] for o in items if o is not it and o.kind == 'vocab' for e in _entries(o, 'measure') if e[1] != 'sheets'), None)
+        other = next((e[1] for o in items if o is not it and o.kind == 'vocab' for e in _entries(o, 'measure') + o.said if e[1] != 'sheets'),
+                     None)
         speed = next((SPEED_RANK[o.words] for o in items if o.kind == 'speed_rank'), None)
         if other is None and speed:
             other = 'speed_run_fpm'
@@ -650,6 +652,16 @@ def _boards_dimension(reading, items, a):
         if timed:
             asks = _suggest(mdl, reading, None, 'grade', rank or 'most', measures=_minutes_of(mdl, None))
         else:
+            no_grade = semantic._usable(mdl, other, 'grade', as_filter=False)
+            if no_grade is not None:
+                # "which boards had the most bale": the measure carries no grade, so none is offered; the model's reason, and the
+                # first dimension it is split by (the coordinator's review of PR #155 at 97b81f4, item 2: never "bale by grade",
+                # which the grade totals answer)
+                m = mdl.measures[other]
+                why = no_grade[0].split(';')[0].replace(f' ({other})', '').replace(m['label'], _strip_parens(m['label']).lower(), 1)
+                dim = next((d for d in no_grade[1] if mdl.dimensions[d]['type'] != 'time'), None)
+                return Refused(f"'boards' is not a dimension the semantic model reads, and no grade stands in for it: {why}",
+                               _suggest(mdl, reading, other, dim, rank) if dim else [f'{_measure_word(mdl, other)} {reading.window_words}'.strip()])
             asks = _suggest(mdl, reading, other, 'grade', rank)
             if rank:
                 asks = [asks[0], f'{_measure_word(mdl, other)} by grade {reading.window_words}'.strip()]
@@ -961,6 +973,9 @@ def _assign(reading, items, mdl, store, a, context):
             it.entries = _entries(it, 'measure')
             pure.append(it)
     for it in mixed:
+        # kept for _boards_dimension: "which boards had the most shear" names the shear, though beside "boards" it reads as a place
+        # (the coordinator's review of PR #155 at 97b81f4, item 4)
+        it.said = _entries(it, 'measure')
         it.entries = [e for e in it.entries if e[0] != 'measure']
     for it in pure:
         it.role = 'measure'
@@ -1141,6 +1156,14 @@ def _assign(reading, items, mdl, store, a, context):
         candidates = [e for e in item.value if measure is None or semantic._usable(mdl, measure, e[1], as_filter=True) is None]
         if not candidates:
             if measure is None:
+                continue
+            dim = next((e[1] for e in _entries(item, 'dimension') if semantic._usable(mdl, measure, e[1], as_filter=False) is None), None)
+            if dim is not None and _modifier(items, i) and any(d != dim for d in group_by):
+                # "crew rejects by shift": no value of the word narrows the measure, but the word is also a dimension the measure is
+                # recorded by, said bare before it beside a split of another: _modifier's reason below, never "not recorded by stop
+                # kind" (the coordinator's review of PR #155 at 97b81f4, item 5)
+                item.role, item.value = 'dimension', dim
+                modifiers.append((item, items[i + 1]))
                 continue
             dims = sorted({e[1] for e in item.value})
             raise Refused(f"{_strip_parens(mdl.measures[measure]['label'])} is not recorded by {' or '.join(_dim_word(mdl, d, whole=True) for d in dims)}, so "
@@ -1655,9 +1678,10 @@ def covers(request, reading, context=None, store=None):
         return q.measure == 'msf' and group_by in ([], ['grade']) and not filters and not rank and share is None and not q.compare
     if intent in ('period_speed', 'speed'):
         # the grades' card leads with each grade's speed without stops against its target and carries no window before: never the
-        # elapsed speed by grade, nor "speed by grade this week versus last week"
+        # elapsed speed by grade, nor "speed by grade this week versus last week". Its headline is the slowest grade, so it leads a
+        # grade ranked slowest, never the fastest ("which grade was the fastest": the coordinator's review of PR #155 at 97b81f4, item 1)
         return (q.measure in SPEED_FAMILY and group_by in ([], ['grade']) and not filters and share is None
-                and (not rank or group_by == ['grade'])
+                and (not rank or group_by == ['grade'] and rank == 'least')
                 and (group_by != ['grade'] or q.measure in ('speed_run_fpm', 'run_speed_to_target_pct') and not q.compare))
     if intent == 'period_compare':
         return False   # the KPI summary answers "how did we do", never a measure the reading named
