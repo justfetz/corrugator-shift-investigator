@@ -964,6 +964,8 @@ function moneyStep(trace){
 // (cost_model.ledger_totals, summary, ptd_ledger; get_day_dollars for an all-shifts day), re-priced as a whole at the
 // rates in force; nothing is summed here (the #31b review: no figure is the browser's own). The one money ledger (issue
 // #164): the levers above standard lead; a yearly figure is the period to date's only.
+// The whole dollars a money ledger figure prints (`<key>_shown`, PR #168: whole dollars that add up), else the figure itself.
+const shownOf=(d,k)=>d&&d[k+'_shown']!==null&&d[k+'_shown']!==undefined?d[k+'_shown']:d?d[k]:null;
 function moneyFacts(m){
  const cfg=costCfg(), rates=ratesNow(), e=moneyStep(m.result.trace||[]);
  if(!e)return null;
@@ -973,18 +975,20 @@ function moneyFacts(m){
  if(dropped.length)warning=`Shift ${dropped.join(' and ')}: data incomplete, not counted in these dollars; they are the complete shifts'.`;
  else if(d.coverage!=='complete')warning=levers&&d.coverage==='partial'?'This window is to date: the dollars are the shifts recorded so far.':
   `Incomplete data: ${excluded||'some'} excluded record${excluded===1?'':'s'}. These dollars are the observed records only, not the whole ${levers?'window':day?'day':'shift'}; do not rank them.`;
- const rows=d.rows.map(r=>({name:r.lever||r.gap,bucket:bucketOf(r),usd:r.usd||0,year:r.usd_per_year,minutes:r.machine_minutes||0,share:Money.share(r),
+ const rows=d.rows.map(r=>({name:r.lever||r.gap,bucket:bucketOf(r),usd:shownOf(r,'usd')||0,year:r.usd_per_year,minutes:r.machine_minutes||0,share:Money.share(r),
   area:!!(r.price_terms&&Money.PAPER.has(r.price_terms.kind)),control:r.control||null,apart:r.apart||null,trim:r.key==='trim',rows:[r]}));
  const counted=day?(d.shifts||[]).filter(x=>!dropped.includes(x.shift)).map(x=>x.shift):[];
  // each counted shift's own dollars: its get_shift_dollars step beside the day total, re-priced with it; they add to the day's
  const own=day?counted.map(n=>(m.result.trace||[]).find(x=>x.ok&&x.tool==='get_shift_dollars'&&x.data&&x.data.shift===n&&x.data.production_day===d.production_day)):[];
- const perShift=day&&own.length&&own.every(Boolean)?own.map(x=>`shift ${x.data.shift} ${Money.money(atRates(m,x).total_usd)}`).join(' + '):null;
+ const perShift=day&&own.length&&own.every(Boolean)?own.map(x=>`shift ${x.data.shift} ${Money.money(shownOf(atRates(m,x),'total_usd'))}`).join(' + '):null;
  return {levers,day,owner,data:d,rows,cfg,rates,warning,lens:levers?d.lens||'all':null,
-  total:d.total_usd, paper:d.total_paper_usd, machine:d.total_machine_time_usd, contribution:d.total_contribution_usd,
-  // a window's yearly figure is its scope's period to date (total_usd_per_year); a shift's or a day's is the machine's (ptd_*)
-  year:levers?d.total_usd_per_year:d.ptd_usd_per_year, ptd:d.ptd_usd, ptdLabel:d.ptd_label, ptdScope:d.ptd_scope, ptdDays:d.ptd_days,
-  atStandard:d.at_standard_usd, above:d.above_standard_usd, noBand:d.no_band_usd, apart:d.apart_gaps||0, allIn:d.all_in_usd,
-  buckets:(d.buckets||[]).map(b=>[b.bucket,b.usd]),
+  // the whole dollars the card prints, which add up (PR #168); the cents stay in the rows' formulas
+  total:shownOf(d,'total_usd'), paper:shownOf(d,'total_paper_usd'), machine:shownOf(d,'total_machine_time_usd'), contribution:d.total_contribution_usd,
+  // a window's yearly figure is its scope's period to date (total_usd_per_year); a shift's or a day's is the machine's (ptd_*);
+  // with fewer than five production days to date there is none, and the note says why
+  year:levers?d.total_usd_per_year:d.ptd_usd_per_year, yearNote:d.ptd_year_note||null, ptd:shownOf(d,'ptd_usd'), ptdLabel:d.ptd_label, ptdScope:d.ptd_scope, ptdDays:d.ptd_days,
+  atStandard:shownOf(d,'at_standard_usd'), above:shownOf(d,'above_standard_usd'), noBand:shownOf(d,'no_band_usd'), apart:d.apart_gaps||0, allIn:shownOf(d,'all_in_usd'),
+  buckets:(d.buckets||[]).map(b=>[b.bucket,shownOf(b,'usd')]),
   when:levers?WHEN[d.window&&d.window.period]||'this window':day?((d.shifts||[]).length===3?'this day':'these shifts'):'this shift',
   who:levers?(d.shift?`Shift ${d.shift}`:'All shifts'):day?(counted.length===3?'All shifts':`Shift${counted.length===1?'':'s'} ${counted.join(' and ')}`):`Shift ${d.shift}`,
   label:levers?(d.window&&d.window.label)||'':(d.production_day||''),
@@ -1014,9 +1018,11 @@ function fillDollarLine(line,f){
  if(f.warning)line.append(node('p',f.warning,'warning-note'));
  const lead=node('p',undefined,'dollar-lead'), has=v=>v!==null&&v!==undefined;
  lead.append(node('span','≈ '),node('strong',Money.money(f.total),'figure'),node('span',` ${f.owner?'the waste recorded':'above standard'} ${f.when}`));
- if(f.owner&&has(f.above))lead.append(node('span',` · ${Money.money(f.atStandard)} at standard, ${Money.money(f.above)} above standard`,'at-standard'));
+ // the ownership lens's three parts, which add up to its figure (PR #168)
+ if(f.owner&&has(f.above))lead.append(node('span',` · ${Money.money(f.atStandard)} at standard, ${Money.money(f.above)} above standard, ${Money.money(f.noBand)} with no band yet`,'at-standard'));
  // a yearly figure only from period to date (issue #164): a window's own scope's, a shift's or a day's the machine's
  if(has(f.year))lead.append(node('span',' · '),node('strong',`${Money.short(f.year)}/yr`,'figure'),node('span',` at this period's rate${f.levers?'':` (${f.ptdLabel}, ${f.ptdScope})`}`));
+ else if(f.yearNote)lead.append(node('span',` · ${f.yearNote}`,'year-note'));
  if(!f.owner&&f.apart)lead.append(node('span',` · ${Money.money(f.allIn)} all recorded, ${Money.money(f.atStandard)} of it at standard`,'all-in'));
  const margin=f.rates.values.margin_usd_msf;   // "margin not set" is said once, in the rail; a set margin is stated beside the dollars
  if(has(margin))lead.append(node('span',` · contribution ${Money.money(f.contribution)} at $${Money.rateText(margin)}/MSF, not added`,'contrib'));
@@ -1115,6 +1121,7 @@ function arithmetic(f){
  const total=[`= `,b(Money.money(f.total)),` ${f.owner?'the waste recorded':'above standard'} ${f.when}`];
  if(f.perShift)total.push(` (${f.perShift})`);
  if(has(f.year))total.push(' · ',b(`${Money.money(f.year)}/yr`),` at this period's rate (${f.ptdLabel}${f.levers?'':`, ${f.ptdScope}`}: period-to-date dollars per production day × ${Money.fixed(C.days_per_year,2)} production days a year)`);
+ else if(f.yearNote)total.push(` · ${f.yearNote} (${f.ptdLabel})`);
  total.push(v.margin_usd_msf===null||v.margin_usd_msf===undefined?` · contribution: ${cfg.margin_not_set}`:` · contribution ${Money.money(f.contribution)} at $${Money.rateText(v.margin_usd_msf)}/MSF, beside the dollars, not added`);
  out.push(line('Total ',total));
  const prov=node('p',`${Money.provenance(f.rates,cfg)} ${cfg.note}`,'muted provenance'); out.push(prov);
@@ -1140,18 +1147,19 @@ function paintTiles(rec,m){
 // A tile's money line, and in minutes or dollars its value shown in that unit (the tile's own reading moves to the line).
 function moneyOnTile(tile,valueEl,native,priced,when,slot=null){
  if(!priced||priced.usd===null)return;
+ const usd=shownOf(priced,'usd');   // the ledger's whole dollars the tile is (cost_model.tile_shown, PR #168)
  // a tile is what its figure measures, all recorded, the window's own dollars, never a year (issue #164); the speed tile is the speed lever
  const mode=unitMode(), year=null, measure=priced.measure?` ${priced.measure}`:'';
- let text=[`${Money.money(priced.usd)}${measure} ${when}`,year].filter(Boolean).join(' · ');
- if(mode==='usd'){ valueEl.replaceChildren(node('span',Money.money(priced.usd))); text=[`${measure.trim()} ${when}`.trim(),native].filter(Boolean).join(' · '); }
- else if(mode==='min'){ valueEl.replaceChildren(node('span',Money.fmt(priced.machine_minutes,1)),node('small','min')); text=[Money.money(priced.usd),year,native].filter(Boolean).join(' · '); }
+ let text=[`${Money.money(usd)}${measure} ${when}`,year].filter(Boolean).join(' · ');
+ if(mode==='usd'){ valueEl.replaceChildren(node('span',Money.money(usd))); text=[`${measure.trim()} ${when}`.trim(),native].filter(Boolean).join(' · '); }
+ else if(mode==='min'){ valueEl.replaceChildren(node('span',Money.fmt(priced.machine_minutes,1)),node('small','min')); text=[Money.money(usd),year,native].filter(Boolean).join(' · '); }
  const line=slot||node('div',text,'usd'); line.textContent=text; line.title=`${priced.what}: ${priced.usd_basis}`; if(!slot)tile.append(line);
 }
 // ---- the charts in the unit shown: a priced chart in another unit than its own is drawn as ranked bars of that unit
 function chartUnits(chart){ const mode=unitMode(); if(!mode||!Money.priced(chart))return null; const u=String(chart.unit||''); if(mode==='min'&&u==='minutes'||mode==='pct'&&u==='% of gross')return null; return mode; }
 function pricedChart(chart,mode,wrap){
  const yearly=chart.y==='usd_per_year', label=r=>r.weekday?`${r.weekday} ${shortDay(r[chart.x])}`:String(r[chart.x]??'');
- const rows=chart.rows.filter(r=>r.price_terms).map(r=>({name:label(r),usd:r.usd,year:r.usd_per_year,minutes:r.machine_minutes,share:Money.share(r),area:Money.PAPER.has(r.price_terms.kind),bucket:bucketOf(r),rows:[r]}));
+ const rows=chart.rows.filter(r=>r.price_terms).map(r=>({name:label(r),usd:shownOf(r,'usd'),year:r.usd_per_year,minutes:r.machine_minutes,share:Money.share(r),area:Money.PAPER.has(r.price_terms.kind),bucket:bucketOf(r),rows:[r]}));
  rows.sort((a,b)=>(unitValue(b,mode,yearly)??-1)-(unitValue(a,mode,yearly)??-1));
  wrap.append(node('p',`${mode==='usd'?'Dollars at your rates':UNIT_WORDS[mode][0].toUpperCase()+UNIT_WORDS[mode].slice(1)}, ranked${mode==='usd'?' by dollars':''}: each bar is the row's own priced quantity${chart.y2?'; the previous window is not priced':''}. Show as % for the chart in its own unit.`,'muted'));
  wrap.append(moneyBars(rows,mode,yearly));

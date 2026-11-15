@@ -112,7 +112,7 @@ def test_opportunities_rank_levers_and_name_records(store):
     for r in levers:   # a yearly figure is the period to date's: its dollars per production day x the post's days a year
         terms = r['year_terms']
         assert r['usd_per_year'] == cost_model.annual(cost_model.price(terms['kind'], terms['quantity'], rates('trim:3'))['usd'], terms['days'])
-    assert 'prescribe' in data['method_note'] and data['ptd_label'].endswith('to date')
+    assert 'prescribe' in data['method_note'] and data['ptd_label'].endswith(' to date through Wed 30 Sep')
 
 
 @pytest.mark.parametrize('question, period, tool', [

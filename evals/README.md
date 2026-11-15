@@ -77,6 +77,12 @@ Every case, whatever its type, also checks:
   value of that row, or, with no row named, a count of the result's rows, a below-target count or a total of its
   envelope; every other number on the line is one of those, a count of the result's rows or a rule constant. A figure
   moved to the wrong row, changed by a digit, stated beside a row it does not cite, or citing a chart step fails the case.
+- every money ledger answer's printed parts add up to its printed totals, in the whole dollars printed, never the cents
+  (`displayed_sum_failures`, the owner's top rule on PR #168): the levers to the headline (the supervisor lens: its
+  controllable levers), a day card's shift lines to it, the rows at standard to their total, everything recorded and
+  priced to its parts, side trim by shift to the trim line, and under the ownership lens each split, the tag scrap's kinds
+  and every line and part to all the waste recorded. A case can also name it (`money_checks: displayed_sums`), and
+  `same_figure` and `tile_agrees` hold one figure printed in two views, a turn each, to the same whole dollars.
 
 Two more hold "exact over summary" (issue #113), stated in `run.py` on their own, not imported from the router:
 

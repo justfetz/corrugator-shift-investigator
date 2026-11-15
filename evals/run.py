@@ -903,23 +903,28 @@ def via_url(case, expect, turns, redirect_only=False):
 
 def via_address(case, expect):
     """A URL case (issue #117) over GET: its address answers as the in-process run did, or a hand-typed spelling
-    redirects to `expect.url` and that address answers. Same return as `via_url`."""
-    failures, results, ms, error, location = [], None, 0.0, None, case['url']
-    status, headers, body = http_get(case['url'])
-    if status == 302 and 'Location' in headers:
-        location = headers['Location']
-        status, headers, body = http_get(location)
-    if status == 400:
-        error = json.loads(body)['error']
-    elif status != 200:
-        failures.append(f'GET {location} answered {status}')
-    else:
+    redirects to `expect.url` and that address answers. A case with `turns` asks each address in turn (one figure in
+    two views, PR #168), and `expect.url` is the last one's. Same return as `via_url`."""
+    failures, results, ms, error, location = [], [], 0.0, None, case['url']
+    for address in case.get('turns') or [case['url']]:
+        location = address
+        status, headers, body = http_get(address)
+        if status == 302 and 'Location' in headers:
+            location = headers['Location']
+            status, headers, body = http_get(location)
+        if status == 400:
+            error = json.loads(body)['error']
+            break
+        if status != 200:
+            failures.append(f'GET {location} answered {status}')
+            break
         timing = re.search(r'dur=([0-9.]+)', headers.get('Server-Timing', ''))
-        ms = float(timing[1]) if timing else 0.0
+        ms += float(timing[1]) if timing else 0.0
         result = json.loads(body)
         if result.get('url') != location:
             failures.append(f'the answer names {result.get("url")!r} as its address, served at {location!r}')
-        results = [result]
+        results.append(result)
+    results = results or None
     want = expect.get('url')
     if want and error is None and bare_url(location) != want:
         failures.append(f'{case["url"]} resolves to {bare_url(location)}, expected {want}')
@@ -1031,6 +1036,9 @@ def evidence_vocabulary(trace):
         # A band's words on the envelope (`*_band_text`, issue #101: a subtotal's or a total's band) are tool output, as
         # a row's are; only those exact strings, never the envelope's notes.
         strings.update(v for k, v in data.items() if isinstance(v, str) and k.endswith('band_text'))
+        # The period to date a money card adds to names itself (issue #164: "4-4-5 P2 to date through Mon 14 Sep"), and why
+        # it states no yearly figure; its digits are the tool's, not the prose's.
+        strings.update(v for k, v in data.items() if isinstance(v, str) and k in ('ptd_label', 'ptd_year_note'))
         # Envelope scalars (a window total, a band width, a gross area) are tool output as much as rows are.
         for value in data.values():
             if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -1176,6 +1184,7 @@ def invariants(mode, result, analysis, allowed_shifts, tools=TOOL_NAMES):
     bad = unfaithful_numbers(result['sections'], trace)
     if bad:
         failures.append('numbers not from tool output: ' + '; '.join(bad[:3]))
+    failures.extend(displayed_sum_failures(result))   # the owner's rule on PR #168: the printed parts add to the printed total
     bad = unprovenanced(result['sections'], trace)
     if bad:
         failures.append('figures not from their cited row: ' + '; '.join(bad[:3]))
@@ -1452,6 +1461,105 @@ def _dollars(value):
     return 'unavailable' if value is None else f'${value:,.0f}'
 
 
+# ---- the printed figures add up (the owner's top rule on PR #168, "no money jumping"): every set of parts a money card
+# prints sums to the total it prints, in the whole dollars printed, never the cents behind them. Read from the answer's
+# own lines, so a total that is right to the cent but prints a dollar off its printed parts fails.
+MONEY_LEDGER_TOOLS = ('get_shift_dollars', 'get_day_dollars', 'get_opportunities')
+_FIG = r'\*\*\$([\d,]+)\*\*'
+_LEVER_LINE = re.compile(r'^- (?:\d+\. )?(Speed under the grade baseline|Side trim over the [\d.]+% target|Shear over the [\d.]+% target|'
+                         r'Dry end over the [\d.]+% target|Operator downtime over the [\d.]+% band|Maintenance downtime over the [\d.]+% band): '
+                         + _FIG)
+_AT_LINE = re.compile(r'^- (Side trim at standard|Shear at standard|Dry end at standard|Operator downtime within its|'
+                      r'Maintenance downtime within its)[^:]*: ' + _FIG)
+_APART_LINE = re.compile(r'^- (Downtime: [^:]*\((?:scheduled|external)\)|Changeover rejects \(counted with shear\)|'
+                         r'Cutoff-knife and stacker waste boards): ' + _FIG)
+_EVERYTHING = re.compile(r'^- Everything recorded and priced: ' + _FIG + r' · \$([\d,]+) of it at standard')
+_SHIFT_TOTAL = re.compile(r'^- Shift (\d): ' + _FIG + r' above standard')
+_SHIFT_TRIM = re.compile(r'^- Shift (\d): ' + _FIG + r' (?:over the [\d.]+% target|of side trim)')
+_OWN_HEAD = re.compile(r'^Side trim costs ' + _FIG + r'.*? · \$([\d,]+) at standard and \$([\d,]+) above standard')
+_OWN_DRY = re.compile(r'^- (?:\d+\. )?Dry-end waste \(tag scrap\), the \d+ kinds below: ' + _FIG + r' · \$([\d,]+) at standard, \$([\d,]+) above standard')
+_OWN_KIND = re.compile(r'^- Dry-end: [^*]*\(all recorded\): ' + _FIG)
+_OWN_LINE = re.compile(r'^- \d+\. (?!Dry-end waste \(tag scrap\))([^*]*?): ' + _FIG + r'(?: · \$([\d,]+) at standard, \$([\d,]+) above standard)?')
+_OWN_TOTAL = re.compile(r'^- All the waste recorded: ' + _FIG + r' across \d+ kinds · \$([\d,]+) at standard, \$([\d,]+) above standard, '
+                        r'\$([\d,]+) with no band yet')
+
+
+def _whole(text):
+    return int(text.replace(',', ''))
+
+
+def displayed_sum_failures(result):
+    """Every money ledger answer (get_shift_dollars, get_day_dollars, get_opportunities): its printed lines add up.
+
+    - A levers card: the lever lines add to the headline (the supervisor lens: its controllable levers, side trim apart);
+      the shift lines of a day card add to it too; the rows at standard add to the "of it at standard" figure; everything
+      recorded and priced is the levers, the rows at standard and the rows shown apart added up; the side trim by shift
+      adds to the side trim lever.
+    - The ownership lens: side trim's at standard and above standard add to its cost, the dry-end kinds and its split to
+      the tag scrap's subtotal, each split line's parts to the line, and the lines, and the three parts, to all the waste."""
+    sections = result.get('sections') or []
+    if not sections or not any(s['ok'] and s['tool'] in MONEY_LEDGER_TOOLS for s in result.get('trace', [])):
+        return []
+    head, lines = sections[0], [s for s in sections[1:] if s.startswith('- ')]
+    bad = []
+
+    def check(what, parts, total):
+        if total is not None and parts and sum(parts) != total:
+            bad.append(f'money printed: {what} {" + ".join(f"${p:,}" for p in parts)} = ${sum(parts):,}, printed ${total:,}')
+    own = _OWN_HEAD.match(head)
+    if own:
+        trim, trim_at, trim_above = (_whole(x) for x in own.groups())
+        check('side trim at standard + above standard', [trim_at, trim_above], trim)
+        dry = next((_OWN_DRY.match(l) for l in lines if _OWN_DRY.match(l)), None)
+        kinds = [_whole(m.group(1)) for m in map(_OWN_KIND.match, lines) if m]
+        ats, aboves, others = [trim_at], [trim_above], []
+        if dry:
+            d, a, b = (_whole(x) for x in dry.groups())
+            check('the tag scrap at standard + above standard', [a, b], d)
+            check('the dry-end kinds', kinds, d)
+            ats.append(a)
+            aboves.append(b)
+        for m in map(_OWN_LINE.match, lines):
+            if not m:
+                continue
+            others.append(_whole(m.group(2)))
+            if m.group(3) is not None:
+                check(f'{m.group(1)} at standard + above standard', [_whole(m.group(3)), _whole(m.group(4))], _whole(m.group(2)))
+                ats.append(_whole(m.group(3)))
+                aboves.append(_whole(m.group(4)))
+        total = next((_OWN_TOTAL.match(l) for l in lines if _OWN_TOTAL.match(l)), None)
+        if total is None:
+            return bad + ['money printed: the ownership lens prints no "All the waste recorded" line to add up']
+        w, a, b, c = (_whole(x) for x in total.groups())
+        check('all the waste: at standard + above standard + no band', [a, b, c], w)
+        check('all the waste: its lines', [trim] + ([_whole(dry.group(1))] if dry else []) + others, w)
+        check('all the waste at standard', ats, a)
+        check('all the waste above standard', aboves, b)
+        check('side trim by shift', [_whole(m.group(2)) for m in map(_SHIFT_TRIM.match, lines) if m], trim)
+        return bad
+    figure = re.search(_FIG, head)
+    if not figure:
+        return ['money printed: the headline of a money card prints no figure']
+    headline = _whole(figure.group(1))
+    levers = [(m.group(1), _whole(m.group(2))) for m in map(_LEVER_LINE.match, lines) if m]
+    if not levers:
+        return [] if not re.match(r'^\*\*\$', head) else ['money printed: a money card prints no lever lines to add up']
+    supervisor = 'in controllable levers' in head
+    check('the levers' + (' (controllable)' if supervisor else ''),
+          [usd for name, usd in levers if not (supervisor and name.startswith('Side trim'))], headline)
+    check('the shifts', [_whole(m.group(2)) for m in map(_SHIFT_TOTAL.match, lines) if m], headline)
+    trim = next((usd for name, usd in levers if name.startswith('Side trim')), None)
+    check('side trim by shift', [_whole(m.group(2)) for m in map(_SHIFT_TRIM.match, lines) if m], trim)
+    everything = next((_EVERYTHING.match(l) for l in lines if _EVERYTHING.match(l)), None)
+    if everything:
+        whole, at = (_whole(x) for x in everything.groups())
+        at_rows = [_whole(m.group(2)) for m in map(_AT_LINE.match, lines) if m]
+        apart = [_whole(m.group(2)) for m in map(_APART_LINE.match, lines) if m]
+        check('the rows at standard', at_rows, at)
+        check('everything recorded: the levers, at standard and apart', [usd for _, usd in levers] + at_rows + apart, whole)
+    return bad
+
+
 def _money_steps(result, tool):
     return [s for s in result['trace'] if s['ok'] and s['tool'] == tool]
 
@@ -1470,7 +1578,13 @@ def money_failures(expect, results):
       post's production days a year, lever by lever (`ptd_levers`), never the window's own.
     - `shifts_add_to_day` {}: the day card's levers (`get_day_dollars`) are its complete shifts' (`get_shift_dollars`) added
       up, lever by lever in quantity and in dollars to the cent per lever, so a day inside a band still prices the shifts
-      that were over it, and never a figure its shifts do not hold."""
+      that were over it, and never a figure its shifts do not hold.
+    - `displayed_sums` {} (the owner's top rule on PR #168): every turn's printed parts add to its printed totals, in the
+      whole dollars printed (`displayed_sum_failures`, also run on every money answer as an invariant).
+    - `same_figure` {figures: [{turn, match}], why}: one figure printed in two views is the same whole dollars in both;
+      each `match` is a pattern whose groups are $ figures, added up (a lever and its line at standard: all recorded).
+    - `tile_agrees` {metric, lever_match}: turn 1's KPI tile (get_period_kpis `tile_money`, as the card prints it) is the
+      last turn's ledger lines that `lever_match` picks, as printed, added up (the review of PR #168, item 9)."""
     failures = []
     for check in expect.get('money_checks', []):
         kind, last = check['check'], results[-1]
@@ -1519,6 +1633,9 @@ def money_failures(expect, results):
             if len(day) != 1 or not shifts:
                 failures.append(f'money: shifts_add_to_day needs one day card and its shifts ({len(day)} day, {len(shifts)} shifts)')
                 continue
+            if any('key' not in r for data in [day[0]['data'], *shifts] for r in data['rows']):
+                failures.append('money: shifts_add_to_day reads each lever by its key, and a row of the card has none')
+                continue
             levers = lambda data: {r['key']: r for r in data['rows'] if not r.get('apart')}
             whole = levers(day[0]['data'])
             for key, row in whole.items():
@@ -1530,6 +1647,36 @@ def money_failures(expect, results):
                     failures.append(f'money: the day\'s {key} lever is {row["quantity"]}, its shifts\' {[r["quantity"] for r in parts]}')
                 if abs((row['usd'] or 0) - sum(r['usd'] or 0 for r in parts)) > 0.01 * len(parts):
                     failures.append(f'money: the day\'s {key} lever is {_dollars(row["usd"])}, its shifts\' {[_dollars(r["usd"]) for r in parts]}')
+        elif kind == 'displayed_sums':
+            # every turn's printed parts add to its printed totals (also an invariant of every money answer)
+            for index, result in enumerate(results, 1):
+                if not any(s['ok'] and s['tool'] in MONEY_LEDGER_TOOLS for s in result['trace']):
+                    failures.append(f'money: displayed_sums: turn {index} has no money ledger to add up')
+                failures.extend(f'turn {index}: {f}' for f in displayed_sum_failures(result))
+        elif kind == 'same_figure':
+            # one figure printed in two views (the owner's rule: no money jumping): each `figures` entry is a turn and a
+            # pattern whose groups are $ figures, added up; every entry must print the same whole dollars
+            seen = []
+            for spec in check['figures']:
+                sections = results[spec['turn']]['sections'] if spec['turn'] < len(results) else []
+                match = next((m for m in (re.search(spec['match'], s) for s in sections) if m), None)
+                seen.append(None if match is None else sum(_whole(g) for g in match.groups() if g is not None))
+            if None in seen or len(set(seen)) != 1:
+                failures.append(f'money: {check.get("why", "one figure")} prints {["missing" if v is None else f"${v:,}" for v in seen]} in its views')
+        elif kind == 'tile_agrees':
+            # a KPI tile's dollars (get_period_kpis tile_money, as the card prints them) against the ledger of the same
+            # window: the lever's line and its line at standard, as printed, added up (item 9 of the review on PR #168)
+            tiles = [t for s in _money_steps(results[0], 'get_period_kpis') for t in s['data'].get('tile_money', [])
+                     if check['metric'] in (t.get('metrics') or [t['metric']])]
+            tile = tiles[0] if tiles else None
+            printed = None if tile is None else (tile['usd_shown'] if tile.get('usd_shown') is not None else
+                                                 None if tile['usd'] is None else _whole(_dollars(tile['usd'])[1:]))
+            want = re.compile(check['lever_match'])
+            parts = [_whole(re.search(_FIG, s).group(1)) for s in (results[-1]['sections'] if len(results) > 1 else [])
+                     if want.search(s) and re.search(_FIG, s)]
+            if printed is None or not parts or printed != sum(parts):
+                failures.append(f'money: the {check["metric"]} tile prints {printed and f"${printed:,}"}, the ledger\'s lines '
+                                f'{" + ".join(f"${p:,}" for p in parts) or "none"} = ${sum(parts):,}')
         else:
             failures.append(f'money: unknown check {kind!r}')
     return failures

@@ -737,6 +737,11 @@ LEDGER_LINES = {'speed': ('setups', {}), 'trim': ('shift_kpis', {}), 'shear': ('
                 'boards': ('setup_orders', {})}
 
 
+def _trim_shift(row, entry):
+    """A shift's side trim (a money card's `details`, PR #168): that shift's rows of the card's day or window."""
+    return 'shift_kpis', {'shift': row.get('shift')}
+
+
 def _money_row(row, entry):
     """A money row's records: a ledger row (it carries `apart`) by its key, an ownership lens's waste line by its words."""
     if 'apart' in row:
@@ -829,8 +834,8 @@ SOURCES = {
     'get_order_matrix': ('setup_orders', {'row': lambda r, e: ('setup_orders', {'setup_id': r.get('record_id'), 'order_number': r.get('order_id'), **_knife(r)})}),
     'get_shift_notes': ('stops', {}),
     'get_rankings': ('setups', {'row': _ranking}),
-    'get_shift_dollars': ('shift_kpis', {'row': _money_row}),
-    'get_day_dollars': ('shift_kpis', {'row': _money_row}),
+    'get_shift_dollars': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
+    'get_day_dollars': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
     # period tools: the window and the shift
     'get_period_kpis': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),
     'compare_periods': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),
@@ -844,7 +849,7 @@ SOURCES = {
     'get_rollstock': ('setups', {'row': lambda r, e: ('setups', {'quality_id': r.get('grade'), 'web_width_in': r.get('width_in')})}),
     'get_overrun': ('setup_orders', {'row': lambda r, e: ('setup_orders', _knife(r))}),
     'get_speed_opportunity': ('setups', {'row': _speed_cell}),
-    'get_opportunities': ('shift_kpis', {'row': _money_row}),
+    'get_opportunities': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
     'get_downtime_review': ('shift_kpis', {'row': _review_row, 'flag': _flag}),
     'get_speed_variance': ('shift_kpis', {'row': _speedvar_row, 'detail': _speedvar_detail}),
     'get_trend': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {'from': r.get('week_start'), 'to': r.get('week_end'), 'day': None})}),

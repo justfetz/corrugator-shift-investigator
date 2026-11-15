@@ -79,6 +79,28 @@ def test_unfaithful_number_detector_catches_an_invented_total():
     assert bad and bad[0].startswith("'15'")
 
 
+def test_a_money_check_fails_a_case_on_a_row_without_a_key_and_never_raises():
+    """The review of PR #168, item 8: shifts_add_to_day read each row's `key` and raised KeyError on a row with none; the
+    case fails with the reason instead."""
+    step = lambda tool, rows, **data: {'ok': True, 'tool': tool, 'data': {'rows': rows, 'coverage': 'complete', **data}}
+    result = {'trace': [step('get_day_dollars', [{'lever': 'Side trim', 'usd': 1.0, 'quantity': 1.0}]),
+                        step('get_shift_dollars', [{'key': 'trim', 'usd': 1.0, 'quantity': 1.0}], shift=1)], 'sections': []}
+    failures = golden.money_failures({'money_checks': [{'check': 'shifts_add_to_day'}]}, [result])
+    assert failures == ['money: shifts_add_to_day reads each lever by its key, and a row of the card has none']
+
+
+def test_the_printed_money_check_reads_the_whole_dollars_a_card_prints():
+    """The owner's top rule on PR #168: a card's printed parts add to its printed total, read from its lines, never its cents."""
+    trace = [{'ok': True, 'tool': 'get_day_dollars', 'data': {}}]
+    good = ['**$655** above standard across the three shifts (query 4)', '- Shift 1: **$162** above standard (query 1)',
+            '- Shift 2: **$350** above standard (query 2)', '- Shift 3: **$143** above standard (query 3)',
+            '- 1. Side trim over the 3% target: **$345** · x (query 4 · row 0)', '- 2. Dry end over the 1% target: **$296** · x (query 4 · row 1)',
+            '- 3. Speed under the grade baseline: **$14** · x (query 4 · row 2)']
+    assert golden.displayed_sum_failures({'trace': trace, 'sections': good}) == []
+    bad = good[:2] + ['- Shift 2: **$351** above standard (query 2)'] + good[3:]
+    assert golden.displayed_sum_failures({'trace': trace, 'sections': bad}) == ['money printed: the shifts $162 + $351 + $143 = $656, printed $655']
+
+
 def test_value_selectors_and_tolerances():
     data = {'rows': [{'metric': 'a', 'current': 1.26, 'change': 'worse'}], 'weekday_profile': [{'weekday': 'Mon', 'days': 4}], 'total': 5}
     assert golden.select_row(data, 'metric=a')['current'] == 1.26
@@ -242,7 +264,11 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                'money-day-ranks-shifts-without-the-outage',   # the three shifts' and the day's dollars: 210 ms uncontended (PR #111)
                'money-day-side-trim-schedule-driven',         # the same seven calls on 2025-08-21: 203-207 ms uncontended (issue #135)
                'money-day-headline-is-the-day-ledger', 'money-shifts-one-yearly-figure',   # the same seven calls on the money ledger (issue #164)
-               'money-day-inside-band-prices-the-shifts-over'}
+               'money-day-inside-band-prices-the-shifts-over',
+               # the same seven calls, a day card held to whole dollars that add up and its trim by shift; the KPI and money cards
+               # of one 4-4-5 period, two turns (PR #168's fix round)
+               'money-day-shift-lines-add-to-the-headline', 'money-day-shift-lines-add-up-28-sep', 'money-no-yearly-figure-from-one-day',
+               'money-day-trim-by-shift-inside-the-band', 'money-ptd-label-names-its-end-day', 'money-period-operator-tile-is-the-ledger'}
 
 
 def test_heavy_cases_carry_an_explicit_offline_budget(monkeypatch):
@@ -410,7 +436,7 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c and 'url' not in c]   # an analyst-plan case is a scripted live round: no URL
     asked_by_address = [c for c in CASES if c.get('url')]   # issue #117: a case that asks by its address, which must answer at expect.url
     assert asked_by_address and all('question' not in c and (c['type'] == 'refusal' or c['expect']['url'].startswith('/corr/1/')) for c in asked_by_address)
-    assert len(routing) == 346 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + issue #100's 14 + issue #101's 27 + issue #135's 2 + 129 issue #113 count, unit and scope cases + 20 issue #153 hotfix cases + 7 issue #164 money ledger cases
+    assert len(routing) == 347 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + issue #100's 14 + issue #101's 27 + issue #135's 2 + 129 issue #113 count, unit and scope cases + 20 issue #153 hotfix cases + 7 issue #164 money ledger cases + 1 asked by question in PR #168's fix round
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

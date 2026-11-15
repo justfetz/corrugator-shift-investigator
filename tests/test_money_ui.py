@@ -154,7 +154,13 @@ PARITY_URLS = ('/corr/1/day/2026-09-14/shift/2?measure=dollars', '/corr/1/day/20
                # the owner's ruling on PR #111: planned maintenance and an outage apart on a shift's and a day's money card; on
                # 2026-09-16 the outage moves the day's focus, so a rate can move it again
                '/corr/1/day/2026-09-17/shift/1?measure=dollars', '/corr/1/day/2026-09-16/shift/3?measure=dollars',
-               '/corr/1/day/2026-09-16?measure=dollars')
+               '/corr/1/day/2026-09-16?measure=dollars',
+               # PR #168: whole dollars that add up (a day whose shifts' shares and levers move by a dollar, a shift's share, the
+               # ownership lens's lines and a shift's own, the KPI tiles the ledger prints, side trim by shift) and the records'
+               # first day, with no yearly figure
+               '/corr/1/day/2026-06-10?measure=dollars', '/corr/1/day/2026-06-10/shift/2?measure=dollars', '/corr/1/day/2026-09-28?measure=dollars',
+               '/corr/1/month/2026-09-14/shift/1?measure=money&lens=ownership', '/corr/1/period/2026-09-14?measure=kpis',
+               '/corr/1/day/2025-01-01?measure=dollars')
 PARITY_RATES = ('paper:60,hour:1350.5,margin:35,trim:3.1', 'paper:41.37,hour:5000', 'margin:12.5,trim:4', 'trim:2.5',
                 'hour:1', 'paper:99999.99,margin:0.01')
 

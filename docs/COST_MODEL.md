@@ -87,9 +87,58 @@ Totals: `total_usd` (and its paper, machine and contribution parts, the chips, `
 
 A shift's card, its day's card, a week's, a period to date's and a year to date's levers are sums of the same cells, so each lever's quantity above its band adds exactly, and its dollars and the totals add to the cent but for the rounding of each priced figure (a figure priced once on a window and the sum of its parts priced each on its own can differ by half a cent per part). `tests/test_money_ledger.py` sums shift, day, week, period-to-date and year-to-date dollars and checks they agree, at the post's rates and at others; the all-shifts day card lists each shift's own dollars, which add to its headline.
 
+### Whole dollars that add up (PR #168)
+
+The owner's top rule: no money jumping. Every figure a card prints agrees across views, and every set of parts it prints adds up to the total it prints, in the whole dollars printed, never only in the cents. Each printed figure is allocated from the cents by the largest-remainder method (`cost_model.whole_dollars`, `largest_remainder`; `web/money.js` allocates the same way from `display_terms`, at a visitor's rates):
+
+- **The root** is a window's every shift (for a day card and a shift card, the day's complete shifts). The root's dollars above standard print as their nearest dollar, a tie to the even dollar.
+- **Each shift's share** is its floor, plus a dollar for each of the shifts with the largest remainders, until the shares add up to the root's (a tie goes to the earlier shift).
+- **Within each shift**, its levers share the shift's whole dollars the same way. The cost at standard is a root of its own, shared among the shifts and then among each shift's rows at standard, and so is each row shown apart.
+- **A figure for several shifts**, and each of its lines, is those shifts' whole dollars added up.
+
+So a shift prints the same whole dollars on its own card, on its day's card and on any card that adds it up, and on every card:
+
+- the shifts add up to the day;
+- the levers add up to the figure;
+- the rows at standard add up to their total;
+- everything recorded and priced is the levers, the rows at standard and the rows apart added up;
+- paper and machine time add up to the arithmetic's total;
+- each chip is its lever's.
+
+The ownership lens prints the levers' own figures for its split: side trim, shear and the tag scrap are their lever's whole dollars above standard and their row at standard's, added up. The dry-end kinds share the tag scrap's whole dollars, and the waste boards' two lines share the boards row's. Planning / admin and the unexplained remainder, which no other view prints, print their nearest dollar, and all the waste recorded is its lines added up.
+
+A KPI card's operator and maintenance tiles (`get_period_kpis`, `compare_periods`) price the ledger's minutes, each shift's rounded as the ledger rounds them, and print the ledger's whole dollars: the lever's line and its line at standard added up, with planned maintenance for the maintenance tile. So the tile and the money card of the same window agree (the review's item 9: 4-4-5 P2's operator tile read $12,991 against the ledger's $12,990).
+
+The cents (`usd` and every `*_usd`) stay what the formulas, the receipts (`tests/test_datapages.py`) and the value goldens recompute. The whole dollars ride beside them as `usd_shown` on each row and chip, and as `total_usd_shown`, `at_standard_usd_shown`, `all_in_usd_shown`, `total_paper_usd_shown`, `total_machine_time_usd_shown`, `controllable_usd_shown`, `ptd_usd_shown` and, under the ownership lens, `above_standard_usd_shown`, `no_band_usd_shown` and `dry_end_*_shown`, on each tile and on `details`. The prose, the dollar line, the chips, the bars, the table, the arithmetic and the tiles print them.
+
+- A printed figure is within a dollar of its cents for one shift.
+- A line that adds several shifts up is within a dollar a shift. In PR #168's sweep of July to September 2026 and 23 windows, nearly every printed line sat within a dollar of its cents and none two dollars off.
+- A line can read a dollar off its own formula, and each money answer says so in its notes.
+- A list is ranked by the whole dollars it prints, then by its cents.
+
+Three checks hold it:
+
+- `displayed_sums` (`evals/run.py`) adds up the printed lines of every money answer in the golden set, as an invariant.
+- `tests/test_ui.cjs` adds up the card as drawn: the chips, the ownership split, paper and machine time, and the shifts.
+- `tests/money_cli.cjs parity` holds the browser's allocation to the server's at other rates.
+
+### Side trim by shift (PR #168)
+
+The owner's word on PR #168: "On the trim, you should see trim by shift. While technically it does not matter, it is an indicator of how a shift may have done, eg tight scores, big trim or tight trim. It is explanatory, but a superintendent would want to know."
+
+Wherever a card for several shifts shows the trim lever (a day, a week, a month, a 4-4-5 period, every lens), or the ownership lens's trim line, it lists each shift under "Side trim by shift, explanatory (schedule-driven)". Each shift's line shows:
+
+- its dollars: above the target, or all recorded under the ownership lens;
+- its side trim % of gross;
+- its setups above the per-setup trim flag (`shift_kpis.setups_above_trim_target`, 3.25%).
+
+Each line says the order mix and web widths set it, never a crew. The lines show on a day inside the band too, and they add up to the trim line they follow. They are the envelope's `details`, each cited as `(query N · detail M)`, with a receipt that opens that shift's `shift_kpis` rows.
+
 ### Period to date and the yearly figure
 
-The period to date is the 4-4-5 period containing the window's last day (or the card's day), from its first day inside the records to that day (`cost_model.ptd_window`). In a period's first week, while it holds fewer than five production days, the period before it is read with it ("4-4-5 P2 and P3 to date"), so a yearly figure is never one day's. A lever's yearly figure is its period-to-date dollars / the period's production days x 257.14, "a year at this period's rate".
+The period to date is the 4-4-5 period containing the window's last day (or the card's day), from its first day inside the records to that day (`cost_model.ptd_window`). Its label carries its end day ("4-4-5 P2 to date through Mon 14 Sep", the coordinator's default on PR #168), so a day card and its week never state two yearly figures under one label. A period that began before the records is labelled from their first day ("… to date from the first day of the records, Wed 1 Jan 2025, through …").
+
+In a period's first week, while it holds fewer than five production days, the period before it is read with it ("4-4-5 P2 and P3 to date"), so a yearly figure is never one day's. When even that leaves fewer than five production days (the records' first week), there is no yearly figure. The card says why: `ptd_year_note`, "no yearly figure: 1 production day to date, fewer than 5" (`cost_model.MIN_RATE_DAYS`; `annual` returns none under it). A lever's yearly figure is its period-to-date dollars / the period's production days x 257.14, "a year at this period's rate", and a shift's window says whose: "(shift 1's own)".
 
 - A shift's card and a day's card state the machine's period to date (all shifts): `ptd_usd`, `ptd_usd_per_year`, `ptd_days`, `ptd_label`, each lever in `ptd_levers`. Every shift of a day states the same yearly figure; no shift states one of its own (`total_usd_per_year` and every row's `usd_per_year` are null).
 - A window's levers (`get_opportunities`) state their scope's period to date: all shifts, or the shift asked ("shift 1's own"), never a shift scaled to the machine. `total_usd_per_year` is the levers' yearly figures added; `ptd_*` the same period to date as a whole.
@@ -145,10 +194,10 @@ answered offline: every one goes to the offline planner first.
 
 Every answer card carries the money of its scope, priced in the browser at the rates in force:
 
-- **The dollar line** under the headline: `≈ $502 above standard this shift · $718k/yr at this period's rate (4-4-5 P2 to date, all shifts) · $7,898 all recorded, $6,998 of it at standard` (a window: `≈ $66,792 above standard this month · $790k/yr at this period's rate · …`, its own scope's period to date; the ownership lens: `≈ $521,170 the waste recorded this month · $412,627 at standard, $51,370 above standard · …`; a set margin: `· contribution $11,891 at $40/MSF, not added`), then one chip per lever above standard, largest first. "Margin not set" is said once, in the rail's rates. On incomplete data the line and the arithmetic say so first: the dollars are the observed records only, and an all-shifts day counts its complete shifts and names the one left out; a window the records have not finished reads "to date".
+- **The dollar line** under the headline: `≈ $502 above standard this shift · $718k/yr at this period's rate (4-4-5 P2 to date through Mon 14 Sep, all shifts) · $7,898 all recorded, $6,998 of it at standard` (a window: `≈ $66,792 above standard this month · $790k/yr at this period's rate · …`, its own scope's period to date; the ownership lens: `≈ $521,172 the waste recorded this month · $412,627 at standard, $51,370 above standard, $57,175 with no band yet · …`, its three parts adding to it; a set margin: `· contribution $11,891 at $40/MSF, not added`), then one chip per lever above standard, largest first. Every figure is the whole dollars the card prints, so the chips add to the line. "Margin not set" is said once, in the rail's rates. On incomplete data the line and the arithmetic say so first: the dollars are the observed records only, and an all-shifts day counts its complete shifts and names the one left out; a window the records have not finished reads "to date".
 - **The opportunities panel** under the charts: horizontal bars of the levers ranked by dollars above standard, then the rows shown apart, lighter, in the ledger's group order; each bar's dollars, its yearly figure where it has one, minutes, formula (`usd_basis`), records, owner role and where to look on hover; the top eight with the rest behind "All", and a Table flip with the same rows.
 - **The arithmetic** at the bottom, with the card's own numbers: the area above the targets → MSF → paper $ at the paper rate; machine minutes (downtime over its bands, the speed under the grade baseline, the run time waste took) → MSF not made at the required run speed at 10% downtime, 675 ft/min → $ at the machine rate; the cost at standard, shown apart; the total above standard (an all-shifts day: each shift's own dollars, which add to it), and its yearly figure at this period's rate with the period to date and the 257.14 production days a year it is read from; the contribution (or "margin not set"). Then the rates line with each rate's source and the note that these are synthetic records at assumed rates, not a plant's figures.
-- **Tiles**: every KPI tile that measures a loss shows the window's own dollars, labelled, never a year, from a tool's own `tile_money` (one entry per loss, named by its `metric`, listing the tiles it sits on in `metrics`, and saying what it measures in `measure`), never from the tile's rounded value: a window's on `get_period_kpis` / `compare_periods` (`cost_model.period_tiles`), a shift's on `get_shift_dollars` (`cost_model.shift_tiles`), the card's money answer, so a shift's tiles get their dollars when it lands after the first paint and a KPI answer keeps its #33 size. A tile is what its figure measures, all recorded (the ownership lens's line of the same window), except a shift's speed tile, which is the speed lever above standard (the grade baseline: the one speed a price uses). A window's speed tile is not priced. A count, a volume or a width (setups, MSF, throughput) has no dollars, and a period report's tiles (a whole window's row) are priced in its panel, not on the tiles. The value cases `value-kpi-*` (a window) and `value-dollars-shift-*` (a shift) hold each tile's dollars by hand.
+- **Tiles**: every KPI tile that measures a loss shows the window's own dollars, labelled, never a year (the whole dollars the ledger prints for it: a shift's tiles are its own lines, a window's operator and maintenance tiles the ledger's lines of the same window, PR #168), from a tool's own `tile_money` (one entry per loss, named by its `metric`, listing the tiles it sits on in `metrics`, and saying what it measures in `measure`), never from the tile's rounded value: a window's on `get_period_kpis` / `compare_periods` (`cost_model.period_tiles`), a shift's on `get_shift_dollars` (`cost_model.shift_tiles`), the card's money answer, so a shift's tiles get their dollars when it lands after the first paint and a KPI answer keeps its #33 size. A tile is what its figure measures, all recorded (the ownership lens's line of the same window), except a shift's speed tile, which is the speed lever above standard (the grade baseline: the one speed a price uses). A window's speed tile is not priced. A count, a volume or a width (setups, MSF, throughput) has no dollars, and a period report's tiles (a whole window's row) are priced in its panel, not on the tiles. The value cases `value-kpi-*` (a window) and `value-dollars-shift-*` (a shift) hold each tile's dollars by hand.
 - **Show as minutes · % · $** in the rail ($ by default): priced tiles and bars in machine minutes, in
   percent of the window (an area of the gross, a time of the scheduled minutes), or in dollars. A priced
   chart in another unit than its own is drawn as ranked bars of that unit; the speed, KPI, trend and

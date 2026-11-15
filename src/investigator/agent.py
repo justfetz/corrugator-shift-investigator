@@ -2138,6 +2138,8 @@ def chart_for(rid, result):
              'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
     if result['tool'] == 'get_opportunities' and data.get('lens'):
         chart['lens'] = data['lens']   # the levers' order is the lens's (issue #101): web/money.js re-ranks the chart by it
+    if data.get('display_terms') and result['tool'] in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities'):
+        chart['display_terms'] = data['display_terms']   # the whole dollars its bars print, re-allocated at a visitor's rates (PR #168)
     if result['tool'] == 'get_speed_variance':
         # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
         start_label = {'baseline': 'Baseline speed', 'previous': 'Previous', 'shift': f"Shift {data.get('against_shift')}"}[data['against']]
@@ -2312,7 +2314,11 @@ class Agent:
             if name in ('get_period_kpis', 'compare_periods') and data.get('current_sums'):
                 window = arguments.get('window') or arguments.get('current_window')
                 reasons = self.store.get_downtime_pareto(window, 'reason', 'minutes', shift)['rows']
-                data['tile_money'] = cost_model.period_tiles(data, reasons, rates)   # #31b: the tiles' dollars, as the Pareto and waste rows price them
+                # #31b: the tiles' dollars, as the Pareto and waste rows price them; the operator and maintenance tiles as the
+                # money ledger prints them (PR #168, item 9), so `display_terms` rides along for the browser's re-price
+                ledger = cost_model.period_whole(self.store, window, shift, rates)
+                data['tile_money'] = cost_model.period_tiles(data, reasons, rates, ledger)
+                data['display_terms'] = ledger[1]
             return data
         if name == 'get_day_dollars':
             shifts = arguments.get('shifts') or [1, 2, 3]

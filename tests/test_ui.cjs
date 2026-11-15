@@ -1306,6 +1306,30 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const textOf=e=>typeof e==='string'?e:(e.children&&e.children.length?e.children.map(textOf).join(''):(e.textContent||''));
  const walk=(el,out=[])=>{for(const c of el.children||[]){out.push(c);walk(c,out);}return out;};
  const all=el=>walk(el).map(textOf).join('\n');
+ // the whole dollars a money ledger figure prints (`<key>_shown`, PR #168), as app.js reads them
+ const S=(d,k='usd')=>d[k+'_shown']!==null&&d[k+'_shown']!==undefined?d[k+'_shown']:d[k];
+ // Every set of parts a money card prints adds to the figure it prints, read from the card as drawn (the owner's top rule
+ // on PR #168: no money jumping; the printed whole dollars, never the cents behind them): the chips to the dollar line,
+ // the ownership lens's three parts to the waste recorded, paper and machine time to the arithmetic's total, each shift
+ // to the day.
+ const dollars=s=>Number(s.replace(/[$,]/g,'')), sumOf=xs=>xs.reduce((a,b)=>a+b,0);
+ function addsUp(lineEl,ledgerEl,what){
+  const lead=textOf(lineEl.children.find(c=>c.className==='dollar-lead')), head=dollars(/^≈ (\$[\d,]+)/.exec(lead)[1]);
+  const chips=(lineEl.children.find(c=>c.className==='chips')||{children:[]}).children.map(c=>dollars(/(\$[\d,]+)$/.exec(textOf(c))[1]));
+  assert.ok(chips.length,`${what}: the dollar line has chips`); assert.equal(sumOf(chips),head,`${what}: the chips ${chips.join(' + ')} add to ${head}`);
+  const split=/ · (\$[\d,]+) at standard, (\$[\d,]+) above standard, (\$[\d,]+) with no band yet/.exec(lead);
+  if(split)assert.equal(sumOf(split.slice(1).map(dollars)),head,`${what}: the ownership split adds to the waste recorded`);
+  const ledger=walk(ledgerEl).filter(e=>e.tag==='p').map(textOf), find=re=>ledger.map(l=>re.exec(l)).find(Boolean);
+  const paper=find(/^Paper .* = (\$[\d,]+)$/), machine=find(/^Machine time .* = (\$[\d,]+)$/), total=find(/^Total = (\$[\d,]+)/);
+  assert.ok(paper&&machine&&total,`${what}: the arithmetic prints paper, machine time and a total`);
+  assert.equal(dollars(total[1]),head,`${what}: the arithmetic's total is the dollar line's`);
+  assert.equal(dollars(paper[1])+dollars(machine[1]),dollars(total[1]),`${what}: paper ${paper[1]} + machine time ${machine[1]} = ${total[1]}`);
+  const own=find(/^Split (\$[\d,]+) at standard \+ (\$[\d,]+) above standard, the levers' figure \+ (\$[\d,]+) with no band yet/);
+  if(own)assert.equal(sumOf(own.slice(1).map(dollars)),dollars(total[1]),`${what}: the arithmetic's split adds to its total`);
+  const shifts=find(/^Total = \$[\d,]+ above standard [^(]*\(((?:shift \d \$[\d,]+(?: \+ )?)+)\)/);
+  if(shifts)assert.equal(sumOf([...shifts[1].matchAll(/\$[\d,]+/g)].map(m=>dollars(m[0]))),dollars(total[1]),`${what}: the shifts add to the day`);
+  return {head,chips:chips.length,shifts:!!shifts,owner:!!own};
+ }
  // the rail: Show as minutes · % · $ ($ by default), each rate with its source, Change rates live
  assert.deepEqual(els['units-seg'].children.map(b=>[b.textContent,b['aria-pressed']]),[['minutes','false'],['%','false'],['$','true']]);
  assert.deepEqual(els['rates-list'].children.map(textOf),['Paper','$55/MSFpost','Machine','$1,200/hrpost','Margin','not setowner to set','Trim','3%owner, 2026-11-10']);   // the owner's trim target (issue #101)
@@ -1320,9 +1344,10 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  // the one money ledger (issue #164): the shift's dollars above standard; its only yearly figure is the machine's period to
  // date at this period's rate; everything recorded and the cost at standard beside it; "margin not set" is said in the rail
  const g=golden.input;
- assert.equal(textOf(line.children[0]),`≈ ${Money.money(g.total_usd)} above standard this shift · ${Money.short(g.ptd_usd_per_year)}/yr at this period's rate (${g.ptd_label}, all shifts) · ${Money.money(g.all_in_usd)} all recorded, ${Money.money(g.at_standard_usd)} of it at standard`);
- assert.equal(textOf(line.children[0]),"≈ $502 above standard this shift · $718k/yr at this period's rate (4-4-5 P2 to date, all shifts) · $7,898 all recorded, $6,998 of it at standard");
+ assert.equal(textOf(line.children[0]),`≈ ${Money.money(S(g,'total_usd'))} above standard this shift · ${Money.short(g.ptd_usd_per_year)}/yr at this period's rate (${g.ptd_label}, all shifts) · ${Money.money(S(g,'all_in_usd'))} all recorded, ${Money.money(S(g,'at_standard_usd'))} of it at standard`);
+ assert.equal(textOf(line.children[0]),"≈ $502 above standard this shift · $718k/yr at this period's rate (4-4-5 P2 to date through Mon 14 Sep, all shifts) · $7,898 all recorded, $6,998 of it at standard");   // the label names its end day (PR #168)
  assert.deepEqual(line.children[1].children.map(textOf),['Dry-end $228','Speed $199','Trim $75']);   // a chip per lever above standard, largest first; a lever inside its band adds none
+ addsUp(line,els.ledger,'the shift card');
  // the opportunities panel: bars of the levers by dollars above standard, the rows shown apart after them, the formula, owner role and where to look on hover, a table flip
  const panel=els.money.children[0]; assert.match(panel.className,/money-panel/);
  const svg=walk(panel).find(e=>e.tag==='svg'), vals=walk(svg).filter(e=>/\bval\b/.test(e.class||''));
@@ -1335,10 +1360,10 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  walk(panel).find(e=>e.tag==='button'&&e.textContent==='Bars').events.click();
  // the arithmetic: short lines with this card's numbers, the two speeds named apart (the owner's call 2), then the rates and their sources
  const ledger=all(els.ledger);
- assert.match(ledger,/Paper 5,246 sq ft of side trim, shear and dry end above their targets = 5\.2 MSF × \$55\/MSF = \$289/);
+ assert.match(ledger,/Paper 5,246 sq ft of side trim, shear and dry end above their targets = 5\.2 MSF × \$55\/MSF = \$288/);   // $288.53 prints $288 so paper and machine time add to the $502 (PR #168)
  assert.match(ledger,/Machine time 10\.7 min \(downtime over its bands 0\.0 · speed under the grade baseline 10\.0 · waste run time 0\.7\) = 57\.7 MSF not made at the required run speed at 10% downtime, 675 ft\/min \(5\.4 MSF a minute\) × \$1,200\/hr = \$214/);
  assert.match(ledger,/At standard \$6,998 inside the bands this shift: the cost of the order mix and the process, shown apart, not in the total/);
- assert.match(ledger,/Total = \$502 above standard this shift · \$718,045\/yr at this period's rate \(4-4-5 P2 to date, all shifts: period-to-date dollars per production day × 257\.14 production days a year\) · contribution: margin not set/);
+ assert.match(ledger,/Total = \$502 above standard this shift · \$718,045\/yr at this period's rate \(4-4-5 P2 to date through Mon 14 Sep, all shifts: period-to-date dollars per production day × 257\.14 production days a year\) · contribution: margin not set/);
  assert.match(ledger,/Rates: paper \$55\/MSF \(post\), machine time \$1,200\/hr \(post\), contribution margin not set \(assumption: owner to set\)/);
  assert.match(ledger,/they are not a real plant's figures/);
  // tiles: every tile that measures a loss shows its dollars, never a year (issue #164); in dollars its value is the dollars
@@ -1364,10 +1389,12 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(location.search,'?measure=overview&rates=hour:1500');assert.equal(history.slice(history2).every(h=>h[0]==='replace'),true);
  const rates=Money.effective(cfg,{machine_usd_hour:1500}), moneyNow=Money.reprice('get_shift_dollars',golden.input,rates,cfg);
  const open=els.messages.children.find(e=>/^message\b/.test(e.className)), line2=open.children.find(e=>e.className==='dollar-line');
- assert.equal(textOf(line2.children[0]),`≈ ${Money.money(moneyNow.total_usd)} above standard this shift · ${Money.short(moneyNow.ptd_usd_per_year)}/yr at this period's rate (${moneyNow.ptd_label}, all shifts) · ${Money.money(moneyNow.all_in_usd)} all recorded, ${Money.money(moneyNow.at_standard_usd)} of it at standard`);
+ assert.equal(textOf(line2.children[0]),`≈ ${Money.money(S(moneyNow,'total_usd'))} above standard this shift · ${Money.short(moneyNow.ptd_usd_per_year)}/yr at this period's rate (${moneyNow.ptd_label}, all shifts) · ${Money.money(S(moneyNow,'all_in_usd'))} all recorded, ${Money.money(S(moneyNow,'at_standard_usd'))} of it at standard`);
  assert.notEqual(moneyNow.ptd_usd_per_year,g.ptd_usd_per_year,'the period to date re-priced at the new rate');
- assert.ok(all(els.ledger).includes('× $1,500/hr = '+Money.money(moneyNow.total_machine_time_usd)));
- assert.match(all(els.ledger),/= \$289$/m,'the paper dollars do not use the machine rate: unchanged');
+ assert.ok(all(els.ledger).includes('× $1,500/hr = '+Money.money(S(moneyNow,'total_machine_time_usd'))));
+ assert.equal(moneyNow.total_paper_usd,g.total_paper_usd,'the paper dollars do not use the machine rate: unchanged');
+ assert.ok(all(els.ledger).split('\n').some(l=>l===`${Money.money(S(moneyNow,'total_paper_usd'))}`),'and print as their whole-dollar share of the total (PR #168)');
+ addsUp(line2,els.ledger,'the shift card at $1,500/hr');
  assert.match(all(els.ledger),/machine time \$1,500\/hr \(yours\)/);
  assert.deepEqual(els['rates-list'].children.map(textOf).slice(2,4),['Machine','$1,500/hryours']);
  { const row=whySlow.trace[1].data.rows[0], now=Money.price('downtime',row.price_terms.quantity,rates,row.price_terms.gross_sqft,row.price_terms.minutes,cfg);
@@ -1404,7 +1431,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const m40=Money.reprice('get_shift_dollars',golden.input,Money.effective(cfg,{margin_usd_msf:40,trim_target_pct:3.1}),cfg);
  const lineNow=()=>textOf(els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line').children[0]);
  assert.ok(lineNow().endsWith('contribution '+Money.money(m40.total_contribution_usd)+' at $40/MSF, not added'),lineNow());
- assert.ok(all(els.money).includes('Side trim over the 3.1% target: '+Money.money(m40.rows.find(r=>r.key==='trim'&&!r.apart).usd)),'the trim lever names the target in force, and its dollars at it');
+ assert.ok(all(els.money).includes('Side trim over the 3.1% target: '+Money.money(S(m40.rows.find(r=>r.key==='trim'&&!r.apart)))),'the trim lever names the target in force, and its dollars at it');
  assert.equal(m40.rows.find(r=>r.key==='trim'&&!r.apart).usd,0,'the shift\'s 3.05% is inside a 3.1% target: $0 above standard (over the owner\'s 3%, above)');
  els['rates-reset'].events.click(); assert.ok(!/contribution/.test(lineNow()),lineNow());
 
@@ -1418,24 +1445,26 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  assert.equal(fetched.length,before3,'an answer with its own get_day_dollars asks for no money answer');
  const three=els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
  assert.match(textOf(three.children[0]),/^Shift 2: data incomplete, not counted in these dollars/);
- assert.deepEqual(textOf(three.children[1]).split(' · ').slice(0,2),[`≈ ${Money.money(dayTotal.total_usd)} above standard this day`,`${Money.short(dayTotal.ptd_usd_per_year)}/yr at this period's rate (${dayTotal.ptd_label}, all shifts)`]);
- assert.deepEqual(three.children[2].children.map(c=>textOf(c)),dayTotal.buckets.filter(b=>Money.money(b.usd)!=='$0').map(b=>`${b.bucket} ${Money.money(b.usd)}`),'the chips are the server\'s buckets');
+ assert.deepEqual(textOf(three.children[1]).split(' · ').slice(0,2),[`≈ ${Money.money(S(dayTotal,'total_usd'))} above standard this day`,`${Money.short(dayTotal.ptd_usd_per_year)}/yr at this period's rate (${dayTotal.ptd_label}, all shifts)`]);
+ assert.deepEqual(three.children[2].children.map(c=>textOf(c)),dayTotal.buckets.filter(b=>Money.money(S(b))!=='$0').map(b=>`${b.bucket} ${Money.money(S(b))}`),'the chips are the server\'s buckets');
  assert.match(textOf(els.money.children[0].children[0]),/^Where the money went · Shifts 1 and 3 · /);
  const ledger3=all(els.ledger);
  assert.match(ledger3,/Shift 2: data incomplete, not counted/);
  assert.ok(ledger3.includes(`${Money.fmt(dayTotal.area_sqft,0)} sq ft of side trim, shear and dry end above their targets = ${Money.fmt(dayTotal.area_msf,1)} MSF`),ledger3);
  assert.ok(ledger3.includes(`${Money.fmt(dayTotal.machine_minutes,1)} min (downtime over its bands ${Money.fmt(dayTotal.stop_minutes,1)} · speed under the grade baseline ${Money.fmt(dayTotal.speed_minutes,1)} · waste run time ${Money.fmt(dayTotal.waste_run_minutes,1)}) = ${Money.fmt(dayTotal.msf_not_made,1)} MSF not made`),ledger3);
- assert.ok(ledger3.includes(`At standard ${Money.money(dayTotal.at_standard_usd)} inside the bands this day`),ledger3);
+ assert.ok(ledger3.includes(`At standard ${Money.money(S(dayTotal,'at_standard_usd'))} inside the bands this day`),ledger3);
  // each counted shift's own dollars are its get_shift_dollars step, and they add to the day's (issue #164), re-priced with the day at a rate edit
  const shiftStep=n=>threeAnswer.trace.find(e=>e.tool==='get_shift_dollars'&&e.data.shift===n).data;
- assert.ok(ledger3.includes(`(shift 1 ${Money.money(shiftStep(1).total_usd)} + shift 3 ${Money.money(shiftStep(3).total_usd)})`),ledger3);
+ assert.ok(ledger3.includes(`(shift 1 ${Money.money(S(shiftStep(1),'total_usd'))} + shift 3 ${Money.money(S(shiftStep(3),'total_usd'))})`),ledger3);
  assert.ok(Math.abs(shiftStep(1).total_usd+shiftStep(3).total_usd-dayTotal.total_usd)<=0.02,'the shifts add to the day');
+ assert.equal(S(shiftStep(1),'total_usd')+S(shiftStep(3),'total_usd'),S(dayTotal,'total_usd'),'and their printed whole dollars add to the day\'s printed figure (PR #168)');
  els['rates-change'].events.click(); { const pf=els['rates-fields'].children.map(f=>f.children[1]); pf[0].value='60'; pf[0].events.input(); }
- const at60=Money.effective(cfg,{paper_usd_msf:60}), usd60=n=>Money.money(Money.reprice('get_shift_dollars',shiftStep(n),at60,cfg).total_usd);
+ const at60=Money.effective(cfg,{paper_usd_msf:60}), usd60=n=>Money.money(S(Money.reprice('get_shift_dollars',shiftStep(n),at60,cfg),'total_usd'));
  const ledger60=all(els.ledger), day60=Money.reprice('get_day_dollars',dayTotal,at60,cfg);
  assert.ok(ledger60.includes(`(shift 1 ${usd60(1)} + shift 3 ${usd60(3)})`),ledger60);
- assert.notEqual(usd60(1),Money.money(shiftStep(1).total_usd));
- assert.ok(ledger60.includes(`= ${Money.money(day60.total_usd)} above standard this day (shift 1 ${usd60(1)} + shift 3 ${usd60(3)}) · ${Money.money(day60.ptd_usd_per_year)}/yr at this period's rate`),ledger60);
+ assert.notEqual(usd60(1),Money.money(S(shiftStep(1),'total_usd')));
+ assert.ok(ledger60.includes(`= ${Money.money(S(day60,'total_usd'))} above standard this day (shift 1 ${usd60(1)} + shift 3 ${usd60(3)}) · ${Money.money(day60.ptd_usd_per_year)}/yr at this period's rate`),ledger60);
+ assert.ok(addsUp(els.messages.children.filter(e=>/^message\b/.test(e.className)).map(e=>e.children.find(c=>c.className==='dollar-line')).filter(Boolean).pop(),els.ledger,'the day card at $60/MSF').shifts,'the day card adds its shifts');
  els['rates-reset'].events.click();
  // one shift on incomplete data: the dollars are shown as the observed records only
  const partial={...money,trace:[{...money.trace[0],data:asShift(2,{coverage:'partial',excluded_records:[{record_id:'X',error:'bad trim'}]})}]};
@@ -1446,18 +1475,19 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
  const week=JSON.parse(fs.readFileSync('tests/ui_fixtures/money_week.json','utf8')), levers=week.trace[0].data;
  vm.runInContext(`thread.push({id:++seq,question:'Where is the money?',title:'Where is the money?',scope:{day:'2026-09-14',period:'week',shift:2,scope:'shift'},answered:null,mode:'offline',report:false,corrupt:false,epoch:sessionEpoch,state:'done',t0:0,ms:5,result:${JSON.stringify(week)},url:${JSON.stringify(week.url)},revealed:true});openId=seq;renderCard();`,ctx);
  const wline=els.messages.children.find(e=>/^message\b/.test(e.className)).children.find(e=>e.className==='dollar-line');
- assert.equal(textOf(wline.children[0]),`≈ ${Money.money(levers.total_usd)} above standard this week · ${Money.short(levers.total_usd_per_year)}/yr at this period's rate · ${Money.money(levers.all_in_usd)} all recorded, ${Money.money(levers.at_standard_usd)} of it at standard`);
+ assert.equal(textOf(wline.children[0]),`≈ ${Money.money(S(levers,'total_usd'))} above standard this week · ${Money.short(levers.total_usd_per_year)}/yr at this period's rate · ${Money.money(S(levers,'all_in_usd'))} all recorded, ${Money.money(S(levers,'at_standard_usd'))} of it at standard`);
  assert.equal(els.charts.children.length,0,'the money tool\'s own chart is the panel');
+ addsUp(wline,els.ledger,'the week card');
  const wvals=walk(els.money.children[0]).filter(e=>/\bval\b/.test(e.class||'')).map(e=>e.textContent);
- assert.deepEqual(wvals.slice(0,2),levers.rows.slice(0,2).map(r=>`${Money.money(r.usd)} · ${Money.short(r.usd_per_year)}/yr`));   // the levers by this week's dollars, each with its period-to-date rate a year
+ assert.deepEqual(wvals.slice(0,2),levers.rows.slice(0,2).map(r=>`${Money.money(S(r))} · ${Money.short(r.usd_per_year)}/yr`));   // the levers by this week's dollars, each with its period-to-date rate a year
  // the owner's 3% trim target (issue #101): the shifts over it make the week's trim lever at the post's rates
  const atThree=levers.rows.find(r=>r.key==='trim'&&!r.apart);
- assert.ok(atThree.usd>0&&all(els.messages).includes(`Side trim over the 3% target: ${Money.money(atThree.usd)} · ${Money.money(atThree.usd_per_year)} a year at this period's rate`),'the trim lever in the prose names the target and its dollars');
+ assert.ok(atThree.usd>0&&all(els.messages).includes(`Side trim over the 3% target: ${Money.money(S(atThree))} · ${Money.money(atThree.usd_per_year)} a year at this period's rate`),'the trim lever in the prose names the target and its dollars');
  // the prose of the money answer re-prices with its levers re-ranked, as the server would write it at those rates
  els['rates-change'].events.click(); const wf=els['rates-fields'].children.map(f=>f.children[1]); wf[3].value='3.25'; wf[3].events.input();
  const lever=Money.reprice('get_opportunities',levers,Money.effective(cfg,{trim_target_pct:3.25}),cfg).rows.find(r=>r.key==='trim'&&!r.apart);
- assert.ok(lever.usd<atThree.usd&&all(els.money).includes('Side trim over the 3.25% target: '+Money.money(lever.usd)),'the panel\'s trim lever at the new target');   // the shifts over 3.25% (issue #100's records)
- assert.ok(all(els.messages).includes(`Side trim over the 3.25% target: ${Money.money(lever.usd)} · ${Money.money(lever.usd_per_year)} a year at this period's rate`),'the trim lever in the prose names the new target and its dollars');
+ assert.ok(lever.usd<atThree.usd&&all(els.money).includes('Side trim over the 3.25% target: '+Money.money(S(lever))),'the panel\'s trim lever at the new target');   // the shifts over 3.25% (issue #100's records)
+ assert.ok(all(els.messages).includes(`Side trim over the 3.25% target: ${Money.money(S(lever))} · ${Money.money(lever.usd_per_year)} a year at this period's rate`),'the trim lever in the prose names the new target and its dollars');
  els['rates-reset'].events.click();
 
  // issue #101: the two lenses on the month's levers (tests/ui_fixtures/money_<lens>.json, the server's answers). A rate
@@ -1472,6 +1502,7 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   els['rates-change'].events.click(); const lf=els['rates-fields'].children.map(f=>f.children[1]);
   for(const [i,v] of changes){ lf[i].value=v; lf[i].events.input(); }
   const now=Money.reprice('get_opportunities',data,Money.effective(cfg,over),cfg), rows=now.rows, prose=all(els.messages);
+  assert.equal(addsUp(els.messages.children.filter(e=>/^message\b/.test(e.className)).pop().children.find(c=>c.className==='dollar-line'),els.ledger,`the ${lens} lens at new rates`).owner,lens==='ownership');
   const allBars=walk(els.money.children[0]).find(e=>e.tag==='button'&&/^All \d+$/.test(e.textContent)); if(allBars)allBars.events.click();
   const bars=walk(els.money.children[0]).filter(e=>e.class==='lbl').map(e=>e.textContent), opens=(bar,lever)=>lever.startsWith(bar.replace(/…$/,''));
   if(lens==='supervisor'){
@@ -1479,15 +1510,15 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    const mine=rows.filter(r=>r.control==='controllable'&&!r.apart), rest=rows.filter(r=>!mine.includes(r));
    assert.deepEqual(rows,[...mine,...rest],'the controllable levers first, then the rest');
    assert.deepEqual(mine.map(r=>r.rank),mine.map((_,i)=>i+1)); assert.ok(rest.length&&rest.every(r=>r.rank===null),'nothing after them carries a rank');
-   assert.ok(mine.every((r,i)=>!i||mine[i-1].usd>=r.usd),'the controllable levers by dollars above standard');
+   assert.ok(mine.every((r,i)=>!i||S(mine[i-1])>=S(r)),'the controllable levers by dollars above standard');
    const pm=rest.find(r=>r.apart==='schedule-driven');
    assert.ok(pm&&pm.usd>mine[mine.length-1].usd,'planned maintenance larger than a ranked lever stays after it, apart: the lens, not the dollars');
    assert.equal(now.controllable_usd_per_year,Money.round(mine.reduce((s,r)=>s+r.usd_per_year,0),0));
-   assert.ok(prose.includes(`${Money.money(now.controllable_usd)} in controllable levers above standard across ${mine.length} levers`),'the headline at the new rates');
-   assert.ok(prose.includes(`1. ${mine[0].lever}: ${Money.money(mine[0].usd)} · ${Money.money(mine[0].usd_per_year)} a year at this period's rate`),'the first ranked lever at the new rates');
-   const at=mine.map(r=>prose.indexOf(`${r.rank}. ${r.lever}: ${Money.money(r.usd)} · ${Money.money(r.usd_per_year)} a year`));
+   assert.ok(prose.includes(`${Money.money(S(now,'controllable_usd'))} in controllable levers above standard across ${mine.length} levers`),'the headline at the new rates');
+   assert.ok(prose.includes(`1. ${mine[0].lever}: ${Money.money(S(mine[0]))} · ${Money.money(mine[0].usd_per_year)} a year at this period's rate`),'the first ranked lever at the new rates');
+   const at=mine.map(r=>prose.indexOf(`${r.rank}. ${r.lever}: ${Money.money(S(r))} · ${Money.money(r.usd_per_year)} a year`));
    assert.ok(at.every((x,i)=>x>=0&&(!i||at[i-1]<x)),'every controllable lever, numbered and in rank order, across the label');
-   for(const r of rest){ assert.ok(prose.includes(`${r.lever}: ${Money.money(r.usd)}`),r.lever); assert.ok(!new RegExp(`\\d+\\. ${r.lever.replace(/[()]/g,'\\$&')}`).test(prose),`${r.lever} is listed unranked`); }
+   for(const r of rest){ assert.ok(prose.includes(`${r.lever}: ${Money.money(S(r))}`),r.lever); assert.ok(!new RegExp(`\\d+\\. ${r.lever.replace(/[()]/g,'\\$&')}`).test(prose),`${r.lever} is listed unranked`); }
    assert.ok(bars.slice(-rest.length).every((bar,i)=>opens(bar,rest[i].lever)),'the panel puts the rest last, in the lens\'s order: '+bars.join(' | '));
    // every lever line links to its own lever's rows at these rates, wherever the re-ranking put it (#151 review): the
    // server's receipt for the line that sat in that place opens another lever's rows
@@ -1507,14 +1538,14 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
    // the rest by dollars, the dry-end kinds as one group (the tag scrap, the owner on PR #111) with no rank of their own
    const dry=rows.filter(r=>r.group==='dry_end'), first=rows.indexOf(dry[0]), sum=Money.round(dry.reduce((s,r)=>s+r.usd,0),2);
    assert.ok(dry.length===5&&rows.slice(first,first+5).every(r=>r.group==='dry_end')&&dry.every(r=>r.rank===null),'the dry-end kinds together, unranked');   // the taxonomy's five dry-end families (issue #100)
-   assert.ok(dry.every((r,i)=>!i||dry[i-1].usd>=r.usd),'the kinds by dollars beneath the subtotal');
+   assert.ok(dry.every((r,i)=>!i||S(dry[i-1])>=S(r)),'the kinds by dollars beneath the subtotal');
    assert.equal(now.dry_end_usd,sum); assert.equal(now.dry_end_rank,first+1);
    assert.equal(Money.round(now.dry_end_at_standard_usd+now.dry_end_above_standard_usd,2),now.dry_end_usd,'the subtotal split at its band (issue #164)');
-   const sizes=[...rows.slice(1,first).map(r=>r.usd),sum,...rows.slice(first+5).map(r=>r.usd)];
+   const sizes=[...rows.slice(1,first).map(r=>S(r)),S(now,'dry_end_usd'),...rows.slice(first+5).map(r=>S(r))];
    assert.ok(sizes.every((v,i)=>!i||sizes[i-1]>=v),'the groups by dollars: '+sizes.join(', '));
-   assert.ok(prose.includes(`Side trim costs ${Money.money(rows[0].usd)} in this window · ${Money.money(rows[0].at_standard_usd)} at standard and ${Money.money(rows[0].above_standard_usd)} above standard, the trim lever`),'the headline is side trim at the new rates, split at its band');
-   const sub=prose.indexOf(`${now.dry_end_rank}. Dry-end waste (tag scrap), the 5 kinds below: ${Money.money(sum)} · ${Money.money(now.dry_end_at_standard_usd)} at standard, ${Money.money(now.dry_end_above_standard_usd)} above standard`);
-   const kinds=dry.map(r=>prose.indexOf(`${r.lever}: ${Money.money(r.usd)} · ${Money.money(r.usd_per_year)} a year`));
+   assert.ok(prose.includes(`Side trim costs ${Money.money(S(rows[0]))} in this window · ${Money.money(S(rows[0],'at_standard_usd'))} at standard and ${Money.money(S(rows[0],'above_standard_usd'))} above standard, the trim lever`),'the headline is side trim at the new rates, split at its band');
+   const sub=prose.indexOf(`${now.dry_end_rank}. Dry-end waste (tag scrap), the 5 kinds below: ${Money.money(S(now,'dry_end_usd'))} · ${Money.money(S(now,'dry_end_at_standard_usd'))} at standard, ${Money.money(S(now,'dry_end_above_standard_usd'))} above standard`);
+   const kinds=dry.map(r=>prose.indexOf(`${r.lever}: ${Money.money(S(r))} · ${Money.money(r.usd_per_year)} a year`));
    assert.ok(sub>=0&&kinds.every((x,i)=>x>(i?kinds[i-1]:sub)),'the subtotal at the new rates, each kind beneath it in order');
    assert.ok(!/\d+\. Dry-end: /.test(prose),'the kinds are not numbered on their own');
    assert.ok(opens(bars[0],rows[0].lever),'the panel puts side trim first: '+bars.join(' | '));
@@ -1541,25 +1572,26 @@ issue63.then(async()=>{   // after #63: both drive the same stub elements
   const card=()=>els.messages.children.filter(e=>/^message\b/.test(e.className)).pop(), lineOf=()=>card().children.find(e=>e.className==='dollar-line');
   const pm=d.rows.find(r=>r.apart==='schedule-driven');
   assert.ok(pm&&pm.rank===null&&d.all_in_usd>d.total_usd,'planned maintenance apart, outside the total above standard');
-  assert.equal(textOf(lineOf().children[0]),`≈ ${Money.money(d.total_usd)} above standard this shift · ${Money.short(d.ptd_usd_per_year)}/yr at this period's rate (${d.ptd_label}, all shifts) · ${Money.money(d.all_in_usd)} all recorded, ${Money.money(d.at_standard_usd)} of it at standard`);
+  assert.equal(textOf(lineOf().children[0]),`≈ ${Money.money(S(d,'total_usd'))} above standard this shift · ${Money.short(d.ptd_usd_per_year)}/yr at this period's rate (${d.ptd_label}, all shifts) · ${Money.money(S(d,'all_in_usd'))} all recorded, ${Money.money(S(d,'at_standard_usd'))} of it at standard`);
   const bars=()=>walk(els.money.children[0]).filter(e=>e.class==='lbl').map(e=>e.textContent);
   const allBars=walk(els.money.children[0]).find(e=>e.tag==='button'&&/^All \d+$/.test(e.textContent)); if(allBars)allBars.events.click();
   const pmBar=bars().findIndex(b=>b.startsWith('Downtime: Planned')), leverBars=d.rows.filter(r=>!r.apart).map(r=>bars().findIndex(b=>r.lever.startsWith(b.replace(/…$/,''))));
   assert.ok(pmBar>Math.max(...leverBars),'the planned maintenance bar comes after every lever: '+bars().join(' | '));
   els['rates-change'].events.click(); const af=els['rates-fields'].children.map(f=>f.children[1]); af[1].value='5000'; af[1].events.input();
   const now=Money.reprice('get_shift_dollars',d,Money.effective(cfg,{machine_usd_hour:5000}),cfg), prose=all(els.messages);
+  addsUp(lineOf(),els.ledger,'the planned maintenance card at $5,000/hr');
   const pmNow=now.rows.find(r=>r.apart==='schedule-driven');
   assert.ok(pmNow.rank===null&&now.rows.slice(0,now.rows.indexOf(pmNow)).every(r=>!r.apart||r.apart==='at-standard'),'at $5,000/hr planned maintenance is still apart, after every lever');
   assert.ok(pmNow.usd>now.rows[0].usd,'it now outweighs the first lever, and still has no rank');
   assert.equal(now.total_usd,Money.round(now.rows.filter(r=>!r.apart).reduce((s,r)=>s+r.usd,0),2));
-  assert.ok(prose.includes(`${Money.money(now.total_usd)} above standard this shift · part of ${Money.money(now.ptd_usd)} above standard in ${d.ptd_label}, all shifts, ${d.ptd_days} production days · ${Money.money(now.ptd_usd_per_year)} a year at this period's rate`),'the headline at the new rates');
-  assert.ok(prose.includes(`Downtime: Planned maintenance (scheduled): ${Money.money(pmNow.usd)}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered, as its reason and its kind (owner ruling (c) on PR #123)');
-  assert.ok(prose.includes(`Everything recorded and priced: ${Money.money(now.all_in_usd)}`),'everything recorded at the new rates');
+  assert.ok(prose.includes(`${Money.money(S(now,'total_usd'))} above standard this shift · part of ${Money.money(S(now,'ptd_usd'))} above standard in ${d.ptd_label}, all shifts, ${d.ptd_days} production days · ${Money.money(now.ptd_usd_per_year)} a year at this period's rate`),'the headline at the new rates');
+  assert.ok(prose.includes(`Downtime: Planned maintenance (scheduled): ${Money.money(S(pmNow))}`)&&!/\d+\. Downtime: Planned maintenance/.test(prose),'listed apart, unnumbered, as its reason and its kind (owner ruling (c) on PR #123)');
+  assert.ok(prose.includes(`Everything recorded and priced: ${Money.money(S(now,'all_in_usd'))}`),'everything recorded at the new rates');
   // issue #135 on the ledger: side trim's lever stays ranked, tagged schedule-driven from its row's control (targets.json's trim
   // band lever); at $5,000/hr it is re-priced and keeps the tag on its line and on its bar, and still counts in the total
   const trimNow=now.rows.find(r=>r.key==='trim'&&!r.apart);
   assert.ok(trimNow.control==='schedule-driven'&&typeof trimNow.rank==='number','side trim keeps its control and its rank');
-  assert.ok(prose.includes(`${trimNow.rank}. ${trimNow.lever}: ${Money.money(trimNow.usd)} · ${trimNow.records} · schedule-driven · owner role: `),'the ranked trim line keeps the tag at the new rates');
+  assert.ok(prose.includes(`${trimNow.rank}. ${trimNow.lever}: ${Money.money(S(trimNow))} · ${trimNow.records} · schedule-driven · owner role: `),'the ranked trim line keeps the tag at the new rates');
   const q=apart.trace.findIndex(e=>e.tool==='get_shift_dollars'), lines=Money.repriceSections(apart.sections,apart.trace.map((e,i)=>i===q?{tool:e.tool,before:d,after:now}:null),Money.effective(cfg,{machine_usd_hour:5000}),cfg);
   assert.deepEqual(lines.filter(l=>/ · schedule-driven · owner role: /.test(l)).map(l=>l.slice(0,l.indexOf(':'))),[`- ${trimNow.rank}. Side trim over the 3% target`],'only the trim line is tagged, ranked: '+lines.join(' | '));
   const trimBar=walk(els.money.children[0]).find(e=>/\bval\b/.test(e.class||'')&&/^Side trim over the 3% target: /.test(e['aria-label']||''));

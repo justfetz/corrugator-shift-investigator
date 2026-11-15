@@ -356,8 +356,18 @@ def window_tile_values(plain, span, shift, rates_text=None):
         reasons[st.reason] += st.duration_sec / 60
     stops = tile_parts_sum([("downtime", round(m, 2), gross, minutes, 0) for m in reasons.values()], rates)   # whole seconds / 60 never ties at 0.005
     values["tile_money:metric=downtime_pct"] = {**stops, "metrics": exact(["downtime_pct", "downtime_minutes", "stops"])}   # one entry, three tiles
-    values["tile_money:metric=maintenance_pm_pct"] = one("downtime", round(t["maintenance_pm_seconds"] / 60, 2))
-    values["tile_money:metric=operator_pct"] = one("downtime", round(t["operator_seconds"] / 60, 2))
+    # the operator and maintenance tiles are the money ledger's (the review of PR #168, item 9): each shift's minutes rounded as
+    # the ledger rounds them, and the ledger's printed whole dollars, the lever's line and its line at standard added up
+    s = ledger_of(cells_in(plain, *span, shift), rates[3])
+    w = whole_by_hand(cells_in(plain, *span), [shift] if shift else [1, 2, 3], rates)
+    values["tile_money:metric=maintenance_pm_pct"] = tile_parts_sum([("downtime", s["all"]["maintenance"], gross, minutes, 0),
+                                                                     ("downtime", s["minutes"]["planned"], gross, minutes, 0)], rates)
+    values["tile_money:metric=operator_pct"] = one("downtime", s["all"]["operator"])
+    for key, entry in values.items():   # every other tile prints its own nearest dollar
+        if entry["usd"][0] is not None:
+            entry["usd_shown"] = exact(nearest_whole(int(round(round(entry["usd"][0], 2) * 100))))
+    tile_shown(values, "tile_money:metric=operator_pct", w, [("levers", "operator"), ("at", "operator")])
+    tile_shown(values, "tile_money:metric=maintenance_pm_pct", w, [("levers", "maintenance"), ("at", "maintenance"), ("apart", "scheduled")])
     return values
 
 
@@ -886,7 +896,9 @@ def cell_of(plain, day, shift, setups):
             gap = max(0.0, base[grade] * minutes - feet)
             short += gap / base[grade]
             under += gap > 0
+    flag = _BANDS["trim"]["flag"]   # the owner's per-setup trim flag, 3.25% (targets.json)
     c = {"day": day, "shift": shift, "setups": len(setups),
+         "flag_setups": sum(1 for s in setups if s.total_produced_sqft and s.trim_sqft / s.total_produced_sqft * 100 > flag),
          "gross": round(sum(s.total_produced_sqft for s in setups), 1), "trim": round(sum(s.trim_sqft for s in setups), 1),
          "shear": round(sum(s.chop_sqft for s in setups), 1), "dry_end": round(sum(dry_end(s) for s in setups), 1),
          **{k: round(fam[k], 1) for k in FAMILIES},
@@ -957,9 +969,104 @@ def ptd_of(plain, through, shift, rates):
         priced = money(LEVER_KIND[k], s["over"][k], None, None, rates)
         usd = round(priced["usd"][0], 2)
         margin = None if priced["contribution_usd"][0] is None else round(priced["contribution_usd"][0], 2)
-        out[k] = (usd, round(usd / s["days"] * DAYS_A_YEAR) if s["days"] else None,
-                  None if margin is None or not s["days"] else round(margin / s["days"] * DAYS_A_YEAR))
+        enough = s["days"] >= MIN_RATE_DAYS   # fewer production days state no yearly figure (the coordinator's default, PR #168)
+        out[k] = (usd, round(usd / s["days"] * DAYS_A_YEAR) if enough else None,
+                  None if margin is None or not enough else round(margin / s["days"] * DAYS_A_YEAR))
     return s, out
+
+
+# ---------------------------------------------------------------- whole dollars that add up (PR #168), by hand
+# A card prints whole dollars whose parts add to its figures: the root (the window's every shift; a day's complete shifts)
+# at its nearest dollar, a tie to even; each shift its share by the largest remainder (its floor, then a dollar each to the
+# largest remainders, a tie to the earlier shift); within a shift its levers share its whole dollars the same way, the cost at
+# standard and each row apart are roots of their own; a card's line for several shifts is its shifts' whole dollars added.
+MIN_RATE_DAYS = 5
+
+
+def cents_of(kind, qty, rates):
+    """A priced quantity's dollars as the tool keeps them, two places, in integer cents."""
+    return int(round(round(money(kind, qty, None, None, rates)["usd"][0], 2) * 100))
+
+
+def nearest_whole(c):
+    whole, rest = c // 100, c % 100
+    return whole + (rest > 50 or (rest == 50 and whole % 2 == 1))
+
+
+def share_out(parts, target):
+    """Whole dollars of `parts` (cents) adding to `target`: floors, then a dollar to each largest remainder in turn."""
+    out = [p // 100 for p in parts]
+    by_rest = sorted((i for i, p in enumerate(parts) if p % 100), key=lambda i: (-(parts[i] % 100), i))
+    for i in by_rest[:max(0, target - sum(out))]:
+        out[i] += 1
+    assert sum(out) == target, (parts, target)   # the golden window never needs the tool's overflow rule
+    return out
+
+
+APART_HAND = (("scheduled", "downtime", "planned"), ("external", "downtime", "external"), ("changeover", "waste", "changeover"),
+              ("boards", "waste", "boards"))
+
+
+def priced_cents(cells, rates):
+    s = ledger_of(cells, rates[3])
+    over = {k: cents_of(LEVER_KIND[k], s["over"][k], rates) for k in LEVERS}
+    return {"levers": [over[k] for k in LEVERS],
+            "at": [cents_of(LEVER_KIND[k], s["all"][k], rates) - over[k] for k in BANDED],
+            "apart": [cents_of(kind, (s["minutes"] if kind == "downtime" else s["lines"])[q], rates) for _, kind, q in APART_HAND],
+            "boards": [cents_of("waste", s["lines"][k], rates) for k in ("cutoff_waste", "stacker_waste")]}
+
+
+def whole_by_hand(root, scope, rates):
+    """The whole dollars a card prints, by hand: `root` the cells it shares from, `scope` the shifts it states."""
+    by = defaultdict(list)
+    for c in root:
+        by[c["shift"]].append(c)
+    order = sorted(by)
+    whole, parts = priced_cents(root, rates), [priced_cents(by[sh], rates) for sh in order]
+    totals = share_out([sum(p["levers"]) for p in parts], nearest_whole(sum(whole["levers"])))
+    at_totals = share_out([sum(p["at"]) for p in parts], nearest_whole(sum(whole["at"])))
+    apart = [share_out([p["apart"][j] for p in parts], nearest_whole(whole["apart"][j])) for j in range(len(APART_HAND))]
+    each = {}
+    for i, sh in enumerate(order):
+        if sh in scope:
+            boards = share_out(parts[i]["boards"], apart[3][i])
+            each[sh] = {"total": totals[i], "levers": dict(zip(LEVERS, share_out(parts[i]["levers"], totals[i]))),
+                        "at": dict(zip(BANDED, share_out(parts[i]["at"], at_totals[i]))), "at_total": at_totals[i],
+                        "apart": {k: apart[j][i] for j, (k, _, _) in enumerate(APART_HAND)},
+                        "boards": {"cutoff_waste": boards[0], "stacker_waste": boards[1]}}
+    add = lambda f: sum(f(e) for e in each.values())
+    out = {"shifts": each, "total": add(lambda e: e["total"]), "at_total": add(lambda e: e["at_total"]),
+           "levers": {k: add(lambda e: e["levers"][k]) for k in LEVERS}, "at": {k: add(lambda e: e["at"][k]) for k in BANDED},
+           "apart": {k: add(lambda e: e["apart"][k]) for k, _, _ in APART_HAND},
+           "boards": {k: add(lambda e: e["boards"][k]) for k in ("cutoff_waste", "stacker_waste")}}
+    out["all_in"] = out["total"] + out["at_total"] + sum(out["apart"].values())
+    return out
+
+
+def split_whole(paper, machine, target):
+    """Paper and machine time (each to the cent) as whole dollars that add to the card's figure."""
+    return share_out([int(round(paper * 100)), int(round(machine * 100))], target)
+
+
+def whole_values(values, totals, w, rates, lever_usd):
+    """A ledger's printed whole dollars into its expectations: each row's, the chips', the card's figure, its cost at
+    standard, everything recorded and priced, and paper and machine time split to add up to its figure."""
+    target = rates[3]
+    for k in LEVERS:
+        values[f"rows:lever={lever_label(k, target)}"]["usd_shown"] = exact(w["levers"][k])
+        values[f"buckets:bucket={BUCKET[k]}"]["usd_shown"] = exact(w["levers"][k])
+    for k in BANDED:
+        if f"rows:lever={at_label(k, target)}" in values:
+            values[f"rows:lever={at_label(k, target)}"]["usd_shown"] = exact(w["at"][k])
+    for (key, _, _), label in zip(APART_HAND, ("Downtime: Planned maintenance (scheduled)", f"Downtime: {' / '.join(sorted(EXTERNAL_REASONS))} (external)",
+                                               "Changeover rejects (counted with shear)", "Cutoff-knife and stacker waste boards")):
+        if f"rows:lever={label}" in values:
+            values[f"rows:lever={label}"]["usd_shown"] = exact(w["apart"][key])
+    paper = round(sum(round(u[0], 2) for u in lever_usd["paper"]), 2)
+    machine = round(sum(round(u[0], 2) for u in lever_usd["machine"]), 2)
+    totals.update({"total_usd_shown": exact(w["total"]), "at_standard_usd_shown": exact(w["at_total"]), "all_in_usd_shown": exact(w["all_in"])})
+    totals["total_paper_usd_shown"], totals["total_machine_time_usd_shown"] = (exact(v) for v in split_whole(paper, machine, w["total"]))
+    return values, totals
 
 
 def lever_label(key, target):
@@ -978,9 +1085,10 @@ def at_label(key, target):
             "maintenance": f"Maintenance downtime within its {t:g}% band"}[key]
 
 
-def ledger_values(s, rates, ptd=None, lens="all"):
+def ledger_values(s, rates, ptd=None, lens="all", w=None):
     """A ledger's expected rows and totals: each lever above its band, its rank, each band's cost at standard (all recorded
-    less above standard), planned maintenance, external stops and the waste no band covers, each priced on the window."""
+    less above standard), planned maintenance, external stops and the waste no band covers, each priced on the window; with
+    `w` (whole_by_hand) the whole dollars each prints, the levers ranked by them, then by their cents (PR #168)."""
     target = rates[3]
     gross, minutes = s["gross"], s["scheduled"]
     q = lambda k: 0.01 if k in MINUTE_LEVERS else 0.1
@@ -995,11 +1103,13 @@ def ledger_values(s, rates, ptd=None, lens="all"):
             e["contribution_usd_per_year"] = [ptd[k][2], 1.01] if ptd[k][2] is not None else exact(None)
         levers[lever_label(k, target)] = (k, e)
     # ranked by dollars (the supervisor lens: the controllable ones only), a tie by name
-    ranked = sorted((n for n, (k, e) in levers.items() if lens != "supervisor" or k != "trim"), key=lambda n: (-round(levers[n][1]["usd"][0], 2), n))
+    shown = lambda n: w["levers"][levers[n][0]] if w else 0
+    ranked = sorted((n for n, (k, e) in levers.items() if lens != "supervisor" or k != "trim"),
+                    key=lambda n: (-shown(n), -round(levers[n][1]["usd"][0], 2), n))
     for n, (k, e) in levers.items():
         e["rank"] = exact(ranked.index(n) + 1 if n in ranked else None)
         values[f"rows:lever={n}"] = e
-    values["#0"] = {"lever": exact(ranked[0])}
+    values["#0"] = {"lever": exact(ranked[0]), "rank": exact(1)}
     apart = {}
     for k in BANDED:
         if s["all"][k]:
@@ -1010,7 +1120,8 @@ def ledger_values(s, rates, ptd=None, lens="all"):
     for label, qty, kind in (("Downtime: Planned maintenance (scheduled)", s["minutes"]["planned"], "schedule-driven"),
                              (f"Downtime: {' / '.join(sorted(EXTERNAL_REASONS))} (external)", s["minutes"]["external"], "external")):
         if qty:
-            apart[label] = (kind, {**money("downtime", qty, gross, minutes, rates, 0.01), "apart": exact(kind), "rank": exact(None)})
+            apart[label] = (kind, {**money("downtime", qty, gross, minutes, rates, 0.01), "apart": exact(kind), "rank": exact(None),
+                                   "control": exact(kind)})   # planned maintenance schedule-driven, an outage external
     for label, qty in (("Changeover rejects (counted with shear)", s["lines"]["changeover"]), ("Cutoff-knife and stacker waste boards", s["lines"]["boards"])):
         if qty:
             apart[label] = ("no-band", {**money("waste", qty, gross, minutes, rates, 0.1), "apart": exact("no-band"), "rank": exact(None)})
@@ -1023,14 +1134,25 @@ def ledger_values(s, rates, ptd=None, lens="all"):
     for k, e in levers.values():
         buckets[BUCKET[k]].append(round(e["usd"][0], 2))
     for b, usd in buckets.items():
-        values[f"buckets:bucket={b}"] = {"usd": [round(sum(usd), 6), 0.011 * len(usd)]}
+        # a chip's yearly figure is its lever's at the period's rate on a window, none on a shift's or a day's card (call 3;
+        # restored on PR #168's review: the tool still states it, null on a card)
+        year = [ptd[k][1] for k, b2 in BUCKET.items() if b2 == b] if ptd is not None else [None]
+        values[f"buckets:bucket={b}"] = {"usd": [round(sum(usd), 6), 0.011 * len(usd)],
+                                         "usd_per_year": exact(None) if None in year else [sum(year), 1.01 * len(year)]}
+    # the first chip, the most dollars (a tie by name), restored on PR #168's review: the ledger's lever buckets now
+    values["buckets:#0"] = {"bucket": exact(min(buckets, key=lambda b: (-round(sum(buckets[b]), 2), b)))}
     totals = {"total_usd": [round(sum(lever_usd), 6), 0.011 * n], "levers": exact(n), "apart_gaps": exact(len(apart)),
               "at_standard_usd": [round(sum(at_usd), 6), 0.021 * max(1, len(at_usd))],
               "all_in_usd": [round(sum(lever_usd) + sum(e["usd"][0] for _, e in apart.values()), 6), 0.021 * (n + len(apart))],
               "total_contribution_usd": exact(None) if rates[2] is None else [round(sum(e["contribution_usd"][0] for _, e in levers.values()), 6), 0.011 * n],
               "contribution_status": exact("margin not set" if rates[2] is None else "set"),
               "area_sqft": num(sum(s["over"][k] for k in ("trim", "shear", "dry_end")), 1),
+              "area_msf": num(sum(s["over"][k] for k in ("trim", "shear", "dry_end")) / 1000, 3),
               "stop_minutes": [round(s["over"]["operator"] + s["over"]["maintenance"], 6), 0.011], "speed_minutes": num(s["over"]["speed"], 2),
+              # the arithmetic's run time of waste and machine minutes, and the MSF not made (restored on PR #168's review)
+              "waste_run_minutes": [round(sum(s["over"][k] / 1000 / MSF_PER_MIN for k in ("shear", "dry_end")), 6), 0.011],
+              "machine_minutes": [round(sum(s["over"][k] for k in MINUTE_LEVERS) + sum(s["over"][k] / 1000 / MSF_PER_MIN for k in ("shear", "dry_end")), 6), 0.021],
+              "msf_not_made": [round(sum(s["over"][k] for k in MINUTE_LEVERS) * MSF_PER_MIN + sum(s["over"][k] / 1000 for k in ("shear", "dry_end")), 6), 0.0011 * n],
               "gross_sqft": num(gross, 1), "scheduled_minutes": num(minutes, 2)}
     if ptd is not None:
         years = [ptd[k][1] for k in LEVERS]
@@ -1040,6 +1162,11 @@ def ledger_values(s, rates, ptd=None, lens="all"):
         mine = [n_ for n_ in ranked]
         totals["controllable_levers"] = exact(len(mine))
         totals["controllable_usd"] = [round(sum(round(levers[x][1]["usd"][0], 2) for x in mine), 6), 0.011 * len(mine)]
+    if w is not None:   # the whole dollars it prints (PR #168), each lever's paper and machine time for the arithmetic's split
+        whole_values(values, totals, w, rates, {"paper": [e["paper_usd"] for _, e in levers.values() if e["paper_usd"][0] is not None],
+                                                "machine": [e["machine_time_usd"] for _, e in levers.values()]})
+        if lens == "supervisor":
+            totals["controllable_usd_shown"] = exact(sum(w["levers"][levers[x][0]] for x in ranked))
     return values, totals, len(levers) + len(apart)
 
 
@@ -1049,7 +1176,32 @@ def ptd_values(plain, through, rates):
     usd = [ptd[k][0] for k in LEVERS]
     years = [ptd[k][1] for k in LEVERS]
     return {"ptd_days": exact(s["days"]), "ptd_usd": [round(sum(usd), 6), 0.011 * len(usd)],
+            "ptd_usd_shown": exact(ptd_shown(plain, through, None, rates)),
             "ptd_usd_per_year": exact(None) if None in years else [sum(years), 1.01 * len(years)], "ptd_scope": exact("all shifts")}
+
+
+def ptd_shown(plain, through, shift, rates):
+    """The period to date's printed whole dollars: every shift at its nearest dollar, a shift its share (PR #168)."""
+    return whole_by_hand(cells_in(plain, *ptd_span(plain, through)), [shift] if shift else [1, 2, 3], rates)["total"]
+
+
+def tile_shown(values, key, w, parts):
+    """A tile's printed whole dollars: the ledger's lines it is, added up (cost_model.SHOWN_OF)."""
+    values[key]["usd_shown"] = exact(sum(w[group][k] for group, k in parts))
+
+
+def trim_by_shift_values(values, cells, w, rates, owner=False):
+    """Side trim by shift (the owner's word on PR #168), by hand: each stated shift's dollars (above the target, or under the
+    ownership lens all recorded) as the card adds them up, its side trim % of gross, its setups and those above the flag."""
+    if len(w["shifts"]) < 2:
+        return
+    for sh, e in w["shifts"].items():
+        mine = [c for c in cells if c["shift"] == sh]
+        s = ledger_of(mine, rates[3])
+        values[f"details:shift={sh}"] = {"usd_shown": exact(e["levers"]["trim"] + (e["at"]["trim"] if owner else 0)),
+                                         "trim_pct_of_gross": num(s["lines"]["trim"] / s["gross"] * 100, 2),
+                                         "setups": exact(sum(c["setups"] for c in mine)), "setups_above_trim_flag": exact(sum(c["flag_setups"] for c in mine)),
+                                         "shifts_over": exact(s["over_cells"]["trim"]), "part": exact("all" if owner else "above")}
 
 
 def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
@@ -1060,12 +1212,17 @@ def shift_dollars_case(plain, id, day, shift, rates_text=None, note=""):
     moment = date.fromisoformat(day)
     c = cells_in(plain, moment, moment, shift)
     s = ledger_of(c, rates[3])
-    values, totals, rows = ledger_values(s, rates)
+    w = whole_by_hand(cells_in(plain, moment, moment), [shift], rates)   # its share of the day's whole dollars (PR #168)
+    values, totals, rows = ledger_values(s, rates, w=w)
     cell = c[0]
     tiles = {"observed_shift_fpm": [("speed", s["over"]["speed"])], "maintenance_pct": [("downtime", cell["maintenance"])],
              "operator_pct": [("downtime", cell["operator"])], "trim_pct": [("trim", cell["trim"])],
              "dry_end_pct": [("waste", cell[k]) for k in FAMILIES]}
     values.update({f"tile_money:metric={k}": tile_parts_sum([(kind, q, cell["gross"], cell["scheduled"], 0) for kind, q in v], rates) for k, v in tiles.items()})
+    for metric, parts in (("observed_shift_fpm", [("levers", "speed")]), ("maintenance_pct", [("levers", "maintenance"), ("at", "maintenance")]),
+                          ("operator_pct", [("levers", "operator"), ("at", "operator")]), ("trim_pct", [("levers", "trim"), ("at", "trim")]),
+                          ("dry_end_pct", [("levers", "dry_end"), ("at", "dry_end")])):
+        tile_shown(values, f"tile_money:metric={metric}", w, parts)
     values["$"] = {**totals, **ptd_values(plain, moment, rates), "total_usd_per_year": exact(None), "required_fpm": exact(675)}
     return case(id, "get_shift_dollars", {"shift": shift}, {"coverage": "complete", "row_count": rows, "values": values},
                 day=day, note=note, rates=rates_text)
@@ -1081,9 +1238,13 @@ def day_dollars_case(plain, id, day, rates_text=None, shifts=(1, 2, 3), corrupt=
     counted = [n for n in shifts if n not in bad]
     cells = [cell_of(plain, moment, n, plain.between("dry_end_setups", moment, moment, n)) for n in counted]
     s = ledger_of(cells, rates[3])
-    values, totals, rows = ledger_values(s, rates)
+    root = [cell_of(plain, moment, n, plain.between("dry_end_setups", moment, moment, n)) for n in (1, 2, 3) if n not in bad]
+    w = whole_by_hand(root, counted, rates)   # the day's complete shifts share its whole dollars (PR #168)
+    values, totals, rows = ledger_values(s, rates, w=w)
     for shift in shifts:   # each shift named with its coverage; its own total is its get_shift_dollars step
-        values[f"shifts:shift={shift}"] = {"coverage": exact("incomplete" if shift in bad else "complete")}
+        values[f"shifts:shift={shift}"] = {"coverage": exact("incomplete" if shift in bad else "complete"),
+                                           **({"usd_shown": exact(w["shifts"][shift]["total"])} if shift in w["shifts"] else {})}
+    trim_by_shift_values(values, cells, w, rates)
     values["$"] = {**totals, **ptd_values(plain, moment, rates), "shift": exact(None), "excluded_shifts": exact(sorted(bad)),
                    "total_usd_per_year": exact(None)}
     expect = {"coverage": "complete", "row_count": rows, "values": values}
@@ -1125,9 +1286,13 @@ def opportunities_case(plain, id, period, anchor, shift=None, rates_text=None, *
     span = window(period, anchor)
     s = ledger_of(cells_in(plain, *span, shift), rates[3])
     ptd_s, ptd = ptd_of(plain, min(span[1], max(plain.days)), shift, rates)
-    values, totals, rows = ledger_values(s, rates, ptd, lens or "all")
+    every = cells_in(plain, *span)
+    w = whole_by_hand(every, [shift] if shift else [1, 2, 3], rates)   # the window's every shift shares its whole dollars (PR #168)
+    values, totals, rows = ledger_values(s, rates, ptd, lens or "all", w=w)
+    trim_by_shift_values(values, every, w, rates)
     usd = [ptd[k][0] for k in LEVERS]
     values["$"] = {**totals, "ptd_days": exact(ptd_s["days"]), "ptd_usd": [round(sum(usd), 6), 0.011 * len(usd)],
+                   "ptd_usd_shown": exact(ptd_shown(plain, min(span[1], max(plain.days)), shift, rates)),
                    "ptd_scope": exact(f"shift {shift}" if shift else "all shifts")}
     if lens == "supervisor":
         mine = [k for k in LEVERS if k != "trim"]
@@ -1161,7 +1326,8 @@ def ownership_total_case(plain, id, period, anchor, shift=None, *, day="2026-09-
     lens = ownership_case(plain, id, period, anchor, shift, day=day)["expect"]["values"]["$"]
     if abs(lens["total_usd"][0] - usd) > 0.05:
         raise AssertionError(f"{id}: the ownership lines add to {lens['total_usd'][0]}, the waste breakdown's lines to {usd}")
-    values = {"$": {"total_usd": [round(usd, 6), round(usd_tol, 6)], "above_standard_usd": lens["above_standard_usd"]}}
+    values = {"$": {"total_usd": [round(usd, 6), round(usd_tol, 6)], "above_standard_usd": lens["above_standard_usd"],
+                    "total_usd_per_year": lens["total_usd_per_year"]}}   # its lines' yearly figures added (restored on PR #168's review)
     return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift, "lens": "ownership"},
                 {"coverage": plain.coverage(*span), "values": values}, day=day, note=note)
 
@@ -1195,13 +1361,31 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
         levers["Unexplained (bale minus every recorded waste line)"] = (money("paper", lines["unexplained"], gross, scheduled, rates, 0.1),
                                                                          "unattributed", year("paper", "unexplained"))
     dry = [k for k in levers if k.startswith("Dry-end: ")]
+    # the whole dollars it prints (PR #168): side trim and shear their levers' whole dollars above standard and at standard
+    # added up, the tag scrap the dry-end lever's and its row at standard's shared among its kinds, the waste boards' two
+    # lines the boards row's, the changeover rejects their row's, planning / admin and the remainder their nearest dollar
+    w = whole_by_hand(cells_in(plain, *span), [shift] if shift else [1, 2, 3], rates)
+    key_of = {trim: "trim", **{label: key for key, label in labels}, "Unexplained (bale minus every recorded waste line)": "unexplained"}
+    cents = lambda k: int(round(round(levers[k][0]["usd"][0], 2) * 100))
+    shown = {}
+    for k in levers:
+        key = key_of[k]
+        shown[k] = (w["levers"][key] + w["at"][key] if key in ("trim", "shear") else w["apart"]["changeover"] if key == "changeover" else
+                    w["boards"][key] if key in ("cutoff_waste", "stacker_waste") else None if key in FAMILIES else nearest_whole(cents(k)))
+    kinds = [k for key in FAMILIES for k in dry if key_of[k] == key]
+    for k, v in zip(kinds, share_out([cents(k) for k in kinds], w["levers"]["dry_end"] + w["at"]["dry_end"]) if kinds else []):
+        shown[k] = v
     groups = {k: [k] for k in levers if k != trim and k not in dry}
     if dry:
-        groups["dry_end"] = sorted(dry, key=lambda k: -levers[k][0]["usd"][0])
-    size = lambda keys: sum(levers[k][0]["usd"][0] for k in keys)
-    ranked = sorted(groups, key=lambda g: -size(groups[g]))
+        groups["dry_end"] = sorted(dry, key=lambda k: (-shown[k], -levers[k][0]["usd"][0]))
+    size = lambda keys: (sum(shown[k] for k in keys), sum(levers[k][0]["usd"][0] for k in keys))
+    ranked = sorted(groups, key=lambda g: (-size(groups[g])[0], -size(groups[g])[1]))
     rank_of = {trim: 1, **{k: (None if g == "dry_end" else i) for i, g in enumerate(ranked, 2) for k in groups[g]}}
-    values = {f"rows:lever={k}": {**e, "control": exact(c), "rank": exact(rank_of[k]), "usd_per_year": [y, 1.01]} for k, (e, c, y) in levers.items()}
+    values = {f"rows:lever={k}": {**e, "control": exact(c), "rank": exact(rank_of[k]), "usd_per_year": [y, 1.01], "usd_shown": exact(shown[k]),
+                                  # each line's share, restored on PR #168's review: of the yield for a dry-end kind, else of gross
+                                  **({"pct_of_yield": num(lines[key_of[k]] / lines["yield"] * 100, 4)} if key_of[k] in FAMILIES else
+                                     {"pct_of_gross": num(lines[key_of[k]] / gross * 100, 4)})}
+              for k, (e, c, y) in levers.items()}
     above = {}
     for key, label in (("trim", trim), ("shear", "Shear chops (all recorded)")):
         if f"rows:lever={label}" in values:
@@ -1209,12 +1393,23 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
             above[key] = a
             values[f"rows:lever={label}"]["above_standard_usd"] = [a, 0.011]
             values[f"rows:lever={label}"]["at_standard_usd"] = [round(round(levers[label][0]["usd"][0], 2) - a, 6), 0.021]
+            # the split's whole dollars and the shifts over its band beside it (PR #168, the review's item 4)
+            values[f"rows:lever={label}"].update({"above_standard_usd_shown": exact(w["levers"][key]), "at_standard_usd_shown": exact(w["at"][key]),
+                                                  "shifts_over": exact(s["over_cells"][key]), "shifts": exact(s["cells"])})
     order = [trim] + [k for g in ranked for k in groups[g]]
     for i, k in enumerate(order):
         values[f"#{i}"] = {"lever": exact(k)}
+    values["#0"]["pct_of_gross"] = num(lines["trim"] / gross * 100, 4)   # side trim first, its share of gross (restored on PR #168's review)
     total = sum(e["usd"][0] for e, _, _ in levers.values())
+    split = [w["levers"][k] for k in above] + ([w["levers"]["dry_end"]] if dry else []), [w["at"][k] for k in above] + ([w["at"]["dry_end"]] if dry else [])
+    paper = round(sum(round(e["paper_usd"][0], 2) for e, _, _ in levers.values() if e["paper_usd"][0] is not None), 2)
+    machine = round(sum(round(e["machine_time_usd"][0], 2) for e, _, _ in levers.values()), 2)
     values["$"] = {"total_usd": [round(total, 6), sum(e["usd"][1] for e, _, _ in levers.values())],
-                   "total_usd_per_year": [sum(y for _, _, y in levers.values()), 1.01 * len(levers)]}
+                   "total_usd_per_year": [sum(y for _, _, y in levers.values()), 1.01 * len(levers)],
+                   "total_usd_shown": exact(sum(shown.values())), "above_standard_usd_shown": exact(sum(split[0])),
+                   "at_standard_usd_shown": exact(sum(split[1])), "no_band_usd_shown": exact(sum(shown.values()) - sum(split[0]) - sum(split[1]))}
+    values["$"]["total_paper_usd_shown"], values["$"]["total_machine_time_usd_shown"] = (exact(v) for v in split_whole(paper, machine, sum(shown.values())))
+    trim_by_shift_values(values, cells_in(plain, *span), w, rates, owner=True)
     if dry:   # the subtotal: its kinds' dollars added up, split at the dry-end band; its share is the dry-end waste's over the yield
         mine = groups["dry_end"]
         d_usd = sum(levers[k][0]["usd"][0] for k in mine)
@@ -1223,7 +1418,10 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
         values["$"].update({"dry_end_rank": exact(ranked.index("dry_end") + 2), "dry_end_kinds": exact(len(mine)),
                             "dry_end_label": exact("Dry-end waste (tag scrap)"), "dry_end_usd": [round(d_usd, 6), 0.011 * len(mine) + 0.01],
                             "dry_end_above_standard_usd": [d_above, 0.011], "dry_end_at_standard_usd": [round(d_usd - d_above, 6), 0.011 * len(mine) + 0.021],
-                            "dry_end_sqft": num(lines["dry_end"], 1), "dry_end_pct_of_yield": num(lines["dry_end"] / lines["yield"] * 100, 4)})
+                            "dry_end_sqft": num(lines["dry_end"], 1), "dry_end_pct_of_yield": num(lines["dry_end"] / lines["yield"] * 100, 4),
+                            "dry_end_usd_per_year": [sum(levers[k][2] for k in mine), 1.01 * len(mine)],   # restored on PR #168's review
+                            "dry_end_usd_shown": exact(sum(shown[k] for k in mine)), "dry_end_above_standard_usd_shown": exact(w["levers"]["dry_end"]),
+                            "dry_end_at_standard_usd_shown": exact(w["at"]["dry_end"]), "dry_end_shifts_over": exact(s["over_cells"]["dry_end"])})
     values["$"]["above_standard_usd"] = [round(sum(above.values()), 6), 0.011 * len(above)]
     return case(id, "get_opportunities", {"window": {"period": period, "anchor": anchor}, "shift": shift, "lens": "ownership"},
                 {"coverage": plain.coverage(*span), "row_count": len(levers), "values": values}, day=day, note=note)

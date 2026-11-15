@@ -102,7 +102,8 @@
    "annual_msf_per_machine": 1800000,
    "required_fpm": 675,
    "net_width_in": 96,
-   "scheduled_min_day": 1440
+   "scheduled_min_day": 1440,
+   "min_rate_days": 5
   },
   "margin_not_set": "margin not set",
   "note": "Dollars are synthetic records priced at assumed rates (the post's defaults unless changed); they are not a real plant's figures."
@@ -146,6 +147,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 228,
     "rank": 1
    },
    {
@@ -182,6 +184,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 199,
     "rank": 2
    },
    {
@@ -224,6 +227,7 @@
       ]
      ]
     },
+    "usd_shown": 75,
     "rank": 3
    },
    {
@@ -260,6 +264,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 0,
     "rank": 4
    },
    {
@@ -296,6 +301,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 0,
     "rank": 5
    },
    {
@@ -332,6 +338,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 0,
     "rank": 6
    },
    {
@@ -372,6 +379,7 @@
       ]
      ]
     },
+    "usd_shown": 4446,
     "rank": null
    },
    {
@@ -406,6 +414,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 1527,
     "rank": null
    },
    {
@@ -440,6 +449,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 645,
     "rank": null
    },
    {
@@ -474,6 +484,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 207,
     "rank": null
    },
    {
@@ -508,6 +519,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 173,
     "rank": null
    },
    {
@@ -537,6 +549,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 203,
     "rank": null
    },
    {
@@ -566,6 +579,7 @@
      "gross_sqft": 2694376.9,
      "minutes": 480.0
     },
+    "usd_shown": 195,
     "rank": null
    }
   ],
@@ -618,32 +632,38 @@
    {
     "bucket": "Dry-end",
     "usd": 227.9,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 228
    },
    {
     "bucket": "Speed",
     "usd": 199.4,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 199
    },
    {
     "bucket": "Trim",
     "usd": 75.0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 75
    },
    {
     "bucket": "Maintenance stops",
     "usd": 0.0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 0
    },
    {
     "bucket": "Operator stops",
     "usd": 0.0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 0
    },
    {
     "bucket": "Shear",
     "usd": 0.0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 0
    }
   ],
   "area_sqft": 5245.8,
@@ -657,13 +677,15 @@
   "apart_gaps": 7,
   "at_standard_usd": 6997.58,
   "all_in_usd": 7897.85,
-  "ptd_label": "4-4-5 P2 to date",
+  "ptd_label": "4-4-5 P2 to date through Mon 14 Sep",
   "ptd_start": "2026-08-31",
   "ptd_through": "2026-09-14",
   "ptd_days": 11,
   "ptd_scope": "all shifts",
   "ptd_usd": 30716.41,
+  "ptd_usd_shown": 30716,
   "ptd_usd_per_year": 718045.0,
+  "ptd_year_note": null,
   "ptd_levers": [
    {
     "key": "speed",
@@ -869,7 +891,388 @@
      "kind": "downtime",
      "quantity": 3.73
     }
-   ]
+   ],
+   "whole": {
+    "root": {
+     "shift": null,
+     "levers": {
+      "speed": 388.14,
+      "shear": 0.0,
+      "dry_end": 90346.7,
+      "operator": 56.94,
+      "maintenance": 3.73
+     },
+     "all": {
+      "trim": 2703400.4,
+      "shear": 459736.7,
+      "dry_end": 855402.3,
+      "operator": 386.89,
+      "maintenance": 171.27
+     },
+     "apart": {
+      "scheduled": 248.0,
+      "external": 0.0,
+      "changeover": 120196.6,
+      "boards": 157853.1,
+      "cutoff_waste": 74455.3,
+      "stacker_waste": 83397.8
+     },
+     "trim_cells": [
+      [
+       68565.3,
+       2131070.3
+      ],
+      [
+       82745.6,
+       2333533.5
+      ],
+      [
+       86776.3,
+       2677906.5
+      ],
+      [
+       76831.5,
+       2303572.7
+      ],
+      [
+       77491.9,
+       2380956.5
+      ],
+      [
+       93148.9,
+       2805495.6
+      ],
+      [
+       158672.8,
+       2631680.7
+      ],
+      [
+       53615.6,
+       1738365.1
+      ],
+      [
+       91318.9,
+       2776652.9
+      ],
+      [
+       56090.7,
+       1871393.3
+      ],
+      [
+       62208.4,
+       2027025.2
+      ],
+      [
+       96379.0,
+       2604967.9
+      ],
+      [
+       65051.4,
+       2176754.6
+      ],
+      [
+       90963.4,
+       2917459.0
+      ],
+      [
+       70439.6,
+       2218529.0
+      ],
+      [
+       72117.2,
+       2276656.6
+      ],
+      [
+       95556.6,
+       2755747.3
+      ],
+      [
+       75251.0,
+       2241946.2
+      ],
+      [
+       72998.4,
+       2182859.5
+      ],
+      [
+       105377.3,
+       2975379.9
+      ],
+      [
+       85668.1,
+       2368015.9
+      ],
+      [
+       84694.7,
+       2508501.6
+      ],
+      [
+       80574.4,
+       2698356.2
+      ],
+      [
+       89301.7,
+       2678809.2
+      ],
+      [
+       56174.7,
+       1900552.8
+      ],
+      [
+       90967.4,
+       2598068.5
+      ],
+      [
+       86703.5,
+       2570349.7
+      ],
+      [
+       64241.1,
+       1952658.6
+      ],
+      [
+       98939.8,
+       2966519.9
+      ],
+      [
+       83191.5,
+       2505974.5
+      ],
+      [
+       85281.2,
+       2671353.3
+      ],
+      [
+       82194.9,
+       2694376.9
+      ],
+      [
+       63867.6,
+       2061007.6
+      ]
+     ]
+    },
+    "shifts": [
+     {
+      "shift": 1,
+      "levers": {
+       "speed": 121.37,
+       "shear": 0.0,
+       "dry_end": 36795.5,
+       "operator": 27.96,
+       "maintenance": 0.0
+      },
+      "all": {
+       "trim": 860719.0,
+       "shear": 142378.2,
+       "dry_end": 268554.3,
+       "operator": 145.12,
+       "maintenance": 47.08
+      },
+      "apart": {
+       "scheduled": 248.0,
+       "external": 0.0,
+       "changeover": 37192.5,
+       "boards": 48315.3,
+       "cutoff_waste": 22674.1,
+       "stacker_waste": 25641.2
+      },
+      "trim_cells": [
+       [
+        68565.3,
+        2131070.3
+       ],
+       [
+        76831.5,
+        2303572.7
+       ],
+       [
+        158672.8,
+        2631680.7
+       ],
+       [
+        56090.7,
+        1871393.3
+       ],
+       [
+        65051.4,
+        2176754.6
+       ],
+       [
+        72117.2,
+        2276656.6
+       ],
+       [
+        72998.4,
+        2182859.5
+       ],
+       [
+        84694.7,
+        2508501.6
+       ],
+       [
+        56174.7,
+        1900552.8
+       ],
+       [
+        64241.1,
+        1952658.6
+       ],
+       [
+        85281.2,
+        2671353.3
+       ]
+      ]
+     },
+     {
+      "shift": 2,
+      "levers": {
+       "speed": 129.1,
+       "shear": 0.0,
+       "dry_end": 28165.4,
+       "operator": 17.07,
+       "maintenance": 3.73
+      },
+      "all": {
+       "trim": 920635.3,
+       "shear": 156816.9,
+       "dry_end": 297191.5,
+       "operator": 127.56,
+       "maintenance": 57.53
+      },
+      "apart": {
+       "scheduled": 0.0,
+       "external": 0.0,
+       "changeover": 40864.8,
+       "boards": 52685.3,
+       "cutoff_waste": 25220.6,
+       "stacker_waste": 27464.7
+      },
+      "trim_cells": [
+       [
+        82745.6,
+        2333533.5
+       ],
+       [
+        77491.9,
+        2380956.5
+       ],
+       [
+        53615.6,
+        1738365.1
+       ],
+       [
+        62208.4,
+        2027025.2
+       ],
+       [
+        90963.4,
+        2917459.0
+       ],
+       [
+        95556.6,
+        2755747.3
+       ],
+       [
+        105377.3,
+        2975379.9
+       ],
+       [
+        80574.4,
+        2698356.2
+       ],
+       [
+        90967.4,
+        2598068.5
+       ],
+       [
+        98939.8,
+        2966519.9
+       ],
+       [
+        82194.9,
+        2694376.9
+       ]
+      ]
+     },
+     {
+      "shift": 3,
+      "levers": {
+       "speed": 137.67,
+       "shear": 0.0,
+       "dry_end": 25385.8,
+       "operator": 11.91,
+       "maintenance": 0.0
+      },
+      "all": {
+       "trim": 922046.1,
+       "shear": 160541.6,
+       "dry_end": 289656.5,
+       "operator": 114.21,
+       "maintenance": 66.66
+      },
+      "apart": {
+       "scheduled": 0.0,
+       "external": 0.0,
+       "changeover": 42139.3,
+       "boards": 56852.5,
+       "cutoff_waste": 26560.6,
+       "stacker_waste": 30291.9
+      },
+      "trim_cells": [
+       [
+        86776.3,
+        2677906.5
+       ],
+       [
+        93148.9,
+        2805495.6
+       ],
+       [
+        91318.9,
+        2776652.9
+       ],
+       [
+        96379.0,
+        2604967.9
+       ],
+       [
+        70439.6,
+        2218529.0
+       ],
+       [
+        75251.0,
+        2241946.2
+       ],
+       [
+        85668.1,
+        2368015.9
+       ],
+       [
+        89301.7,
+        2678809.2
+       ],
+       [
+        86703.5,
+        2570349.7
+       ],
+       [
+        83191.5,
+        2505974.5
+       ],
+       [
+        63867.6,
+        2061007.6
+       ]
+      ]
+     }
+    ],
+    "scope": [
+     1,
+     2,
+     3
+    ]
+   }
   },
   "required_fpm": 675,
   "required_downtime_pct": 10,
@@ -877,7 +1280,151 @@
   "speeds_note": "Two speeds, never one definition: the speed lever is each grade's trailing-year baseline (targets.json), and the required speed, 675 ft/min at 10% downtime (rates.json, the post), converts machine minutes to MSF not made and is no lever.",
   "baseline_since": "2025-09-15",
   "baseline_through": "2026-09-14",
-  "method_note": "Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band adds $0, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this period's rate, period-to-date dollars per production day x the post's production days a year, never a shift's or a day's own. These name where to look and whom to ask; they never prescribe a machine adjustment.",
+  "method_note": "Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this period's rate, period-to-date dollars per production day x the post's production days a year, never a shift's or a day's own. These name where to look and whom to ask; they never prescribe a machine adjustment.",
+  "total_usd_shown": 502,
+  "at_standard_usd_shown": 6998,
+  "all_in_usd_shown": 7898,
+  "total_paper_usd_shown": 288,
+  "total_machine_time_usd_shown": 214,
+  "display_terms": {
+   "root": {
+    "shift": null,
+    "levers": {
+     "speed": 43.16,
+     "shear": 0.0,
+     "dry_end": 12586.1,
+     "operator": 3.8,
+     "maintenance": 0.0
+    },
+    "all": {
+     "trim": 231343.7,
+     "shear": 35791.0,
+     "dry_end": 84182.1,
+     "operator": 30.31,
+     "maintenance": 11.12
+    },
+    "apart": {
+     "scheduled": 0.0,
+     "external": 0.0,
+     "changeover": 10321.5,
+     "boards": 12387.1,
+     "cutoff_waste": 5929.0,
+     "stacker_waste": 6458.1
+    },
+    "trim_cells": [
+     [
+      85281.2,
+      2671353.3
+     ],
+     [
+      82194.9,
+      2694376.9
+     ],
+     [
+      63867.6,
+      2061007.6
+     ]
+    ]
+   },
+   "shifts": [
+    {
+     "shift": 1,
+     "levers": {
+      "speed": 0.72,
+      "shear": 0.0,
+      "dry_end": 6844.8,
+      "operator": 3.8,
+      "maintenance": 0.0
+     },
+     "all": {
+      "trim": 85281.2,
+      "shear": 13879.8,
+      "dry_end": 32566.7,
+      "operator": 15.8,
+      "maintenance": 0.0
+     },
+     "apart": {
+      "scheduled": 0.0,
+      "external": 0.0,
+      "changeover": 4457.5,
+      "boards": 5158.3,
+      "cutoff_waste": 2377.4,
+      "stacker_waste": 2780.9
+     },
+     "trim_cells": [
+      [
+       85281.2,
+       2671353.3
+      ]
+     ]
+    },
+    {
+     "shift": 2,
+     "levers": {
+      "speed": 9.97,
+      "shear": 0.0,
+      "dry_end": 3882.2,
+      "operator": 0.0,
+      "maintenance": 0.0
+     },
+     "all": {
+      "trim": 82194.9,
+      "shear": 10992.0,
+      "dry_end": 29894.1,
+      "operator": 10.33,
+      "maintenance": 8.65
+     },
+     "apart": {
+      "scheduled": 0.0,
+      "external": 0.0,
+      "changeover": 3325.3,
+      "boards": 3454.0,
+      "cutoff_waste": 1561.5,
+      "stacker_waste": 1892.5
+     },
+     "trim_cells": [
+      [
+       82194.9,
+       2694376.9
+      ]
+     ]
+    },
+    {
+     "shift": 3,
+     "levers": {
+      "speed": 32.47,
+      "shear": 0.0,
+      "dry_end": 1859.1,
+      "operator": 0.0,
+      "maintenance": 0.0
+     },
+     "all": {
+      "trim": 63867.6,
+      "shear": 10919.2,
+      "dry_end": 21721.3,
+      "operator": 4.18,
+      "maintenance": 2.47
+     },
+     "apart": {
+      "scheduled": 0.0,
+      "external": 0.0,
+      "changeover": 2538.7,
+      "boards": 3774.8,
+      "cutoff_waste": 1990.1,
+      "stacker_waste": 1784.7
+     },
+     "trim_cells": [
+      [
+       63867.6,
+       2061007.6
+      ]
+     ]
+    }
+   ],
+   "scope": [
+    2
+   ]
+  },
   "tile_money": [
    {
     "metric": "observed_shift_fpm",
@@ -897,7 +1444,14 @@
       "gross_sqft": 2694376.9,
       "minutes": 480.0
      }
-    ]
+    ],
+    "shown_of": [
+     [
+      "levers",
+      "speed"
+     ]
+    ],
+    "usd_shown": 199
    },
    {
     "metric": "maintenance_pct",
@@ -917,7 +1471,18 @@
       "gross_sqft": 2694376.9,
       "minutes": 480.0
      }
-    ]
+    ],
+    "shown_of": [
+     [
+      "levers",
+      "maintenance"
+     ],
+     [
+      "at",
+      "maintenance"
+     ]
+    ],
+    "usd_shown": 173
    },
    {
     "metric": "operator_pct",
@@ -937,7 +1502,18 @@
       "gross_sqft": 2694376.9,
       "minutes": 480.0
      }
-    ]
+    ],
+    "shown_of": [
+     [
+      "levers",
+      "operator"
+     ],
+     [
+      "at",
+      "operator"
+     ]
+    ],
+    "usd_shown": 207
    },
    {
     "metric": "dry_end_pct",
@@ -981,7 +1557,18 @@
       "gross_sqft": 2694376.9,
       "minutes": 480.0
      }
-    ]
+    ],
+    "shown_of": [
+     [
+      "levers",
+      "dry_end"
+     ],
+     [
+      "at",
+      "dry_end"
+     ]
+    ],
+    "usd_shown": 1755
    },
    {
     "metric": "trim_pct",
@@ -1001,7 +1588,18 @@
       "gross_sqft": 2694376.9,
       "minutes": 480.0
      }
-    ]
+    ],
+    "shown_of": [
+     [
+      "levers",
+      "trim"
+     ],
+     [
+      "at",
+      "trim"
+     ]
+    ],
+    "usd_shown": 4521
    }
   ],
   "rates": [
@@ -1057,6 +1655,7 @@
     "contribution_status": "set",
     "usd_basis": "3,882.2 sq ft = 3.882 MSF x $60/MSF paper = $233; 3.882 MSF / 5.4 MSF per min = 0.72 min x $1,350.5/hr machine time = $16.18; contribution 3.882 MSF not made x $35/MSF = $136 (not added)",
     "share_of_window_pct": 0.1441,
+    "usd_shown": 249,
     "control": "controllable",
     "control_note": "bond: temperature; warp: temperature; misalignment: slitter, scorer and knife; moisture: steam and temperature along the machine; other: board surface; handling after the knife; paper as received, partly controllable (receiving and roll prep); pre-print",
     "apart": null
@@ -1075,6 +1674,7 @@
     "contribution_status": "set",
     "usd_basis": "9.97 min x $1,350.5/hr machine time = $224; contribution 53.838 MSF not made x $35/MSF = $1,884 (not added)",
     "share_of_window_pct": 2.0771,
+    "usd_shown": 225,
     "control": "controllable",
     "control_note": "speed under the grade baseline",
     "apart": null
@@ -1093,6 +1693,7 @@
     "contribution_status": "set",
     "usd_basis": "0.00 min x $1,350.5/hr machine time = $0.00; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added)",
     "share_of_window_pct": 0,
+    "usd_shown": 0,
     "control": "controllable",
     "control_note": "unplanned maintenance: breakdowns and faults",
     "apart": null
@@ -1111,6 +1712,7 @@
     "contribution_status": "set",
     "usd_basis": "0.00 min x $1,350.5/hr machine time = $0.00; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added)",
     "share_of_window_pct": 0,
+    "usd_shown": 0,
     "control": "controllable",
     "control_note": "operator downtime, the order changes included",
     "apart": null
@@ -1129,6 +1731,7 @@
     "contribution_status": "set",
     "usd_basis": "0.0 sq ft = 0.000 MSF x $60/MSF paper = $0.00; 0.000 MSF / 5.4 MSF per min = 0.00 min x $1,350.5/hr machine time = $0.00; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added)",
     "share_of_window_pct": 0,
+    "usd_shown": 0,
     "control": "controllable",
     "control_note": "sequencing",
     "apart": null
@@ -1147,6 +1750,7 @@
     "contribution_status": "set",
     "usd_basis": "0.0 sq ft = 0.000 MSF x $60/MSF paper = $0.00; contribution 0.000 MSF not made x $35/MSF = $0.00 (not added)",
     "share_of_window_pct": 0,
+    "usd_shown": 0,
     "control": "schedule-driven",
     "control_note": "the order mix and its web widths",
     "apart": null
@@ -1165,6 +1769,7 @@
     "contribution_status": "set",
     "usd_basis": "$4,932 all recorded less $0.00 above standard = $4,932 at standard; contribution $0.00 (not added)",
     "share_of_window_pct": 3.0506,
+    "usd_shown": 4932,
     "apart": "at-standard"
    },
    {
@@ -1181,6 +1786,7 @@
     "contribution_status": "set",
     "usd_basis": "$1,918 all recorded less $249 above standard = $1,669 at standard; contribution $910 (not added)",
     "share_of_window_pct": 0.9654,
+    "usd_shown": 1669,
     "apart": "at-standard"
    },
    {
@@ -1197,6 +1803,7 @@
     "contribution_status": "set",
     "usd_basis": "$705 all recorded less $0.00 above standard = $705 at standard; contribution $385 (not added)",
     "share_of_window_pct": 0.408,
+    "usd_shown": 705,
     "apart": "at-standard"
    },
    {
@@ -1213,6 +1820,7 @@
     "contribution_status": "set",
     "usd_basis": "$233 all recorded less $0.00 above standard = $233 at standard; contribution $1,952 (not added)",
     "share_of_window_pct": 2.1521,
+    "usd_shown": 232,
     "apart": "at-standard"
    },
    {
@@ -1229,6 +1837,7 @@
     "contribution_status": "set",
     "usd_basis": "$195 all recorded less $0.00 above standard = $195 at standard; contribution $1,635 (not added)",
     "share_of_window_pct": 1.8021,
+    "usd_shown": 195,
     "apart": "at-standard"
    },
    {
@@ -1245,6 +1854,7 @@
     "contribution_status": "set",
     "usd_basis": "3,454.0 sq ft = 3.454 MSF x $60/MSF paper = $207; 3.454 MSF / 5.4 MSF per min = 0.64 min x $1,350.5/hr machine time = $14.40; contribution 3.454 MSF not made x $35/MSF = $121 (not added)",
     "share_of_window_pct": 0.1282,
+    "usd_shown": 222,
     "apart": "no-band"
    },
    {
@@ -1261,6 +1871,7 @@
     "contribution_status": "set",
     "usd_basis": "3,325.3 sq ft = 3.325 MSF x $60/MSF paper = $200; 3.325 MSF / 5.4 MSF per min = 0.62 min x $1,350.5/hr machine time = $13.86; contribution 3.325 MSF not made x $35/MSF = $116 (not added)",
     "share_of_window_pct": 0.1234,
+    "usd_shown": 213,
     "apart": "no-band"
    }
   ],
@@ -1275,32 +1886,38 @@
    {
     "bucket": "Dry-end",
     "usd": 249.11,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 249
    },
    {
     "bucket": "Speed",
     "usd": 224.41,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 225
    },
    {
     "bucket": "Maintenance stops",
     "usd": 0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 0
    },
    {
     "bucket": "Operator stops",
     "usd": 0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 0
    },
    {
     "bucket": "Shear",
     "usd": 0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 0
    },
    {
     "bucket": "Trim",
     "usd": 0,
-    "usd_per_year": null
+    "usd_per_year": null,
+    "usd_shown": 0
    }
   ],
   "area_sqft": 3882.2,
@@ -1313,6 +1930,12 @@
   "at_standard_usd": 7733.38,
   "all_in_usd": 8641.92,
   "ptd_usd": 29672.24,
-  "ptd_usd_per_year": 693637
+  "ptd_usd_per_year": 693637,
+  "total_usd_shown": 474,
+  "total_paper_usd_shown": 233,
+  "total_machine_time_usd_shown": 241,
+  "at_standard_usd_shown": 7733,
+  "all_in_usd_shown": 8642,
+  "ptd_usd_shown": 29672
  }
 }

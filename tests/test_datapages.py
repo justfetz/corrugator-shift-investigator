@@ -769,6 +769,11 @@ class Figures:
         if tool in ('get_opportunities', 'get_shift_dollars', 'get_day_dollars'):
             if part == 'row':
                 return self.lever_usd(entry, index, 'usd'), False
+            if part == 'detail':   # a shift's side trim (PR #168): its own rows' trim over the target (or all of it), priced
+                if {r['shift'] for r in rows} != {row['shift']}:
+                    raise WrongRows(f'shift {row["shift"]}\'s side trim opens the rows of shifts {sorted({r["shift"] for r in rows})}')
+                qty = sum(self.recorded('trim', r) if row['part'] == 'all' else self.cell_gap('trim', r) for r in rows)
+                return cost_model.price('trim', round(qty, 1), self.rates)['usd'], False
             # a total from its own receipt: the levers above standard, or every row recorded and priced (the rows shown
             # apart too), the controllable levers, the dry-end kinds, or all the waste of the ownership lens
             levers = range(len(data['rows']))
@@ -932,6 +937,36 @@ class Figures:
         runs = [r for cell in self.speed_runs(entry, rows).values() for r in cell]
         return sum(1 for base, feet, run in runs if feet / run < base), len(runs)
 
+    MONEY_TOTALS = (('controllable levers', 'controllable_usd'), ('Dry-end waste (tag scrap)', 'dry_end_usd'),
+                    ('Everything recorded and priced', 'all_in_usd'), ('All the waste recorded', 'total_usd'))
+
+    @staticmethod
+    def money_shown(entry, part, index, section):
+        """(cents, printed whole dollars, bound) of a money ledger's bold figure (cost_model.whole_dollars, PR #168): a
+        line within a dollar of its cents for each shift it adds up (two for the ownership lens's lines, an above and an
+        at-standard share each), a little over for the cents a window priced at once differs from its shifts' by."""
+        data = entry.get('data') if isinstance(entry.get('data'), dict) else {}
+        if entry.get('tool') not in ('get_opportunities', 'get_shift_dollars', 'get_day_dollars') or 'display_terms' not in data:
+            return None
+        owner = data.get('lens') == 'ownership'
+        if part == 'row':
+            row = data['rows'][index]
+            parts = 2 if owner and (row.get('above_standard_usd') is not None or row.get('group')) else 1   # an above and an at share
+        elif part == 'detail':
+            row = data['details'][index]
+            parts = 2 if row.get('part') == 'all' else 1
+        else:
+            after = section[section.index('**', section.index('**') + 2) + 2:]
+            key = next((k for words, k in Figures.MONEY_TOTALS if words in (after if words == 'controllable levers' else section)), 'total_usd')
+            row = {'usd': data.get(key), 'usd_shown': data.get(f'{key}_shown')}
+            # a figure that adds printed parts up: everything recorded is the levers, the rows at standard and each row
+            # apart; the controllable levers, the tag scrap, two shares each; all the waste, its lines
+            parts = ({'all_in_usd': 2 + sum(1 for r in data['rows'] if r.get('apart') and r.get('apart') != 'at-standard'),
+                      'controllable_usd': 2, 'dry_end_usd': 2}.get(key, 1) if not owner or key != 'total_usd' else 2 * len(data['rows']))
+        if row.get('usd_shown') is None:
+            return None
+        return row['usd'], row['usd_shown'], parts * max(1, len(data['display_terms']['scope'])) + 0.05
+
     def check(self, result, i, section):
         receipt = result['receipts'][i]
         m = dp.REF.search(section)
@@ -947,6 +982,16 @@ class Figures:
         except WrongRows as exc:
             return f'{exc} over {receipt["url"]} ({entry["tool"]} {part} {index}): {section[:110]!r}'
         text, value, decimals = printed(section)
+        shown = self.money_shown(entry, part, index, section)
+        if shown is not None:
+            # A money ledger prints whole dollars that add up (PR #168): the bold figure is the step's own `*_shown`, within
+            # the allocation's bound of its cents, and the cents are what the receipt's rows recompute.
+            cents, whole, bound = shown
+            if value != whole:
+                return f'**{text}** but the step prints {whole} ({entry["tool"]} {part} {index}): {section[:110]!r}'
+            if abs(whole - cents) >= bound:
+                return f'**{text}** is {abs(whole - cents):.2f} off its cents {cents}, past the allocation\'s {bound} ({entry["tool"]} {part} {index})'
+            value = cents
         if exact is not True and exact is not False:   # the tool rounded to `exact` places and printed more
             decimals, exact = exact, False
         # A count is exact. A measure may be one unit of its last printed digit off: the tools round their rows' quantities

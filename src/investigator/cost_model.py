@@ -119,7 +119,8 @@ def client_config():
             'assumptions': DEFINITION['assumptions'], 'post': DEFINITION['post'],
             'constants': {'msf_per_minute': MSF_PER_MINUTE, 'annual_minutes': ANNUAL_MINUTES, 'shift_minutes': SHIFT_MINUTES, 'days_per_year': DAYS_PER_YEAR,
                           'annual_msf_per_machine': ASSUMPTIONS['annual_msf_per_machine'], 'required_fpm': ASSUMPTIONS['required_fpm'],
-                          'net_width_in': ASSUMPTIONS['net_width_in'], 'scheduled_min_day': ASSUMPTIONS['scheduled_min_day']},
+                          'net_width_in': ASSUMPTIONS['net_width_in'], 'scheduled_min_day': ASSUMPTIONS['scheduled_min_day'],
+                          'min_rate_days': MIN_RATE_DAYS},   # no yearly figure from fewer production days (PR #168)
             'margin_not_set': MARGIN_NOT_SET, 'note': NOTE}
 
 
@@ -199,8 +200,10 @@ def price(kind, quantity, rates, gross_sqft=None, minutes=None):
 def annual(usd, days):
     """Dollars a year at a period's rate (the owner's call 3 on issue #164): period-to-date dollars per production day x
     the post's production days a year (DAYS_PER_YEAR, 1.8M MSF / 7,000 MSF a day). Never a shift's or a day's own: the
-    money tools call it with period-to-date dollars only. Whole dollars; None without dollars or days."""
-    return None if usd is None or not days else round(usd / days * DAYS_PER_YEAR, 0)
+    money tools call it with period-to-date dollars only. Whole dollars; None without dollars, and None with fewer than
+    MIN_RATE_DAYS production days (the coordinator's default on PR #168: one day x 257 is no yearly figure; `year_note`
+    says why)."""
+    return None if usd is None or not days or days < MIN_RATE_DAYS else round(usd / days * DAYS_PER_YEAR, 0)
 
 
 def trim_points_usd_per_year(points, rates=None, machines=1):
@@ -385,10 +388,13 @@ WASTE_TILES = {'trim_pct': 'trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry_end
                'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'other_pct': 'other', 'bale_pct': 'bale', 'unexplained_pct': 'unexplained'}
 
 
-def period_tiles(data, reasons, rates):
+def period_tiles(data, reasons, rates, ledger=None):
     """The money of a window's KPI tiles (get_period_kpis, compare_periods): each waste tile its category's area, each
     stop tile the stop reasons' minutes (`reasons`, the Pareto's rows of the same window and shift). A tile is what its
-    figure measures, all recorded: the ownership lens's line for the same window, never a lever's above-standard part."""
+    figure measures, all recorded: the ownership lens's line for the same window, never a lever's above-standard part.
+    The operator and maintenance tiles are the money ledger's (`ledger`, period_whole: its sums and display terms; the
+    review of PR #168, item 9): its minutes, each shift's rounded as the ledger rounds them, and its printed whole dollars,
+    the lever's line and its line at standard (and planned maintenance) added up, so the tile and the money card agree."""
     sums = data.get('current_sums') or {}
     if not sums.get('gross_sqft'):
         return []
@@ -399,13 +405,31 @@ def period_tiles(data, reasons, rates):
            for metric, key in WASTE_TILES.items()]
     stops = [_part('downtime', r['minutes'], gross, minutes) for r in reasons]
     out.append(tile('downtime_pct', stops, rates, 'all stops', ('downtime_pct', 'downtime_minutes', 'stops')))   # one entry, three tiles
-    out.append(tile('maintenance_pm_pct', [_part('downtime', round(sums['maintenance_pm_seconds'] / 60, 2), gross, minutes)], rates, 'maintenance and planned maintenance (scheduled) stops'))
-    out.append(tile('operator_pct', [_part('downtime', round(sums['operator_seconds'] / 60, 2), gross, minutes)], rates, 'operator stops'))
+    s, whole = (ledger[0], whole_dollars(ledger[1], rates)) if ledger else (None, None)
+    pm = ([_part('downtime', s['all']['maintenance'], gross, minutes), _part('downtime', s['minutes']['planned'], gross, minutes)] if s else
+          [_part('downtime', round(sums['maintenance_pm_seconds'] / 60, 2), gross, minutes)])
+    out.append(tile('maintenance_pm_pct', pm, rates, 'maintenance and planned maintenance (scheduled) stops'))
+    op = s['all']['operator'] if s else round(sums['operator_seconds'] / 60, 2)
+    out.append(tile('operator_pct', [_part('downtime', op, gross, minutes)], rates, 'operator stops'))
+    for t in out:
+        tile_shown(t, whole if t['metric'] in ('operator_pct', 'maintenance_pm_pct') else None)
     return out
 
 
+def period_whole(store, window, shift, rates):
+    """The money ledger of a period tool's window and shift, for its tiles (period_tiles): the scope's sums and the
+    display terms its whole dollars are allocated from (the window's every shift, PR #168)."""
+    current = store._window(window)
+    every, _, _ = ledger_cells(store, current['start'], current['end'], None)
+    mine = [c for c in every if shift is None or c['shift'] == shift]
+    return ledger_sums(mine, rates), display_terms(every, [shift] if shift else [1, 2, 3], rates)
+
+
 def _rank(rows, key):
-    rows.sort(key=lambda r: (-(r[key] or 0), r['gap'] if 'gap' in r else r['lever']))
+    """Ranked by the whole dollars the card prints (`usd_shown`, PR #168) when a row carries them, then by `key`, then by
+    name: a list never prints a larger figure below a smaller one. web/money.js rank is this."""
+    shown = lambda r: r.get('usd_shown') if r.get('usd_shown') is not None else (r[key] or 0)
+    rows.sort(key=lambda r: (-shown(r), -(r[key] or 0), r['gap'] if 'gap' in r else r['lever']))
     for i, r in enumerate(rows, 1):
         r['rank'] = i
     return rows
@@ -492,13 +516,14 @@ SPEEDS_NOTE = ('Two speeds, never one definition: the speed lever is each grade\
                'the required speed, {required:g} ft/min at {downtime:g}% downtime (rates.json, the post), converts machine minutes to MSF '
                'not made and is no lever.')
 LEDGER_NOTE = ('Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band '
-               'adds $0, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this '
+               'adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this '
                'period\'s rate, period-to-date dollars per production day x the post\'s production days a year, never a shift\'s or '
                'a day\'s own. These name where to look and whom to ask; they never prescribe a machine adjustment.')
 
 CELL_SQL = ("SELECT production_date, shift, coverage, setups, gross_sqft, trim_sqft, shear_sqft, reject_sqft, bond_sqft, warp_sqft, "
             "misalignment_sqft, moisture_sqft, other_sqft, changeover_sqft, cutoff_waste_sqft, stacker_waste_sqft, admin_sqft, bale_sqft, "
-            "scheduled_seconds, stop_seconds, maintenance_seconds, planned_maintenance_seconds, operator_seconds, lineal_ft, source_ids "
+            "scheduled_seconds, stop_seconds, maintenance_seconds, planned_maintenance_seconds, operator_seconds, lineal_ft, source_ids, "
+            "setups_above_trim_target "
             "FROM shift_kpis WHERE corrupt = ? AND production_date BETWEEN ? AND ?{clause} ORDER BY production_date, shift")
 # Each wet-end run's part in a shift, so a run that spans two shifts is measured in each against its grade's baseline
 # through its own day (the trailing year ending on the day, targets.json speed): a shift's speed gap never moves with
@@ -574,6 +599,7 @@ def _ledger_cells(store, start, end, shift, corrupt, exclude):
              'planned': minute(r['planned_maintenance_seconds']),
              'external': minute(r['stop_seconds'] - r['maintenance_seconds'] - r['planned_maintenance_seconds'] - r['operator_seconds']),
              'lineal_ft': round(r['lineal_ft'], 1), 'source_ids': list(r['source_ids'] or []),
+             'trim_flag_setups': r['setups_above_trim_target'] or 0,   # the setups above the per-setup trim flag (trim by shift, PR #168)
              'speed_short_min': 0.0, 'runs': 0, 'runs_under': 0, 'grade_short': {}}
         cells[(r['production_date'], r['shift'])] = c
     baselines = {}
@@ -632,11 +658,18 @@ def ledger_sums(cells, rates):
 MIN_RATE_DAYS = 5   # a production week: a period to date shorter than this reads its rate with the period before it
 
 
+def day_text(day, year=False):
+    """A day as a label names it: "Mon 14 Sep" (with the year, "Wed 1 Jan 2025")."""
+    return f'{day:%a} {day.day} {day:%b}' + (f' {day.year}' if year else '')
+
+
 def ptd_window(store, through):
     """The period to date a yearly figure is read from: the 4-4-5 period containing `through` (the window's last day, or
     the card's day), from its first day inside the record store to `through`. In a period's first week, when it holds
     fewer than MIN_RATE_DAYS production days, the period before it is read with it ("P3 and P4 to date"), so a yearly
-    figure is never one day's or one shift's. Returns (start, end, label)."""
+    figure is never one day's or one shift's. The label carries its end day ("4-4-5 P2 to date through Mon 14 Sep", the
+    coordinator's default on PR #168), so a day card and its week never state two yearly figures under one label; a period
+    that began before the records is labelled from their first day. Returns (start, end, label)."""
     day = min(date.fromisoformat(str(through)[:10]), store._last)
     start, _, label = fiscal_bounds(day)
     name = label.split(' (')[0]
@@ -645,7 +678,17 @@ def ptd_window(store, through):
         if start > store._first:
             name = f'{prior.split(" (")[0]} and {name.split(" ", 1)[1] if name.startswith("4-4-5 ") else name}'
             start = before
-    return max(start, store._first), day, f'{name} to date'
+    if start < store._first:
+        return store._first, day, f'{name} to date from the first day of the records, {day_text(store._first, True)}, through {day_text(day)}'
+    return start, day, f'{name} to date through {day_text(day)}'
+
+
+def year_note(days):
+    """Why a period to date states no yearly figure (the coordinator's default on PR #168): with fewer than MIN_RATE_DAYS
+    production days, one day's or a few days' rate would be scaled to a year. None when it states one."""
+    if days >= MIN_RATE_DAYS:
+        return None
+    return f'no yearly figure: {days} production day{"" if days == 1 else "s"} to date, fewer than {MIN_RATE_DAYS}'
 
 
 def trim_cells_over(cells, target):
@@ -807,7 +850,7 @@ def rank_ledger(rows, lens='all'):
     ranked = [r for r in rows if not r.get('apart') and (lens != 'supervisor' or r['control'] == 'controllable')]
     rest = [r for r in rows if r not in ranked]
     _rank(ranked, 'usd')
-    rest.sort(key=lambda r: (group(r), -(r['usd'] or 0), r['lever']))
+    rest.sort(key=lambda r: (group(r), -(r.get('usd_shown') if r.get('usd_shown') is not None else r['usd'] or 0), -(r['usd'] or 0), r['lever']))
     for r in rest:
         r['rank'] = None
     return ranked + rest
@@ -823,24 +866,183 @@ def ledger_totals(rows):
             'at_standard_usd': round(_add(at), 2) if at else 0.0, 'all_in_usd': round(_add(usd), 2) if usd else 0.0}
 
 
+# ------------------------------------------------------------------ whole dollars that add up (the owner's top rule, PR #168)
+#
+# A card prints whole dollars, and every set of parts it prints adds up to the figure it prints, in those whole dollars:
+# the shifts to the day, the levers to the card's figure, the rows at standard to their total, the dry-end kinds to the
+# tag scrap, paper and machine time to the total. Each printed figure is allocated from the cents by the largest-remainder
+# method:
+#
+# - the root is a window's every shift (a day card's and a shift card's: the day's complete shifts); the root's dollars
+#   above standard print as their nearest dollar, and each shift's share is its floor plus a dollar for the shifts with
+#   the largest remainders until the shares add up to the root's;
+# - within each shift, its levers share the shift's whole dollars the same way; the cost at standard is a root of its own,
+#   shared among the shifts and then among each shift's rows at standard, and so is each row shown apart;
+# - a figure for several shifts, and each of its lines, is those shifts' whole dollars added up.
+#
+# So a shift prints the same whole dollars on its own card, on its day's card and on any card that adds it up, and every
+# card's lines add up to its figure. A printed figure is within a dollar of its cents for one shift, and within a dollar a
+# shift for several. The cents (`usd`) stay what the arithmetic and the receipts recompute; `*_shown` is what a card
+# prints. web/money.js allocates the same way from `display_terms`, at a visitor's rates.
+
+APART_KEYS = ('scheduled', 'external', 'changeover', 'boards')   # the rows shown apart, each a root of its own
+APART_KIND = {'scheduled': 'downtime', 'external': 'downtime', 'changeover': 'waste', 'boards': 'waste',
+              'cutoff_waste': 'waste', 'stacker_waste': 'waste'}
+BOARDS = ('cutoff_waste', 'stacker_waste')   # the ownership lens's two lines of the waste boards row
+
+
+def to_cents(usd):
+    """A priced figure (two places) as integer cents."""
+    return 0 if usd is None else int(round(usd * 100))
+
+
+def nearest_dollar(cents):
+    """Whole dollars of integer cents, a tie to the even dollar (Python's round, and shapes.money's f'{x:,.0f}')."""
+    dollars, rest = divmod(cents, 100)
+    return dollars + (1 if rest > 50 or (rest == 50 and dollars % 2) else 0)
+
+
+def largest_remainder(parts, target):
+    """Whole dollars of `parts` (integer cents, in a fixed order) that add up to `target` whole dollars: each part's floor,
+    then a dollar more to the parts with the largest remainders, a tie to the earlier part. When the floors and remainders
+    cannot reach the target (a whole priced at once differs from its parts by a cent or so), the largest parts move, a $0
+    part never rises and no part falls below $0. web/money.js largestRemainder is this, line for line."""
+    out = [c // 100 for c in parts]
+    gap = target - sum(out)
+    fraction = [i for i in sorted(range(len(parts)), key=lambda i: (-(parts[i] % 100), i)) if parts[i] % 100]
+    for i in fraction[:max(gap, 0)]:
+        out[i] += 1
+    gap -= min(max(gap, 0), len(fraction))
+    largest = sorted(range(len(parts)), key=lambda i: (-parts[i], i))
+    rising = [i for i in largest if parts[i] > 0] or largest[:1]
+    j = 0
+    while gap > 0 and rising:
+        out[rising[j % len(rising)]] += 1
+        gap, j = gap - 1, j + 1
+    j = 0
+    while gap < 0 and any(out[i] > 0 for i in largest):
+        i = largest[j % len(largest)]
+        if out[i] > 0:
+            out[i], gap = out[i] - 1, gap + 1
+        j += 1
+    return out
+
+
+def whole_terms(s, shift=None):
+    """The rate-free quantities a ledger's whole dollars are priced from (`display_terms`): each lever's gap, each band's
+    quantity recorded, each row shown apart, the two lines of the waste boards, and the trim cells (the trim lever at a
+    visitor's target; so the trim lever's own gap is not in them, and the terms are the same at any rates)."""
+    return {'shift': shift, 'levers': {k: s['over'][k] for k in LEVERS if k != 'trim'}, 'all': {k: s['all'][k] for k in BANDED},
+            'apart': {'scheduled': s['minutes']['planned'], 'external': s['minutes']['external'], 'changeover': s['lines']['changeover'],
+                      'boards': s['lines']['boards'], **{k: s['lines'][k] for k in BOARDS}},
+            'trim_cells': s['trim_cells']}
+
+
+def _cents(kind, quantity, rates):
+    return to_cents(price(kind, quantity, rates)['usd'])
+
+
+def terms_cents(t, rates):
+    """One set of terms priced: integer cents of each lever above its band, each band's cost at standard (all recorded
+    less above standard, as at_standard), each row shown apart, and the waste boards' two lines."""
+    over = {**t['levers'], 'trim': trim_cells_over(t['trim_cells'], rates['values']['trim_target_pct'])}
+    above = {k: _cents(LEVER_KIND[k], over[k], rates) for k in LEVERS}
+    return {'levers': [above[k] for k in LEVERS],
+            'at': [_cents(LEVER_KIND[k], t['all'][k], rates) - above[k] for k in BANDED],
+            'apart': [_cents(APART_KIND[k], t['apart'][k], rates) for k in APART_KEYS],
+            'boards': [_cents(APART_KIND[k], t['apart'][k], rates) for k in BOARDS]}
+
+
+def whole_dollars(terms, rates):
+    """The whole dollars a card prints (see above): `terms` is {root, shifts, scope}, the root's terms, each of its shifts'
+    and the shifts the card states. Returns the card's figure (`total`), its levers, rows at standard and their total, rows
+    apart, everything recorded and priced (`all_in`), and each stated shift's own."""
+    root, shifts, scope = terms['root'], terms['shifts'], terms['scope']
+    whole, parts = terms_cents(root, rates), [terms_cents(t, rates) for t in shifts]
+    share = lambda total, each: largest_remainder(each, nearest_dollar(total))
+    totals = share(sum(whole['levers']), [sum(p['levers']) for p in parts])
+    levers = [largest_remainder(p['levers'], totals[i]) for i, p in enumerate(parts)]
+    at_totals = share(sum(whole['at']), [sum(p['at']) for p in parts])
+    at = [largest_remainder(p['at'], at_totals[i]) for i, p in enumerate(parts)]
+    apart = [share(whole['apart'][j], [p['apart'][j] for p in parts]) for j in range(len(APART_KEYS))]
+    boards = [largest_remainder(p['boards'], apart[APART_KEYS.index('boards')][i]) for i, p in enumerate(parts)]
+    mine = [i for i, t in enumerate(shifts) if t['shift'] in scope]
+    each = [{'shift': shifts[i]['shift'], 'total': totals[i], 'levers': dict(zip(LEVERS, levers[i])), 'at': dict(zip(BANDED, at[i])),
+             'at_total': at_totals[i], 'apart': {k: apart[j][i] for j, k in enumerate(APART_KEYS)}, 'boards': dict(zip(BOARDS, boards[i]))}
+            for i in mine]
+    out = {'total': sum(e['total'] for e in each), 'shifts': each,
+           'levers': {k: sum(e['levers'][k] for e in each) for k in LEVERS}, 'at': {k: sum(e['at'][k] for e in each) for k in BANDED},
+           'at_total': sum(e['at_total'] for e in each), 'apart': {k: sum(e['apart'][k] for e in each) for k in APART_KEYS},
+           'boards': {k: sum(e['boards'][k] for e in each) for k in BOARDS}}
+    out['all_in'] = out['total'] + out['at_total'] + sum(out['apart'].values())
+    return out
+
+
+def display_terms(root_cells, scope, rates):
+    """`display_terms` of a card: the root's cells (the window's every shift, or the day's complete ones), grouped by
+    shift, and the shifts the card states."""
+    by = {}
+    for c in root_cells:
+        by.setdefault(c['shift'], []).append(c)
+    return {'root': whole_terms(ledger_sums(root_cells, rates)),
+            'shifts': [whole_terms(ledger_sums(by[sh], rates), sh) for sh in sorted(by)],
+            'scope': sorted(set(scope) & set(by))}
+
+
+def split_shown(parts, target):
+    """A printed figure's parts (cents, in a fixed order) as whole dollars that add up to it."""
+    return largest_remainder([to_cents(p) for p in parts], target)
+
+
+def row_shown(row, whole):
+    """The whole dollars a ledger row prints: a lever's, a row at standard's, a row shown apart's (cost_model.APART_KEYS)."""
+    if not row.get('apart'):
+        return whole['levers'][row['key']]
+    if row['apart'] == 'at-standard':
+        return whole['at'][row['key']]
+    return whole['apart'][row['key']]
+
+
+def attach_shown(data, rows, whole):
+    """A ledger's printed whole dollars beside its cents: each row's `usd_shown`, each chip's, the card's figure, its cost
+    at standard and everything recorded, and paper and machine time split so they add up to its figure."""
+    for r in rows:
+        r['usd_shown'] = row_shown(r, whole)
+    data['total_usd_shown'] = whole['total']
+    data['at_standard_usd_shown'] = whole['at_total']
+    data['all_in_usd_shown'] = whole['all_in']
+    data['total_paper_usd_shown'], data['total_machine_time_usd_shown'] = split_shown(
+        [data.get('total_paper_usd') or 0, data.get('total_machine_time_usd') or 0], whole['total'])
+    for b in data.get('buckets') or []:
+        b['usd_shown'] = sum(r['usd_shown'] for r in rows if not r.get('apart') and r.get('bucket') == b['bucket'])
+    return data
+
+
 def ptd_ledger(store, through, shift, rates):
     """The period to date of `through` for `shift` (None: all shifts): its ledger, the dollars above standard of each lever
-    and in all, and the same at this period's rate a year. `ptd_terms` re-derive it at a visitor's rates in the browser."""
+    and in all, and the same at this period's rate a year. With fewer than MIN_RATE_DAYS production days there is no
+    yearly figure, and `ptd_year_note` says why. `ptd_usd_shown` is the whole dollars a card prints: the period's every
+    shift at its nearest dollar, a shift its share (whole_dollars). `ptd_terms` re-derive it at a visitor's rates."""
     start, end, label = ptd_window(store, through)
-    cells, _, trace = ledger_cells(store, start, end, shift)
+    every, _, trace = ledger_cells(store, start, end, None)
+    cells = [c for c in every if shift is None or c['shift'] == shift]
     s = ledger_sums(cells, rates)
     levers = []
     for key in LEVERS:
         p = price(LEVER_KIND[key], s['over'][key], rates)
         levers.append({'key': key, 'lever': lever_label(key, rates), 'usd': p['usd'], 'usd_per_year': annual(p['usd'], s['days'])})
     years = [r['usd_per_year'] for r in levers]
+    shares = display_terms(every, [shift] if shift else [1, 2, 3], rates)
     out = {'ptd_label': label, 'ptd_start': start.isoformat(), 'ptd_through': end.isoformat(),
            'ptd_days': s['days'], 'ptd_scope': f'shift {shift}' if shift else 'all shifts',
            'ptd_usd': round(_add(r['usd'] for r in levers), 2),
+           'ptd_usd_shown': whole_dollars(shares, rates)['total'],
            'ptd_usd_per_year': None if None in years else round(_add(years), 0),
+           'ptd_year_note': year_note(s['days']),
            'ptd_levers': levers,
            'ptd_terms': {'days': s['days'], 'levers': [{'key': k, 'kind': LEVER_KIND[k], 'quantity': s['over'][k],
-                                                        **({'trim_cells': s['trim_cells']} if k == 'trim' else {})} for k in LEVERS]}}
+                                                        **({'trim_cells': s['trim_cells']} if k == 'trim' else {})} for k in LEVERS],
+                         'whole': shares}}
     return s, out, trace
 
 
@@ -875,28 +1077,88 @@ def _card(analysis, shifts, rates):
     return store, cells, stops, trace
 
 
-def shift_tiles(cell, s, rates):
+# A tile's printed whole dollars, as the ledger prints them (PR #168): the lever's whole dollars, and for a tile of all
+# recorded its rows at standard (and apart) of the same scope, added up; web/money.js reads `shown_of` the same way.
+SHOWN_OF = {'observed_shift_fpm': [['levers', 'speed']], 'maintenance_pct': [['levers', 'maintenance'], ['at', 'maintenance']],
+            'operator_pct': [['levers', 'operator'], ['at', 'operator']], 'dry_end_pct': [['levers', 'dry_end'], ['at', 'dry_end']],
+            'trim_pct': [['levers', 'trim'], ['at', 'trim']],
+            'maintenance_pm_pct': [['levers', 'maintenance'], ['at', 'maintenance'], ['apart', 'scheduled']]}
+
+
+def tile_shown(t, whole):
+    """A tile's `usd_shown`: the ledger's printed whole dollars it is (SHOWN_OF), else its own nearest dollar."""
+    if t['metric'] in SHOWN_OF and whole is not None:
+        t['shown_of'] = SHOWN_OF[t['metric']]
+        t['usd_shown'] = sum(whole[group][key] for group, key in t['shown_of'])
+    else:
+        t['usd_shown'] = None if t['usd'] is None else nearest_dollar(to_cents(t['usd']))
+    return t
+
+
+def shift_tiles(cell, s, rates, whole=None):
     """The money of a shift's KPI tiles, from the cell the card prices: the speed tile is the speed lever (the grade
     baseline, the one speed a price uses); side trim, the dry-end families, and the maintenance and operator minutes are
     all recorded, as the ownership lens's lines of the same shift. Returned on get_shift_dollars, the money answer a card
-    fetches after its first paint, so a KPI answer stays the size it was (#33)."""
+    fetches after its first paint, so a KPI answer stays the size it was (#33). Each prints the ledger's whole dollars
+    (tile_shown): the lever's, and its rows at standard, as the card's own lines print them."""
     gross, minutes = cell['gross'], cell['scheduled']
-    return [tile('observed_shift_fpm', [_part('speed', s['over']['speed'], gross, minutes)], rates, 'the speed under the grade baseline',
-                 measure='under the grade baseline'),
-            tile('maintenance_pct', [_part('downtime', cell['maintenance'], gross, minutes)], rates, 'maintenance stops, all recorded'),
-            tile('operator_pct', [_part('downtime', cell['operator'], gross, minutes)], rates, 'operator stops, all recorded'),
-            tile('dry_end_pct', [_part('waste', cell[k], gross, minutes) for k in DRY_END_KINDS], rates, 'dry-end rejects, all recorded'),
-            tile('trim_pct', [_part('trim', cell['trim'], gross, minutes)], rates, 'side trim, all recorded')]
+    tiles = [tile('observed_shift_fpm', [_part('speed', s['over']['speed'], gross, minutes)], rates, 'the speed under the grade baseline',
+                  measure='under the grade baseline'),
+             tile('maintenance_pct', [_part('downtime', cell['maintenance'], gross, minutes)], rates, 'maintenance stops, all recorded'),
+             tile('operator_pct', [_part('downtime', cell['operator'], gross, minutes)], rates, 'operator stops, all recorded'),
+             tile('dry_end_pct', [_part('waste', cell[k], gross, minutes) for k in DRY_END_KINDS], rates, 'dry-end rejects, all recorded'),
+             tile('trim_pct', [_part('trim', cell['trim'], gross, minutes)], rates, 'side trim, all recorded')]
+    return [tile_shown(t, whole) for t in tiles]
+
+
+def _day_root(every):
+    """A day's root (whole_dollars): its complete shifts' cells, the ones its card adds up; every cell when none is."""
+    return [c for c in every if c['coverage'] == 'complete'] or every
+
+
+def trim_by_shift(cells, whole, rates, lens='all'):
+    """Side trim by shift (the owner's word on PR #168): wherever a card for several shifts shows the trim lever, or the
+    ownership lens's trim line, each shift's line, its dollars (above the target; under the ownership lens all recorded)
+    with its side trim % of gross and its setups above the per-setup trim flag. Explanatory and schedule-driven: the order
+    mix and web widths set it, never a crew's doing. `details` rows, each its shift's whole dollars as the card adds them."""
+    if len(whole['shifts']) < 2:
+        return []
+    by, out = {}, []
+    for c in cells:
+        by.setdefault(c['shift'], []).append(c)
+    for e in whole['shifts']:
+        mine = by.get(e['shift'], [])
+        s = ledger_sums(mine, rates)
+        owner = lens == 'ownership'
+        qty = s['all']['trim'] if owner else s['over']['trim']
+        p = price('trim', qty, rates, s['gross'], s['scheduled'])
+        out.append({'shift': e['shift'], 'key': 'trim', 'part': 'all' if owner else 'above',
+                    'lever': TOTAL_TRIM if owner else lever_label('trim', rates), 'quantity': qty, 'usd': p['usd'],
+                    'usd_shown': e['levers']['trim'] + (e['at']['trim'] if owner else 0),
+                    'trim_pct_of_gross': _pct(s['lines']['trim'], s['lines']['gross']), 'band_target': band_target('trim', rates),
+                    'setups': sum(c['setups'] for c in mine), 'setups_above_trim_flag': sum(c['trim_flag_setups'] for c in mine),
+                    'trim_flag_pct': targets.TRIM_FLAG_PCT, 'shifts_over': s['over_cells']['trim'], 'shifts': s['cells'],
+                    'control': targets.BANDS['trim']['lever'], 'price_terms': {**p['price_terms'], 'trim_cells': s['trim_cells'],
+                                                                              'part': 'all' if owner else 'above'}})
+    return out
 
 
 def shift_dollars(analysis, shift, rates):
     """`get_shift_dollars`: one shift on the ledger (issue #164). Its levers, each its gap to its band, ranked by dollars;
     the cost at standard, planned maintenance, external stops and the waste with no band apart, outside the total; the
-    machine's period to date and its rate a year beside it. A shift is never annualized on its own."""
-    store, cells, stops, trace = _card(analysis, (shift,), rates)
+    machine's period to date and its rate a year beside it. A shift is never annualized on its own. It prints its share
+    of the day's whole dollars (whole_dollars), the figure the day card's line for it prints."""
+    store, every, stops, trace = _card(analysis, (1, 2, 3), rates)
+    cells = [c for c in every if c['shift'] == shift]
     rows, s = [], ledger_sums(cells, rates)
+    root = _day_root(every)
+    terms = display_terms(root if any(c['shift'] == shift for c in root) else cells, [shift], rates)
+    whole = whole_dollars(terms, rates)
     if cells:
-        rows = rank_ledger([_lever_row(k, s, rates, f'shift {shift}', stops) for k in LEVERS] + _apart_rows(s, rates))
+        rows = [_lever_row(k, s, rates, f'shift {shift}', stops) for k in LEVERS] + _apart_rows(s, rates)
+        for r in rows:
+            r['usd_shown'] = row_shown(r, whole)
+        rows = rank_ledger(rows)
     _, ptd, ptd_trace = ptd_ledger(store, analysis.day, None, rates)
     cell = cells[0] if cells else None
     coverage = cell['coverage'] if cell else 'unavailable'
@@ -907,8 +1169,10 @@ def shift_dollars(analysis, shift, rates):
                       'elapsed_ms': 0.0},
             'gross_sqft': s['gross'], 'scheduled_minutes': s['scheduled'], 'source_ids': cell['source_ids'] if cell else [],
             **ledger_totals(rows), **ptd, **_speeds(s), **_baseline_span(store, analysis.day, analysis.day), 'method_note': LEDGER_NOTE}
+    attach_shown(data, rows, whole)
+    data['display_terms'] = terms
     if cell and cell['coverage'] == 'complete' and cell['gross']:
-        data['tile_money'] = shift_tiles(cell, s, rates)
+        data['tile_money'] = shift_tiles(cell, s, rates, whole)
     return _envelope(data, rates)
 
 
@@ -916,23 +1180,37 @@ def day_dollars(analysis, rates, shifts=(1, 2, 3)):
     """`get_day_dollars`: a production day on the ledger (issue #31b review, #164), the card's total for the day's shifts
     (all three, or the ones a question named). The same cells as each shift's get_shift_dollars, those that are complete
     (an incomplete one is named in `excluded_shifts`, not added), summed: so the day's levers are its shifts' added up, and
-    its period to date and rate a year are the machine's, the figures every shift's card states."""
+    its period to date and rate a year are the machine's, the figures every shift's card states. Its whole dollars are
+    its shifts' (whole_dollars), and with several shifts its side trim is listed by shift (`details`)."""
     asked = sorted(set(shifts or (1, 2, 3)))
-    store, cells, stops, trace = _card(analysis, asked, rates)
+    store, every, stops, trace = _card(analysis, (1, 2, 3), rates)
+    cells = [c for c in every if c['shift'] in asked]
     complete = [c for c in cells if c['coverage'] == 'complete']
     used = complete or cells
     s = ledger_sums(used, rates)
-    rows = rank_ledger([_lever_row(k, s, rates, 'the day', stops) for k in LEVERS] + _apart_rows(s, rates)) if used else []
+    terms = display_terms(_day_root(every), [c['shift'] for c in used], rates)
+    whole = whole_dollars(terms, rates)
+    rows = []
+    if used:
+        rows = [_lever_row(k, s, rates, 'the day', stops) for k in LEVERS] + _apart_rows(s, rates)
+        for r in rows:
+            r['usd_shown'] = row_shown(r, whole)
+        rows = rank_ledger(rows)
     _, ptd, ptd_trace = ptd_ledger(store, analysis.day, None, rates)
+    shown = {e['shift']: e['total'] for e in whole['shifts']}
     data = {'production_day': analysis.day, 'shift': None, 'dataset_version': analysis.version, 'rows': rows,
             'coverage': 'complete' if complete else 'partial',
             'excluded_records': [e for e in analysis.errors if e.get('shift') in [c['shift'] for c in cells if c['coverage'] != 'complete']],
             'excluded_shifts': [c['shift'] for c in cells if c['coverage'] != 'complete'] if complete else [],
-            'shifts': [{'shift': c['shift'], 'coverage': c['coverage']} for c in cells],
+            'shifts': [{'shift': c['shift'], 'coverage': c['coverage'], **({'usd_shown': shown[c['shift']]} if c['shift'] in shown else {})}
+                       for c in cells],
             'trace': {'sql': ';\n'.join(trace['sql'] + ptd_trace['sql']), 'parameters': trace['parameters'] + ptd_trace['parameters'],
                       'elapsed_ms': 0.0},
             'gross_sqft': s['gross'], 'scheduled_minutes': s['scheduled'], **ledger_totals(rows), **ptd, **_speeds(s),
             **_baseline_span(store, analysis.day, analysis.day), 'method_note': LEDGER_NOTE}
+    attach_shown(data, rows, whole)
+    data['display_terms'] = terms
+    data['details'] = trim_by_shift(used, whole, rates)
     return _envelope(data, rates)
 
 
@@ -958,6 +1236,10 @@ def _ownership_rows(s, ptd, rates):
         row['above_standard_usd'] = above['usd']
         row['at_standard_usd'] = round(row['usd'] - above['usd'], 2)
         row['above_terms'] = {'kind': LEVER_KIND[key], 'quantity': s['over'][key], **({'trim_cells': s['trim_cells']} if key == 'trim' else {})}
+        # the shifts over the band beside the split (the review of PR #168, item 4): the band is each shift's standard, so
+        # a window inside it can still hold shifts above it, and the split says how many, as a lever's line does
+        row['band_target'], row['shifts_over'], row['shifts'] = band_target(key, rates), s['over_cells'][key], s['cells']
+        row['over_records'] = over_records(row['shifts_over'], row['shifts'], row['band_target'])
         return row
     trim_pct = _pct(lines['trim'], gross, 4)
     trim = _control({'lever': TOTAL_TRIM, 'key': 'trim', 'kind': 'trim', 'quantity': lines['trim'], 'unit': 'sq ft', 'pct_of_gross': trim_pct,
@@ -993,12 +1275,14 @@ def owner_order(rows):
     groups = {}
     for r in rows:
         groups.setdefault(r.get('group') or r['lever'], []).append(r)
-    by_usd = lambda r: (-(r['usd'] or 0), r['lever'])
+    shown = lambda r: r.get('usd_shown') if r.get('usd_shown') is not None else (r['usd'] or 0)
+    by_usd = lambda r: (-shown(r), -(r['usd'] or 0), r['lever'])
     for members in groups.values():
         members.sort(key=by_usd)
-    size = {k: _add(r['usd'] or 0 for r in members) for k, members in groups.items()}
+    # by the whole dollars printed (PR #168), then the cents: the group by its rows' printed dollars added up
+    size = {k: (sum(shown(r) for r in members), _add(r['usd'] or 0 for r in members)) for k, members in groups.items()}
     out, group_rank = [], None
-    for rank, key in enumerate(sorted(groups, key=lambda k: (-size[k], k)), 2):
+    for rank, key in enumerate(sorted(groups, key=lambda k: (-size[k][0], -size[k][1], k)), 2):
         for r in groups[key]:
             r['rank'] = None if r.get('group') else rank
         if groups[key][0].get('group'):
@@ -1017,7 +1301,57 @@ def dry_end_subtotal(rows, rank, s, rates):
     return {'dry_end_rank': rank, 'dry_end_kinds': len(mine), 'dry_end_usd': usd,
             'dry_end_usd_per_year': None if any(v is None for v in years) else round(_add(v or 0 for v in years), 0),
             'dry_end_above_standard_usd': above, 'dry_end_at_standard_usd': round(usd - above, 2),
-            'dry_end_above_terms': {'kind': 'waste', 'quantity': s['over']['dry_end']}}
+            'dry_end_above_terms': {'kind': 'waste', 'quantity': s['over']['dry_end']},
+            'dry_end_band_target': band_target('dry_end', rates), 'dry_end_shifts_over': s['over_cells']['dry_end'],
+            'dry_end_shifts': s['cells'], 'dry_end_over_records': over_records(s['over_cells']['dry_end'], s['cells'], band_target('dry_end', rates))}
+
+
+def over_records(over, cells, target):
+    """A split's shifts over its band, in words (the review of PR #168, item 4): "2 of 3 shifts over the 3% target"."""
+    return f'{over} of {cells} shift{"" if cells == 1 else "s"} over the {target:g}% target'
+
+
+def ownership_shown(rows, whole):
+    """The ownership lens's printed whole dollars (PR #168): side trim and shear are their levers' whole dollars above
+    standard and their rows' at standard added up, the figures the levers print, so the two lenses print one figure; the
+    tag scrap is the dry-end lever's and its row at standard's, its kinds sharing it by the largest remainder; the waste
+    boards' two lines share the boards row's; the changeover rejects are their row's; planning / admin and the
+    unexplained remainder, which no other view prints, are their nearest dollar. Returns the tag scrap's (above, at)."""
+    for r in rows:
+        k = r['key']
+        if k in ('trim', 'shear'):
+            r['above_standard_usd_shown'], r['at_standard_usd_shown'] = whole['levers'][k], whole['at'][k]
+            r['usd_shown'] = whole['levers'][k] + whole['at'][k]
+        elif k == 'changeover':
+            r['usd_shown'] = whole['apart']['changeover']
+        elif k in BOARDS:
+            r['usd_shown'] = whole['boards'][k]
+        elif r.get('group') != DRY_END_GROUP:
+            r['usd_shown'] = nearest_dollar(to_cents(r['usd']))
+    kinds = sorted((r for r in rows if r.get('group') == DRY_END_GROUP), key=lambda r: DRY_END_KINDS.index(r['key']))
+    dry = (whole['levers']['dry_end'], whole['at']['dry_end'])
+    for r, v in zip(kinds, split_shown([r['usd'] for r in kinds], sum(dry))):
+        r['usd_shown'] = v
+    return dry
+
+
+def ownership_totals_shown(data, rows, dry):
+    """The ownership lens's printed totals: all the waste is its lines' whole dollars added up, at standard and above
+    standard the split lines' parts added up, with no band yet the rest, and paper and machine time split to add up."""
+    split = [r for r in rows if r.get('above_standard_usd_shown') is not None]
+    group = data.get('dry_end_rank') is not None
+    data['total_usd_shown'] = sum(r['usd_shown'] for r in rows)
+    data['above_standard_usd_shown'] = sum(r['above_standard_usd_shown'] for r in split) + (dry[0] if group else 0)
+    data['at_standard_usd_shown'] = sum(r['at_standard_usd_shown'] for r in split) + (dry[1] if group else 0)
+    data['no_band_usd_shown'] = data['total_usd_shown'] - data['above_standard_usd_shown'] - data['at_standard_usd_shown']
+    if group:
+        data['dry_end_usd_shown'] = sum(r['usd_shown'] for r in rows if r.get('group') == DRY_END_GROUP)
+        data['dry_end_above_standard_usd_shown'], data['dry_end_at_standard_usd_shown'] = dry
+    data['total_paper_usd_shown'], data['total_machine_time_usd_shown'] = split_shown(
+        [data.get('total_paper_usd') or 0, data.get('total_machine_time_usd') or 0], data['total_usd_shown'])
+    for b in data.get('buckets') or []:
+        b['usd_shown'] = sum(r['usd_shown'] for r in rows if bucket_of(r) == b['bucket'])
+    return data
 
 
 def opportunities(store, window, shift, rates, lens='all'):
@@ -1037,12 +1371,17 @@ def opportunities(store, window, shift, rates, lens='all'):
     current = store._window(window)
     cells, stops, trace = ledger_cells(store, current['start'], current['end'], shift)
     s = ledger_sums(cells, rates)
+    # the whole dollars it prints are its shifts' shares of the window's every shift (whole_dollars, PR #168)
+    every = cells if shift is None else ledger_cells(store, current['start'], current['end'], None)[0]
+    terms = display_terms(every, [shift] if shift else [1, 2, 3], rates)
+    whole = whole_dollars(terms, rates)
     through = current['end'] if current['coverage'] != 'unavailable' else store.last_day
     ptd_s, ptd, ptd_trace = ptd_ledger(store, through, shift, rates)
     scope = f'shift {shift}' if shift else 'all shifts'
     group = {}
     if lens == 'ownership':
         rows = _ownership_rows(s, ptd_s, rates)
+        dry = ownership_shown(rows, whole)
         rows[0]['rank'] = 1
         rest, group_rank = owner_order(rows[1:])
         rows = rows[:1] + rest
@@ -1057,9 +1396,13 @@ def opportunities(store, window, shift, rates, lens='all'):
                   'at_standard_usd': round(_add(r['at_standard_usd'] for r in rows if r.get('at_standard_usd') is not None) +
                                            (group['dry_end_at_standard_usd'] if group else 0.0), 2)}
         totals['no_band_usd'] = round(totals['total_usd'] - totals['above_standard_usd'] - totals['at_standard_usd'], 2)
+        totals = ownership_totals_shown({**totals, **group}, rows, dry)
     else:
-        rows = rank_ledger([_lever_row(k, s, rates, scope, stops, ptd_s) for k in LEVERS] + _apart_rows(s, rates), lens)
-        totals = ledger_totals(rows)
+        rows = [_lever_row(k, s, rates, scope, stops, ptd_s) for k in LEVERS] + _apart_rows(s, rates)
+        for r in rows:
+            r['usd_shown'] = row_shown(r, whole)
+        rows = rank_ledger(rows, lens)
+        totals = attach_shown(ledger_totals(rows), rows, whole)
     controllable = [r for r in rows if r.get('control') == 'controllable' and not r.get('apart') and lens != 'ownership']
     coverage = current['coverage']
     notes = {'all': LEDGER_NOTE,
@@ -1080,7 +1423,9 @@ def opportunities(store, window, shift, rates, lens='all'):
             'controllable_levers': len(controllable), 'controllable_usd': round(_add(r['usd'] or 0 for r in controllable), 2),
             'controllable_usd_per_year': round(_add(r['usd_per_year'] or 0 for r in controllable), 0)
                 if all(r['usd_per_year'] is not None for r in controllable) else None,
+            'controllable_usd_shown': sum(r['usd_shown'] for r in controllable),
             'runs_under_baseline': s['runs_under'], **ptd, **_speeds(s),
             **_baseline_span(store, current['start'], current['end'] if coverage != 'unavailable' else through),
-            'method_note': notes}
+            'method_note': notes, 'display_terms': terms,
+            'details': trim_by_shift(every, whole, rates, 'ownership' if lens == 'ownership' else 'all')}
     return _envelope(data, rates)
