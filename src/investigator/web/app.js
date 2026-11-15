@@ -663,7 +663,7 @@ function showTable(data){
 const TILE_PRIORITY=['volume_msf','msf_per_day','speed_run_fpm','speed_all_fpm','downtime_pct','stops','minutes_per_stop','trim_pct','shear_pct','dry_end_pct','bale_pct','maintenance_pm_pct','operator_pct'];
 const VISIBLE_TILES=12;
 const UNIT_SHORT={'% of gross':'%','% of scheduled minutes':'%',count:'','min/stop':'min/stop'};
-const unitShort=unit=>UNIT_SHORT[unit]??unit;
+const unitShort=unit=>UNIT_SHORT[unit]??(/^% of /.test(unit||'')?'%':unit);   // any percent reads as % on a tile, its change as pts (#177); the tile's title names the denominator
 function fmtNumber(value,unit,signed=false){
  if(value===null||value===undefined)return 'unavailable';
  let places=Number.isInteger(value)?0:/MSF|ft\/min|^ft$|^min$/.test(unit)?1:2;

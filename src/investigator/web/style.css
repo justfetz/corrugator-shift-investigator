@@ -286,7 +286,10 @@ button.analyst{display:inline-flex;align-items:center;gap:8px;padding:0 14px}but
 .tile .v small{font-size:.72rem;font-weight:400;color:var(--ink-3);margin-left:3px;letter-spacing:0}
 .tile .f{margin-top:auto;display:flex;flex-direction:column;gap:3px;padding-top:6px}
 .tile .prev{font-family:var(--mono);font-size:.7rem;color:var(--ink-3)}
-.delta{display:inline-block;align-self:flex-start;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--neutral-soft);color:var(--neutral);white-space:nowrap}
+/* #177: card text wraps inside the card at every width; a chip, a tile or a finding never pushes past its box (the long unit ran 113 px past a 390 px card) */
+.delta{display:inline-block;align-self:flex-start;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--neutral-soft);color:var(--neutral);max-width:100%;overflow-wrap:anywhere}
+.tile,.metric,.tile .f,.tile .usd,.metric .usd,.metric .sub{min-width:0;overflow-wrap:anywhere}
+.metric .label{letter-spacing:.03em;overflow-wrap:anywhere}#messages li,#messages p,.message li,.message p{overflow-wrap:anywhere}
 .delta.better{background:var(--good-soft);color:var(--good)}.delta.worse{background:var(--bad-soft);color:var(--bad)}
 .delta.withheld{font-weight:500;font-style:italic}
 .kpis .more{margin-top:10px;font-size:.82rem;padding:7px 11px}
