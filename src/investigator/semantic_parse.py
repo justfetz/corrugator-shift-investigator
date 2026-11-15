@@ -640,10 +640,15 @@ def _boards_dimension(reading, items, a):
         if not (split or ranked):
             continue   # "boards with the most downtime", "top 3 boards by downtime": the boards ranked, as "which boards" ranks them
         # a measure the reading read first ("which boards had the most order change stops": the stops), else one said as a value
-        # ("which boards had the most shear": the shear); never a dimension's word ("which day had the most boards" counts boards by day)
-        said = [o.said if not _entries(o, 'dimension') else [] for o in items]
+        # ("which boards had the most shear": the shear); never a dimension's word ("which day had the most boards" counts boards by day),
+        # nor a value said as one ("compare boards at the shear on shift 1 versus shift 2" compares a count of boards)
+        said = [o.said if not _entries(o, 'dimension') and getattr(_prev(items, j), 'words', None) not in PLACE_CUES + REASON_CUES else []
+                for j, o in enumerate(items)]
         other = next((e[1] for entries in ([_entries(o, 'measure') for o in items], said) for o, found in zip(items, entries)
                       if o is not it and o.kind == 'vocab' for e in found if e[1] != 'sheets'), None)
+        unit = next((u for u in a.get('units') or [] if u not in ('count', 'min')), None)
+        if other is not None and unit is not None:
+            other = _family(mdl, other, unit) or other   # "shear % by boards": the shear's percent, as _assign reads the unit said
         speed = next((SPEED_RANK[o.words] for o in items if o.kind == 'speed_rank'), None)
         if other is None and speed:
             other = 'speed_run_fpm'
@@ -661,7 +666,7 @@ def _boards_dimension(reading, items, a):
                 # first dimension it is split by (the coordinator's review of PR #155 at 97b81f4, item 2: never "bale by grade",
                 # which the grade totals answer)
                 m = mdl.measures[other]
-                why = no_grade[0].split(';')[0].replace(f' ({other})', '').replace(m['label'], _strip_parens(m['label']).lower(), 1)
+                why = no_grade[0].split(';')[0].replace(f' ({other})', '').replace(m['label'], _measure_word(mdl, other), 1)
                 dim = next((d for d in no_grade[1] if mdl.dimensions[d]['type'] != 'time'), None)
                 return Refused(f"'boards' is not a dimension the semantic model reads, and no grade stands in for it: {why}",
                                _suggest(mdl, reading, other, dim, rank) if dim else [f'{_measure_word(mdl, other)} {reading.window_words}'.strip()])
@@ -820,7 +825,12 @@ def _measure_word(mdl, name):
     words = {'downtime_minutes': 'minutes of downtime', 'stops': 'stops', 'setups': 'setups', 'msf': 'MSF', 'reject_sqft': 'dry-end rejects',
              'speed_run_fpm': 'speed', 'shear_sqft': 'shear', 'shear_usd': 'shear cost', 'running_minutes': 'run minutes',
              'elapsed_minutes': 'setup minutes'}
-    return words.get(name) or _strip_parens(m['label']).lower()
+    if name in words:
+        return words[name]
+    # a word that reads back as this measure: a percent or the bale in MSF shares its label with the square feet ("bale"), so its own
+    # synonym says it ("bale %", "trim percent"; the reviewer's check of this round: "which shift had the most bale" answered sq ft)
+    return next((w for w in [_strip_parens(m['label']).lower(), *m.get('synonyms', [])] if mdl.measure_words.get(w) == name),
+                _strip_parens(m['label']).lower())
 
 
 def _dim_word(mdl, dim, whole=False):
@@ -1163,7 +1173,8 @@ def _assign(reading, items, mdl, store, a, context):
             if measure is None:
                 continue
             dim = next((e[1] for e in _entries(item, 'dimension') if semantic._usable(mdl, measure, e[1], as_filter=False) is None), None)
-            if dim is not None and _modifier(items, i) and any(d != dim for d in group_by):
+            if dim is not None and _modifier(items, i) and any(d != dim and semantic._usable(mdl, measure, d, as_filter=False) is None
+                                                               for d in group_by):
                 # "crew rejects by shift": no value of the word narrows the measure, but the word is also a dimension the measure is
                 # recorded by, said bare before it beside a split of another: _modifier's reason below, never "not recorded by stop
                 # kind" (the coordinator's review of PR #155 at 97b81f4, item 5)
@@ -1470,9 +1481,11 @@ def _suggest(mdl, reading, measure, dim, rank, dims=None, measures=None):
             if rank:
                 verb = 'had the most' if rank == 'most' else 'had the fewest' if mdl.measures[m]['unit'] in COUNT_UNITS else \
                        'had the least'
-                if mdl.measures[m]['unit'] == 'ft/min':
+                if m == 'speed_run_fpm':   # "fastest" ranks the speed without stops; another speed is named ("speed with stops")
                     verb = 'was the slowest' if rank == 'least' else 'was the fastest'
                     out.append(f'which {_dim_word(mdl, d)} {verb} {window}'.strip())
+                elif mdl.measures[m]['unit'] == 'ft/min':
+                    out.append(f"which {_dim_word(mdl, d)} had the {'lowest' if rank == 'least' else 'highest'} {word} {window}".strip())
                 else:
                     out.append(f'which {_dim_word(mdl, d)} {verb} {word} {window}'.strip())
             else:

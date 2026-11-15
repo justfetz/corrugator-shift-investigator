@@ -1149,7 +1149,9 @@ def test_every_question_a_refusal_offers_is_answered_as_asked(store):
                      'Shear by boards this week', 'Which boards had the most order changes this week?', 'Crew rejects by shift this week',
                      'Which shift had the most crew rejects this week?', 'Which boards took the most minutes this week?',
                      'Which boards had the most shear cost this week?', 'Which boards had the most order change stops this week?',
-                     'Which boards had the most shear chops, priced this week?'):
+                     'Which boards had the most shear chops, priced this week?', 'Which boards had the highest line speed this week?',
+                     'Which boards had the highest bale % this week?', 'Bale MSF by boards this week', 'Shear % by boards this week',
+                     'Crew trim % by shift this week'):
         with pytest.raises(ValueError) as refused:
             route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
         offered = _offered(str(refused.value))
@@ -1204,3 +1206,34 @@ def test_edge_trim_waste_is_side_trim(store):
                      'How much edge trim waste this week?'):
         r = reading(store, question)
         assert r.complete and r.query.measure == 'trim_sqft', (question, r.refusal)
+
+
+def test_a_suggestion_names_the_measure_the_question_asked(store):
+    """Each question a refusal offers reads as the measure the refused question named, its unit included: the speed with stops is
+    never offered as "which shift was the fastest" (the speed without stops), a percent or the bale in MSF never as the square feet
+    its label shares ("bale %" is "bale %", never "bale"), and the priced shear as "shear cost" (the reviewer's check of this round)."""
+    for question, measure in (('Which boards had the highest line speed this week?', 'speed_all_fpm'),
+                              ('Which boards had the lowest speed with stops this week?', 'speed_all_fpm'),
+                              ('Which boards had the most elapsed speed this week?', 'speed_elapsed_fpm'),
+                              ('Which grade had the most wet end speed this week?', 'speed_run_fpm'),
+                              ('Which boards had the highest bale % this week?', 'bale_pct'), ('Bale MSF by boards this week', 'bale_msf'),
+                              ('Which boards had the highest unexplained % this week?', 'unexplained_pct'), ('Shear % by boards this week', 'shear_pct'),
+                              ('Crew trim % by shift this week', 'trim_pct'), ('Which boards had the most shear cost this week?', 'shear_usd'),
+                              ('Which boards had the most bale this week?', 'bale_sqft')):
+        with pytest.raises(ValueError) as refused:
+            route(question, Context(DAY, 2, scope='shift'), store.production_days, store)
+        offered = _offered(str(refused.value))
+        assert offered, (question, str(refused.value))
+        for suggestion in offered:
+            r = reading(store, suggestion)
+            assert r.complete and r.query.measure == measure, (question, suggestion, r.query.measure if r.query else r.refusal)
+
+
+def test_the_modifier_and_the_boards_keep_their_own_reasons_where_they_do_not_apply(store):
+    """_modifier's reason needs another split the measure is recorded by: "crew rejects by reason" is never told to ask a split the
+    model refuses. A value said with its cue is a value ("compare boards at the shear on shift 1 versus shift 2" compares a count of
+    boards: the records' reason), never a measure kept for _boards_dimension (the reviewer's check of this round)."""
+    r = reading(store, 'Crew rejects by reason this week')
+    assert 'modifier' not in r.cues and not r.complete, r.refusal
+    with pytest.raises(ValueError, match='^The records do not count boards'):
+        route('Compare boards at the shear on shift 1 versus shift 2 this week', Context(DAY, 2, scope='shift'), store.production_days, store)
