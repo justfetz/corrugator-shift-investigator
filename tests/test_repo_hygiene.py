@@ -502,7 +502,7 @@ import workflow_yaml
 AUTH_ACTION = 'google-github-actions/auth@'
 PR_EVENTS = {'pull_request', 'pull_request_review', 'pull_request_review_comment', 'merge_group'}   # these run the PR's code as the definition
 BASE_REFS = {'${{ github.event.repository.default_branch }}', 'main', 'refs/heads/main'}
-OTHER_FETCH = re.compile(r'refs/pull/|FETCH_HEAD|\bgit\s+(?:-C\s+\S+\s+)?(?:checkout|switch|worktree|reset|restore|pull|merge|am|apply|'
+OTHER_FETCH = re.compile(r'refs/pull/|(?<![\w/])pull/[^\s/"\']+/(?:head|merge)\b|FETCH_HEAD|\bgit\s+(?:-C\s+\S+\s+)?(?:checkout|switch|worktree|reset|restore|pull|merge|am|apply|'
                          r'cherry-pick|rebase)\b|\bgh\s+pr\s+(?:checkout|diff)\b|pull_request\.head\.(?:sha|ref)|merge_commit_sha')
 AUTHOR_TEXT = re.compile(r'\$\{\{[^}]*(?:github\.event\.pull_request\.(?:title|body|head\.ref|head\.label)|github\.head_ref|'
                          r'github\.event\.(?:comment|review|issue|commits|head_commit)\b)')
@@ -513,11 +513,19 @@ def workflow_events(workflow):
     return {on} if isinstance(on, str) else set(on or ())
 
 
+# The stored key in any spelling (`secrets.GCP_SA_KEY`, `secrets['GCP_SA_KEY']`), and the whole secrets context, which
+# holds it too (`toJSON(secrets)`, `secrets[matrix.name]`, a bare `secrets`). A job that names only another secret
+# (the agents' Anthropic credential, HF_TOKEN) holds a credential, but not Google's: its own workflow's tests cover it.
+GOOGLE_KEY = re.compile(r'secrets\s*(?:\.\s*GCP_SA_KEY\b|\[\s*[\'"]GCP_SA_KEY[\'"]\s*\])')
+WHOLE_SECRETS = re.compile(r'\$\{\{[^}]*\bsecrets\b(?!\s*\.\s*\w|\s*\[\s*[\'"])')
+
+
 def holds_google_credential(workflow, job):
-    """The job authenticates to Google: the auth action, the stored key, or gcloud's own login."""
-    text = json_lib.dumps([job, workflow.get('env')])
+    """The job authenticates to Google: the auth action, the stored key or the whole secrets context, or gcloud's login."""
+    text = json_lib.dumps([job, workflow.get('env')]).replace('\\"', '"')
     return (any(str(s.get('uses') or '').startswith(AUTH_ACTION) for s in job.get('steps') or ())
-            or 'secrets.GCP_SA_KEY' in text or re.search(r'gcloud\s+auth\s+(?:activate-service-account|login)', text) is not None)
+            or GOOGLE_KEY.search(text) is not None or WHOLE_SECRETS.search(text) is not None
+            or re.search(r'gcloud\s+auth\s+(?:activate-service-account|login)', text) is not None)
 
 
 def checkouts(job, events):
@@ -569,11 +577,13 @@ def uploads(script, workdir):
     """The directory each gcloud upload in a script sends to Cloud Build, resolved against its working directory."""
     found = []
     for line in script.replace('\\\n', ' ').splitlines():
-        if re.search(r'\bgcloud\s+run\s+deploy\b', line):
+        # gcloud [alpha|beta] run deploy, run jobs deploy, functions deploy: --source, else the working directory
+        # (run: unless --image names a built image)
+        if re.search(r'\bgcloud\s+(?:(?:alpha|beta)\s+)?(?:run\s+(?:jobs\s+)?deploy|functions\s+deploy)\b', line):
             source = re.search(r'--source[ =]["\']?([^\s"\']+)', line)
-            if source or '--image' not in line:   # no --source and no --image: gcloud uploads the working directory
+            if source or '--image' not in line:
                 found.append(source.group(1) if source else '.')
-        submit = re.search(r'\bgcloud\s+(?:builds\s+submit|app\s+deploy)\b(.*)', line)
+        submit = re.search(r'\bgcloud\s+(?:(?:alpha|beta)\s+)?(?:builds\s+submit|app\s+deploy)\b(.*)', line)
         if submit:
             positional = [w for w in submit.group(1).split() if not w.startswith('-')]
             found.append(positional[0].strip('"\'') if positional else '.')
@@ -757,6 +767,16 @@ jobs:
     ('--tag "pr-$PR"', '--tag "pr-$PR" --description "${{ github.event.pull_request.title }}"'),
     ('      - uses: google-github-actions/auth@v2\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n',
      '      - run: echo "$KEY" > k.json && gcloud auth activate-service-account --key-file k.json && python3 pr/x.py\n        env:\n          KEY: ${{ secrets.GCP_SA_KEY }}\n'),
+    # the coordinator's review of PR #170: spellings the second version missed
+    ('      - uses: google-github-actions/auth@v2\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n',
+     "      - run: python3 pr/x.py\n        env:\n          KEY: ${{ secrets['GCP_SA_KEY'] }}\n"),
+    ('      - uses: google-github-actions/auth@v2\n        with:\n          credentials_json: ${{ secrets.GCP_SA_KEY }}\n',
+     '      - run: python3 pr/x.py\n        env:\n          ALL: ${{ toJSON(secrets) }}\n'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud beta run deploy "$SERVICE" --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud run jobs deploy job --source .\n          echo --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud functions deploy f --runtime python312\n          echo --tag'),
+    ('--source pr --tag', '--source pr --tag "pr-$PR"\n          gcloud beta builds submit\n          echo --tag'),
+    ('- name: Deploy\n        run: |\n', '- run: git fetch origin pull/41/head\n      - name: Deploy\n        run: |\n'),
 ])
 def test_the_exposure_check_finds_each_way_in(change, finding):
     """The check is not vacuous: each edit of a safe job is found, and the safe job passes."""
@@ -824,3 +844,20 @@ def test_the_documented_pool_condition_trusts_mains_two_deploy_workflows_and_not
     for file in named:
         events = workflow_events(workflows[file])
         assert 'workflow_call' not in events and not events & PR_EVENTS, (file, events)
+
+
+def test_the_owner_is_told_to_end_the_stored_key_and_the_stale_branches_before_agents_run():
+    """The coordinator's review of PR #170: a pull request between two branches cut before #133 runs their old
+    preview.yml (on pull_request, the pull request's own scripts after auth), which in key mode holds GCP_SA_KEY. No
+    file on main can change another branch, so the guard for it is the owner's list: "Fix before enabling" names the
+    cutover's key deletion or an Environment for main only, and the stale branches; DEPLOYMENT.md lists them."""
+    agents = (ROOT / 'docs' / 'AGENTS.md').read_text(encoding='utf-8')
+    table = agents.split('## Fix before enabling `agent-ready`', 1)[1].split('\n## ', 1)[0]
+    row = next(line for line in table.splitlines() if line.startswith('| **The stored key is gone'))
+    assert 'delete `GCP_SA_KEY`' in row and 'Environment' in row and "`main` only" in row and 'stale' in row
+    assert 'Nothing left' not in table, 'H4 is not closed on branches cut before #133'
+    deployment = (ROOT / 'docs' / 'DEPLOYMENT.md').read_text(encoding='utf-8')
+    assert '**Branches cut before #133 still carry the old Preview.**' in deployment
+    assert "git show \"origin/$B:.github/workflows/preview.yml\" 2>/dev/null | grep -q '^  pull_request:$'" in deployment
+    old = workflow_yaml.load(PRE_133_PREVIEW)   # what such a branch still holds
+    assert workflow_events(old) == {'pull_request'} and credential_exposures(old)
