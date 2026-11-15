@@ -54,13 +54,14 @@ NOTE = ('Dollars are synthetic records priced at assumed rates (the post\'s defa
         'they are not a real plant\'s figures.')
 # Said once on a card over several production days, and on its tiles (the coordinator's review of 82c0994 on PR #168, item 2):
 # its whole dollars are its cells' added up (whole_dollars), which can differ from the window priced at once in cents. The bound
-# is measured over the whole record, 1 Jan 2025 to 13 Nov 2026, at seven rate sets (the review of 2510d38, item 2): a card's
-# levers within $7, everything recorded and priced within $12, a line within $17.09 and all the waste recorded within $23.69
-# (September 2025 at hour:1); at the post's rates within $12.78 (4-4-5 P2 2026's waste recorded). docs/COST_MODEL.md has the
-# table. In words, never a $ figure: web/money.js re-prices every $ token of the prose.
+# over the whole record (the review of 2510d38, item 2), 1 Jan 2025 to 13 Nov 2026: at the post's rates every multi-day card's
+# figures are within $12.78 of their cents (4-4-5 P2 2026's waste recorded), LONG_BOUND, which the note states and
+# tests/test_money_ledger.py holds on the golden record. Other rates can read wider: within $23.69 at six other sets, and a very
+# low machine rate floors each cell's sub-dollar lines, $29.74 at hour:1,trim:2 (September 2026's waste recorded);
+# docs/COST_MODEL.md has the table. In words, never a $ figure: web/money.js re-prices every $ token of the prose.
+LONG_BOUND = 13   # dollars: no multi-day card at the post's rates reads this far off its cents over the whole record
 LONG_NOTE = ('Over several days these whole dollars, added shift by shift, can read off the same quantities priced at once in cents, '
-             'which the formulas and receipts state; over the whole record the widest gap measured is about twenty-five dollars, on a '
-             'month\'s waste recorded.')
+             'which the formulas and receipts state: at the post\'s rates by under thirteen dollars over the whole record.')
 
 
 # ------------------------------------------------------------------ rates
@@ -593,7 +594,7 @@ SPEEDS_NOTE = ('Two speeds, never one definition: the speed lever is each grade\
 LEDGER_NOTE = ('Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band '
                'adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this '
                'period\'s rate, period-to-date dollars per production day x the post\'s production days a year, never a shift\'s or '
-               'a day\'s own; for all shifts it is each shift\'s period-to-date rate added up, so the shifts\' yearly figures add to it. '
+               'a day\'s own. For all shifts it is each shift\'s period-to-date rate added up, so the shifts\' yearly figures add to it. '
                'These name where to look and whom to ask; they never prescribe a machine adjustment.')
 
 CELL_SQL = ("SELECT production_date, shift, coverage, setups, gross_sqft, trim_sqft, shear_sqft, reject_sqft, bond_sqft, warp_sqft, "
@@ -1452,7 +1453,12 @@ def _ownership_rows(s, ptd, rates, ptd_whole):
     trim.update(yearly('trim', 'trim'))
     rows = [split(trim, 'trim')]
     for key in ('shear', 'changeover', 'cutoff_waste', 'stacker_waste', 'admin', *DRY_END_KINDS, 'unexplained'):
-        if not lines[key] or lines[key] <= 0:
+        # a line the window holds, or one its period to date holds and the window does not (it prints $0 beside its yearly
+        # figure): every line with a yearly figure is on every card that adds it, so a shift's card states its own share of
+        # the all-shifts card's (the reviewer's gap on 2510d38's round: 29 Jan 2025's shift 2 recorded no planning / admin,
+        # and its card left out the $15,637 a year its period to date holds, which the all-shifts card added). A negative
+        # remainder is not priced and not shown.
+        if lines[key] < 0 or (not lines[key] and not plines[key] > 0):
             continue
         kind = 'paper' if key == 'unexplained' else 'waste'
         share, records = pct(key)
@@ -1610,8 +1616,9 @@ def opportunities(store, window, shift, rates, lens='all'):
                            'of the waste breakdown priced once, so the total is the waste breakdown\'s. A banded line is split at its band: '
                            'at standard, the cost of the order mix and the process; above standard, the lever\'s own figure. The dry-end '
                            'waste is the tag scrap: bond, warp, misalignment, moisture and other, one subtotal with each kind beneath it. A '
-                           'yearly figure is this period\'s rate, period-to-date dollars per production day x the post\'s production days a year; '
-                           'for all shifts it is each shift\'s period-to-date rate added up, so the shifts\' yearly figures add to it.')}[lens]
+                           'yearly figure is this period\'s rate, period-to-date dollars per production day x the post\'s production days a year. '
+                           'For all shifts it is each shift\'s period-to-date rate added up, so the shifts\' yearly figures add to it; a line '
+                           'the period to date holds still shows when the window holds none of it.')}[lens]
     data = {'tool': 'get_opportunities', 'window': current, 'previous_window': None, 'shift': shift, 'lens': lens,
             'dataset_version': store.content_hash, 'rows': rows, 'coverage': 'complete' if coverage == 'complete' else coverage,
             'excluded_records': [], 'source_rows': {'shifts': s['cells'], 'runs': s['runs']},

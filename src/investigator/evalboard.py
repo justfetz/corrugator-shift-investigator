@@ -167,7 +167,7 @@ def describe_expect(expect):
         lines.append({'headline_figure': f'The headline\'s bold figure is {check.get("tool")}\'s {check.get("field")}',
                       'one_yearly_figure': f'Every {check.get("tool")} states the same yearly figure, the period to date\'s',
                       'views_agree': f'The {check.get("lever")} lever and the ownership lens\'s line above standard are one figure, stated in the second answer',
-                      'yearly_from_period_to_date': f'{check.get("tool")}\'s yearly figure is its period to date\'s dollars per production day x the post\'s days a year',
+                      'yearly_from_period_to_date': f'{check.get("tool")}\'s yearly figure is each shift\'s period-to-date dollars per production day x the post\'s days a year, added up',
                       'shifts_add_to_day': 'The day card\'s levers are its shifts\' levers added up, in quantity and in dollars'}
                      .get(check.get('check'), f'Money check {check.get("check")}'))
     if 'narrative_status' in expect:

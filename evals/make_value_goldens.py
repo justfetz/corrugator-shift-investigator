@@ -1439,10 +1439,12 @@ def ownership_case(plain, id, period, anchor, shift=None, *, day="2026-09-14", n
               ("misalignment", "Dry-end: misalignment (all recorded)"), ("moisture", "Dry-end: moisture (all recorded)"),
               ("other", "Dry-end: other (cracking, handling, paper, print) (all recorded)"))
     for key, label in labels:
-        if lines[key] > 0:   # planning / admin is bookkeeping, not production waste (reject_reasons.json: controllable "no")
+        # a line the window holds, or one its period to date holds that the window does not ($0 beside its yearly figure: the
+        # review of 2510d38's round). Planning / admin is bookkeeping, not production waste (reject_reasons.json: controllable "no")
+        if lines[key] > 0 or (lines[key] == 0 and plines[key] > 0):
             levers[label] = (money("waste", lines[key], gross, scheduled, rates, 0.1), "not production waste" if key == "admin" else "controllable",
                              year("waste", key))
-    if lines["unexplained"] > 0:
+    if lines["unexplained"] > 0 or (lines["unexplained"] == 0 and plines["unexplained"] > 0):
         levers["Unexplained (bale minus every recorded waste line)"] = (money("paper", lines["unexplained"], gross, scheduled, rates, 0.1),
                                                                          "unattributed", year("paper", "unexplained"))
     dry = [k for k in levers if k.startswith("Dry-end: ")]

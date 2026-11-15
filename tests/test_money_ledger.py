@@ -553,10 +553,70 @@ def test_the_shifts_yearly_figures_add_to_the_all_shifts_card(store, text):
                 assert figures[('card', 'total_usd_per_year')] == sum(v for k, v in figures.items() if k[0] == 'row'), (window, lens)
             checked += len(every)
     assert len(windows) >= 66 + 20 and checked > 2000
+
+
+def test_a_shift_with_none_of_a_line_states_its_yearly_figure_beside_zero_dollars(store):
+    """The reviewer's gap on the round on 2510d38: on 29 Jan 2025 shift 2 recorded no planning / admin, so its ownership card
+    left the line out, and the $15,637 a year its period to date holds with it, which the all-shifts card added ($5,680,409 a
+    year of all the waste against shift cards adding to $5,664,772). Every shift-day of the golden record that holds none of an
+    ownership line its period to date holds: the shift's card shows the line at $0 beside its yearly figure, and the day's
+    shift cards add to the day's, line by line and in total, at two rate sets."""
+    cells, _, _ = cost_model.ledger_cells(store, store.production_days[0], store.production_days[-1])
+    keys = ('shear', 'changeover', 'cutoff_waste', 'stacker_waste', 'admin', *cost_model.DRY_END_KINDS, 'unexplained')
+    empty = sorted({(c['production_day'], c['shift'], k) for c in cells for k in keys
+                    if cost_model.ledger_sums([c], rates())['lines'][k] == 0})
+    assert ('2025-01-29', 2, 'admin') in empty and len(empty) >= 3
+    for text in ('', 'paper:47.5,hour:1450,margin:40,trim:2.75'):
+        r = rates(text)
+        for day, shift, key in empty:
+            window = {'period': 'day', 'anchor': day}
+            cards = {sh: cost_model.opportunities(store, window, sh, r, 'ownership') for sh in (None, 1, 2, 3)}
+            line = next(x for x in cards[shift]['rows'] if x['key'] == key)
+            assert line['usd'] == 0 and line['usd_shown'] == 0 and line['usd_per_year'] > 0, (day, shift, key)
+            every, mine = yearly_figures(cards[None]), [yearly_figures(cards[sh]) for sh in (1, 2, 3)]
+            assert all(set(m) == set(every) for m in mine) and every == {k: sum(m[k] for m in mine) for k in every}, (day, key, text)
+            assert owned_lines(cards[None]) == added([cards[sh] for sh in (1, 2, 3)], owned_lines), (day, key, text)
+
+
+def test_a_long_window_reads_within_the_stated_bound_of_its_cents(store):
+    """The coordinator's review of 2510d38, item 2: the long-window note states its bound over the whole record, at the post's
+    rates (cost_model.LONG_BOUND, "under thirteen dollars"): every week, month and 4-4-5 period of the golden record, for all
+    shifts and each shift, both lenses, prints each total, split and line within it of the same quantities priced at once in
+    cents, and so does each period to date."""
+    r, widest = rates(), (0.0, None)
+    first, last = date.fromisoformat(store.production_days[0]), date.fromisoformat(store.production_days[-1])
+    windows, monday = [], first - timedelta(days=first.weekday())
+    while monday <= last:
+        windows.append({'period': 'week', 'anchor': monday.isoformat()})
+        monday += timedelta(days=7)
+    month = first.replace(day=1)
+    while month <= last:
+        windows.append({'period': 'month', 'anchor': month.isoformat()})
+        month = (month.replace(day=28) + timedelta(days=4)).replace(day=1)
+    moment = first
+    while moment <= last:
+        windows.append({'period': 'fiscal', 'anchor': moment.isoformat()})
+        moment = fiscal_bounds(moment)[1] + timedelta(days=1)
+    pairs = [('total_usd', 'total_usd_shown'), ('at_standard_usd', 'at_standard_usd_shown'), ('all_in_usd', 'all_in_usd_shown'),
+             ('ptd_usd', 'ptd_usd_shown'), ('above_standard_usd', 'above_standard_usd_shown'), ('no_band_usd', 'no_band_usd_shown'),
+             ('dry_end_usd', 'dry_end_usd_shown')]
+    for window in windows:
+        for shift in (None, 1, 2, 3):
+            for lens in ('all', 'ownership'):
+                card = cost_model.opportunities(store, window, shift, r, lens)
+                figures = [(card[a], card[b], a) for a, b in pairs if card.get(a) is not None and card.get(b) is not None]
+                figures += [(x['usd'], x['usd_shown'], x['lever']) for x in card['rows'] if x.get('usd') is not None]
+                for cents, shown, what in figures:
+                    widest = max(widest, (abs(shown - cents), (window, shift, lens, what)))
+    assert len(windows) > 120 and widest[0] < cost_model.LONG_BOUND, widest
+    assert widest[0] > cost_model.LONG_BOUND - 1, widest   # the bound is the record's own, not a loose one
+
+
+def test_a_long_window_states_its_cents_apart_once():
     """The coordinator's review of 82c0994, item 2: a long window's whole dollars, added cell by cell, can differ from its cents
     by a few dollars; a card over several production days says so once, and a shift's or a day's card does not."""
     from investigator import shapes
-    assert '$' not in shapes.LONG_NOTE
+    assert '$' not in shapes.LONG_NOTE and 'under thirteen dollars' in shapes.LONG_NOTE and cost_model.LONG_BOUND == 13
     assert shapes.long_note({'window': {'production_days_observed': 5}}) == [shapes.LONG_NOTE]
     assert shapes.long_note({'window': {'production_days_observed': 1}}) == [] and shapes.long_note({}) == []
 

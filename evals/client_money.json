@@ -107,7 +107,7 @@
   },
   "margin_not_set": "margin not set",
   "note": "Dollars are synthetic records priced at assumed rates (the post's defaults unless changed); they are not a real plant's figures.",
-  "long_note": "Over several days these whole dollars, added shift by shift, can read off the same quantities priced at once in cents, which the formulas and receipts state; over the whole record the widest gap measured is about twenty-five dollars, on a month's waste recorded."
+  "long_note": "Over several days these whole dollars, added shift by shift, can read off the same quantities priced at once in cents, which the formulas and receipts state: at the post's rates by under thirteen dollars over the whole record."
  },
  "input": {
   "production_day": "2026-09-14",
@@ -2030,7 +2030,7 @@
   "speeds_note": "Two speeds, never one definition: the speed lever is each grade's trailing-year baseline (targets.json), and the required speed, 675 ft/min at 10% downtime (rates.json, the post), converts machine minutes to MSF not made and is no lever.",
   "baseline_since": "2025-09-15",
   "baseline_through": "2026-09-14",
-  "method_note": "Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this period's rate, period-to-date dollars per production day x the post's production days a year, never a shift's or a day's own; for all shifts it is each shift's period-to-date rate added up, so the shifts' yearly figures add to it. These name where to look and whom to ask; they never prescribe a machine adjustment.",
+  "method_note": "Each lever is its gap to its band in targets.json, summed over the shifts of the window: a shift inside its band adds nothing, and the cost inside the bands is shown apart, at standard, outside the total. A yearly figure is this period's rate, period-to-date dollars per production day x the post's production days a year, never a shift's or a day's own. For all shifts it is each shift's period-to-date rate added up, so the shifts' yearly figures add to it. These name where to look and whom to ask; they never prescribe a machine adjustment.",
   "total_usd_shown": 502,
   "at_standard_usd_shown": 6998,
   "all_in_usd_shown": 7898,
