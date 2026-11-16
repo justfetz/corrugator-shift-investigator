@@ -43,8 +43,8 @@ def running():
     server.app.close()
 
 
-def request(server, method, path, body=None, headers=None):
-    client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=60)
+def request(server, method, path, body=None, headers=None, timeout=60):
+    client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=timeout)
     try:
         client.request(method, path, body=body, headers=headers or {})
         response = client.getresponse()
@@ -53,9 +53,9 @@ def request(server, method, path, body=None, headers=None):
         client.close()
 
 
-def run(server, payload, **extra):
+def run(server, payload, timeout=60, **extra):
     headers = {'Content-Type': 'application/json', 'X-Workbench-Token': server.app.token, **extra}
-    status, _, body = request(server, 'POST', '/api/evals/run', json.dumps(payload), headers)
+    status, _, body = request(server, 'POST', '/api/evals/run', json.dumps(payload), headers, timeout=timeout)
     return status, json.loads(body)
 
 
@@ -178,15 +178,22 @@ def test_live_cases_replay_the_recording_and_never_call_a_model(running, monkeyp
     assert result['turns'][0]['trace'] and result['turns'][0]['usage']['model_calls'] == len(fixture['exchanges'])
 
 
-def test_run_all_scores_the_whole_set_once_a_minute(running, monkeypatch):
+# Scoring the whole set is one request that runs every case (about 40 s on a laptop, and it grows with the set), so a
+# 60 s socket timeout tripped on a slower shared runner (issue #183). The test checks the once-a-minute cache, not a
+# speed: its wait is 180 s, scaled by INVESTIGATOR_LATENCY_SCALE like every other budget (evals/run.py, issue #139).
+RUN_ALL_WAIT_MS = 180_000
+
+
+def test_run_all_scores_the_whole_set_once_a_minute(running, monkeypatch, latency_budget):
     no_model(monkeypatch)
-    status, result = run(running, {'all': True})
+    wait = latency_budget(RUN_ALL_WAIT_MS) / 1000
+    status, result = run(running, {'all': True}, timeout=wait)
     assert status == 200 and result['total'] == HISTORY[-1]['cases'] == len(result['rows'])
     failed = [(row['id'], row['ms'], row['failures']) for row in result['rows'] if row['outcome'] == 'fail']   # name a failing case, not a count
     assert result['failed'] == 0 and result['passed'] + result['skipped'] == result['total'] and result['model_called'] is False, failed
     assert result['cached'] is False and result['latency_ms']['p50'] is not None
     assert len({row['id'] for row in result['rows']}) == result['total']
-    status, again = run(running, {'all': True})
+    status, again = run(running, {'all': True}, timeout=wait)
     assert status == 200 and again['cached'] is True and again['ran_at'] == result['ran_at']
     assert running.app.evals.runner._DATASETS == {}                      # the run's day stores are closed, not kept
 
