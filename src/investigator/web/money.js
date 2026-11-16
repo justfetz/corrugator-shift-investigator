@@ -11,9 +11,18 @@
 const Money=(()=>{
  const PAPER=new Set(['trim','waste','paper']), TIME=new Set(['downtime','speed']);
  const MONEY_TOOLS=new Set(['get_shift_dollars','get_opportunities','get_day_dollars']);
- const WINDOW_FIELDS=['usd','paper_usd','machine_time_usd','contribution_usd'], YEAR_FIELDS=['usd_per_year','contribution_usd_per_year'];
- const TOTAL_WINDOW=['total_usd','total_paper_usd','total_machine_time_usd','total_contribution_usd','controllable_usd','controllable_contribution_usd','dry_end_usd','all_in_usd'],
-  TOTAL_YEAR=['total_usd_per_year','controllable_usd_per_year','dry_end_usd_per_year','all_in_usd_per_year'];
+ // A priced field and the words that follow it in the prose (issue #164): `at` before " at standard", `above` before " above
+ // standard", `ptd` before " above standard in" (the period to date a card adds to), `year` before a yearly word.
+ // The whole dollars a card prints (`*_shown`, PR #168) come first: a ledger's prose prints them, never the cents' own rounding.
+ const WINDOW_FIELDS=[['usd_shown'],['at_standard_usd_shown','at'],['above_standard_usd_shown','above'],
+  ['usd'],['at_standard_usd','at'],['above_standard_usd','above'],['all_recorded_usd'],['paper_usd'],['machine_time_usd'],['contribution_usd']],
+  YEAR_FIELDS=['usd_per_year','contribution_usd_per_year'];
+ const TOTAL_WINDOW=[['total_usd_shown'],['total_contribution_usd_shown'],['controllable_usd_shown'],['dry_end_usd_shown'],['dry_end_at_standard_usd_shown','at'],['dry_end_above_standard_usd_shown','above'],
+  ['at_standard_usd_shown','at'],['above_standard_usd_shown','above'],['no_band_usd_shown'],['all_in_usd_shown'],['ptd_usd_shown','ptd'],
+  ['total_usd'],['total_paper_usd'],['total_machine_time_usd'],['total_contribution_usd'],['controllable_usd'],['controllable_contribution_usd'],
+  ['dry_end_usd'],['dry_end_at_standard_usd','at'],['dry_end_above_standard_usd','above'],['at_standard_usd','at'],['above_standard_usd','above'],['no_band_usd'],
+  ['all_in_usd'],['ptd_usd','ptd']],
+  TOTAL_YEAR=['total_usd_per_year','controllable_usd_per_year','dry_end_usd_per_year','ptd_usd_per_year'];
  const LABEL_KEYS=['gap','lever','category','label','reason'];
  // Python's f'{x:.{d}f}': correctly rounded on the binary value, a tie to even (toFixed breaks a tie upward).
  // A double is a tie at d places only when x * 2^(d+1) is an odd integer.
@@ -31,7 +40,7 @@ const Money=(()=>{
  const gText=(v,comma=false)=>{ const t=String(Number(Number(v).toPrecision(6))); return comma?group(t):t; };   // f'{v:g}' for the sizes used here
  function rateText(v,comma=false){ let t=comma?fmt(v,2):fixed(v,2); if(t.includes('.'))t=t.replace(/0+$/,'').replace(/\.$/,''); return t; }
  const money=v=>v===null||v===undefined?'unavailable':'$'+fmt(v,0);   // shapes.money: the answer's prose
- const moneyRaw=v=>'$'+(Math.abs(v)>=100?fmt(v,0):fmt(v,2));         // cost_model._money: inside a formula
+ const moneyRaw=v=>'$'+fmt(v,2);                                     // cost_model._money: inside a formula, in cents (PR #168)
  // A dollar figure for a tile or a bar label: whole dollars from $100, $1.2k from $10,000, $5.7M from $1M.
  function short(v){
   if(v===null||v===undefined)return 'unavailable';
@@ -72,108 +81,259 @@ const Money=(()=>{
   return `Rates: paper $${rateText(v.paper_usd_msf)}/MSF (${s.paper_usd_msf}), machine time $${rateText(v.machine_usd_hour,true)}/hr (${s.machine_usd_hour}), ${margin}, trim target ${rateText(v.trim_target_pct)}% (${s.trim_target_pct}).`;
  }
 
- // ---- pricing: cost_model.price, line for line
+ // ---- pricing: cost_model.price, line for line. A price is the window's own dollars: nothing is annualized here (issue #164)
  const NOT_PRICED={msf:null,paper_usd:null,machine_minutes:null,machine_time_usd:null,usd:null,usd_per_year:null,msf_not_made:null,contribution_usd:null,contribution_usd_per_year:null,contribution_status:'not priced',usd_basis:'not priced: the quantity is unavailable or a negative remainder',share_of_window_pct:null,price_terms:null};
  const add=values=>{ let total=0; for(const v of values)total+=v; return total; };   // cost_model._add: left to right
  function price(kind,quantity,rates,gross,minutes,cfg){
   const v=rates.values, C=cfg.constants, paper=v.paper_usd_msf, hour=v.machine_usd_hour, margin=v.margin_usd_msf;
-  const byVolume=gross?C.annual_msf_per_machine/(gross/1000):null, byTime=minutes?C.annual_minutes/minutes:null;
   if(quantity===null||quantity===undefined||quantity<0)return {...NOT_PRICED};
-  const parts=[]; let msf, paperUsd, paperYear, machineMinutes, notMade;
+  const parts=[]; let msf, paperUsd, machineMinutes, notMade;
   if(PAPER.has(kind)){
    msf=quantity/1000; paperUsd=msf*paper; machineMinutes=kind==='waste'?msf/C.msf_per_minute:0; notMade=kind==='waste'?msf:0;
    parts.push(`${fmt(quantity,1)} sq ft = ${fmt(msf,3)} MSF x $${rateText(paper)}/MSF paper = ${moneyRaw(paperUsd)}`);
-   paperYear=byVolume?paperUsd*byVolume:null;
-  }else if(TIME.has(kind)){ msf=null; paperUsd=null; paperYear=0; machineMinutes=quantity; notMade=quantity*C.msf_per_minute; }
+  }else if(TIME.has(kind)){ msf=null; paperUsd=null; machineMinutes=quantity; notMade=quantity*C.msf_per_minute; }
   else throw new Error(`Unknown cost kind ${kind}`);
   const machineUsd=machineMinutes/60*hour;
   if(kind!=='trim'&&kind!=='paper'){ const lead=TIME.has(kind)?'':`${fmt(msf,3)} MSF / ${gText(C.msf_per_minute)} MSF per min = `; parts.push(`${lead}${fmt(machineMinutes,2)} min x $${rateText(hour,true)}/hr machine time = ${moneyRaw(machineUsd)}`); }
-  const usd=(paperUsd||0)+machineUsd;
-  const factor=kind==='waste'?byVolume:byTime;
-  const machineYear=machineUsd===0?0:factor?machineUsd*factor:null;
-  const usdYear=paperYear!==null&&machineYear!==null?paperYear+machineYear:null;
-  let contribution=null, contributionYear=null, status=cfg.margin_not_set;
+  // a waste row's dollars are its two parts to the cent, added, and its formula ends with that sum (cost_model.price, PR #168)
+  const usd=kind==='waste'?round(paperUsd,2)+round(machineUsd,2):(paperUsd||0)+machineUsd;
+  if(kind==='waste')parts.push(`${moneyRaw(paperUsd)} + ${moneyRaw(machineUsd)} = ${moneyRaw(round(usd,2))}`);
+  let contribution=null, status=cfg.margin_not_set;
   if(margin===null||margin===undefined)parts.push(`contribution: ${cfg.margin_not_set}`);
-  else{
-   contribution=notMade*margin; status='set';
-   const f=PAPER.has(kind)?byVolume:byTime; contributionYear=f?contribution*f:null;
-   parts.push(`contribution ${fmt(notMade,3)} MSF not made x $${rateText(margin)}/MSF = ${moneyRaw(contribution)} (not added)`);
-  }
-  const volumeText=byVolume?`x ${fmt(byVolume,2)} (${group(String(C.annual_msf_per_machine))} MSF a year / ${fmt(gross/1000,3)} MSF gross)`:null;
-  const timeText=byTime?`x ${fmt(byTime,2)} (${fmt(C.annual_minutes,0)} scheduled min a year / ${gText(minutes,true)} min)`:null;
-  if(usdYear===null)parts.push('per year: not computed (no window volume or minutes)');
-  else parts.push(`per year: ${(PAPER.has(kind)?volumeText:timeText)??'None'}`);
+  else{ contribution=notMade*margin; status='set'; parts.push(`contribution ${fmt(notMade,3)} MSF not made x $${rateText(margin)}/MSF = ${moneyRaw(contribution)} (not added)`); }
+  const base=PAPER.has(kind)?gross:minutes;
   return {msf:msf===null?null:round(msf,3),paper_usd:round(paperUsd,2),machine_minutes:round(machineMinutes,2),machine_time_usd:round(machineUsd,2),usd:round(usd,2),
-   usd_per_year:usdYear===null?null:round(usdYear,0),msf_not_made:round(notMade,3),contribution_usd:round(contribution,2),
-   contribution_usd_per_year:contributionYear===null?null:round(contributionYear,0),contribution_status:status,usd_basis:parts.join('; '),
-   share_of_window_pct:(PAPER.has(kind)?gross:minutes)?round(quantity/(PAPER.has(kind)?gross:minutes)*100,4):null,
-   price_terms:{kind,quantity,gross_sqft:gross||null,minutes:minutes||null}};
+   usd_per_year:null,msf_not_made:round(notMade,3),contribution_usd:round(contribution,2),contribution_usd_per_year:null,contribution_status:status,usd_basis:parts.join('; '),
+   share_of_window_pct:base?round(quantity/base*100,4):null,price_terms:{kind,quantity,gross_sqft:gross||null,minutes:minutes||null}};
  }
- // One priced row at `rates`, from its own terms. The get_opportunities trim lever is re-derived first: its quantity is
- // the trim points over the target, which is itself a rate (cost_model.opportunities).
- function repriceRow(tool,row,rates,cfg){
+ // cost_model.annual: dollars a year at a period's rate, period-to-date dollars per production day x the post's days a year.
+ // With fewer production days than min_rate_days there is no yearly figure (the coordinator's default on PR #168).
+ const annual=(usd,days,cfg)=>usd===null||usd===undefined||!days||days<cfg.constants.min_rate_days?null:round(usd/days*cfg.constants.days_per_year,0);
+ // A figure of a card's whole dollars by its path (`of`, `shown_of`): ['levers','trim'], ['lines','bond'].
+ const wholeOf=(w,[g,k])=>w[g][k];
+ // cost_model.annual_of (the coordinator's review of 2510d38 on PR #168, item 1): each shift's own yearly figure, its line of the
+ // period to date's whole dollars at its own production days (`shift_days`), and a card for several shifts theirs added up, so
+ // the shift cards' yearly figures add to the all-shifts card's. Without `shift_days` (an older answer) each shift reads `days`.
+ function annualOf(w,path,shiftDays,days,cfg){
+  const own=new Map((shiftDays||w.shifts.map(e=>[e.shift,days])).map(([s,d])=>[s,d])), years=w.shifts.map(e=>annual(wholeOf(e,path),own.get(e.shift)||0,cfg));
+  return !years.length||years.some(v=>v===null)?null:round(add(years),0);
+ }
+ // cost_model.trim_cells_over: the trim line above a target from the trim cells, each cell's gap to 0.1 sq ft, added left to right.
+ const trimCellsOver=(cells,target)=>round(add(cells.map(([trim,gross])=>round(Math.max(0,trim-target/100*gross),1))),1);
+ const pctText=(n,d)=>d?fixed(round(n/d*100,2),2):'unavailable';   // cost_model._pct_text: two decimals
+ // cost_model.at_standard: all recorded less above standard, each priced on its own quantity.
+ function atStandard(kind,total,over,rates,gross,minutes,cfg){
+  const whole=price(kind,total,rates,gross,minutes,cfg), above=price(kind,over,rates,gross,minutes,cfg);
+  const diff=(k,d=2)=>whole[k]===null||whole[k]===undefined?null:round(whole[k]-(above[k]||0),d);
+  const atQty=round(total-over,TIME.has(kind)?2:1), base=PAPER.has(kind)?gross:minutes;
+  return {msf:diff('msf',3),paper_usd:diff('paper_usd'),machine_minutes:diff('machine_minutes'),machine_time_usd:diff('machine_time_usd'),usd:diff('usd'),usd_per_year:null,
+   msf_not_made:diff('msf_not_made',3),contribution_usd:diff('contribution_usd'),contribution_usd_per_year:null,contribution_status:whole.contribution_status,
+   all_recorded_usd:whole.usd,above_standard_usd:above.usd,usd_basis:`${moneyRaw(whole.usd)} all recorded less ${moneyRaw(above.usd)} above standard = ${moneyRaw(diff('usd'))} at standard; `+
+    (whole.contribution_usd===null?`contribution: ${cfg.margin_not_set}`:`contribution ${moneyRaw(diff('contribution_usd'))} (not added)`),
+   share_of_window_pct:base?round(atQty/base*100,4):null,price_terms:{kind,part:'at',quantity:atQty,total,over,gross_sqft:gross||null,minutes:minutes||null}};
+ }
+ // A trim quantity at `rates`: from its trim cells when it carries them (the target is a rate), else its own.
+ const trimQty=(t,rates)=>t&&t.trim_cells?trimCellsOver(t.trim_cells,rates.values.trim_target_pct):t?t.quantity:null;
+ // cost_model._yearly: a ledger row's dollars a year at this period's rate, from its line of the period to date's whole dollars
+ // (`of`, its cells' added up: the review of 82c0994 on PR #168, item 2); the contribution from its period to date's quantity.
+ function yearly(yt,rates,cfg,ptdWhole){
+  const qty=trimQty(yt,rates), p=price(yt.kind,qty,rates,null,null,cfg);
+  const year=yt.of&&ptdWhole?annualOf(ptdWhole,yt.of,yt.shift_days,yt.days,cfg):annual(p.usd,yt.days,cfg);
+  return {usd_per_year:year,contribution_usd_per_year:p.contribution_usd===null?null:annual(p.contribution_usd,yt.days,cfg),year_terms:{...yt,quantity:qty}};
+ }
+ // The trim lever's words name the target, a rate (cost_model.lever_label, at_label, lever_records).
+ const trimLabel=target=>`Side trim over the ${gText(target)}% target`, trimAtLabel=target=>`Side trim at standard (up to ${gText(target)}% of gross)`;
+ function trimRecords(cells,target){
+  const trim=round(add(cells.map(c=>c[0])),1), gross=round(add(cells.map(c=>c[1])),1), over=cells.filter(([t,g])=>round(Math.max(0,t-target/100*g),1)>0).length;
+  return `${over} of ${cells.length} shift${cells.length===1?'':'s'} over the ${gText(target)}% target, side trim ${pctText(trim,gross)}% of gross`;
+ }
+ // One priced row at `rates`, from its own terms: a ledger row's quantity above its band (the trim line from its cells, at the
+ // target in force), its cost at standard (`part` at), its yearly figure from its period to date, an ownership line's split.
+ function repriceRow(tool,row,rates,cfg,ptdWhole){
   const t=row&&row.price_terms; if(!t)return row;
-  if(tool==='get_opportunities'&&t.kind==='trim'&&t.trim_pct!==undefined){
-   const target=rates.values.trim_target_pct, over=Math.max(0,(t.trim_pct||0)-target), sqft=t.gross_sqft?over/100*t.gross_sqft:0;
-   const priced=price('trim',sqft,rates,t.gross_sqft,t.minutes,cfg);
-   return {...row,lever:`Side trim over the ${gText(target)}% target`,quantity:round(over,4),records:String(row.records||'').replace(/, at or under target$/,'')+(over?'':', at or under target'),
-    ...priced,price_terms:{...priced.price_terms,trim_pct:t.trim_pct}};
+  const target=rates.values.trim_target_pct; let out;
+  if(t.part==='at'){
+   const over=t.trim_cells?trimCellsOver(t.trim_cells,target):t.over, p=atStandard(t.kind,t.total,over,rates,t.gross_sqft,t.minutes,cfg);
+   if(t.trim_cells)p.price_terms.trim_cells=t.trim_cells;
+   out={...row,...p,quantity:p.price_terms.quantity,...(t.trim_cells?{lever:trimAtLabel(target)}:{})};
+  }else if(t.trim_cells){
+   const qty=trimCellsOver(t.trim_cells,target), p=price(t.kind,qty,rates,t.gross_sqft,t.minutes,cfg);
+   p.price_terms.trim_cells=t.trim_cells;
+   out={...row,...p,quantity:qty,lever:trimLabel(target),band_target:target,records:trimRecords(t.trim_cells,target),
+    shifts_over:t.trim_cells.filter(([tr,g])=>round(Math.max(0,tr-target/100*g),1)>0).length};
+  }else out={...row,...price(t.kind,t.quantity,rates,t.gross_sqft,t.minutes,cfg)};
+  if(row.year_terms)Object.assign(out,yearly(row.year_terms,rates,cfg,ptdWhole));
+  if(row.above_terms){   // the ownership lens: a banded line split at its band, above standard the lever's own figure
+   const qty=trimQty(row.above_terms,rates), above=price(row.above_terms.kind,qty,rates,t.gross_sqft,t.minutes,cfg).usd;
+   Object.assign(out,{above_standard_usd:above,at_standard_usd:round(out.usd-above,2),above_terms:{...row.above_terms,quantity:qty}});
+   if(row.above_terms.trim_cells){   // the shifts over the target beside the split (PR #168, item 4; cost_model.over_records)
+    const over=row.above_terms.trim_cells.filter(([tr,g])=>round(Math.max(0,tr-target/100*g),1)>0).length;
+    Object.assign(out,{band_target:target,shifts_over:over,over_records:`${over} of ${out.shifts} shift${out.shifts===1?'':'s'} over the ${gText(target)}% target`});
+   }
   }
-  return {...row,...price(t.kind,t.quantity,rates,t.gross_sqft,t.minutes,cfg)};
+  return out;
  }
- function rank(rows,key){   // cost_model._rank: by the key, largest first, then by name; a stable sort as Python's
-  const name=r=>'gap' in r?r.gap:r.lever;
-  rows.sort((a,b)=>((b[key]||0)-(a[key]||0))||(name(a)<name(b)?-1:name(a)>name(b)?1:0));
+ function rank(rows,key){   // cost_model._rank: by the whole dollars printed, then the key, largest first, then by name; a stable sort as Python's
+  const name=r=>'gap' in r?r.gap:r.lever, shown=r=>r.usd_shown!==null&&r.usd_shown!==undefined?r.usd_shown:(r[key]||0);
+  rows.sort((a,b)=>(shown(b)-shown(a))||((b[key]||0)-(a[key]||0))||(name(a)<name(b)?-1:name(a)>name(b)?1:0));
   rows.forEach((r,i)=>{r.rank=i+1;});
   return rows;
  }
- // cost_model.rank_gaps (the owner, PR #111): a money card's recorded losses ranked by dollars; the gaps apart (planned
- // maintenance, schedule-driven; a power outage, external) after them with no rank, by group (APART) and dollars.
- function rankGaps(rows){
-  const name=r=>r.gap, byUsd=(a,b)=>((b.usd||0)-(a.usd||0))||(name(a)<name(b)?-1:name(a)>name(b)?1:0);
-  const ranked=rank(rows.filter(r=>!r.apart),'usd'), rest=rows.filter(r=>r.apart).sort((a,b)=>(APART[a.apart]-APART[b.apart])||byUsd(a,b));
-  rest.forEach(r=>{r.rank=null;}); rows.splice(0,rows.length,...ranked,...rest); return rows;
+ // ---- whole dollars that add up (cost_model.whole_dollars, the owner's top rule on PR #168): every set of parts a card
+ // prints adds to the figure it prints, across views and nested windows. The root is the cell, one shift of one production
+ // day (the review of 82c0994, item 2): its levers print their nearest dollar together and share it by the largest
+ // remainder, its rows at standard theirs, each row apart and each plain waste line its own; a card is its cells added up.
+ const LEVERS=['speed','trim','shear','dry_end','operator','maintenance'], BANDED=['trim','shear','dry_end','operator','maintenance'];
+ const LEVER_KIND={speed:'speed',trim:'trim',shear:'waste',dry_end:'waste',operator:'downtime',maintenance:'downtime'};
+ const APART_KEYS=['scheduled','external','changeover','boards'], BOARDS=['cutoff_waste','stacker_waste'];
+ const APART_KIND={scheduled:'downtime',external:'downtime',changeover:'waste',boards:'waste',cutoff_waste:'waste',stacker_waste:'waste'};
+ const DRY_END_KINDS=['bond','warp','misalignment','moisture','other'], AREA_LEVERS=['trim','shear','dry_end'];
+ const LINE_TERMS=[...DRY_END_KINDS,'admin','bale','unexplained'], LINE_KIND={bond:'waste',warp:'waste',misalignment:'waste',moisture:'waste',other:'waste',admin:'waste',bale:'paper',unexplained:'paper'};
+ const OWNER_LINES=['trim','shear','changeover','cutoff_waste','stacker_waste','admin',...DRY_END_KINDS,'unexplained'];   // cost_model.OWNER_LINES
+ const toCents=usd=>usd===null||usd===undefined?0:Math.round(usd*100);   // cost_model.to_cents: two places, so never a tie
+ function nearestDollar(c){ const d=Math.floor(c/100), r=c-d*100; return d+(r>50||(r===50&&((d%2)+2)%2===1)?1:0); }   // a tie to the even dollar
+ function largestRemainder(parts,target){   // cost_model.largest_remainder, line for line
+  const mod=c=>((c%100)+100)%100, idx=parts.map((_,i)=>i), out=parts.map(c=>Math.floor(c/100));
+  let gap=target-out.reduce((a,b)=>a+b,0);
+  const fraction=[...idx].sort((a,b)=>(mod(parts[b])-mod(parts[a]))||(a-b)).filter(i=>mod(parts[i]));
+  const up=Math.min(Math.max(gap,0),fraction.length); for(let k=0;k<up;k++)out[fraction[k]]+=1; gap-=up;
+  const largest=[...idx].sort((a,b)=>(parts[b]-parts[a])||(a-b)), positive=largest.filter(i=>parts[i]>0), rising=positive.length?positive:largest.slice(0,1);
+  let j=0; while(gap>0&&rising.length){ out[rising[j%rising.length]]+=1; gap--; j++; }
+  j=0; while(gap<0&&largest.some(i=>out[i]>0)){ const i=largest[j%largest.length]; if(out[i]>0){ out[i]--; gap++; } j++; }
+  return out;
  }
- // cost_model.gap_totals: the all-in total, every gap added left to right in row order, the gaps apart included.
- function allIn(rows){
-  const usd=rows.map(r=>r.usd).filter(v=>v!==null&&v!==undefined), years=rows.map(r=>r.usd_per_year);
-  return {apart_gaps:rows.filter(r=>r.apart).length,all_in_usd:usd.length?round(add(usd),2):0,
-   all_in_usd_per_year:rows.length&&!years.some(v=>v===null||v===undefined)?round(add(years),0):null};
+ const sum=xs=>xs.reduce((a,b)=>a+b,0), zip=(keys,vals)=>Object.fromEntries(keys.map((k,i)=>[k,vals[i]]));
+ // cost_model._priced: (cents, paper, machine time, contribution) of one quantity, price's arithmetic step for step without its text
+ function priced4(kind,q,rates,cfg){
+  if(q===null||q===undefined||q<0)return [0,0,0,0];
+  const v=rates.values, C=cfg.constants; let paper, minutes, notMade;
+  if(PAPER.has(kind)){ const msf=q/1000; paper=msf*v.paper_usd_msf; minutes=kind==='waste'?msf/C.msf_per_minute:0; notMade=kind==='waste'?msf:0; }
+  else if(TIME.has(kind)){ paper=null; minutes=q; notMade=q*C.msf_per_minute; }
+  else throw new Error(`Unknown cost kind ${kind}`);
+  const machine=minutes/60*v.machine_usd_hour, usd=kind==='waste'?round(paper,2)+round(machine,2):(paper||0)+machine;
+  const margin=v.margin_usd_msf, contribution=margin===null||margin===undefined?null:notMade*margin, c=x=>x===null?0:toCents(round(x,2));
+  return [c(usd),c(paper),c(machine),c(contribution)];
  }
- // cost_model.opportunities (issue #101): the levers in the order and with the ranks the lens gives them. ownership: side
- // trim, all of it, first always (every owner asks what trim costs), then the rest by dollars a year; supervisor: the
- // controllable levers ranked, then the others with no rank, by control (schedule-driven, then external; cost_model.APART)
- // and within each by dollars a year; all: every lever.
- const APART={'schedule-driven':0,external:1};
- // Ownership (cost_model.owner_order): after trim, the dry-end group (the tag scrap, PR #111) by the sum of its rows and each
- // other lever by dollars a year; the group holds the rank, its rows beneath it by dollars a year and with no rank.
- function rankLevers(rows,lens){
-  const byYear=(a,b)=>((b.usd_per_year||0)-(a.usd_per_year||0))||(a.lever<b.lever?-1:a.lever>b.lever?1:0);
-  const apart=r=>r.control in APART?APART[r.control]:Object.keys(APART).length;
-  if(lens==='ownership'){
-   const [first,...rest]=rows, groups=new Map(); first.rank=1;
-   for(const r of rest){ const k=r.group||r.lever; if(!groups.has(k))groups.set(k,[]); groups.get(k).push(r); }
-   const size=new Map(); for(const [k,m] of groups){ m.sort(byYear); size.set(k,add(m.map(r=>r.usd_per_year||0))); }
-   const keys=[...groups.keys()].sort((a,b)=>(size.get(b)-size.get(a))||(a<b?-1:a>b?1:0)), out=[first];
-   keys.forEach((k,i)=>{ for(const r of groups.get(k)){ r.rank=r.group?null:i+2; out.push(r); } });
-   rows.splice(0,rows.length,...out); return rows;
+ function termsCents(t,rates,cfg){   // cost_model.terms_cents: the trim lever from its cell at the target in force
+  const over={...t.levers,trim:trimCellsOver(t.trim_cells,rates.values.trim_target_pct)};
+  const above=Object.fromEntries(LEVERS.map(k=>[k,priced4(LEVER_KIND[k],over[k],rates,cfg)])), recorded=Object.fromEntries(BANDED.map(k=>[k,priced4(LEVER_KIND[k],t.all[k],rates,cfg)]));
+  const plain=Object.fromEntries(LINE_TERMS.map(k=>[k,priced4(LINE_KIND[k],t.lines[k],rates,cfg)])), boards=Object.fromEntries(BOARDS.map(k=>[k,priced4(APART_KIND[k],t.apart[k],rates,cfg)]));
+  const changeover=priced4('waste',t.apart.changeover,rates,cfg);
+  const owner=[recorded.trim,recorded.shear,changeover,boards.cutoff_waste,boards.stacker_waste,plain.admin,...DRY_END_KINDS.map(k=>plain[k]),plain.unexplained];
+  const part=(rows,i)=>sum(rows.map(r=>r[i])), ab=LEVERS.map(k=>above[k]);
+  return {levers:ab.map(r=>r[0]),at:BANDED.map(k=>recorded[k][0]-above[k][0]),apart:APART_KEYS.map(k=>priced4(APART_KIND[k],t.apart[k],rates,cfg)[0]),
+   boards:BOARDS.map(k=>boards[k][0]),lines:Object.fromEntries(LINE_TERMS.map(k=>[k,plain[k][0]])),split:[part(ab,1),part(ab,2)],contribution:part(ab,3),
+   owner_split:[part(owner,1),part(owner,2)],owner_contribution:part(owner,3)};
+ }
+ function cellWhole(t,rates,cfg){   // cost_model.cell_whole
+  const p=termsCents(t,rates,cfg), total=nearestDollar(sum(p.levers)), atTotal=nearestDollar(sum(p.at));
+  const e={shift:t.shift,total,levers:zip(LEVERS,largestRemainder(p.levers,total)),at_total:atTotal,at:zip(BANDED,largestRemainder(p.at,atTotal)),
+   apart:zip(APART_KEYS,p.apart.map(nearestDollar))};
+  e.boards=zip(BOARDS,largestRemainder(p.boards,e.apart.boards));
+  const lines={trim:e.levers.trim+e.at.trim,shear:e.levers.shear+e.at.shear,dry_end:e.levers.dry_end+e.at.dry_end};
+  largestRemainder(DRY_END_KINDS.map(k=>p.lines[k]),lines.dry_end).forEach((v,i)=>{ lines[DRY_END_KINDS[i]]=v; });
+  Object.assign(lines,{changeover:e.apart.changeover,...e.boards});
+  for(const k of ['admin','bale','unexplained'])lines[k]=nearestDollar(p.lines[k]);
+  e.lines=lines;
+  [e.paper,e.machine]=largestRemainder(p.split,total); e.contribution=nearestDollar(p.contribution);
+  e.owner=sum(OWNER_LINES.map(k=>lines[k])); [e.owner_paper,e.owner_machine]=largestRemainder(p.owner_split,e.owner); e.owner_contribution=nearestDollar(p.owner_contribution);
+  return e;
+ }
+ const WHOLE_SCALARS=['total','at_total','paper','machine','contribution','owner','owner_paper','owner_machine','owner_contribution'], WHOLE_GROUPS=['levers','at','apart','boards','lines'];
+ const GROUP_KEYS={levers:LEVERS,at:BANDED,apart:APART_KEYS,boards:BOARDS,lines:[...AREA_LEVERS,...DRY_END_KINDS,'changeover',...BOARDS,'admin','bale','unexplained']};
+ function added(cells,shift=null){   // cost_model._added
+  const out={shift}; for(const k of WHOLE_SCALARS)out[k]=sum(cells.map(e=>e[k]));
+  for(const g of WHOLE_GROUPS){ const keys=cells.length?Object.keys(cells[0][g]):GROUP_KEYS[g]; out[g]=Object.fromEntries(keys.map(k=>[k,sum(cells.map(e=>e[g][k]))])); }
+  out.all_in=out.total+out.at_total+sum(Object.values(out.apart));
+  return out;
+ }
+ function cellTerms(terms){   // cost_model.cell_terms: display_terms' rows of numbers as each cell's terms
+  return terms.cells.map(row=>{ const v=Object.fromEntries(terms.fields.map((f,i)=>[f,row[i]]));
+   return {shift:v.shift,levers:Object.fromEntries(LEVERS.filter(k=>k!=='trim').map(k=>[k,v[k]])),all:Object.fromEntries(BANDED.map(k=>[k,v['all_'+k]])),
+    apart:Object.fromEntries([...APART_KEYS,...BOARDS].map(k=>[k,v['apart_'+k]])),lines:Object.fromEntries(LINE_TERMS.map(k=>[k,v[k]])),trim_cells:[[v.trim,v.gross]]}; });
+ }
+ // a cell's whole dollars at one set of rates, kept for the page (cost_model._CELL_WHOLE): a day card and its shifts read one period to date
+ const CELL_WHOLE=new Map();
+ function wholeDollars(terms,rates,cfg){   // cost_model.whole_dollars: the card's cells added up, and each shift's
+  const v=rates.values, key=[v.paper_usd_msf,v.machine_usd_hour,v.margin_usd_msf,v.trim_target_pct].join('|');
+  if(CELL_WHOLE.size>50000)CELL_WHOLE.clear();
+  const ts=cellTerms(terms), cells=terms.cells.map((row,i)=>{ const k=key+'#'+row.join(','); if(!CELL_WHOLE.has(k))CELL_WHOLE.set(k,cellWhole(ts[i],rates,cfg)); return CELL_WHOLE.get(k); }), by=new Map();
+  for(const e of cells){ if(!by.has(e.shift))by.set(e.shift,[]); by.get(e.shift).push(e); }
+  const out=added(cells); out.shifts=[...by.keys()].sort((a,b)=>a-b).map(sh=>added(by.get(sh),sh));
+  return out;
+ }
+ const splitShown=(parts,target)=>largestRemainder(parts.map(toCents),target);   // cost_model.split_shown
+ const rowShown=(r,w)=>!r.apart?w.levers[r.key]:r.apart==='at-standard'?w.at[r.key]:w.apart[r.key];   // cost_model.row_shown
+ function attachShown(out,rows,w){   // cost_model.attach_shown
+  for(const r of rows)r.usd_shown=rowShown(r,w);
+  out.total_usd_shown=w.total; out.at_standard_usd_shown=w.at_total; out.all_in_usd_shown=w.all_in;
+  out.total_paper_usd_shown=w.paper; out.total_machine_time_usd_shown=w.machine;
+  out.total_contribution_usd_shown=out.total_contribution_usd===null||out.total_contribution_usd===undefined?null:w.contribution;
+  for(const b of out.buckets||[])b.usd_shown=rows.filter(r=>!r.apart&&r.bucket===b.bucket).reduce((a,r)=>a+r.usd_shown,0);
+ }
+ function ownershipShown(rows,w){   // cost_model.ownership_shown: each line the figure every view of it prints (wholeLines)
+  for(const r of rows){ const k=r.key;
+   if(k==='trim'||k==='shear'){ r.above_standard_usd_shown=w.levers[k]; r.at_standard_usd_shown=w.at[k]; }
+   r.usd_shown=w.lines[k];
   }
-  if(lens==='supervisor'){
-   const mine=rows.filter(r=>r.control==='controllable').sort(byYear), rest=rows.filter(r=>r.control!=='controllable').sort((a,b)=>(apart(a)-apart(b))||byYear(a,b));
-   mine.forEach((r,i)=>{r.rank=i+1;}); rest.forEach(r=>{r.rank=null;}); rows.splice(0,rows.length,...mine,...rest); return rows;
-  }
-  return rank(rows,'usd_per_year');
+  return [w.levers.dry_end,w.at.dry_end];
  }
- // The ownership lens's dry-end subtotal (cost_model.dry_end_subtotal): its rows' dollars added left to right, its place among the groups.
- function dryEnd(rows){
+ function ownershipTotalsShown(out,rows,dry,w){   // cost_model.ownership_totals_shown
+  const split=rows.filter(r=>r.above_standard_usd_shown!==null&&r.above_standard_usd_shown!==undefined), group=out.dry_end_rank!==null&&out.dry_end_rank!==undefined;
+  out.total_usd_shown=sum(rows.map(r=>r.usd_shown));
+  out.above_standard_usd_shown=sum(split.map(r=>r.above_standard_usd_shown))+(group?dry[0]:0);
+  out.at_standard_usd_shown=sum(split.map(r=>r.at_standard_usd_shown))+(group?dry[1]:0);
+  out.no_band_usd_shown=out.total_usd_shown-out.above_standard_usd_shown-out.at_standard_usd_shown;
+  if(group){ out.dry_end_usd_shown=sum(rows.filter(r=>r.group==='dry_end').map(r=>r.usd_shown)); [out.dry_end_above_standard_usd_shown,out.dry_end_at_standard_usd_shown]=dry; }
+  if(w.owner===out.total_usd_shown){ out.total_paper_usd_shown=w.owner_paper; out.total_machine_time_usd_shown=w.owner_machine; }
+  else [out.total_paper_usd_shown,out.total_machine_time_usd_shown]=splitShown([out.total_paper_usd||0,out.total_machine_time_usd||0],out.total_usd_shown);
+  out.total_contribution_usd_shown=out.total_contribution_usd===null||out.total_contribution_usd===undefined?null:w.owner_contribution;
+  for(const b of out.buckets||[])b.usd_shown=sum(rows.filter(r=>bucketOf(r)===b.bucket).map(r=>r.usd_shown));
+ }
+ // cost_model.tile_shown: a tile prints the ledger's whole dollars it is (shown_of), else its own nearest dollar
+ const tileShown=(t,w)=>t.shown_of&&w&&t.usd!==null&&t.usd!==undefined?t.shown_of.reduce((a,[g,k])=>a+w[g][k],0):t.usd===null||t.usd===undefined?null:nearestDollar(toCents(t.usd));
+ // cost_model.trim_by_shift at `rates`: each shift's side trim from its own cells (above the target in force, or all recorded)
+ function trimByShift(details,w,rates,cfg){
+  const target=rates.values.trim_target_pct;
+  return details.map(r=>{ const t=r.price_terms, all=t.part==='all', qty=all?t.quantity:trimCellsOver(t.trim_cells,target), p=price('trim',qty,rates,t.gross_sqft,t.minutes,cfg);
+   const e=w.shifts.find(x=>x.shift===r.shift)||{levers:{trim:0},at:{trim:0}};
+   return {...r,...(all?{}:{lever:trimLabel(target)}),quantity:qty,usd:p.usd,usd_shown:e.levers.trim+(all?e.at.trim:0),band_target:target,
+    shifts_over:t.trim_cells.filter(([tr,g])=>round(Math.max(0,tr-target/100*g),1)>0).length,price_terms:{...p.price_terms,trim_cells:t.trim_cells,part:t.part}}; });
+ }
+ // cost_model.rank_ledger (issue #164): the levers ranked by dollars (the supervisor lens: the controllable ones only); the rest
+ // after them with no rank, by group (APART: at standard, schedule-driven, external, no band) and dollars.
+ const APART={'at-standard':0,'schedule-driven':1,external:2,'no-band':3};
+ const ledgerGroup=r=>r.apart?APART[r.apart]:r.control==='schedule-driven'?APART['schedule-driven']:APART.external;
+ const byUsd=(a,b)=>((b.usd||0)-(a.usd||0))||(a.lever<b.lever?-1:a.lever>b.lever?1:0);
+ const shownOf=r=>r.usd_shown!==null&&r.usd_shown!==undefined?r.usd_shown:(r.usd||0);
+ const byShown=(a,b)=>(shownOf(b)-shownOf(a))||byUsd(a,b);   // the whole dollars printed first (PR #168), then the cents, then the name
+ function rankLedger(rows,lens){
+  const ranked=rows.filter(r=>!r.apart&&(lens!=='supervisor'||r.control==='controllable')), rest=rows.filter(r=>!ranked.includes(r));
+  rank(ranked,'usd'); rest.sort((a,b)=>(ledgerGroup(a)-ledgerGroup(b))||byShown(a,b)); rest.forEach(r=>{r.rank=null;});
+  rows.splice(0,rows.length,...ranked,...rest); return rows;
+ }
+ // Ownership (cost_model.owner_order): side trim first always; then the dry-end group (the tag scrap, PR #111) by the sum of its
+ // rows and each other line by dollars, the whole dollars printed first; the group holds the rank, its rows beneath it.
+ function rankOwnership(rows){
+  const [first,...rest]=rows, groups=new Map(); first.rank=1;
+  for(const r of rest){ const k=r.group||r.lever; if(!groups.has(k))groups.set(k,[]); groups.get(k).push(r); }
+  const size=new Map(); for(const [k,m] of groups){ m.sort(byShown); size.set(k,[m.reduce((a,r)=>a+shownOf(r),0),add(m.map(r=>r.usd||0))]); }
+  const keys=[...groups.keys()].sort((a,b)=>(size.get(b)[0]-size.get(a)[0])||(size.get(b)[1]-size.get(a)[1])||(a<b?-1:a>b?1:0)), out=[first];
+  keys.forEach((k,i)=>{ for(const r of groups.get(k)){ r.rank=r.group?null:i+2; out.push(r); } });
+  rows.splice(0,rows.length,...out); return rows;
+ }
+ // The ownership lens's dry-end subtotal (cost_model.dry_end_subtotal): its rows' dollars added left to right, split at its band.
+ function dryEnd(rows,data,rates,cfg){
   const keys=[]; for(const r of rows.slice(1)){ const k=r.group||r.lever; if(!keys.includes(k))keys.push(k); }
-  const mine=rows.filter(r=>r.group==='dry_end'), years=mine.map(r=>r.usd_per_year);
-  return {dry_end_rank:keys.indexOf('dry_end')+2,dry_end_kinds:mine.length,dry_end_usd:round(add(mine.map(r=>r.usd||0)),2),
-   dry_end_usd_per_year:years.some(v=>v===null||v===undefined)?null:round(add(years.map(v=>v||0)),0)};
+  const mine=rows.filter(r=>r.group==='dry_end'), years=mine.map(r=>r.usd_per_year), usd=round(add(mine.map(r=>r.usd||0)),2);
+  const t=data.dry_end_above_terms, above=price(t.kind,t.quantity,rates,data.gross_sqft,data.scheduled_minutes,cfg).usd;
+  return {dry_end_rank:keys.indexOf('dry_end')+2,dry_end_kinds:mine.length,dry_end_usd:usd,
+   dry_end_usd_per_year:years.some(v=>v===null||v===undefined)?null:round(add(years.map(v=>v||0)),0),
+   dry_end_above_standard_usd:above,dry_end_at_standard_usd:round(usd-above,2)};
  }
- // The controllable losses (cost_model.opportunities): the controllable levers in their ranked order, added left to right.
+ // The controllable levers (cost_model.opportunities): in their ranked order, added left to right.
  function controllable(rows){
-  const mine=rows.filter(r=>r.control==='controllable'), years=mine.map(r=>r.usd_per_year);
+  const mine=rows.filter(r=>r.control==='controllable'&&!r.apart), years=mine.map(r=>r.usd_per_year);
   return {controllable_levers:mine.length,controllable_usd:round(add(mine.map(r=>r.usd||0)),2),
    controllable_usd_per_year:years.some(v=>v===null||v===undefined)?null:round(add(years.map(v=>v||0)),0)};
  }
@@ -186,8 +346,27 @@ const Money=(()=>{
   out.total_contribution_usd=set?total('contribution_usd'):null; out.contribution_status=set?'set':cfg.margin_not_set;
   return out;
  }
+ // cost_model.ledger_totals: the levers above standard, the cost at standard and everything recorded, left to right in row order.
+ function ledgerTotals(rows,cfg){
+  const levers=rows.filter(r=>!r.apart), at=rows.filter(r=>r.apart==='at-standard'&&r.usd!==null&&r.usd!==undefined).map(r=>r.usd);
+  const usd=rows.map(r=>r.usd).filter(v=>v!==null&&v!==undefined);
+  return {...totals(levers,cfg),...summary(levers),levers:levers.length,apart_gaps:rows.length-levers.length,
+   at_standard_usd:at.length?round(add(at),2):0,all_in_usd:usd.length?round(add(usd),2):0};
+ }
+ // cost_model.ptd_ledger: the period to date's dollars above standard, lever by lever, its whole dollars (its cells' added up)
+ // and each lever's yearly figure at this period's rate, read from its whole dollars (the review of 82c0994, item 2): each
+ // shift's own at its own days (`by_shift`), and the scope's theirs added up (annualOf, the review of 2510d38, item 1).
+ function ptd(terms,rates,cfg,w){
+  const own=new Map((terms.shift_days||(w?w.shifts.map(e=>[e.shift,terms.days]):[])).map(([s,d])=>[s,d]));
+  const levers=terms.levers.map(l=>{ const p=price(l.kind,trimQty(l,rates),rates,null,null,cfg), shown=w?w.levers[l.key]:null;
+   const byShift=w?w.shifts.map(e=>({shift:e.shift,days:own.get(e.shift)||0,usd_shown:e.levers[l.key],usd_per_year:annual(e.levers[l.key],own.get(e.shift)||0,cfg)})):null;
+   return {key:l.key,usd:p.usd,usd_shown:shown,usd_per_year:w?annualOf(w,['levers',l.key],terms.shift_days,terms.days,cfg):annual(p.usd,terms.days,cfg),by_shift:byShift}; });
+  const years=levers.map(l=>l.usd_per_year);
+  return {ptd_usd:round(add(levers.map(l=>l.usd)),2),ptd_usd_per_year:years.some(v=>v===null)?null:round(add(years),0),levers};
+ }
  // cost_model.bucket_of / summary: the chips' bucket totals and the arithmetic's sums, from the rows in their ranked order.
  function bucketOf(row){
+  if(row.bucket)return row.bucket;
   const kind=(row.price_terms&&row.price_terms.kind)||row.kind, name=String(row.gap||row.lever||'').toLowerCase();
   if(row.kind==='setup')return 'Setups';
   if(kind==='downtime'||kind==='speed'||kind==='trim')return {downtime:'Stops',speed:'Speed',trim:'Trim'}[kind];
@@ -204,18 +383,11 @@ const Money=(()=>{
    stop_minutes:minutes('downtime'),speed_minutes:minutes('speed'),waste_run_minutes:minutes('waste'),
    machine_minutes:round(add(priced.map(r=>r.machine_minutes)),2),msf_not_made:round(add(priced.map(r=>r.msf_not_made)),3)};
  }
- // cost_model.trim_over_target: the trim points over the target and their paper dollars a year, from the side trim's share.
- function trimOver(t,rates,cfg){
-  const target=rates.values.trim_target_pct, over=Math.max(0,(t.trim_pct||0)-target);
-  const p=price('trim',t.gross_sqft?over/100*t.gross_sqft:0,rates,t.gross_sqft,t.minutes,cfg);
-  return {trim_pct_of_gross:t.trim_pct===null||t.trim_pct===undefined?null:round(t.trim_pct,4),trim_target_pct:target,trim_points_over:round(over,4),
-   trim_over_usd:p.usd,trim_over_usd_per_year:p.usd_per_year,trim_over_basis:p.usd_basis,trim_over_terms:{...p.price_terms,trim_pct:t.trim_pct||0}};
- }
- // cost_model.tile: a KPI tile's dollars, the sum of its parts' pricing calls.
+ // cost_model.tile: a KPI tile's dollars, the sum of its parts' pricing calls; the window's own, never a year.
  function tile(t,rates,cfg){
   const priced=(t.parts||[]).map(p=>p?price(p.kind,p.quantity,rates,p.gross_sqft,p.minutes,cfg):{...NOT_PRICED});
-  const usd=priced.map(r=>r.usd).filter(v=>v!==null&&v!==undefined), years=priced.map(r=>r.usd_per_year);
-  return {...t,usd:usd.length?round(add(usd),2):null,usd_per_year:!priced.length||years.some(v=>v===null||v===undefined)?null:round(add(years),0),
+  const usd=priced.map(r=>r.usd).filter(v=>v!==null&&v!==undefined);
+  return {...t,usd:usd.length?round(add(usd),2):null,usd_per_year:null,
    machine_minutes:round(add(priced.map(r=>r.machine_minutes||0)),2),usd_basis:priced.map(r=>r.usd_basis).join(' + '),parts:priced.map(r=>r.price_terms)};
  }
  // A tool result at `rates`: every priced row re-priced from its terms; the two money tools re-ranked with their
@@ -238,24 +410,52 @@ const Money=(()=>{
  }
  function reprice(tool,data,rates,cfg){
   if(!priced(data))return data;
-  const rows=Array.isArray(data.rows)?data.rows:[], byIndex=rows.map(r=>repriceRow(tool,r,rates,cfg)), out={...data,rows:[...byIndex]};
+  // the period to date's whole dollars first: a window's yearly figures are read from them (cost_model._yearly)
+  // (a chart of a window's levers carries them as `ptd_display_terms`, agent.chart_for)
+  const ptdTerms=data.ptd_terms&&data.ptd_terms.whole?data.ptd_terms.whole:data.ptd_display_terms||null, pw=ptdTerms?wholeDollars(ptdTerms,rates,cfg):null;
+  const rows=Array.isArray(data.rows)?data.rows:[], byIndex=rows.map(r=>repriceRow(tool,r,rates,cfg,pw)), out={...data,rows:[...byIndex]};
   if(tool==='get_speed_variance')speedVariance(data,byIndex,out,rates,cfg);   // a chart of it has the rows only
-  if(MONEY_TOOLS.has(tool)){
-   if(tool==='get_opportunities')rankLevers(out.rows,data.lens); else rankGaps(out.rows);
-   // the recorded losses' totals, chips and arithmetic leave the gaps apart out (the owner, PR #111); a lever is never apart
-   const counted=out.rows.filter(r=>!r.apart);
-   Object.assign(out,totals(counted,cfg)); if('buckets' in data)Object.assign(out,summary(counted));
-   if('all_in_usd' in data)Object.assign(out,allIn(out.rows));
-   if(tool==='get_opportunities'&&'controllable_usd' in data)Object.assign(out,controllable(out.rows));
-   if(tool==='get_opportunities'&&'dry_end_usd' in data)Object.assign(out,dryEnd(out.rows));
+  // the whole dollars a card prints (cost_model.whole_dollars, PR #168), from its display terms at these rates
+  const w=data.display_terms?wholeDollars(data.display_terms,rates,cfg):null;
+  if(MONEY_TOOLS.has(tool)){   // the one money ledger (issue #164): ranked, its totals redone, its period to date re-priced
+   if(tool==='get_opportunities'&&data.lens==='ownership'){
+    const dry=w?ownershipShown(out.rows,w):null;
+    rankOwnership(out.rows); Object.assign(out,totals(out.rows,cfg)); if('buckets' in data)Object.assign(out,summary(out.rows));
+    if('dry_end_usd' in data)Object.assign(out,dryEnd(out.rows,data,rates,cfg));
+    if('above_standard_usd' in data){   // cost_model.opportunities: the lens's split, the lines' parts added left to right
+     const above=out.rows.filter(r=>r.above_standard_usd!==null&&r.above_standard_usd!==undefined).map(r=>r.above_standard_usd).concat('dry_end_usd' in data?[out.dry_end_above_standard_usd]:[]);
+     const at=out.rows.filter(r=>r.at_standard_usd!==null&&r.at_standard_usd!==undefined).map(r=>r.at_standard_usd);
+     out.above_standard_usd=round(add(above),2); out.at_standard_usd=round(add(at)+('dry_end_usd' in data?out.dry_end_at_standard_usd:0),2);
+     out.no_band_usd=round(out.total_usd-out.above_standard_usd-out.at_standard_usd,2);
+    }
+    if(w)ownershipTotalsShown(out,out.rows,dry,w);
+   }else{
+    if(w)for(const r of out.rows)r.usd_shown=rowShown(r,w);
+    rankLedger(out.rows,data.lens);
+    if('levers' in data)Object.assign(out,ledgerTotals(out.rows,cfg));
+    else Object.assign(out,totals(out.rows.filter(r=>!r.apart),cfg));   // a chart of it has the rows only
+    if(w&&'levers' in data)attachShown(out,out.rows,w);
+    if(tool==='get_opportunities'&&'controllable_usd' in data){ Object.assign(out,controllable(out.rows)); if(w)out.controllable_usd_shown=out.rows.filter(r=>r.control==='controllable'&&!r.apart).reduce((a,r)=>a+r.usd_shown,0); }
+   }
+   if(w&&Array.isArray(data.details))out.details=trimByShift(data.details,w,rates,cfg);
+   if(w&&tool==='get_day_dollars'&&Array.isArray(data.shifts))   // each shift's share of the day's whole dollars (cost_model.day_dollars)
+    out.shifts=data.shifts.map(x=>{ const e=w.shifts.find(y=>y.shift===x.shift); return e&&'usd_shown' in x?{...x,usd_shown:e.total}:x; });
+   if(data.ptd_terms){
+    const p=ptd(data.ptd_terms,rates,cfg,pw);
+    out.ptd_usd=p.ptd_usd; out.ptd_usd_per_year=p.ptd_usd_per_year;
+    if(pw)out.ptd_usd_shown=pw.total;
+    out.ptd_terms={...data.ptd_terms,levers:data.ptd_terms.levers.map(l=>({...l,quantity:trimQty(l,rates)}))};
+    if(Array.isArray(data.ptd_levers))out.ptd_levers=data.ptd_levers.map(l=>{ const q=p.levers.find(x=>x.key===l.key); return {...l,usd:q.usd,usd_per_year:q.usd_per_year,...('usd_shown' in l?{usd_shown:q.usd_shown}:{}),...('by_shift' in l?{by_shift:q.by_shift}:{}),...(l.key==='trim'?{lever:trimLabel(rates.values.trim_target_pct)}:{})}; });
+   }
   }
-  if(data.trim_over_terms)Object.assign(out,trimOver(data.trim_over_terms,rates,cfg));
-  if(Array.isArray(data.tile_money))out.tile_money=data.tile_money.map(t=>tile(t,rates,cfg));
+  if(w&&tool==='get_waste_breakdown')for(const r of out.rows)r.usd_shown=r.usd===null||r.usd===undefined?null:w.lines[r.category];   // cost_model.waste_shown
+  if(w&&!MONEY_TOOLS.has(tool))for(const r of out.rows)if(r.shown_of&&r.usd!==null&&r.usd!==undefined)r.usd_shown=r.shown_of.reduce((a,[g,k])=>a+w[g][k],0);   // cost_model.daily_shown
+  if(Array.isArray(data.tile_money))out.tile_money=data.tile_money.map(t=>{ const x=tile(t,rates,cfg); return {...x,usd_shown:tileShown(x,w)}; });
   if('provenance' in data){ out.rates=rateRows(rates,cfg); out.provenance=provenance(rates,cfg); }
   Object.defineProperty(out,'byIndex',{value:byIndex,enumerable:false});
   return out;
  }
- const priced=data=>!!(data&&(Array.isArray(data.tile_money)&&data.tile_money.length||data.trim_over_terms||Array.isArray(data.rows)&&data.rows.some(r=>r&&r.price_terms)));
+ const priced=data=>!!(data&&(Array.isArray(data.tile_money)&&data.tile_money.length||data.ptd_terms||Array.isArray(data.rows)&&data.rows.some(r=>r&&r.price_terms)));
  // A chart drawn from a priced result (render_chart): its rows at `rates`, ranked as its tool ranks them.
  const repriceChart=(chart,tool,rates,cfg)=>priced(chart)?reprice(tool,chart,rates,cfg):chart;
  // A priced row's share of its window: area rows of the gross, time rows of the scheduled minutes.
@@ -270,7 +470,7 @@ const Money=(()=>{
   if('controllable_contribution_usd' in data)   // shapes.period_speedvar: the controllable buckets' contribution, the mix never priced
    return data.controllable_contribution_usd===null||data.controllable_contribution_usd===undefined?null:
     `Contribution ${money(data.controllable_contribution_usd)} for the controllable buckets at the set margin, not added to the machine time.`;
-  if(data.total_contribution_usd!==null&&data.total_contribution_usd!==undefined)return `Contribution ${money(data.total_contribution_usd)} at the set margin, not added to the losses above.`;
+  if(data.total_contribution_usd!==null&&data.total_contribution_usd!==undefined)return `Contribution ${money(data.total_contribution_usd_shown!==null&&data.total_contribution_usd_shown!==undefined?data.total_contribution_usd_shown:data.total_contribution_usd)} at the set margin, not added to the losses above.`;
   return null;
  }
  const CONTRIBUTION=/^Contribution (?:.+ at the set margin, not added to the losses above\.|.+ for the controllable buckets at the set margin, not added to the machine time\.|.+: without an owner margin no lost contribution is priced, so the dollars are paper and machine time\.)$/;
@@ -279,7 +479,6 @@ const Money=(()=>{
   const live=steps.filter(Boolean); if(!live.length)return sections;
   const head=REF.exec(sections[0]||''), cited=head&&steps[Number(head[1])-1];
   const money1=cited&&'contribution_status' in cited.after?cited:live.find(s=>'contribution_status' in s.after);   // the result whose contribution the answer states
-  const swapped=refocus(sections,steps,rates,cfg); if(swapped)return swapped;
   const out=[];
   for(const line of sections){
    if(line.startsWith('Rates: ')&&line.endsWith(' '+cfg.note)){ out.push(`${provenance(rates,cfg)} ${cfg.note}`); continue; }
@@ -289,39 +488,55 @@ const Money=(()=>{
   }
   return reorder(out,steps);
  }
+ // shapes.formula_line: a row's formula in cents, and the figure the row prints when that is not the cents' nearest dollar
+ const printsNote=row=>row&&row.usd_shown!==null&&row.usd_shown!==undefined&&row.usd!==null&&row.usd!==undefined&&row.usd_shown!==nearestDollar(toCents(row.usd))?
+  `It prints ${money(row.usd_shown)} (whole dollars that add up).`:'';
+ function formulaLine(label,row){ const note=printsNote(row); return `How a dollar is priced, for ${label}: ${row.usd_basis}.`+(note?' '+note:''); }
  function basisLine(line,live){
-  for(const s of live)for(const [i,row] of s.before.rows.entries()){
+  // a day card's formula line is its day's (shapes.ledger_notes of get_day_dollars): when one shift holds a lever the day's row
+  // and that shift's read the same line, and at other rates they part, so the day's step is read first
+  const order=[...live.filter(s=>s.tool==='get_day_dollars'),...live.filter(s=>s.tool!=='get_day_dollars')];
+  for(const s of order)for(const [i,row] of s.before.rows.entries()){
    if(!row||!row.usd_basis)continue;
    // A money tool's formula line is for its first row, the most dollars: at other rates that may be another row.
-   for(const key of LABEL_KEYS)if(key in row&&line===`How a dollar is priced, for ${row[key]}: ${row.usd_basis}.`){ const now=MONEY_TOOLS.has(s.tool)&&i===0?s.after.rows[0]:s.after.byIndex[i]; return `How a dollar is priced, for ${now[key]}: ${now.usd_basis}.`; }
+   for(const key of LABEL_KEYS)if(key in row&&line===formulaLine(row[key],row)){ const now=MONEY_TOOLS.has(s.tool)&&i===0?s.after.rows[0]:s.after.byIndex[i]; return formulaLine(now[key],now); }
   }
   return line;
  }
  function candidates(line,steps,live){
   const m=REF.exec(line), out=[];
-  const rowFields=(s,i)=>{ for(const f of [...WINDOW_FIELDS,...YEAR_FIELDS])out.push({old:s.before.rows[i][f],now:s.after.byIndex[i][f],year:YEAR_FIELDS.includes(f)}); };
-  const totalFields=s=>{ for(const f of [...TOTAL_WINDOW,...TOTAL_YEAR])if(f in s.before)out.push({old:s.before[f],now:s.after[f],year:TOTAL_YEAR.includes(f),controllable:f.startsWith('controllable_'),subtotal:f.startsWith('dry_end_'),allin:f.startsWith('all_in_')}); };
+  const rowFields=(s,i)=>{ for(const [f,role] of WINDOW_FIELDS)out.push({old:s.before.rows[i][f],now:s.after.byIndex[i][f],role:role||'window'});
+   for(const f of YEAR_FIELDS)out.push({old:s.before.rows[i][f],now:s.after.byIndex[i][f],role:'year'}); };
+  const totalFields=s=>{ for(const [f,role] of TOTAL_WINDOW)if(f in s.before)out.push({old:s.before[f],now:s.after[f],role:role||'window',controllable:f.startsWith('controllable_'),subtotal:f.startsWith('dry_end_')});
+   for(const f of TOTAL_YEAR)if(f in s.before)out.push({old:s.before[f],now:s.after[f],role:'year',controllable:f.startsWith('controllable_'),subtotal:f.startsWith('dry_end_')}); };
   const step=m?steps[Number(m[1])-1]:null;
   if(m&&!step)return out;   // the line cites an unpriced query: its dollars, if any, are not this layer's
-  if(step&&m[2]==='row'&&step.before.rows[Number(m[3])]){ rowFields(step,Number(m[3])); totalFields(step); }
+  const detail=step&&m[2]==='detail'&&Array.isArray(step.before.details)&&step.before.details[Number(m[3])];   // a shift's side trim (PR #168)
+  if(detail){ for(const [f,role] of WINDOW_FIELDS)out.push({old:detail[f],now:(step.after.details||[])[Number(m[3])]?.[f],role:role||'window'}); totalFields(step); }
+  else if(step&&m[2]==='row'&&step.before.rows[Number(m[3])]){ rowFields(step,Number(m[3])); totalFields(step); }
   else if(step){ totalFields(step); step.before.rows.forEach((r,i)=>{ if(r&&r.price_terms)rowFields(step,i); }); }
   else for(const s of live){ totalFields(s); s.before.rows.forEach((r,i)=>{ if(r&&r.price_terms)rowFields(s,i); }); }
   return out;
  }
  // The trim lever's name and records name the target, a rate: a line citing that row says the new target.
+ // A split's shifts over its band (`over_records`, PR #168, item 4) and a shift's side trim line name the target too.
  function renamed(line,steps){
-  const m=REF.exec(line), s=m&&m[2]==='row'?steps[Number(m[1])-1]:null; if(!s||s.tool!=='get_opportunities')return line;
-  const was=s.before.rows[Number(m[3])], now=s.after.byIndex[Number(m[3])]; if(!was||!now)return line;
-  let out=line; for(const key of ['lever','records'])if(was[key]&&now[key]&&was[key]!==now[key])out=out.replace(was[key],now[key]);
+  const m=REF.exec(line), s=m&&(m[2]==='row'||m[2]==='detail')?steps[Number(m[1])-1]:null; if(!s||!MONEY_TOOLS.has(s.tool))return line;
+  const detail=m[2]==='detail', was=detail?(s.before.details||[])[Number(m[3])]:s.before.rows[Number(m[3])], now=detail?(s.after.details||[])[Number(m[3])]:s.after.byIndex[Number(m[3])];
+  if(!was||!now)return line;
+  let out=line; for(const key of ['lever','records','over_records'])if(!detail&&was[key]&&now[key]&&was[key]!==now[key])out=out.replace(was[key],now[key]);
+  if(detail&&was.band_target!==now.band_target)out=out.replace(`over the ${gText(was.band_target)}% target ·`,`over the ${gText(now.band_target)}% target ·`);
   return out;
  }
- // The controllable totals (issue #101) are stated only on the lines that name them, "… in controllable losses" (the
+ // The controllable totals (issue #101) are stated only on the lines that name them, "… in controllable levers" (the
  // supervisor lens) and "The controllable buckets are …" (the speed variance): such a line takes them first, and no
- // other line takes them, so a window whose controllable total reads as its all-lever total (no planned maintenance,
- // side trim at or under the target) re-prices each line to its own figure (review of #111).
+ // other line takes them, so a window whose controllable total reads as its all-lever total (no side trim over the target)
+ // re-prices each line to its own figure (review of #111).
  // The ownership lens's dry-end subtotal (PR #111) is the same: only the line naming the tag scrap takes it, first.
- // A money card's all-in total (PR #111) is the figure followed by "all in", and no other figure takes it.
- const CONTROLLABLE=/\bcontrollable (?:losses|buckets)\b/, TAG_SCRAP=/\(tag scrap\)/, ALL_IN=/^ all in\b/;
+ // A figure's following words pick among fields of the same old value (issue #164): " at standard", " above standard in"
+ // (the period to date), " above standard", a yearly word; with none, a window figure.
+ const CONTROLLABLE=/\bcontrollable (?:losses|buckets|levers)\b/, TAG_SCRAP=/\(tag scrap\)/;
+ const ROLE_OF=after=>YEARLY.test(after)?'year':/^ at standard\b/.test(after)?'at':/^ above standard in\b/.test(after)?'ptd':/^ above standard\b/.test(after)?'above':'window';
  function repriceLine(line,steps,live){
   if(!line.includes('$'))return line;
   const names=CONTROLLABLE.test(line), tag=TAG_SCRAP.test(line);
@@ -329,49 +544,13 @@ const Money=(()=>{
   const first=c=>names?c.controllable:tag?c.subtotal:false;
   const pool=[...all.filter(first),...all.filter(c=>!first(c))], used=new Set();
   return renamed(line,steps).replace(TOKEN,(token,at,whole)=>{
-   const after=whole.slice(at+token.length), yearly=YEARLY.test(after), allin=ALL_IN.test(after);
-   const order=[...pool.filter(c=>c.year===yearly),...pool.filter(c=>c.year!==yearly)].filter(c=>!!c.allin===allin);
+   const role=ROLE_OF(whole.slice(at+token.length)), yearly=role==='year';
+   // the same role first; then, for a window figure, any window field ("above standard" also follows a ledger's own total)
+   const order=[...pool.filter(c=>c.role===role),...pool.filter(c=>c.role!==role&&(c.role==='year')===yearly),...pool.filter(c=>(c.role==='year')!==yearly)];
    const hit=order.find(c=>!used.has(c)&&c.old!==null&&c.old!==undefined&&money(c.old)===token);
    if(!hit)return token;
    used.add(hit); return money(hit.now);
   });
- }
- // All three shifts asked where the money went (shapes.DailyAnswer, intent dollars): the answer is about the shift that
- // lost the most dollars, "on shift 3, the highest of the three shifts". At other rates that can be another shift; the
- // answer is then written again about that one, in the shape's own order: the headline, a line per other shift, the
- // focus shift's ranked gaps, what else the answer said, its notes, and where to look.
- const OTHER=/^- Shift (\d): \*\*\$[\d,]+\*\* of recorded losses · /, FOCUSED=/^- Shift (\d) · \d+\. /, ON=/ on shift (\d)(, the \w+ of the )/;
- // shapes.all_in and the apart blocks of shapes.shape_dollars (the owner, PR #111)
- const ALL_IN_CLAUSE=/ · \$[\d,]+ all in, with the schedule-driven and external downtime/, APART_LABELS={'schedule-driven':'Schedule-driven, shown apart',external:'External, not controllable'};
- const allInText=d=>d.apart_gaps?` · ${money(d.all_in_usd)} all in, with the schedule-driven and external downtime`:'';
- // shapes.gap_tag: a ranked gap the tool marks other than controllable says so on its line, from the row's own `control`
- // (side trim, schedule-driven: targets.json's trim band lever; the owner, issue #135), which re-pricing keeps
- const gapTag=r=>r.control&&r.control!=='controllable'?` · ${r.control}`:'';
- const APART_LINE=/^- Shift \d · (?!\d+\. ).+ · (?:schedule-driven|external), .+ \(query \d+ · row \d+\)$/;
- function refocus(sections,steps,rates,cfg){
-  const dollars=steps.map((s,i)=>s&&s.tool==='get_shift_dollars'?{s,q:i+1,shift:s.before.shift}:null).filter(Boolean);
-  const head=sections[0]||'', on=ON.exec(head), ref=REF.exec(head);
-  if(dollars.length<2||!on||!ref)return null;
-  const ranked=dollars.filter(d=>d.s.after.coverage==='complete').map(d=>[d.s.after.total_usd,d.shift,d]).sort((a,b)=>(a[0]-b[0])||(a[1]-b[1]));
-  if(!ranked.length)return null;
-  const focus=ranked[ranked.length-1][2], was=Number(on[1]);   // max((total, shift)): a tie goes to the later shift, as in Python
-  if(focus.shift===was)return null;
-  const d=focus.s.after;
-  // The headline is the old one about the new shift: its two figures, its shift and its query.
-  const top=head.replace(/^\*\*\$[\d,]+\*\*/,`**${money(d.total_usd)}**`).replace(/\$[\d,]+(?= per year)/,money(d.total_usd_per_year))
-   .replace(ALL_IN_CLAUSE,'').replace(/ \(query \d+\)$/,`${allInText(d)} (query ${focus.q})`).replace(ON,` on shift ${focus.shift}$2`);
-  const others=dollars.filter(x=>x!==focus&&x.s.after.coverage==='complete').sort((a,b)=>a.shift-b.shift)
-   .map(x=>`- Shift ${x.shift}: **${money(x.s.after.total_usd)}** of recorded losses · ${money(x.s.after.total_usd_per_year)} per year${allInText(x.s.after)} (query ${x.q})`);
-  const yearly=r=>r.usd_per_year!==null&&r.usd_per_year!==undefined?` · ${money(r.usd_per_year)}/yr`:'';
-  const gaps=d.rows.map((r,i)=>r.apart?null:`- Shift ${focus.shift} · ${r.rank}. ${r.gap}: **${money(r.usd)}**${yearly(r)}${gapTag(r)} (query ${focus.q} · row ${i})`).filter(Boolean);
-  for(const [apart,label] of Object.entries(APART_LABELS)){   // the gaps apart, each group under its label (shapes.shape_dollars)
-   const mine=d.rows.map((r,i)=>[r,i]).filter(([r])=>r.apart===apart);
-   if(mine.length)gaps.push(label,...mine.map(([r,i])=>`- Shift ${focus.shift} · ${r.gap}: **${money(r.usd)}**${yearly(r)} · ${apart}, ${r.apart_note} (query ${focus.q} · row ${i})`));
-  }
-  const look=sections.indexOf('Where to look'), body=sections.slice(1,look<0?sections.length:look), looks=look<0?[]:sections.slice(look);
-  const rest=body.filter(l=>!OTHER.test(l)&&!FOCUSED.test(l)&&!APART_LINE.test(l)&&!Object.values(APART_LABELS).includes(l)&&!CONTRIBUTION.test(l)&&!l.startsWith('How a dollar is priced, for ')&&!(l.startsWith('Rates: ')&&l.endsWith(' '+cfg.note)));
-  const notes=[contributionLine(d,cfg),d.rows.length?`How a dollar is priced, for ${d.rows[0].gap}: ${d.rows[0].usd_basis}.`:null,`${provenance(rates,cfg)} ${cfg.note}`].filter(Boolean);
-  return [top,...others,...gaps,...rest,...notes,...looks.map(l=>l.replace(new RegExp(` for shift ${was}”$`),` for shift ${focus.shift}”`))];
  }
  // "- 3. Side trim: $4,383 · … (query 1 · row 2)": a money tool's ranked list, put in its re-priced order and renumbered.
  // Every line that cites a money tool's row takes the row's place in the re-ranked rows, which is what the server cites.
@@ -405,7 +584,8 @@ const Money=(()=>{
   }
   return out;
  }
- return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,rankLevers,controllable,totals,summary,bucketOf,trimOver,tile,
-  repriceSections,contributionLine,PAPER,TIME,MONEY_TOOLS};
+ return {fixed,fmt,round,group,gText,rateText,money,moneyRaw,short,base,effective,parse,check,format,rateRows,provenance,price,repriceRow,reprice,repriceChart,priced,share,rank,rankLedger,rankOwnership,controllable,totals,ledgerTotals,summary,bucketOf,trimCellsOver,annual,annualOf,atStandard,tile,
+  repriceSections,contributionLine,PAPER,TIME,MONEY_TOOLS,
+  nearestDollar,largestRemainder,wholeDollars,splitShown,toCents,formulaLine,printsNote};
 })();
 if(typeof module!=='undefined'&&module.exports)module.exports=Money;

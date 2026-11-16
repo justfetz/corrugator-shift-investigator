@@ -78,7 +78,7 @@ def test_money_apart_ui_fixture_is_the_offline_answer_of_its_url():
         assert saved[key] == fresh[key], f'{key} drifted; refresh with: {refresh}'
     money = lambda r: [{k: v for k, v in e['data'].items() if k != 'trace'} for e in r['trace'] if e['tool'] == 'get_shift_dollars']
     assert money(saved) == money(fresh), refresh
-    assert money(saved)[0]['apart_gaps'] == 1
+    assert [r['apart'] for r in money(saved)[0]['rows']].count('schedule-driven') == 1   # planned maintenance, apart (issue #164: with the rows at standard)
 
 
 DAY = Path(__file__).parent / 'ui_fixtures' / 'money_day.json'

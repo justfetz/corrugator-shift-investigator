@@ -339,41 +339,49 @@ def test_downtime_with_no_scope_is_the_selected_day_all_shifts(store):
 @pytest.mark.parametrize('lens', cost_model.LENSES)
 def test_every_lever_is_marked_controllable_or_schedule_driven(store, lens):
     data = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, cost_model.effective(), lens)
-    marks = {r['lever']: r['control'] for r in data['rows']}
+    marks = {r['lever']: r['control'] for r in data['rows'] if 'control' in r}   # a row at standard or with no band is shown apart
     # the ownership lens prices every waste line, planning / admin too, which is bookkeeping, not production waste
     allowed = {'controllable', 'schedule-driven'} | ({'unattributed', 'not production waste'} if lens == 'ownership' else {'external'})
-    assert set(marks.values()) <= allowed and all(r['control_note'] for r in data['rows'])
+    assert set(marks.values()) <= allowed and all(r['control_note'] for r in data['rows'] if 'control' in r)
     if lens == 'ownership':
         assert marks['Planning / admin (not production waste) (all recorded)'] == 'not production waste'
-    trim = next(r for r in data['rows'] if r['lever'].startswith('Side trim'))
+    trim = next(r for r in data['rows'] if r['lever'].startswith('Side trim') and not r.get('apart'))
     assert trim['control'] == 'schedule-driven'
     if lens != 'ownership':
-        assert marks['Downtime: Planned maintenance (scheduled time)'] == 'schedule-driven'
+        assert marks['Downtime: Planned maintenance (scheduled)'] == 'schedule-driven'
         assert marks['Downtime: Power outage (external)'] == 'external'   # September's outage (the owner, PR #111)
-        assert marks["Speed under each grade's trailing-year speed"] == 'controllable'
-        assert all(v == 'controllable' for k, v in marks.items() if k.startswith(('Shear', 'Dry-end')) or
-                   (k.startswith('Downtime') and 'Planned maintenance' not in k and 'Power outage' not in k))
-    assert data['controllable_levers'] == sum(v == 'controllable' for v in marks.values())
+        # issue #164: the six levers, each its gap to its band; every one but side trim is the crew's
+        levers = {r['lever']: r['control'] for r in data['rows'] if not r.get('apart')}
+        assert len(levers) == 6 and {k for k, v in levers.items() if v != 'controllable'} == {'Side trim over the 3% target'}
+        assert all(r['apart'] in cost_model.APART and r['rank'] is None for r in data['rows'] if r.get('apart'))
+        assert data['controllable_levers'] == sum(v == 'controllable' for v in levers.values()) == 5
 
 
 def test_the_supervisor_lens_ranks_the_controllable_losses_and_the_ownership_lens_starts_with_trim(store):
+    """One ledger read three ways (issues #101, #164): the levers and the supervisor lens are the same rows and figures; the
+    supervisor ranks the controllable levers by dollars; the ownership lens leads with all of side trim, split at its band,
+    above standard the trim lever's own figure."""
     window, rates = {'period': 'month', 'anchor': DAY}, cost_model.effective()
     every = cost_model.opportunities(store, window, None, rates)
     supervisor = cost_model.opportunities(store, window, None, rates, 'supervisor')
     ownership = cost_model.opportunities(store, window, None, rates, 'ownership')
     assert sorted(r['lever'] for r in every['rows']) == sorted(r['lever'] for r in supervisor['rows'])   # one set of numbers
-    assert {r['lever']: r['usd_per_year'] for r in every['rows']} == {r['lever']: r['usd_per_year'] for r in supervisor['rows']}
+    assert {r['lever']: (r['usd'], r['usd_per_year']) for r in every['rows']} == {r['lever']: (r['usd'], r['usd_per_year']) for r in supervisor['rows']}
     ranked = [r for r in supervisor['rows'] if r['rank'] is not None]
     assert all(r['control'] == 'controllable' for r in ranked) and supervisor['rows'][:len(ranked)] == ranked
-    assert [r['usd_per_year'] for r in ranked] == sorted((r['usd_per_year'] for r in ranked), reverse=True)
+    assert [r['usd'] for r in ranked] == sorted((r['usd'] for r in ranked), reverse=True)
     assert supervisor['controllable_usd_per_year'] == pytest.approx(sum(r['usd_per_year'] for r in ranked), abs=1)
     first = ownership['rows'][0]
     assert first['lever'] == cost_model.TOTAL_TRIM and first['rank'] == 1 and first['band'] == targets.band('trim', first['pct_of_gross'])
     waste = store.get_waste_breakdown(window)
     trim = next(r for r in waste['rows'] if r['category'] == 'trim')
     assert first['quantity'] == trim['sqft'] and first['usd'] == cost_model.price('trim', trim['sqft'], rates, waste['gross_sqft'], 3 * 480 * 22)['usd']
+    lever = {r['key']: r for r in every['rows'] if not r.get('apart')}
+    at = {r['key']: r for r in every['rows'] if r.get('apart') == 'at-standard'}
+    assert first['above_standard_usd'] == lever['trim']['usd'] and first['at_standard_usd'] == at['trim']['usd']   # one window, one figure
     shear = next(r for r in ownership['rows'] if r['lever'].startswith('Shear'))
-    assert shear['usd_per_year'] == next(r for r in every['rows'] if r['lever'].startswith('Shear'))['usd_per_year']
+    assert shear['above_standard_usd'] == lever['shear']['usd'] and shear['at_standard_usd'] == at['shear']['usd']
+    assert ownership['dry_end_above_standard_usd'] == lever['dry_end']['usd'] and ownership['dry_end_at_standard_usd'] == at['dry_end']['usd']
 
 
 @pytest.mark.parametrize('question, scope, lens, window', [
@@ -493,14 +501,15 @@ def test_the_ownership_lens_shows_the_dry_end_waste_as_one_tag_scrap_subtotal_wi
                                          'Dry-end: other (cracking, handling, paper, print) (all recorded)']
     assert rows[first:first + len(dry)] == dry and all(r['rank'] is None for r in dry)
     assert data['dry_end_usd_per_year'] == round(sum(r['usd_per_year'] for r in dry)) and data['dry_end_kinds'] == 5
+    assert data['dry_end_above_standard_usd'] + data['dry_end_at_standard_usd'] == pytest.approx(data['dry_end_usd'], abs=0.005)   # split at its band
     assert data['dry_end_usd'] == pytest.approx(sum(r['usd'] for r in dry), abs=0.005)
     waste = next(r for r in store.get_waste_breakdown(window)['rows'] if r['category'] == 'dry_end')
     assert data['dry_end_pct_of_yield'] == waste['pct_of_yield'] and data['dry_end_band'] == targets.band('dry_end', waste['pct_of_yield'])
-    # ranked by dollars among the other levers: September's tag scrap ($1.08M/yr) outranks shear ($600k/yr), the unexplained
+    # ranked by this window's dollars among the other lines (issue #164): September's tag scrap outranks shear, the unexplained
     # remainder, the changeover rejects, the stacker and cutoff-knife boards and planning / admin (each its own line, priced
     # once: owner ruling (d) on PR #123 and the coordinator's re-review)
     others = [r for r in rows[1:] if not r.get('group')]
-    groups = sorted([(data['dry_end_usd_per_year'], 'dry_end')] + [(r['usd_per_year'], r['lever']) for r in others], reverse=True)
+    groups = sorted([(data['dry_end_usd'], 'dry_end')] + [(r['usd'], r['lever']) for r in others], reverse=True)
     assert data['dry_end_rank'] == 2 + [g for _, g in groups].index('dry_end') == 2
     assert [r['rank'] for r in others] == [2 + [g for _, g in groups].index(r['lever']) for r in others] == [3, 4, 5, 6, 7, 8]
     assert data['total_usd_per_year'] == round(sum(r['usd_per_year'] for r in rows))   # the subtotal adds nothing to the total
@@ -523,14 +532,19 @@ def test_each_reject_family_names_its_own_cause_from_the_taxonomy(store):
     assert [taxonomy[k]['driver'] for k in ('cracking', 'handling', 'paper', 'print')] == \
         ['board surface', 'handling after the knife', 'paper as received', 'pre-print']   # the taxonomy's order, the family label's
     assert cost_model.CONTROL['changeover'] == ('controllable', 'sequencing') and cost_model.CONTROL['admin'] == ('not production waste', 'planning and bookkeeping')
-    for lens in cost_model.LENSES:
+    rows = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, cost_model.effective(), 'ownership')['rows']
+    dry = {r['lever']: r['control_note'] for r in rows if r['lever'].startswith('Dry-end: ')}
+    assert len(dry) == 5 and len(set(dry.values())) == 4 and 'temperatures' not in ' '.join(dry.values())
+    # issue #164: dry end is one lever, its gap to its band; it names each family with its own cause, never "temperatures"
+    for lens in ('all', 'supervisor'):
         rows = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, cost_model.effective(), lens)['rows']
-        dry = {r['lever']: r['control_note'] for r in rows if r['lever'].startswith('Dry-end: ')}
-        assert len(dry) == 5 and len(set(dry.values())) == 4 and 'temperatures' not in ' '.join(dry.values()), lens
+        note = next(r['control_note'] for r in rows if r.get('key') == 'dry_end' and not r.get('apart'))
+        assert note == '; '.join(f'{k}: {cost_model.CONTROL[k][1]}' for k in cost_model.DRY_END_KINDS) and 'temperatures' not in note, lens
 
 
 @pytest.mark.parametrize('window, shift', [({'period': 'month', 'anchor': DAY}, None), ({'period': 'week', 'anchor': DAY}, 2),
-                                           ({'period': 'day', 'anchor': DAY}, None), ({'period': 'month', 'anchor': '2026-08-14'}, 3)])
+                                           ({'period': 'day', 'anchor': DAY}, None), ({'period': 'month', 'anchor': '2026-08-14'}, 3),
+                                           ({'period': 'day', 'anchor': '2025-01-29'}, 2)])   # no planning / admin that shift
 def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced_once(store, window, shift):
     """The coordinator's re-review of PR #123 (owner ruling (d): each loss priced exactly once). The ownership lens priced the
     cutoff-knife and stacker boards and planning / admin zero times; every line of the waste breakdown is a lever now, priced
@@ -541,10 +555,27 @@ def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced
     lens = cost_model.opportunities(store, window, shift, rates, 'ownership')
     waste = cost_model.attach('get_waste_breakdown', store.get_waste_breakdown(window, shift), rates)
     lines = [r for r in waste['rows'] if r['category'] not in ('dry_end', 'bale') and r['sqft'] > 0]
-    assert {r['quantity'] for r in lens['rows']} == {r['sqft'] for r in lines} and len(lens['rows']) == len(lines)
-    assert {r['usd'] for r in lens['rows']} == {r['usd'] for r in lines}, 'each line priced the same way, once'
+    held = [r for r in lens['rows'] if r['quantity'] > 0]
+    assert {r['quantity'] for r in held} == {r['sqft'] for r in lines} and len(held) == len(lines)
+    # a line the window holds none of but its period to date does shows at $0 beside its yearly figure (the round on
+    # 2510d38 of PR #168): the breakdown lists it at 0 sq ft and $0, so the lens still prices each line once
+    zero = {r['category']: r for r in waste['rows'] if r['category'] not in ('dry_end', 'bale') and r['sqft'] == 0}
+    for r in lens['rows']:
+        if r['quantity'] == 0:
+            assert r['key'] in zero and zero[r['key']]['usd'] == 0 and r['usd'] == 0 and r['usd_per_year'] > 0, r
+    assert len(lens['rows']) - len(held) == (1 if window['anchor'] == '2025-01-29' else 0)
+    assert {r['usd'] for r in held} == {r['usd'] for r in lines}, 'each line priced the same way, once'
     assert lens['total_usd'] == pytest.approx(sum(r['usd'] for r in lines), abs=0.01)
-    assert lens['total_usd_per_year'] == pytest.approx(sum(r['usd_per_year'] for r in lines), abs=1)
+    # a yearly figure is each line's period to date at this period's rate (issue #164), never the window's own: its printed
+    # whole dollars there, its cells' added up (the coordinator's review of 82c0994 on PR #168, item 2)
+    assert lens['total_usd_per_year'] == sum(r['usd_per_year'] for r in lens['rows'])
+    ptd = cost_model.whole_dollars(lens['ptd_terms']['whole'], rates)
+    for r in lens['rows']:   # each shift's own at its own days, the shifts' added up (the review of 2510d38 on PR #168, item 1)
+        terms = r['year_terms']
+        days = dict(terms['shift_days'])
+        assert terms['of'] == ['lines', r['key']] and r['usd_per_year'] == sum(cost_model.annual(e['lines'][r['key']], days[e['shift']])
+                                                                               for e in ptd['shifts'])
+    assert lens['above_standard_usd'] + lens['at_standard_usd'] + lens['no_band_usd'] == pytest.approx(lens['total_usd'], abs=0.005)
     for key in ('cutoff_waste', 'stacker_waste', 'admin', 'changeover'):
         line = next(r for r in waste['rows'] if r['category'] == key)
         assert sum(r['quantity'] == line['sqft'] and r['lever'].startswith(line['label']) for r in lens['rows']) == 1, key
@@ -552,10 +583,10 @@ def test_the_ownership_lens_total_is_the_waste_breakdowns_total_each_line_priced
 
 def test_the_supervisor_lens_lists_a_power_outage_apart_as_external(store):
     data = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, cost_model.effective(), 'supervisor')
-    controls = [r['control'] for r in data['rows']]
-    assert controls == sorted(controls, key=['controllable', 'schedule-driven', 'external'].index)
+    groups = [r['apart'] or ('schedule-driven' if r['control'] == 'schedule-driven' else 'ranked') if r.get('rank') is None else 'ranked' for r in data['rows']]
+    assert groups == sorted(groups, key=['ranked', 'at-standard', 'schedule-driven', 'external', 'no-band'].index)   # cost_model.APART
     outage = next(r for r in data['rows'] if r['lever'] == 'Downtime: Power outage (external)')
-    assert outage['rank'] is None and outage not in [r for r in data['rows'] if r['control'] == 'controllable']
+    assert outage['rank'] is None and outage['apart'] == 'external' and outage['control'] == 'external' 
     sections = Agent(store.day_analysis(DAY)).ask("Where's my biggest opportunity this month?", Context(DAY, 2, scope='day'))['sections']
     at = sections.index('External, not controllable')
     assert sections.index('Schedule-driven, shown apart') < at and sections[at + 1].startswith('- Downtime: Power outage (external): **$')
@@ -563,13 +594,14 @@ def test_the_supervisor_lens_lists_a_power_outage_apart_as_external(store):
 
 def test_the_card_reads_a_tile_without_its_band_against_the_owners_numbers():
     config = targets.client_config()
-    assert config['dry_end'] == {'home_run': 0.75, 'target': 1.0, 'flag': 1.25, 'unit': '% of yield'}
+    assert config['dry_end'] == {'home_run': 0.75, 'target': 1.0, 'flag': 1.25, 'unit': '% of yield', 'owner': 'owner to set'}
     assert config['maintenance']['flag'] == config['operator']['flag'] == 2.5
 
 
 def test_side_trim_is_ranked_on_the_money_cards_and_marked_as_the_supervisor_lens_marks_it(store, monkeypatch):
-    """Issue #135 (the owner, 2026-11-12): on the shift's and the day's money cards side trim stays a ranked recorded loss,
-    in the total, with the control the supervisor lens gives it, both read from targets.json's trim band lever."""
+    """Issue #135 (the owner, 2026-11-12), on the ledger (issue #164): on the shift's and the day's money cards side trim is
+    its lever over the target, ranked and in the total, with the control the supervisor lens gives it, both read from
+    targets.json's trim band lever; its cost inside the band is shown apart, at standard."""
     rates = cost_model.effective()
     analysis = store.day_analysis(DAY)
     try:
@@ -577,20 +609,23 @@ def test_side_trim_is_ranked_on_the_money_cards_and_marked_as_the_supervisor_len
     finally:
         analysis.close()
     lens = cost_model.opportunities(store, {'period': 'day', 'anchor': DAY}, 2, rates, 'supervisor')
-    lever = next(r for r in lens['rows'] if r['kind'] == 'trim')
+    lever = next(r for r in lens['rows'] if r['key'] == 'trim' and not r.get('apart'))
     assert lever['control'] == targets.BANDS['trim']['lever'] == 'schedule-driven' and lever['rank'] is None
     for data in (shift, day):
-        trim = [r for r in data['rows'] if r['kind'] == 'trim']
+        trim = [r for r in data['rows'] if r['key'] == 'trim' and not r['apart']]
         assert len(trim) == 1 and (trim[0]['control'], trim[0]['control_note']) == (lever['control'], lever['control_note'])
-        assert trim[0]['apart'] is None and isinstance(trim[0]['rank'], int)   # ranked among the recorded losses, not apart
+        assert isinstance(trim[0]['rank'], int)   # ranked among the levers, not apart
         assert data['total_usd'] == round(sum(r['usd'] for r in data['rows'] if not r['apart']), 2) and trim[0]['usd'] > 0
-        # no other gap carries a control: the apart gaps say theirs in `apart`, and the rest are controllable losses
-        assert [r['gap'] for r in data['rows'] if 'control' in r] == ['Side trim']
+        # side trim is the one lever a band calls other than controllable
+        assert [r['lever'] for r in data['rows'] if not r['apart'] and r['control'] != 'controllable'] == ['Side trim over the 3% target']
+        assert any(r['key'] == 'trim' and r['apart'] == 'at-standard' for r in data['rows'])
     # the tag follows the band's lever, never text of its own: a controllable trim band ranks trim untagged
     monkeypatch.setitem(cost_model.CONTROL, 'trim', ('controllable', 'the order mix and its web widths'))
+    store.__dict__.pop('_ledger_cells', None)
     sections = ask(store, 'Where did the money go this shift?')['sections']
-    line = next(s for s in sections if '. Side trim: **$' in s)
+    line = next(s for s in sections if '. Side trim over the 3% target: **$' in s)
     assert ' · schedule-driven' not in line and ' · controllable' not in line
     monkeypatch.undo()
-    line = next(s for s in ask(store, 'Where did the money go this shift?')['sections'] if '. Side trim: **$' in s)
-    assert re.match(r'^- \d+\. Side trim: \*\*\$[\d,]+\*\* · \$[\d,]+/yr · schedule-driven \(query 1 · row \d+\)$', line), line
+    line = next(s for s in ask(store, 'Where did the money go this shift?')['sections'] if '. Side trim over the 3% target: **$' in s)
+    assert re.match(r'^- \d+\. Side trim over the 3% target: \*\*\$[\d,]+\*\* · \d of 1 shift over the 3% target, side trim [\d.]+% of '
+                    r'gross · schedule-driven · owner role: owner to set · look at: .+ \(query 1 · row \d+\)$', line), line

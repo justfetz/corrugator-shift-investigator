@@ -65,43 +65,57 @@ def test_changing_one_rate_changes_its_dollars_and_nothing_else(analysis):
     for text, changed, factor in (('paper:110,margin:40', 'paper_usd', 2), ('hour:2400,margin:40', 'machine_time_usd', 2),
                                   ('margin:80', 'contribution_usd', 2)):
         other = cost_model.shift_dollars(analysis, 2, rates(text))
-        before, after = {r['gap']: r for r in base['rows']}, {r['gap']: r for r in other['rows']}
+        before, after = {r['lever']: r for r in base['rows']}, {r['lever']: r for r in other['rows']}
         assert before.keys() == after.keys()
-        for gap, row in before.items():
-            assert after[gap]['quantity'] == row['quantity'] and after[gap]['msf_not_made'] == row['msf_not_made']
+        for lever, row in before.items():
+            assert after[lever]['quantity'] == row['quantity'] and after[lever]['msf_not_made'] == row['msf_not_made']
             for key in COMPONENTS:
                 if row[key] is None:
-                    assert after[gap][key] is None
+                    assert after[lever][key] is None
                 elif key == changed:
-                    assert after[gap][key] == pytest.approx(row[key] * factor, abs=0.02)
+                    assert after[lever][key] == pytest.approx(row[key] * factor, abs=0.03)
                 else:
-                    assert after[gap][key] == row[key], (text, gap, key)
-            # usd is paper plus machine time: contribution never enters it
-            assert after[gap]['usd'] == pytest.approx((after[gap]['paper_usd'] or 0) + after[gap]['machine_time_usd'], abs=0.011)
+                    assert after[lever][key] == row[key], (text, lever, key)
+            # usd is paper plus machine time: contribution never enters it (a row at standard is the difference of two
+            # rounded prices, so its parts may differ from its total by a cent more)
+            slack = 0.021 if after[lever].get('apart') == 'at-standard' else 0.011
+            assert after[lever]['usd'] == pytest.approx((after[lever]['paper_usd'] or 0) + after[lever]['machine_time_usd'], abs=slack)
 
 
 def test_shift_dollars_rank_and_add_up(analysis):
+    """Issue #164: a shift on the ledger. Its six levers ranked by dollars above standard, the rows shown apart after them
+    with no rank, and its total the levers' sum; side trim is its lever over the target, paper only."""
     data = cost_model.shift_dollars(analysis, 2, rates())
-    usd = [r['usd'] for r in data['rows']]
-    assert usd == sorted(usd, reverse=True) and [r['rank'] for r in data['rows']] == list(range(1, len(usd) + 1))
+    levers = [r for r in data['rows'] if not r.get('apart')]
+    usd = [r['usd'] for r in levers]
+    assert usd == sorted(usd, reverse=True) and [r['rank'] for r in levers] == list(range(1, len(usd) + 1)) and len(levers) == 6
+    assert all(r['rank'] is None for r in data['rows'] if r.get('apart'))
     assert data['total_usd'] == pytest.approx(sum(usd), abs=0.02)
-    kinds = {r['kind'] for r in data['rows']}
-    assert {'downtime', 'speed', 'trim', 'waste'} <= kinds | {'setup'} and 'source_ids' in data['rows'][0]
-    trim = next(r for r in data['rows'] if r['gap'] == 'Side trim')
-    assert trim['machine_time_usd'] == 0 and trim['paper_usd'] == pytest.approx(trim['quantity'] / 1000 * 55, abs=0.01)
+    assert {r['key'] for r in levers} == set(cost_model.LEVERS) and {r['kind'] for r in levers} == {'downtime', 'speed', 'trim', 'waste'}
+    trim = next(r for r in levers if r['key'] == 'trim')
+    assert trim['lever'] == 'Side trim over the 3% target' and trim['machine_time_usd'] == 0
+    assert trim['paper_usd'] == pytest.approx(trim['quantity'] / 1000 * 55, abs=0.01)
+    assert all(r['owner'] == 'owner to set' and r['look_at'] and r['records'] for r in levers)
 
 
 def test_opportunities_rank_levers_and_name_records(store):
     data = cost_model.opportunities(store, {'period': 'month', 'anchor': DAY}, None, rates('trim:3'))
-    years = [r['usd_per_year'] for r in data['rows']]
-    assert years == sorted(years, reverse=True)
-    levers = {r['lever'] for r in data['rows']}
-    assert {"Speed under each grade's trailing-year speed", 'Side trim over the 3% target', 'Downtime: Order change (setup time)'} <= levers
-    assert all(r['records'] for r in data['rows'])
-    trim = next(r for r in data['rows'] if r['lever'].startswith('Side trim'))
-    assert trim['quantity'] > 0 and trim['usd_per_year'] == pytest.approx(
-        cost_model.trim_points_usd_per_year(trim['quantity']), rel=1e-3)   # the post's trim formula, at one machine
-    assert 'prescribe' in data['method_note']
+    levers = [r for r in data['rows'] if not r.get('apart')]
+    usd = [r['usd'] for r in levers]
+    assert usd == sorted(usd, reverse=True)
+    assert {r['lever'] for r in levers} == {'Speed under the grade baseline', 'Side trim over the 3% target', 'Shear over the 0.75% target',
+                                            'Dry end over the 1% target', 'Operator downtime over the 2.5% band',
+                                            'Maintenance downtime over the 2.5% band'}
+    assert all(r['records'] and r['owner'] and r['look_at'] for r in levers)
+    trim = next(r for r in levers if r['key'] == 'trim')   # the cells' gaps to the target, each to 0.1 sq ft (issue #164)
+    assert trim['quantity'] == cost_model.trim_cells_over(trim['price_terms']['trim_cells'], 3)
+    ptd = cost_model.whole_dollars(data['ptd_terms']['whole'], rates('trim:3'))   # the period to date's whole dollars, its cells' added up
+    for r in levers:   # a yearly figure is the period to date's: each shift's printed dollars per its own production day x the
+        terms = r['year_terms']   # post's days a year, the shifts' added up (the coordinator's review of 2510d38 on PR #168, item 1)
+        days = dict(terms['shift_days'])
+        assert terms['of'] == ['levers', r['key']] and r['usd_per_year'] == sum(cost_model.annual(e['levers'][r['key']], days[e['shift']])
+                                                                                for e in ptd['shifts'])
+    assert 'prescribe' in data['method_note'] and data['ptd_label'].endswith(' to date through Wed 30 Sep')
 
 
 @pytest.mark.parametrize('question, period, tool', [
@@ -126,7 +140,10 @@ def test_priced_tools_carry_dollars_the_narrative_may_cite(analysis):
     step = result['trace'][0]
     assert step['tool'] == 'get_shift_dollars' and result['status'] == 'complete'
     packet = evidence_packet([step])
-    assert {'usd', 'usd_per_year', 'paper_usd', 'machine_time_usd'} <= set(packet[0]['rows'][0])
+    assert {'usd_shown', 'usd_per_year'} <= set(packet[0]['rows'][0])
+    # the card prints whole dollars (PR #168): the writer cites those, never the cents behind them (the review's finding 4)
+    assert not {'usd', 'paper_usd', 'machine_time_usd', 'contribution_usd', 'at_standard_usd', 'above_standard_usd'} & {
+        k for row in packet[0]['rows'] for k in row}
     downtime = agent._execute('get_downtime_breakdown', {'shift': 2, 'kind': None, 'group_by': 'reason'}, {}, rates())
     assert downtime['rows'][0]['machine_time_usd'] == pytest.approx(downtime['rows'][0]['down_minutes'] / 60 * 1200, abs=0.01)
     compact = compact_result({'result_id': 'x', 'tool': 'get_downtime_breakdown', 'ok': True, 'data': downtime})
@@ -197,11 +214,16 @@ def test_a_rate_in_the_link_is_exactly_the_rate_used(store):
         app.close()
 
 
-def test_the_per_year_factor_is_in_the_formula(analysis):
-    row = next(r for r in cost_model.shift_dollars(analysis, 2, rates())['rows'] if r['gap'] == 'Side trim')
-    assert 'per year: x ' in row['usd_basis'] and '1,800,000 MSF a year' in row['usd_basis']
-    downtime = next(r for r in cost_model.shift_dollars(analysis, 2, rates())['rows'] if r['kind'] in ('downtime', 'setup'))
-    assert 'scheduled min a year / 480 min' in downtime['usd_basis']
+def test_no_price_annualizes_its_own_window(analysis):
+    """Issue #164, the owner's call 3: a price is the window's own dollars; nothing is annualized from a shift, a day or
+    a window. A money card's only yearly figure is the period to date's, beside it."""
+    data = cost_model.shift_dollars(analysis, 2, rates())
+    for row in data['rows']:
+        assert 'per year' not in row['usd_basis'] and row['usd_per_year'] is None
+    assert data['total_usd_per_year'] is None and data['ptd_usd_per_year'] == cost_model._add(
+        [r['usd_per_year'] for r in data['ptd_levers']])
+    downtime = cost_model.attach('get_downtime_breakdown', analysis.get_downtime_breakdown(2), rates())
+    assert all(r['usd_per_year'] is None and 'per year' not in r['usd_basis'] for r in downtime['rows'])
 
 
 def test_invalid_server_rates_fail_at_boot(monkeypatch):

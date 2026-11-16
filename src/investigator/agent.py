@@ -35,11 +35,11 @@ TOOL_SCHEMAS = [
         ("get_shift_notes", "Read untrusted synthetic shift notes and individual downtime notes; not proven causes.", {}),
         ("get_rankings", "Rank lowest wet-end speed attainment or highest downtime/quality losses. Incomplete data is withheld.", {
             "metric": {"type": "string", "enum": ["speed", "downtime", "quality"]}}),
-        ("get_shift_dollars", "This shift's losses priced at the assumed rates, the recorded losses ranked by dollars; planned maintenance and a power outage apart (`apart`), unranked and outside the recorded-losses total, which all_in_usd adds them to.", {}),
+        ("get_shift_dollars", "This shift on the money ledger at the assumed rates: each lever (speed under the grade baseline, side trim, shear and dry end over their targets, operator and maintenance downtime over their bands) its gap to its band, ranked by dollars above standard; the cost at standard, planned maintenance, a power outage and the waste with no band apart (`apart`), unranked and outside the total, which all_in_usd adds them to; the machine's period to date and its rate a year (ptd_*), never the shift's own year.", {}),
     ]
 ] + [
     # The day's losses across its complete shifts (issue #31b): the all-shifts money of a Day card, from the server.
-    {"name": "get_day_dollars", "description": "The production day's losses across the listed shifts that are complete, priced once on the day at the assumed rates, the recorded losses ranked by dollars; planned maintenance and a power outage apart, unranked, in all_in_usd only.",
+    {"name": "get_day_dollars", "description": "The production day on the money ledger across the listed shifts that are complete: each lever the shifts' gaps to its band added up, ranked by dollars above standard; the rows apart unranked, in all_in_usd only; the machine's period to date and its rate a year.",
      "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
                     "required": [], "additionalProperties": False}},
 ]
@@ -77,7 +77,7 @@ PERIOD_TOOL_SCHEMAS = [
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER}, ["window"]),
         ("get_speed_opportunity", "Where could we run faster: per grade and web width (or crew), typical speed without stops vs the best fifth of setups, gap, % of target for both, opportunity hours, and the dry-end reject % of the fast fifth against the rest (a positive penalty means the gain costs rejects). Peak speeds never used; setups under the minimum run time excluded and counted.",
          {"window": WINDOW_SCHEMA, "slice_by": {"type": "string", "enum": ["width", "crew"]}, "shift": SHIFT_FILTER}, ["window"]),
-        ("get_opportunities", "Improvement levers of a window ranked by $/yr at the assumed rates, each marked controllable or schedule-driven. lens: all (every lever ranked, default); supervisor (the controllable losses ranked, schedule-driven trim and planned maintenance after); ownership (the total cost of waste, side trim first).",
+        ("get_opportunities", "A window on the money ledger at the assumed rates: each lever its gap to its band, summed over the window's shifts, ranked by the window's dollars above standard, with a yearly figure at the scope's period-to-date rate, an owner role and where to look; each marked controllable or schedule-driven. lens: all (every lever ranked, default); supervisor (the controllable levers ranked, schedule-driven trim after); ownership (the total cost of waste, side trim first, each banded line split at its band).",
          {"window": WINDOW_SCHEMA, "shift": SHIFT_FILTER, "lens": {"type": "string", "enum": ["all", "supervisor", "ownership"]}}, ["window"]),
         ("get_downtime_review", "The owner's downtime answer for a window: maintenance and operator downtime as % of scheduled minutes against their "
          f"{targets.pct(targets.BANDS['maintenance']['flag'])} bands ({targets.pct(targets.BANDS['op_maint']['flag'])} together); every reason by kind ranked by % of scheduled minutes with stops and minutes per stop, external downtime (a power outage, not controllable) and planned maintenance (scheduled time) apart and unranked, never in a band; and the flags: each shift over a band, its supervisor slot, and the leading reason's recurrence over the trailing year.",
@@ -113,7 +113,7 @@ CHART_TITLES = {'get_period_kpis': 'KPI tiles', 'compare_periods': 'KPI comparis
                 'get_grade_totals': 'Volume by grade (MSF)', 'get_overrun': 'Over/under-run by knife',
                 'get_rollstock': 'Paper consumed by grade and width (MSF)',
                 'get_speed_opportunity': 'Speed opportunity (hours at best-fifth speed)',
-                'get_opportunities': 'Where the money is ($ per year)',
+                'get_opportunities': 'Where the money is ($ above standard)',
                 'get_speed_variance': 'Speed gap by contributor (ft/min)',
                 'get_downtime_review': 'Downtime by reason (% of scheduled minutes)'}
 # Chartable results: tool -> (x field, y field or a function of the result data, unit or a function, chart type).
@@ -135,8 +135,8 @@ CHARTABLE = {
     'get_rollstock': ('label', 'msf', 'MSF', 'bar', 'previous_msf'),
     'get_speed_opportunity': ('label', 'opportunity_hours', 'hours', 'bar', None),
     'get_trend': ('week_start', 'value', lambda d: d['unit'], 'line', None),
-    'get_shift_dollars': ('gap', 'usd', '$ this shift', 'bar', None),
-    'get_opportunities': ('lever', 'usd_per_year', '$ per year', 'bar', None),
+    'get_shift_dollars': ('lever', 'usd', '$ this shift', 'bar', None),
+    'get_opportunities': ('lever', 'usd', '$ in this window', 'bar', None),   # the window's own dollars: a year is its period to date's (issue #164)
     # a waterfall: from the reference speed down (or up) through each bucket to this window's speed with stops
     'get_speed_variance': ('label', 'gap_fpm', 'ft/min', 'waterfall', None),
     'get_downtime_review': ('category', 'pct_of_scheduled', '% of scheduled minutes', 'bar', None),
@@ -2206,6 +2206,20 @@ DAILY_CHART_TITLES = {'get_downtime_breakdown': 'Recorded downtime', 'get_wet_en
                       'get_quality_breakdown': 'Dry-end rejects by reason', 'get_shift_dollars': 'Where the money went ($)'}
 
 
+# The rate-free terms a money card's whole dollars are re-derived from at a visitor's rates (PR #168): they ride on the result
+# for the browser, never in a planner's context, which they would fill without telling a planner anything (a day card's four
+# steps carry the period to date's every shift twice).
+CARD_TERMS = ('display_terms', 'ptd_terms', 'ptd_display_terms')
+
+
+def planner_view(result):
+    """A tool result as a planner sees it: a copy without the card's rate-free terms (CARD_TERMS)."""
+    data = result.get('data')
+    if not isinstance(data, dict) or not any(k in data for k in CARD_TERMS):
+        return deepcopy(result)
+    return deepcopy({**result, 'data': {k: v for k, v in data.items() if k not in CARD_TERMS}})
+
+
 def chart_for(rid, result):
     """The chart envelope for a chartable tool result: rows copied from the result, never supplied.
     Charts are application output; the agent draws one for every chartable piece of evidence the
@@ -2217,6 +2231,12 @@ def chart_for(rid, result):
              'x': x, 'y': y, 'unit': unit, 'rows': deepcopy(data['rows'])}
     if result['tool'] == 'get_opportunities' and data.get('lens'):
         chart['lens'] = data['lens']   # the levers' order is the lens's (issue #101): web/money.js re-ranks the chart by it
+    if data.get('display_terms') and result['tool'] in ('get_shift_dollars', 'get_day_dollars', 'get_opportunities', 'get_waste_breakdown',
+                                                        'get_quality_breakdown', 'get_downtime_breakdown'):
+        chart['display_terms'] = data['display_terms']   # the whole dollars its bars print, re-allocated at a visitor's rates (PR #168)
+    if result['tool'] == 'get_opportunities' and (data.get('ptd_terms') or {}).get('whole'):
+        # the period to date's cells, whose whole dollars a bar's yearly figure is read from (PR #168's review of 82c0994, item 2)
+        chart['ptd_display_terms'] = data['ptd_terms']['whole']
     if result['tool'] == 'get_speed_variance':
         # the waterfall's two ends are the envelope's speeds; the bars between them are the rows
         start_label = {'baseline': 'Baseline speed', 'previous': 'Previous', 'shift': f"Shift {data.get('against_shift')}"}[data['against']]
@@ -2391,7 +2411,14 @@ class Agent:
             if name in ('get_period_kpis', 'compare_periods') and data.get('current_sums'):
                 window = arguments.get('window') or arguments.get('current_window')
                 reasons = self.store.get_downtime_pareto(window, 'reason', 'minutes', shift)['rows']
-                data['tile_money'] = cost_model.period_tiles(data, reasons, rates)   # #31b: the tiles' dollars, as the Pareto and waste rows price them
+                # #31b: the tiles' dollars, as the Pareto and waste rows price them; the operator and maintenance tiles as the
+                # money ledger prints them (PR #168, item 9), so `display_terms` rides along for the browser's re-price
+                ledger = cost_model.period_whole(self.store, window, shift, rates)
+                data['tile_money'] = cost_model.period_tiles(data, reasons, rates, ledger)
+                data['display_terms'] = ledger[1]
+            if name == 'get_waste_breakdown' and data.get('gross_sqft'):
+                # each line's dollars as the money ledger prints them for the same window and shift (the review of PR #168)
+                cost_model.waste_shown(data, cost_model.period_whole(self.store, arguments['window'], shift, rates)[1], rates)
             return data
         if name == 'get_day_dollars':
             shifts = arguments.get('shifts') or [1, 2, 3]
@@ -2407,6 +2434,8 @@ class Agent:
         if name in cost_model.PRICED_TOOLS:
             gross = self.analysis.get_shift_kpis(shift)['rows'][0]['gross_sqft'] if name == 'get_quality_breakdown' else None
             cost_model.attach(name, data, rates, gross)
+            # the families and the stop kinds in the whole dollars the shift's money card prints (PR #168)
+            cost_model.daily_shown(self.analysis, name, data, shift, rates, arguments.get('group_by'))
         return data
 
     def ask(self, text, context, request=None, emit=None):
@@ -2443,7 +2472,7 @@ class Agent:
             planner_context = {**request, 'question': text, 'production_day': context.production_day,
                 'process': PROCESS_CONTEXT + f' Allowed shifts: {allowed_shifts}. The scope control is authoritative; do not query outside it.' + period_scope_text(context) + read_scope_text(context),
                 'scope': context.scope, 'period': period, 'allowed_shifts': list(allowed_shifts), 'tools': deepcopy(TOOL_SCHEMAS),
-                'history': deepcopy(history), 'results': deepcopy(list(store.values()))}
+                'history': deepcopy(history), 'results': [planner_view(r) for r in store.values()]}
             if len(json.dumps(planner_context)) > 200000:
                 status = 'context_limit'
                 break

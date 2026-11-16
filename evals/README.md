@@ -77,6 +77,19 @@ Every case, whatever its type, also checks:
   value of that row, or, with no row named, a count of the result's rows, a below-target count or a total of its
   envelope; every other number on the line is one of those, a count of the result's rows or a rule constant. A figure
   moved to the wrong row, changed by a digit, stated beside a row it does not cite, or citing a chart step fails the case.
+- every money ledger answer's printed parts add up to its printed totals, in the whole dollars printed, never the cents
+  (`displayed_sum_failures`, the owner's top rule on PR #168): the levers to the headline (the supervisor lens: its
+  controllable levers), a day card's shift lines to it, the rows at standard to their total, everything recorded and
+  priced to its parts, side trim by shift to the trim line, and under the ownership lens each split, the tag scrap's kinds
+  and every line and part to all the waste recorded. A case can also name it (`money_checks: displayed_sums`), and
+  `same_figure` and `tile_agrees` hold one figure printed in two views, a turn each, to the same whole dollars.
+  `turns_add_up` holds nested windows as printed (the days of a week or a month, a shift's cards to its month, a period's
+  weeks, a period to date and the next day, the shifts of a day or a week, a KPI tile by shift), and `same_words` one
+  label on every card (a period to date names the same end day wherever it is stated; the coordinator's review of
+  `82c0994` on PR #168).
+- every formula line ("How a dollar is priced, for …") states its row's cents as its last figure, says "It prints $N
+  (whole dollars that add up)" exactly when the row prints another whole dollar than their nearest one, and on a money
+  ledger card agrees with the bold figure of the line that cites its row (`formula_failures`, item 1 of the same review).
 
 Two more hold "exact over summary" (issue #113), stated in `run.py` on their own, not imported from the router:
 
@@ -203,6 +216,12 @@ four cores, two runs) four of them crossed the 250 ms default (`story-monday-war
 418 ms, `story-trim-creep` 339 ms, `value-trend-trim-8w` 302 ms,
 `period-trend-minutes-per-stop` 266 ms), all of them stayed under 500 ms, the next
 slowest case reached 156 ms, and the run-level gate held at p50 26 ms, p95 232 ms.
+The nested-window money cases (the coordinator's review of `82c0994` on PR #168) ask one address a turn, each a
+money card of its own with its period to date priced. Those over 250 ms carry 150 ms a turn, 500 ms at the least
+(`tests/test_evals.py` `NESTED_CASES`), measured in-process / over GET on a shared 2-CPU box over three runs:
+September's 23 day cards 1,352–1,864 / 1,596–2,315 ms, shift 3's 23 shift cards 110–386 / 1,037–1,221 ms, the week of
+7 Sep's six cards 301–499 / 391–529 ms, February's four period-to-date labels 218–407 / 178–378 ms and P2's five weeks
+112–189 / 214–275 ms. The shorter nested cases stay under 250 ms and carry no budget.
 Raise a budget only with the number that justifies it in the PR; never to make
 a slow change pass.
 

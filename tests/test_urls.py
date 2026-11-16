@@ -49,6 +49,12 @@ def test_every_golden_question_round_trips_through_its_url(case):
     context.scope = scope
     after, url = [], None
     for text in turns:
+        if text.startswith('/corr/'):
+            # a turn asked by its address (evals/run.py answers it over GET): its own canonical address, resolved to itself
+            resolved = resolve_url(text, store)
+            assert page_url(resolved) == text and redirect_target(text, resolved) is None, text
+            url = text
+            continue
         try:
             # the router reads the scope the question names first (issue #105, and the owner's downtime default of
             # #101), as the server does, and the address is of that scope
