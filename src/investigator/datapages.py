@@ -836,6 +836,9 @@ SOURCES = {
     'get_rankings': ('setups', {'row': _ranking}),
     'get_shift_dollars': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
     'get_day_dollars': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
+    # the day's row: its complete shifts' records; its details, the day's stops and order lanes over those shifts (#177)
+    'get_day_kpis': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {}),
+                                    'detail': lambda r, e: ('stops', {}) if r.get('count') == 'stops' else ('setup_orders', {})}),
     # period tools: the window and the shift
     'get_period_kpis': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),
     'compare_periods': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),

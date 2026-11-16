@@ -37,6 +37,9 @@ PARTS = {'row': 'rows', 'detail': 'details', 'weekday': 'weekday_profile', 'flag
 ALIASES = {'period_downtime': 'period_pareto', 'period_quality': 'period_waste', 'period_dollars': 'period_money'}
 MARGIN_NOT_SET = 'margin not set'   # cost_model.MARGIN_NOT_SET: no owner margin, so no contribution is priced
 WORDS = {2: 'two', 3: 'three'}
+# A day's total over the shifts it lists, which the offline planner adds to an all-shifts card (agent.DAY_TOOLS): the
+# day's money (#31b) and the day's KPI row (#177). Neither has a shift of its own, so neither is grouped as one.
+DAY_TOOLS = ('get_day_dollars', 'get_day_kpis')
 TREND_NAMES = {'trim_pct': 'side trim', 'shear_pct': 'shear', 'dry_end_pct': 'dry-end rejects', 'warp_pct': 'warp', 'bond_pct': 'bond',
                'misalignment_pct': 'misalignment', 'moisture_pct': 'moisture', 'other_pct': 'other dry-end rejects', 'speed_run_fpm': 'speed without stops',
                'speed_all_fpm': 'speed with stops', 'downtime_pct': 'downtime', 'stops': 'stops', 'minutes_per_stop': 'minutes per stop',
@@ -338,15 +341,16 @@ def answer_sections(intent, evidence, context, period_tools, lead=None):
     semantic = [r for r in evidence if r['tool'] == SEMANTIC_TOOL]   # the semantic model's own shape (issue #117)
     evidence = [r for r in evidence if r['tool'] != SEMANTIC_TOOL]
     period = [r for r in evidence if r['tool'] in period_tools]
-    daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] != 'get_day_dollars']
-    day_total = next((r for r in evidence if r['tool'] == 'get_day_dollars'), None)   # the day's ledger leads its card (issue #164)
+    day = [r for r in evidence if r['tool'] in DAY_TOOLS]   # the day's totals: its ledger (#164) and its KPI row (#177)
+    daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] not in DAY_TOOLS]
+    day_total = next((r for r in day if r['tool'] == 'get_day_dollars'), None)   # the day's ledger leads its card (issue #164)
     lines = SemanticAnswer(semantic, context, lead if intent == 'semantic' else None).sections() if semantic else []
     if period:
         own = intent.startswith('period_')
         lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own, lead=lead).sections()
     if daily:
         own = not intent.startswith('period_') and intent != 'model'
-        lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own, day_total=day_total).sections()
+        lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own, day_total=day_total, day=day).sections()
     return order(lines)
 
 
@@ -449,13 +453,22 @@ class DailyAnswer:
             'ranking': {KPIS, 'get_rankings'}, 'summary': {'get_shift_overview'}, 'dollars': {'get_shift_dollars'},
             'compare': {KPIS, 'get_downtime_breakdown', 'get_wet_end_performance'}}
 
-    def __init__(self, intent, evidence, context, inferred=False, day_total=None):
+    # The intents whose card under All leads with the day, all shifts together (issue #177, the owner's ruling of
+    # 2026-11-15), and the day total each reads (agent.DAY_LEAD_INTENTS). The money card's day ledger is #164's (day_dollars).
+    DAY_LEAD = {'summary': 'get_day_kpis', 'overview': 'get_day_kpis', 'speed': 'get_day_kpis', 'quality': 'get_day_kpis',
+                'matrix': 'get_day_kpis', 'notes': 'get_day_kpis', 'orders': 'get_day_kpis'}
+
+    def __init__(self, intent, evidence, context, inferred=False, day_total=None, day=()):
         self.intent, self.context, self.inferred, self.generic = intent, context, inferred, False
+        self.day = {r['tool']: r for r in day}
         self.shifts = group(evidence)
         self.day_total = day_total
         self.incomplete = [s for s, tools in self.shifts.items()
                            if any(r['data']['coverage'] != 'complete' for k, r in tools.items() if not k.startswith('all:'))]
         self.complete = [s for s in self.shifts if s not in self.incomplete]
+        # Under All a question that names no shift: all three shifts are in the scope, so the card is the day's (#177).
+        # A question naming two shifts keeps its first shift's lead (the owner has ruled on the whole day only).
+        self.whole_day = context.scope == 'day' and sorted(self.shifts) == [1, 2, 3] and len(self.complete) > 1
 
     def suffix(self, shift):
         """The words that point a where-to-look question at the focus shift when the scope is all shifts."""
@@ -509,7 +522,12 @@ class DailyAnswer:
         shape = getattr(self, 'shape_' + self.intent, None) or self.shape_speed
         head, bullets, notes, looks = shape(focus)
         bullets += self.leftovers(focus)
-        others = [] if self.intent == 'compare' else [b for s in self.complete if s != focus for b in [self.other(s)] if b]
+        day = self.day_lead()
+        if day:   # under All the day leads, all shifts together; each shift follows, the focus with its rank (#177)
+            head = self.day_head(day)
+            others = [b for s in self.complete for b in [self.other(s, ranked=s == focus)] if b]
+        else:
+            others = [] if self.intent == 'compare' else [b for s in self.complete if s != focus for b in [self.other(s)] if b]
         if self.inferred:   # an analyst's plan: every other shift's evidence is listed too
             others += [f'- Shift {s} · {b[2:]}' for s in self.complete if s != focus for b in self.leftovers(s, all_tools=True)]
         if others:   # several shifts: the focus shift's findings say whose they are
@@ -519,6 +537,56 @@ class DailyAnswer:
         if looks:
             out += [LOOK, *looks]
         return out
+
+    def day_lead(self):
+        """The day's total this card leads with under All (#177): the intent's day tool, when the scope holds several
+        complete shifts and the offline planner ran it; None otherwise (one shift, an analyst's plan, a selected shift)."""
+        tool = self.DAY_LEAD.get(self.intent)
+        result = self.day.get(tool) if tool else None
+        if not result or self.inferred or not self.whole_day:
+            return None
+        if tool == 'get_day_kpis' and not result['data']['rows']:
+            return None
+        return result
+
+    @staticmethod
+    def across(data):
+        """` across the three shifts`, or the shifts a day total counted when one holds an excluded record (` across shifts 1
+        and 3`): its `shifts` less its `excluded_shifts`."""
+        counted = [x['shift'] for x in data.get('shifts', []) if x['shift'] not in (data.get('excluded_shifts') or [])]
+        if counted == [1, 2, 3]:
+            return ' across the three shifts'
+        return ' across shifts ' + ' and '.join(str(x) for x in counted)
+
+    def day_head(self, day):
+        """The headline of the day (#177): the intent's measure over the day's row, its scope in the line."""
+        row, where = day['data']['rows'][0], self.across(day['data'])
+        down = 'of the day down' if where == ' across the three shifts' else f'of their {n(row["scheduled_minutes"])} scheduled minutes down'
+        if self.intent == 'summary':
+            return (f'**{f0(row["observed_lineal_ft"])} lineal ft**{where} at {f1(row["observed_shift_fpm"])} ft/min including downtime · '
+                    f'{f1(row["speed_to_target_pct"])}% of grade target · {f2(row["downtime_pct"])}% {down} · '
+                    f'{f2(row["dry_end_pct"])}% of yield rejected at the dry end {ref(day, 0)}')
+        if self.intent == 'overview':
+            return (f'**{f1(row["speed_to_target_pct"])}%** of grade target{where} · {f1(row["observed_shift_fpm"])} ft/min including downtime · '
+                    f'{f2(row["downtime_pct"])}% {down} {ref(day, 0)}')
+        if self.intent == 'quality':
+            return f'**{f2(row["dry_end_pct"])}%** of yield rejected at the dry end{where}{band(row["dry_end_band_text"])} {ref(day, 0)}'
+        if self.intent == 'matrix':   # each shift's line gives its paper changes; the day's distinct runs would not add up to them
+            per = f' · {f0(row["lineal_per_setup"])} ft per setup' if row['lineal_per_setup'] is not None else ''
+            return f'**{n(row["valid_setups"])}** dry-end setups{where}{per} {ref(day, 0)}'
+        counts = {d['count']: (i, d) for i, d in enumerate(day['data'].get('details') or [])}
+        if self.intent == 'notes' and 'stops' in counts:   # the day's stops: its detail, whose link opens them
+            i, d = counts['stops']
+            stops = d['stops']
+            own = all(any(r.get('record_type') == 'Shift' for r in self.shifts[s]['get_shift_notes']['data']['rows'])
+                      for s in self.complete if self.shifts[s].get('get_shift_notes'))
+            noted = f', {n(d["stops_with_note"])} with a note' if stops else ''
+            return (f'**{n(stops)}** stop{"" if stops == 1 else "s"}{where}{noted}' + (", and each shift's own note" if own else '') +
+                    f' · synthetic and unverified: observations, not causes {ref(day, i, "detail")}')
+        if self.intent == 'orders' and 'order_fragments' in counts:   # the day's order lanes: its detail, whose link opens them
+            i, d = counts['order_fragments']
+            return f'**{n(d["order_fragments"])}** order fragments{where} · demand repeats on continuing orders {ref(day, i, "detail")}'
+        return f'**{f1(row["observed_shift_fpm"])} ft/min** including downtime{where} · {f1(row["speed_to_target_pct"])}% of grade target {ref(day, 0)}'
 
     def clause(self, focus, low=True):
         """`on shift 2, the lowest of the three shifts` when the scope holds several shifts; nothing for one.
@@ -560,17 +628,20 @@ class DailyAnswer:
         return lines
 
     # ---- one bullet for a shift that is not the focus
-    def other(self, shift):
+    def other(self, shift, ranked=False):
+        """A shift's own line on a card of several shifts; `ranked`: the focus shift's line under a day headline (#177),
+        which says the rank the focus was chosen by, right after the figure it was chosen by."""
         tools = self.shifts[shift]
         k, row = self.kpis(tools)
+        rank = (lambda low=True: self.rank(low)) if ranked else (lambda low=True: '')
         if self.intent in ('overview', 'speed', 'summary') and row:
-            return bullet(f'Shift {shift}: **{f1(row["speed_to_target_pct"])}%** of grade target · {f1(row["observed_shift_fpm"])} ft/min including downtime', k, 0)
+            return bullet(f'Shift {shift}: **{f1(row["speed_to_target_pct"])}%** of grade target{rank()} · {f1(row["observed_shift_fpm"])} ft/min including downtime', k, 0)
         if self.intent == 'downtime' and row:
             field = self.kind_pct(tools)
             words = {'op_maint_pct': 'maintenance and operator', 'pm_pct': 'planned maintenance'}.get(field, field[:-4])
             return bullet(f'Shift {shift}: **{f2(row[field])}%** of the shift in {words} downtime{band(row.get(field[:-4] + "_band_text"))}', k, 0)
         if self.intent == 'quality' and row:
-            return bullet(f'Shift {shift}: **{f2(row["dry_end_pct"])}%** of yield rejected at the dry end{band(row["dry_end_band_text"])}', k, 0)
+            return bullet(f'Shift {shift}: **{f2(row["dry_end_pct"])}%** of yield rejected at the dry end{rank(False)}{band(row["dry_end_band_text"])}', k, 0)
         if self.intent == 'matrix' and row:
             return bullet(f'Shift {shift}: **{n(row["valid_setups"])}** dry-end setups · {n(row["paper_changes"])} paper changes', k, 0)
         if self.intent == 'notes' and tools.get('get_shift_notes'):
@@ -821,10 +892,12 @@ class DailyAnswer:
         if not first:
             return self.shape_generic(s)
         r0, metric = first['data']['rows'][0], first['data'].get('metric')
-        where = self.clause(s, low=False).split(',')[0]
-        head = (f'**{f1(r0["value"])}%** of target on {r0["item"]}{where}, the lowest speed attainment {ref(first, 0)}' if metric == 'speed' else
-                f'**{f2(r0["value"])} min** at {r0["item"]}{where}, the most downtime {ref(first, 0)}' if metric == 'downtime' else
-                f'**{f1(r0["value"])} sq ft** of {r0["item"]}{where}, the most rejected area {ref(first, 0)}')
+        # under All the day's extreme across its shifts, the scope in the line and the shift on the findings (#177)
+        where, scope = ('', self.across({'shifts': [{'shift': x} for x in sorted(self.complete)]})) if self.whole_day else \
+            (self.clause(s, low=False).split(',')[0], '')
+        head = (f'**{f1(r0["value"])}%** of target on {r0["item"]}{where}, the lowest speed attainment{scope} {ref(first, 0)}' if metric == 'speed' else
+                f'**{f2(r0["value"])} min** at {r0["item"]}{where}, the most downtime{scope} {ref(first, 0)}' if metric == 'downtime' else
+                f'**{f1(r0["value"])} sq ft** of {r0["item"]}{where}, the most rejected area{scope} {ref(first, 0)}')
         bullets = []
         for ranking in rankings:
             if ranking['data']['rows']:

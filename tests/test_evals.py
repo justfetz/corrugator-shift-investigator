@@ -293,6 +293,8 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                'period-run-length-trend', 'value-trend-trim-8w', 'value-trend-warp-8w', 'value-trend-stops-9w-missing-weeks',
                'money-day-ranks-shifts-without-the-outage',   # the three shifts' and the day's dollars: 210 ms uncontended (PR #111)
                'money-day-side-trim-schedule-driven',         # the same seven calls on 2025-08-21: 203-207 ms uncontended (issue #135)
+               'all-day-money-leads-with-the-day',            # the same seven calls on 2026-09-14: 230-270 ms uncontended (issue #177)
+               'all-day-named-plural-pair-money-reads-its-shifts',   # two shifts' dollars and the pair's: 206 ms uncontended (issue #177)
                'money-day-headline-is-the-day-ledger', 'money-shifts-one-yearly-figure',   # the same seven calls on the money ledger (issue #164)
                'money-day-inside-band-prices-the-shifts-over',
                # the same seven calls, a day card held to whole dollars that add up and its trim by shift; the KPI and money cards
@@ -482,8 +484,9 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     # + the reviewer's checks of that round's two fix commits, 11 + the review of b955ca4's 10 + the reviewer's two checks of its fix, 2 + 3
     # + the review of 7b46463's 5 + its probe's 4 + the reviewer's check of its fix, 1 + the review of 97b81f4's 9 + its probe's 1
     # + the reviewer's check of its fix, 2 + the review of 2c28fd3's 2 + the reviewer's check of its fix, 1
-    # + 7 issue #164 money ledger cases + 1 asked by question in PR #168's fix round
-    assert len(routing) == 519 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
+    # + 7 issue #164 money ledger cases + 1 asked by question in PR #168's fix round + 11 issue #177 All-day cases + 9 issue #177
+    # named-shift-list cases
+    assert len(routing) == 539 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

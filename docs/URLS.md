@@ -38,7 +38,12 @@ parses the question (`agent.route`), on `/q`, on `POST /api/ask` and for the ana
   shift: "Show shift 1" with shift 2 selected is `/corr/1/day/2026-09-14/shift/1?measure=overview`. A
   comparison (any of compare, versus, compared, against, than, relative to: "how did we do compared with first
   shift", "compare shift 1 with shift 3") or several named shifts keep the refusal that asks for the
-  production-day scope. Under all shifts a named shift narrows with `shifts=` as before.
+  production-day scope. Under all shifts a named shift narrows with `shifts=` as before. Several shifts may be
+  named in one phrase (issue #177): "shifts 2 and 3", "shift 1 & 3", "shift 3 vs 1", "shifts 1,3", "shift 1, 3"
+  and "the first and third shift" name both, and a range names each shift in it ("shifts 1-2", "shift 1-3"). A
+  count after a comma is not a shift: "on shift 2, 3 stops ran long" is shift 2. Under all shifts "Where is the
+  money for shifts 1 and 3?" is `/corr/1/day/2026-09-14?measure=dollars&shifts=1,3`; under one selected shift
+  it is refused as "shift 1 and shift 3" is.
 - **A relative window** moves the path to it: `yesterday` is the production day before the selected one (Friday
   from a Monday), `last week`, `last month` and `last period` (also `previous`, `prior`) the week, calendar month
   and 4-4-5 period before the selected day's. The path takes that window's grain and its first production day,
@@ -76,13 +81,13 @@ store measures run one record-store tool over a window.
 
 | `measure=` | Under `day` | Under `week`, `month`, `period` |
 | --- | --- | --- |
-| `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow"); with `window=` the period form over that window ("why was this shift slow this week", "were we slow in August") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
-| `summary` | `get_shift_overview` in one call, three charts | the same three store tools as `overview` |
+| `overview` | KPIs, downtime by `by=`, wet-end speed, notes ("why was this shift slow"); under All with no shift named also `get_day_kpis`, the day the card leads with (#177); with `window=` the period form over that window ("why was this shift slow this week", "were we slow in August") | KPI tiles against the previous window, downtime Pareto by `by=`, waste breakdown |
+| `summary` | `get_shift_overview` in one call, three charts; under All with no shift named also `get_day_kpis`, the day the card leads with (#177) | the same three store tools as `overview` |
 | `downtime` | KPIs and downtime by `by=` (`kind=` narrows); under all shifts by reason, an alias of `review` (issue #101) | by reason, an alias of `review`; by `by=place` or `kind`, an alias of `pareto` |
-| `fpm` | KPIs and wet-end speed against grade targets; with `window=` the period form over that window ("average speed this week", "our speed vs last week"); with `by=grade` speed without stops against each grade target, charted in ft/min ("fpm by grade") | KPI tiles and speed by grade against target; `by=grade` the speed-by-grade table alone |
-| `quality` | KPIs and dry-end rejects by reason | the waste breakdown alone: an alias of `waste` |
+| `fpm` | KPIs and wet-end speed against grade targets (under All with no shift named also `get_day_kpis`, the day the card leads with, #177); with `window=` the period form over that window ("average speed this week", "our speed vs last week"); with `by=grade` speed without stops against each grade target, charted in ft/min ("fpm by grade") | KPI tiles and speed by grade against target; `by=grade` the speed-by-grade table alone |
+| `quality` | KPIs and dry-end rejects by reason; under All with no shift named also `get_day_kpis` (#177) | the waste breakdown alone: an alias of `waste` |
 | `compare` | KPIs, downtime and speed per shift (`shifts=` or all three) | KPI tiles per shift: an alias of `kpis` with `shifts=` |
-| `setups`, `orders`, `notes`, `rank` | the setup matrix, the order matrix, the notes, the rankings (`rank=` picks the metrics) | refused: "Switch Period to Day", as the question is |
+| `setups`, `orders`, `notes`, `rank` | the setup matrix, the order matrix, the notes, the rankings (`rank=` picks the metrics); the setup matrix under All with no shift named also `get_day_kpis` (#177) | refused: "Switch Period to Day", as the question is |
 | `kpis` | `get_period_kpis` for the window with the previous window; `compare=` changes the base. The KPI summary, for "how did we do": a question that names a countable noun or a unit never lands here (issue #113) | the same |
 | `quantity` | one count or unit (issue #113), named by `metric=`: `setups`, `paper_changes`, `order_changes` (setups an order change started, change code O), `lineal_ft`, `lineal_per_setup`, `lineal_per_paper_change`, `msf_per_day` (MSF per production day), `stops`, `downtime_minutes`, `minutes_per_stop` from `get_period_kpis` over the day; `maintenance_minutes`, `operator_minutes`, `maintenance_stops`, `operator_stops` from `get_downtime_review`; `sheets` from `get_overrun`; `bale_msf` (all baled waste in MSF) from `get_period_kpis`; `waste_sqft` and `waste_pct` (one waste line's area, or its percent of gross, of the yield after trim and shear for a dry-end line, whose findings are the dry-end families) from `get_waste_breakdown` with `waste=`; `downtime_per_day` (the downtime of each production day, the day with the most minutes first, then each weekday's minutes per day) from `get_stops_profile`. `reason=` or `place=` narrows `stops` or `downtime_minutes` to one stop reason or place (`get_downtime_pareto` by it, counted or in minutes), and `grade=` narrows `setups`, `paper_changes` or `lineal_ft` to one board grade (`get_grade_totals`). The answer opens with that quantity in its unit, then the previous window and the band (a grade's count says its previous window is unavailable: the totals by grade keep only the previous volume); with `window=` over that window ("how many setups this week", "how many minutes of steam / moisture this month") | the same over the window |
 | `pareto` | `get_downtime_pareto` by `by=` in `unit=` minutes or count | the same |

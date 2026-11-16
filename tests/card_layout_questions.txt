@@ -1,0 +1,20 @@
+# The card layout check's own questions (issue #177): cards with the longest phrases the router writes, so a long stop
+# reason, place, lever or grade line is measured at 390, 768 and 1440 px (a refused question opens no card). One per line.
+Show downtime by equipment
+Which equipment cost the most downtime minutes this month?
+What were the top downtime reasons yesterday?
+Show maintenance downtime by place
+How many minutes of steam / moisture this month?
+How many stops at the double backer this week?
+Show dry-end rejects by reason
+Waste breakdown this month
+What does trim cost?
+Where's my biggest opportunity?
+What drove speed this week?
+Top 3 contributors to speed variation this month
+Speed opportunity by width this week
+Totals by grade this month
+How much paper did we consume this month?
+Show the over/under-run by knife this month
+How many order changes this week?
+Show downtime by kind

@@ -42,7 +42,16 @@ TOOL_SCHEMAS = [
     {"name": "get_day_dollars", "description": "The production day on the money ledger across the listed shifts that are complete: each lever the shifts' gaps to its band added up, ranked by dollars above standard; the rows apart unranked, in all_in_usd only; the machine's period to date and its rate a year.",
      "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
                     "required": [], "additionalProperties": False}},
+    # The day's KPI row across its complete shifts (issue #177): under All a day card leads with the day (the owner, 2026-11-15).
+    {"name": "get_day_kpis", "description": "The production day's KPI row across the listed shifts that are complete: one query over their setups, stops and order lanes, each percent a ratio of the day's sums (speed over 480 minutes a shift, downtime over their scheduled time, dry-end waste over their yield after trim and shear), with the day's stops, stops with a note and order fragments.",
+     "parameters": {"type": "object", "properties": {"shifts": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 3]}, "description": "Distinct shifts; all three when omitted."}},
+                    "required": [], "additionalProperties": False}},
 ]
+# The day totals the offline planner adds to an all-shifts day card: not a model's to plan (each reads every shift it lists).
+DAY_TOOLS = ('get_day_dollars', 'get_day_kpis')
+# The daily intents whose card under All leads with the day, all shifts together (issue #177, the owner's ruling of 2026-11-15):
+# a question that names no shift, so all three shifts are in its scope.
+DAY_LEAD_INTENTS = ('summary', 'overview', 'speed', 'quality', 'matrix', 'notes', 'orders')
 # Period tools read the whole record store (a rolling year of production days) instead of one day.
 # A window is {period, anchor}: day = that Monday-Friday production day, week = the
 # Monday-Friday production week containing the anchor, month = its calendar month.
@@ -247,6 +256,8 @@ class OfflinePlanner:
 
         if intent == 'dollars' and not context.get("plan") and len(context["shifts"]) > 1:
             plan.append(("get_day_dollars", {"shifts": sorted(context["shifts"])}))   # #31b: the day's total over the shifts asked, for the card
+        if intent in DAY_LEAD_INTENTS and not context.get("plan") and sorted(context["shifts"]) == [1, 2, 3]:
+            plan.append(("get_day_kpis", {"shifts": [1, 2, 3]}))   # #177: under All a question naming no shift leads with the day
         completed = [(r["tool"], r["arguments"]) for r in results]
         for tool, args in plan:
             if (tool, args) not in completed:
@@ -357,12 +368,49 @@ PREVIOUS_CUE = (r"\b(?:versus|vs\.?|compared (?:with|to)|than|against|from|over|
 UNNAMED_SHIFT = r"\b(?:previous|last|prior|next|other)\s+shifts?\b"
 EVERY_SHIFT = r"\bbetween (?:the )?shifts\b|\b(?:each|every|by|per) shift\b|\ball (?:three )?shifts\b|\bacross (?:the )?shifts\b"
 SHIFT_PATTERNS = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
+# Several shifts in one phrase (issue #177, the coordinator's review of aad1b3c): "shifts 2 and 3", "shift 1 & 3", "shift 3 vs 1",
+# "shifts 1, 2 and 3", "shifts 1,3", "shift 1, 3", "shifts 1-2", "shift 1-3", "the first and third shift", "1st & 3rd shifts",
+# "shift 2 and 3rd". A number joins a list only after a joiner ("and", "&", "or", "vs", "versus"; a comma after "shifts", with no
+# space, before a later joiner, or before the phrase ends, so "on shift 2, 3 stops ran long" is shift 2), or in a range, and never as
+# a decimal, a percent, a date, a grade code, a clock time or a count of weeks, days or minutes ("shift 2 versus 3 weeks ago" is shift 2).
+SHIFT_NUMBER = (r"[1-3]\b(?![.:]\d|,(?![1-3](?![\d%.]))\d|[%/]|-(?![1-3]\b))"
+                r"(?!\s*(?:weeks?|days?|months?|years?|hours?|hrs?|mins?|minutes?|secs?|seconds?|times|am|pm|a\.m\.|p\.m\.|o'clock|"
+                r"shifts?\s+ago)(?![a-z]))")
+SHIFT_ORDINAL = r"(?:first|second|third|1st|2nd|3rd)"
+SHIFT_AND = r"\s*(?:,\s*)?(?:&|\band\b|\bor\b|\bvs\b\.?|\bversus\b)\s*"   # the joiners, an Oxford comma before one
+SHIFT_ITEM = (rf"(?:(?:(?:the\s+)?shift\s*)?{SHIFT_NUMBER}"
+              rf"|(?:the\s+)?{SHIFT_ORDINAL}(?=\s+shifts?\b|\s*[?.!;]|\s*$))")   # "shift 2 and 3rd", "shift 1 and the third shift"
+# the phrase ends after a number: the end, a mark, a joiner or a window or comparison word, never a noun it counts ("3 stops")
+SHIFT_END = (r"(?=\s*(?:$|[?.!;:,)]|&|\b(?:and|or|vs|versus|this|that|last|previous|on|in|for|during|over|across|yesterday|today|"
+             r"compared|against|than|with|to|from|between|please)\b))")
+SHIFT_LISTS = (rf"\bshifts\s*{SHIFT_NUMBER}(?:(?:{SHIFT_AND}|\s*,\s*){SHIFT_ITEM})+",                     # "shifts 2 and 3", "shifts 1, 3"
+               rf"\bshift\s*{SHIFT_NUMBER}(?:\s*,\s*{SHIFT_ITEM})*(?:{SHIFT_AND}{SHIFT_ITEM})+",          # "shift 1 & 3", "shift 1, 2 and 3"
+               rf"\bshift\s*{SHIFT_NUMBER}(?:,{SHIFT_NUMBER})+",                                          # "shift 1,3"
+               rf"\bshift\s*{SHIFT_NUMBER}(?:\s*,\s*{SHIFT_NUMBER}{SHIFT_END})+",                        # "shift 1, 3", never "shift 2, 3 stops"
+               rf"\bshifts?\s*{SHIFT_NUMBER}(?:\s*[-–]\s*{SHIFT_NUMBER}){{2,}}",                           # "shifts 1-2-3"
+               rf"\b{SHIFT_ORDINAL}(?:(?:{SHIFT_AND}|\s*,\s*)(?:the\s+)?{SHIFT_ORDINAL})+\s+shifts?\b")   # "first and third shift"
+# a range names each shift in it: "shifts 1-2", "shift 1-3", "shift 1 through 3", "shifts 1 to 3" ("to" after "shifts" only: "compare
+# shift 1 to 3" compares two), never part of a longer dash list ("shifts 1-2-3" is a list, above)
+SHIFT_RANGES = (rf"\bshifts?\s*([1-3])\s*(?:[-–]|\bthrough\b|\bthru\b)\s*({SHIFT_NUMBER})(?!\s*[-–]\s*[1-3])",
+                rf"\bshifts\s*([1-3])\s*\bto\b\s*({SHIFT_NUMBER})")
+SHIFT_IN_LIST = {**{str(s): s for s in (1, 2, 3)}, 'first': 1, '1st': 1, 'second': 2, '2nd': 2, 'third': 3, '3rd': 3}
 
 
 def named_shifts(lower):
-    """The shifts a question names, in the order it names them ("shift 3 versus shift 1" is [3, 1])."""
+    """The shifts a question names, in the order it names them ("shift 3 versus shift 1" is [3, 1]), a list in one phrase
+    included ("shifts 2 and 3" is [2, 3], "the first and third shift" [1, 3], "shift 3 vs 1" [3, 1], "shifts 1-3" [1, 2, 3])."""
     found = [(m.start(), shift) for shift, pattern in SHIFT_PATTERNS.items() for m in [re.search(pattern, lower)] if m]
-    return [shift for _, shift in sorted(found)]
+    for pattern in SHIFT_LISTS:
+        for m in re.finditer(pattern, lower):
+            found += [(m.start() + w.start(), SHIFT_IN_LIST[w.group()]) for w in re.finditer(r"\b(?:[1-3]|first|second|third|1st|2nd|3rd)\b", m.group())]
+    for m in (m for pattern in SHIFT_RANGES for m in re.finditer(pattern, lower)):
+        a, b = int(m[1]), int(m[2])
+        step = 1 if b >= a else -1
+        found += [(m.start(1) + i / 10, s) for i, s in enumerate(range(a, b + step, step))]
+    first = {}
+    for at, shift in sorted(found):
+        first.setdefault(shift, at)
+    return sorted(first, key=first.get)
 
 
 def question_months(lower, anchor):
@@ -750,8 +798,9 @@ WINDOW_WORDS = (
 WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse|more|fewer|less|higher|lower)(\s+(to|with|against|than))?\b"
                   r"(?=(.*\b(to|with|against|versus|vs|than))?\s+"
                   r"(the\s+)?(last|previous|prior|week before|month before|day before)\b)")
-SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(shift\s*[1-3]|(first|second|third|1st|2nd|3rd)\s+shift|"
-               r"(this|that|my|our|the)\s+shift)\b")   # as named_shifts reads them ("shift one" is not one: refused, UNREAD_SHIFT)
+SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(" + "|".join(f"(?:{p})" for p in (*SHIFT_LISTS, *SHIFT_RANGES)) +
+               r"|shift\s*[1-3]|(first|second|third|1st|2nd|3rd)\s+shift|"
+               r"(this|that|my|our|the)\s+shift)\b")   # as named_shifts reads them, a list in one phrase first ("shift one" is not one: refused, UNREAD_SHIFT)
 UNREAD_SHIFT = (r"\bshifts?\s+(one|two|three|[abc])\b|\b(last|previous|prior|next|other|night|day|swing|graveyard|morning|afternoon|"
                 r"evening|late|early)\s+shifts?\b")
 SHIFT_TEXT = "'{words}' names a shift the router does not read: name it by its number ('{plain} on shift 1 this week') or set the shift control."
@@ -1500,6 +1549,16 @@ def catch_all_guard(lower, request):
         raise ValueError(QUANTITY_HELP)
 
 
+def one_or_all_shifts(shifts, current, example):
+    """Refuse two named shifts under All where the answer is one shift's or every shift's together (a count, a count or minutes
+    by reason, place or kind, the stops profile): its shift is one or none, so a pair would be answered over all three. Issue #177:
+    once the consumed words take a list ("shift 2 versus shift 3", "shifts 1 and 3"), no leftover word refuses it any more. It stands
+    over the semantic model's parser (#144): its split by shift reads every shift and leads with their total, never the pair's."""
+    if len(shifts) > 1 and current.scope == 'day':
+        raise Standing(f"A count is answered for one shift or all shifts together: ask one shift at a time ('{example}'), "
+                         "or leave the shift out")
+
+
 def parse_period_request(lower, current, shifts, named_day=None, asked=None):
     """Route plain period phrasing to the store tools; None when the question is about one day. `named_day` is the words of the
     one production day the question itself named ("yesterday"), which question_scope moved the scope to; `asked` the question as said,
@@ -1722,6 +1781,7 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
                 comparison_gate(lower, group, gated['period'], asked=asked)   # its windows, and a window before it does not carry (#153)
             # a stop reason, place or kind beside it ("planned stops by reason") stands, as #159's goldens pin it; a second split ("by reason
             # by shift") is the Pareto's own limit, which the semantic model's split does not share
+            one_or_all_shifts(shifts, current, f"{PLAIN[group['metric']]} on shift 1 this week")   # the shifts named are read (#177)
             allow_list(lower, group, stands=('filter',))
             window = gated
         if not pareto and months:
@@ -1743,6 +1803,7 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
             deictic_gate(lower, {'metric': 'stops_per_day'}, current, shifts)   # issue #153, row 8
             gated_window(PLAIN['stops_per_day'])
             comparison_gate(lower, {'metric': 'stops_per_day'}, period or selected or 'week', asked=asked)   # no window before beside it (row 6)
+        one_or_all_shifts(shifts, current, f"{PLAIN['stops_per_day']} on shift 1 this week")   # the shifts named are read (#177)
         allow_list(lower, {'metric': 'stops_per_day'})   # every word consumed (round 6): never the profile for a subset, share or statistic
         if one_day_named or said and gated['period'] == 'day':
             raise ValueError(ONE_DAY_PROFILE.format(words=one_day_named or said[0]))
@@ -2274,7 +2335,8 @@ def plan_step_cap(allowed_shifts):
 OVER_CAP = 'it proposes more queries than the limit allows'
 # get_day_dollars is the card's day total, which the offline planner adds (#31b): not a model's to plan, and it reads
 # every listed shift, so it stays off the analyst's allowlist (Re-review 2 of PR 109).
-PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] not in ('render_chart', 'get_day_dollars')}
+# get_day_kpis, the day's KPI row an all-shifts card leads with (#177), the same.
+PLAN_TOOLS = {schema['name']: schema for schema in TOOL_SCHEMAS if schema['name'] not in ('render_chart', *DAY_TOOLS)}
 PLAN_REJECTED = "The analyst's plan was rejected ({reason}); no query was run for it. The offline answer stands on its own."
 
 
@@ -2284,8 +2346,8 @@ def scope_violation(tool, arguments, allowed_shifts, scope, period, production_d
         return 'Tool shift is outside the selected scope'
     if arguments.get('against_shift') is not None and arguments['against_shift'] not in allowed_shifts:
         return 'Tool shift is outside the selected scope'   # a speed variance against another shift reads that shift
-    if tool == 'get_day_dollars' and any(s not in allowed_shifts for s in (arguments.get('shifts') or [1, 2, 3])):
-        return 'Tool shift is outside the selected scope'   # the day total reads every shift it lists (all three when none)
+    if tool in DAY_TOOLS and any(s not in allowed_shifts for s in (arguments.get('shifts') or [1, 2, 3])):
+        return 'Tool shift is outside the selected scope'   # a day total reads every shift it lists (all three when none)
     if tool in STORE_TOOLS and scope == 'shift' and arguments.get('shift') is None:
         return 'Selected shift only: period tools run for the selected shift; choose Production-day comparison for all shifts'
     if period != 'day' and tool not in STORE_TOOLS and tool != 'render_chart':
@@ -2425,6 +2487,11 @@ class Agent:
             if not isinstance(shifts, list) or any(type(s) is not int or s not in (1, 2, 3) for s in shifts) or len(set(shifts)) != len(shifts):
                 raise ValueError('shifts lists distinct shifts from 1, 2 and 3')
             return cost_model.day_dollars(self.analysis, rates, shifts)
+        if name == 'get_day_kpis':
+            shifts = arguments.get('shifts') or [1, 2, 3]
+            if not isinstance(shifts, list):
+                raise ValueError('shifts lists distinct shifts from 1, 2 and 3')
+            return self.analysis.get_day_kpis(shifts)
         shift = arguments['shift']
         if type(shift) is not int or shift not in (1,2,3):
             raise ValueError('Shift must be 1, 2 or 3')

@@ -179,7 +179,9 @@ def test_every_rank_word_is_true_on_every_day():
     called the highest against its target is the highest, and the rankings headline is the extreme of the
     shifts' first-ranked rows (issue #75 review: 14 of 43 days broke the first, 20 shift-days the second)."""
     store = default_store()
-    pct = re.compile(r'on shift ([123])\b[^·]* · ([0-9.]+)% of grade target, the lowest of the three shifts')
+    # Under All the day leads (issue #177, the owner's ruling of 2026-11-15) and the rank sits on the focus shift's own line,
+    # right after the percent of grade target it was chosen by.
+    pct = re.compile(r'^- Shift ([123]): \*\*([0-9.]+)%\*\* of grade target, the lowest of the three shifts · ')
     for day in store.production_days:
         analysis = store.day_analysis(day)
         try:
@@ -189,10 +191,11 @@ def test_every_rank_word_is_true_on_every_day():
                 result = Agent(analysis).ask(question, context)
                 rows = {t['data']['shift']: t['data']['rows'][0] for t in result['trace']
                         if t['ok'] and t['tool'] in ('get_shift_kpis', 'get_shift_overview') and t['data']['coverage'] == 'complete'}
-                m = pct.search(result['sections'][0])
-                assert m, (day, question, result['sections'][0])
+                assert ' across the three shifts ' in result['sections'][0], (day, question, result['sections'][0])
+                ranked = [m for line in result['sections'] for m in [pct.search(line)] if m]
+                assert len(ranked) == 1, (day, question, result['sections'])
                 lowest = min(rows, key=lambda s: rows[s]['speed_to_target_pct'])
-                assert int(m[1]) == lowest, (day, question, result['sections'][0])
+                assert int(ranked[0][1]) == lowest, (day, question, ranked[0][0])
             for shift in (1, 2, 3):
                 context = Context(day, shift)
                 context.scope = 'shift'
@@ -297,3 +300,12 @@ def test_no_section_runs_on_and_every_where_to_look_question_routes(case):
         if m:
             _, asked = route(m[1], context, store.production_days)
             assert asked is context, f"the look {m[1]!r} moves the card's scope: {asked.read}"
+
+
+def test_the_day_lead_is_a_method_no_attribute_can_shadow():
+    """The day headline under All is `DailyAnswer.day_lead()` (issue #177, the coordinator's review of aad1b3c, item 7). PR #168
+    gives the card an instance attribute `self.day_total`; a method of that name would be shadowed by it, and every daily card
+    under All would raise TypeError once both are in main, with no merge conflict to warn of it."""
+    from investigator.shapes import DailyAnswer
+    assert callable(DailyAnswer.day_lead)
+    assert 'day_total' not in vars(DailyAnswer)

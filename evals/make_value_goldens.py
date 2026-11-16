@@ -729,9 +729,9 @@ def day_setups(plain, day, shift, corrupt=False):
     return setups, excluded
 
 
-def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
-    setups, excluded = day_setups(plain, day, shift, corrupt)
-    stops = plain.between("stops", date.fromisoformat(day), date.fromisoformat(day), shift)
+def kpi_row(id, setups, stops, seconds):
+    """A KPI row by hand over these setups and stops, downtime over `seconds` of scheduled time (a shift's 28,800, or a
+    day's shifts' sum): every figure a ratio of the sums, as the daily tools state them."""
     feet = sum(s.lineal_ft for s in setups)
     gross = sum(s.total_produced_sqft for s in setups)
     trim, shear, rejects = (sum(s.trim_sqft for s in setups), sum(s.chop_sqft for s in setups), sum(dry_end(s) for s in setups))
@@ -743,28 +743,59 @@ def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
     row = {
         "valid_setups": exact(len(setups)), "paper_changes": exact(wet_ends),
         "speed_to_target_pct": approx(feet / sum(GRADES[s.quality_id] * s.elapsed_seconds / 60 for s in setups) * 100),
-        "observed_lineal_ft": approx(feet), "observed_shift_fpm": approx(feet / 480),
+        "observed_lineal_ft": approx(feet), "observed_shift_fpm": approx(feet / (seconds / 60)),
         "gross_sqft": approx(gross), "estimated_good_sqft": approx(sum(good_of(s) for s in setups)),
         "trim_sqft": approx(trim), "shear_sqft": approx(shear), "reject_sqft": approx(rejects),
         "changeover_sqft": approx(sum(line_sqft(s, "shear") for s in setups)), "waste_board_sqft": approx(sum(boards(s) for s in setups)),
         "admin_sqft": approx(sum(line_sqft(s, "excluded") for s in setups)),
         "throughput_in": approx(gross / feet * 12),
         "trim_pct": approx(trim / gross * 100), "shear_pct": approx(shear / gross * 100), "dry_end_pct": approx(rejects / net * 100),
-        "yield_sqft": approx(net), "op_maint_pct": approx((kinds["Maintenance"] + kinds["Operator"]) / SCHEDULED_SECONDS * 100),
-        "maintenance_pct": approx(kinds["Maintenance"] / SCHEDULED_SECONDS * 100),
-        "operator_pct": approx(kinds["Operator"] / SCHEDULED_SECONDS * 100),
-        "pm_pct": approx(kinds["Scheduled"] / SCHEDULED_SECONDS * 100),
-        "downtime_pct": approx(sum(kinds.values()) / SCHEDULED_SECONDS * 100),
+        "yield_sqft": approx(net), "op_maint_pct": approx((kinds["Maintenance"] + kinds["Operator"]) / seconds * 100),
+        "maintenance_pct": approx(kinds["Maintenance"] / seconds * 100),
+        "operator_pct": approx(kinds["Operator"] / seconds * 100),
+        "pm_pct": approx(kinds["Scheduled"] / seconds * 100),
+        "downtime_pct": approx(sum(kinds.values()) / seconds * 100),
         "lineal_per_setup": approx(feet / len(setups)), "lineal_per_wet_end": approx(feet / wet_ends),
         "setups_above_trim_target": exact(sum(1 for s in setups if s.trim_sqft / s.total_produced_sqft * 100 > 3.25)),
     }
     lines = trim + shear + rejects + sum(line_sqft(s, "shear") + boards(s) + line_sqft(s, "excluded") for s in setups)
-    if setups and abs(gross - lines - sum(good_of(s) for s in setups)) > 0.01:   # the shift's line totals against each setup's own
-        raise AssertionError(f"{id}: good output by setup is not gross minus the shift's lines")
+    if setups and abs(gross - lines - sum(good_of(s) for s in setups)) > 0.01:   # the line totals against each setup's own
+        raise AssertionError(f"{id}: good output by setup is not gross minus the lines")
+    return row
+
+
+def day_kpi_case(plain, id, day, shift, corrupt=False, note=""):
+    setups, excluded = day_setups(plain, day, shift, corrupt)
+    stops = plain.between("stops", date.fromisoformat(day), date.fromisoformat(day), shift)
+    row = kpi_row(id, setups, stops, SCHEDULED_SECONDS)
     expect = {"coverage": "incomplete" if excluded else "complete", "row_count": 1, "values": {"#0": row}}
     if excluded:
         expect["excluded_records"] = excluded
     return case(id, "get_shift_kpis", {"shift": shift}, expect, day=day, corrupt=corrupt, note=note)
+
+
+def day_total_kpi_case(plain, id, day, shifts=(1, 2, 3), corrupt=False, note=""):
+    """get_day_kpis by hand (issue #177): the day's KPI row across the listed shifts that are complete, each figure a ratio
+    of the day's sums (speed over 480 minutes a shift, downtime over the shifts' scheduled seconds), never an average of the
+    shifts' percents. On corrupt data shift 2 holds the refused record, so it is named in excluded_shifts and left out."""
+    bad = {2} if corrupt and 2 in shifts else set()
+    counted = [n for n in shifts if n not in bad]
+    span = date.fromisoformat(day)
+    setups = [s for n in counted for s in day_setups(plain, day, n)[0]]
+    stops = [st for n in counted for st in plain.between("stops", span, span, n)]
+    row = kpi_row(id, setups, stops, SCHEDULED_SECONDS * len(counted))
+    row.update({"shifts_counted": exact(counted), "scheduled_minutes": exact(480 * len(counted))})
+    values = {"#0": row, "$": {"shift": exact(None), "excluded_shifts": exact(sorted(bad))},
+              # the counts a day card leads with (notes, orders), each a detail with its own records: the shifts' stops,
+              # those with a comment, and their order lanes
+              "details:count=stops": {"stops": exact(len(stops)), "stops_with_note": exact(sum(1 for st in stops if (st.comment or "").strip()))},
+              "details:count=order_fragments": {"order_fragments": exact(sum(len(s.lanes) for s in setups))}}
+    for n in shifts:
+        values[f"shifts:shift={n}"] = {"coverage": exact("incomplete" if n in bad else "complete")}
+    expect = {"coverage": "complete", "row_count": 1, "values": values}
+    if bad:
+        expect["excluded_records"] = day_setups(plain, day, 2, corrupt=True)[1]
+    return case(id, "get_day_kpis", {"shifts": list(shifts)}, expect, day=day, corrupt=corrupt, note=note)
 
 
 def day_downtime_case(plain, id, day, shift, group_by="reason", kind=None, note=""):
@@ -1848,6 +1879,21 @@ def build(data=None):
         cases.append(day_downtime_case(plain, f"value-day-downtime-{tag}-kind-shift-1", day, 1, "kind"))
         cases.append(day_downtime_case(plain, f"value-day-downtime-{tag}-maintenance-place-shift-3", day, 3, "place", "Maintenance"))
         cases.append(day_quality_case(plain, f"value-day-quality-{tag}-shift-3", day, 3))
+    # The day's KPI row under All (issue #177, the owner's ruling of 2026-11-15): a day card leads with the day, all shifts
+    # together, so the day's figures are ratios of its sums, computed here a second time from the records.
+    cases.append(day_total_kpi_case(plain, "value-day-total-kpis-0914", "2026-09-14",
+                                    note="The day across its three shifts: lineal feet summed, speed over 1,440 minutes, percent of grade "
+                                         "target over the day's targeted feet, downtime over 86,400 scheduled seconds, dry-end waste over the "
+                                         "day's yield after trim and shear; never an average of the shifts' percents."))
+    cases.append(day_total_kpi_case(plain, "value-day-total-kpis-0916-outage", "2026-09-16",
+                                    note="The day of September's power outage (third shift): the outage minutes are in the day's downtime, "
+                                         "over the day's scheduled time."))
+    cases.append(day_total_kpi_case(plain, "value-day-total-kpis-0914-shifts-1-3", "2026-09-14", shifts=(1, 3),
+                                    note="The tool over two listed shifts: shifts 1 and 3 and their 960 minutes, never shift 2. (The "
+                                         "offline planner asks it of all three shifts only: the owner's ruling covers a question naming no shift.)"))
+    cases.append(day_total_kpi_case(plain, "value-day-total-kpis-0914-corrupt", "2026-09-14", corrupt=True,
+                                    note="Shift 2 holds the refused trim record: it is named in excluded_shifts and left out, and the day "
+                                         "is shifts 1 and 3 alone over their 960 minutes, with the excluded record reported."))
     # Data quality: the corrupt trim record is excluded, reported with its raw value, and never averaged in.
     # Ruling (d), owner 2026-11-12: good output is gross minus every recorded waste line, so the lines and good output
     # add back to gross, for a shift (the daily KPI row) and for a month (the waste breakdown).

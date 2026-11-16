@@ -3750,7 +3750,7 @@
    "day": "2026-08-12",
    "scope": "day",
    "question": "Show speed to target",
-   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-12 shift 2 is lowest in percent of target (85.3%) but not in ft/min (shift 1 ran 567.6 ft/min to its 580.5): the headline must not call its ft/min the lowest. Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
+   "note": "Issue #75 review: with all shifts the focus is the shift lowest in percent of grade target, so the rank words follow that figure. On 2026-08-12 shift 2 is lowest in percent of target (85.3%) but not in ft/min (shift 1 ran 567.6 ft/min to its 580.5): the headline must not call its ft/min the lowest. Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the rank words now sit on the focus shift's bullet, right after the percent of grade target it was chosen by, and never after its ft/min.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3758,8 +3758,11 @@
      2,
      3
     ],
-    "sections_match": "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime on shift [123] · [0-9.]+% of grade target, the lowest of the three shifts \\(query [0-9]+ · row 0\\)$",
-    "sections_not_match": "ft/min\\*\\* including downtime on shift [123], the (lowest|lower)"
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime across the three shifts · [0-9.]+% of grade target \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts · [0-9.,]+ ft/min including downtime \\(query [0-9]+ · row 0\\)$"
+    ],
+    "sections_not_match": "ft/min(\\*\\*)? including downtime( on shift [123])?, the (lowest|lower)"
    }
   },
   {
@@ -3769,7 +3772,7 @@
    "day": "2026-08-12",
    "scope": "day",
    "question": "Summarize this shift",
-   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 1 made fewer feet on 2026-08-12: 272,462 lineal ft against shift 2's 278,622). Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both.",
+   "note": "Issue #75 review: the summary headline leads with lineal feet, but the focus shift is chosen by percent of grade target; the rank words follow the percent, never the lineal feet (shift 1 made fewer feet on 2026-08-12: 272,462 lineal ft against shift 2's 278,622). Re-anchored from 2026-08-05 for the year window (issue #35), where shift 3 is lowest on both. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the day's lineal feet lead and the rank words sit on the focus shift's bullet, after the percent of grade target it was chosen by, never after lineal feet.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3777,8 +3780,11 @@
      2,
      3
     ],
-    "sections_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [123] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lowest of the three shifts",
-    "sections_not_match": "lineal ft\\*\\* on shift [123], the (lowest|lower)"
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* across the three shifts at [0-9.,]+ ft/min including downtime · ",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts · [0-9.,]+ ft/min including downtime \\(query [0-9]+ · row 0\\)$"
+    ],
+    "sections_not_match": "lineal ft(\\*\\*)?( on shift [123]| across the three shifts)?, the (lowest|lower)"
    }
   },
   {
@@ -3801,7 +3807,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Show rankings",
-   "note": "Issue #75 review: with all shifts, the rankings headline names the lowest speed attainment across the shifts (shift 3's WE20260914044 on 2026-09-14), not shift 1's first-ranked run.",
+   "note": "Issue #75 review: with all shifts, the rankings headline names the lowest speed attainment across the shifts (shift 3's WE20260914044 on 2026-09-14), not shift 1's first-ranked run. Re-pointed for issue #177, the owner's ruling of 2026-11-15 (under All a day card leads with the day): the headline is the day's lowest run across the three shifts and says so; the shift it ran on is on the findings, shift 3's ranked list first under its label.",
    "expect": {
     "status": "complete",
     "shifts": [
@@ -3810,8 +3816,9 @@
      3
     ],
     "sections_match": [
-     "^\\*\\*[0-9.]+%\\*\\* of target on WE[0-9]+ on shift 3, the lowest speed attainment \\(query [0-9]+ · row 0\\)$",
-     "^- Shift 1, 1\\. WE[0-9]+: \\*\\*[0-9.]+% of target\\*\\*"
+     "^\\*\\*[0-9.]+%\\*\\* of target on WE[0-9]+, the lowest speed attainment across the three shifts \\(query [0-9]+ · row 0\\)$",
+     "^- Shift 1, 1\\. WE[0-9]+: \\*\\*[0-9.]+% of target\\*\\*",
+     "^- Shift 3 · 1\\. WE[0-9]+: \\*\\*[0-9.]+% of target\\*\\*"
     ]
    }
   },
@@ -18146,13 +18153,13 @@
    "mode": "offline",
    "scope": "day",
    "question": "Show the shift and downtime notes for every shift",
-   "note": "#151 re-review (the coordinator's decision): the count's receipt opens the shift's stops, and the shift's own note is in the shift record beside them, so \"13 reported notes\" linked 12 rows. The count now says what its link opens: the stops, how many of them carry a comment (about half are empty), and the shift's own note named apart.",
+   "note": "#151 re-review (the coordinator's decision): the count's receipt opens the shift's stops, and the shift's own note is in the shift record beside them, so \"13 reported notes\" linked 12 rows. The count now says what its link opens: the stops, how many of them carry a comment (about half are empty), and the shift's own note named apart. Re-pointed for issue #177, the owner's ruling of 2026-11-15 (under All a day card leads with the day): the day's stops lead, a detail of get_day_kpis whose link opens those stops, so the count still says what its link opens; each shift's count follows, citing its own notes.",
    "reviewed_by": "owner-pending",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=notes",
     "status": "complete",
     "sections_match": [
-     "^\\*\\*[0-9]+\\*\\* stops on shift 1, [0-9]+ with a note, and the shift's own note · synthetic and unverified",
+     "^\\*\\*[0-9]+\\*\\* stops across the three shifts, [0-9]+ with a note, and each shift's own note · synthetic and unverified.* \\(query [0-9]+ · detail 0\\)$",
      "^- Shift 2: \\*\\*[0-9]+\\*\\* stops, [0-9]+ with a note, and the shift's own note \\(query"
     ],
     "sections_not_match": "reported notes"
@@ -22833,6 +22840,682 @@
     "raises": "^The question names no measure the semantic model holds\\. Did you mean 'which reason had the most stops this week' or 'which reason had the most minutes of downtime this week'\\?$"
    },
    "note": "Fix round on the coordinator's review of 2c28fd3 (PR #155, 2026-11-15 11:04), the reviewer subagent's narrow re-check of 67cb893: no stop reason records the production days, and the refusal named the volume ('Volume (msf) is recorded per run setup …', from 'production' inside the phrase), as df63d4c did. A phrase that is itself a measure lends no measure by its first word; the refusal is the paper runs' own."
+  },
+  {
+   "id": "all-day-summary-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance, downtime and waste. Show supporting charts.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The question lab (#177) found the canned summary under All leading with the weakest shift's lineal feet. The day line states the day's lineal feet, speed including downtime, percent of grade target, downtime over the day's scheduled minutes and dry-end waste over the yield after trim and shear; the weakest shift follows with its rank words.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* across the three shifts at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target · [0-9.]+% of the day down · [0-9.]+% of yield rejected at the dry end \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts · [0-9.,]+ ft/min including downtime \\(query [0-9]+ · row 0\\)$"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-why-slow-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Why was this shift slow? Chart downtime by reason.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned 'why slow' card under All leading with the weakest shift's percent of target. The day's percent of grade target leads; the weakest shift's bullet carries the rank, and its findings (largest reason, slowest run) follow, each naming the shift.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=overview",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "charts": {
+     "min": 1
+    },
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of grade target across the three shifts · [0-9.,]+ ft/min including downtime · [0-9.]+% of the day down \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts",
+     "^- Shift [123] · "
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-money-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Where is the money?",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned money card under All leading with the shift that lost the most. The day's recorded losses (get_day_dollars, priced once on the day) lead, the day's gaps follow ranked by dollars, and each shift's own total is a finding, the one that lost the most saying so. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage. Re-pointed in the catch-up with main after #168 (the coordinator's review of aad1b3c on PR #178): the money card is #164's day ledger, which leads with the day's dollars above standard and lists each shift's own dollars, which add up to it. The canned money question under All still leads with the day, never one shift.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across the three shifts · ",
+     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 1\\)$",
+     "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 3\\)$"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]",
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "all-day-speed-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned speed card under All leading with the weakest shift's ft/min. The day's speed including downtime and percent of grade target lead; the weakest shift follows with its rank.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime across the three shifts · [0-9.]+% of grade target \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of grade target, the lowest of the three shifts"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-dry-end-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show dry-end quality waste",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned dry-end card under All leading with the shift with the most waste. The day's dry-end waste, over the day's yield after trim and shear, leads with its band; the shift with the most follows with its rank.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=quality",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of yield rejected at the dry end across the three shifts( · [^(]+)? \\(query [0-9]+ · row 0\\)$",
+     "^- Shift [123]: \\*\\*[0-9.]+%\\*\\* of yield rejected at the dry end, the highest of the three shifts"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-setup-matrix-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show setup matrix",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned setup matrix under All leading with shift 1's setups, the first shift, as if it were the day's. The day's setups and feet per setup lead; each shift's setups and paper changes follow. The day's distinct paper runs are not in the headline: a run that crosses a shift change is in two shifts' counts, so the day's count would not add up to the lines under it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=setups",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+\\*\\* dry-end setups across the three shifts · [0-9,]+ ft per setup \\(query [0-9]+ · row 0\\)$",
+     "^- Shift 1: \\*\\*[0-9,]+\\*\\* dry-end setups · [0-9,]+ paper changes ",
+     "^- Shift 3: \\*\\*[0-9,]+\\*\\* dry-end setups · "
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]|^\\*\\*.*paper changes"
+   }
+  },
+  {
+   "id": "all-day-incomplete-shift-left-out-of-the-day",
+   "type": "data_quality",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "corrupt": true,
+   "question": "Summarize performance, downtime and waste.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. On the data-quality demo shift 2 holds the refused trim record, so the day line covers the two complete shifts, says which, and shift 2 is reported as incomplete, never added in (the day's money does the same, #31b).",
+   "expect": {
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* across shifts 1 and 3 at [0-9.,]+ ft/min including downtime",
+     "^Shift 2: data incomplete; 1 excluded records\\. Do not rank"
+    ],
+    "sections_not_match": "99,999,999"
+   }
+  },
+  {
+   "id": "selected-shift-never-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Summarize performance, downtime and waste. Show supporting charts.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. Under the selected shift the card is that shift's: no day total runs and the headline is shift 2's own. tools_only pins that get_day_kpis never runs there.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14/shift/2?measure=summary",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "sections_match": "^\\*\\*[0-9,]+ lineal ft\\*\\* at [0-9.,]+ ft/min including downtime",
+    "sections_not_match": "across (the three shifts|shifts [123])",
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ]
+   }
+  },
+  {
+   "id": "all-day-notes-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show shift and downtime notes",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned notes card under All leading with shift 1's stops. The day's stops, those with a note and each shift's own note lead (get_day_kpis); each shift's count follows. The day's stops are a detail of get_day_kpis whose link opens those stops, so the count says what its link opens (#151's rule).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=notes",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+\\*\\* stops across the three shifts, [0-9,]+ with a note, and each shift's own note · synthetic and unverified: observations, not causes \\(query [0-9]+ · detail [0-9]+\\)$",
+     "^- Shift 1: \\*\\*[0-9,]+\\*\\* stops, [0-9,]+ with a note, and the shift's own note "
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-orders-leads-with-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show orders and quantities",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned orders card under All leading with shift 1's order fragments. The day's order fragments lead (get_day_kpis); each shift's count follows. The day's order fragments are a detail of get_day_kpis whose link opens those order lanes.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=orders",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_kpis",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+\\*\\* order fragments across the three shifts · demand repeats on continuing orders \\(query [0-9]+ · detail [0-9]+\\)$",
+     "^- Shift 3: \\*\\*[0-9,]+\\*\\* order fragments "
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-rankings-leads-with-the-days-extreme",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show rankings",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The canned rankings under All led with the day's lowest run but said 'on shift 3', as if it were one shift's card. The headline is the lowest run across the three shifts and says so; the shift is on the findings.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=rank",
+    "status": "complete",
+    "shifts": [
+     1,
+     2,
+     3
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.]+%\\*\\* of target on WE[0-9]+, the lowest speed attainment across the three shifts \\(query [0-9]+ · row 0\\)$"
+    ],
+    "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]"
+   }
+  },
+  {
+   "id": "all-day-named-pair-keeps-its-shift-lead",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target for shift 1 and shift 3",
+   "note": "Issue #177's reviewer pass: the owner's ruling of 2026-11-15 covers a question that names no shift. A question naming two shifts keeps main's card (the slower shift first, the other after) until the owner rules on pairs, and no day total runs for it. Re-pointed in the catch-up with main after #155 (the coordinator's review of aad1b3c foresaw it): #155's semantic parser reads the pair as two values compared, so the card names both shifts, the higher one's figure first, and leaves shift 2 apart as not compared; still no day total runs.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=semantic&m=speed_to_target_pct&by=shift&vs=1,3",
+    "status": "complete",
+    "tools_only": [
+     "semantic_query",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^Shift 1 had a higher speed against grade target than Shift 3: \\*\\*[0-9.]+%\\*\\* of target",
+     "^- Shift 3: \\*\\*[0-9.]+%\\*\\* of target"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])"
+   }
+  },
+  {
+   "id": "all-day-named-plural-pair-summary-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance for shifts 2 and 3",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so a pair said in the plural named no shift and the card led with the day's 862,644 lineal ft across the three shifts. A day leads only when the question names no shift: the plural pair keeps main's pair card (the slower shift first, the other after), as 'shift 2 and shift 3' does, and no day total runs for it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary&shifts=2,3",
+    "status": "complete",
+    "shifts": [
+     2,
+     3
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [23] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 1\\b"
+   }
+  },
+  {
+   "id": "all-day-named-plural-pair-money-reads-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Where is the money for shifts 1 and 3?",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shifts 1 and 3' named no shift and the money card led with the day's $24,472 across the three shifts, shift 2's $7,699 among its lines. The pair said in the plural is shifts 1 and 3: main's pair card, the shift that lost more first, the other after, the day total over those two shifts only. Re-pointed in the catch-up with main after #168 (the coordinator's review of aad1b3c on PR #178): the money card is #164's day ledger, which leads with the day's dollars above standard and lists each shift's own dollars, which add up to it. A plural pair still reads its two shifts and never shift 2.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across the two shifts · "
+    ],
+    "sections_not_match": "across the three shifts|^- Shift 2\\b",
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "all-day-named-ordinal-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target for the first and third shift",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'the first and third shift' was read as the third shift alone and the card answered shift 3 only. Two ordinals before one 'shift' name both: main's pair card, as 'shift 1 and shift 3' gives (all-day-named-pair-keeps-its-shift-lead).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime on shift 3 · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])"
+   }
+  },
+  {
+   "id": "all-day-named-ampersand-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance for shift 1 & 3",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shift 1 & 3' was read as shift 1 alone and the card answered shift 1 only. A number joined to a named shift by '&', 'and', a comma, 'or' or 'vs' is a shift too: main's pair card for shifts 1 and 3.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [13] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 2\\b"
+   }
+  },
+  {
+   "id": "all-day-named-vs-pair-compares-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Compare shift 3 vs 1",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shift 3 vs 1' was read as shift 3 alone and the comparison put the selected shift 2 beside it. The shifts compared are the two named, 3 and 1.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=compare&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "sections_not_match": "^- Shift 2\\b|shift 2 at"
+   }
+  },
+  {
+   "id": "selected-shift-refuses-a-plural-pair",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Where is the money for shifts 1 and 3?",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so under the selected shift 2 'shifts 1 and 3' named no shift and the card answered shift 2's money, a shift the question did not name. Two named shifts under the selected shift are refused as 'shift 1 and shift 3' is: choose Production-day comparison.",
+   "expect": {
+    "raises": "Selected shift only"
+   }
+  },
+  {
+   "id": "all-day-pair-stops-by-reason-is-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "How many stops by reason on shift 2 versus shift 3 this week?",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): once the router's consumed words took a list of shifts, joiners and all, a count by reason over two named shifts lost the leftover 'versus' that refused it and was answered as the week's Pareto over all shifts (32 stops at Stacker), a shift the question did not name among them. The grouped count is one shift or all shifts together, as a plain count is: refused with what to ask.",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   }
+  },
+  {
+   "id": "all-day-pair-stops-per-day-is-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Stops per day on shifts 1 and 3 this week",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): the stops profile over two named shifts was answered over all shifts (36 stops on Tuesday). The profile is one shift or all shifts together: refused with what to ask.",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   }
+  },
+  {
+   "id": "all-day-pair-minutes-by-reason-is-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "How many minutes of downtime by reason on shift 1 & 3 this week?",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): minutes by reason over 'shift 1 & 3' were answered as the week's review over all shifts (42.93 min at Stacker). One shift or all shifts together: refused with what to ask.",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   }
+  },
+  {
+   "id": "all-day-a-count-after-a-comma-is-not-a-shift",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "On shift 2, 3 stops ran long: why?",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): a comma joined any number to the list, so '3 stops' was read as shift 3 and the card compared shifts 2 and 3. After a single 'shift', a comma and a space join a number only before a later 'and', '&', 'or' or 'vs' ('shift 1, 2 and 3'): this is shift 2's card, as at aad1b3c.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=downtime&shifts=2",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "sections_not_match": "the higher of the two shifts|^- Shift 3\\b"
+   }
+  },
+  {
+   "id": "all-day-named-comma-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance for shifts 1,3",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): 'shifts 1,3' was read as no shift (a comma with no space before a digit looked like a thousands separator), so the day led with 862,644 lineal ft across the three shifts. The pair keeps main's pair card for shifts 1 and 3.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [13] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 2\\b"
+   }
+  },
+  {
+   "id": "all-day-named-range-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target for shifts 1-2",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): 'shifts 1-2' was read as no shift and the day led across the three shifts. A range after 'shifts' names each shift in it: main's pair card for shifts 1 and 2.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&shifts=1,2",
+    "status": "complete",
+    "shifts": [
+     1,
+     2
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime on shift [12] · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 3\\b"
+   }
+  },
+  {
+   "id": "all-day-named-comma-space-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance for shift 1, 3",
+   "note": "Issue #177, the reviewer's re-check of this round's fix (a901335): the rule that keeps a count after a comma off the list ('On shift 2, 3 stops ran long') also dropped 'shift 1, 3', which answered shift 1 alone. After a single 'shift', a comma and a space join a number that ends the phrase (the end, a mark, a joiner or a window word follows it) and never one a noun follows: main's pair card for shifts 1 and 3.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [13] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 2\\b"
+   }
+  },
+  {
+   "id": "selected-shift-refuses-a-comma-space-pair",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Show shift 1, 3",
+   "note": "Issue #177, the reviewer's re-check of this round's fix (a901335): under the selected shift 2 'shift 1, 3' was read as shift 1 and the card moved to shift 1 without a word. Two named shifts under the selected shift are refused: choose Production-day comparison.",
+   "expect": {
+    "raises": "Selected shift only"
+   }
+  },
+  {
+   "id": "selected-shift-refuses-a-singular-range",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Show shift 1-3",
+   "note": "Issue #177, the reviewer's re-check of this round's fix (a901335): a range after a single 'shift' read its first number only, so under the selected shift 2 'shift 1-3' moved the card to shift 1 without a word. A dash or 'through' between two shift numbers names each shift in the range: refused under the selected shift.",
+   "expect": {
+    "raises": "Selected shift only"
+   }
   }
  ]
 }
