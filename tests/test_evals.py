@@ -241,7 +241,8 @@ HEAVY_CASES = {'story-monday-warp', 'story-trim-creep', 'period-trend-minutes-pe
                'period-run-length-trend', 'value-trend-trim-8w', 'value-trend-warp-8w', 'value-trend-stops-9w-missing-weeks',
                'money-day-ranks-shifts-without-the-outage',   # the three shifts' and the day's dollars: 210 ms uncontended (PR #111)
                'money-day-side-trim-schedule-driven',         # the same seven calls on 2025-08-21: 203-207 ms uncontended (issue #135)
-               'all-day-money-leads-with-the-day'}            # the same seven calls on 2026-09-14: 230-270 ms uncontended (issue #177)
+               'all-day-money-leads-with-the-day',            # the same seven calls on 2026-09-14: 230-270 ms uncontended (issue #177)
+               'all-day-named-plural-pair-money-reads-its-shifts'}   # two shifts' dollars and the pair's: 206 ms uncontended (issue #177)
 
 
 def test_heavy_cases_carry_an_explicit_offline_budget(monkeypatch):
@@ -409,7 +410,7 @@ def test_every_routing_case_records_its_canonical_url_and_the_runner_asserts_it(
     routing = [c for c in CASES if c['type'] == 'routing' and 'plan' not in c and 'url' not in c]   # an analyst-plan case is a scripted live round: no URL
     asked_by_address = [c for c in CASES if c.get('url')]   # issue #117: a case that asks by its address, which must answer at expect.url
     assert asked_by_address and all('question' not in c and (c['type'] == 'refusal' or c['expect']['url'].startswith('/corr/1/')) for c in asked_by_address)
-    assert len(routing) == 350 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + issue #100's 14 + issue #101's 27 + issue #135's 2 + 129 issue #113 count, unit and scope cases + 20 issue #153 hotfix cases + 11 issue #177 All-day cases
+    assert len(routing) == 358 and all(c['expect']['url'].startswith('/corr/1/') for c in routing)   # main's 147 + issue #100's 14 + issue #101's 27 + issue #135's 2 + 129 issue #113 count, unit and scope cases + 20 issue #153 hotfix cases + 11 issue #177 All-day cases, + 8 issue #177 named-shift-list cases
     case = copy.deepcopy(next(c for c in CASES if c['id'] == 'why-slow'))
     outcome, failures, note, _ = golden.run_case(case)
     assert outcome == 'pass' and 'URL' in note and golden.URL_MS[case['id']] > 0, (failures, note)

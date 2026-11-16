@@ -5,7 +5,7 @@
     python3 evals/lab.py --canned                      # the page's canned questions under every scope and period
     python3 evals/lab.py --ask "how many setups last week" --scope both --period day,week
 
-A line of a text file may set its own controls before the question: `[scope=day period=week day=2026-09-16] stops by shift`.
+A line of a text file, or an --ask, may set its own controls before the question: `[scope=day period=week day=2026-09-16] stops by shift`.
 The keys are day (a production day of the golden store, YYYY-MM-DD), shift (1, 2 or 3), scope (shift: the selected shift; day:
 All) and period (day, week, month or accounting). An unknown key or a value outside these is a lab error that names them, and
 the lab asks nothing: it never becomes a card. Controls not given take the command line's (--day, --shift, --scope shift|day|both, --period day|week|month|accounting|all),
@@ -135,8 +135,10 @@ def load(args):
                 for s in scopes:
                     controls = {**base, 'scope': scope or s, 'period': period or p}
                     items.append((text.replace('{period}', period_word(controls['period'])), controls, label.replace('{period}', period_word(controls['period']))))
-    for text in args.ask or []:
-        for c in expand(dict(base), scopes, periods):
+    for text in args.ask or []:   # an --ask may set its controls as a line does: `--ask "[scope=day] how many setups"`
+        text, controls = parse_line(text, base, '--ask: ')
+        fixed = tuple(k for k in ('scope', 'period') if k in controls)
+        for c in expand({**controls, '_fixed': fixed}, scopes, periods):
             items.append((text, c, None))
     for path in args.files:
         path = Path(path)

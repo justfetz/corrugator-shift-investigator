@@ -198,8 +198,10 @@ def test_the_planner_is_told_the_scope_only_when_the_question_moved_it():
 
 def test_named_shifts_reads_a_list_in_one_phrase():
     """Several shifts in one phrase are each named (issue #177, the coordinator's review of aad1b3c, item 1): in the plural,
-    by ordinals before one 'shift', joined by 'and', '&', a comma, 'or', 'vs' or 'versus', in the order said. A number after a
-    joiner is a shift only when it is not a decimal, a percent, a date, a grade code or a count of weeks, days or minutes."""
+    by ordinals before one 'shift', joined by 'and', '&', 'or', 'vs' or 'versus', in the order said, or as a range after 'shifts'. A
+    comma joins after 'shifts', before a later joiner, or with no space ('shift 1,3'), so a count after a comma is not a shift. A number
+    after a joiner is a shift only when it is not a decimal, a percent, a date, a grade code, a clock time or a count of weeks, days
+    or minutes (the reviewer's check of this round's fix)."""
     from investigator.agent import named_shifts
     cases = {
         'summarize performance for shifts 2 and 3': [2, 3], 'where is the money for shifts 1 and 3?': [1, 3],
@@ -208,9 +210,14 @@ def test_named_shifts_reads_a_list_in_one_phrase():
         'shifts 1, 2 and 3': [1, 2, 3], 'shifts 1, 2, and 3': [1, 2, 3], 'the 1st & 3rd shifts': [1, 3],
         'the first and the third shift': [1, 3], 'first, second and third shift': [1, 2, 3], 'shift 2 or 3': [2, 3],
         'shift 1 and shift 3': [1, 3], 'shift 3 versus shift 1': [3, 1], 'shift 2 and 3rd shift': [2, 3],
+        'summarize performance for shifts 1,3': [1, 3], 'summarize performance for shift 1,3': [1, 3], 'shifts 1, 3': [1, 3],
+        'shifts 1-2': [1, 2], 'shifts 1 to 3': [1, 2, 3], 'shifts 1 through 3 this week': [1, 2, 3], 'shift 2 and 3rd': [2, 3],
+        'shift 1 & 2nd?': [1, 2], 'shift 2 and the third': [2, 3], 'shift 1, 2 and 3': [1, 2, 3],
         # one shift, as before: the number after the joiner is not a shift
         'shift 2 versus 3 weeks ago': [2], 'shift 2 and 3% waste': [2], 'shift 1 and 3.5 min': [1], 'shift 2, 2026-09-14': [2],
         'shift 2 and 275-bc': [2], 'top 3 stops on shift 1': [1], 'second shift': [2], 'how many setups': [],
+        'on shift 2, 3 stops ran long: why?': [2], 'shift 1 and 3 pm': [1], 'shift 2 and 3 a.m.': [2], "shift 1 and 2 o'clock": [1],
+        'shift 2 and 3,000 sheets': [2], 'shift 2,300 sheets': [2], 'shift 1 and 2 minutes': [1], 'shift 2 and the first stop': [2],
         'shift one and two': [], 'night shift': [],
     }
     assert {q: named_shifts(q) for q in cases} == cases

@@ -70,6 +70,8 @@ def test_a_line_sets_its_own_controls(tmp_path):
     questions = tmp_path / 'q.txt'
     questions.write_text('# a comment\n\n[scope=day] how many setups\nhow many stops\n')
     items = lab.load(args_of(str(questions), '--scope', 'both', '--period', 'day,month'))
+    asked = lab.load(args_of('--ask', '[scope=day period=week] how many setups', '--scope', 'both', '--period', 'day,month'))
+    assert [(t, c['scope'], c['period']) for t, c, _ in asked] == [('how many setups', 'day', 'week')]   # an --ask sets its controls too
     assert [(t, c['scope'], c['period']) for t, c, _ in items] == [
         ('how many setups', 'day', 'day'), ('how many setups', 'day', 'month'),
         ('how many stops', 'shift', 'day'), ('how many stops', 'shift', 'month'), ('how many stops', 'day', 'day'), ('how many stops', 'day', 'month')]
@@ -103,7 +105,7 @@ def test_a_bad_control_stops_the_lab_before_any_card(tmp_path, capsys):
     entries = tmp_path / 'q.json'
     entries.write_text('[{"question": "how many setups", "scopes": "day"}]')
     out = tmp_path / 'out'
-    for argv in ([str(good_then_bad)], [str(entries)], ['--ask', 'how many setups', '--period', 'day,fiscal'],
+    for argv in ([str(good_then_bad)], [str(entries)], ['--ask', 'how many setups', '--period', 'day,fiscal'], ['--ask', '[perod=week] how many setups'],
                  ['--ask', 'how many setups', '--day', '2026-09-19']):
         assert lab.main([*argv, '--name', 'bad', '--out', str(out)]) == 2
         assert capsys.readouterr().err.startswith('lab error: ')

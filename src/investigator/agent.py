@@ -368,24 +368,36 @@ UNNAMED_SHIFT = r"\b(?:previous|last|prior|next|other)\s+shifts?\b"
 EVERY_SHIFT = r"\bbetween (?:the )?shifts\b|\b(?:each|every|by|per) shift\b|\ball (?:three )?shifts\b|\bacross (?:the )?shifts\b"
 SHIFT_PATTERNS = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
 # Several shifts in one phrase (issue #177, the coordinator's review of aad1b3c): "shifts 2 and 3", "shift 1 & 3", "shift 3 vs 1",
-# "shifts 1, 2 and 3", "the first and third shift", "1st & 3rd shifts". A number joins the list only right after a joiner ("and", "&",
-# a comma, "or", "vs", "versus"), and never as a decimal, a time, a grade code or a count of weeks ("shift 2 versus 3 weeks ago" is shift 2).
-SHIFT_JOIN = r"\s*(?:,\s*(?:and\s+|or\s+|&\s*)?|&|\band\b|\bor\b|\bvs\b\.?|\bversus\b)\s*"
-SHIFT_NUMBER = (r"[1-3]\b(?![.,:]\d|[%/-])"
-                r"(?!\s*(?:weeks?|days?|months?|years?|hours?|hrs?|mins?|minutes?|times|shifts? ago)\b)")
+# "shifts 1, 2 and 3", "shifts 1,3", "shifts 1-2", "the first and third shift", "1st & 3rd shifts", "shift 2 and 3rd". A number
+# joins a list only after a joiner ("and", "&", "or", "vs", "versus"; a comma after "shifts", before a later joiner or with no space,
+# so "on shift 2, 3 stops ran long" is shift 2), and never as a decimal, a percent, a date, a grade code, a clock time or a count of
+# weeks, days or minutes ("shift 2 versus 3 weeks ago" is shift 2).
+SHIFT_NUMBER = (r"[1-3]\b(?![.:]\d|,\d{3}\b|[%/]|-(?![1-3]\b))"
+                r"(?!\s*(?:weeks?|days?|months?|years?|hours?|hrs?|mins?|minutes?|secs?|seconds?|times|am|pm|a\.m\.|p\.m\.|o'clock|"
+                r"shifts?\s+ago)(?![a-z]))")
 SHIFT_ORDINAL = r"(?:first|second|third|1st|2nd|3rd)"
-SHIFT_LISTS = (rf"\bshifts?\s*{SHIFT_NUMBER}(?:{SHIFT_JOIN}(?:(?:the\s+)?shift\s*)?{SHIFT_NUMBER})+",
-               rf"\b{SHIFT_ORDINAL}(?:{SHIFT_JOIN}(?:the\s+)?{SHIFT_ORDINAL})+\s+shifts?\b")
+SHIFT_AND = r"\s*(?:,\s*)?(?:&|\band\b|\bor\b|\bvs\b\.?|\bversus\b)\s*"   # the joiners, an Oxford comma before one
+SHIFT_ITEM = (rf"(?:(?:(?:the\s+)?shift\s*)?{SHIFT_NUMBER}"
+              rf"|(?:the\s+)?{SHIFT_ORDINAL}(?=\s+shifts?\b|\s*[?.!;]|\s*$))")   # "shift 2 and 3rd", "shift 1 and the third shift"
+SHIFT_LISTS = (rf"\bshifts\s*{SHIFT_NUMBER}(?:(?:{SHIFT_AND}|\s*,\s*){SHIFT_ITEM})+",                     # "shifts 2 and 3", "shifts 1, 3"
+               rf"\bshift\s*{SHIFT_NUMBER}(?:\s*,\s*{SHIFT_ITEM})*(?:{SHIFT_AND}{SHIFT_ITEM})+",          # "shift 1 & 3", "shift 1, 2 and 3"
+               rf"\bshift\s*{SHIFT_NUMBER}(?:,{SHIFT_NUMBER})+",                                          # "shift 1,3"
+               rf"\b{SHIFT_ORDINAL}(?:(?:{SHIFT_AND}|\s*,\s*)(?:the\s+)?{SHIFT_ORDINAL})+\s+shifts?\b")   # "first and third shift"
+SHIFT_RANGE = rf"\bshifts\s*([1-3])\s*(?:-|–|\bto\b|\bthrough\b|\bthru\b)\s*({SHIFT_NUMBER})"   # "shifts 1-2", "shifts 1 to 3"
 SHIFT_IN_LIST = {**{str(s): s for s in (1, 2, 3)}, 'first': 1, '1st': 1, 'second': 2, '2nd': 2, 'third': 3, '3rd': 3}
 
 
 def named_shifts(lower):
     """The shifts a question names, in the order it names them ("shift 3 versus shift 1" is [3, 1]), a list in one phrase
-    included ("shifts 2 and 3" is [2, 3], "the first and third shift" [1, 3], "shift 3 vs 1" [3, 1])."""
+    included ("shifts 2 and 3" is [2, 3], "the first and third shift" [1, 3], "shift 3 vs 1" [3, 1], "shifts 1-3" [1, 2, 3])."""
     found = [(m.start(), shift) for shift, pattern in SHIFT_PATTERNS.items() for m in [re.search(pattern, lower)] if m]
     for pattern in SHIFT_LISTS:
         for m in re.finditer(pattern, lower):
             found += [(m.start() + w.start(), SHIFT_IN_LIST[w.group()]) for w in re.finditer(r"\b(?:[1-3]|first|second|third|1st|2nd|3rd)\b", m.group())]
+    for m in re.finditer(SHIFT_RANGE, lower):
+        a, b = int(m[1]), int(m[2])
+        step = 1 if b >= a else -1
+        found += [(m.start(1) + i / 10, s) for i, s in enumerate(range(a, b + step, step))]
     first = {}
     for at, shift in sorted(found):
         first.setdefault(shift, at)
@@ -777,7 +789,7 @@ WINDOW_WORDS = (
 WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse|more|fewer|less|higher|lower)(\s+(to|with|against|than))?\b"
                   r"(?=(.*\b(to|with|against|versus|vs|than))?\s+"
                   r"(the\s+)?(last|previous|prior|week before|month before|day before)\b)")
-SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(" + "|".join(f"(?:{p})" for p in SHIFT_LISTS) +
+SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(" + "|".join(f"(?:{p})" for p in (*SHIFT_LISTS, SHIFT_RANGE)) +
                r"|shift\s*[1-3]|(first|second|third|1st|2nd|3rd)\s+shift|"
                r"(this|that|my|our|the)\s+shift)\b")   # as named_shifts reads them, a list in one phrase first ("shift one" is not one: refused, UNREAD_SHIFT)
 UNREAD_SHIFT = (r"\bshifts?\s+(one|two|three|[abc])\b|\b(last|previous|prior|next|other|night|day|swing|graveyard|morning|afternoon|"
@@ -1494,6 +1506,15 @@ def catch_all_guard(lower, request):
         raise ValueError(QUANTITY_HELP)
 
 
+def one_or_all_shifts(shifts, current, example):
+    """Refuse two named shifts under All where the answer is one shift's or every shift's together (a count, a count or minutes
+    by reason, place or kind, the stops profile): its shift is one or none, so a pair would be answered over all three. Issue #177:
+    once the consumed words take a list ("shift 2 versus shift 3", "shifts 1 and 3"), no leftover word refuses it any more."""
+    if len(shifts) > 1 and current.scope == 'day':
+        raise ValueError(f"A count is answered for one shift or all shifts together: ask one shift at a time ('{example}'), "
+                         "or leave the shift out")
+
+
 def parse_period_request(lower, current, shifts, named_day=None, asked=None):
     """Route plain period phrasing to the store tools; None when the question is about one day. `named_day` is the words of the
     one production day the question itself named ("yesterday"), which question_scope moved the scope to; `asked` the question as said,
@@ -1710,6 +1731,7 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
             # a count or minutes grouped by reason, place or kind answers only when every word is read (issue #153, row 3): the Pareto
             # applies no stop reason, place, kind (but the kinds it groups by), subset or comparison
             group = {'metric': 'stops_by_group' if measure == 'count' else 'minutes_by_group', 'group': group_by}
+            one_or_all_shifts(shifts, current, f"{PLAIN[group['metric']]} on shift 1 this week")   # the shifts named are read (#177)
             deictic_gate(lower, group, current, shifts)
             gated_window(PLAIN[group['metric']])
             logged = re.search(KIND_LOGGED, lower)
@@ -1733,6 +1755,7 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
         plan = [("get_downtime_review", {"window": window, "shift": shift})]
         intent = 'period_review'
     elif profile:
+        one_or_all_shifts(shifts, current, f"{PLAIN['stops_per_day']} on shift 1 this week")   # the shifts named are read (#177)
         deictic_gate(lower, {'metric': 'stops_per_day'}, current, shifts)   # issue #153, row 8
         gated_window(PLAIN['stops_per_day'])
         comparison_gate(lower, {'metric': 'stops_per_day'}, period or selected or 'week', asked=asked)   # no window before beside it (row 6)
