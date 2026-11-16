@@ -368,22 +368,30 @@ UNNAMED_SHIFT = r"\b(?:previous|last|prior|next|other)\s+shifts?\b"
 EVERY_SHIFT = r"\bbetween (?:the )?shifts\b|\b(?:each|every|by|per) shift\b|\ball (?:three )?shifts\b|\bacross (?:the )?shifts\b"
 SHIFT_PATTERNS = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
 # Several shifts in one phrase (issue #177, the coordinator's review of aad1b3c): "shifts 2 and 3", "shift 1 & 3", "shift 3 vs 1",
-# "shifts 1, 2 and 3", "shifts 1,3", "shifts 1-2", "the first and third shift", "1st & 3rd shifts", "shift 2 and 3rd". A number
-# joins a list only after a joiner ("and", "&", "or", "vs", "versus"; a comma after "shifts", before a later joiner or with no space,
-# so "on shift 2, 3 stops ran long" is shift 2), and never as a decimal, a percent, a date, a grade code, a clock time or a count of
-# weeks, days or minutes ("shift 2 versus 3 weeks ago" is shift 2).
-SHIFT_NUMBER = (r"[1-3]\b(?![.:]\d|,\d{3}\b|[%/]|-(?![1-3]\b))"
+# "shifts 1, 2 and 3", "shifts 1,3", "shift 1, 3", "shifts 1-2", "shift 1-3", "the first and third shift", "1st & 3rd shifts",
+# "shift 2 and 3rd". A number joins a list only after a joiner ("and", "&", "or", "vs", "versus"; a comma after "shifts", with no
+# space, before a later joiner, or before the phrase ends, so "on shift 2, 3 stops ran long" is shift 2), or in a range, and never as
+# a decimal, a percent, a date, a grade code, a clock time or a count of weeks, days or minutes ("shift 2 versus 3 weeks ago" is shift 2).
+SHIFT_NUMBER = (r"[1-3]\b(?![.:]\d|,(?![1-3](?![\d%.]))\d|[%/]|-(?![1-3]\b))"
                 r"(?!\s*(?:weeks?|days?|months?|years?|hours?|hrs?|mins?|minutes?|secs?|seconds?|times|am|pm|a\.m\.|p\.m\.|o'clock|"
                 r"shifts?\s+ago)(?![a-z]))")
 SHIFT_ORDINAL = r"(?:first|second|third|1st|2nd|3rd)"
 SHIFT_AND = r"\s*(?:,\s*)?(?:&|\band\b|\bor\b|\bvs\b\.?|\bversus\b)\s*"   # the joiners, an Oxford comma before one
 SHIFT_ITEM = (rf"(?:(?:(?:the\s+)?shift\s*)?{SHIFT_NUMBER}"
               rf"|(?:the\s+)?{SHIFT_ORDINAL}(?=\s+shifts?\b|\s*[?.!;]|\s*$))")   # "shift 2 and 3rd", "shift 1 and the third shift"
+# the phrase ends after a number: the end, a mark, a joiner or a window or comparison word, never a noun it counts ("3 stops")
+SHIFT_END = (r"(?=\s*(?:$|[?.!;:,)]|&|\b(?:and|or|vs|versus|this|that|last|previous|on|in|for|during|over|across|yesterday|today|"
+             r"compared|against|than|with|to|from|between|please)\b))")
 SHIFT_LISTS = (rf"\bshifts\s*{SHIFT_NUMBER}(?:(?:{SHIFT_AND}|\s*,\s*){SHIFT_ITEM})+",                     # "shifts 2 and 3", "shifts 1, 3"
                rf"\bshift\s*{SHIFT_NUMBER}(?:\s*,\s*{SHIFT_ITEM})*(?:{SHIFT_AND}{SHIFT_ITEM})+",          # "shift 1 & 3", "shift 1, 2 and 3"
                rf"\bshift\s*{SHIFT_NUMBER}(?:,{SHIFT_NUMBER})+",                                          # "shift 1,3"
+               rf"\bshift\s*{SHIFT_NUMBER}(?:\s*,\s*{SHIFT_NUMBER}{SHIFT_END})+",                        # "shift 1, 3", never "shift 2, 3 stops"
+               rf"\bshifts?\s*{SHIFT_NUMBER}(?:\s*[-–]\s*{SHIFT_NUMBER}){{2,}}",                           # "shifts 1-2-3"
                rf"\b{SHIFT_ORDINAL}(?:(?:{SHIFT_AND}|\s*,\s*)(?:the\s+)?{SHIFT_ORDINAL})+\s+shifts?\b")   # "first and third shift"
-SHIFT_RANGE = rf"\bshifts\s*([1-3])\s*(?:-|–|\bto\b|\bthrough\b|\bthru\b)\s*({SHIFT_NUMBER})"   # "shifts 1-2", "shifts 1 to 3"
+# a range names each shift in it: "shifts 1-2", "shift 1-3", "shift 1 through 3", "shifts 1 to 3" ("to" after "shifts" only: "compare
+# shift 1 to 3" compares two), never part of a longer dash list ("shifts 1-2-3" is a list, above)
+SHIFT_RANGES = (rf"\bshifts?\s*([1-3])\s*(?:[-–]|\bthrough\b|\bthru\b)\s*({SHIFT_NUMBER})(?!\s*[-–]\s*[1-3])",
+                rf"\bshifts\s*([1-3])\s*\bto\b\s*({SHIFT_NUMBER})")
 SHIFT_IN_LIST = {**{str(s): s for s in (1, 2, 3)}, 'first': 1, '1st': 1, 'second': 2, '2nd': 2, 'third': 3, '3rd': 3}
 
 
@@ -394,7 +402,7 @@ def named_shifts(lower):
     for pattern in SHIFT_LISTS:
         for m in re.finditer(pattern, lower):
             found += [(m.start() + w.start(), SHIFT_IN_LIST[w.group()]) for w in re.finditer(r"\b(?:[1-3]|first|second|third|1st|2nd|3rd)\b", m.group())]
-    for m in re.finditer(SHIFT_RANGE, lower):
+    for m in (m for pattern in SHIFT_RANGES for m in re.finditer(pattern, lower)):
         a, b = int(m[1]), int(m[2])
         step = 1 if b >= a else -1
         found += [(m.start(1) + i / 10, s) for i, s in enumerate(range(a, b + step, step))]
@@ -789,7 +797,7 @@ WINDOW_WORDS = (
 WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse|more|fewer|less|higher|lower)(\s+(to|with|against|than))?\b"
                   r"(?=(.*\b(to|with|against|versus|vs|than))?\s+"
                   r"(the\s+)?(last|previous|prior|week before|month before|day before)\b)")
-SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(" + "|".join(f"(?:{p})" for p in (*SHIFT_LISTS, SHIFT_RANGE)) +
+SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(" + "|".join(f"(?:{p})" for p in (*SHIFT_LISTS, *SHIFT_RANGES)) +
                r"|shift\s*[1-3]|(first|second|third|1st|2nd|3rd)\s+shift|"
                r"(this|that|my|our|the)\s+shift)\b")   # as named_shifts reads them, a list in one phrase first ("shift one" is not one: refused, UNREAD_SHIFT)
 UNREAD_SHIFT = (r"\bshifts?\s+(one|two|three|[abc])\b|\b(last|previous|prior|next|other|night|day|swing|graveyard|morning|afternoon|"

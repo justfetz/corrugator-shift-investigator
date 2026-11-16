@@ -213,11 +213,15 @@ def test_named_shifts_reads_a_list_in_one_phrase():
         'summarize performance for shifts 1,3': [1, 3], 'summarize performance for shift 1,3': [1, 3], 'shifts 1, 3': [1, 3],
         'shifts 1-2': [1, 2], 'shifts 1 to 3': [1, 2, 3], 'shifts 1 through 3 this week': [1, 2, 3], 'shift 2 and 3rd': [2, 3],
         'shift 1 & 2nd?': [1, 2], 'shift 2 and the third': [2, 3], 'shift 1, 2 and 3': [1, 2, 3],
+        # the reviewer's re-check: a comma and a space before a number that ends the phrase, a range after a single 'shift', a dash list
+        'summarize performance for shift 1, 3': [1, 3], 'show shift 1, 3': [1, 3], 'shift 1, 3 this week': [1, 3], 'show shift 1-3': [1, 2, 3],
+        'shift 1 through 3': [1, 2, 3], 'shift 1–3': [1, 2, 3], 'summarize performance for shifts 1-2-3': [1, 2, 3],
         # one shift, as before: the number after the joiner is not a shift
         'shift 2 versus 3 weeks ago': [2], 'shift 2 and 3% waste': [2], 'shift 1 and 3.5 min': [1], 'shift 2, 2026-09-14': [2],
         'shift 2 and 275-bc': [2], 'top 3 stops on shift 1': [1], 'second shift': [2], 'how many setups': [],
         'on shift 2, 3 stops ran long: why?': [2], 'shift 1 and 3 pm': [1], 'shift 2 and 3 a.m.': [2], "shift 1 and 2 o'clock": [1],
         'shift 2 and 3,000 sheets': [2], 'shift 2,300 sheets': [2], 'shift 1 and 2 minutes': [1], 'shift 2 and the first stop': [2],
+        'why was speed low on shift 1 and 2,5% waste?': [1], 'shift 1,3%': [1], 'compare shift 1 to 3': [1],
         'shift one and two': [], 'night shift': [],
     }
     assert {q: named_shifts(q) for q in cases} == cases
