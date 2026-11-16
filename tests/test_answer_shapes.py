@@ -298,3 +298,12 @@ def test_no_section_runs_on_and_every_where_to_look_question_routes(case):
         if m:
             _, asked = route(m[1], context, store.production_days)
             assert asked is context, f"the look {m[1]!r} moves the card's scope: {asked.read}"
+
+
+def test_the_day_lead_is_a_method_no_attribute_can_shadow():
+    """The day headline under All is `DailyAnswer.day_lead()` (issue #177, the coordinator's review of aad1b3c, item 7). PR #168
+    gives the card an instance attribute `self.day_total`; a method of that name would be shadowed by it, and every daily card
+    under All would raise TypeError once both are in main, with no merge conflict to warn of it."""
+    from investigator.shapes import DailyAnswer
+    assert callable(DailyAnswer.day_lead)
+    assert 'day_total' not in vars(DailyAnswer)

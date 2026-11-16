@@ -38,7 +38,11 @@ parses the question (`agent.route`), on `/q`, on `POST /api/ask` and for the ana
   shift: "Show shift 1" with shift 2 selected is `/corr/1/day/2026-09-14/shift/1?measure=overview`. A
   comparison (any of compare, versus, compared, against, than, relative to: "how did we do compared with first
   shift", "compare shift 1 with shift 3") or several named shifts keep the refusal that asks for the
-  production-day scope. Under all shifts a named shift narrows with `shifts=` as before.
+  production-day scope. Under all shifts a named shift narrows with `shifts=` as before. Several shifts may be
+  named in one phrase (issue #177): "shifts 2 and 3", "shift 1 & 3", "shift 3 vs 1", "the first and third shift"
+  name both, so under all shifts "Where is the money for shifts 1 and 3?" is
+  `/corr/1/day/2026-09-14?measure=dollars&shifts=1,3`, and under one selected shift it is refused as
+  "shift 1 and shift 3" is.
 - **A relative window** moves the path to it: `yesterday` is the production day before the selected one (Friday
   from a Monday), `last week`, `last month` and `last period` (also `previous`, `prior`) the week, calendar month
   and 4-4-5 period before the selected day's. The path takes that window's grain and its first production day,

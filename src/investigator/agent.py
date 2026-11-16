@@ -367,12 +367,29 @@ PREVIOUS_CUE = (r"\b(?:versus|vs\.?|compared (?:with|to)|than|against|from|over|
 UNNAMED_SHIFT = r"\b(?:previous|last|prior|next|other)\s+shifts?\b"
 EVERY_SHIFT = r"\bbetween (?:the )?shifts\b|\b(?:each|every|by|per) shift\b|\ball (?:three )?shifts\b|\bacross (?:the )?shifts\b"
 SHIFT_PATTERNS = {1: r"\b(first|1st)\s+shift\b|\bshift\s*1\b", 2: r"\b(second|2nd)\s+shift\b|\bshift\s*2\b", 3: r"\b(third|3rd)\s+shift\b|\bshift\s*3\b"}
+# Several shifts in one phrase (issue #177, the coordinator's review of aad1b3c): "shifts 2 and 3", "shift 1 & 3", "shift 3 vs 1",
+# "shifts 1, 2 and 3", "the first and third shift", "1st & 3rd shifts". A number joins the list only right after a joiner ("and", "&",
+# a comma, "or", "vs", "versus"), and never as a decimal, a time, a grade code or a count of weeks ("shift 2 versus 3 weeks ago" is shift 2).
+SHIFT_JOIN = r"\s*(?:,\s*(?:and\s+|or\s+|&\s*)?|&|\band\b|\bor\b|\bvs\b\.?|\bversus\b)\s*"
+SHIFT_NUMBER = (r"[1-3]\b(?![.,:]\d|[%/-])"
+                r"(?!\s*(?:weeks?|days?|months?|years?|hours?|hrs?|mins?|minutes?|times|shifts? ago)\b)")
+SHIFT_ORDINAL = r"(?:first|second|third|1st|2nd|3rd)"
+SHIFT_LISTS = (rf"\bshifts?\s*{SHIFT_NUMBER}(?:{SHIFT_JOIN}(?:(?:the\s+)?shift\s*)?{SHIFT_NUMBER})+",
+               rf"\b{SHIFT_ORDINAL}(?:{SHIFT_JOIN}(?:the\s+)?{SHIFT_ORDINAL})+\s+shifts?\b")
+SHIFT_IN_LIST = {**{str(s): s for s in (1, 2, 3)}, 'first': 1, '1st': 1, 'second': 2, '2nd': 2, 'third': 3, '3rd': 3}
 
 
 def named_shifts(lower):
-    """The shifts a question names, in the order it names them ("shift 3 versus shift 1" is [3, 1])."""
+    """The shifts a question names, in the order it names them ("shift 3 versus shift 1" is [3, 1]), a list in one phrase
+    included ("shifts 2 and 3" is [2, 3], "the first and third shift" [1, 3], "shift 3 vs 1" [3, 1])."""
     found = [(m.start(), shift) for shift, pattern in SHIFT_PATTERNS.items() for m in [re.search(pattern, lower)] if m]
-    return [shift for _, shift in sorted(found)]
+    for pattern in SHIFT_LISTS:
+        for m in re.finditer(pattern, lower):
+            found += [(m.start() + w.start(), SHIFT_IN_LIST[w.group()]) for w in re.finditer(r"\b(?:[1-3]|first|second|third|1st|2nd|3rd)\b", m.group())]
+    first = {}
+    for at, shift in sorted(found):
+        first.setdefault(shift, at)
+    return sorted(first, key=first.get)
 
 
 def question_months(lower, anchor):
@@ -760,8 +777,9 @@ WINDOW_WORDS = (
 WINDOW_COMPARE = (r"\b(compar\w*|versus|vs|better|worse|more|fewer|less|higher|lower)(\s+(to|with|against|than))?\b"
                   r"(?=(.*\b(to|with|against|versus|vs|than))?\s+"
                   r"(the\s+)?(last|previous|prior|week before|month before|day before)\b)")
-SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(shift\s*[1-3]|(first|second|third|1st|2nd|3rd)\s+shift|"
-               r"(this|that|my|our|the)\s+shift)\b")   # as named_shifts reads them ("shift one" is not one: refused, UNREAD_SHIFT)
+SHIFT_NAMED = (r"\b((on|for|by|in|during|from)\s+)?(the\s+)?(" + "|".join(f"(?:{p})" for p in SHIFT_LISTS) +
+               r"|shift\s*[1-3]|(first|second|third|1st|2nd|3rd)\s+shift|"
+               r"(this|that|my|our|the)\s+shift)\b")   # as named_shifts reads them, a list in one phrase first ("shift one" is not one: refused, UNREAD_SHIFT)
 UNREAD_SHIFT = (r"\bshifts?\s+(one|two|three|[abc])\b|\b(last|previous|prior|next|other|night|day|swing|graveyard|morning|afternoon|"
                 r"evening|late|early)\s+shifts?\b")
 SHIFT_TEXT = "'{words}' names a shift the router does not read: name it by its number ('{plain} on shift 1 this week') or set the shift control."

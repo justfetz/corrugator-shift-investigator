@@ -397,7 +397,7 @@ class DailyAnswer:
         shape = getattr(self, 'shape_' + self.intent, None) or self.shape_speed
         head, bullets, notes, looks = shape(focus)
         bullets += self.leftovers(focus)
-        day = self.day_total()
+        day = self.day_lead()
         if day:   # under All the day leads, all shifts together; each shift follows, the focus with its rank (#177)
             if self.intent == 'dollars':   # the day's own gaps, ranked by dollars as the day's total ranked them
                 head, bullets, notes, _ = self.shape_dollars(focus, day)
@@ -416,7 +416,7 @@ class DailyAnswer:
             out += [LOOK, *looks]
         return out
 
-    def day_total(self):
+    def day_lead(self):
         """The day's total this card leads with under All (#177): the intent's day tool, when the scope holds several
         complete shifts and the offline planner ran it; None otherwise (one shift, an analyst's plan, a selected shift)."""
         tool = self.DAY_LEAD.get(self.intent)

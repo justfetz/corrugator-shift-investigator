@@ -6,7 +6,9 @@
     python3 evals/lab.py --ask "how many setups last week" --scope both --period day,week
 
 A line of a text file may set its own controls before the question: `[scope=day period=week day=2026-09-16] stops by shift`.
-Controls not given take the command line's (--day, --shift, --scope shift|day|both, --period day|week|month|accounting|all),
+The keys are day (a production day of the golden store, YYYY-MM-DD), shift (1, 2 or 3), scope (shift: the selected shift; day:
+All) and period (day, week, month or accounting). An unknown key or a value outside these is a lab error that names them, and
+the lab asks nothing: it never becomes a card. Controls not given take the command line's (--day, --shift, --scope shift|day|both, --period day|week|month|accounting|all),
 which default to the eval defaults: 2026-09-14, shift 2, the selected shift, Day; with --canned the scope defaults to both
 and the period to all, so `--canned` alone asks every canned question under one shift and All, Day, Week, Month and 4-4-5.
 
@@ -27,7 +29,7 @@ import json
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +41,9 @@ SCOPES = ('shift', 'day')
 DEFAULTS = {'day': '2026-09-14', 'shift': 2, 'scope': 'shift', 'period': 'day'}
 OUT = ROOT / 'artifacts' / 'lab'
 CITE = re.compile(r'\s*\((?:query|row)[^)]*\)')
-SHIFT_NAMED = re.compile(r'\bshift\s*[1-3]\b|\b(first|second|third|1st|2nd|3rd|night|day|swing)\s+shift\b', re.I)
+# a shift the question names, in the singular or the plural, by number or ordinal ("shift 2", "shifts 2 and 3", "shift 1 & 3",
+# "first and third shift", "the 2nd and 3rd shifts"), or a shift the router refuses by name ("night shift")
+SHIFT_NAMED = re.compile(r'\bshifts?\s*[1-3]\b|\b(first|second|third|1st|2nd|3rd|night|day|swing)\s+shifts?\b', re.I)
 ONE_SHIFT = re.compile(r'\bon shift [1-3]\b|^\*\*[^*]+\*\*[^·]*\bshift [1-3]\b|^Shift [1-3]\b', re.I)
 GENERIC = ('Offline mode supports', 'Offline mode answers one quantity at a time')
 LONG_LINE = 160      # a card line longer than this strains the card at phone width (issue #177, item 5)
@@ -65,15 +69,50 @@ def period_word(period):
     return {'day': 'week', 'week': 'week', 'month': 'month', 'accounting': 'period'}[period]
 
 
-def parse_line(line, base):
-    """(question, controls) of one text line: `[key=value ...] question`."""
+# The controls a line, a JSON entry or the command line may set, and the values each takes (the server's own checks, Workbench.ask)
+CONTROLS = {'day': 'a production day as YYYY-MM-DD', 'shift': '1, 2 or 3', 'scope': 'shift (the selected shift) or day (All)',
+            'period': 'day, week, month or accounting'}
+ALLOWED = 'the controls are ' + '; '.join(f'{key}: {values}' for key, values in CONTROLS.items())
+
+
+class LabError(Exception):
+    """A question file or command line the lab will not run: a control it does not know, or a value the control does not take.
+    It stops the lab before any question is asked, so a typo in a control never comes back as a card (a refusal the analyst
+    would grade as the router's)."""
+
+
+def control(key, value, where=''):
+    """`value` of the control `key`, typed (the shift an int), or a LabError naming the allowed keys and values."""
+    if key not in CONTROLS:
+        raise LabError(f"{where}unknown control '{key}': {ALLOWED}")
+    text = str(value).strip()
+    if key == 'shift' and text in ('1', '2', '3') and not isinstance(value, bool):
+        return int(text)
+    if key == 'scope' and text in SCOPES or key == 'period' and text in PERIODS:
+        return text
+    if key == 'day' and re.fullmatch(r'\d{4}-\d{2}-\d{2}', text):
+        try:
+            date.fromisoformat(text)
+            return text
+        except ValueError:
+            pass
+    raise LabError(f"{where}{key}={text!r} is not a value the lab takes: {ALLOWED}")
+
+
+def parse_line(line, base, where=''):
+    """(question, controls) of one text line: `[key=value ...] question`. A pair that is not key=value, an unknown key or a value
+    the key does not take is a LabError naming the allowed keys and values; so is a line with controls and no question."""
     controls = dict(base)
     m = re.match(r'\s*\[([^\]]*)\]\s*(.*)$', line)
     if m:
         for pair in m[1].split():
-            key, _, value = pair.partition('=')
-            controls[key] = int(value) if key == 'shift' else value
+            key, eq, value = pair.partition('=')
+            if not eq:
+                raise LabError(f"{where}'{pair}' is not key=value: {ALLOWED}")
+            controls[key] = control(key, value, where)
         line = m[2]
+        if not line.strip():
+            raise LabError(f'{where}the line sets controls and asks no question')
     return line.strip(), controls
 
 
@@ -86,9 +125,9 @@ def expand(controls, scopes, periods):
 
 def load(args):
     """[(question, controls, label)] for the command line's inputs."""
-    base = {'day': args.day, 'shift': args.shift}
-    scopes = SCOPES if args.scope == 'both' else (args.scope,)
-    periods = PERIODS if args.period == 'all' else tuple(args.period.split(','))
+    base = {'day': control('day', args.day, '--day: '), 'shift': control('shift', args.shift, '--shift: ')}
+    scopes = SCOPES if args.scope == 'both' else (control('scope', args.scope, '--scope: '),)
+    periods = PERIODS if args.period == 'all' else tuple(control('period', p, '--period: ') for p in args.period.split(','))
     items = []
     if args.canned:
         for label, text, scope, period in canned_questions():
@@ -102,16 +141,21 @@ def load(args):
     for path in args.files:
         path = Path(path)
         if path.suffix == '.json':
-            for entry in json.loads(path.read_text()):
+            for i, entry in enumerate(json.loads(path.read_text())):
                 entry = {'question': entry} if isinstance(entry, str) else entry
-                fixed = {k: entry[k] for k in ('day', 'shift', 'scope', 'period') if k in entry}
+                where = f'{path.name} entry {i}: '
+                if not isinstance(entry, dict) or not isinstance(entry.get('question'), str) or not entry['question'].strip():
+                    raise LabError(f'{where}an entry is a question, or an object with a "question" and any of the controls: {ALLOWED}')
+                for key in set(entry) - {'question', 'label', *CONTROLS}:
+                    control(key, entry[key], where)   # an unknown key: the error names the allowed ones
+                fixed = {k: control(k, entry[k], where) for k in CONTROLS if k in entry}
                 for c in expand({**base, **fixed, '_fixed': tuple(fixed)}, scopes, periods):
                     items.append((entry['question'], c, entry.get('label')))
         else:
-            for line in path.read_text().splitlines():
+            for number, line in enumerate(path.read_text().splitlines(), 1):
                 if not line.strip() or line.lstrip().startswith('#'):
                     continue
-                text, controls = parse_line(line, base)
+                text, controls = parse_line(line, base, f'{path.name} line {number}: ')
                 fixed = tuple(k for k in ('scope', 'period') if k in controls)
                 for c in expand({**controls, '_fixed': fixed}, scopes, periods):
                     items.append((text, c, None))
@@ -240,9 +284,19 @@ def main(argv=None):
     # --canned alone is the page's front door: every canned question under every scope and period (the issue's criterion)
     args.scope = args.scope or ('both' if args.canned else DEFAULTS['scope'])
     args.period = args.period or ('all' if args.canned else DEFAULTS['period'])
-    items = load(args)
     import run as runner   # the golden store: the window the golden set is scored on
-    records = run(items, runner.golden_store())
+    try:
+        items = load(args)
+        store = runner.golden_store()
+        for day in sorted({c['day'] for _, c, _ in items}):   # a day outside the golden store is a control error too, never a card
+            try:
+                store.check_day(day)
+            except ValueError as exc:
+                raise LabError(f'day={day}: {exc}') from None
+    except LabError as exc:
+        print(f'lab error: {exc}', file=sys.stderr)
+        return 2
+    records = run(items, store)
     name = args.name or 'lab-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / f'{name}.json').write_text(json.dumps({'name': name, 'records': records}, indent=1, ensure_ascii=False))

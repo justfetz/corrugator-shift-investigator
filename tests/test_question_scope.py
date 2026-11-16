@@ -194,3 +194,23 @@ def test_the_planner_is_told_the_scope_only_when_the_question_moved_it():
     note = read_scope_text(question_scope('How much donwtime on 1st shift last week?', rail(), DAYS))
     assert 'it names shift 1' in note and '"last week" is the Mon-Fri production week containing 2026-09-07' in note
     assert 'do not move the window again' in note
+
+
+def test_named_shifts_reads_a_list_in_one_phrase():
+    """Several shifts in one phrase are each named (issue #177, the coordinator's review of aad1b3c, item 1): in the plural,
+    by ordinals before one 'shift', joined by 'and', '&', a comma, 'or', 'vs' or 'versus', in the order said. A number after a
+    joiner is a shift only when it is not a decimal, a percent, a date, a grade code or a count of weeks, days or minutes."""
+    from investigator.agent import named_shifts
+    cases = {
+        'summarize performance for shifts 2 and 3': [2, 3], 'where is the money for shifts 1 and 3?': [1, 3],
+        'show speed for the first and third shift': [1, 3], 'summarize performance for shift 1 & 3': [1, 3],
+        'compare shift 3 vs 1': [3, 1], 'compare shift 3 vs. 1': [3, 1], 'shift 3 versus 1': [3, 1], 'shifts 2&3': [2, 3],
+        'shifts 1, 2 and 3': [1, 2, 3], 'shifts 1, 2, and 3': [1, 2, 3], 'the 1st & 3rd shifts': [1, 3],
+        'the first and the third shift': [1, 3], 'first, second and third shift': [1, 2, 3], 'shift 2 or 3': [2, 3],
+        'shift 1 and shift 3': [1, 3], 'shift 3 versus shift 1': [3, 1], 'shift 2 and 3rd shift': [2, 3],
+        # one shift, as before: the number after the joiner is not a shift
+        'shift 2 versus 3 weeks ago': [2], 'shift 2 and 3% waste': [2], 'shift 1 and 3.5 min': [1], 'shift 2, 2026-09-14': [2],
+        'shift 2 and 275-bc': [2], 'top 3 stops on shift 1': [1], 'second shift': [2], 'how many setups': [],
+        'shift one and two': [], 'night shift': [],
+    }
+    assert {q: named_shifts(q) for q in cases} == cases

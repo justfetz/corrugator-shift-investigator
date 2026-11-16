@@ -27,6 +27,19 @@ Example: 10 minutes at a 900 target and 10 minutes at a 500 target have a combin
 
 Period speed is total feet / (480 × number of observed shifts). Period downtime percentages average shift percentages because every supported shift has exactly the same 480-minute denominator. Period waste is weighted by gross area. The period report reads each shift's row of the daily matrix from `shift_kpis` (one lookup per window, no per-day rebuild) and reconstructs target footage from each footage/attainment pair; the raw target footage is the table's `target_ft`. Zero or wholly invalid shifts would require additional handling before supporting external data.
 
+**The day row** (`get_day_kpis`, issue #177). Under All a day card whose question names no shift leads with the production day across its shifts (the owner, 2026-11-15), and this row is that headline's figures. It is one query over the counted shifts' setups and stops, so every figure is a ratio of the day's sums, never an average of the shifts' percents. The counted shifts are the listed shifts that are complete: a shift holding a record that failed validation (the data-quality demo's bad-trim record is on shift 2) is left out and named in `excluded_shifts`, as `get_day_dollars` leaves it out; when none is complete the row covers every listed shift and its coverage says `incomplete`. Each counted shift is 480 scheduled minutes, so the day's denominator is 1,440 minutes over three shifts and **960 when one shift is excluded** (the row's `scheduled_minutes`, beside `shifts_counted`).
+
+| Day row figure | Formula over the counted shifts |
+| --- | --- |
+| Speed including downtime (`observed_shift_fpm`) | sum(F) / (480 × counted shifts) |
+| Speed / target | 100 × sum(F) / sum(v × m) |
+| Downtime, maintenance, operator, planned maintenance | 100 × minutes of that kind / (480 × counted shifts): 1,440 for three, 960 for two |
+| Dry-end waste | 100 × sum(R) / sum(G − T − S), the yield after trim and shear |
+| Setups, stops, stops with a note, order fragments | Counts over the counted shifts |
+| Paper changes | The day's distinct wet-end IDs: a run that crosses a shift boundary counts once, so the shifts' own counts can add to more |
+
+The headline names the shifts it counted: "across the three shifts" and "of the day down" for three; "across shifts 1 and 3" and "of their 960 scheduled minutes down" when shift 2 is excluded. A question that names one or two shifts ("shift 1 and shift 3", "shifts 1 and 3") keeps its shift-by-shift card and runs no day row; naming all three is the same address as naming none.
+
 In the daily tools `maintenance_pct` is unplanned Maintenance only; the planned window is reported separately as `pm_pct` (stop kind `Scheduled`, reason Planned maintenance, shown as "Planned maintenance (scheduled)"), and `downtime_pct` is every stop. A power outage is **External** (the owner, PR #111; `targets.json`, `external`): the records log it as a Maintenance stop, and every table the tools read (the stops table, `shift_kpis`, each day's analysis) counts it under the kind `External` instead, so it is in `downtime_pct` and in every downtime list, but never in `maintenance_pct`, `op_maint_pct`, a band or a flag. The raw records and the dataset hash are unchanged. Dry-end rejects in the record families are reject lines per lane, category and reason ([the record contract](RECORD_CONTRACT.md#dry-end-rejects-category-reason-position)); the daily quality tools read the dry-end families' lines (`reason` is the family, `BOND`, `WARP`, `MISALIGNMENT`, `MOISTURE` or `OTHER`, and `detail` the reported reason), so a setup with three reasons contributes to three rows (the fixture wrote one reason per setup). Changeover rejects, planning / admin entries and the lanes' cutoff-knife and stacker waste boards are not dry-end quality, but they are not saleable board either: the daily KPIs' `estimated_good_sqft` is gross minus every recorded waste line (trim, shear, dry-end rejects, changeover rejects, the waste boards and planning / admin; owner, 2026-11-12), each of those lines is on the row beside it, and the waste breakdown (`get_waste_breakdown`) reads them for a single day or shift as well as a week or month. In the order matrix `requested_sheets`, `remaining_before`, `remaining_after` and `planned_overrun_sheets` are null (each lane carries its order's demand, `order_quantity`, which the matrix does not read yet), `planned_sheets` is this record's `nominal_cuts × outs`, `produced_sheets` is `actual_cuts × outs`, and the knife column is `knife 1/2` from `cutoff_allocation` (two cutoff knives).
 
 ## Period tools (record store)
@@ -169,7 +182,7 @@ The owner's bands ([next section](#the-owners-targets-and-bands-issue-101)) repl
 
 | Measure | Home run | Target | Flag above | Denominator | Lens |
 | --- | ---: | ---: | ---: | --- | --- |
-| Operator downtime | | 2.5 % | 2.5 % | scheduled minutes (480 a shift, 1,440 a day) | controllable |
+| Operator downtime | | 2.5 % | 2.5 % | scheduled minutes (480 a shift; a day row 1,440 over three shifts, 960 with one excluded) | controllable |
 | Maintenance downtime | | 2.5 % | 2.5 % | scheduled minutes | controllable |
 | Operator and maintenance together | | 5 % | 5 % | scheduled minutes | controllable |
 | Side trim | 2.75 % | 3 % | 3.25 % | gross sq ft | schedule-driven |
