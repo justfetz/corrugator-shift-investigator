@@ -435,21 +435,86 @@ class Figures:
 
     def line_quantity(self, entry, row, url, kpis=None):
         """`kpis`: a total's receipt rows (shift_kpis), which the quantity is read from wherever they hold it."""
+        if 'apart' in row:   # a money ledger row (issue #164)
+            return self.ledger_quantity(entry, row, url, kpis)
         quantity = self._line_quantity(entry, row, url) if kpis is None else self._kpis_quantity(entry, row, url, kpis)
-        if entry['tool'] == 'get_opportunities' and quantity is not None and not str(row.get('lever', '')).startswith('Side trim over'):
-            quantity = round(quantity, 2 if row.get('unit') == 'min' else 1)   # the levers price their rows' rounded quantities
+        if entry['tool'] == 'get_opportunities' and quantity is not None:
+            quantity = round(quantity, 2 if row.get('unit') == 'min' else 1)   # the lens's lines price their rows' rounded quantities
         return quantity
 
+    # ---- the money ledger (issue #164): a band's lever is each shift's gap to the band, summed over the shift rows; the
+    # ledger keeps a shift's areas to 0.1 sq ft and its minutes to 0.01 (docs/COST_MODEL.md), and the check reads them so
+    BAND_COLUMN = {'trim': 'trim_sqft', 'shear': 'shear_sqft', 'dry_end': 'reject_sqft', 'operator': 'operator_seconds',
+                   'maintenance': 'maintenance_seconds'}
+
+    @staticmethod
+    def recorded(key, r):
+        """A shift row's quantity of a band's measure, all recorded: sq ft to 0.1, minutes to 0.01."""
+        column = Figures.BAND_COLUMN[key]
+        return round(r[column] / 60, 2) if column.endswith('_seconds') else round(r[column], 1)
+
+    def cell_gap(self, key, r):
+        """A shift row's quantity above its band: the trim target is the answer's rate, the other bands targets.json's;
+        downtime against the shift's scheduled minutes, dry end against its yield after trim and shear."""
+        target = self.rates['values']['trim_target_pct'] if key == 'trim' else targets.BANDS[key]['target']
+        area = lambda c: round(r[c], 1)
+        if key in ('operator', 'maintenance'):
+            return round(max(0.0, self.recorded(key, r) - target / 100 * round(r['scheduled_seconds'] / 60, 2)), 2)
+        base = area('gross_sqft') - (area('trim_sqft') + area('shear_sqft') if key == 'dry_end' else 0)
+        return round(max(0.0, self.recorded(key, r) - target / 100 * base), 1)
+
+    def year_baselines(self, entry, day):
+        """Each grade's baseline over the trailing year ending on `day`, from the trailing-year rows the receipt links."""
+        first, last = self.store.trailing_year(day)
+        url, kept = self.also(entry, 'the trailing year'), self.__dict__.setdefault('years', {})
+        if (url, first, last) not in kept:   # by the link too: a receipt moved off its day reads only the year its step linked
+            kept[(url, first, last)] = baselines([y for y in self.rows(url) if first.isoformat() <= y['production_date'] <= last.isoformat()])
+        return kept[(url, first, last)]
+
+    def speed_runs(self, entry, rows):
+        """{(day, shift): [(baseline, feet, running minutes)]}: each wet-end run's part in a shift (its setups on one day,
+        shift, run and grade) with its grade's baseline over the trailing year ending on its own day."""
+        runs = {}
+        for r in rows:
+            key = (r['production_date'], r['shift'], r['wet_end_id'], r['quality_id'])
+            feet, run = runs.get(key, (0.0, 0.0))
+            runs[key] = (feet + r['lineal_ft'], run + (r['seconds'] - r['stop_seconds']) / 60)
+        out = {}
+        for (day, shift, _, grade), (feet, run) in runs.items():
+            base = self.year_baselines(entry, day).get(grade)
+            if base and run > 0:
+                out.setdefault((day, shift), []).append((base, feet, run))
+        return out
+
+    def ledger_quantity(self, entry, row, url, kpis=None):
+        """A ledger row's quantity, from the rows its receipt opens (`kpis`: a total's shift rows): a band's lever, the shift
+        rows' gaps; its cost at standard, all recorded less the gaps; the speed lever, each run's feet short of its baseline
+        in minutes at it, each shift's to 0.01; planned maintenance and external stops their minutes; the waste no band
+        covers its sq ft."""
+        key, part = row['key'], row.get('apart')
+        if key in self.BAND_COLUMN:
+            shifts = kpis if kpis is not None else self.rows(url)
+            over = sum(self.cell_gap(key, r) for r in shifts)
+            return sum(self.recorded(key, r) for r in shifts) - over if part == 'at-standard' else over
+        if key == 'speed':
+            cells = self.speed_runs(entry, self.rows(url))
+            return sum(round(sum(max(0.0, b * run - feet) / b for b, feet, run in runs), 2) for runs in cells.values())
+        if key in ('scheduled', 'external'):
+            return stop_minutes(self.rows(url))
+        if key == 'changeover':
+            return sum(r['changeover_sqft'] for r in kpis) if kpis is not None else sum(r['sqft'] for r in self.rows(url))
+        if key == 'boards':
+            return sum(r['cutoff_waste_sqft'] + r['stacker_waste_sqft'] for r in (kpis if kpis is not None else self.rows(url)))
+        raise Unchecked(f'no quantity for the ledger row {key!r}')
+
     def _kpis_quantity(self, entry, row, url, kpis):
-        """A lever's quantity for a total, from the total's own shift_kpis rows wherever they hold it: side trim, shear,
-        the changeover and waste-board lines, each dry-end family, the bale's remainder, the speed gap's feet and stops.
-        A downtime reason and the runs under baseline are not in those rows: they come from the lever's records over the
-        receipt's scope (`url`), which total_usd first holds to the receipt's rows."""
+        """An ownership lens line's quantity for a total, from the total's own shift_kpis rows wherever they hold it: side
+        trim, shear, the changeover and waste-board lines, each dry-end family, the bale's remainder. A downtime reason is
+        not in those rows: it comes from its records over the receipt's scope (`url`), which total_usd first holds to the
+        receipt's rows."""
         label, total = row.get('lever') or row.get('gap'), lambda c: sum(r[c] for r in kpis)
         family = re.match(r'Dry-end: (\w+)', label)
-        over = re.match(r'Side trim over the ([\d.]+)% target', label)
-        required = re.match(r'Speed gap to ([\d.]+) ft/min', label)
-        if label.startswith('Downtime: ') or label.startswith('Speed under'):
+        if label.startswith('Downtime: '):
             return self._line_quantity(entry, row, url)
         if family:
             return total(f'{family.group(1).lower()}_sqft')
@@ -462,21 +527,16 @@ class Figures:
                     if label.startswith('Stacker waste') else total('cutoff_waste_sqft') + total('stacker_waste_sqft'))
         if label.startswith('Unexplained') or label.startswith('Bale'):
             return unexplained(kpis)
-        if over:
-            return max(0.0, round(total('trim_sqft') / total('gross_sqft') * 100, 4) - float(over.group(1))) / 100 * total('gross_sqft')
         if label.startswith('Side trim'):
             return total('trim_sqft')
         if label.startswith('Shear'):
             return total('shear_sqft')
-        if required:   # each shift's feet short of the speed over its running minutes (its setups' own stops)
-            speed = float(required.group(1))
-            return sum(max(0.0, speed * (480 - r['setup_stop_seconds'] / 60) - r['lineal_ft']) for r in kpis) / speed
         raise Unchecked(f'no quantity for the line {label!r} in shift_kpis rows')
 
     def total_usd(self, entry, url, field, levers):
         """A money total from its own receipt: the step's shift_kpis rows of its day or span and shifts, each shift once,
-        priced lever by lever (_kpis_quantity). The records a downtime reason or a run comes from, over the receipt's scope,
-        must first agree with the receipt's rows on the stop seconds and lineal feet both hold."""
+        priced row by row (line_quantity over those rows). The records a downtime reason or a run comes from, over the
+        receipt's scope, must first agree with the receipt's rows on the stop seconds and lineal feet both hold."""
         table, kpis = url.split('?')[0].removeprefix('/data/'), self.rows(url)
         if table != 'shift_kpis' or not kpis:
             raise WrongRows(f'a money total is read from shift_kpis rows; the receipt opens {len(kpis)} rows of {table}')
@@ -492,9 +552,8 @@ class Figures:
                                field, kpis) for j in levers)
 
     def _line_quantity(self, entry, row, url):
-        """The quantity a priced line prices, from its own rows: stop minutes, reject sq ft, waste-board sq ft, side trim
-        and shear sq ft, the sq ft over the trim target, the speed gap's minutes, the minutes under the grade baselines,
-        the bale's unexplained remainder."""
+        """The quantity an ownership lens line prices, from its own rows: stop minutes, reject sq ft, waste-board sq ft,
+        side trim and shear sq ft, the bale's unexplained remainder."""
         rows = self.rows(url)
         table = url.split('?')[0].removeprefix('/data/')
         label = row.get('lever') or row.get('gap')
@@ -507,28 +566,10 @@ class Figures:
             return cutoff if label.startswith('Cutoff-knife waste') else stacker if label.startswith('Stacker waste') else cutoff + stacker
         if table == 'shifts':
             return unexplained(rows)
-        over = re.match(r'Side trim over the ([\d.]+)% target', label)
-        if over:   # the points over the target on the window's trim percent (to four places, as the tool rounds it)
-            trim, gross = (sum(r[c] for r in rows) for c in ('trim_sqft', 'gross_sqft'))
-            return max(0.0, round(trim / gross * 100, 4) - float(over.group(1))) / 100 * gross
         if label.startswith('Side trim'):
             return sum(r['trim_sqft'] for r in rows)
         if label.startswith('Shear'):
             return sum(r['shear_sqft'] for r in rows)
-        required = re.match(r'Speed gap to ([\d.]+) ft/min', label)
-        if required:
-            speed, shifts = float(required.group(1)), {}
-            for r in rows:
-                shifts.setdefault((r['production_date'], r['shift']), []).append(r)
-            gap_ft = sum(max(0.0, speed * (480 - sum(r['stop_seconds'] for r in rs) / 60) - sum(r['lineal_ft'] for r in rs)) for rs in shifts.values())
-            return gap_ft / speed
-        if label.startswith('Speed under'):
-            base, runs = baselines(self.rows(self.also(entry, 'the trailing year'))), {}
-            for r in rows:
-                key = (r['production_date'], r['wet_end_id'], r['quality_id'])
-                feet, run = runs.get(key, (0.0, 0.0))
-                runs[key] = (feet + r['lineal_ft'], run + (r['seconds'] - r['stop_seconds']) / 60)
-            return sum(max(0.0, base[g] * run - feet) / base[g] for (_, _, g), (feet, run) in runs.items() if g in base and run)
         raise Unchecked(f'no quantity for the line {label!r}')
 
     def lever_usd(self, entry, j, field):
@@ -725,20 +766,24 @@ class Figures:
             if text.endswith('ft/min'):
                 return sum(r['lineal_ft'] for r in rows) / (sum(r['seconds'] - r['stop_seconds'] for r in rows) / 60), False
             return sum(r['gross_sqft'] for r in rows) / 1000, False
-        if tool == 'get_opportunities':
-            field = 'usd_per_year'
+        if tool in ('get_opportunities', 'get_shift_dollars', 'get_day_dollars'):
             if part == 'row':
-                return self.lever_usd(entry, index, field), False
+                return self.lever_usd(entry, index, 'usd'), False
+            if part == 'detail':   # a shift's side trim (PR #168): its own rows' trim over the target (or all of it), priced
+                if {r['shift'] for r in rows} != {row['shift']}:
+                    raise WrongRows(f'shift {row["shift"]}\'s side trim opens the rows of shifts {sorted({r["shift"] for r in rows})}')
+                qty = sum(self.recorded('trim', r) if row['part'] == 'all' else self.cell_gap('trim', r) for r in rows)
+                return cost_model.price('trim', round(qty, 1), self.rates)['usd'], False
+            # a total from its own receipt: the levers above standard, or every row recorded and priced (the rows shown
+            # apart too), the controllable levers, the dry-end kinds, or all the waste of the ownership lens
             levers = range(len(data['rows']))
-            if 'controllable losses' in after:
-                levers = [j for j in levers if data['rows'][j].get('control') == 'controllable']
+            if 'controllable levers' in after:
+                levers = [j for j in levers if data['rows'][j].get('control') == 'controllable' and not data['rows'][j].get('apart')]
             elif 'Dry-end waste (tag scrap)' in section:
                 levers = [j for j in levers if str(data['rows'][j]['lever']).startswith('Dry-end:')]
-            return self.total_usd(entry, url, field, levers), False   # from the total's own receipt
-        if tool in ('get_shift_dollars', 'get_day_dollars'):
-            if part == 'row':
-                return self.priced(entry, row, self.line_quantity(entry, row, url), 'usd'), False
-            return self.total_usd(entry, url, 'usd', [j for j, r in enumerate(data['rows']) if not r.get('apart')]), False
+            elif not section.lstrip('- ').startswith(('Everything recorded and priced', 'All the waste recorded')):
+                levers = [j for j in levers if not data['rows'][j].get('apart')]
+            return self.total_usd(entry, url, 'usd', levers), False
         if tool == 'get_overrun' and text.endswith(' sheets'):   # sheets at the knife: cuts x outs; over nominal, the cuts past it
             if section.startswith('- Over nominal'):
                 return sum(max(0, r['actual_cuts'] - r['nominal_cuts']) * r['outs'] for r in rows), True
@@ -904,14 +949,41 @@ class Figures:
         raise Unchecked(f'{entry["tool"]}: no check for the M of {section[:80]!r}')
 
     def _runs_under(self, entry, rows):
-        """A speed lever's wet-end runs (a run's setups on one day, run and grade) under their grade's trailing-year
-        running speed, and all of them."""
-        base, runs = baselines(self.rows(self.also(entry, 'the trailing year'))), {}
-        for r in rows:
-            key = (r['production_date'], r['wet_end_id'], r['quality_id'])
-            feet, run = runs.get(key, (0.0, 0.0))
-            runs[key] = (feet + r['lineal_ft'], run + (r['seconds'] - r['stop_seconds']) / 60)
-        return sum(1 for (_, _, g), (feet, run) in runs.items() if g in base and run and feet / run < base[g]), len(runs)
+        """A speed lever's wet-end runs (a run's part in a shift: its setups on one day, shift, run and grade, with running
+        time and a baseline) under their grade's running speed over the trailing year ending on their day, and all of them."""
+        runs = [r for cell in self.speed_runs(entry, rows).values() for r in cell]
+        return sum(1 for base, feet, run in runs if feet / run < base), len(runs)
+
+    MONEY_TOTALS = (('controllable levers', 'controllable_usd'), ('Dry-end waste (tag scrap)', 'dry_end_usd'),
+                    ('Everything recorded and priced', 'all_in_usd'), ('All the waste recorded', 'total_usd'))
+
+    @staticmethod
+    def money_shown(entry, part, index, section):
+        """(cents, printed whole dollars, bound) of a money ledger's bold figure (cost_model.whole_dollars, PR #168): a
+        line within a dollar of its cents for each cell it adds up, one shift of one day (the cell is the root: the review
+        of 82c0994; two for the ownership lens's lines, an above and an at-standard share each), a little over for the cents
+        a window priced at once differs from its cells' by."""
+        data = entry.get('data') if isinstance(entry.get('data'), dict) else {}
+        if entry.get('tool') not in ('get_opportunities', 'get_shift_dollars', 'get_day_dollars') or 'display_terms' not in data:
+            return None
+        owner = data.get('lens') == 'ownership'
+        if part == 'row':
+            row = data['rows'][index]
+            parts = 2 if owner and (row.get('above_standard_usd') is not None or row.get('group')) else 1   # an above and an at share
+        elif part == 'detail':
+            row = data['details'][index]
+            parts = 2 if row.get('part') == 'all' else 1
+        else:
+            after = section[section.index('**', section.index('**') + 2) + 2:]
+            key = next((k for words, k in Figures.MONEY_TOTALS if words in (after if words == 'controllable levers' else section)), 'total_usd')
+            row = {'usd': data.get(key), 'usd_shown': data.get(f'{key}_shown')}
+            # a figure that adds printed parts up: everything recorded is the levers, the rows at standard and each row
+            # apart; the controllable levers, the tag scrap, two shares each; all the waste, its lines
+            parts = ({'all_in_usd': 2 + sum(1 for r in data['rows'] if r.get('apart') and r.get('apart') != 'at-standard'),
+                      'controllable_usd': 2, 'dry_end_usd': 2}.get(key, 1) if not owner or key != 'total_usd' else 2 * len(data['rows']))
+        if row.get('usd_shown') is None:
+            return None
+        return row['usd'], row['usd_shown'], parts * max(1, len(data['display_terms']['cells'])) + 0.05
 
     def check(self, result, i, section):
         receipt = result['receipts'][i]
@@ -928,6 +1000,16 @@ class Figures:
         except WrongRows as exc:
             return f'{exc} over {receipt["url"]} ({entry["tool"]} {part} {index}): {section[:110]!r}'
         text, value, decimals = printed(section)
+        shown = self.money_shown(entry, part, index, section)
+        if shown is not None:
+            # A money ledger prints whole dollars that add up (PR #168): the bold figure is the step's own `*_shown`, within
+            # the allocation's bound of its cents, and the cents are what the receipt's rows recompute.
+            cents, whole, bound = shown
+            if value != whole:
+                return f'**{text}** but the step prints {whole} ({entry["tool"]} {part} {index}): {section[:110]!r}'
+            if abs(whole - cents) >= bound:
+                return f'**{text}** is {abs(whole - cents):.2f} off its cents {cents}, past the allocation\'s {bound} ({entry["tool"]} {part} {index})'
+            value = cents
         if exact is not True and exact is not False:   # the tool rounded to `exact` places and printed more
             decimals, exact = exact, False
         # A count is exact. A measure may be one unit of its last printed digit off: the tools round their rows' quantities

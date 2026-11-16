@@ -23,6 +23,7 @@ Any other line is a plain sentence: a caveat, the window and its coverage, a rep
 import re
 
 from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
+from . import cost_model
 from .records import stop_label
 from .semantic import TOOL as SEMANTIC_TOOL
 
@@ -102,7 +103,24 @@ def priced(row):
     """` · $127 ($97,795/yr)` after a quantity whose row the cost model priced; nothing for an unpriced row."""
     if row.get('usd') is None:
         return ''
-    return f' · {money(row["usd"])}' + (f' ({money(row["usd_per_year"])}/yr)' if row.get('usd_per_year') is not None else '')
+    return f' · {money(shown(row))}' + (f' ({money(row["usd_per_year"])}/yr)' if row.get('usd_per_year') is not None else '')
+
+
+def nearest_dollar(usd):
+    """The nearest whole dollar of a figure's cents, a tie to the even dollar (cost_model.nearest_dollar of to_cents)."""
+    dollars, rest = divmod(int(round(usd * 100)), 100)
+    return dollars + (1 if rest > 50 or (rest == 50 and dollars % 2) else 0)
+
+
+def formula_line(label, row):
+    """One row's pricing formula as the cost model wrote it, in cents, and the figure the row prints when that is not the
+    cents' nearest dollar (the coordinator's review of 82c0994 on PR #168, item 1: "Side trim over the 3% target: **$512**"
+    sat over a formula ending "= $513"). web/money.js formulaLine is this."""
+    line = f'How a dollar is priced, for {label}: {row["usd_basis"]}.'
+    shown, usd = row.get('usd_shown'), row.get('usd')
+    if shown is not None and usd is not None and shown != nearest_dollar(usd):
+        line += f' It prints {money(shown)} (whole dollars that add up).'
+    return line
 
 
 def money_notes(result, row=None, label=None, formula=True):
@@ -111,7 +129,10 @@ def money_notes(result, row=None, label=None, formula=True):
     data = result['data']
     if 'provenance' not in data:
         return []
-    notes = [f'How a dollar is priced, for {stop_label(row[label])}: {row["usd_basis"]}.'] if formula and row is not None and row.get('usd_basis') else []
+    notes = [formula_line(stop_label(row[label]), row)] if formula and row is not None and row.get('usd_basis') else []
+    if notes and row.get('usd_shown') is not None and result.get('tool') not in LEDGER_TOOLS:
+        # the line prints the ledger's whole dollars (PR #168), its cells' added up, and says so once on a long window
+        notes += [WHOLE_NOTE, *long_note(data)]
     return notes + [f'{data["provenance"]} {data["cost_note"]}']
 
 
@@ -119,7 +140,7 @@ def contribution(data):
     if data.get('contribution_status') == MARGIN_NOT_SET:
         return f'Contribution {MARGIN_NOT_SET}: without an owner margin no lost contribution is priced, so the dollars are paper and machine time.'
     if data.get('total_contribution_usd') is not None:
-        return f'Contribution {money(data["total_contribution_usd"])} at the set margin, not added to the losses above.'
+        return f'Contribution {money(shown(data, "total_contribution_usd"))} at the set margin, not added to the losses above.'
     return None
 
 
@@ -187,12 +208,116 @@ def gap_tag(row):
     return f' · {control}' if control and control != 'controllable' else ''
 
 
-def all_in(data):
-    """A money card's all-in total, with the gaps it shows apart (planned maintenance, a power outage; the owner on PR #111);
-    nothing when it holds none, since the recorded losses are then all of it."""
-    if not data.get('apart_gaps'):
+# ---- the one money ledger (issue #164): every money view writes its levers, its rows apart and its period to date alike
+TOP_LEVERS = 3   # an opportunity list is a top three, every other lever under "All levers" (issue #164, item 5)
+LEDGER_GROUPS = (('at-standard', 'At standard, not in the total'), ('schedule-driven', 'Schedule-driven, shown apart'),
+                 ('external', 'External, not controllable'), ('no-band', 'No band yet, shown apart'))   # cost_model.APART_LABEL
+
+
+def shown(d, key='usd'):
+    """The whole dollars a money ledger figure prints (its `<key>_shown`, PR #168: whole dollars that add up, so the parts a
+    card prints add to the totals it prints), else the figure itself."""
+    value = d.get(f'{key}_shown')
+    return d.get(key) if value is None else value
+
+
+def year_words(data):
+    """" a year at this period's rate", and whose period to date it is on a shift's window (the review of PR #168, item 3)."""
+    return ' a year at this period\'s rate' + (f' (shift {data["shift"]}\'s own)' if type(data.get('shift')) is int else '')
+
+
+WHOLE_NOTE = ('Whole dollars that add up: each shift of each production day prints its nearest dollar, its lines sharing it by '
+              'the largest remainder, and every day, window and line is its shifts\' whole dollars added up.')
+LONG_NOTE = cost_model.LONG_NOTE   # said once on a card over several production days (the review of 82c0994, item 2)
+TRIM_BY_SHIFT = 'Side trim by shift, explanatory (schedule-driven)'
+LEDGER_TOOLS = ('get_shift_dollars', 'get_day_dollars', 'get_opportunities')   # their notes carry WHOLE_NOTE (ledger_notes)
+
+
+def trim_by_shift_lines(d):
+    """Side trim by shift (the owner's word on PR #168): each shift's dollars beside its side trim % of gross and its setups
+    above the per-setup trim flag, explanatory and schedule-driven, never blame; they add to the trim line they follow."""
+    rows = d['data'].get('details') or []
+    if not rows:
+        return []
+    out = [TRIM_BY_SHIFT]
+    for i, r in enumerate(rows):
+        what = 'of side trim' if r.get('part') == 'all' else f'over the {r["band_target"]:g}% target'
+        out.append(bullet(f'Shift {r["shift"]}: **{money(shown(r))}** {what} · side trim {pval(r["trim_pct_of_gross"])}% of gross · '
+                          f'{n(r["setups_above_trim_flag"])} of {n(r["setups"])} setups above the {targets.pct(r["trim_flag_pct"])} trim flag · '
+                          'set by the order mix and web widths', d, i, 'detail'))
+    return out
+
+
+def ledger_group(row):
+    """A ledger row's group when it is not ranked (cost_model.rank_ledger): its `apart`, or schedule-driven for a lever a
+    lens leaves unranked (side trim under the supervisor lens)."""
+    return row.get('apart') or ('schedule-driven' if row.get('control') == 'schedule-driven' else 'external')
+
+
+def ptd_clause(data):
+    """` · part of $30,716 above standard in 4-4-5 P2 to date, all shifts, 11 production days · $718,045 a year at this
+    period's rate`: the period to date a shift or a day adds to, and the only yearly figure a money card states (the owner's
+    call 3 on issue #164: never a shift's or a day's own)."""
+    if data.get('ptd_usd') is None:
         return ''
-    return f' · {money(data["all_in_usd"])} all in, with the schedule-driven and external downtime'
+    year = (f' · {money(data["ptd_usd_per_year"])} a year at this period\'s rate' if data.get('ptd_usd_per_year') is not None else
+            f' · {data["ptd_year_note"]}' if data.get('ptd_year_note') else '')
+    return (f' · part of {money(shown(data, "ptd_usd"))} above standard in {data["ptd_label"]}, {data["ptd_scope"]}, '
+            f'{n(data["ptd_days"])} production day{"" if data["ptd_days"] == 1 else "s"}{year}')
+
+
+def lever_line(d, i, r, yearly=False, numbered=True, why=False):
+    """One lever: its dollars above standard, at this period's rate a year on a window, what it is read against, its owner
+    role and where to look (issue #164, item 5); never a machine adjustment. `why` (the supervisor lens) says what controls
+    it, each dry-end family its own cause (the coordinator's re-review of PR #123)."""
+    year = f' · {money(r["usd_per_year"])}{year_words(d["data"])}' if yearly and r.get('usd_per_year') is not None else ''
+    rank = f'{r["rank"]}. ' if numbered and r.get('rank') else ''
+    control = f' · {r["control"]}, {r["control_note"]}' if why else gap_tag(r)
+    return bullet(f'{rank}{r["lever"]}: **{money(shown(r))}**{year} · {r["records"]}{control} · owner role: {r["owner"]} · look at: {r["look_at"]}', d, i)
+
+
+def apart_line(d, i, r):
+    return bullet(f'{r["lever"]}: **{money(shown(r))}** · {r["apart_note"]}', d, i)
+
+
+def ledger_bullets(d, yearly=False, why=False):
+    """A ledger's lines: the top three levers, the other levers under "All levers", then each group shown apart under its
+    label (cost_model.rank_ledger's order), then everything recorded and priced."""
+    data, rows = d['data'], d['data']['rows']
+    ranked = [(i, r) for i, r in enumerate(rows) if r.get('rank')]
+    out = [lever_line(d, i, r, yearly, why=why) for i, r in ranked[:TOP_LEVERS]]
+    if len(ranked) > TOP_LEVERS:
+        out += ['All levers'] + [lever_line(d, i, r, yearly, why=why) for i, r in ranked[TOP_LEVERS:]]
+    by_shift = trim_by_shift_lines(d)   # after the group that holds the trim lever (the owner's word on PR #168)
+    if any(r.get('key') == 'trim' and r.get('rank') for r in rows):
+        out, by_shift = out + by_shift, []
+    for group, label in LEDGER_GROUPS:
+        mine = [(i, r) for i, r in enumerate(rows) if not r.get('rank') and ledger_group(r) == group]
+        if mine:
+            out += [label] + [apart_line(d, i, r) if r.get('apart') else lever_line(d, i, r, yearly, numbered=False, why=why) for i, r in mine]
+            if by_shift and any(r.get('key') == 'trim' and not r.get('apart') for _, r in mine):
+                out, by_shift = out + by_shift, []
+    if data.get('apart_gaps'):
+        out.append(bullet(f'Everything recorded and priced: **{money(shown(data, "all_in_usd"))}** · {money(shown(data, "at_standard_usd"))} '
+                          'of it at standard, the rest above standard or shown apart', d))
+    return out + by_shift
+
+
+def ledger_notes(d):
+    """A ledger's notes: the contribution, the two speeds named apart (the owner's call 2), the method, the formula of the
+    first lever and the rates."""
+    data, rows = d['data'], d['data']['rows']
+    speeds = data.get('speeds_note')
+    if speeds and data.get('observed_fpm_with_stops') is not None:
+        speeds += f' This window ran {f1(data["observed_fpm_with_stops"])} ft/min with stops, against neither.'
+    return ([x for x in [contribution(data), speeds] if x] + sentences(data.get('method_note')) + [WHOLE_NOTE] + long_note(data) +
+            (money_notes(d, rows[0], 'lever') if rows else money_notes(d)))
+
+
+def long_note(data):
+    """LONG_NOTE on a card whose window holds more than one production day, else nothing."""
+    window = data.get('window') or {}
+    return [LONG_NOTE] if (window.get('production_days_observed') or 0) > 1 else []
 
 
 def pareto_lead(rows):
@@ -216,15 +341,16 @@ def answer_sections(intent, evidence, context, period_tools, lead=None):
     semantic = [r for r in evidence if r['tool'] == SEMANTIC_TOOL]   # the semantic model's own shape (issue #117)
     evidence = [r for r in evidence if r['tool'] != SEMANTIC_TOOL]
     period = [r for r in evidence if r['tool'] in period_tools]
-    day = [r for r in evidence if r['tool'] in DAY_TOOLS]   # the day's totals are the card's (#31b) and lead it under All (#177)
+    day = [r for r in evidence if r['tool'] in DAY_TOOLS]   # the day's totals: its ledger (#164) and its KPI row (#177)
     daily = [r for r in evidence if r['tool'] not in period_tools and r['tool'] not in DAY_TOOLS]
+    day_total = next((r for r in day if r['tool'] == 'get_day_dollars'), None)   # the day's ledger leads its card (issue #164)
     lines = SemanticAnswer(semantic, context).sections() if semantic else []
     if period:
         own = intent.startswith('period_')
         lines += PeriodAnswer(intent if own else infer_period(period), period, context, inferred=not own, lead=lead).sections()
     if daily:
         own = not intent.startswith('period_') and intent != 'model'
-        lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own, day=day).sections()
+        lines += DailyAnswer(intent if own else infer_daily(daily), daily, context, inferred=not own, day_total=day_total, day=day).sections()
     return order(lines)
 
 
@@ -328,14 +454,15 @@ class DailyAnswer:
             'compare': {KPIS, 'get_downtime_breakdown', 'get_wet_end_performance'}}
 
     # The intents whose card under All leads with the day, all shifts together (issue #177, the owner's ruling of
-    # 2026-11-15), and the day total each reads (agent.DAY_LEAD_INTENTS; money reads the day's dollars, #31b).
+    # 2026-11-15), and the day total each reads (agent.DAY_LEAD_INTENTS). The money card's day ledger is #164's (day_dollars).
     DAY_LEAD = {'summary': 'get_day_kpis', 'overview': 'get_day_kpis', 'speed': 'get_day_kpis', 'quality': 'get_day_kpis',
-                'matrix': 'get_day_kpis', 'notes': 'get_day_kpis', 'orders': 'get_day_kpis', 'dollars': 'get_day_dollars'}
+                'matrix': 'get_day_kpis', 'notes': 'get_day_kpis', 'orders': 'get_day_kpis'}
 
-    def __init__(self, intent, evidence, context, inferred=False, day=()):
+    def __init__(self, intent, evidence, context, inferred=False, day_total=None, day=()):
         self.intent, self.context, self.inferred, self.generic = intent, context, inferred, False
         self.day = {r['tool']: r for r in day}
         self.shifts = group(evidence)
+        self.day_total = day_total
         self.incomplete = [s for s, tools in self.shifts.items()
                            if any(r['data']['coverage'] != 'complete' for k, r in tools.items() if not k.startswith('all:'))]
         self.complete = [s for s in self.shifts if s not in self.incomplete]
@@ -363,10 +490,6 @@ class DailyAnswer:
         return {'Maintenance': 'maintenance_pct', 'Operator': 'operator_pct', 'Scheduled': 'pm_pct', 'PM': 'pm_pct'}.get(kind, 'op_maint_pct')
 
     def focus(self):
-        if self.intent == 'dollars' and len(self.complete) > 1:
-            totals = [(self.shifts[s]['get_shift_dollars']['data']['total_usd'], s) for s in self.complete if 'get_shift_dollars' in self.shifts[s]]
-            if totals:
-                return max(totals)[1]   # the shift that lost the most dollars
         if self.intent == 'ranking' and len(self.complete) > 1:
             # the shift whose first ranking leads: the lowest speed attainment, the most downtime or rejected area
             tops = [(r['data']['rows'][0]['value'], s, r['data'].get('metric')) for s in self.complete
@@ -393,22 +516,21 @@ class DailyAnswer:
             lines.append(f'Shift {shift}: data incomplete; {len(first["data"]["excluded_records"])} excluded records. Do not rank its observed production totals.')
         if not self.complete:
             return lines
+        if self.intent == 'dollars' and self.day_total and not self.inferred:
+            return self.day_dollars(lines)
         focus = self.focus()
         shape = getattr(self, 'shape_' + self.intent, None) or self.shape_speed
         head, bullets, notes, looks = shape(focus)
         bullets += self.leftovers(focus)
         day = self.day_lead()
         if day:   # under All the day leads, all shifts together; each shift follows, the focus with its rank (#177)
-            if self.intent == 'dollars':   # the day's own gaps, ranked by dollars as the day's total ranked them
-                head, bullets, notes, _ = self.shape_dollars(focus, day)
-            else:
-                head = self.day_head(day)
+            head = self.day_head(day)
             others = [b for s in self.complete for b in [self.other(s, ranked=s == focus)] if b]
         else:
             others = [] if self.intent == 'compare' else [b for s in self.complete if s != focus for b in [self.other(s)] if b]
         if self.inferred:   # an analyst's plan: every other shift's evidence is listed too
             others += [f'- Shift {s} · {b[2:]}' for s in self.complete if s != focus for b in self.leftovers(s, all_tools=True)]
-        if others and not (day and self.intent == 'dollars'):   # several shifts: the focus shift's findings say whose they are
+        if others:   # several shifts: the focus shift's findings say whose they are
             bullets = [f'- Shift {focus} · {b[2:]}' if b.startswith('- ') and not b.startswith('- Shift ') else b for b in bullets]
         notes = list(dict.fromkeys(notes))   # two priced results name the same rates once
         out = [head, *others, *bullets, *lines, *self.all_notes(focus), *notes]   # the reported notes stay with the findings; caveats read under the charts
@@ -531,8 +653,7 @@ class DailyAnswer:
             return self.ranked(ranking, 0, prefix=f'Shift {shift}, ') if ranking else None
         if self.intent == 'dollars' and tools.get('get_shift_dollars'):
             d = tools['get_shift_dollars']
-            return bullet(f'Shift {shift}: **{money(d["data"]["total_usd"])}** of recorded losses{rank(False)} · {money(d["data"]["total_usd_per_year"])} per year'
-                          f'{all_in(d["data"])}', d)
+            return bullet(f'Shift {shift}: **{money(d["data"]["total_usd"])}** above standard', d)
         return None
 
     # ---- findings shared by several shapes
@@ -848,28 +969,41 @@ class DailyAnswer:
         dt = tools.get('get_downtime_breakdown')
         return head, [b for b in bullets if b], self.priced_notes(dt, 'down_minutes', 'category') if dt else [], looks
 
-    def shape_dollars(self, s, day=None):
-        """Where the money went in one shift (get_shift_dollars): the total, then each gap ranked by dollars as the tool ranked it.
-        With `day` (get_day_dollars under All, #177), the day's: its total leads and its gaps follow, ranked as it ranked them."""
-        d = day or self.shifts[s].get('get_shift_dollars')
+    def shape_dollars(self, s):
+        """One shift on the money ledger (get_shift_dollars, issue #164): its dollars above standard, the period to date it
+        adds to and that period's rate a year, then the top three levers, the rest, and the rows shown apart."""
+        d = self.shifts[s].get('get_shift_dollars')
         if not d:
             return self.shape_generic(s)
-        data, rows = d['data'], d['data']['rows']
-        where = self.across(data) if day else self.clause(s, low=False)
-        head = (f'**{money(data["total_usd"])}** of recorded losses{where} · {money(data["total_usd_per_year"])} per year at '
-                f'the post\'s volumes{all_in(data)} {ref(d)}')
-        yearly = lambda r: f' · {money(r["usd_per_year"])}/yr' if r.get('usd_per_year') is not None else ''
-        # a ranked gap the tool marks other than controllable says so (side trim, schedule-driven: the owner, issue #135)
-        bullets = [bullet(f'{r["rank"]}. {r["gap"]}: **{money(r["usd"])}**{yearly(r)}{gap_tag(r)}', d, i) for i, r in enumerate(rows) if not r.get('apart')]
-        # planned maintenance and a power outage: on the card with their dollars, apart from the ranked losses (the owner, PR #111)
-        for apart, label in (('schedule-driven', 'Schedule-driven, shown apart'), ('external', 'External, not controllable')):
-            mine = [(i, r) for i, r in enumerate(rows) if r.get('apart') == apart]
-            if mine:
-                bullets += [label] + [bullet(f'{r["gap"]}: **{money(r["usd"])}**{yearly(r)} · {apart}, {r["apart_note"]}', d, i) for i, r in mine]
-        notes = [x for x in [contribution(data)] if x] + (money_notes(d, rows[0], 'gap') if rows else money_notes(d))
+        data = d['data']
+        head = f'**{money(shown(data, "total_usd"))}** above standard{self.where(s) or " this shift"}{ptd_clause(data)} {ref(d)}'
         looks = [look('The downtime behind the machine-time dollars, by reason', f'Show the downtime breakdown{self.dsuffix(s)}'),
                  look('The rejected area behind the dry-end dollars, by reason', f'Show dry-end rejects by reason{self.suffix(s)}')]
-        return head, bullets, notes, looks
+        return head, ledger_bullets(d), ledger_notes(d), looks
+
+    def day_dollars(self, lines):
+        """The production day on the money ledger (get_day_dollars, issue #164): the day's dollars above standard, the
+        period to date and its rate a year, each shift's own dollars (which add to the day's), then the day's levers and
+        the rows shown apart. The day's figure leads, never one shift's."""
+        d, data = self.day_total, self.day_total['data']
+        counted = [s for s in self.complete if 'get_shift_dollars' in self.shifts[s]]
+        words = {2: 'the two', 3: 'the three'}.get(len(counted), f'the {len(counted)}')
+        head = (f'**{money(shown(data, "total_usd"))}** above standard across {words}{" complete" if self.incomplete else ""} shifts'
+                f'{ptd_clause(data)} {ref(d)}')
+        # each shift's whole dollars, its cell's (cost_model.whole_dollars: the cell is the root): they add to the day's figure
+        shifts = [bullet(f'Shift {s}: **{money(shown(self.shifts[s]["get_shift_dollars"]["data"], "total_usd"))}** above standard',
+                         self.shifts[s]['get_shift_dollars']) for s in sorted(counted)]
+        # where to look: the shift with the most downtime minutes and the one with the most dry-end rejects, all recorded
+        # (quantities, so no rate moves them), each named so the question stays on this day's scope
+        def most(keys):
+            size = lambda s: sum(r['quantity'] for r in self.shifts[s]['get_shift_dollars']['data']['rows']
+                                 if r.get('key') in keys and r.get('apart') in (None, 'at-standard'))
+            return max(sorted(counted), key=size) if counted else self.complete[0]
+        looks = [look('The downtime behind the machine-time dollars, by reason', f'Show the downtime breakdown{self.suffix(most(("operator", "maintenance")))}'),
+                 look('The rejected area behind the dry-end dollars, by reason', f'Show dry-end rejects by reason{self.suffix(most(("dry_end",)))}')]
+        notes = list(dict.fromkeys(ledger_notes(d)))
+        out = [head, *shifts, *ledger_bullets(d), *lines, *self.all_notes(counted[0] if counted else self.complete[0]), *notes]
+        return out + [LOOK, *looks]
 
     def focus_of(self, field):
         scored = [(self.kpis(self.shifts[s])[1] or {}).get(field) for s in self.complete]
@@ -900,7 +1034,7 @@ class DailyAnswer:
         if tool == 'get_rankings':
             return [self.ranked(r, 0) for r in tools.get('all:get_rankings', []) if r['data']['rows']], []
         if tool == 'get_shift_dollars':
-            return [bullet(f'Recorded losses: **{money(data["total_usd"])}** · {money(data["total_usd_per_year"])} per year', result)], money_notes(result)
+            return [bullet(f'Above standard: **{money(shown(data, "total_usd"))}**{ptd_clause(data)}', result)], money_notes(result)
         return [], []
 
     def shape_generic(self, s):
@@ -1045,7 +1179,12 @@ class PeriodAnswer:
             # the downtime review ranks on its own window's coverage, the previous window beside it (period_review): a complete
             # window whose previous one is outside the records is ranked, so it is not called incomplete
             own = lead['data'].get('window', {}).get('coverage') if lead['data'].get('tool') == 'get_downtime_review' else None
-            if own != 'complete':
+            if own != 'complete' and lead['tool'] == 'get_opportunities' and lead['data']['coverage'] == 'partial':
+                # a window the records have not finished is to date, not withheld (issue #164): the ledger is its shifts so far
+                w = lead['data']['window']
+                notes = [f'The window is to date: {n(w["production_days_observed"])} of its {n(w["production_days_expected"])} production days are '
+                         'in the records, and its dollars are those shifts\' so far, ranked as they stand.', *notes]
+            elif own != 'complete':
                 notes = [f'The window is incomplete (coverage {own or lead["data"]["coverage"]}): observed values only, and rankings are withheld.', *notes]
         notes = list(dict.fromkeys(notes))
         out = [head, *others, *[b for b in bullets if b], *dict.fromkeys(windows), *notes]
@@ -1364,69 +1503,62 @@ class PeriodAnswer:
         return head, bullets, notes, self.window_looks(data, ('speed', 'trend_speed'))
 
     def period_money(self, tools, o):
-        """Where the money is over a window (get_opportunities): the levers' total a year, then each lever as the tool ranked it,
-        marked controllable or schedule-driven. The supervisor and ownership lenses (issue #101) read the same rows their way."""
-        data, rows = o['data'], o['data']['rows']
+        """A window on the money ledger (get_opportunities, issue #164): its dollars above standard and the scope's period
+        to date at this period's rate a year, then the top three levers, the rest and the rows shown apart. The supervisor
+        and ownership lenses (issue #101) read the same ledger their way."""
+        data = o['data']
         if data.get('lens') == 'supervisor':
             return self.money_supervisor(o)
         if data.get('lens') == 'ownership':
             return self.money_ownership(o)
-        if data.get('total_usd_per_year') is not None:
-            head = f'**{money(data["total_usd_per_year"])} a year** across {len(rows)} levers{self.where(data)} · {money(data["total_usd"])} in this window {ref(o)}'
-        else:
-            head = f'**{money(data["total_usd"])}** across {len(rows)} levers in this window{self.where(data)} {ref(o)}'
-        bullets = [bullet(f'{r["rank"]}. {r["lever"]}: **{money(r["usd_per_year"])}/yr**' if r.get('usd_per_year') is not None else
-                          f'{r["rank"]}. {r["lever"]}: **{money(r["usd"])}** in the window', o, i) + ''
-                   for i, r in enumerate(rows)]
-        bullets = [b[:b.rindex(' (query')] + f' · {r["records"]} · {r["control"]}' + b[b.rindex(' (query'):] for b, r in zip(bullets, rows)]
-        notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + (money_notes(o, rows[0], 'lever') if rows else money_notes(o))
-        return head, bullets, notes, self.window_looks(data, ('opportunity', 'pareto', 'waste'))
+        head = (f'**{money(shown(data, "total_usd"))}** above standard across {n(data["levers"])} levers{self.where(data)}'
+                f'{self.year_clause(data, data.get("total_usd_per_year"))} {ref(o)}')
+        return head, ledger_bullets(o, yearly=True), ledger_notes(o), self.window_looks(data, ('opportunity', 'pareto', 'waste'))
 
     @staticmethod
-    def lever_line(o, i, r, numbered=True):
-        figure = f'**{money(r["usd_per_year"])}/yr**' if r.get('usd_per_year') is not None else f'**{money(r["usd"])}** in the window'
-        return bullet(f'{str(r["rank"]) + ". " if numbered and r.get("rank") else ""}{r["lever"]}: {figure} · {r["records"]} · {r["control"]}, {r["control_note"]}', o, i)
+    def year_clause(data, year):
+        """` · $789,949 a year at this period's rate, from 4-4-5 P2 and P3 to date, 23 production days`: a window's yearly
+        figure is its scope's period to date, never the window's own (the owner's call 3 on issue #164)."""
+        if data.get('ptd_label') is None:
+            return ''
+        days = f'{n(data["ptd_days"])} production day{"" if data["ptd_days"] == 1 else "s"}'
+        if year is None:   # fewer than five production days to date: no yearly figure, and why (PR #168, item 2)
+            return f' · {data["ptd_year_note"]}, from {data["ptd_label"]}' if data.get('ptd_year_note') else ''
+        return f' · {money(year)}{year_words(data)}, from {data["ptd_label"]}, {days}'
 
     @staticmethod
     def dry_end_line(o):
         """The ownership lens's dry-end subtotal: bond, warp, misalignment, moisture and other are dry-end waste, the tag scrap
-        (the owner, PR #111); its dollars are the lines beneath it added up, its share and band the dry-end waste's. Each kind
-        names its own cause on its line (reject_reasons.json; the coordinator's re-review of PR #123), so the subtotal names none."""
+        (the owner, PR #111); its dollars are the lines beneath it added up, split at the dry-end band (issue #164): above
+        standard is the dry-end lever's own figure. Each kind names its own cause on its line below, so the subtotal names none."""
         d = o['data']
         kinds = [r for r in d['rows'] if r.get('group') == 'dry_end']
         control = 'controllable' if all(r['control'] == 'controllable' for r in kinds) else 'partly controllable'
-        figure = (f'**{money(d["dry_end_usd_per_year"])}/yr**' if d.get('dry_end_usd_per_year') is not None else
-                  f'**{money(d["dry_end_usd"])}** in the window')
-        return bullet(f'{d["dry_end_rank"]}. {d["dry_end_label"]}, the {n(d["dry_end_kinds"])} kinds below: {figure} · '
-                      f'{money(d["dry_end_usd"])} in this window · {pval(d["dry_end_pct_of_yield"])}% of the yield after trim and shear'
-                      f'{band(d.get("dry_end_band_text"))} · {control}, each kind\'s cause on its line', o)
+        over = f', {d["dry_end_over_records"]}' if d.get('dry_end_over_records') else ''
+        return bullet(f'{d["dry_end_rank"]}. {d["dry_end_label"]}, the {n(d["dry_end_kinds"])} kinds below: **{money(shown(d, "dry_end_usd"))}** · '
+                      f'{money(shown(d, "dry_end_at_standard_usd"))} at standard, {money(shown(d, "dry_end_above_standard_usd"))} above standard{over} · '
+                      f'{pval(d["dry_end_pct_of_yield"])}% of the yield after trim and shear{band(d.get("dry_end_band_text"))} · '
+                      f'{control}, each kind\'s cause below', o)
 
     def money_supervisor(self, o):
-        """The supervisor lens: the controllable losses ranked by dollars a year; side trim and planned maintenance after, schedule-driven;
-        then external downtime (a power outage), not controllable."""
-        data, rows = o['data'], o['data']['rows']
-        mine = [(i, r) for i, r in enumerate(rows) if r['control'] == 'controllable']
-        head = (f'**{money(data["controllable_usd_per_year"])} a year** in controllable losses across {n(data["controllable_levers"])} levers{self.where(data)} · '
-                f'{money(data["controllable_usd"])} in this window {ref(o)}' if data.get('controllable_usd_per_year') is not None else
-                f'**{money(data["controllable_usd"])}** in controllable losses in this window{self.where(data)} {ref(o)}')
-        # every controllable lever is listed: the five largest beside the headline, the others after, so a rate the visitor
-        # changes can move a lever across that line in the browser (web/money.js re-ranks them as the server does)
-        bullets = [self.lever_line(o, i, r) for i, r in mine[:5]]
-        if len(mine) > 5:
-            bullets += ['The other controllable levers'] + [self.lever_line(o, i, r) for i, r in mine[5:]]
-        for control, label in (('schedule-driven', 'Schedule-driven, shown apart'), ('external', 'External, not controllable')):
-            rest = [(i, r) for i, r in enumerate(rows) if r['control'] == control]
-            if rest:   # the tool lists each group apart (cost_model.APART), so a re-rank in the browser keeps it under its label
-                bullets += [label] + [self.lever_line(o, i, r, numbered=False) for i, r in rest]
-        notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + (money_notes(o, mine[0][1], 'lever') if mine else money_notes(o))
-        return head, bullets, notes, self.window_looks(data, ('pareto', 'waste', 'opportunity'))
+        """The supervisor lens: the controllable levers ranked, each its gap to its band; side trim (schedule-driven) after,
+        with the rows shown apart."""
+        data = o['data']
+        head = (f'**{money(shown(data, "controllable_usd"))}** in controllable levers above standard across {n(data["controllable_levers"])} '
+                f'levers{self.where(data)}{self.year_clause(data, data.get("controllable_usd_per_year"))} {ref(o)}')
+        return head, ledger_bullets(o, yearly=True, why=True), ledger_notes(o), self.window_looks(data, ('pareto', 'waste', 'opportunity'))
 
     def money_ownership(self, o):
-        """The ownership lens: the total cost of waste in dollars, side trim first (every owner asks what trim costs)."""
+        """The ownership lens: the total cost of waste, side trim first (every owner asks what trim costs), each banded line
+        split into its cost at standard and above standard, the levers' own figure (issue #164)."""
         data, rows = o['data'], o['data']['rows']
         trim = rows[0]
-        figure = f'**{money(trim["usd_per_year"])} a year**' if trim.get('usd_per_year') is not None else f'**{money(trim["usd"])}**'
-        head = (f'Side trim costs {figure}{self.where(data)} · {money(trim["usd"])} in this window · {pval(trim["pct_of_gross"])}% of gross'
+        year = f' · {money(trim["usd_per_year"])}{year_words(data)}' if trim.get('usd_per_year') is not None else ''
+        over = f', {trim["over_records"]}' if trim.get('over_records') else ''
+        # within forty words with the shifts over the band and a shift's own yearly figure (PR #168's fix round): the window is
+        # the card's, and that above standard is the trim lever's own figure is the notes' (the lens's method note)
+        head = (f'Side trim costs **{money(shown(trim))}**{self.where(data)} · {money(shown(trim, "at_standard_usd"))} at standard and '
+                f'{money(shown(trim, "above_standard_usd"))} above standard{over}{year} · {pval(trim["pct_of_gross"])}% of gross'
                 f'{band(trim.get("band_text"))} {ref(o, 0)}')
         bullets = []
         for i, r in enumerate(rows):
@@ -1434,11 +1566,23 @@ class PeriodAnswer:
                 continue
             if r.get('group') == 'dry_end' and rows[i - 1].get('group') != 'dry_end':
                 bullets.append(self.dry_end_line(o))   # the tag scrap as one line, each kind beneath it (the owner, PR #111)
-            bullets.append(self.lever_line(o, i, r, numbered=not r.get('group')))
-        total = (f'**{money(data["total_usd_per_year"])} a year**' if data.get('total_usd_per_year') is not None else f'**{money(data["total_usd"])}**')
-        bullets.append(bullet(f'All the waste recorded: {total} across {len(rows)} kinds · {money(data["total_usd"])} in this window', o))
-        notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + money_notes(o, trim, 'lever')
+            bullets.append(self.ownership_line(o, i, r))
+        bullets.append(bullet(f'All the waste recorded: **{money(shown(data, "total_usd"))}** across {len(rows)} kinds · '
+                              f'{money(shown(data, "at_standard_usd"))} at standard, {money(shown(data, "above_standard_usd"))} above standard, '
+                              f'{money(shown(data, "no_band_usd"))} with no band yet{self.year_clause(data, data.get("total_usd_per_year"))}', o))
+        bullets += trim_by_shift_lines(o)
+        notes = [x for x in [contribution(data)] if x] + sentences(data.get('method_note')) + [WHOLE_NOTE] + long_note(data) + money_notes(o, trim, 'lever')
         return head, bullets, notes, self.window_looks(data, ('trend_trim', 'waste', 'grade'))
+
+    @staticmethod
+    def ownership_line(o, i, r):
+        """One waste line of the ownership lens: its total cost, split at its band when it has one."""
+        split = (f' · {money(shown(r, "at_standard_usd"))} at standard, {money(shown(r, "above_standard_usd"))} above standard'
+                 f'{", " + r["over_records"] if r.get("over_records") else ""}'
+                 if r.get('above_standard_usd') is not None else '')
+        year = f' · {money(r["usd_per_year"])}{year_words(o["data"])}' if r.get('usd_per_year') is not None else ''
+        rank = f'{r["rank"]}. ' if r.get('rank') else ''
+        return bullet(f'{rank}{r["lever"]}: **{money(shown(r))}**{split}{year} · {r["records"]} · {r["control"]}, {r["control_note"]}', o, i)
 
     def period_review(self, tools, r):
         """The owner's downtime answer (get_downtime_review, issue #101): maintenance and operator downtime against their

@@ -23,6 +23,17 @@ EXTERNAL_REASONS = frozenset(EXTERNAL['reasons'])
 SHIFT_MINUTES = 480
 
 
+OWNER_TO_SET = 'owner to set'
+SPEED = DEFINITION['speed']
+
+
+def owner(measure):
+    """The role a lever names as its owner (issue #164): the band's `owner` in targets.json, `speed` for the grade
+    baseline. The owner sets the roles as he sets the margin; until he does, the role reads "owner to set"."""
+    spec = SPEED if measure == 'speed' else BANDS[measure]
+    return spec.get('owner') or OWNER_TO_SET
+
+
 def stop_kind(kind, reason):
     """The kind a stop is counted under: External for a reason the owner calls external (targets.json), whatever
     kind the record gives it; otherwise the record's own kind."""
@@ -110,7 +121,7 @@ def prompt_text():
 def client_config():
     """The bands' numbers for the card (`/api/config`): a tile whose row carries no band of its own is read against
     these, never against a threshold typed into web/app.js."""
-    return {b['id']: {k: b[k] for k in ('home_run', 'target', 'flag', 'unit')} for b in DEFINITION['bands']}
+    return {b['id']: {k: b[k] for k in ('home_run', 'target', 'flag', 'unit')} | {'owner': owner(b['id'])} for b in DEFINITION['bands']}
 
 
 # The KPI tile (record_store.KPI_CATALOG) each band reads, for the period tools' one-measure rows.

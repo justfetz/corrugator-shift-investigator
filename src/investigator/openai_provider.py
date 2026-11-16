@@ -41,7 +41,9 @@ Profit, costs, staffing decisions, live machine state and plant-wide optimal imp
 # 1.3 KB, and "what drove speed" is answered offline first and by the Anthropic analyst, which plans it.
 OPENAI_OMITTED_TOOLS=frozenset({'get_shift_dollars','get_opportunities','get_speed_variance','get_day_dollars','get_downtime_review','get_day_kpis'})   # the review (issue #101) too: same byte cap; get_day_kpis (#177) is the offline planner's day total
 DOLLAR_FIELDS=('msf','paper_usd','machine_minutes','machine_time_usd','usd','usd_per_year','msf_not_made',
-               'contribution_usd','contribution_usd_per_year','contribution_status','usd_basis','price_terms','share_of_window_pct')
+               'contribution_usd','contribution_usd_per_year','contribution_status','usd_basis','price_terms','share_of_window_pct',
+               'year_terms','above_terms','at_standard_usd','above_standard_usd','all_recorded_usd',   # the money ledger's (issue #164)
+               'usd_shown','at_standard_usd_shown','above_standard_usd_shown')   # the whole dollars a card prints (PR #168)
 
 
 def compact_result(result):
@@ -54,9 +56,10 @@ def compact_result(result):
         # ranking is in dollars), never the formulas or rate rows, so a priced result stays inside the byte cap.
         for key in ('cost_note','rates','provenance','current_sums','tile_money','buckets','area_sqft','area_msf','stop_minutes','speed_minutes',
                     'waste_run_minutes','machine_minutes','msf_not_made','trim_pct_of_gross','trim_target_pct','trim_points_over',
-                    'trim_over_usd','trim_over_usd_per_year','trim_over_basis','trim_over_terms'):
+                    'trim_over_usd','trim_over_usd_per_year','trim_over_basis','trim_over_terms','ptd_terms','ptd_levers','speeds_note',
+                    'display_terms','ptd_display_terms','details'):   # the terms the card's whole dollars are allocated from, side trim by shift (PR #168)
             compact['data'].pop(key,None)   # the card's money (#31b): what the card states, not what a planner chooses by
-        keep=('usd','usd_per_year') if result['tool'] in ('get_shift_dollars','get_opportunities') else ()
+        keep=('usd_shown','usd_per_year') if result['tool'] in ('get_shift_dollars','get_opportunities') else ()   # as the card prints them (PR #168)
         for row in compact['data'].get('rows',[]):
             row.pop('source_ids',None)
             for key in DOLLAR_FIELDS:

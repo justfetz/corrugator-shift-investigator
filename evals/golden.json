@@ -3523,22 +3523,22 @@
     "status": "complete",
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of the shift in maintenance and operator downtime · (on target|flag)[^·]* · maintenance [0-9.]+%, [^·]+ · operator [0-9.]+%, ",
-     "^- .*: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$"
+     "^- .*: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · \\$[0-9,]+ \\(query 2 · row 0\\)$"
     ]
    },
-   "note": "Issue #101: a downtime question that names the shift is asked of it: the shift's downtime by reason, maintenance and operator downtime leading against their bands, each reason with its stops, minutes per stop and dollars."
+   "note": "Issue #101: a downtime question that names the shift is asked of it: the shift's downtime by reason, maintenance and operator downtime leading against their bands, each reason with its stops, minutes per stop and dollars. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed."
   },
   {
    "id": "downtime-cost-keeps-the-shifts-dollars",
    "type": "routing",
    "mode": "offline",
    "question": "What did downtime cost?",
-   "note": "Review of #111 (the reviewer subagent): the owner's downtime default sent money questions to the review, which prices nothing, so 'what did downtime cost' lost its dollars. A money question is the shift's priced downtime, as before; the default is for the downtime answer itself.",
+   "note": "Review of #111 (the reviewer subagent): the owner's downtime default sent money questions to the review, which prices nothing, so 'what did downtime cost' lost its dollars. A money question is the shift's priced downtime, as before; the default is for the downtime answer itself. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=downtime",
     "status": "complete",
     "sections_match": [
-     "^- .*: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$"
+     "^- .*: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops?, [0-9.]+ min per stop · \\$[0-9,]+ \\(query 2 · row 0\\)$"
     ]
    }
   },
@@ -3548,7 +3548,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "What did downtime cost?",
-   "note": "Review of #111: under the production-day scope too, a money question about downtime is each shift's priced downtime, not the review (which prices nothing).",
+   "note": "Review of #111: under the production-day scope too, a money question about downtime is each shift's priced downtime, not the review (which prices nothing). Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=downtime",
     "status": "complete",
@@ -3558,7 +3558,7 @@
      3
     ],
     "sections_match": [
-     "\\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query [0-9]+ · row 0\\)$"
+     "\\$[0-9,]+ \\(query [0-9]+ · row 0\\)$"
     ]
    }
   },
@@ -3678,7 +3678,7 @@
    "type": "grounding",
    "mode": "offline",
    "question": "Why was this shift slow?",
-   "note": "Issue #75: the answer is a shape, not a paragraph. One headline (speed attainment, the asked measure, with what it is held against), three to five finding bullets with one bold figure each, every figure a value of the row it cites (the global provenance invariant), and a where-to-look list of questions the offline router answers.",
+   "note": "Issue #75: the answer is a shape, not a paragraph. One headline (speed attainment, the asked measure, with what it is held against), three to five finding bullets with one bold figure each, every figure a value of the row it cites (the global provenance invariant), and a where-to-look list of questions the offline router answers. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=overview",
     "status": "complete",
@@ -3697,7 +3697,7 @@
      ]
     },
     "sections_match": [
-     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest of [0-9]+ reasons · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row [0-9]+\\)$",
+     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, the largest of [0-9]+ reasons · \\$[0-9,]+ \\(query 2 · row [0-9]+\\)$",
      "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the slowest of [0-9]+ runs \\(query 3 · row [0-9]+\\)$"
     ],
     "sections_not_match": "ft/min including downtime; .* lineal ft\\. Maintenance"
@@ -3857,7 +3857,7 @@
      }
     ]
    },
-   "note": "Issue #75 review: an analyst's own plan is shaped by the tools it ran (here the dry-end shape), and every other result keeps its own findings in the calculated evidence: the downtime reasons and the slowest run are not dropped.",
+   "note": "Issue #75 review: an analyst's own plan is shaped by the tools it ran (here the dry-end shape), and every other result keeps its own findings in the calculated evidence: the downtime reasons and the slowest run are not dropped. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "status_in": [
      "complete"
@@ -3865,7 +3865,7 @@
     "tool_calls": 4,
     "sections_match": [
      "^\\*\\*[0-9.]+%\\*\\* of yield rejected at the dry end",
-     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, [0-9.]+% of the shift · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 3 · row 0\\)$",
+     "^- .*: \\*\\*[0-9.]+ min\\*\\* of recorded downtime, [0-9.]+% of the shift · \\$[0-9,]+ \\(query 3 · row 0\\)$",
      "^- WE[0-9]+ \\(.*\\): \\*\\*[0-9.]+%\\*\\* of its [0-9,]+ ft/min grade target, the slowest of [0-9]+ runs \\(query 4 · row [0-9]+\\)$"
     ]
    }
@@ -5792,7 +5792,7 @@
    "scope": "shift",
    "shift": 2,
    "question": "Where did the money go this shift?",
-   "note": "Issue #135 (the owner, 2026-11-12): side trim, this shift's first ranked loss, stays ranked and is tagged \" · schedule-driven\" from its row's control (targets.json's trim band lever). The first ranked line's pattern accepted any gap with no tag before; it now names side trim and requires the tag, so the line is held more tightly than it was.",
+   "note": "Issue #135 (the owner, 2026-11-12): side trim, this shift's first ranked loss, stays ranked and is tagged \" · schedule-driven\" from its row's control (targets.json's trim band lever). The first ranked line's pattern accepted any gap with no tag before; it now names side trim and requires the tag, so the line is held more tightly than it was. Issue #164 (the owner's calls of 2026-11-14): the shift card is one shift on the money ledger: its dollars above standard, the period to date it adds to and that period's rate a year in the headline, then each lever as its gap to its band. Side trim is its lever over the target, still tagged \" · schedule-driven\" (issue #135), wherever it ranks; trim at standard is shown apart. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
     "status": "complete",
@@ -5810,8 +5810,9 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes \\(query 1\\)$",
-     "^- 1\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query 1 · row 0\\)$",
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard this shift · part of \\$[0-9,]+ above standard in 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, all shifts, [0-9]+ production days · \\$[0-9,]+ a year at this period's rate \\(query 1\\)$",
+     "^- 1\\. .+: \\*\\*\\$[0-9,]+\\*\\* · .+ · owner role: owner to set · look at: .+ \\(query 1 · row 0\\)$",
+     "^- [0-9]+\\. Side trim over the 3% target: \\*\\*\\$[0-9,]+\\*\\* · [01] of 1 shift over the 3% target, side trim [0-9.]+% of gross · schedule-driven · owner role: owner to set · look at: ",
      "^Contribution margin not set"
     ]
    }
@@ -5880,13 +5881,14 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+ a year\\*\\* across [0-9]+ levers · \\$[0-9,]+ in this window \\(query 1\\)$",
-     "^- [0-9]+\\. Speed under each grade's trailing-year speed: \\*\\*\\$[0-9,]+/yr\\*\\*",
-     "^- [0-9]+\\. Downtime: Order change \\(setup time\\): \\*\\*\\$[0-9,]+/yr\\*\\*",
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across 6 levers · \\$[0-9,]+ a year at this period's rate, from 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, [0-9]+ production days \\(query 1\\)$",
+     "^- [0-9]+\\. Speed under the grade baseline: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · [0-9]+ of [0-9]+ wet-end runs under their grade baseline",
+     "^- [0-9]+\\. Operator downtime over the 2\\.5% band: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · [0-9]+ of [0-9]+ shifts over the 2\\.5% band, operator downtime [0-9.]+% of scheduled minutes",
      "^September 2026 .*, all shifts\\. Window coverage",
-     "do not prescribe a machine adjustment"
+     "never prescribe a machine adjustment"
     ]
-   }
+   },
+   "note": "Issue #164 (the owner's calls of 2026-11-14): the levers are the ledger's six, each its gap to its band (speed under each grade's baseline, operator and maintenance downtime over their bands replace each recorded reason, which is where to look), ranked by this window's dollars with a yearly figure at this period's rate from period to date. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed."
   },
   {
    "id": "money-costing-us-week-shift-2",
@@ -5979,7 +5981,7 @@
    "scope": "shift",
    "shift": 2,
    "question": "Which downtime reason is costing us the most minutes this month?",
-   "note": "Review of #31a: 'costing us' is a money word, but the question is the Pareto, whose rows carry their dollars. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts.",
+   "note": "Review of #31a: 'costing us' is a money word, but the question is the Pareto, whose rows carry their dollars. The owner's scope ruling (2026-11-13) moves its address: a number asked with no shift named answers all shifts. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=pareto&window=month",
     "status": "complete",
@@ -5999,8 +6001,8 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^How a dollar is priced, for .*: .*min x \\$1,200/hr machine time.*per year: x ",
-     "^\\*\\*[0-9.,]+ min\\*\\* at .* · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 1 · row [0-9]+\\)$"
+     "^How a dollar is priced, for .*: .*min x \\$1,200/hr machine time = \\$[0-9,.]+; contribution: margin not set\\.$",
+     "^\\*\\*[0-9.,]+ min\\*\\* at .* · \\$[0-9,]+ \\(query 1 · row [0-9]+\\)$"
     ]
    }
   },
@@ -6035,7 +6037,7 @@
    "scope": "shift",
    "shift": 2,
    "question": "Why was this week so bad in dollars?",
-   "note": "Merge of main into #31a: main answers a diagnosis over a window with the period overview; the money word took it to the levers alone. The overview stays, and its Pareto and waste rows carry their dollars.",
+   "note": "Merge of main into #31a: main answers a diagnosis over a window with the period overview; the money word took it to the levers alone. The overview stays, and its Pareto and waste rows carry their dollars. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
     "status": "complete",
@@ -6082,7 +6084,7 @@
     ],
     "sections_match": [
      "^How a dollar is priced, for .*: .*min x \\$1,200/hr machine time",
-     "^- .*: \\*\\*[0-9.,]+ min\\*\\* of downtime, .* · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query [0-9]+ · row 0\\)$"
+     "^- .*: \\*\\*[0-9.,]+ min\\*\\* of downtime, .* · \\$[0-9,]+ \\(query [0-9]+ · row 0\\)$"
     ]
    }
   },
@@ -6093,7 +6095,7 @@
    "scope": "shift",
    "shift": 2,
    "question": "What did waste cost this shift?",
-   "note": "Review of #31a: on the day grain 'waste' chose the dry-end reject breakdown, so the answer priced rejects alone and left out side trim and shear. What waste costs is trim, shear and dry-end together: the shift's dollars.",
+   "note": "Review of #31a: on the day grain 'waste' chose the dry-end reject breakdown, so the answer priced rejects alone and left out side trim and shear. What waste costs is trim, shear and dry-end together: the shift's dollars. Issue #164 (the owner's calls of 2026-11-14): what waste cost on the day grain is still the shift's money card, now the ledger: side trim, shear and dry end each as its lever above its band and its cost at standard shown apart, so the waste is all there, split at the bands; each dry-end family is where to look.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars",
     "status": "complete",
@@ -6111,9 +6113,12 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^- [0-9]+\\. Side trim: \\*\\*\\$[0-9,]+\\*\\*",
-     "^- [0-9]+\\. Shear chops: \\*\\*\\$[0-9,]+\\*\\*",
-     "^- [0-9]+\\. Dry-end: [A-Z]+: \\*\\*\\$[0-9,]+\\*\\*"
+     "^- [0-9]+\\. Side trim over the 3% target: \\*\\*\\$[0-9,]+\\*\\*",
+     "^- [0-9]+\\. Shear over the 0\\.75% target: \\*\\*\\$[0-9,]+\\*\\*",
+     "^- [0-9]+\\. Dry end over the 1% target: \\*\\*\\$[0-9,]+\\*\\*",
+     "^- Side trim at standard \\(up to 3% of gross\\): \\*\\*\\$[0-9,]+\\*\\*",
+     "^- Shear at standard \\(up to 0\\.75% of gross\\): \\*\\*\\$[0-9,]+\\*\\*",
+     "^- Dry end at standard \\(up to 1% of the yield\\): \\*\\*\\$[0-9,]+\\*\\*"
     ]
    }
   },
@@ -6177,7 +6182,7 @@
    "scope": "shift",
    "shift": 2,
    "question": "What did slow running cost us this week?",
-   "note": "Reviewer pass on the #31a fixes: the diagnosis reset caught a bare 'slow', so the cost of slow running became the overview and the speed gap went unpriced. A why/bad/killed question keeps the overview; the cost of running slow is the levers, speed gap first among them.",
+   "note": "Reviewer pass on the #31a fixes: the diagnosis reset caught a bare 'slow', so the cost of slow running became the overview and the speed gap went unpriced. A why/bad/killed question keeps the overview; the cost of running slow is the levers, speed gap first among them. Issue #164 (the owner's calls of 2026-11-14): the levers lead with the window's dollars above standard; the yearly figure is shift 2's own period to date, and the speed lever is named for the grade baseline.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=money&window=week",
     "status": "complete",
@@ -6194,8 +6199,8 @@
      }
     ],
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+ a year\\*\\* across [0-9]+ levers",
-     "^- [0-9]+\\. Speed under each grade's trailing-year speed: \\*\\*\\$[0-9,]+/yr\\*\\*"
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across 6 levers · \\$[0-9,]+ a year at this period's rate \\(shift 2's own\\)",
+     "^- [0-9]+\\. Speed under the grade baseline: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate"
     ]
    }
   },
@@ -6312,7 +6317,7 @@
    "scope": "shift",
    "shift": 2,
    "question": "Why was 275-BC slow this week in dollars?",
-   "note": "Reviewer pass on the #31a fixes: the grade word refused it before the diagnosis rule ran. Main answers the question without dollars with the overview (a grade word does not make a diagnosis speed by grade); in dollars it is the same overview, its Pareto and waste rows priced.",
+   "note": "Reviewer pass on the #31a fixes: the grade word refused it before the diagnosis rule ran. Main answers the question without dollars with the overview (a grade word does not make a diagnosis speed by grade); in dollars it is the same overview, its Pareto and waste rows priced. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=overview&window=week",
     "status": "complete",
@@ -6352,7 +6357,7 @@
      }
     ],
     "sections_match": [
-     "\\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query [0-9]+ · row [0-9]+\\)$",
+     "\\$[0-9,]+ \\(query [0-9]+ · row [0-9]+\\)$",
      "^Rates: paper \\$[0-9,.]+/MSF"
     ]
    }
@@ -6363,7 +6368,7 @@
    "mode": "offline",
    "day": "2026-09-15",
    "question": "What were the top 3 contributors to speed variations?",
-   "note": "Issue #92, the owner's question (2026-11-10): it used to route to the generic speed card. The speed gap of the shift against target, split into stops, setups, below-target running and grade mix that add up to it; three bullets for the three largest buckets, a waterfall chart, where to look. Issue #101 (the owner's speed standard, review of #111): the reference is each grade's trailing-year sustained speed (its baseline) at the usual grade mix, not its target; the grade mix is schedule-driven and unpriced, the other buckets controllable. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): on 14 September shift 2 now runs above its baseline (its mix ran fast grades), so the case is asked on Tuesday 15 September, shift 2, where it runs below and three buckets add to the gap with none pulling against it (the plain three-bullet card; the branch's four-bullet note for 14 September no longer applies).",
+   "note": "Issue #92, the owner's question (2026-11-10): it used to route to the generic speed card. The speed gap of the shift against target, split into stops, setups, below-target running and grade mix that add up to it; three bullets for the three largest buckets, a waterfall chart, where to look. Issue #101 (the owner's speed standard, review of #111): the reference is each grade's trailing-year sustained speed (its baseline) at the usual grade mix, not its target; the grade mix is schedule-driven and unpriced, the other buckets controllable. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): on 14 September shift 2 now runs above its baseline (its mix ran fast grades), so the case is asked on Tuesday 15 September, shift 2, where it runs below and three buckets add to the gap with none pulling against it (the plain three-bullet card; the branch's four-bullet note for 14 September no longer applies). Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-15/shift/2?measure=speedvar",
     "status": "complete",
@@ -6406,7 +6411,7 @@
      ]
     },
     "sections_match": [
-     "^- (Stops|Setups|Below baseline|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* (of the gap|the other way, an offset) · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) · controllable \\(query 1 · row 0\\)$",
+     "^- (Stops|Setups|Below baseline|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* (of the gap|the other way, an offset) · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ · controllable \\(query 1 · row 0\\)$",
      "^Against the baseline, the reference is each grade's baseline weighted by its share of the setup clock over the same trailing year",
      "^The buckets add up to the gap, and each bucket's details add up to it\\.$",
      "^How a dollar is priced, for .*: [0-9,.]+ lineal ft / [0-9.,]+ ft/min reference speed = [0-9,.]+ min x \\$1,200/hr machine time"
@@ -6419,7 +6424,7 @@
    "mode": "offline",
    "day": "2026-09-07",
    "question": "What were the top 3 contributors to speed variations on shift 1?",
-   "note": "Coordinator review of PR #123, item 5: the plain three-bullet speed-variance card, pinned on its own: three bullets for the three largest buckets and no offset line. Merged with #111 (issue #101, the owner's speed standard): the reference is each grade's trailing-year baseline, not its target, so the case reads the baseline card (below baseline, each controllable bucket marked, the buckets add up to the gap). On the merged records it is first shift on Monday 2026-09-07 (speedvar-top-three-contributors is second shift on Tuesday 15 September, also three bullets).",
+   "note": "Coordinator review of PR #123, item 5: the plain three-bullet speed-variance card, pinned on its own: three bullets for the three largest buckets and no offset line. Merged with #111 (issue #101, the owner's speed standard): the reference is each grade's trailing-year baseline, not its target, so the case reads the baseline card (below baseline, each controllable bucket marked, the buckets add up to the gap). On the merged records it is first shift on Monday 2026-09-07 (speedvar-top-three-contributors is second shift on Tuesday 15 September, also three bullets). Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-07/shift/1?measure=speedvar",
     "status": "complete",
@@ -6462,7 +6467,7 @@
      ]
     },
     "sections_match": [
-     "^- (Stops|Setups|Below baseline|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) · controllable \\(query 1 · row 0\\)$",
+     "^- (Stops|Setups|Below baseline|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ · controllable \\(query 1 · row 0\\)$",
      "^Against the baseline, the reference is each grade's baseline weighted by its share of the setup clock over the same trailing year",
      "^The buckets add up to the gap, and each bucket's details add up to it\\.$",
      "^How a dollar is priced, for .*: [0-9,.]+ lineal ft / [0-9.,]+ ft/min reference speed = [0-9,.]+ min x \\$1,200/hr machine time"
@@ -6477,7 +6482,7 @@
    "day": "2026-03-09",
    "scope": "day",
    "question": "Why did speed differ on shift 3 versus shift 1 this week?",
-   "note": "Review of #111 (fix 1): the speed variance still held each grade at its target and priced the grade mix as machine time. The owner's speed standard is each grade's sustained average over the trailing year (targets.json, speed), never its target or maximum, and the grade mix is decided by the order book, so it is schedule-driven: marked so and never priced. The controllable buckets (stops, setups, running under baseline) carry the dollars. Re-picked on the rolling year (issue #91): September 2026's mix is the fourth bucket and gets no line, so the case asks the week of 26 January 2026, where shift 3's heavier grade mix is 82% of its gap to shift 1. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 9 March 2026, where shift 3 runs 8.4 ft/min below shift 1 and the grade mix is one of the three lines (an offset, the other way), marked schedule-driven and not priced.",
+   "note": "Review of #111 (fix 1): the speed variance still held each grade at its target and priced the grade mix as machine time. The owner's speed standard is each grade's sustained average over the trailing year (targets.json, speed), never its target or maximum, and the grade mix is decided by the order book, so it is schedule-driven: marked so and never priced. The controllable buckets (stops, setups, running under baseline) carry the dollars. Re-picked on the rolling year (issue #91): September 2026's mix is the fourth bucket and gets no line, so the case asks the week of 26 January 2026, where shift 3's heavier grade mix is 82% of its gap to shift 1. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 9 March 2026, where shift 3 runs 8.4 ft/min below shift 1 and the grade mix is one of the three lines (an offset, the other way), marked schedule-driven and not priced. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-03-09?measure=speedvar&window=week&against=shift&shifts=3,1",
     "status": "complete",
@@ -6504,7 +6509,7 @@
      "^- Grade mix: \\*\\*[0-9.,]+ ft/min\\*\\* (of the gap|the other way, an offset) · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · schedule-driven, the order mix decides which grades run \\(query 1 · row [0-3]\\)$",
      "^- (Stops|Setups|Below baseline): \\*\\*[0-9.,]+ ft/min\\*\\* .* · controllable \\(query 1 · row [0-3]\\)$",
      "^Each grade is held at its baseline, its sustained average speed over the trailing year, never its target or its maximum\\.$",
-     "^The controllable buckets are \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); the mix, planned maintenance and external stops are not priced, nor is a bucket that ran better than the reference\\.$"
+     "^The controllable buckets are \\$[0-9,]+ of machine time; the mix, planned maintenance and external stops are not priced, nor is a bucket that ran better than the reference\\.$"
     ],
     "sections_not_match": "^- Grade mix: .*\\$",
     "shifts": [
@@ -6765,7 +6770,7 @@
    "type": "routing",
    "mode": "offline",
    "question": "What did our speed losses cost us this week?",
-   "note": "A money word beside a speed-variance question keeps the speed variance: each bucket is priced as machine time, and the whole gap on the envelope.",
+   "note": "A money word beside a speed-variance question keeps the speed variance: each bucket is priced as machine time, and the whole gap on the envelope. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=speedvar&window=week",
     "status": "complete",
@@ -6787,7 +6792,7 @@
      "render_chart"
     ],
     "sections_match": [
-     "^The controllable buckets are \\$[0-9,]+ of machine time \\(\\$[0-9,]+/yr at the post's volumes\\); the mix, planned maintenance and external stops are not priced, nor is a bucket that ran better than the reference\\.$",
+     "^The controllable buckets are \\$[0-9,]+ of machine time; the mix, planned maintenance and external stops are not priced, nor is a bucket that ran better than the reference\\.$",
      "^Contribution margin not set"
     ]
    }
@@ -6844,7 +6849,7 @@
    "day": "2026-08-31",
    "period": "month",
    "question": "Why was speed below target?",
-   "note": "Issue #92: every figure on the speed-variance card is a tool value: the gap and the shares are the envelope's, each bullet's figures its bucket row's, the reference speeds in the notes the envelope's speeds, the dollars the priced rows'. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): September's shift 2 now runs above its baseline at its month mix, so the month asked about is August 2026 (anchored on Monday 31 August), where it runs below.",
+   "note": "Issue #92: every figure on the speed-variance card is a tool value: the gap and the shares are the envelope's, each bullet's figures its bucket row's, the reference speeds in the notes the envelope's speeds, the dollars the priced rows'. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): September's shift 2 now runs above its baseline at its month mix, so the month asked about is August 2026 (anchored on Monday 31 August), where it runs below. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/month/2026-08-31/shift/2?measure=speedvar",
     "status": "complete",
@@ -6863,7 +6868,7 @@
     ],
     "sections_match": [
      "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* below baseline: (stops|setups|running under baseline|mix) [0-9.-]+%",
-     "^- (Stops|Setups|Below baseline|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* (of the gap|the other way, an offset) · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) · controllable \\(query 1 · row [0-2]\\)$",
+     "^- (Stops|Setups|Below baseline|Grade mix): \\*\\*[0-9.,]+ ft/min\\*\\* (of the gap|the other way, an offset) · -?[0-9.]+% · [0-9,]+ lineal ft · largest .* at [0-9.,]+ ft/min · \\$[0-9,]+ · controllable \\(query 1 · row [0-2]\\)$",
      "over the same trailing year, all shifts: [0-9.,]+ ft/min\\.$",
      "^This window ran [0-9.,]+ ft/min with stops; its grade baselines at its own mix make [0-9.,]+ ft/min\\.$"
     ]
@@ -6969,7 +6974,7 @@
    "day": "2026-01-26",
    "scope": "day",
    "question": "Why did speed differ on shift 2 versus shift 1 this week?",
-   "note": "Review of #92: when a window is faster than its reference the gap is a gain. Its buckets that ran worse pull the other way: offsets, priced as machine time when they are controllable losses; the gain itself is not priced, and the contribution note stays. In the week of 7 September 2026 shift 2 runs 65.3 ft/min above shift 1, mostly shift 1's planned maintenance (schedule-driven, not priced); its unplanned stops, led by missed splices, ran worse than shift 1's and pull the other way, priced. Re-anchored from the week of 26 January 2026, whose only listed offset became the planned-maintenance bucket when the owner split it out of stops (PR #111). Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 26 January 2026, where shift 2 runs 83.6 ft/min above shift 1, mostly its faster grade mix and shift 1's planned maintenance (both schedule-driven, not priced); its running under baseline and its unplanned stops, led by missed splices, ran worse than shift 1's and pull the other way, priced. The largest item of the planned bucket reads \"Planned maintenance (scheduled)\", the owner's ruling (c) on PR #123.",
+   "note": "Review of #92: when a window is faster than its reference the gap is a gain. Its buckets that ran worse pull the other way: offsets, priced as machine time when they are controllable losses; the gain itself is not priced, and the contribution note stays. In the week of 7 September 2026 shift 2 runs 65.3 ft/min above shift 1, mostly shift 1's planned maintenance (schedule-driven, not priced); its unplanned stops, led by missed splices, ran worse than shift 1's and pull the other way, priced. Re-anchored from the week of 26 January 2026, whose only listed offset became the planned-maintenance bucket when the owner split it out of stops (PR #111). Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the week of 26 January 2026, where shift 2 runs 83.6 ft/min above shift 1, mostly its faster grade mix and shift 1's planned maintenance (both schedule-driven, not priced); its running under baseline and its unplanned stops, led by missed splices, ran worse than shift 1's and pull the other way, priced. The largest item of the planned bucket reads \"Planned maintenance (scheduled)\", the owner's ruling (c) on PR #123. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-01-26?measure=speedvar&window=week&against=shift&shifts=2,1",
     "status": "complete",
@@ -6978,7 +6983,7 @@
     ],
     "sections_match": [
      "^Speed gap \\*\\*[0-9.,]+ ft/min\\*\\* on shift 2 above shift 1: ",
-     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Missed splice at [0-9.,]+ ft/min · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) · controllable \\(query 1 · row [0-9]\\)$",
+     "^- Stops: \\*\\*[0-9.,]+ ft/min\\*\\* the other way, an offset · -[0-9.]+% · [0-9,]+ lineal ft · largest Missed splice at [0-9.,]+ ft/min · \\$[0-9,]+ · controllable \\(query 1 · row [0-9]\\)$",
      "^- Planned maintenance: \\*\\*[0-9.,]+ ft/min\\*\\* of the gap · [0-9.]+% · [0-9,]+ lineal ft · largest Planned maintenance \\(scheduled\\) at [0-9.,]+ ft/min · schedule-driven, the maintenance plan sets planned stops \\(query 1 · row [0-9]\\)$",
      "^Shift 2 is faster than shift 1, so the gap is a gain and is not priced; the controllable buckets that ran worse are priced as machine time\\.$",
      "^Contribution margin not set"
@@ -7090,10 +7095,10 @@
    "id": "owner-biggest-opportunity-supervisor-lens",
    "type": "routing",
    "mode": "offline",
-   "reviewed_by": "owner",
+   "reviewed_by": "owner-pending",
    "scope": "day",
    "question": "Where's my biggest opportunity this month?",
-   "note": "Issue #101, the supervisor lens: the controllable losses ranked (maintenance and operator downtime, dry-end waste, the speed of each run under its grade's trailing-year speed, shear); side trim and planned maintenance are schedule-driven, shown apart and never ranked. Every lever is marked controllable or schedule-driven.",
+   "note": "Issue #101, the supervisor lens: the controllable losses ranked (maintenance and operator downtime, dry-end waste, the speed of each run under its grade's trailing-year speed, shear); side trim and planned maintenance are schedule-driven, shown apart and never ranked. Every lever is marked controllable or schedule-driven. Issue #164 (the owner's calls of 2026-11-14): the supervisor lens ranks the controllable levers, each its gap to its band, by this window's dollars (the top three beside the headline, the rest under \"All levers\"); side trim, schedule-driven, and planned maintenance stay unranked under \"Schedule-driven, shown apart\", as the owner ruled. The figures moved from dollars a year to the window's dollars with a yearly figure at this period's rate. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=supervisor",
     "status": "complete",
@@ -7116,10 +7121,10 @@
     ],
     "charts": 1,
     "shape": {
-     "headline_match": "^\\*\\*\\$[0-9,]+ a year\\*\\* in controllable losses across [0-9]+ levers · \\$[0-9,]+ in this window \\(query 1\\)$",
+     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* in controllable levers above standard across [0-9]+ levers · \\$[0-9,]+ a year at this period's rate, from 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, [0-9]+ production days \\(query 1\\)$",
      "bullets": [
       3,
-      5
+      3
      ],
      "look": [
       2,
@@ -7127,10 +7132,10 @@
      ]
     },
     "sections_match": [
-     "^- 1\\. .+: \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, .+ \\(query 1 · row 0\\)$",
+     "^- 1\\. .+: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · .+ · controllable, .+ · owner role: owner to set · look at: .+ \\(query 1 · row 0\\)$",
      "^Schedule-driven, shown apart$",
-     "^- Side trim over the 3% target: \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · schedule-driven, the order mix and its web widths \\(query 1 · row [0-9]+\\)$",
-     "^- Downtime: Planned maintenance \\(scheduled time\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · schedule-driven, planned maintenance is scheduled time"
+     "^- Side trim over the 3% target: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · .+ · schedule-driven, the order mix and its web widths · owner role: owner to set · look at: .+ \\(query 1 · row [0-9]+\\)$",
+     "^- Downtime: Planned maintenance \\(scheduled\\): \\*\\*\\$[0-9,]+\\*\\* · planned maintenance is scheduled time"
     ],
     "sections_not_match": "^- [0-9]+\\. (Side trim|Downtime: Planned maintenance)"
    }
@@ -7141,7 +7146,7 @@
    "mode": "offline",
    "scope": "day",
    "question": "Where's my biggest opportunity this month?",
-   "note": "The coordinator's re-review of PR #123 (2026-11-13), item 4: every dry-end family was filed as 'controllable, temperatures', so the other family (cracking, handling, paper, print) and misalignment read as temperature problems. Each family now carries its own cause from reject_reasons.json: bond and warp temperature, moisture the steam and temperature along the machine, misalignment the slitter, scorer and knife, and other its four causes in the taxonomy's order, cracking the board surface, handling after the knife, paper as received (partly controllable: receiving and roll prep) and print the pre-print. The supervisor lens shows each one beside the lever.",
+   "note": "The coordinator's re-review of PR #123 (2026-11-13), item 4: every dry-end family was filed as 'controllable, temperatures', so the other family (cracking, handling, paper, print) and misalignment read as temperature problems. Each family now carries its own cause from reject_reasons.json: bond and warp temperature, moisture the steam and temperature along the machine, misalignment the slitter, scorer and knife, and other its four causes in the taxonomy's order, cracking the board surface, handling after the knife, paper as received (partly controllable: receiving and roll prep) and print the pre-print. The supervisor lens shows each one beside the lever. Issue #164 (the owner's calls of 2026-11-14): dry end is one lever, its gap to the 1% band, so the families are no longer five levers: the one lever names each family with its own cause, as the coordinator's re-review asked, and never \"temperatures\" for all of them.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=supervisor",
     "status": "complete",
@@ -7159,11 +7164,7 @@
      }
     ],
     "sections_match": [
-     "^- [0-9]+\\. Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, temperature \\(query 1 · row [0-9]+\\)$",
-     "^- [0-9]+\\. Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, temperature \\(query 1 · row [0-9]+\\)$",
-     "^- [0-9]+\\. Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, slitter, scorer and knife \\(query 1 · row [0-9]+\\)$",
-     "^- [0-9]+\\. Dry-end: moisture \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, steam and temperature along the machine \\(query 1 · row [0-9]+\\)$",
-     "^- [0-9]+\\. Dry-end: other \\(cracking, handling, paper, print\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, board surface; handling after the knife; paper as received, partly controllable \\(receiving and roll prep\\); pre-print \\(query 1 · row [0-9]+\\)$"
+     "^- [0-9]+\\. Dry end over the 1% target: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · .+ · controllable, bond: temperature; warp: temperature; misalignment: slitter, scorer and knife; moisture: steam and temperature along the machine; other: board surface; handling after the knife; paper as received, partly controllable \\(receiving and roll prep\\); pre-print · owner role: owner to set · look at: [a-z]+ rejects by grade, the largest dry-end family \\(query 1 · row [0-9]+\\)$"
     ],
     "sections_not_match": "controllable, temperatures"
    }
@@ -7172,10 +7173,10 @@
    "id": "owner-what-does-trim-cost-ownership-lens",
    "type": "routing",
    "mode": "offline",
-   "reviewed_by": "owner",
+   "reviewed_by": "owner-pending",
    "scope": "day",
    "question": "What's trim costing us this month?",
-   "note": "Issue #101, the ownership lens: the total cost of waste in dollars, side trim first (always the largest percentage; every owner asks what trim costs), with trim's band beside its figure, then the rest by dollars and the total. Bond, warp and misalignment (and moisture, the fourth dry-end family the records hold) are dry-end waste, the tag scrap: one subtotal line ranked by its dollars, read against the yield after trim and shear with the dry-end band, and each kind kept as its own line beneath it, since the detail is what supervisors go after (the owner, PR #111, 2026-11-12). In September the tag scrap is second, ahead of shear. Issue #100 (record contract v2): the owner-approved taxonomy (2026-11-11) has a fifth dry-end family, other (cracking, handling, paper, print), so the tag scrap holds five kinds, and the changeover rejects are a line of their own, priced once (owner ruling (d) on PR #123, 2026-11-12). Shear moves to row 6 and the card to ten bullets. Those three changes follow from the owner's rulings, not from a choice here; the tag scrap is still second, ahead of shear. For the owner to confirm. The coordinator's re-review of PR #123 (2026-11-13), items 3 and 4: the lens prices every waste line of the waste breakdown once, so the cutoff-knife and stacker waste boards and planning / admin (not production waste) are levers too, which it priced zero times before, and the card lists eleven levers under trim, twelve kinds with it (thirteen bullets); the lens's total is the waste breakdown's (the value golden value-ownership-total-is-the-waste-breakdown-september). Each dry-end kind carries its own cause from reject_reasons.json (bond and warp temperature, misalignment the slitter, scorer and knife, moisture the steam and temperature along the machine, other its four causes with paper partly controllable), where every kind read 'temperatures' before. Trim, the tag scrap and shear keep their places.",
+   "note": "Issue #101, the ownership lens: the total cost of waste in dollars, side trim first (always the largest percentage; every owner asks what trim costs), with trim's band beside its figure, then the rest by dollars and the total. Bond, warp and misalignment (and moisture, the fourth dry-end family the records hold) are dry-end waste, the tag scrap: one subtotal line ranked by its dollars, read against the yield after trim and shear with the dry-end band, and each kind kept as its own line beneath it, since the detail is what supervisors go after (the owner, PR #111, 2026-11-12). In September the tag scrap is second, ahead of shear. Issue #100 (record contract v2): the owner-approved taxonomy (2026-11-11) has a fifth dry-end family, other (cracking, handling, paper, print), so the tag scrap holds five kinds, and the changeover rejects are a line of their own, priced once (owner ruling (d) on PR #123, 2026-11-12). Shear moves to row 6 and the card to ten bullets. Those three changes follow from the owner's rulings, not from a choice here; the tag scrap is still second, ahead of shear. For the owner to confirm. The coordinator's re-review of PR #123 (2026-11-13), items 3 and 4: the lens prices every waste line of the waste breakdown once, so the cutoff-knife and stacker waste boards and planning / admin (not production waste) are levers too, which it priced zero times before, and the card lists eleven levers under trim, twelve kinds with it (thirteen bullets); the lens's total is the waste breakdown's (the value golden value-ownership-total-is-the-waste-breakdown-september). Each dry-end kind carries its own cause from reject_reasons.json (bond and warp temperature, misalignment the slitter, scorer and knife, moisture the steam and temperature along the machine, other its four causes with paper partly controllable), where every kind read 'temperatures' before. Trim, the tag scrap and shear keep their places. Issue #164 (the owner's calls of 2026-11-14): what trim costs stays the total, side trim first, and is split at its band: its cost at standard and above standard, the trim lever's own figure, so the levers and this answer agree for one window. Each line leads with the window's dollars and states a yearly figure at this period's rate; the dry-end subtotal and shear are split at their bands too. Every line of the earlier check is kept, each with the new figures: the window's dollars, then a yearly figure at this period's rate. PR #168's fix round (2026-11-15): the period to date's label carries its end day (\"to date through Wed 30 Sep\", the coordinator's default), and each split line names its shifts over the band beside its split (\", 62 of 66 shifts over the 3% target\", the review's item 4), so the patterns read both; every line is still checked, with the figures the card prints, whole dollars that add up. PR #168's fix round (2026-11-15): the ownership headline drops \"in this window\" and \"the trim lever\", which the card's title and the lens's method note carry, so it stays within forty words with the shifts over the band and a shift's own yearly figure; the pattern reads the shifts over the target in their place.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=money&window=month&lens=ownership",
     "status": "complete",
@@ -7198,7 +7199,7 @@
     ],
     "charts": 1,
     "shape": {
-     "headline_match": "^Side trim costs \\*\\*\\$[0-9,]+ a year\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of gross · (home run \\(2\\.75% or under\\)|on target \\(3% or under\\)|over the 3% target, under the 3\\.25% flag|flag: over 3\\.25%, the target is 3%) \\(query 1 · row 0\\)$",
+     "headline_match": "^Side trim costs \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ at standard and \\$[0-9,]+ above standard, [0-9]+ of [0-9]+ shifts over the 3% target · \\$[0-9,]+ a year at this period's rate · [0-9.]+% of gross · (home run \\(2\\.75% or under\\)|on target \\(3% or under\\)|over the 3% target, under the 3\\.25% flag|flag: over 3\\.25%, the target is 3%) \\(query 1 · row 0\\)$",
      "bullets": [
       3,
       13
@@ -7209,18 +7210,18 @@
      ]
     },
     "sections_match": [
-     "^- 2\\. Dry-end waste \\(tag scrap\\), the 5 kinds below: \\*\\*\\$[0-9,]+/yr\\*\\* · \\$[0-9,]+ in this window · [0-9.]+% of the yield after trim and shear · (home run \\(0\\.75% or under\\)|on target \\(1% or under\\)|over the 1% target, under the 1\\.25% flag|flag: over 1\\.25%, the target is 1%) · controllable, each kind's cause on its line \\(query 1\\)$",
-     "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: bond: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-4]\\)$",
-     "^- Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: warp: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-4]\\)$",
-     "^- Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: misalignment: [0-9.]+% of the yield after trim and shear · controllable, slitter, scorer and knife \\(query 1 · row [1-4]\\)$",
-     "^- Dry-end: moisture \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: moisture: [0-9.]+% of the yield after trim and shear · controllable, steam and temperature along the machine \\(query 1 · row [1-5]\\)$",
-     "^- Dry-end: other \\(cracking, handling, paper, print\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Dry-end: other \\(cracking, handling, paper, print\\): [0-9.]+% of the yield after trim and shear · controllable, board surface; handling after the knife; paper as received, partly controllable \\(receiving and roll prep\\); pre-print \\(query 1 · row [1-5]\\)$",
-     "^- 3\\. Shear chops \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · .+ · controllable, sequencing \\(query 1 · row 6\\)$",
-     "^- 5\\. Changeover rejects \\(counted with shear\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Changeover rejects \\(counted with shear\\): [0-9.]+% of gross · controllable, sequencing \\(query 1 · row 8\\)$",
-     "^- 6\\. Stacker waste boards \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Stacker waste boards: [0-9.]+% of gross · controllable, sequencing: the boards each order change loses at the stacker \\(query 1 · row 9\\)$",
-     "^- 7\\. Cutoff-knife waste boards \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Cutoff-knife waste boards: [0-9.]+% of gross · controllable, sequencing: the boards each order change loses at the cutoff knife \\(query 1 · row 10\\)$",
-     "^- 8\\. Planning / admin \\(not production waste\\) \\(all recorded\\): \\*\\*\\$[0-9,]+/yr\\*\\* · Planning / admin \\(not production waste\\): [0-9.]+% of gross · not production waste, planning and bookkeeping \\(query 1 · row 11\\)$",
-     "^- All the waste recorded: \\*\\*\\$[0-9,]+ a year\\*\\* across 12 kinds · \\$[0-9,]+ in this window \\(query 1\\)$",
+     "^- 2\\. Dry-end waste \\(tag scrap\\), the 5 kinds below: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ at standard, \\$[0-9,]+ above standard, [0-9]+ of [0-9]+ shifts over the 1% target · [0-9.]+% of the yield after trim and shear · (home run \\(0\\.75% or under\\)|on target \\(1% or under\\)|over the 1% target, under the 1\\.25% flag|flag: over 1\\.25%, the target is 1%) · controllable, each kind's cause below \\(query 1\\)$",
+     "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Dry-end: bond: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-4]\\)$",
+     "^- Dry-end: warp \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Dry-end: warp: [0-9.]+% of the yield after trim and shear · controllable, temperature \\(query 1 · row [1-4]\\)$",
+     "^- Dry-end: misalignment \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Dry-end: misalignment: [0-9.]+% of the yield after trim and shear · controllable, slitter, scorer and knife \\(query 1 · row [1-4]\\)$",
+     "^- Dry-end: moisture \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Dry-end: moisture: [0-9.]+% of the yield after trim and shear · controllable, steam and temperature along the machine \\(query 1 · row [1-5]\\)$",
+     "^- Dry-end: other \\(cracking, handling, paper, print\\) \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Dry-end: other \\(cracking, handling, paper, print\\): [0-9.]+% of the yield after trim and shear · controllable, board surface; handling after the knife; paper as received, partly controllable \\(receiving and roll prep\\); pre-print \\(query 1 · row [1-5]\\)$",
+     "^- 3\\. Shear chops \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ at standard, \\$[0-9,]+ above standard, [0-9]+ of [0-9]+ shifts over the 0\\.75% target · \\$[0-9,]+ a year at this period's rate · Shear chops: [0-9.]+% of gross · controllable, sequencing \\(query 1 · row 6\\)$",
+     "^- 5\\. Changeover rejects \\(counted with shear\\) \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Changeover rejects \\(counted with shear\\): [0-9.]+% of gross · controllable, sequencing \\(query 1 · row 8\\)$",
+     "^- 6\\. Stacker waste boards \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Stacker waste boards: [0-9.]+% of gross · controllable, sequencing: the boards each order change loses at the stacker \\(query 1 · row 9\\)$",
+     "^- 7\\. Cutoff-knife waste boards \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Cutoff-knife waste boards: [0-9.]+% of gross · controllable, sequencing: the boards each order change loses at the cutoff knife \\(query 1 · row 10\\)$",
+     "^- 8\\. Planning / admin \\(not production waste\\) \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate · Planning / admin \\(not production waste\\): [0-9.]+% of gross · not production waste, planning and bookkeeping \\(query 1 · row 11\\)$",
+     "^- All the waste recorded: \\*\\*\\$[0-9,]+\\*\\* across 12 kinds · \\$[0-9,]+ at standard, \\$[0-9,]+ above standard, \\$[0-9,]+ with no band yet · \\$[0-9,]+ a year at this period's rate, from 4-4-5 P2 and P3 to date through Wed 30 Sep, 23 production days \\(query 1\\)$",
      "The ownership lens: the total cost of the waste recorded, side trim first"
     ],
     "sections_not_match": "^- [0-9]+\\. Dry-end: |controllable, temperatures|not as a lever here"
@@ -7230,11 +7231,11 @@
    "id": "owner-maintenance-flag-recurrence",
    "type": "routing",
    "mode": "offline",
-   "reviewed_by": "owner",
+   "reviewed_by": "owner-pending",
    "day": "2026-09-07",
    "shift": 2,
    "question": "Show maintenance downtime by reason",
-   "note": "Issue #101, a flagged maintenance shift: the owner's example is 60 maintenance minutes on first shift (12.5% of 480, five times target). The records hold no such shift until one is planted (a follow-up on top of the rolling year). A power outage is external, not maintenance (the owner on PR #111, 2026-11-12), so the case sits on a real maintenance fault: the year's largest maintenance-fault shift is third shift on 2026-09-21 (Monday), 14.65 min over 7 stops (3.05%), over the 2.5% band, led by knife / slitter jams. The flag names the shift and its supervisor slot, and the recurrence of the reason that led it: over the trailing year, the shifts on which knife jams were over the band on their own (none on shift 3: they never cross it alone) and the weeks they were among the five reasons with the most unplanned minutes (23 of 52, a chronic contributor). Re-picked from 2026-05-04 shift 1, which a 15-minute power outage put over the band. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the records' largest maintenance-fault shift, and the one knife / slitter jam flag with a full trailing year behind it, is second shift on Monday 2026-09-07 (the knife-jam story's week), 15.73 min over 7 stops (3.28%), led by knife / slitter jams, which never crossed the band alone on shift 2 (0 of 261 shifts) and were in the weekly top five 22 of 53 weeks, a chronic contributor. Changed from the owner's expectations: the date and the shift (3 to 2, in the address, the tool arguments and the flag lines); for the owner to confirm.",
+   "note": "Issue #101, a flagged maintenance shift: the owner's example is 60 maintenance minutes on first shift (12.5% of 480, five times target). The records hold no such shift until one is planted (a follow-up on top of the rolling year). A power outage is external, not maintenance (the owner on PR #111, 2026-11-12), so the case sits on a real maintenance fault: the year's largest maintenance-fault shift is third shift on 2026-09-21 (Monday), 14.65 min over 7 stops (3.05%), over the 2.5% band, led by knife / slitter jams. The flag names the shift and its supervisor slot, and the recurrence of the reason that led it: over the trailing year, the shifts on which knife jams were over the band on their own (none on shift 3: they never cross it alone) and the weeks they were among the five reasons with the most unplanned minutes (23 of 52, a chronic contributor). Re-picked from 2026-05-04 shift 1, which a 15-minute power outage put over the band. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): the records' largest maintenance-fault shift, and the one knife / slitter jam flag with a full trailing year behind it, is second shift on Monday 2026-09-07 (the knife-jam story's week), 15.73 min over 7 stops (3.28%), led by knife / slitter jams, which never crossed the band alone on shift 2 (0 of 261 shifts) and were in the weekly top five 22 of 53 weeks, a chronic contributor. Changed from the owner's expectations: the date and the shift (3 to 2, in the address, the tool arguments and the flag lines); for the owner to confirm. Issue #164 (the owner's call 3: a yearly figure only from period to date, never a shift's, a day's or a window's own): a priced row outside the money ledger states its window's dollars only, so the \"($…/yr)\" after them is gone from the pattern; nothing else changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-07/shift/2?measure=downtime&kind=maintenance",
     "status": "complete",
@@ -7272,7 +7273,7 @@
      ]
     },
     "sections_match": [
-     "^- Knife / slitter jam: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops, [0-9.]+ min per stop · \\$[0-9,]+ \\(\\$[0-9,]+/yr\\) \\(query 2 · row 0\\)$",
+     "^- Knife / slitter jam: \\*\\*[0-9.]+%\\*\\* of the shift · [0-9.]+ min over [0-9]+ stops, [0-9.]+ min per stop · \\$[0-9,]+ \\(query 2 · row 0\\)$",
      "^Flags and who to ask$",
      "^- Shift 2, 2026-09-07: \\*\\*[0-9.]+%\\*\\* of the shift in maintenance downtime · flag: over 2\\.5% · [0-9.]+ min over [0-9]+ stops · ask the shift 2 supervisor \\(Crew [ABC] on duty\\) \\(query 2 · flag 0\\)$",
      "^- Shift 2, Knife / slitter jam led it with [0-9.]+ min: over the band on its own on \\*\\*0\\*\\* of [0-9]+ shifts since [0-9-]+, shift 2 · in the weekly top five [1-9][0-9]* of [0-9]+ weeks \\(query 2 · flag 0\\)$"
@@ -7506,11 +7507,11 @@
    "id": "money-card-planned-maintenance-apart",
    "type": "routing",
    "mode": "offline",
-   "reviewed_by": "owner",
+   "reviewed_by": "owner-pending",
    "day": "2025-08-21",
    "shift": 1,
    "question": "Where did the money go this shift?",
-   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes, $2,580 at the post's rates: it was the shift's second-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): first shift on Thursday 2025-08-21 holds a 129-minute planned maintenance window, $2,580 at the post's rates, apart from the ranked losses; shear chops are second. The card also carries the changeover rejects and the cutoff-knife and stacker waste boards as their own gaps (owner ruling (d) on PR #123). Changed from the owner's expectations: the date only. Owner ruling (c) on PR #123 (2026-11-12): a planned stop reads as its reason and its kind both, \"Planned maintenance (scheduled)\", wherever it shows, never as a bare code, so the gap reads \"Downtime: Planned maintenance (scheduled)\" (the coordinator's re-review, item 5, 2026-11-13); where it read \"Downtime: Planned maintenance\" before, only the label changed. Its line still says \"planned maintenance is scheduled time\".",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. First shift on Thursday 2026-09-17 holds the weekly planned maintenance window, 129 minutes, $2,580 at the post's rates: it was the shift's second-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): first shift on Thursday 2025-08-21 holds a 129-minute planned maintenance window, $2,580 at the post's rates, apart from the ranked losses; shear chops are second. The card also carries the changeover rejects and the cutoff-knife and stacker waste boards as their own gaps (owner ruling (d) on PR #123). Changed from the owner's expectations: the date only. Owner ruling (c) on PR #123 (2026-11-12): a planned stop reads as its reason and its kind both, \"Planned maintenance (scheduled)\", wherever it shows, never as a bare code, so the gap reads \"Downtime: Planned maintenance (scheduled)\" (the coordinator's re-review, item 5, 2026-11-13); where it read \"Downtime: Planned maintenance\" before, only the label changed. Its line still says \"planned maintenance is scheduled time\". Issue #164 (the owner's calls of 2026-11-14): the planned maintenance window stays on the card with its $2,580, apart and unranked under \"Schedule-driven, shown apart\", outside the total, as the owner ruled; it carries no yearly figure (a yearly figure is the period to date's only). The shift's shear, 0.53% of gross, is inside its 0.75% band, so it is $0 above standard and its cost is shown at standard, where the pattern now looks for it (it was the second-ranked loss when every shear chop was a loss). PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
    "expect": {
     "url": "/corr/1/day/2025-08-21/shift/1?measure=dollars",
     "status": "complete",
@@ -7518,10 +7519,10 @@
      1
     ],
     "shape": {
-     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 1\\)$",
+     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* above standard this shift · part of \\$[0-9,]+ above standard in 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, all shifts, [0-9]+ production days · \\$[0-9,]+ a year at this period's rate \\(query 1\\)$",
      "bullets": [
       3,
-      14
+      3
      ],
      "look": [
       2,
@@ -7530,8 +7531,9 @@
     },
     "sections_match": [
      "^Schedule-driven, shown apart$",
-     "^- Downtime: Planned maintenance \\(scheduled\\): \\*\\*\\$2,580\\*\\* · \\$[0-9,]+/yr · schedule-driven, planned maintenance is scheduled time \\(query 1 · row [0-9]+\\)$",
-     "^- 2\\. Shear chops: \\*\\*\\$[0-9,]+\\*\\*"
+     "^- Downtime: Planned maintenance \\(scheduled\\): \\*\\*\\$2,580\\*\\* · planned maintenance is scheduled time \\(query 1 · row [0-9]+\\)$",
+     "^At standard, not in the total$",
+     "^- Shear at standard \\(up to 0\\.75% of gross\\): \\*\\*\\$[0-9,]+\\*\\*"
     ],
     "sections_not_match": "^- [0-9]+\\. Downtime: (Planned maintenance|Power outage)|^External, not controllable$|^- Downtime: Planned maintenance: "
    }
@@ -7540,11 +7542,11 @@
    "id": "money-card-power-outage-apart",
    "type": "routing",
    "mode": "offline",
-   "reviewed_by": "owner",
+   "reviewed_by": "owner-pending",
    "day": "2025-11-21",
    "shift": 3,
    "question": "Where did the money go this shift?",
-   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Third shift on 2026-09-16 had the September power outage, 11 minutes, $220: it was the shift's seventh-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): third shift on Friday 2025-11-21 had an 11-minute power outage, $220, apart from the ranked losses (ranked, it would have been ninth). Changed from the owner's expectations: the date only; for the owner to confirm.",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Third shift on 2026-09-16 had the September power outage, 11 minutes, $220: it was the shift's seventh-ranked loss. Re-picked on record contract v2's records (issue #100: the data regenerated from 1 January 2025, merged with #111): third shift on Friday 2025-11-21 had an 11-minute power outage, $220, apart from the ranked losses (ranked, it would have been ninth). Changed from the owner's expectations: the date only; for the owner to confirm. Issue #164 (the owner's calls of 2026-11-14): the outage stays on the card with its $220, apart and unranked under \"External, not controllable\", outside the total. One ledger names it the same way in every money view, \"Downtime: Power outage (external)\" as the lenses did; it carries no yearly figure. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
    "expect": {
     "url": "/corr/1/day/2025-11-21/shift/3?measure=dollars",
     "status": "complete",
@@ -7552,10 +7554,10 @@
      3
     ],
     "shape": {
-     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 1\\)$",
+     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* above standard this shift · part of \\$[0-9,]+ above standard in 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, all shifts, [0-9]+ production days · \\$[0-9,]+ a year at this period's rate \\(query 1\\)$",
      "bullets": [
       3,
-      16
+      3
      ],
      "look": [
       2,
@@ -7564,7 +7566,7 @@
     },
     "sections_match": [
      "^External, not controllable$",
-     "^- Downtime: Power outage: \\*\\*\\$220\\*\\* · \\$[0-9,]+/yr · external, outside the plant, not controllable \\(query 1 · row [0-9]+\\)$"
+     "^- Downtime: Power outage \\(external\\): \\*\\*\\$220\\*\\* · outside the plant, not controllable \\(query 1 · row [0-9]+\\)$"
     ],
     "sections_not_match": "^- [0-9]+\\. Downtime: (Planned maintenance|Power outage)|^Schedule-driven, shown apart$"
    }
@@ -7573,21 +7575,29 @@
    "id": "money-day-ranks-shifts-without-the-outage",
    "type": "routing",
    "mode": "offline",
-   "reviewed_by": "owner",
+   "reviewed_by": "owner-pending",
    "day": "2026-09-16",
    "scope": "day",
    "question": "Where did the money go?",
-   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Across 2026-09-16 the shifts are ranked by their recorded losses without the outage: third shift's $7,418 held the $220 outage, so without it first shift, $7,335, lost the most; the outage stays on third shift's line, apart. Seven tool calls (each shift's dollars and the day's, which prices them again), so the budget is 500 ms, as for the shift comparisons. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the day's recorded losses lead (get_day_dollars, the outage apart and in the all-in total), the day's gaps follow ranked without the outage, and first shift's line says it lost the most of the three, ranked without the outage as before; third shift's line keeps its outage in its all-in total.",
+   "note": "The owner's ruling on PR #111 (2026-11-12): planned maintenance and power outages are on the money cards with their dollars, apart from the ranked recorded losses (planned maintenance under \"Schedule-driven\", the outage under \"External, not controllable\"), as the lenses show them. The ranking and the headline's total leave them out; the headline also states the all-in total. Across 2026-09-16 the shifts are ranked by their recorded losses without the outage: third shift's $7,418 held the $220 outage, so without it first shift, $7,335, lost the most; the outage stays on third shift's line, apart. Seven tool calls (each shift's dollars and the day's, which prices them again), so the budget is 500 ms, as for the shift comparisons. Issue #164 (the owner's calls of 2026-11-14): the all-shifts card no longer leads with the shift that lost the most: it leads with the day's own ledger, which the outage never enters (it is apart, under \"External, not controllable\"), and each shift's line is that shift's dollars above standard, which add to the day's. So an outage still never decides the day's money. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
    "expect": {
     "url": "/corr/1/day/2026-09-16?measure=dollars",
     "status": "complete",
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses across the three shifts · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime ",
-     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* of recorded losses, the highest of the three shifts · ",
-     "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 3\\)$"
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across the three shifts · part of \\$[0-9,]+ above standard in 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, all shifts, [0-9]+ production days · \\$[0-9,]+ a year at this period's rate \\(query 4\\)$",
+     "^External, not controllable$",
+     "^- Downtime: Power outage \\(external\\): \\*\\*\\$[0-9,]+\\*\\* · outside the plant, not controllable \\(query 4 · row [0-9]+\\)$",
+     "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 3\\)$"
     ],
-    "sections_not_match": "^- (Shift [123] · )?[0-9]+\\. Downtime: (Planned maintenance|Power outage)",
-    "max_ms": 500
+    "sections_not_match": "^- [0-9]+\\. Downtime: |^- Shift [123]: .*(all in|per year|a year)",
+    "max_ms": 500,
+    "money_checks": [
+     {
+      "check": "headline_figure",
+      "tool": "get_day_dollars",
+      "field": "total_usd"
+     }
+    ]
    }
   },
   {
@@ -7598,7 +7608,7 @@
    "day": "2025-08-21",
    "shift": 1,
    "question": "Where did the money go this shift?",
-   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). First shift on Thursday 2025-08-21 (the shift of money-card-planned-maintenance-apart, re-picked by PR #123) has side trim as a ranked loss: its line reads \" · schedule-driven\" after its dollars a year and nothing else changes. No other ranked line carries the tag, side trim is never listed apart or unranked, and the line names no reason (the supervisor lens's lever line does). The recorded-loss total still counts trim (the value cases value-dollars-* hold total_usd to the record sums).",
+   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). First shift on Thursday 2025-08-21 (the shift of money-card-planned-maintenance-apart, re-picked by PR #123) has side trim as a ranked loss: its line reads \" · schedule-driven\" after its dollars a year and nothing else changes. No other ranked line carries the tag, side trim is never listed apart or unranked, and the line names no reason (the supervisor lens's lever line does). The recorded-loss total still counts trim (the value cases value-dollars-* hold total_usd to the record sums). Issue #164 (the owner's calls of 2026-11-14): side trim is its lever over the target, ranked by its dollars above standard and tagged \" · schedule-driven\" wherever it ranks (the owner's #135); its cost inside the band is shown apart, at standard. No other ranked line carries the tag, and the lever is never listed unranked. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
    "expect": {
     "url": "/corr/1/day/2025-08-21/shift/1?measure=dollars",
     "status": "complete",
@@ -7606,10 +7616,10 @@
      1
     ],
     "shape": {
-     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses · \\$[0-9,]+ per year at the post's volumes · \\$[0-9,]+ all in, with the schedule-driven and external downtime \\(query 1\\)$",
+     "headline_match": "^\\*\\*\\$[0-9,]+\\*\\* above standard this shift · part of \\$[0-9,]+ above standard in 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, all shifts, [0-9]+ production days · \\$[0-9,]+ a year at this period's rate \\(query 1\\)$",
      "bullets": [
       3,
-      14
+      3
      ],
      "look": [
       2,
@@ -7617,11 +7627,11 @@
      ]
     },
     "sections_match": [
-     "^- [0-9]+\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query 1 · row [0-9]+\\)$",
-     "^- [0-9]+\\. Shear chops: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr \\(query 1 · row [0-9]+\\)$",
-     "^Schedule-driven, shown apart$"
+     "^- [0-9]+\\. Side trim over the 3% target: \\*\\*\\$[0-9,]+\\*\\* · [01] of 1 shift over the 3% target, side trim [0-9.]+% of gross · schedule-driven · owner role: owner to set · look at: .+ \\(query 1 · row [0-9]+\\)$",
+     "^Schedule-driven, shown apart$",
+     "^- Side trim at standard \\(up to 3% of gross\\): \\*\\*\\$[0-9,]+\\*\\*"
     ],
-    "sections_not_match": "^- Side trim|^- [0-9]+\\. (?!Side trim: ).* · schedule-driven|Side trim: .* · schedule-driven, "
+    "sections_not_match": "^- Side trim over|^- [0-9]+\\. (?!Side trim over the 3% target: ).* · schedule-driven|Side trim over the 3% target: .* · schedule-driven, "
    }
   },
   {
@@ -7632,15 +7642,1109 @@
    "day": "2025-08-21",
    "scope": "day",
    "question": "Where did the money go?",
-   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). Across Thursday 2025-08-21 the focus shift's gaps are listed ranked: its side-trim line carries \" · schedule-driven\", ranked, and no other ranked line does. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage. Re-pointed for issue #177, the owner's ruling of 2026-11-15: under All a day card leads with the day, all shifts together, and each shift follows as a finding, so the gaps listed ranked are the day's own (get_day_dollars), not the focus shift's: the day's side-trim line carries \" · schedule-driven\", ranked, and no other ranked line does.",
+   "note": "Issue #135, the owner's ruling of 2026-11-12: on the money cards side trim stays ranked among the recorded losses but is tagged schedule-driven, as the supervisor lens and targets.json (the trim band's lever) already treat it: the order and width pairing the scheduler chose sets most of the trim, not the crew. Planned maintenance and outages already sit apart (#111). Across Thursday 2025-08-21 the focus shift's gaps are listed ranked: its side-trim line carries \" · schedule-driven\", ranked, and no other ranked line does. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage. Issue #164 (the owner's calls of 2026-11-14): the day card lists the day's own levers (get_day_dollars, query 4), not one shift's; side trim's lever keeps its tag there.",
    "expect": {
     "url": "/corr/1/day/2025-08-21?measure=dollars",
     "status": "complete",
     "sections_match": [
-     "^- [0-9]+\\. Side trim: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+/yr · schedule-driven \\(query [0-9]+ · row [0-9]+\\)$"
+     "^- [0-9]+\\. Side trim over the 3% target: \\*\\*\\$[0-9,]+\\*\\* · [0-3] of 3 shifts over the 3% target, side trim [0-9.]+% of gross · schedule-driven · owner role: owner to set · look at: .+ \\(query 4 · row [0-9]+\\)$"
     ],
-    "sections_not_match": "^- (Shift [123] · )?Side trim|^- (Shift [123] · )?[0-9]+\\. (?!Side trim: ).* · schedule-driven",
+    "sections_not_match": "^- Side trim over|^- [0-9]+\\. (?!Side trim over the 3% target: ).* · schedule-driven",
     "max_ms": 500
+   }
+  },
+  {
+   "id": "money-day-headline-is-the-day-ledger",
+   "type": "routing",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "scope": "day",
+   "question": "Where did the money go?",
+   "note": "Issue #164 (the owner, 2026-11-14: \"no money jumping around\"; one window's figure reads the same in every view and a shift's dollars add to its day). Finding 4c: the all-shifts day card led with one shift's total (shift 1's $8,442 on 2026-09-14) while its own dollar line, get_day_dollars, said the day's. The headline is the day's own ledger (query 4), and each shift's line adds to it. Seven tool calls, so the budget is 500 ms, as for the other all-shifts money cases. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "money_checks": [
+     {
+      "check": "headline_figure",
+      "tool": "get_day_dollars",
+      "field": "total_usd"
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across the three shifts · part of \\$[0-9,]+ above standard in 4-4-5 P[0-9]+ to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, all shifts, [0-9]+ production days · \\$[0-9,]+ a year at this period's rate \\(query 4\\)$",
+     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 1\\)$"
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-shifts-one-yearly-figure",
+   "type": "routing",
+   "mode": "offline",
+   "day": "2026-09-14",
+   "scope": "day",
+   "question": "Where did the money go?",
+   "note": "Issue #164 (the owner, 2026-11-14: \"no money jumping around\"; one window's figure reads the same in every view and a shift's dollars add to its day). Finding 1: each shift's paper was annualized on its own gross, so on 2026-09-14 shift 1 lost $8,442 and showed $5,733,431 a year while shift 3 lost less, $8,332, and showed $7,018,313: two shifts whose losses and yearly figures disagree in order. A yearly figure comes only from period to date (the owner's call 3): every shift's card states the machine's one period-to-date rate, and no shift line states a yearly figure of its own.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "one_yearly_figure",
+      "tool": "get_shift_dollars"
+     }
+    ],
+    "sections_not_match": "^- Shift [123]: .*(per year|/yr|a year)",
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-on-target-trim-not-first",
+   "type": "routing",
+   "mode": "offline",
+   "day": "2026-09-09",
+   "scope": "shift",
+   "shift": 2,
+   "question": "Where did the money go this shift?",
+   "note": "Issue #164 (the owner, 2026-11-14: \"no money jumping around\"; one window's figure reads the same in every view and a shift's dollars add to its day). Finding 2: side trim inside its band was still the first loss. Second shift on 2026-09-09 ran side trim under the 3% target, yet all of it was priced and ranked first. Priced as its gap to standard (the owner's call 1), on-target trim is $0 above standard, never ranked first, and its cost inside the band is shown apart, at standard.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-09/shift/2?measure=dollars",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "sections_match": [
+     "^- [0-9]+\\. Side trim over the 3% target: \\*\\*\\$0\\*\\* · 0 of 1 shift over the 3% target, side trim [0-9.]+% of gross · schedule-driven",
+     "^At standard, not in the total$",
+     "^- Side trim at standard \\(up to 3% of gross\\): \\*\\*\\$[0-9,]+\\*\\*"
+    ],
+    "sections_not_match": "^- 1\\. Side trim"
+   }
+  },
+  {
+   "id": "money-shear-in-band-not-first",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "period": "month",
+   "question": "Where is the money this month?",
+   "note": "Issue #164 (the owner, 2026-11-14: \"no money jumping around\"; one window's figure reads the same in every view and a shift's dollars add to its day). Finding 3: some opportunities were already wins. September's levers ranked shear first, priced in full, with shear under its 0.75% target; planned maintenance and a 'Downtime: Other' reason were ranked levers too. Each lever is its gap to its band: shear inside it is $0, planned maintenance is shown apart (schedule-driven), and downtime is the operator and maintenance bands, each with an owner role and where to look.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=money",
+    "status": "complete",
+    "sections_match": [
+     "^- [0-9]+\\. Shear over the 0\\.75% target: \\*\\*\\$0\\*\\* · \\$0 a year at this period's rate · 0 of [0-9]+ shifts over the 0\\.75% target, shear [0-9.]+% of gross · owner role: owner to set · look at: ",
+     "^Schedule-driven, shown apart$",
+     "^- Downtime: Planned maintenance \\(scheduled\\): \\*\\*\\$[0-9,]+\\*\\* · planned maintenance is scheduled time"
+    ],
+    "sections_not_match": "^- 1\\. Shear|^- [0-9]+\\. Downtime: "
+   }
+  },
+  {
+   "id": "money-day-inside-band-prices-the-shifts-over",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner",
+   "day": "2026-06-10",
+   "scope": "day",
+   "question": "Where did the money go?",
+   "note": "Issue #164, the reviewer on this PR: the band is each shift's standard. On 2026-06-10 the day ran 2.98% side trim, under the 3% target, but two of its three shifts were over it, so the day's trim lever is those two shifts' sq ft over 3% (a few hundred dollars), not $0: a window-level gap would price the day at $0 while its shifts priced theirs, and the day's dollars would not be its shifts' added up (the owner's rule on #164: a shift's dollars add to its day). The lever's line leads with the shifts over the band, then the day's own share, so the two never read as a contradiction. The owner confirmed it on PR #168 (comment 6886482102, 2026-11-14, \"I think you are right\"): the band is each shift's standard, so a day inside its band still prices its shifts over the band, and the shifts add to the day.",
+   "expect": {
+    "url": "/corr/1/day/2026-06-10?measure=dollars",
+    "status": "complete",
+    "tools": [
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        2,
+        3
+       ]
+      }
+     }
+    ],
+    "money_checks": [
+     {
+      "check": "headline_figure",
+      "tool": "get_day_dollars",
+      "field": "total_usd"
+     },
+     {
+      "check": "shifts_add_to_day"
+     }
+    ],
+    "sections_match": [
+     "^- [0-9]+\\. Side trim over the 3% target: \\*\\*\\$[1-9][0-9,]*\\*\\* · 2 of 3 shifts over the 3% target, side trim 2\\.98% of gross · schedule-driven · ",
+     "^- [0-9]+\\. Shear over the 0\\.75% target: \\*\\*\\$0\\*\\* · 0 of 3 shifts over the 0\\.75% target, shear [0-9.]+% of gross · "
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-levers-agree-with-trim-cost",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "period": "month",
+   "turns": [
+    "Where is the money this month?",
+    "What does trim cost this month?"
+   ],
+   "note": "Issue #164 (the owner, 2026-11-14: \"no money jumping around\"; one window's figure reads the same in every view and a shift's dollars add to its day). Finding 4a: for one window the levers and \"what did trim cost\" were two unrelated totals. What trim costs stays the total and is split at its band: its cost above standard is the trim lever's own figure, which the second answer states. PR #168's fix round (2026-11-15): the ownership headline drops \"in this window\" and \"the trim lever\", which the card's title and the lens's method note carry, so it stays within forty words with the shifts over the band and a shift's own yearly figure; the pattern reads the shifts over the target in their place.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "views_agree",
+      "lever": "trim"
+     }
+    ],
+    "sections_match": "^Side trim costs \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ at standard and \\$[0-9,]+ above standard, [0-9]+ of [0-9]+ shifts? over the 3% target"
+   }
+  },
+  {
+   "id": "money-shift-scope-yearly-from-period-to-date",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 1,
+   "period": "month",
+   "question": "Where is the money this month?",
+   "note": "Issue #164 (the owner, 2026-11-14: \"no money jumping around\"; one window's figure reads the same in every view and a shift's dollars add to its day). Finding 7: the page lands on shift 1, so \"where is the money this month\" answered for shift 1 and annualized that to a whole machine-year (a third of the machine's gross scaled to 1.8M MSF). The yearly figure is the scope's own period to date: shift 1's dollars per production day in the 4-4-5 period to date, x the post's production days a year, and the headline says it is shift 1's. PR #168's fix round (the coordinator's default, 2026-11-15): the period to date's label carries its end day (\"4-4-5 P2 to date through Mon 14 Sep\"), so the pattern reads it there; nothing else in the pattern changed.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14/shift/1?measure=money",
+    "status": "complete",
+    "shifts": [
+     1
+    ],
+    "money_checks": [
+     {
+      "check": "yearly_from_period_to_date",
+      "tool": "get_opportunities"
+     }
+    ],
+    "sections_match": "^\\*\\*\\$[0-9,]+\\*\\* above standard across 6 levers · \\$[0-9,]+ a year at this period's rate \\(shift 1's own\\), from 4-4-5 P[0-9]+.* to date through [A-Z][a-z]{2} [0-9]+ [A-Z][a-z]{2}, [0-9]+ production days \\(query 1\\)$"
+   }
+  },
+  {
+   "id": "money-day-shift-lines-add-to-the-headline",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-06-10",
+   "url": "/corr/1/day/2026-06-10?measure=dollars",
+   "note": "the coordinator's review of PR #168 (2026-11-15), item 1, and the owner's top rule on #164 (no money jumping: every printed figure agrees across views, and every printed set of parts adds to its printed total). On 10 Jun the day card printed **$655** above standard while its shift lines printed $162 + $351 + $143 = $656, and its levers $345 + $295 + $14 = $654: each figure was rounded to the dollar on its own, so the printed parts missed the printed total by a dollar (19 of the 66 July-September days). Whole dollars now add up: the day's figure is its nearest dollar, each shift's line its share by the largest-remainder method, and each lever the shifts' whole dollars added up, so every set of parts the card prints sums to the figure it prints. displayed_sums reads the printed lines, never the cents.",
+   "expect": {
+    "url": "/corr/1/day/2026-06-10?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     },
+     {
+      "check": "headline_figure",
+      "tool": "get_day_dollars",
+      "field": "total_usd"
+     }
+    ],
+    "sections_match": [
+     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 1\\)$",
+     "^- Shift 2: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 2\\)$",
+     "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 3\\)$"
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-day-shift-lines-add-up-28-sep",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-28",
+   "url": "/corr/1/day/2026-09-28?measure=dollars",
+   "note": "the coordinator's review of PR #168 (2026-11-15), item 1: 28 Sep printed **$5,040** above standard while its three shift lines added to $5,041. Whole dollars that add up (largest remainder), as on 10 Jun.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-28?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-no-yearly-figure-from-one-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2025-01-01",
+   "url": "/corr/1/day/2025-01-01?measure=dollars",
+   "note": "the coordinator's review of PR #168 (2026-11-15), item 2: on the records' first day the card stated **$403,694 a year** at this period's rate, one production day x 257.14, labelled \"P6 of the year starting 2024-08-05\", a period that began before the records do; 2-6 Jan were the same. With fewer than five production days to date (cost_model.MIN_RATE_DAYS) there is no yearly figure, and the card says why; the period is labelled from the first day of the records.",
+   "expect": {
+    "url": "/corr/1/day/2025-01-01?measure=dollars",
+    "status": "complete",
+    "sections_not_match": "a year at this period's rate|/yr",
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across the three shifts · part of \\$[0-9,]+ above standard in 4-4-5 P6 of the year starting 2024-08-05 to date from the first day of the records, Wed 1 Jan 2025, through Wed 1 Jan, all shifts, 1 production day · no yearly figure: 1 production day to date, fewer than 5 \\(query 4\\)$"
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-ownership-shift-yearly-is-the-shifts-own",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 1,
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-14/shift/1?measure=money&lens=ownership",
+   "note": "the coordinator's review of PR #168 (2026-11-15), item 3: shift 1's ownership lens for September read \"Side trim costs $98,617 ... · $1,144,709 a year at this period's rate\" without saying the yearly figure is shift 1's own, while its total line said so. Every yearly figure of a shift-scoped answer names its shift. PR #168's fix round (2026-11-15): the ownership headline drops \"in this window\" and \"the trim lever\", which the card's title and the lens's method note carry, so it stays within forty words with the shifts over the band and a shift's own yearly figure; the pattern reads the shifts over the target in their place.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14/shift/1?measure=money&lens=ownership",
+    "status": "complete",
+    "sections_match": [
+     "^Side trim costs \\*\\*\\$[0-9,]+\\*\\* · .* · \\$[0-9,]+ a year at this period's rate \\(shift 1's own\\) · ",
+     "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate \\(shift 1's own\\) · "
+    ]
+   }
+  },
+  {
+   "id": "money-shift-scope-lever-yearly-is-the-shifts-own",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "shift": 1,
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-14/shift/1?measure=money",
+   "note": "the coordinator's review of PR #168 (2026-11-15), item 3: on shift 1's levers for September each lever line stated \"$X a year at this period's rate\" without naming whose period to date it is; the headline said \"(shift 1's own)\". Each line does now.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14/shift/1?measure=money",
+    "status": "complete",
+    "sections_match": [
+     "^- 1\\. Side trim over the 3% target: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ a year at this period's rate \\(shift 1's own\\) · "
+    ]
+   }
+  },
+  {
+   "id": "money-ownership-split-names-the-shifts-over",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-06-10",
+   "period": "day",
+   "question": "What does trim cost?",
+   "note": "the coordinator's review of PR #168 (2026-11-15), item 4: on 10 Jun the ownership lens printed \"$13,000 at standard and $345 above standard, the trim lever\" beside \"on target (3% or under)\" with no reason: the day ran 2.98%, inside the band, while two of its three shifts were over it (the band is each shift's standard, the owner's word on this PR). The split carries the shifts over the band, as the lever lines do. PR #168's fix round (2026-11-15): the ownership headline drops \"in this window\" and \"the trim lever\", which the card's title and the lens's method note carry, so it stays within forty words with the shifts over the band and a shift's own yearly figure; the pattern reads the shifts over the target in their place.",
+   "expect": {
+    "status": "complete",
+    "sections_match": [
+     "^Side trim costs \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ at standard and \\$[0-9,]+ above standard, 2 of 3 shifts over the 3% target · ",
+     "^- [0-9]+\\. Dry-end waste \\(tag scrap\\), the 5 kinds below: \\*\\*\\$[0-9,]+\\*\\* · \\$[0-9,]+ at standard, \\$[0-9,]+ above standard, 2 of 3 shifts over the 1% target · "
+    ],
+    "url": "/corr/1/day/2026-06-10?measure=money&lens=ownership"
+   }
+  },
+  {
+   "id": "money-day-trim-by-shift-inside-the-band",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-06-10",
+   "url": "/corr/1/day/2026-06-10?measure=dollars",
+   "note": "The owner's word on PR #168 (comment 6886482102, 2026-11-14): \"On the trim, you should see trim by shift. While technically it does not matter, it is an indicator of how a shift may have done, eg tight scores, big trim or tight trim. It is explanatory, but a superintendent would want to know.\" Wherever a day or a longer window shows the trim lever, each shift's line shows its side trim % of gross beside its dollars and its setups above the per-setup trim flag (shift_kpis.setups_above_trim_target), labelled explanatory and schedule-driven, never blame, even when the window is inside the band: 10 Jun ran 2.98%, under the 3% target.",
+   "expect": {
+    "url": "/corr/1/day/2026-06-10?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ],
+    "sections_match": [
+     "^Side trim by shift, explanatory \\(schedule-driven\\)$",
+     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* over the 3% target · side trim [0-9.]+% of gross · [0-9,]+ of [0-9,]+ setups above the 3\\.25% trim flag · set by the order mix and web widths \\(query 4 · detail 0\\)$",
+     "^- Shift 2: \\*\\*\\$[0-9,]+\\*\\* over the 3% target · side trim [0-9.]+% of gross · ",
+     "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* over the 3% target · side trim [0-9.]+% of gross · "
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-ownership-trim-by-shift",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-14?measure=money&lens=ownership",
+   "note": "The owner's word on PR #168 (comment 6886482102): the ownership lens's trim line shows trim by shift too, each shift's side trim (all recorded) and its share of gross, explanatory and schedule-driven; the shifts' dollars add to the line.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ],
+    "sections_match": [
+     "^Side trim by shift, explanatory \\(schedule-driven\\)$",
+     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* of side trim · side trim [0-9.]+% of gross · [0-9,]+ of [0-9,]+ setups above the 3\\.25% trim flag · "
+    ]
+   }
+  },
+  {
+   "id": "money-ownership-lines-add-up",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-14?measure=money&lens=ownership",
+   "note": "the owner's top rule on #164 (no money jumping: every printed figure agrees across views, and every printed set of parts adds to its printed total); found by the sweep of this fix round: September's ownership lens printed the tag scrap at **$97,520** above its five kinds' $97,519, and all the waste at **$521,170** above its lines' $521,171 and its three parts' (at standard, above standard, no band) $521,171. Its lines are whole dollars that add up.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-14?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-ptd-label-names-its-end-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/day/2026-09-14?measure=dollars",
+   "note": "the coordinator's review of PR #168 (2026-11-15), the coordinator's default: the \"to date\" label carries its end day, so a day card and its week can never state two yearly figures under one label (\"4-4-5 P2 to date\" read the same on 14 Sep and on 20 Sep).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars",
+    "status": "complete",
+    "sections_match": "^\\*\\*\\$[0-9,]+\\*\\* above standard across the three shifts · part of \\$[0-9,]+ above standard in 4-4-5 P2 to date through Mon 14 Sep, all shifts, 11 production days · \\$[0-9,]+ a year at this period's rate \\(query 4\\)$",
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-period-operator-tile-is-the-ledger",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/period/2026-09-14?measure=money",
+   "turns": [
+    "/corr/1/period/2026-09-14?measure=kpis",
+    "/corr/1/period/2026-09-14?measure=money"
+   ],
+   "note": "the coordinator's review of PR #168 (2026-11-15), item 9: 4-4-5 P2's KPI operator tile priced the window's operator minutes rounded once ($12,991) while the ledger rounds each shift's ($1,571 above the band + $11,419 within it = $12,990). The tile now prints the ledger's whole dollars, the lever's line and its line at standard added up.",
+   "expect": {
+    "url": "/corr/1/period/2026-09-14?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "tile_agrees",
+      "metric": "operator_pct",
+      "lever_match": "^- (?:[0-9]+\\. )?Operator downtime (?:over the|within its) [0-9.]+% band: "
+     }
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-kpi-waste-tiles-are-the-ownership-lines",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/week/2025-01-13?measure=kpis",
+    "/corr/1/week/2025-01-13?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 1, under the owner's top rule on #164 (no money jumping): the week of 13 Jan 2025's KPI tiles printed their own rounding, side trim $62,760 and the dry end $22,821, while the ownership lens for the same week printed \"Side trim costs **$62,761**\" and the tag scrap **$22,822** (the cents agree: 62,760.45 and 22,820.62). Every waste tile now prints the money ledger's whole dollars for its line.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "tile_agrees",
+      "metric": "trim_pct",
+      "lever_match": "^Side trim costs "
+     },
+     {
+      "check": "tile_agrees",
+      "metric": "dry_end_pct",
+      "lever_match": "^- (?:[0-9]+\\. )?Dry-end waste \\(tag scrap\\)"
+     },
+     {
+      "check": "tile_agrees",
+      "metric": "shear_pct",
+      "lever_match": "^- (?:[0-9]+\\. )?Shear chops \\(all recorded\\): "
+     }
+    ],
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "money-waste-breakdown-is-the-ownership-line",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/week/2025-01-13?measure=waste",
+    "/corr/1/week/2025-01-13?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 1: the waste breakdown in dollars printed its own rounding, side trim $62,760 and the dry-end rejects $22,821 in the week of 13 Jan 2025, against the ownership lens's **$62,761** and **$22,822** for the same week. Each waste line now prints the money ledger's whole dollars.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-13?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "side trim in the waste breakdown and the ownership lens",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "of gross in side trim, the largest waste · .* · \\$([0-9,]+) · "
+       },
+       {
+        "turn": 1,
+        "match": "^Side trim costs \\*\\*\\$([0-9,]+)\\*\\*"
+       }
+      ]
+     },
+     {
+      "check": "same_figure",
+      "why": "the dry-end waste in the waste breakdown and the ownership lens",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Dry-end rejects \\(all dry-end families\\): .* · \\$([0-9,]+) · "
+       },
+       {
+        "turn": 1,
+        "match": "^- (?:[0-9]+\\. )?Dry-end waste \\(tag scrap\\)[^:]*: \\*\\*\\$([0-9,]+)\\*\\*"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-waste-families-add-to-the-dry-end-line",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-01?measure=waste",
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 1: in the records' first week (30 Dec 2024 to 3 Jan 2025) the five dry-end families printed $5,018 + $3,747 + $2,523 + $716 + $526 = $12,530 under a dry-end line of $12,529, each rounded on its own. The families now share the dry-end line's whole dollars by the largest remainder.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-01?measure=waste",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "the dry-end families and the dry-end line they add to",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Dry-end: [^:]+: \\*\\*.* · \\$([0-9,]+)(?: · |$| \\()",
+        "each": true
+       },
+       {
+        "turn": 0,
+        "match": "^- Dry-end rejects \\(all dry-end families\\): .* · \\$([0-9,]+)(?: · |$| \\()"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-toggle-moves-no-shift-it-leaves-complete",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "day": "2026-02-16",
+   "shift": 1,
+   "url": "/corr/1/day/2026-02-16/shift/1?measure=dollars&corrupt=1",
+   "turns": [
+    "/corr/1/day/2026-02-16/shift/1?measure=dollars",
+    "/corr/1/day/2026-02-16/shift/1?measure=dollars&corrupt=1"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 2: the data-quality toggle excludes a record on shift 2, yet shift 1's card on 16 Feb 2026 printed **$334** without it and **$335** with it, the same $334.36 in cents, because the day's root dropped the incomplete shift 2 and shift 1's share moved. The root is the day's own records in either view, so the toggle moves no shift it leaves complete.",
+   "expect": {
+    "url": "/corr/1/day/2026-02-16/shift/1?measure=dollars&corrupt=1",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "shift 1's figure with and without the data-quality toggle",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard this shift"
+       },
+       {
+        "turn": 1,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard this shift"
+       }
+      ]
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-levers-agree-with-trim-cost-as-printed",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2025-01-27?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/week/2025-01-27?measure=money",
+    "/corr/1/week/2025-01-27?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 3: views_agree compared the trim lever's cents rounded on their own ($1,674 for 1,674.28) with the second answer, which prints the whole dollars both cards print (**$1,675**, the week's shifts' shares added up). The check now reads the printed figures.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-27?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "views_agree",
+      "lever": "trim"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-day-line-is-the-shift-card",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-06-10",
+   "url": "/corr/1/day/2026-06-10/shift/2?measure=dollars",
+   "turns": [
+    "/corr/1/day/2026-06-10?measure=dollars",
+    "/corr/1/day/2026-06-10/shift/2?measure=dollars"
+   ],
+   "note": "the reviewer's check of PR #168's fix round (2026-11-15), finding 7: the same_figure check had no case. 10 Jun's day card's line for shift 2 is the figure shift 2's own card leads with, in whole dollars (the owner's rule on #164).",
+   "expect": {
+    "url": "/corr/1/day/2026-06-10/shift/2?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "shift 2 on the day card and on its own card",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Shift 2: \\*\\*\\$([0-9,]+)\\*\\* above standard"
+       },
+       {
+        "turn": 1,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard this shift"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-day-card-with-a-long-period-to-date-completes",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-08-05",
+   "url": "/corr/1/day/2026-08-05?measure=dollars",
+   "note": "found by the sweep of PR #168's fix round (2026-11-15): with each waste line's whole dollars added to the cards' terms, 5 Aug 2026's day card (its period to date reaches back into the period before, 28 production days) stopped at the planner's 200,000-character context bound: four money steps each carried the period to date's every shift twice. The cards' rate-free terms ride on the result for the browser and stay out of the planner's context.",
+   "expect": {
+    "url": "/corr/1/day/2026-08-05?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-quality-card-families-are-the-ledger-lines",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "day": "2026-07-09",
+   "shift": 1,
+   "url": "/corr/1/day/2026-07-09/shift/1?measure=waste",
+   "turns": [
+    "/corr/1/day/2026-07-09/shift/1?measure=quality",
+    "/corr/1/day/2026-07-09/shift/1?measure=waste"
+   ],
+   "note": "the reviewer's check of f7847cf on PR #168 (2026-11-15), finding 4: shift 1's quality card on 9 Jul 2026 printed its families on their own rounding, $426 + $352 + $214 + $76 + $36 = $1,104, while the same shift's waste breakdown printed warp at $351 (the same 5,989.1 sq ft) and the dry-end line, and the card's own dry-end tile, at $1,103. The families print the shift's dry-end kinds' whole dollars, the figures its waste breakdown and money card print.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-09/shift/1?measure=waste",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "warp on the quality card and the waste breakdown",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- WARP: \\*\\*.* · \\$([0-9,]+)"
+       },
+       {
+        "turn": 1,
+        "match": "^- Dry-end: warp: .* · \\$([0-9,]+) "
+       }
+      ]
+     },
+     {
+      "check": "same_figure",
+      "why": "the quality card's families and the dry-end line they add to",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- (?:BOND|WARP|MISALIGNMENT|MOISTURE|OTHER): \\*\\*.* · \\$([0-9,]+)",
+        "each": true
+       },
+       {
+        "turn": 1,
+        "match": "^- Dry-end rejects \\(all dry-end families\\): .* · \\$([0-9,]+) · "
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-downtime-kind-is-the-ledger-lines",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "shift",
+   "day": "2026-07-17",
+   "shift": 1,
+   "url": "/corr/1/day/2026-07-17/shift/1?measure=dollars",
+   "turns": [
+    "/corr/1/day/2026-07-17/shift/1?measure=downtime&by=kind",
+    "/corr/1/day/2026-07-17/shift/1?measure=dollars"
+   ],
+   "note": "the reviewer's check of f7847cf on PR #168 (2026-11-15), finding 4: shift 1's downtime by kind on 17 Jul 2026 printed Operator at $180 (9.02 min, $180.33) while its operator tile and its money card printed $181, the lever's line and its line within the band added up. Each stop kind prints the ledger's whole dollars for it.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-17/shift/1?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_figure",
+      "why": "operator downtime on the downtime card and the money card",
+      "figures": [
+       {
+        "turn": 0,
+        "match": "^- Operator: .* · \\$([0-9,]+)"
+       },
+       {
+        "turn": 1,
+        "match": "^- (?:[0-9]+\\. )?Operator downtime (?:over the|within its) [0-9.]+% band: \\*\\*\\$([0-9,]+)\\*\\*",
+        "each": true
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-formula-line-prints-the-bold-figure",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-07-13",
+   "url": "/corr/1/day/2026-07-13/shift/2?measure=dollars",
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 1: on 13 Jul shift 2 the card printed \"Side trim over the 3% target: **$512**\" while its formula line ended \"= $513\", each rounding the same $512.52 its own way (193 of 635 cards at the post's rates). The formula states the row's cents, and where the figure the card prints is not their nearest dollar it says so: \"It prints $N (whole dollars that add up).\" The invariant formula_failures holds every formula line to its row and to the line citing it.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-13/shift/2?measure=dollars",
+    "status": "complete",
+    "sections_match": [
+     "^How a dollar is priced, for Side trim over the 3% target: 9,318\\.6 sq ft = 9\\.319 MSF x \\$55/MSF paper = \\$512\\.52; contribution: margin not set\\.( It prints \\$[0-9,]+ \\(whole dollars that add up\\)\\.)?$"
+    ],
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-formula-line-prints-the-bold-figure-ownership",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-07-01",
+   "url": "/corr/1/day/2026-07-01?measure=money&lens=ownership",
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 1: 1 Jul's ownership card printed \"Side trim costs **$13,150**\" over a formula ending \"= $13,151\". The formula is in cents ($13,150.85) and says what the line prints when that is not their nearest dollar.",
+   "expect": {
+    "url": "/corr/1/day/2026-07-01?measure=money&lens=ownership",
+    "status": "complete",
+    "sections_match": [
+     "^How a dollar is priced, for Side trim \\(all recorded\\): 239,106\\.4 sq ft = 239\\.106 MSF x \\$55/MSF paper = \\$13,150\\.85; contribution: margin not set\\.( It prints \\$[0-9,]+ \\(whole dollars that add up\\)\\.)?$"
+    ],
+    "money_checks": [
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-week-is-its-days-7-sep",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2026-09-07?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-07?measure=dollars",
+    "/corr/1/day/2026-09-08?measure=dollars",
+    "/corr/1/day/2026-09-09?measure=dollars",
+    "/corr/1/day/2026-09-10?measure=dollars",
+    "/corr/1/day/2026-09-11?measure=dollars",
+    "/corr/1/week/2026-09-07?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: the five day cards of the week of 7 Sep printed $2,968 + $3,148 + $1,997 + $2,276 + $2,157 = $12,546 and the week card $12,547, each window rounding from its own root. The cell, one shift of one production day, is the whole-dollar root: every day and window prints its cells' whole dollars added up. The Friday card and the week read their yearly figure from the same period to date, so they state the same one.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the days of the week of 7 Sep and the week",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     },
+     {
+      "check": "same_figure",
+      "why": "the yearly figure of P2 to date through Fri 11 Sep on the day card and the week",
+      "figures": [
+       {
+        "turn": 4,
+        "match": "^\\*\\*.* · \\$([0-9,]+) a year at this period's rate"
+       },
+       {
+        "turn": 5,
+        "match": "^\\*\\*.* · \\$([0-9,]+) a year at this period's rate"
+       }
+      ]
+     }
+    ],
+    "max_ms": 900
+   }
+  },
+  {
+   "id": "money-month-is-its-days-september",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-01?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-01?measure=dollars",
+    "/corr/1/day/2026-09-02?measure=dollars",
+    "/corr/1/day/2026-09-03?measure=dollars",
+    "/corr/1/day/2026-09-04?measure=dollars",
+    "/corr/1/day/2026-09-07?measure=dollars",
+    "/corr/1/day/2026-09-08?measure=dollars",
+    "/corr/1/day/2026-09-09?measure=dollars",
+    "/corr/1/day/2026-09-10?measure=dollars",
+    "/corr/1/day/2026-09-11?measure=dollars",
+    "/corr/1/day/2026-09-14?measure=dollars",
+    "/corr/1/day/2026-09-15?measure=dollars",
+    "/corr/1/day/2026-09-16?measure=dollars",
+    "/corr/1/day/2026-09-17?measure=dollars",
+    "/corr/1/day/2026-09-18?measure=dollars",
+    "/corr/1/day/2026-09-21?measure=dollars",
+    "/corr/1/day/2026-09-22?measure=dollars",
+    "/corr/1/day/2026-09-23?measure=dollars",
+    "/corr/1/day/2026-09-24?measure=dollars",
+    "/corr/1/day/2026-09-25?measure=dollars",
+    "/corr/1/day/2026-09-28?measure=dollars",
+    "/corr/1/day/2026-09-29?measure=dollars",
+    "/corr/1/day/2026-09-30?measure=dollars",
+    "/corr/1/month/2026-09-01?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: September's 22 day cards printed $66,790 in all and the month card $66,792. The month is its cells' whole dollars added up, so it is its days'.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-01?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "September's days and the month",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     }
+    ],
+    "max_ms": 3450
+   }
+  },
+  {
+   "id": "money-month-shift-3-is-its-shifts-september",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/month/2026-09-01/shift/3?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-01/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-02/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-03/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-04/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-07/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-08/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-09/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-10/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-11/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-14/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-15/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-16/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-17/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-18/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-21/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-22/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-23/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-24/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-25/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-28/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-29/shift/3?measure=dollars",
+    "/corr/1/day/2026-09-30/shift/3?measure=dollars",
+    "/corr/1/month/2026-09-01/shift/3?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: September shift 3's 22 shift cards printed $22,935 in all and its month card $22,939.",
+   "expect": {
+    "url": "/corr/1/month/2026-09-01/shift/3?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "September shift 3's shifts and its month",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     }
+    ],
+    "max_ms": 3450
+   }
+  },
+  {
+   "id": "money-period-is-its-weeks-p2",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/period/2026-09-14?measure=money",
+   "turns": [
+    "/corr/1/week/2026-08-31?measure=money",
+    "/corr/1/week/2026-09-07?measure=money",
+    "/corr/1/week/2026-09-14?measure=money",
+    "/corr/1/week/2026-09-21?measure=money",
+    "/corr/1/period/2026-09-14?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: 4-4-5 P2 is the four weeks of 31 Aug to 25 Sep; its card prints their whole dollars added up.",
+   "expect": {
+    "url": "/corr/1/period/2026-09-14?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the weeks of P2 and the period",
+      "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+     }
+    ],
+    "max_ms": 750
+   }
+  },
+  {
+   "id": "money-ptd-is-the-day-before-and-the-day",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/day/2026-09-14?measure=dollars",
+   "turns": [
+    "/corr/1/day/2026-09-11?measure=dollars",
+    "/corr/1/day/2026-09-14?measure=dollars"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 2: the day cards' \"part of $X above standard in … to date\" chain broke on 17 of 66 steps: the period to date through one day and the next day did not add to the period to date through the next: Fri 11 Sep's $28,569 and Mon 14 Sep's $2,148 made $28,569 + $2,148 = $30,717 against the $30,716 the Monday card printed for P2 to date. Each is its cells' whole dollars added up, so they do.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "P2 to date through Fri 11 Sep, then Mon 14 Sep, and P2 to date through Mon 14 Sep",
+      "parts": [
+       {
+        "turn": 0,
+        "match": " · part of \\$([0-9,]+) above standard in "
+       },
+       {
+        "turn": 1,
+        "match": "^\\*\\*\\$([0-9,]+)\\*\\* above standard"
+       }
+      ],
+      "total": {
+       "turn": 1,
+       "match": " · part of \\$([0-9,]+) above standard in "
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-ownership-shifts-add-to-the-day-1-jan-2025",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2025-01-01",
+   "url": "/corr/1/day/2025-01-01?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/day/2025-01-01/shift/1?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-01/shift/2?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-01/shift/3?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-01?measure=money&lens=ownership"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 3: on 1 Jan 2025 the ownership lens's shifts printed $7,476 + $7,473 + $7,591 = $22,540 of waste and the day $22,541: planning / admin, the bale, the unexplained remainder and the dry-end kinds were rounded per window, outside the ledger. Every line is its cells' whole dollars now.",
+   "expect": {
+    "url": "/corr/1/day/2025-01-01?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "all the waste of 1 Jan 2025 by shift and for the day",
+      "match": "^- All the waste recorded: \\*\\*\\$([0-9,]+)\\*\\*"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the tag scrap of 1 Jan 2025 by shift and for the day",
+      "match": "^- (?:\\d+\\. )?Dry-end waste \\(tag scrap\\), the \\d+ kinds below: \\*\\*\\$([0-9,]+)\\*\\*"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-warp-tile-shifts-add-to-the-week-13-jan-2025",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2025-01-13",
+   "url": "/corr/1/week/2025-01-13?measure=kpis",
+   "turns": [
+    "/corr/1/week/2025-01-13/shift/1?measure=kpis",
+    "/corr/1/week/2025-01-13/shift/2?measure=kpis",
+    "/corr/1/week/2025-01-13/shift/3?measure=kpis",
+    "/corr/1/week/2025-01-13?measure=kpis"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 3: the week of 13 Jan 2025's warp tile printed $7,404, its three shifts' $2,403 + $2,562 + $2,438 = $7,403 (the moisture, bale and unexplained tiles a dollar off too). A tile is its cells' whole dollars added up.",
+   "expect": {
+    "url": "/corr/1/week/2025-01-13?measure=kpis",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the warp tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "warp_pct"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the moisture tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "moisture_pct"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the bale tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "bale_pct"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the unexplained tile of the week of 13 Jan 2025 by shift and for the week",
+      "tile": "unexplained_pct"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-ptd-label-is-the-last-production-day-february",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-02-27",
+   "url": "/corr/1/period/2026-02-02?measure=money",
+   "turns": [
+    "/corr/1/day/2026-02-27?measure=dollars",
+    "/corr/1/week/2026-02-23?measure=money",
+    "/corr/1/month/2026-02-02?measure=money",
+    "/corr/1/period/2026-02-02?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 4: one period to date, P7 of the prior year through its last production day, was labelled \"through Fri 27 Feb\" on the day and the week, \"through Sat 28 Feb\" on the month and \"through Sun 1 Mar\" on the period: a window's calendar end. The label names the last production day on or before it.",
+   "expect": {
+    "url": "/corr/1/period/2026-02-02?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_words",
+      "why": "the period to date of February 2026",
+      "match": "(4-4-5 P7 of the prior year to date through [A-Z][a-z]{2} \\d+ [A-Z][a-z]{2})"
+     }
+    ],
+    "sections_match": [
+     "from 4-4-5 P7 of the prior year to date through Fri 27 Feb, "
+    ],
+    "max_ms": 600
+   }
+  },
+  {
+   "id": "money-ptd-label-is-the-last-production-day-p2",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/period/2026-09-14?measure=money",
+   "turns": [
+    "/corr/1/day/2026-09-25?measure=dollars",
+    "/corr/1/period/2026-09-14?measure=money"
+   ],
+   "note": "the coordinator's review of 82c0994 on PR #168 (2026-11-15, comment 6891090319), item 4: P2 to date was \"through Fri 25 Sep\" on the day card and \"through Sun 27 Sep\" on the period card.",
+   "expect": {
+    "url": "/corr/1/period/2026-09-14?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "same_words",
+      "why": "P2 to date",
+      "match": "(4-4-5 P2 to date through [A-Z][a-z]{2} \\d+ [A-Z][a-z]{2})"
+     },
+     {
+      "check": "yearly_from_period_to_date",
+      "tool": "get_opportunities"
+     }
+    ],
+    "sections_match": [
+     "from 4-4-5 P2 to date through Fri 25 Sep, 20 production days \\(query 1\\)$"
+    ]
    }
   },
   {
@@ -14031,7 +15135,7 @@
    "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:70,hour:1500",
    "scope": "shift",
    "shift": 2,
-   "note": "#151 re-review: a money answer priced at the visitor's rates carries them as its rate rows, and the receipt checker read only the dict form, so it recomputed these lines at the post's rates and called correct receipts wrong. tests/test_datapages.py recomputes every line and the total at the rates in the answer.",
+   "note": "#151 re-review: a money answer priced at the visitor's rates carries them as its rate rows, and the receipt checker read only the dict form, so it recomputed these lines at the post's rates and called correct receipts wrong. tests/test_datapages.py recomputes every line and the total at the rates in the answer. Issue #164 (the owner's calls of 2026-11-14): the money card's headline is its dollars above standard.",
    "reviewed_by": "owner-pending",
    "expect": {
     "url": "/corr/1/day/2026-09-14/shift/2?measure=dollars&rates=paper:70,hour:1500",
@@ -14046,7 +15150,7 @@
     ],
     "charts": 1,
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses",
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard this shift",
      "^Rates: paper \\$70/MSF \\(yours\\), machine time \\$1,500/hr \\(yours\\)"
     ]
    }
@@ -15119,6 +16223,118 @@
    }
   },
   {
+   "id": "money-yearly-figure-is-its-shifts-week-7-sep",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-14",
+   "url": "/corr/1/week/2026-09-07?measure=money",
+   "turns": [
+    "/corr/1/week/2026-09-07/shift/1?measure=money",
+    "/corr/1/week/2026-09-07/shift/2?measure=money",
+    "/corr/1/week/2026-09-07/shift/3?measure=money",
+    "/corr/1/week/2026-09-07?measure=money"
+   ],
+   "note": "the coordinator's review of 2510d38 on PR #168 (2026-11-15, comment 6893513782), item 1: the week of 7 Sep's shift cards said $287,307 + $217,646 + $229,629 = $734,582 a year, but the all-shifts card said $734,580; its dry end over the 1% target read $45,206 + $36,643 + $35,486 = $117,335 a year by shift and $117,334 for all shifts, and its operator downtime $27,361 and $27,360. Each scope called annual() once on its own period-to-date whole dollars, so three roundings to the dollar did not add to the all-shifts one. The all-shifts yearly figure, for each lever and each line, is the shifts' own printed yearly figures added up.",
+   "expect": {
+    "url": "/corr/1/week/2026-09-07?measure=money",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "the yearly figure of the levers of the week of 7 Sep by shift and for all shifts",
+      "match": "^\\*\\*\\$[0-9,]+\\*\\* above standard across [0-9]+ levers · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the dry-end lever's yearly figure of the week of 7 Sep by shift and for all shifts",
+      "match": "^- [0-9]+\\. Dry end over the 1% target: \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the operator lever's yearly figure of the week of 7 Sep by shift and for all shifts",
+      "match": "^- [0-9]+\\. Operator downtime over the 2\\.5% band: \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-yearly-figure-is-its-shifts-ownership-7-sep",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2026-09-07",
+   "url": "/corr/1/day/2026-09-07?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/day/2026-09-07/shift/1?measure=money&lens=ownership",
+    "/corr/1/day/2026-09-07/shift/2?measure=money&lens=ownership",
+    "/corr/1/day/2026-09-07/shift/3?measure=money&lens=ownership",
+    "/corr/1/day/2026-09-07?measure=money&lens=ownership"
+   ],
+   "note": "the coordinator's review of 2510d38 on PR #168 (2026-11-15, comment 6893513782), item 1: the ownership lens's \"All the waste recorded\" line missed its shifts on 57 of 70 day cards (up to $5) and 20 of 22 windows (up to $6). On 7 Sep its shifts said $1,933,198 + $1,916,442 + $2,081,742 = $5,931,382 a year and the day $5,931,387. Each line's all-shifts yearly figure is its shifts' own added up, so the lines and all the waste add up by shift.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-07?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "all the waste of 7 Sep a year by shift and for the day",
+      "match": "^- All the waste recorded: \\*\\*\\$[0-9,]+\\*\\* across .* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "side trim of 7 Sep a year by shift and for the day",
+      "match": "^Side trim costs \\*\\*\\$[0-9,]+\\*\\*.* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "the bond line of 7 Sep a year by shift and for the day",
+      "match": "^- Dry-end: bond \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
+   "id": "money-yearly-figure-is-its-shifts-ownership-29-jan-2025",
+   "type": "routing",
+   "mode": "offline",
+   "scope": "day",
+   "day": "2025-01-29",
+   "url": "/corr/1/day/2025-01-29?measure=money&lens=ownership",
+   "turns": [
+    "/corr/1/day/2025-01-29/shift/1?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-29/shift/2?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-29/shift/3?measure=money&lens=ownership",
+    "/corr/1/day/2025-01-29?measure=money&lens=ownership"
+   ],
+   "note": "the reviewer subagent on the round on 2510d38 of PR #168 (2026-11-15), item 1: on 29 Jan 2025 shift 2 recorded no planning / admin, so its ownership card left the line out, and with it the $15,637 a year its period to date holds, which the all-shifts card added: all the waste recorded read $5,680,409 a year for the day and $1,799,046 + $1,866,575 + $1,999,151 = $5,664,772 by shift. A line the window holds none of, but its period to date does, shows at $0 beside its yearly figure, so the shift cards' yearly figures add to the day's, line by line and in total.",
+   "expect": {
+    "url": "/corr/1/day/2025-01-29?measure=money&lens=ownership",
+    "status": "complete",
+    "money_checks": [
+     {
+      "check": "turns_add_up",
+      "why": "all the waste of 29 Jan 2025 a year by shift and for the day",
+      "match": "^- All the waste recorded: \\*\\*\\$[0-9,]+\\*\\* across .* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "turns_add_up",
+      "why": "planning / admin of 29 Jan 2025 a year by shift and for the day",
+      "match": "^- (?:[0-9]+\\. )?Planning / admin \\(not production waste\\) \\(all recorded\\): \\*\\*\\$[0-9,]+\\*\\* · \\$([0-9,]+) a year at this period's rate"
+     },
+     {
+      "check": "displayed_sums"
+     }
+    ]
+   }
+  },
+  {
    "id": "all-day-summary-leads-with-the-day",
    "type": "routing",
    "mode": "offline",
@@ -15199,7 +16415,7 @@
    "reviewed_by": "owner-pending",
    "scope": "day",
    "question": "Where is the money?",
-   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned money card under All leading with the shift that lost the most. The day's recorded losses (get_day_dollars, priced once on the day) lead, the day's gaps follow ranked by dollars, and each shift's own total is a finding, the one that lost the most saying so. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage.",
+   "note": "The owner's ruling on issue #177 (2026-11-15): under All a question that names no shift is about every shift together, so a day card leads with the day, all shifts together, and each shift follows as a finding. The lab found the canned money card under All leading with the shift that lost the most. The day's recorded losses (get_day_dollars, priced once on the day) lead, the day's gaps follow ranked by dollars, and each shift's own total is a finding, the one that lost the most saying so. Seven tool calls (each shift's dollars and the day's), so the budget is 500 ms, as for money-day-ranks-shifts-without-the-outage. Re-pointed in the catch-up with main after #168 (the coordinator's review of aad1b3c on PR #178): the money card is #164's day ledger, which leads with the day's dollars above standard and lists each shift's own dollars, which add up to it. The canned money question under All still leads with the day, never one shift.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=dollars",
     "status": "complete",
@@ -15221,9 +16437,9 @@
      }
     ],
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses across the three shifts · \\$[0-9,]+ per year at the post's volumes",
-     "^- Shift [123]: \\*\\*\\$[0-9,]+\\*\\* of recorded losses, the highest of the three shifts · ",
-     "^- 1\\. [^:]+: \\*\\*\\$[0-9,]+\\*\\*"
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across the three shifts · ",
+     "^- Shift 1: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 1\\)$",
+     "^- Shift 3: \\*\\*\\$[0-9,]+\\*\\* above standard \\(query 3\\)$"
     ],
     "sections_not_match": "^\\*\\*[^*]+\\*\\*[^·]* on shift [123]",
     "max_ms": 500
@@ -15541,7 +16757,7 @@
    "reviewed_by": "owner-pending",
    "scope": "day",
    "question": "Where is the money for shifts 1 and 3?",
-   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shifts 1 and 3' named no shift and the money card led with the day's $24,472 across the three shifts, shift 2's $7,699 among its lines. The pair said in the plural is shifts 1 and 3: main's pair card, the shift that lost more first, the other after, the day total over those two shifts only.",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shifts 1 and 3' named no shift and the money card led with the day's $24,472 across the three shifts, shift 2's $7,699 among its lines. The pair said in the plural is shifts 1 and 3: main's pair card, the shift that lost more first, the other after, the day total over those two shifts only. Re-pointed in the catch-up with main after #168 (the coordinator's review of aad1b3c on PR #178): the money card is #164's day ledger, which leads with the day's dollars above standard and lists each shift's own dollars, which add up to it. A plural pair still reads its two shifts and never shift 2.",
    "expect": {
     "url": "/corr/1/day/2026-09-14?measure=dollars&shifts=1,3",
     "status": "complete",
@@ -15561,7 +16777,7 @@
      }
     ],
     "sections_match": [
-     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses on shift [13], the higher of the two shifts · "
+     "^\\*\\*\\$[0-9,]+\\*\\* above standard across the two shifts · "
     ],
     "sections_not_match": "across the three shifts|^- Shift 2\\b",
     "max_ms": 500
