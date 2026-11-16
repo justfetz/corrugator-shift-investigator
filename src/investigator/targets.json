@@ -1,28 +1,28 @@
 {
- "about": "The plant's targets and flag bands (issue #101), from the owner's golden review of 2026-11-10. They drive the band beside every headline figure, the downtime flags and the two lenses on the cost model's levers. A band is home run (at or under home_run), on target (at or under target), over target (above target, at or under flag) or flag (above flag: \"what's going on?\"). A null flag is the owner's to set; a measure the records do not carry is listed so the standard is on record, and no answer shows it until a tool returns it.",
+ "about": "The plant's targets and flag bands (issue #101), from the owner's golden review of 2026-11-10. They drive the band beside every headline figure, the downtime flags and the two lenses on the cost model's levers. A band is home run (at or under home_run), on target (at or under target), over target (above target, at or under flag) or flag (above flag: \"what's going on?\"). A null flag is the owner's to set; a measure the records do not carry is listed so the standard is on record, and no answer shows it until a tool returns it. Each band (and the speed baseline) carries an `owner`: the role an answer names beside its lever (scheduler, wet-end lead, maintenance), set by the owner as the margin is; null reads \"owner to set\" (issue #164).",
  "source": "owner, 2026-11-10",
  "bands": [
   {"id": "operator", "label": "Operator downtime", "unit": "% of scheduled minutes", "home_run": null, "target": 2.5, "flag": 2.5,
-   "denominator": "scheduled minutes (480 a shift, 1,440 a production day)", "lever": "controllable", "source": "owner, 2026-11-10"},
+   "denominator": "scheduled minutes (480 a shift, 1,440 a production day)", "lever": "controllable", "source": "owner, 2026-11-10", "owner": null},
   {"id": "maintenance", "label": "Maintenance downtime", "unit": "% of scheduled minutes", "home_run": null, "target": 2.5, "flag": 2.5,
-   "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10",
+   "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10", "owner": null,
    "note": "Unplanned maintenance stops, breakdowns and faults; planned maintenance (PM) is schedule-driven and sits below the ranked reasons, and an external stop (a power outage) is not maintenance: neither counts against this band or trips its flag."},
   {"id": "op_maint", "label": "Downtime (operator and maintenance)", "unit": "% of scheduled minutes", "home_run": null, "target": 5.0, "flag": 5.0,
-   "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10"},
+   "denominator": "scheduled minutes", "lever": "controllable", "source": "owner, 2026-11-10", "owner": null},
   {"id": "trim", "label": "Side trim", "unit": "% of gross", "home_run": 2.75, "target": 3.0, "flag": 3.25,
-   "denominator": "gross sq ft", "lever": "schedule-driven", "source": "owner, 2026-11-10",
+   "denominator": "gross sq ft", "lever": "schedule-driven", "source": "owner, 2026-11-10", "owner": null,
    "note": "Always the largest waste percentage; the order mix and the web widths it runs on decide it."},
   {"id": "shear", "label": "Shear (chop)", "unit": "% of gross", "home_run": 0.5, "target": 0.75, "flag": 1.0,
-   "denominator": "gross sq ft (full-web cuts, about 34 in a piece, at order and grade changes)", "lever": "controllable", "source": "owner, 2026-11-10",
+   "denominator": "gross sq ft (full-web cuts, about 34 in a piece, at order and grade changes)", "lever": "controllable", "source": "owner, 2026-11-10", "owner": null,
    "note": "Controllable through sequencing."},
   {"id": "dry_end", "label": "Dry-end waste (bond, warp, misalignment, moisture, other)", "unit": "% of yield", "home_run": 0.75, "target": 1.0, "flag": 1.25,
-   "denominator": "yield after trim and shear (gross minus side trim minus shear)", "lever": "controllable", "source": "owner, 2026-11-10",
+   "denominator": "yield after trim and shear (gross minus side trim minus shear)", "lever": "controllable", "source": "owner, 2026-11-10", "owner": null,
    "note": "Controllable through temperatures."},
   {"id": "peel", "label": "Peel (roll prep)", "unit": "% of roll stock consumed", "home_run": null, "target": 0.5, "flag": null,
-   "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10",
+   "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10", "owner": null,
    "note": "Target about 0.5%; the flag is the owner's to set. The roll records carry peel (rolls.peel_sqft, issue #100); no tool reads it against this band yet."},
   {"id": "core", "label": "Core (at splice)", "unit": "% of roll stock consumed", "home_run": null, "target": 0.1, "flag": null,
-   "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10",
+   "denominator": "roll stock consumed", "lever": "controllable", "source": "owner, 2026-11-10", "owner": null,
    "note": "Target about 0.1%; the flag is the owner's to set. The roll records carry core (rolls.core_sqft, issue #100); no tool reads it against this band yet."}
  ],
  "external": {
@@ -33,6 +33,7 @@
   "source": "owner, 2026-11-12"
  },
  "speed": {
+  "owner": null,
   "baseline": "Each grade's sustained average speed over the trailing year: lineal feet over running minutes (stops out) of every setup of that grade in the 365 days ending on the day asked about, inside the record store. Never the maximum speed, which is a ramp-up point.",
   "gap": "A run under its grade's baseline is a speed gap: the lineal feet it would have made at the baseline in its running minutes, less the feet it made.",
   "source": "owner, 2026-11-10"
