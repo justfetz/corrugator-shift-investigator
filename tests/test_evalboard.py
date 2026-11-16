@@ -43,8 +43,8 @@ def running():
     server.app.close()
 
 
-def request(server, method, path, body=None, headers=None):
-    client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=60)
+def request(server, method, path, body=None, headers=None, timeout=60):
+    client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=timeout)
     try:
         client.request(method, path, body=body, headers=headers or {})
         response = client.getresponse()
@@ -53,9 +53,15 @@ def request(server, method, path, body=None, headers=None):
         client.close()
 
 
+# The whole set's run waits as long as Cloud Run lets a request run (180 s, CLAUDE.md): it grows with every case, and at
+# 1,162 cases it took 59-61 s in one process on a shared 2-CPU box (main's 1,131: 54 s), past the 60 s every other request waits.
+RUN_ALL_TIMEOUT_S = 180
+
+
 def run(server, payload, **extra):
     headers = {'Content-Type': 'application/json', 'X-Workbench-Token': server.app.token, **extra}
-    status, _, body = request(server, 'POST', '/api/evals/run', json.dumps(payload), headers)
+    timeout = RUN_ALL_TIMEOUT_S if isinstance(payload, dict) and payload.get('all') is True else 60
+    status, _, body = request(server, 'POST', '/api/evals/run', json.dumps(payload), headers, timeout=timeout)
     return status, json.loads(body)
 
 

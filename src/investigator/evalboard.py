@@ -156,6 +156,9 @@ def describe_expect(expect):
         lines.append(f'Never asserts a cause the evidence lacks: /{pattern}/')
     for pattern in [expect['sections_match']] if isinstance(expect.get('sections_match'), str) else expect.get('sections_match', []):
         lines.append(f'An evidence line matches /{pattern}/')
+    asked = expect.get('asked_sections_match') or []
+    for pattern in [asked] if isinstance(asked, str) else asked:
+        lines.append(f'The question\'s own answer (not its address\'s) has a line matching /{pattern}/')
     if 'shape' in expect:
         low, high = expect['shape'].get('bullets', [3, 5])
         look_low, look_high = expect['shape'].get('look', [2, 3])

@@ -311,7 +311,9 @@ def test_downtime_with_no_scope_is_the_selected_day_all_shifts(store):
                           ('Show downtime by reason for the selected day', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           ('What did downtime cost?', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           ('Show downtime in dollars', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
-                          ('Show downtime by kind', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
+                          # issue #144: "by kind" is a split the day's downtime answer dropped (it grouped by reason); the semantic
+                          # model reads it, and a number with no shift named is every shift's (the owner's scope ruling)
+                          ('Show downtime by kind', '/corr/1/day/2026-09-14?measure=semantic&m=downtime_minutes&by=kind'),
                           ('Show downtime by reason for shift 2', '/corr/1/day/2026-09-14/shift/2?measure=downtime'),
                           ('Show downtime by reason for shift 1', '/corr/1/day/2026-09-14/shift/1?measure=downtime'),
                           ('Show maintenance downtime by reason', '/corr/1/day/2026-09-14/shift/2?measure=downtime&kind=maintenance'),
