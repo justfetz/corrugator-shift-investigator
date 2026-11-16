@@ -7,13 +7,19 @@
 'use strict';
 const fs=require('node:fs');
 const Money=require('../src/investigator/web/money.js');
-const FIELDS=['msf','paper_usd','machine_minutes','machine_time_usd','usd','usd_per_year','msf_not_made','contribution_usd','contribution_usd_per_year','contribution_status','usd_basis','share_of_window_pct','rank','lever','gap','quantity','records','control','group','apart','apart_note'];
+const FIELDS=['msf','paper_usd','machine_minutes','machine_time_usd','usd','usd_per_year','msf_not_made','contribution_usd','contribution_usd_per_year','contribution_status','usd_basis','share_of_window_pct','rank','lever','gap','quantity','records','control','group','apart','apart_note',
+ 'band_target','shifts_over','at_standard_usd','above_standard_usd','all_recorded_usd','year_terms','above_terms','price_terms',   // the money ledger's rows (issue #164)
+ 'usd_shown','at_standard_usd_shown','above_standard_usd_shown','over_records','shifts'];   // the whole dollars a card prints (PR #168)
 const TOTALS=['total_usd','total_paper_usd','total_machine_time_usd','total_usd_per_year','total_contribution_usd','contribution_status','provenance','gap_machine_minutes','gap_usd','gap_usd_per_year','gap_contribution_usd',
  'buckets','area_sqft','area_msf','stop_minutes','speed_minutes','waste_run_minutes','machine_minutes','msf_not_made',   // the summary the card states (#31b review)
- 'trim_pct_of_gross','trim_target_pct','trim_points_over','trim_over_usd','trim_over_usd_per_year','trim_over_basis','trim_over_terms','tile_money','shifts',
+ 'tile_money','shifts',
  'controllable_levers','controllable_usd','controllable_usd_per_year','controllable_machine_minutes','controllable_contribution_usd','lens',   // the lenses and the speed variance (issue #101)
  'dry_end_rank','dry_end_kinds','dry_end_usd','dry_end_usd_per_year',
- 'apart_gaps','all_in_usd','all_in_usd_per_year'];   // a money card's gaps apart and its all-in total (the owner, PR #111)   // the ownership lens's tag-scrap subtotal (PR #111)
+ 'apart_gaps','all_in_usd','levers','at_standard_usd','above_standard_usd','no_band_usd','dry_end_at_standard_usd','dry_end_above_standard_usd',
+ 'ptd_usd','ptd_usd_per_year','ptd_levers','ptd_terms',
+ 'total_usd_shown','total_paper_usd_shown','total_machine_time_usd_shown','at_standard_usd_shown','above_standard_usd_shown','no_band_usd_shown','all_in_usd_shown',
+ 'controllable_usd_shown','dry_end_usd_shown','dry_end_at_standard_usd_shown','dry_end_above_standard_usd_shown','ptd_usd_shown','details','display_terms',
+ 'total_contribution_usd_shown'];   // whole dollars that add up (PR #168)   // the money ledger: its totals and its period to date (issue #164)   // a money card's gaps apart and its all-in total (the owner, PR #111)   // the ownership lens's tag-scrap subtotal (PR #111)
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function parity(file){
  const {cfg,cases}=JSON.parse(fs.readFileSync(file,'utf8')), bad=[]; let fields=0, lines=0;

@@ -92,11 +92,25 @@ def test_every_priced_row_carries_the_call_that_priced_it(bench):
                 if t is None:
                     assert row['usd'] is None
                     continue
-                if 'trim_pct' in t:   # the trim lever: its quantity is the points over the target, itself a rate
-                    over = max(0.0, t['trim_pct'] - rates['values']['trim_target_pct'])
-                    assert t['quantity'] == pytest.approx(over / 100 * t['gross_sqft'])
-                again = cost_model.price(t['kind'], t['quantity'], rates, t['gross_sqft'], t['minutes'])
-                assert {k: v for k, v in again.items() if k != 'price_terms'} == {k: row[k] for k in again if k != 'price_terms'}, (url, row)
+                target = rates['values']['trim_target_pct']
+                if t.get('part') == 'at':   # a row at standard (issue #164): all recorded less above standard, each priced on its own
+                    over = cost_model.trim_cells_over(t['trim_cells'], target) if 'trim_cells' in t else t['over']
+                    again = cost_model.at_standard(t['kind'], t['total'], over, rates, t['gross_sqft'], t['minutes'])
+                else:
+                    if 'trim_cells' in t:   # the trim lever: its quantity is the cells' gaps to the target, itself a rate
+                        assert t['quantity'] == cost_model.trim_cells_over(t['trim_cells'], target)
+                    again = cost_model.price(t['kind'], t['quantity'], rates, t['gross_sqft'], t['minutes'])
+                skip = ('price_terms', 'usd_per_year', 'contribution_usd_per_year')
+                assert {k: v for k, v in again.items() if k not in skip} == {k: row[k] for k in again if k not in skip}, (url, row)
+                if row.get('year_terms'):   # a lever's year is its period to date's, from its own line of the period's whole dollars
+                    y = row['year_terms']   # (its cells' added up: the coordinator's review of 82c0994 on PR #168, item 2)
+                    pw = cost_model.whole_dollars(entry['data']['ptd_terms']['whole'], rates)
+                    days = dict(y['shift_days'])   # each shift's own at its days, added up (the review of 2510d38, item 1)
+                    assert row['usd_per_year'] == sum(cost_model.annual(e[y['of'][0]][y['of'][1]], days[e['shift']]) for e in pw['shifts'])
+                    margin = cost_model.price(y['kind'], y['quantity'], rates)['contribution_usd']
+                    assert row['contribution_usd_per_year'] == (None if margin is None else cost_model.annual(margin, y['days']))
+                else:
+                    assert row['usd_per_year'] is None, (url, row)
 
 
 def test_the_models_never_see_the_terms(bench):
@@ -144,7 +158,19 @@ PARITY_URLS = ('/corr/1/day/2026-09-14/shift/2?measure=dollars', '/corr/1/day/20
                # the owner's ruling on PR #111: planned maintenance and an outage apart on a shift's and a day's money card; on
                # 2026-09-16 the outage moves the day's focus, so a rate can move it again
                '/corr/1/day/2026-09-17/shift/1?measure=dollars', '/corr/1/day/2026-09-16/shift/3?measure=dollars',
-               '/corr/1/day/2026-09-16?measure=dollars')
+               '/corr/1/day/2026-09-16?measure=dollars',
+               # PR #168: whole dollars that add up (a day whose shifts' shares and levers move by a dollar, a shift's share, the
+               # ownership lens's lines and a shift's own, the KPI tiles the ledger prints, side trim by shift) and the records'
+               # first day, with no yearly figure
+               '/corr/1/day/2026-06-10?measure=dollars', '/corr/1/day/2026-06-10/shift/2?measure=dollars', '/corr/1/day/2026-09-28?measure=dollars',
+               '/corr/1/month/2026-09-14/shift/1?measure=money&lens=ownership', '/corr/1/period/2026-09-14?measure=kpis',
+               '/corr/1/day/2025-01-01?measure=dollars',
+               # the sweep of PR #168's review of 82c0994: on 19 Jun 2026 one shift holds the day's whole trim lever, so the day's
+               # formula line and that shift's read the same at the post's rates and part at another target; the line is the day's
+               '/corr/1/day/2026-06-19?measure=dollars',
+               # the review of 2510d38 on PR #168, item 1: the all-shifts yearly figures are the shifts' own added up, lever by
+               # lever and line by line (the week of 7 Sep, and 7 Sep under the ownership lens)
+               '/corr/1/week/2026-09-07?measure=money', '/corr/1/day/2026-09-07?measure=money&lens=ownership')
 PARITY_RATES = ('paper:60,hour:1350.5,margin:35,trim:3.1', 'paper:41.37,hour:5000', 'margin:12.5,trim:4', 'trim:2.5',
                 'hour:1', 'paper:99999.99,margin:0.01')
 
@@ -160,11 +186,11 @@ def test_the_client_formula_gives_the_servers_answer_at_any_rates(bench, tmp_pat
     for url in PARITY_URLS:
         before, _ = bench.answer_url(url)
         cases += [{'url': url, 'rates': rates, 'before': before, 'after': bench.answer_url(at(url, rates))[0]} for rates in PARITY_RATES]
-    # every kind of priced row is in the set with real dollars, the speed gap too (since issue #100's records the
-    # client money golden's own shift runs above 675 ft/min, so its speed gap is $0; the all-shifts day is not)
+    # every kind of priced row is in the set with real dollars, the speed lever too (the speed under each grade's baseline,
+    # issue #164: the one speed a price uses)
     speed = [row['usd'] for c in cases for e in c['before']['trace'] if e['tool'] == 'get_shift_dollars'
-             for row in e['data']['rows'] if row['gap'].startswith('Speed gap') and row['usd']]
-    assert speed, 'no parity case prices a non-zero speed gap'
+             for row in e['data']['rows'] if row.get('key') == 'speed' and not row.get('apart') and row['usd']]
+    assert speed, 'no parity case prices a non-zero speed lever'
     file = tmp_path / 'cases.json'
     file.write_text(json.dumps({'cfg': cost_model.client_config(), 'cases': cases}))
     run = subprocess.run([NODE, str(ROOT / 'tests' / 'money_cli.cjs'), 'parity', str(file)], capture_output=True, text=True)

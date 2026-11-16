@@ -23,7 +23,9 @@ NARRATIVE_SCHEMA = {'type':'object','properties':{'paragraphs':{'type':'array','
     'required':['paragraphs'],'additionalProperties':False}
 
 
-PACKET_DROP=frozenset({'source_ids','usd_basis','msf','machine_minutes','msf_not_made','contribution_usd_per_year','price_terms','share_of_window_pct'})
+PACKET_DROP=frozenset({'source_ids','usd_basis','msf','machine_minutes','msf_not_made','contribution_usd_per_year','price_terms','share_of_window_pct',
+                       'year_terms','above_terms'})   # the money ledger's rate-free terms (issue #164) stay on the card too
+SHOWN_CENTS=('usd','paper_usd','machine_time_usd','contribution_usd','at_standard_usd','above_standard_usd','all_recorded_usd')   # the cents behind a figure the card prints in whole dollars
 
 
 def evidence_packet(evidence):
@@ -39,8 +41,11 @@ def evidence_packet(evidence):
     for result in evidence:
         data=result['data']
         # The writer may cite the dollars (usd, usd_per_year, paper_usd, machine_time_usd, contribution_usd);
-        # the formula text and the intermediate quantities stay on the card, inside the byte caps.
-        rows=[{k:v for k,v in row.items() if k not in PACKET_DROP} for row in data.get('rows',[])[:12]]
+        # the formula text and the intermediate quantities stay on the card, inside the byte caps. A row the card
+        # prints in whole dollars (`usd_shown`, PR #168) offers those, never its cents: a narrative citing 224.41
+        # beside a card printing $225 is money jumping (the review of PR #168).
+        rows=[{k:v for k,v in row.items() if k not in PACKET_DROP and not (k in SHOWN_CENTS and row.get('usd_shown') is not None)}
+              for row in data.get('rows',[])[:12]]
         entry={'result_id':result['result_id'],'tool':result['tool'],
             'shift':data['shift'],'coverage':data['coverage'],'rows':rows,
             'total_rows':len(data.get('rows',[])), 'preview_rows':len(rows)}

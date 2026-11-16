@@ -727,6 +727,28 @@ def _line(label, kind=None):
     return 'setups', {}
 
 
+# A money ledger row (cost_model, issue #164) by its key: a band's lever, and its cost at standard, is each shift's gap to
+# the band, read from the shift rows it is summed over (its waste, its minutes and its scheduled minutes); the speed lever
+# the setups whose runs it measures (with the trailing year their baselines come from); planned maintenance and external
+# stops their stop kinds; the waste with no band its own records.
+LEDGER_LINES = {'speed': ('setups', {}), 'trim': ('shift_kpis', {}), 'shear': ('shift_kpis', {}), 'dry_end': ('shift_kpis', {}),
+                'operator': ('shift_kpis', {}), 'maintenance': ('shift_kpis', {}), 'scheduled': ('stops', {'kind': 'Scheduled'}),
+                'external': ('stops', {'kind': 'External'}), 'changeover': ('rejects', {'family': 'CHANGEOVER'}),
+                'boards': ('setup_orders', {})}
+
+
+def _trim_shift(row, entry):
+    """A shift's side trim (a money card's `details`, PR #168): that shift's rows of the card's day or window."""
+    return 'shift_kpis', {'shift': row.get('shift')}
+
+
+def _money_row(row, entry):
+    """A money row's records: a ledger row (it carries `apart`) by its key, an ownership lens's waste line by its words."""
+    if 'apart' in row:
+        return LEDGER_LINES[row['key']]
+    return _line(row.get('lever'), row.get('kind'))
+
+
 WASTE_LINES = {'trim': ('setups', {}), 'shear': ('setups', {}), 'changeover': ('rejects', {'family': 'CHANGEOVER'}),
                'cutoff_waste': ('setup_orders', {}), 'stacker_waste': ('setup_orders', {}),
                'bond': ('rejects', {'family': 'BOND'}), 'warp': ('rejects', {'family': 'WARP'}),
@@ -812,8 +834,8 @@ SOURCES = {
     'get_order_matrix': ('setup_orders', {'row': lambda r, e: ('setup_orders', {'setup_id': r.get('record_id'), 'order_number': r.get('order_id'), **_knife(r)})}),
     'get_shift_notes': ('stops', {}),
     'get_rankings': ('setups', {'row': _ranking}),
-    'get_shift_dollars': ('shift_kpis', {'row': lambda r, e: _line(r.get('gap'), r.get('kind'))}),
-    'get_day_dollars': ('shift_kpis', {'row': lambda r, e: _line(r.get('gap'), r.get('kind'))}),
+    'get_shift_dollars': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
+    'get_day_dollars': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
     # period tools: the window and the shift
     'get_period_kpis': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),
     'compare_periods': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {})}),
@@ -827,7 +849,7 @@ SOURCES = {
     'get_rollstock': ('setups', {'row': lambda r, e: ('setups', {'quality_id': r.get('grade'), 'web_width_in': r.get('width_in')})}),
     'get_overrun': ('setup_orders', {'row': lambda r, e: ('setup_orders', _knife(r))}),
     'get_speed_opportunity': ('setups', {'row': _speed_cell}),
-    'get_opportunities': ('shift_kpis', {'row': lambda r, e: _line(r.get('lever'), r.get('kind'))}),
+    'get_opportunities': ('shift_kpis', {'row': _money_row, 'detail': _trim_shift}),
     'get_downtime_review': ('shift_kpis', {'row': _review_row, 'flag': _flag}),
     'get_speed_variance': ('shift_kpis', {'row': _speedvar_row, 'detail': _speedvar_detail}),
     'get_trend': ('shift_kpis', {'row': lambda r, e: ('shift_kpis', {'from': r.get('week_start'), 'to': r.get('week_end'), 'day': None})}),
@@ -1007,7 +1029,8 @@ def source(entry, production_day, corrupt=False):
     # A speed against each grade's baseline also read the trailing year the baselines come from (its sustained speed,
     # targets.json) and, against the baseline, the usual grade mix of that year (#151 review).
     since, through = entry['data'].get('baseline_since'), entry['data'].get('baseline_through')
-    if since and through and entry['tool'] in ('get_speed_variance', 'get_opportunities', 'get_wet_end_performance'):
+    if since and through and entry['tool'] in ('get_speed_variance', 'get_opportunities', 'get_wet_end_performance', 'get_shift_dollars',
+                                               'get_day_dollars'):
         year = {'from': since, 'to': through}
         also.append({'label': 'the trailing year', 'table': 'setups', 'filter': year, 'url': table_url('setups', year)})
     # The notes are the shift's own note (its crew, from the shift record) and then its stops' comments (Codex on #151).
