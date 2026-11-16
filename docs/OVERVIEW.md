@@ -10,7 +10,7 @@ The project is a worked example of building an agent: start from a manufacturing
 
 The tool is for production, and for the senior leaders who hold production to account for speed, waste and downtime. Everything else in the plant waits on the corrugator, so the tool's job is to help production keep it running. It points out how the machine is doing, what is outside its band and where the money is, then investigates why.
 
-Production and leadership read the same dollars, with every lever priced at named, assumed rates ([the cost model](COST_MODEL.md)). The goal of the money ledger ([issue #164](https://github.com/justfetz/corrugator-shift-investigator/issues/164)) is that a shift's figures add up to its day, its period and its year; until it lands, a day card prices its own quantities, so its yearly figure is not the sum of its shifts'. Findings keep what production controls apart from what it does not, such as schedule-driven trim, a bad roll or a maintenance window. A downtime record coded "Other", or left without a comment, is itself a finding.
+Production and leadership read the same dollars, with every lever priced at named, assumed rates ([the cost model](COST_MODEL.md)). The money ledger ([issue #164](https://github.com/justfetz/corrugator-shift-investigator/issues/164)) makes a shift's whole dollars add up to its day, its period and its year, and every displayed set of parts add up to its displayed total. Findings keep what production controls apart from what it does not, such as schedule-driven trim, a bad roll or a maintenance window. A downtime record coded "Other", or left without a comment, is itself a finding.
 
 ## Try it
 
