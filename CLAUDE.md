@@ -6,6 +6,16 @@ Guidance for Claude Code sessions in `corrugator-shift-investigator`. The repo i
 
 A bounded agent that investigates why a corrugator shift was bad, on synthetic data. The offline router and parameterized DuckDB tools compute every number; a model (Anthropic or OpenAI, server key only) may choose tools and write the narrative, never the numbers. The public demo is <https://shift.talktomymachine.ai> on Cloud Run; every question is answered by the offline planner first, and the model is an opt-in, streamed "Ask the analyst" per answer that never holds the shared lock. Target behavior: Datasette-fast. A question answers in tens of milliseconds and the URL is the state. `/issues` shows the ordered backlog.
 
+## Who this is for
+
+This is for production first, and for the senior leaders they answer to. The owner (2026-11-15): "Ultimately I think you want to help production succeed. SLT comes down on them for speed, waste and downtime, and they should have tools to point out and investigate. The machine is the only asset and you need to keep it humming." SLT members want it too, for the money.
+
+- **Three levers:** speed, waste and downtime, and what each costs. Every answer ties back to one of them. Maintenance schedules and personnel are context that explains a lever, not products of their own.
+- **Point out, then investigate.** The page says how the machine is running, what is outside its band and where the opportunities are. The analyst investigates why.
+- **Empathy is a rule.** Keep what production controls apart from what it does not (schedule-driven trim, a bad roll, a maintenance window, an outage). Never word a finding as blame.
+- **One ledger for both readers.** The superintendent and the plant manager read the same dollars, priced at named rates. The rule (#164) is that shift figures add up to the day, the period and the year; a change that breaks that is a bug.
+- **The data is part of the job.** Downtime coded "Other", or left without a comment, is a finding too.
+
 ## What good looks like
 
 This is the owner's public portfolio piece, so trust beats breadth.
