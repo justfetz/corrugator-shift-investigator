@@ -15508,6 +15508,144 @@
     ],
     "sections_not_match": "across (the three shifts|shifts [123])"
    }
+  },
+  {
+   "id": "all-day-named-plural-pair-summary-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance for shifts 2 and 3",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so a pair said in the plural named no shift and the card led with the day's 862,644 lineal ft across the three shifts. A day leads only when the question names no shift: the plural pair keeps main's pair card (the slower shift first, the other after), as 'shift 2 and shift 3' does, and no day total runs for it.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary&shifts=2,3",
+    "status": "complete",
+    "shifts": [
+     2,
+     3
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [23] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 1\\b"
+   }
+  },
+  {
+   "id": "all-day-named-plural-pair-money-reads-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Where is the money for shifts 1 and 3?",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shifts 1 and 3' named no shift and the money card led with the day's $24,472 across the three shifts, shift 2's $7,699 among its lines. The pair said in the plural is shifts 1 and 3: main's pair card, the shift that lost more first, the other after, the day total over those two shifts only.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=dollars&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools": [
+     {
+      "tool": "get_day_dollars",
+      "arguments": {
+       "shifts": [
+        1,
+        3
+       ]
+      }
+     }
+    ],
+    "sections_match": [
+     "^\\*\\*\\$[0-9,]+\\*\\* of recorded losses on shift [13], the higher of the two shifts · "
+    ],
+    "sections_not_match": "across the three shifts|^- Shift 2\\b",
+    "max_ms": 500
+   }
+  },
+  {
+   "id": "all-day-named-ordinal-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target for the first and third shift",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'the first and third shift' was read as the third shift alone and the card answered shift 3 only. Two ordinals before one 'shift' name both: main's pair card, as 'shift 1 and shift 3' gives (all-day-named-pair-keeps-its-shift-lead).",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime on shift 3 · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])"
+   }
+  },
+  {
+   "id": "all-day-named-ampersand-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance for shift 1 & 3",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shift 1 & 3' was read as shift 1 alone and the card answered shift 1 only. A number joined to a named shift by '&', 'and', a comma, 'or' or 'vs' is a shift too: main's pair card for shifts 1 and 3.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [13] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 2\\b"
+   }
+  },
+  {
+   "id": "all-day-named-vs-pair-compares-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Compare shift 3 vs 1",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so 'shift 3 vs 1' was read as shift 3 alone and the comparison put the selected shift 2 beside it. The shifts compared are the two named, 3 and 1.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=compare&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "sections_not_match": "^- Shift 2\\b|shift 2 at"
+   }
+  },
+  {
+   "id": "selected-shift-refuses-a-plural-pair",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "question": "Where is the money for shifts 1 and 3?",
+   "note": "Issue #177, the coordinator's review of aad1b3c (item 1): named_shifts read only 'shift 1' and 'first shift', one shift at a time, so under the selected shift 2 'shifts 1 and 3' named no shift and the card answered shift 2's money, a shift the question did not name. Two named shifts under the selected shift are refused as 'shift 1 and shift 3' is: choose Production-day comparison.",
+   "expect": {
+    "raises": "Selected shift only"
+   }
   }
  ]
 }
