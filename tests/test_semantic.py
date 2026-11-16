@@ -1083,3 +1083,60 @@ def test_every_semantic_answer_reads_short_and_its_looks_route_in_scope(store, c
             context = resolved['context']
             _, asked = route(look[1], context, store.production_days)
             assert asked is context, (look[1], asked.read)
+
+
+# ---- the review of PR #155 (issue #144): a fewest ranking counts the values with no records, and one value's share is its own row
+W0914 = {'period': 'week', 'anchor': '2026-09-14'}
+
+
+def test_a_fewest_ranking_lists_the_values_with_no_records_as_zeros(store):
+    """A place with no stop had the fewest stops, never the place with one: a fewest-first split by one dimension of a sum or a
+    count lists every value the store holds (a time dimension's: the window's scheduled days), the missing ones as recorded zeros
+    DuckDB adds; the rows still add up to the total, and a most-first ranking, a ratio or a filtered dimension lists only rows
+    with records."""
+    held = S.store_values('place', store)
+    fewest = run(store, 'stops', W0914, group_by=['place'], order='value_asc')
+    most = run(store, 'stops', W0914, group_by=['place'])
+    assert {r['place'] for r in fewest['rows']} == set(held) and fewest['groups'] == len(held)
+    zeros = [r for r in fewest['rows'] if r['value'] == 0]
+    assert zeros and all(r['source_count'] == 0 and r['source_ids'] == [] and r['share_pct'] == 0 for r in zeros)
+    assert fewest['rows'][0]['value'] == 0 and {r['place'] for r in most['rows']} == {r['place'] for r in fewest['rows'] if r['value']}
+    assert sum(r['value'] for r in fewest['rows']) == fewest['value'] == most['value']
+    days = run(store, 'stops', W0914, group_by=['day'], order='value_asc')
+    assert [r['day'] for r in sorted(days['rows'], key=lambda r: r['day'])] == ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18']
+    ratio = run(store, 'minutes_per_stop', W0914, group_by=['place'], order='value_asc')
+    assert all(r['value'] is not None and r['source_count'] for r in ratio['rows'])
+    own = run(store, 'maintenance_pm_minutes', W0914, group_by=['kind'], order='value_asc')   # counts two kinds only
+    assert {r['kind'] for r in own['rows']} <= {'Maintenance', 'Scheduled', 'PM'}
+    filtered = run(store, 'stops', W0914, group_by=['place'], filters={'kind': 'Maintenance'}, order='value_asc')
+    assert {r['place'] for r in filtered['rows']} == set(held)   # the filter narrows the records, never the values listed
+
+
+def test_the_share_of_a_value_is_its_row_whatever_the_limit_and_zero_without_records(store):
+    """share= names one value of the split: its row is in the result (appended when the limit or no records left it out), its
+    share DuckDB's, a value with no records a zero row; the receipt names its records; share needs one split of a sum or a count."""
+    steam = run(store, 'stops', W0914, group_by=['place'], share='steam system')
+    row = steam['rows'][steam['share_row']]
+    assert (row['place'], row['value'], row['share_pct'], row['source_count']) == ('Steam system', 0, 0, 0)
+    assert steam['query']['share'] == 'Steam system' and steam['groups'] == len(steam['rows']) - 1
+    stacker = run(store, 'stops', W0914, group_by=['place'], share='Stacker')
+    total = sum(r['value'] for r in stacker['rows'])
+    row = stacker['rows'][stacker['share_row']]
+    assert close(row['share_pct'], row['value'] / total * 100) and len(row['source_ids']) == row['source_count'] == row['value']
+    cracking = run(store, 'reject_sqft', MONTH, group_by=['reject_reason'], share='Cracking board')
+    row = cracking['rows'][cracking['share_row']]
+    assert cracking['share_row'] == S.DEFAULT_LIMIT and cracking['groups'] > S.DEFAULT_LIMIT and row['reject_reason'] == 'Cracking board'
+    whole = run(store, 'reject_sqft', MONTH, group_by=['reject_reason'], limit=S.MAX_LIMIT)
+    assert close(row['value'], rows_by(whole, 'reject_reason')['Cracking board']['value'])
+    assert close(row['share_pct'], rows_by(whole, 'reject_reason')['Cracking board']['share_pct'])
+    for kw, message in (({'group_by': []}, 'one value of the one dimension'), ({'group_by': ['place', 'kind']}, 'one value of the one dimension'),
+                        ({'group_by': ['day']}, 'not a time dimension'), ({'group_by': ['place'], 'compare': 'previous'}, 'one at a time'),
+                        ({'group_by': ['place'], 'filters': {'place': 'Stacker'}}, 'also a filter')):
+        with pytest.raises(S.SemanticError, match=message):
+            run(store, 'stops', W0914, share='Stacker', **kw)
+    with pytest.raises(S.SemanticError, match='no share of a total'):
+        run(store, 'minutes_per_stop', W0914, group_by=['place'], share='Stacker')
+    with pytest.raises(S.SemanticError, match="No stop place 'nowhere'"):
+        run(store, 'stops', W0914, group_by=['place'], share='nowhere')
+    assert S.SemanticQuery.from_arguments({'measure': 'stops', 'share': 'Stacker'}).share == 'Stacker'
+    assert 'share' not in S.SemanticQuery('stops').to_arguments()   # a plan without a share keeps the arguments it always had

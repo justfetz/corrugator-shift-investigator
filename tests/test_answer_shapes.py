@@ -241,7 +241,9 @@ def tool_text(trace):
         if not step.get('ok'):
             continue
         data = step['data']
-        records = [*data.get('rows', []), *(data.get('details') or [])]
+        # a semantic card's totals too: a ranked or split priced measure quotes the total's pricing formula (usd_basis), which no row
+        # carries ("which grade had the most shear cost")
+        records = [*data.get('rows', []), *(data.get('details') or []), *(r for r in data.get('totals') or [] if isinstance(r, dict))]
         values = [v for r in records for v in r.values()] + list(data.values())
         out |= {v for v in values if isinstance(v, str) and len(v) >= 30}
     return out

@@ -4,7 +4,7 @@ The optional model adapter implements Planner.next_step. OfflinePlanner is rule-
 it is a teaching/test driver, not an LLM or general natural-language understanding.
 """
 from collections import OrderedDict
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 import json
@@ -101,7 +101,8 @@ PERIOD_TOOL_SCHEMAS = [
 ]
 PERIOD_TOOLS = {schema["name"] for schema in PERIOD_TOOL_SCHEMAS}
 # The tools that read the whole record store: the period tools and the semantic model's compiler (issue #117). The
-# compiler is reached by its URL (measure=semantic) and is not in TOOL_SCHEMAS, so the analyst cannot plan it yet.
+# compiler is reached by its URL (measure=semantic) and by the offline router's semantic step (issue #144, semantic_parse);
+# it is not in TOOL_SCHEMAS, so the analyst cannot plan it yet.
 STORE_TOOLS = PERIOD_TOOLS | {semantic.TOOL}
 TOOL_SCHEMAS.extend(PERIOD_TOOL_SCHEMAS)
 TOOL_SCHEMAS.append({"name": "render_chart", "description": "Chart a result from this investigation; never supply invented rows.",
@@ -976,9 +977,10 @@ def leftover_family(word):
     return 'subset' if re.fullmatch(r"\d[\d,.]*", word) else None
 
 
-def allow_list(lower, lead):
+def allow_list(lower, lead, stands=()):
     """Raise unless every word of `lower` is consumed by the quantity `lead` (unconsumed): a rolling window is refused with the
-    windows the records keep, any other leftover word with what it asks for and at most three questions that answer."""
+    windows the records keep, any other leftover word with what it asks for and at most three questions that answer. A plan, a
+    capacity, the line running or a span said in words, and a word of a family in `stands`, is refused as Standing."""
     metric = lead['metric']
     rolling = re.search(ROLLING_WINDOW, lower)
     if rolling:
@@ -1006,11 +1008,12 @@ def allow_list(lower, lead):
     if found is None:
         raise ValueError(leftover_refusal(None, ' '.join(phrases[0]), metric))
     phrase, word, family = found
+    error = Standing if family in ('plan', 'state', 'span', *stands) else ValueError   # what ran in a window answers no plan (Standing)
     if family in LEFTOVER_ASKS:
         # the word as said: "what shift", "which shift", "over 10", "under 2"
         said = re.search(rf"\b((what|which)\s+)?{re.escape(word)}(\s+\d[\d,.]*)?(?![a-z])", lower)
-        raise ValueError(leftover_refusal(family, said[0] if said and word in ('shift', 'over', 'under', 'above', 'below') else word, metric))
-    raise ValueError(leftover_refusal(family, ' '.join(phrase), metric))
+        raise error(leftover_refusal(family, said[0] if said and word in ('shift', 'over', 'under', 'above', 'below') else word, metric))
+    raise error(leftover_refusal(family, ' '.join(phrase), metric))
 
 
 # ---- Words the gate consumed but no route applied (issue #153, the hotfix after PR 143). Each is now read by the code that applies it,
@@ -1095,6 +1098,37 @@ HEDGE_TEXT = ("'{words}' hedges the cause: one quantity counts what the records 
               "drove them.")
 
 
+# A window the gate consumes that the period words do not read ("for the day", "this day", "over the period": issue #153), applied where
+# the gate reads it, never the selected window: "this day" under a ranged Period control names the production day its address cannot,
+# and "the period" under a week or month could be the 4-4-5 period or that window. The semantic model's parser reads them the same way.
+THE_PERIOD_SAID = r"\b(the|that|whole|full|entire)\s+period\b"
+THIS_DAY_SAID = r"\b(this|that|the|current|selected|whole|full|entire)\s+(production\s+)?day\b(?!\s+(before|of\s+the\s+week)\b)"
+THE_PERIOD_TEXT = ("'{words}' could be the 4-4-5 accounting period or the {selected} the Period control selects: ask '{plain} this period' or "
+                   "'{plain} this {grain}'.")
+THIS_DAY_TEXT = "'{words}' names the selected production day, and the Period control is on the {selected}: set it to Day, or ask '{plain} this week'."
+
+
+class Standing(ValueError):
+    """A refusal of something the question said that no answer reads (issue #153): two windows, "during the day" beside another window,
+    a hedge before a cause, a plan, a capacity or a span said in words ("how far", "up to"), the line running, "this shift" with no shift
+    selected, who logged a stop, "this day" or "the period" under a ranged Period control, a comparison one quantity's answer or the
+    Pareto grouped does not carry, and a stop reason, place or kind left beside the Pareto grouped. It stands over the semantic model's parser (issue #144): a
+    complete reading of the other words is still not the question asked, so it never answers in its place (the coordinator on PR #155,
+    after #159). A window named in words no route reads ("so far", "until now", "the week before last") is a plain refusal: the parser
+    refuses the same words on its own."""
+
+
+@contextmanager
+def standing():
+    """The refusals raised inside are Standing ones (a ValueError raised as Standing, its text unchanged)."""
+    try:
+        yield
+    except Standing:
+        raise
+    except ValueError as exc:
+        raise Standing(str(exc)) from exc
+
+
 def compares(lead):
     """True when the answer to `lead` carries the window before beside it (the KPI tiles, the review, the Pareto of one reason or place,
     a waste line), so a comparison with it is read; False for the over/under-run, the stops profile, a grade's totals and the Pareto
@@ -1154,15 +1188,15 @@ def comparison_gate(lower, lead, period, named_month=False, asked=None):
     daytime = re.search(DAYTIME_SAID, asked)
     other = daytime and next((words for start, end, words, _ in windows if end <= daytime.start() or start >= daytime.end()), None)
     if other:
-        raise ValueError(DAYTIME_TEXT.format(words=daytime[0], other=other.strip(), plain=PLAIN.get(lead['metric'], 'how many stops')))
+        raise Standing(DAYTIME_TEXT.format(words=daytime[0], other=other.strip(), plain=PLAIN.get(lead['metric'], 'how many stops')))
     if not window_compared(lower):
         second = next((w for w in windows if w[3] != windows[0][3]), None) if windows else None
         modal = re.search(MODAL_MAY, asked)
         if second and modal and 'may' in (windows[0][2], second[2]):
-            raise ValueError(MAY_TEXT.format(said=modal[0], other=(second if windows[0][2] == 'may' else windows[0])[2].strip(),
+            raise Standing(MAY_TEXT.format(said=modal[0], other=(second if windows[0][2] == 'may' else windows[0])[2].strip(),
                                              plain=PLAIN.get(lead['metric'], 'how many stops')))
         if second:
-            raise ValueError(TWO_SAID_TEXT.format(words=asked[windows[0][0]:second[1]], first=windows[0][2].strip(), second=second[2].strip(),
+            raise Standing(TWO_SAID_TEXT.format(words=asked[windows[0][0]:second[1]], first=windows[0][2].strip(), second=second[2].strip(),
                                                   plain=PLAIN.get(lead['metric'], 'how many stops')))
         return
     windows = windows_said(lower)
@@ -1184,7 +1218,7 @@ def comparison_gate(lower, lead, period, named_month=False, asked=None):
         what = "a month and the month before the selected day's"
     else:
         return
-    raise ValueError(TWO_WINDOWS_TEXT.format(words=words, what=what, plain=PLAIN.get(metric, 'how many stops')))
+    raise Standing(TWO_WINDOWS_TEXT.format(words=words, what=what, plain=PLAIN.get(metric, 'how many stops')))
 
 
 def deictic_gate(lower, lead, current, shifts):
@@ -1221,10 +1255,11 @@ def quantity_gate(lower, lead):
     of who logged the stops, a ratio kept for all stops or for the line asked of one stop reason, place or kind (the more specific
     refusals), or any word the route does not consume (allow_list)."""
     metric = lead['metric']
-    duration_gate(lower, lead)
-    logged = re.search(KIND_LOGGED, lower)
-    if logged and metric.startswith(('maintenance_', 'operator_')):
-        raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain=PLAIN[metric]))
+    with standing():   # the line running and who logged a stop: no reading of the other words answers them
+        duration_gate(lower, lead)
+        logged = re.search(KIND_LOGGED, lower)
+        if logged and metric.startswith(('maintenance_', 'operator_')):
+            raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain=PLAIN[metric]))
     if metric in RATIO_METRICS and metric != 'waste_pct' and any(re.search(p, lower) for p in NAMED_FILTER):
         raise ValueError(RATIO_FILTER_TEXT.get(metric) or RATIO_FILTER_LINE.format(ratio=initial(PLAIN[metric]), plain=PLAIN[metric]))
     allow_list(lower, lead)
@@ -1582,19 +1617,15 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
     window = {"period": period or selected or 'day', "anchor": anchor}
     # A window the gate consumes that the period words above do not read ("for the day", "this day", "over the period": issue #153) is
     # applied where the gate reads it, by one quantity, each production day's stops and the Pareto grouped: never the selected window
-    said = None if period or months else (
-        re.search(r"\b(the|that|whole|full|entire)\s+period\b", lower) or
-        re.search(r"\b(this|that|the|current|selected|whole|full|entire)\s+(production\s+)?day\b(?!\s+(before|of\s+the\s+week)\b)", lower))
+    said = None if period or months else re.search(THE_PERIOD_SAID, lower) or re.search(THIS_DAY_SAID, lower)
     gated = {"period": 'fiscal' if said and said[0].endswith('period') else 'day', "anchor": anchor} if said else window
     def gated_window(plain):
         """The gated routes' window; "this day" under a ranged Period control is refused (its address has no day window to name), and
         "the period" under a week or month one (it could be the 4-4-5 period or the window the Period control selects)."""
         if said and gated['period'] == 'fiscal' and selected in ('week', 'month'):
-            raise ValueError(f"'{said[0]}' could be the 4-4-5 accounting period or the {PERIOD_WORDS[selected]} the Period control selects: "
-                             f"ask '{plain} this period' or '{plain} this {selected}'.")
+            raise ValueError(THE_PERIOD_TEXT.format(words=said[0], selected=PERIOD_WORDS[selected], plain=plain, grain=selected))
         if said and gated['period'] == 'day' and selected:
-            raise ValueError(f"'{said[0]}' names the selected production day, and the Period control is on the {PERIOD_WORDS[selected]}: set "
-                             f"it to Day, or ask '{plain} this week'.")
+            raise ValueError(THIS_DAY_TEXT.format(words=said[0], selected=PERIOD_WORDS[selected], plain=plain))
         return gated
     def answer_quantity(lead):
         """One quantity over the question's window (a named month, else the window words or the Period control's), for
@@ -1612,11 +1643,12 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
                 raise ValueError(f"Stops, downtime, order changes and sheets are recorded by shift, reason, place and knife, not by grade: "
                                  f"ask 'how many setups on {grade_code} this week', or 'volume by grade this week'. " + QUANTITY_HELP)
             lead = {**lead, 'grade': grade_code}
-        deictic_gate(lower, lead, current, shifts)   # "this shift" with no shift selected (issue #153, row 8)
-        gated_window(PLAIN.get(lead['metric'], 'how many stops'))
-        hedge_gate(lower, lead, asked)   # "might be due to the stacker": never the coded count (the review of e863f1e, item 3)
-        answered ='month' if months else 'week' if lead['metric'] == 'downtime_per_day' and gated['period'] == 'day' else gated['period']
-        comparison_gate(lower, lead, answered, bool(months) and month_start(months[0])[:7] != anchor[:7], asked)   # rows 2 and 6
+        with standing():   # what the question said that no answer reads: never answered by the semantic model's reading either
+            deictic_gate(lower, lead, current, shifts)   # "this shift" with no shift selected (issue #153, row 8)
+            gated_window(PLAIN.get(lead['metric'], 'how many stops'))
+            hedge_gate(lower, lead, asked)   # "might be due to the stacker": never the coded count (the review of e863f1e, item 3)
+            answered ='month' if months else 'week' if lead['metric'] == 'downtime_per_day' and gated['period'] == 'day' else gated['period']
+            comparison_gate(lower, lead, answered, bool(months) and month_start(months[0])[:7] != anchor[:7], asked)   # rows 2 and 6
         quantity_gate(lower, lead)   # every word consumed: the allow-list (round 6)
         if lead['metric'] == 'downtime_per_day' and (one_day_named or said and gated['period'] == 'day'):
             raise ValueError(ONE_DAY_PROFILE.format(words=one_day_named or said[0]))
@@ -1681,13 +1713,16 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
             # a count or minutes grouped by reason, place or kind answers only when every word is read (issue #153, row 3): the Pareto
             # applies no stop reason, place, kind (but the kinds it groups by), subset or comparison
             group = {'metric': 'stops_by_group' if measure == 'count' else 'minutes_by_group', 'group': group_by}
-            deictic_gate(lower, group, current, shifts)
-            gated_window(PLAIN[group['metric']])
-            logged = re.search(KIND_LOGGED, lower)
-            if logged:   # "how many stops did maintenance log by kind": who logged a stop is not recorded (row 9)
-                raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain='how many operator stops'))
-            comparison_gate(lower, group, gated['period'], asked=asked)
-            allow_list(lower, group)
+            with standing():
+                deictic_gate(lower, group, current, shifts)
+                gated_window(PLAIN[group['metric']])
+                logged = re.search(KIND_LOGGED, lower)
+                if logged:   # "how many stops did maintenance log by kind": who logged a stop is not recorded (row 9)
+                    raise ValueError(KIND_LOGGED_TEXT.format(words=logged[0], plain='how many operator stops'))
+                comparison_gate(lower, group, gated['period'], asked=asked)   # its windows, and a window before it does not carry (#153)
+            # a stop reason, place or kind beside it ("planned stops by reason") stands, as #159's goldens pin it; a second split ("by reason
+            # by shift") is the Pareto's own limit, which the semantic model's split does not share
+            allow_list(lower, group, stands=('filter',))
             window = gated
         if not pareto and months:
             window = {"period": "month", "anchor": month_start(months[0])}   # "downtime in August": that month, the latest such on or before the day
@@ -1704,9 +1739,10 @@ def parse_period_request(lower, current, shifts, named_day=None, asked=None):
         plan = [("get_downtime_review", {"window": window, "shift": shift})]
         intent = 'period_review'
     elif profile:
-        deictic_gate(lower, {'metric': 'stops_per_day'}, current, shifts)   # issue #153, row 8
-        gated_window(PLAIN['stops_per_day'])
-        comparison_gate(lower, {'metric': 'stops_per_day'}, period or selected or 'week', asked=asked)   # no window before beside it (row 6)
+        with standing():
+            deictic_gate(lower, {'metric': 'stops_per_day'}, current, shifts)   # issue #153, row 8
+            gated_window(PLAIN['stops_per_day'])
+            comparison_gate(lower, {'metric': 'stops_per_day'}, period or selected or 'week', asked=asked)   # no window before beside it (row 6)
         allow_list(lower, {'metric': 'stops_per_day'})   # every word consumed (round 6): never the profile for a subset, share or statistic
         if one_day_named or said and gated['period'] == 'day':
             raise ValueError(ONE_DAY_PROFILE.format(words=one_day_named or said[0]))
@@ -1846,7 +1882,7 @@ def previous_window_day(grain, day, days):
     return next((d for d in days if first <= date.fromisoformat(d) <= last), None)
 
 
-def question_scope(text, current, days):
+def question_scope(text, current, days, store=None):
     """The context a question asks in: `current` itself when its words name nothing the controls do not, else a
     new Context with the shift, production day and period it names and `read` saying what moved (the analyst's
     prompt and the router read it). Follow-up history goes with it while the day is the same. A relative window
@@ -1871,7 +1907,7 @@ def question_scope(text, current, days):
         day, period = moved, grain
         read.update({'words': words, 'day': day, 'period': grain})
     scope = current.scope
-    if downtime_default(text, lower, current, shifts, relative, day, period, read):
+    if downtime_default(text, lower, current, shifts, relative, day, period, read, store):
         # The owner's default for downtime (issue #101), as the owner's scope ruling of 2026-11-13 left it: a downtime question that
         # names no shift is all shifts, whatever the shift control says, on the day it names ("yesterday") or the selected day (the
         # ruling retired #101's previous production day); shift detail only when asked (a named shift) or when a flag pulls one in.
@@ -1879,9 +1915,16 @@ def question_scope(text, current, days):
         scope, period = 'day', 'day'
         read.setdefault('day', day)
         read.setdefault('period', 'day')
-    elif scope == 'shift' and quantity_default(text, lower, current, shifts, day, period, read):
+    elif scope == 'shift' and quantity_default(text, lower, current, shifts, day, period, read, store):
         # A number asked with no shift named answers every shift together (the owner's scope ruling, 2026-11-13), over the window
         # it names or the selected one; the selected shift only when the question says "this shift" or names one.
+        scope = 'day'
+        read['all_shifts'] = True
+        read.setdefault('day', day)
+        read.setdefault('period', period)
+    elif scope == 'shift' and 'shift' not in read and split_by_shift(text, current, day, period, read, store):
+        # A question the semantic model reads as split or ranked by shift ("which shift had the most setups this week", "compare
+        # shift 1 and shift 2 stops") asks about every shift, whatever the shift control says (issue #144)
         scope = 'day'
         read['all_shifts'] = True
         read.setdefault('day', day)
@@ -1914,7 +1957,7 @@ OTHER_GROUPING = r"\bby\s+(kind|type|category|equipment|place|machine|location|s
 # trends and dollars, any question that mentions a shift ("this shift"), and the per-shift answers of a production day (its speed,
 # quality, and downtime by place or kind), whose all-shift form is the three shifts compared, led by another measure.
 NUMBER_INTENTS = frozenset(('period_quantity', 'period_stops', 'period_review', 'period_pareto', 'period_downtime', 'period_waste',
-                            'period_quality', 'period_grade', 'period_speed', 'period_rollstock', 'period_overrun'))
+                            'period_quality', 'period_grade', 'period_speed', 'period_rollstock', 'period_overrun', 'semantic'))
 
 
 def plan_tools(request):
@@ -1922,7 +1965,7 @@ def plan_tools(request):
     return [step['tool'] for step in request.get('plan') or []]
 
 
-def quantity_default(text, lower, current, shifts, day, period, read):
+def quantity_default(text, lower, current, shifts, day, period, read, store=None):
     """True when a question asked under one selected shift asks for a number and names no shift (the owner's scope ruling): its
     answer is a number (NUMBER_INTENTS) and the same answer for all shifts as for the selected one. No shift named or mentioned
     ("this shift", "the shift", "shift two"), all shifts said aside; no investigation (WHY_ASK)."""
@@ -1930,19 +1973,23 @@ def quantity_default(text, lower, current, shifts, day, period, read):
         return False
     every = Context(day, current.shift, scope='day', period=period, read={k: v for k, v in read.items() if k != 'shift'})
     try:
-        request = parse_request(text, every)
+        request = parse_request(text, every, store)
     except ValueError:
         return False
     if request.get('intent') not in NUMBER_INTENTS:
         return False
+    if request.get('intent') == 'semantic':
+        # the semantic model read the question over every shift: its number is every shift's, whatever the selected shift's hand
+        # route would have answered ("most common downtime reason" is not the selected shift's breakdown; the review of PR #155)
+        return True
     try:
-        selected = parse_request(text, Context(day, current.shift, scope='shift', period=period, read=dict(read)))
+        selected = parse_request(text, Context(day, current.shift, scope='shift', period=period, read=dict(read)), store)
     except ValueError:
         return True   # refused for the selected shift alone ("how many setups across all shifts"): all shifts answer it
     return plan_tools(selected) == plan_tools(request)
 
 
-def downtime_default(text, lower, current, shifts, relative, day, period, read):
+def downtime_default(text, lower, current, shifts, relative, day, period, read, store=None):
     """True when the owner's downtime default applies (issue #101): the Period control is on Day (or the question's
     "yesterday" moved it there), the question names no shift and no day or window other than yesterday, it asks no
     dollars, and the router would answer it over one day, once the scope is all shifts, with the downtime review. By
@@ -1958,7 +2005,7 @@ def downtime_default(text, lower, current, shifts, relative, day, period, read):
         return False
     probe = Context(day, current.shift, scope='day', period='day', read={k: v for k, v in read.items() if k != 'shift'})
     try:
-        request = parse_request(text, probe)
+        request = parse_request(text, probe, store)
     except ValueError:
         return False
     plan = request.get('plan') or []
@@ -1967,11 +2014,25 @@ def downtime_default(text, lower, current, shifts, relative, day, period, read):
     return request['intent'] != 'period_quantity' and plan[0]['tool'] == 'get_downtime_review'
 
 
-def route(text, current, days):
+def split_by_shift(text, current, day, period, read, store=None):
+    """True when the question, asked of every shift, is answered by the semantic model split or ranked by shift (issue #144)."""
+    if re.search(WHY_ASK, correct_typos(text.lower())):
+        return False
+    every = Context(day, current.shift, scope='day', period=period, read={k: v for k, v in read.items() if k != 'shift'})
+    try:
+        request = parse_request(text, every, store)
+    except ValueError:
+        return False
+    plan = request.get('plan') or []
+    return request.get('intent') == 'semantic' and 'shift' in plan[0]['arguments'].get('group_by', [])
+
+
+def route(text, current, days, store=None):
     """The offline router's whole reading of a question: the scope it names (question_scope) and the request
-    parse_request makes of it there. Returns (request, context); the agent answers the request in that context."""
-    context = question_scope(text, current, days)
-    return parse_request(text, context), context
+    parse_request makes of it there. Returns (request, context); the agent answers the request in that context.
+    `store` gives the semantic model's parser the dimension values (the process's default store when None)."""
+    context = question_scope(text, current, days, store)
+    return parse_request(text, context, store), context
 
 
 def asked_for(text):
@@ -1986,11 +2047,29 @@ def asked_for(text):
     return asked
 
 
-def parse_request(text, current):
+def parse_request(text, current, store=None):
     """The offline router: a supported question in its scope becomes a request the planner runs,
-    or a ValueError saying what to change. `asked` carries the objectives of `asked_for`."""
-    request = _parse_request(text, current)
-    catch_all_guard(correct_typos(text.lower()), request)
+    or a ValueError saying what to change. `asked` carries the objectives of `asked_for`.
+
+    The hand router reads the question first; the semantic model's parser (semantic_parse, issue #144) then reads it into
+    the model's own terms. A complete reading (every content word used) answers with measure=semantic when the hand router
+    refused the question or answers something else; a reading that asks a split, a ranking, a share or a ratio the hand
+    route drops refuses with at most three questions that answer; otherwise the hand route, or its refusal, stands.
+    The investigations (WHY_ASK) are never read by it. `store` gives the parser the dimension values (the process's default
+    store when None; False for a single-day fixture, which no semantic query can read: the hand router alone)."""
+    from . import semantic_parse
+    request, refused = None, None
+    try:
+        request = _parse_request(text, current)
+        catch_all_guard(correct_typos(text.lower()), request)
+    except ValueError as exc:
+        refused = exc
+    if isinstance(text, str) and text.strip() and len(text) <= 2000:
+        semantic_request = semantic_parse.route(text, current, store, request, refused)
+        if semantic_request is not None:
+            request, refused = semantic_request, None
+    if refused is not None:
+        raise refused
     request['asked'] = asked_for(text)
     return request
 
@@ -2370,7 +2449,8 @@ class Agent:
             raise ValueError('Enter a question of 1-2000 characters')
         with self.guard:
             if request is None:
-                request = parse_request(text, context) if isinstance(self.planner, OfflinePlanner) else {
+                # a single-day fixture has no record store, so no semantic answer could run: the hand router alone (store False)
+                request = parse_request(text, context, self.store if self.store is not None else False) if isinstance(self.planner, OfflinePlanner) else {
                     'intent': 'model', 'shifts': [context.shift], 'kind': None,
                     'group_by': 'reason', 'want_chart': True, 'asked': asked_for(text)}
             allowed_shifts, period = self._enter(context)
