@@ -15646,6 +15646,110 @@
    "expect": {
     "raises": "Selected shift only"
    }
+  },
+  {
+   "id": "all-day-pair-stops-by-reason-is-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "How many stops by reason on shift 2 versus shift 3 this week?",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): once the router's consumed words took a list of shifts, joiners and all, a count by reason over two named shifts lost the leftover 'versus' that refused it and was answered as the week's Pareto over all shifts (32 stops at Stacker), a shift the question did not name among them. The grouped count is one shift or all shifts together, as a plain count is: refused with what to ask.",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   }
+  },
+  {
+   "id": "all-day-pair-stops-per-day-is-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Stops per day on shifts 1 and 3 this week",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): the stops profile over two named shifts was answered over all shifts (36 stops on Tuesday). The profile is one shift or all shifts together: refused with what to ask.",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   }
+  },
+  {
+   "id": "all-day-pair-minutes-by-reason-is-refused",
+   "type": "refusal",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "How many minutes of downtime by reason on shift 1 & 3 this week?",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): minutes by reason over 'shift 1 & 3' were answered as the week's review over all shifts (42.93 min at Stacker). One shift or all shifts together: refused with what to ask.",
+   "expect": {
+    "raises": "one shift or all shifts together"
+   }
+  },
+  {
+   "id": "all-day-a-count-after-a-comma-is-not-a-shift",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "On shift 2, 3 stops ran long: why?",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): a comma joined any number to the list, so '3 stops' was read as shift 3 and the card compared shifts 2 and 3. After a single 'shift', a comma and a space join a number only before a later 'and', '&', 'or' or 'vs' ('shift 1, 2 and 3'): this is shift 2's card, as at aad1b3c.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=downtime&shifts=2",
+    "status": "complete",
+    "shifts": [
+     2
+    ],
+    "sections_not_match": "the higher of the two shifts|^- Shift 3\\b"
+   }
+  },
+  {
+   "id": "all-day-named-comma-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Summarize performance for shifts 1,3",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): 'shifts 1,3' was read as no shift (a comma with no space before a digit looked like a thousands separator), so the day led with 862,644 lineal ft across the three shifts. The pair keeps main's pair card for shifts 1 and 3.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=summary&shifts=1,3",
+    "status": "complete",
+    "shifts": [
+     1,
+     3
+    ],
+    "tools_only": [
+     "get_shift_overview",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9,]+ lineal ft\\*\\* on shift [13] at [0-9.,]+ ft/min including downtime · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 2\\b"
+   }
+  },
+  {
+   "id": "all-day-named-range-pair-keeps-its-shifts",
+   "type": "routing",
+   "mode": "offline",
+   "reviewed_by": "owner-pending",
+   "scope": "day",
+   "question": "Show speed to target for shifts 1-2",
+   "note": "Issue #177, the reviewer's check of this round's fix (988b978): 'shifts 1-2' was read as no shift and the day led across the three shifts. A range after 'shifts' names each shift in it: main's pair card for shifts 1 and 2.",
+   "expect": {
+    "url": "/corr/1/day/2026-09-14?measure=fpm&shifts=1,2",
+    "status": "complete",
+    "shifts": [
+     1,
+     2
+    ],
+    "tools_only": [
+     "get_shift_kpis",
+     "get_wet_end_performance",
+     "render_chart"
+    ],
+    "sections_match": [
+     "^\\*\\*[0-9.,]+ ft/min\\*\\* including downtime on shift [12] · [0-9.]+% of grade target, the lower of the two shifts"
+    ],
+    "sections_not_match": "across (the three shifts|shifts [123])|^- Shift 3\\b"
+   }
   }
  ]
 }
