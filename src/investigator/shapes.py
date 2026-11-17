@@ -25,7 +25,7 @@ import re
 from . import targets   # the owner's bands (issue #101): a threshold in prose is read from targets.json
 from . import cost_model
 from .records import stop_label
-from .semantic import TOOL as SEMANTIC_TOOL, _same as same_value
+from .semantic import TOOL as SEMANTIC_TOOL, DEFAULT_LIMIT as SEMANTIC_DEFAULT_LIMIT, _same as same_value
 
 LOOK = 'Where to look'
 # `(query 2 · row 0)`, `(query 3)`: the evidence a bullet or headline cites.
@@ -1138,7 +1138,7 @@ class PeriodAnswer:
             return ''
         if not window['start'] <= self.context.production_day <= window['end']:
             return None
-        return {'week': ' this week', 'month': ' this month', 'fiscal': ' this period'}.get(window['period'], '')
+        return {'week': ' this week', 'month': ' this month', 'fiscal': ' this period', 'ytd': ' year to date'}.get(window['period'], '')
 
     def sfx(self, data):
         return f' for shift {data["shift"]}' if self.context.scope == 'day' and data.get('shift') else ''
@@ -2198,11 +2198,20 @@ class SemanticAnswer:
             what += f', {re.sub(r"\s*\(.*\)$", "", f["label"]).lower()} {f["text"]}'
         if data['group_by']:
             what += ' by ' + ' and '.join(GROUP_NOUNS.get(d, d.replace('_', ' ')) for d in data['group_by'])
-        parts = [what, data['window']['label'], f'shift {data["shift"]}' if data.get('shift') else 'all shifts']
+        parts = [what]
+        default = self.ranked_by_default(data) if self.lead.get('rank') else None
+        if default:
+            # issue #185: a ranking of a dimension by the measure the model ranks it by when none is named
+            parts.append(f'ranked by {default} (the plant\'s default)')
+        parts += [data['window']['label'], f'shift {data["shift"]}' if data.get('shift') else 'all shifts']
         if self.lead.get('rank'):
             parts.append(('largest' if self.lead['rank'] == 'most' else 'smallest') + ' first')
         limit = data['query'].get('limit')
-        if limit is not None and limit < data['groups'] and limit <= data['rows_shown']:
+        if self.lead.get('rank') and limit is not None and limit < SEMANTIC_DEFAULT_LIMIT:
+            # a ranking of N rows says so (issue #185: "top 5"), and how many the window holds when that is fewer
+            parts.append(f'{"top" if self.lead["rank"] == "most" else "bottom"} {n(limit)}' +
+                         ('' if limit < data['groups'] else f' (the window holds {n(data["groups"])})' if data['groups'] < limit else ''))
+        elif limit is not None and limit < data['groups'] and limit <= data['rows_shown']:
             parts.append(f'the first {n(limit)}')
         if data.get('share_row') is not None:
             parts.append(f'the share of {data["rows"][data["share_row"]]["label"]}')
@@ -2214,6 +2223,19 @@ class SemanticAnswer:
         if data.get('previous_window'):
             parts.append(f'against {data["previous_window"]["label"]}')
         return 'Read as: ' + ', '.join(parts) + '.'
+
+    @staticmethod
+    def ranked_by_default(data):
+        """The words of the measure a ranking of its one dimension reads when the question names none (the model's `rank_by`,
+        issue #185: `downtime minutes` for the stop reasons), when this query ranks by it; else None."""
+        from .semantic import model
+        if len(data.get('group_by') or []) != 1:
+            return None
+        rank_by = model().dimensions[data['group_by'][0]].get('rank_by') or {}
+        if rank_by.get('measure') != data.get('measure'):
+            return None
+        m = model().measures[data['measure']]
+        return f'{re.sub(r"\s*\(.*\)$", "", m["label"]).lower()} {"minutes" if m["unit"] == "min" else m["unit"]}'
 
     @staticmethod
     def cut_note(data):

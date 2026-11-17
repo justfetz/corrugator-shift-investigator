@@ -773,8 +773,8 @@ def read_as_failures(store, question, data, read_as, lead):
         bad.append('most')
     if re.search(r'\b(fewest|least|lowest|smallest|slowest|bottom)\b', lower) and 'smallest first' not in read_as:
         bad.append('fewest')
-    top = re.search(r'\btop (\d+)\b', lower)
-    if top and int(top[1]) < data['groups'] and f'the first {top[1]}' not in read_as:
+    top = re.search(r'\b(top|bottom) (\d+)\b', lower)
+    if top and int(top[2]) < data['groups'] and f'{top[1]} {top[2]}' not in read_as:   # issue #185: a ranking of N says "top N"
         bad.append('top N')
     if re.search(r'\b(percent(?:age)?|share|proportion|fraction|portion)\s+of\b', lower) and \
             not re.search(r"the share of |each row's share of the total", read_as):

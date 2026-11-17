@@ -44,6 +44,10 @@ AGGREGATIONS = ('sum', 'count', 'count_distinct', 'ratio', 'priced')
 SIMPLE = ('sum', 'count', 'count_distinct')
 ADDITIVE = ('sum', 'count')  # a share of the total is read only for these
 TIME_GRAINS = ('day', 'week', 'month', 'fiscal')
+# The windows a request reads (the model's `windows` block): the period tools' four, and the year to date, which only the semantic
+# model reads (issue #185: 1 January of the anchor's year through the anchor; the reports' year period is issue #106)
+YTD = 'ytd'
+WINDOW_PERIODS = (*TIME_GRAINS, YTD)
 PRICE_KINDS = ('trim', 'waste', 'paper', 'downtime', 'speed')
 # The window a priced figure is annualized against, as the tools price theirs: the window's gross area and its
 # scheduled minutes, both measures of the model.
@@ -313,6 +317,21 @@ class Model:
         for basis in PRICE_BASIS:
             if self.measures.get(basis, {}).get('agg') != 'sum':
                 raise ValueError(f'semantic model: the pricing basis needs the sum measure {basis}')
+        for name, dim in self.dimensions.items():
+            rank_by = dim.get('rank_by')
+            if rank_by is None:
+                continue
+            # the measure a ranking of this dimension reads when the question names none (issue #185), and how many rows it lists
+            if rank_by.get('measure') not in self.measures or dim['type'] != 'categorical':
+                raise ValueError(f'semantic model: dimension {name} ranks by default by a measure the model does not hold, or is not categorical')
+            if type(rank_by.get('top')) is not int or not 1 <= rank_by['top'] <= MAX_LIMIT:
+                raise ValueError(f'semantic model: dimension {name} lists a default top that is not a whole number from 1 to {MAX_LIMIT}')
+            if not all(isinstance(w, str) and w.strip() for w in rank_by.get('words', [])):
+                raise ValueError(f'semantic model: dimension {name} names a ranking word that is not text')
+        periods = [p['name'] for p in (self.spec.get('windows') or {}).get('periods', [])]
+        if periods != list(WINDOW_PERIODS):
+            raise ValueError('semantic model: the windows block lists the periods ' + ', '.join(WINDOW_PERIODS) + ', in that order')
+        self.windows = {p['name']: p for p in self.spec['windows']['periods']}
         self.levers = {name: self._measure_lever(name, m) for name, m in self.measures.items()}
         self._check_levers()
 
@@ -553,10 +572,49 @@ def _denominator_ok(mdl, m, denominator, dimension):
     return denominator is None or m.get('denominator_total') or mdl.reach(denominator, dimension) is not None
 
 
+def parse_window(spec, first_day=None, last_day=None):
+    """(period, anchor, start, end) of a semantic window: the period tools' four (record_store.parse_window), and the year to
+    date, {"period": "ytd", "anchor": "YYYY-MM-DD"}: 1 January of the anchor's year through the anchor (issue #185). With the
+    store's first and last day, a window wholly outside them is refused with the calendar's reason, as the tools refuse theirs."""
+    from .record_store import parse_window as tool_window
+    if isinstance(spec, dict) and spec.get('period') == YTD:
+        if set(spec) != {'period', 'anchor'} or not isinstance(spec['anchor'], str):
+            raise ValueError('A window is {"period": "day|week|month|fiscal|ytd", "anchor": "YYYY-MM-DD"}')
+        try:
+            moment = date.fromisoformat(spec['anchor'])
+        except ValueError:
+            raise ValueError('Window anchor must be a YYYY-MM-DD date') from None
+        start, end = moment.replace(month=1, day=1), moment
+        if first_day and last_day and (end < first_day or start > last_day):
+            raise ValueError(f'The year to date {start} to {end} is outside the dataset range {first_day} to {last_day}')
+        return YTD, moment, start, end
+    try:
+        return tool_window(spec, first_day, last_day)
+    except ValueError as exc:
+        if str(exc).startswith('Window period must be'):
+            raise ValueError('Window period must be day, week, month, fiscal (4-4-5) or ytd (the year to date)') from None
+        raise
+
+
 def _window_bounds(window):
-    from .record_store import parse_window
-    period, anchor, start, end = parse_window(window)
-    return period, anchor, start, end
+    return parse_window(window)
+
+
+def ytd_label(start, end, mdl=None):
+    """`Year to date, 1 Jan–14 Sep 2026 (2026-01-01 to 2026-09-14)`: the label the model gives the window, then its dates."""
+    label = (mdl or model()).windows[YTD]['label']
+    return f"{label}, 1 Jan–{end.day} {end.strftime('%b')} {end.year} ({start.isoformat()} to {end.isoformat()})"
+
+
+def window_of(store, spec, mdl=None):
+    """The window envelope of a semantic window (the store's `_window`: period, anchor, start, end, label, the production
+    days expected and observed, coverage); the year to date is described by the store's own calendar and labelled here."""
+    if isinstance(spec, dict) and spec.get('period') == YTD:
+        _, anchor, start, end = parse_window(spec, store._first, store._last)
+        window = store._describe(YTD, start, end, anchor)
+        window['label'] = ytd_label(start, end, mdl)
+        return window
+    return store._window(spec)
 
 
 def validate(query, store=None, mdl=None):
@@ -602,9 +660,9 @@ def validate(query, store=None, mdl=None):
         _within_own_filter(mdl, measure, dim, filters[dim], store)
     shift = _shift(shift)
     if query.window is None:
-        raise SemanticError('A semantic query needs a window: {"period": "day|week|month|fiscal", "anchor": "YYYY-MM-DD"}')
+        raise SemanticError('A semantic query needs a window: {"period": "day|week|month|fiscal|ytd", "anchor": "YYYY-MM-DD"}')
     try:   # a window outside the dataset, or a weekend day, is refused with the calendar's reason
-        store._window(query.window) if store is not None else _window_bounds(query.window)
+        window_of(store, query.window, mdl) if store is not None else parse_window(query.window)
     except SemanticError:
         raise
     except ValueError as exc:
@@ -612,6 +670,10 @@ def validate(query, store=None, mdl=None):
     compare = {'prev': 'previous'}.get(query.compare, query.compare)
     if compare is not None and compare not in COMPARES:
         raise SemanticError('compare is previous (the previous window of the same kind) or none')
+    if compare and query.window['period'] == YTD:
+        # the year to date has no window of the same kind just before it (issue #185): never last year's whole year beside it
+        raise SemanticError('compare=prev puts the previous window of the same kind beside a query; the year to date has none: ask it by '
+                            'itself, or a month or a 4-4-5 period against the one before it')
     timed = next((d for d in by if mdl.dimensions[d]['type'] == 'time'), None)
     if compare and timed:
         # this week's Monday is not last week's: no row of a time split lines up with the window before, and a missed
@@ -1173,7 +1235,7 @@ def run(query, store, rates=None, mdl=None):
     fill = bool(query.group_by) and (mdl.dimensions[query.group_by[0]]['type'] == 'time' or store_values(query.group_by[0], store, mdl) is not None)
     compiled = compile_query(query, mdl, zero_fill=fill)
     m = compiled.measure
-    window = store._window(query.window)
+    window = window_of(store, query.window, mdl)
     previous = store._previous(window) if query.compare else None
     trace = {'sql': [], 'parameters': []}
     fetched = {}
@@ -1435,6 +1497,28 @@ def model_markdown(text=None):
     for d in dims:
         entity = 'every record' if d['entity'] == '*' else d['entity']
         out.append(f'| `{d["name"]}` | {_cell(d["label"])} | {entity} | {_cell(d["description"])} |')
+    out += ['', '## Default rankings', '',
+            'A ranking of a dimension that names no measure ranks it by the measure the model gives it (issue #185), and a ranking of '
+            'the dimension as a set ("top reasons") with no number asked lists its default top N. A measure named keeps it ("top 5 '
+            'reasons by stops"); the ranking words beside are read as the ranking.', '',
+            '| Dimension | Ranked by | Top N when unsaid | Ranking words | Why |', '| --- | --- | --- | --- | --- |']
+    for d in dims:
+        rank_by = d.get('rank_by')
+        if rank_by:
+            out.append(f'| `{d["name"]}` | `{rank_by["measure"]}` ({_cell(measures[rank_by["measure"]]["label"].lower())} in '
+                       f'{_cell(measures[rank_by["measure"]]["unit"])}) | {rank_by["top"]} | {_cell(", ".join(rank_by.get("words", [])))} | '
+                       f'{_cell(rank_by.get("description", ""))} |')
+    windows = spec['windows']
+    out += ['', '## Windows', '', windows['about'], '',
+            'A window is `{"period": <name>, "anchor": "YYYY-MM-DD"}`; the address names it with the path\'s grain or `window=` '
+            '([the URL grammar](../../docs/URLS.md)).', '',
+            'The words of the period tools\' four windows are the router\'s (`agent.WINDOW_WORDS`, "last week" and "yesterday" moving '
+            'the scope); the year to date\'s are read from this file. A window word the model does not read is refused, never answered '
+            'as another window ([Asking questions](../../docs/ASKING.md#questions-the-semantic-model-reads)).', '',
+            '| Window | Label | Definition | Said as |', '| --- | --- | --- | --- |']
+    for w in windows['periods']:
+        words = ', '.join(w.get('words') or w.get('examples', []))
+        out.append(f'| `{w["name"]}` | {_cell(w["label"])} | {_cell(w["description"])} | {_cell(words)} |')
     out += ['', '## Synonyms', '',
             'The plant\'s own words for a measure, a dimension or a dimension\'s value. The offline router reads a question with '
             'these (issue #144, `semantic_parse.py`): a question in the model\'s words, or in these, answers with the measure, '
@@ -1460,7 +1544,7 @@ def model_markdown(text=None):
             f'| {_cell(", ".join(semantic_parse.FREQUENCY))} | the count of the records ("most common reason": stops) |',
             '| which, what (before a dimension), where (a place) | split by that dimension |',
             f'| {_cell(", ".join(semantic_parse.GROUP))} (before a dimension), daily, weekly, monthly | split by that dimension |',
-            '| top N, bottom N | ranked, the first N rows (`top=N`) |',
+            '| top N, bottom N | ranked, the first N rows (`top=N`; Read as says "top N") |',
             f'| {_cell(", ".join(semantic_parse.COMPARE))} | two values of one dimension, or a plural dimension: split by it; the window before: `compare=prev` |',
             '| percent of, share of, proportion of, fraction of, portion of, how much of | the share of a value in the total (`share=`; the '
             'value after the verb, "were at the stacker", while one beside the measure narrows the whole), or each row\'s share (`share=each`) |',

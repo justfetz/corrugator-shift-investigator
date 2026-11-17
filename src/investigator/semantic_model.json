@@ -47,6 +47,17 @@
   {"from": "reject", "to": "shift", "on": [["production_date", "production_date"], ["shift", "shift"]], "relationship": "many_to_one"},
   {"from": "lane", "to": "shift", "on": [["production_date", "production_date"], ["shift", "shift"]], "relationship": "many_to_one"}
  ],
+ "windows": {
+  "about": "The windows a request reads, {period, anchor}: the period names the window and the anchor is a day inside it. The production day, the Mon-Fri week, the calendar month and the 4-4-5 period are the period tools' own windows (record_store.parse_window); the year to date is the semantic model's alone, so a report or a period tool never reads it (their year period is issue #106).",
+  "periods": [
+   {"name": "day", "label": "Production day", "description": "One production day, Monday to Friday, starting 07:00.", "examples": ["the selected day", "yesterday"]},
+   {"name": "week", "label": "Production week", "description": "The Monday-to-Friday week that holds the anchor.", "examples": ["this week", "last week"]},
+   {"name": "month", "label": "Calendar month", "description": "The calendar month that holds the anchor.", "examples": ["this month", "last month", "in August"]},
+   {"name": "fiscal", "label": "4-4-5 period", "description": "The 4-4-5 accounting period that holds the anchor.", "examples": ["this period", "last period", "P9"]},
+   {"name": "ytd", "label": "Year to date", "description": "1 January of the anchor's year through the anchor, the anchor included (issue #185). It has no window of the same kind before it, so it is never compared with the previous window.",
+    "words": ["ytd", "y-t-d", "year to date", "this year to date", "the year to date", "this year", "so far this year", "this year so far", "the year so far"]}
+  ]
+ },
  "dimensions": [
   {"name": "day", "label": "Production day", "type": "time", "grain": "day", "entity": "*", "expr": "{production_date}",
    "description": "The production day: starts 07:00 and carries its start date, Monday to Friday.", "synonyms": ["date", "daily", "by day"]},
@@ -82,7 +93,9 @@
                       "Upper knife": ["upper cutoff", "upper cut-off", "top knife"], "Lower knife": ["lower cutoff", "lower cut-off", "bottom knife"],
                       "Slitter/scorer": ["slitter", "scorer", "slitter scorer"], "Steam system": ["steam", "boiler"]}},
   {"name": "reason", "label": "Stop reason", "type": "categorical", "entity": "stop", "expr": "{reason}",
-   "description": "The reason logged for the stop: missed splice, knife / slitter jam, stacker, raw material, order change, glue / starch, steam / moisture, power outage, other; planned maintenance for a scheduled stop.", "synonyms": ["stop reason", "downtime reason", "cause"],
+   "description": "The reason logged for the stop: missed splice, knife / slitter jam, stacker, raw material, order change, glue / starch, steam / moisture, power outage, other; planned maintenance for a scheduled stop.", "synonyms": ["stop reason", "downtime reason", "cause", "reason", "reasons", "problem"],
+   "rank_by": {"measure": "downtime_minutes", "top": 5, "words": ["pareto"],
+               "description": "The owner's ruling (2026-11-15, issue #172): stop reasons ranked with no measure named ('top maintenance reasons', 'biggest maintenance problems', 'maintenance pareto') rank by downtime minutes, each with its share of the total beside it; a ranking of the reasons as a set ('top reasons', 'the pareto') with no number asked lists the top 5. 'Top 5 reasons by stops' still ranks by stops."},
    "value_synonyms": {"Glue / starch": ["glue", "starch"], "Knife / slitter jam": ["knife", "cut-off", "cutoff", "slitter jam", "knife jam", "slitter jams", "knife jams"],
                       "Missed splice": ["splice", "missed splices", "splicer"], "Order change": ["changeover", "order changes", "setup change"],
                       "Raw material (roll)": ["raw material", "roll", "paper"], "Steam / moisture": ["steam", "moisture"],

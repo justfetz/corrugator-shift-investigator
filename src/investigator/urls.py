@@ -120,7 +120,9 @@ def canonical_url(request, context, corrupt=False, machine_id='CORR-1', after=()
             shifts = [first['shift'], first['against_shift']]   # the shift explained, then the one it is measured against
         window_param = None   # the question's own window when it is not the Period control's
         if window is not None and (window['period'], window['anchor']) != (control, day):
-            if window['anchor'] == day:
+            if window['period'] == semantic.YTD and window['anchor'] == day:
+                window_param = semantic.YTD                                          # "year to date" (issue #185): the semantic model's
+            elif window['anchor'] == day:
                 window_param = TOOL_TO_GRAIN[window['period']]                      # "this week" under Day
             elif window['period'] == 'month' and window['anchor'].endswith('-01'):
                 window_param = _month_of(window['anchor'])                          # a named month: "August"
@@ -421,11 +423,14 @@ def _window(value, tool_period, day):
     inside the dataset or not: the tool answers with its own reason)."""
     if value is None:
         return {'period': tool_period, 'anchor': day}
+    if value == semantic.YTD:   # the year to date, 1 January through the day (issue #185): measure=semantic only (_request)
+        return {'period': semantic.YTD, 'anchor': day}
     if value in GRAIN_TO_TOOL and value != 'day':
         return {'period': GRAIN_TO_TOOL[value], 'anchor': day}
     if re.fullmatch(r'\d{4}-(0[1-9]|1[0-2])', value):
         return {'period': 'month', 'anchor': value + '-01'}
-    raise ValueError('window is week, month, period (the 4-4-5 period containing the day) or a month as YYYY-MM')
+    raise ValueError('window is week, month, period (the 4-4-5 period containing the day), ytd (the year to date, measure=semantic) '
+                     'or a month as YYYY-MM')
 
 
 def _wants(value):
@@ -442,6 +447,9 @@ def _request(measure, fields, context, window, store=None):
     shifts = _shift_list(fields.get('shifts'), scope, shift)
     if measure == 'semantic':
         return _semantic(fields, context, window, shifts, store)
+    if window['period'] == semantic.YTD:
+        # the reports and the period tools read no year to date (their year period is issue #106): the semantic model alone does
+        raise ValueError('window=ytd (the year to date) is read by the semantic model only: ask it with measure=semantic&m=<measure>')
     if measure in MEASURE_INTENTS:
         intent = MEASURE_INTENTS[measure]
         group_by, kind = 'reason', None

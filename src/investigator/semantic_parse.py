@@ -155,6 +155,7 @@ class Reading:
     shares: bool = False   # a share of each row of a split ("percent of stops by kind"): the card leads with the largest share
     versus: list = None    # two values of the split compared ("32-C and 26-C", "shift 1 versus shift 2"): the card leads with both
     verb: str = None       # the verb the parser does not read ("took", "spent"): route refuses naming it unless the hand route covers the rest
+    default_top: bool = False   # the rows a ranking lists are the dimension's default top N (issue #185: "top reasons" is the top 5)
     # What a question it offers keeps (_answers_as_offered): the window the question's words name, the values it narrowed by and the
     # one shift it named, as far as the reading got before it refused
     window: dict = None
@@ -264,6 +265,9 @@ def vocabulary(store, mdl=None):
                 continue   # a v1 code (PM) the store does not hold: its words read as the value the store does hold
             for word in syns:
                 add(word, ('value', name, held[canonical.lower()], False))
+    for name, d in mdl.dimensions.items():
+        for word in (d.get('rank_by') or {}).get('words', []):
+            add(word, ('rank', name))   # "pareto": this dimension ranked, by its default measure when none is named (issue #185)
     # a phrase that names several measures (the label "Downtime" of minutes and of the percent) reads as the model's own word for
     # it (Model.measure_words: names and synonyms first, in the file's order), and likewise a dimension
     for words, kind in ((mdl.measure_words, 'measure'), (mdl.dimension_words, 'dimension')):
@@ -337,7 +341,58 @@ def _items(text, vocab):
 def _window_words(period, month=None):
     if month:
         return 'in ' + month
-    return {'day': '', 'week': 'this week', 'month': 'this month', 'fiscal': 'this period'}[period]
+    return {'day': '', 'week': 'this week', 'month': 'this month', 'fiscal': 'this period', semantic.YTD: 'year to date'}[period]
+
+
+_YTD = {}
+
+
+def ytd_pattern(mdl=None):
+    """The words of the year to date (the model's `windows` block, issue #185: "YTD", "year to date", "this year", "so far this
+    year"), a preposition before them consumed with them ("for this year", "over the year to date")."""
+    mdl = mdl or semantic.model()
+    if id(mdl) not in _YTD:
+        words = sorted(mdl.windows[semantic.YTD].get('words', []), key=len, reverse=True)
+        alternatives = [r'[\s-]+'.join(re.escape(t) for t in re.split(r'[\s-]+', w.lower().strip())) for w in words]
+        _YTD[id(mdl)] = r"\b(?:(?:for|over|in|during|across|through)\s+)?(?:" + '|'.join(alternatives) + r")\b"
+    return _YTD[id(mdl)]
+
+
+# The windows a question offered in place of a window the model does not read names (issue #185), by the words said: the windows the
+# model reads that hold the selected day, the nearest first. Another year, one day and a weekday are offered none.
+WINDOW_OFFERS = ((r"\b(19|20)\d\d\b|\b(last|next|previous|prior|past)\s+(\d+\s+|[a-z]+\s+)?years?\b", ()),
+                 (r"\bmonths?\b", ('month', semantic.YTD)), (r"\bweekends?\b", ('week',)), (r"\bweeks?\b", ('week', 'month')),
+                 (r"\bdays\b", ('month',)), (r"\b(year|ytd|quarter)s?\b|\bto\s+date\b|\bso\s+far\b|\bnow\b", (semantic.YTD, 'month')))
+
+
+def _unread_offers(reading, text, pattern, context, store, mdl):
+    """The questions a refusal of a window the model does not read offers (issue #185, item 4): the same question over the windows it
+    reads that hold the selected day ("... this month", "... year to date"), each one only when the question reads completely there
+    (the router checks each as offered, _offer). Never inside a check of a question offered."""
+    if getattr(_OFFERING, 'text', None):
+        return []
+    # the words said, with the preposition, the article and the grain said before them ("for the month to date", "over the last 30 days")
+    pattern = r"\b(?:(?:for|over|in|during|across|through)\s+)?(?:(?:the|this|that)\s+)?(?:(?:day|week|month|year|period|quarter)\s+)?" + pattern
+    said = re.search(pattern, text)
+    if said is None:
+        return []
+    periods = next((periods for words, periods in WINDOW_OFFERS if re.search(words, said[0])), ())
+    offers = []
+    for period in periods:
+        words = _window_words(period)
+        swapped = re.sub(r'\s+', ' ', re.sub(pattern, f' {words} ', text)).strip(' ?.!,')
+        # ... only when the window offered is the one window the question then names ("so far this week" is never "this week this week")
+        rest = re.sub(ytd_pattern(mdl), ' ', swapped)
+        if len(agent.windows_said(rest)) != (period != semantic.YTD) or re.search(UNREAD_WINDOW, rest) or re.search(agent.ROLLING_WINDOW, rest):
+            continue
+        own = read(swapped, context, store, mdl)
+        if not own.complete:
+            continue
+        q = own.query
+        offers.append(Ask(swapped, q.measure, q.group_by, own.rank, q.compare, q.share, filters=q.filters, shift=own.shift,
+                          window={'period': period, 'anchor': None}, reads=True))
+    # ... checked here, so a window refusal with none to offer says only the window's reason (never what the model keeps of the measure)
+    return [ask for ask in offers if _answers_as_offered(ask, reading)]
 
 
 def _consume(pattern, text, used, role, flags=0):
@@ -461,16 +516,30 @@ def _read(reading, text, context, store, mdl):
                      "the split, or two values compared",
                      lambda m, window: [_ask(mdl, reading, m, filters={d: v for d, v in reading.filters.items() if d not in reading.compared},
                                              shift=False if than_shift else None)]))
+    # the year to date (issue #185): the model's own window words, read before the words of the windows it does not read ("this year",
+    # "ytd", "to date" and "so far" are among those)
+    lower, ytd = _consume(ytd_pattern(mdl), lower, used, 'window')
+    if ytd and read_words.get('words'):
+        raise Refused(f"'{read_words['words']}' and '{ytd[0].group(0).strip()}' are two windows: ask one window at a time")
     unread = re.search(UNREAD_WINDOW, lower) or re.search(agent.ROLLING_WINDOW, lower)
     if unread:
         wrong = re.search(WRONG_WINDOW, lower)
         weekday = ('monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday')[date.fromisoformat(context.production_day).weekday()]
-        said = unread[0].strip()
+        words = unread[0].strip()
+        if words == 'to date':
+            words = re.search(r"\b(?:(?:day|week|month|period|quarter)\s+)?to\s+date\b", lower)[0]   # "month to date", said whole
         if wrong and wrong[0] != weekday:
             reading.cues.add('wrong window')
-            said = re.sub(r'^the\s+', '', wrong[0].strip())
-        raise Refused(f"'{said}' is not a window the semantic model reads: the windows are the production day, the "
-                      "Mon-Fri week, the calendar month and the 4-4-5 period")
+            words = re.sub(r'^the\s+', '', wrong[0].strip())
+        offers = []
+        if not re.fullmatch(r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?", words):
+            # a window the model does not read is never answered as another one (issue #185, item 4): refused over any hand route
+            # that does not read its window words itself (route), with the same question over the windows the model reads. A weekday
+            # is the selected day, or a weekday profile ("Mondays"), as before: 'wrong window' when it is another day
+            reading.cues.add('unread window')
+            offers = _unread_offers(reading, agent.correct_typos(text.lower()), r'\b' + re.escape(unread[0].strip()) + r'\b', context, store, mdl)
+        raise Refused(f"'{words}' is not a window the semantic model reads: the windows are the production day, the "
+                      "Mon-Fri week, the calendar month, the 4-4-5 period and the year to date", offers)
     named, said_windows = set(), lower
     for m in re.finditer(r"\b(" + '|'.join(agent.MONTH_NAMES) + r")\b", lower):
         number = agent.MONTH_NAMES[m[1]]
@@ -497,6 +566,8 @@ def _read(reading, text, context, store, mdl):
             used[hit] = (read_words['words'], 'window')
         elif not moved:
             used.append((read_words['words'], 'window'))
+    if ytd:
+        named.add((semantic.YTD, anchor, None))
     if len(named) > 1:
         raise Refused('The question names more than one window: ask one window at a time, or one window against the one before it')
     said += _two_windows(reading, named, previous, previous_grain, read_words, said_windows, context)
@@ -593,7 +664,7 @@ def _read(reading, text, context, store, mdl):
             reading.cues.add('lost to')
             if after.kind == 'vocab':
                 item.kind, item.role = 'filler', 'reason cue'   # ... before a value or a measure ("which shift lost the most to trim")
-    a = {'rank': rank, 'limit': limit, 'per_day': bool(per_day), 'reason_cue': bool(connectors), 'period': period, 'anchor': anchor,
+    a = {'rank': rank, 'limit': limit, 'top_said': bool(top), 'per_day': bool(per_day), 'reason_cue': bool(connectors), 'period': period, 'anchor': anchor,
          'compare': compare, 'shifts': shifts, 'this_shift': bool(this_shift), 'all_shifts': bool(all_shifts), 'ask_unit': ask_unit,
          'ask_often': ask_often, 'loss': bool(set(tokens_of(text)) & set(LOSS))}
     try:
@@ -965,7 +1036,9 @@ def _cued(items, i):
         it = items[j]
         if it.kind in ('group', 'which', 'rank', 'speed_rank', 'compare') or it.words == 'what' or it.words in SUPERLATIVE:
             return True   # ... or a superlative with no measure ("best crew": the crew, ranked on a measure not named)
-        if it.role in ('measure', 'unit') or it.kind in ('frequency', 'unit') or (it.kind == 'filler' and it.words in ARTICLES):
+        # ... across a value of another dimension that narrows the noun phrase ("which maintenance reason", "which 26-C shift": issue
+        # #185, item 1)
+        if it.role in ('measure', 'unit', 'value') or it.kind in ('frequency', 'unit') or (it.kind == 'filler' and it.words in ARTICLES):
             j -= 1
             continue
         return False
@@ -1216,9 +1289,8 @@ def _as_offered(ask, reading, controls, store):
 
 def _holds(outer, inner):
     """True when the window `outer` holds every production day of `inner`."""
-    from .record_store import parse_window
     try:
-        (start, end), (first, last) = parse_window(outer)[2:], parse_window(inner)[2:]
+        (start, end), (first, last) = semantic.parse_window(outer)[2:], semantic.parse_window(inner)[2:]
     except (ValueError, TypeError, KeyError):
         return False
     return start <= first and last <= end
@@ -1226,9 +1298,8 @@ def _holds(outer, inner):
 
 def _same_window(one, other):
     """True when two windows are the same production days (a week anchored on its Monday or its Friday is one week)."""
-    from .record_store import parse_window
     try:
-        return parse_window(one)[2:] == parse_window(other)[2:]
+        return semantic.parse_window(one)[2:] == semantic.parse_window(other)[2:]
     except (ValueError, TypeError, KeyError):
         return False
 
@@ -1301,7 +1372,7 @@ def _hand_leads(request, own, asked, store):
     if intent == 'period_speed':
         # by grade only over a complete window: an incomplete one opens with the grades observed, unranked (shapes.PeriodAnswer.whole)
         return q.measure == 'speed_run_fpm' and not q.filters and (whole or q.group_by == ['grade'] and rank in (None, 'least')
-                                                                    and store._window(q.window)['coverage'] == 'complete')
+                                                                    and semantic.window_of(store, q.window)['coverage'] == 'complete')
     if intent == 'period_overrun':
         return q.measure == 'overrun_pct' and whole
     if intent == 'quality':
@@ -1322,9 +1393,15 @@ def _assign(reading, items, mdl, store, a, context):
     a['units'], a['leftover'] = units, leftover   # what was read when a refusal fires, for _verb_cues
     statistic, evaluative, which, speed_rank, frequency, who = [], [], False, None, False, False
     group_by, filters, per_ratio, verbs, than, modifiers, compared = [], {}, None, [], [], [], []
+    ranked_by = []   # the dimensions a ranking word of the model names ("pareto": the stop reasons, issue #185)
     for i, item in enumerate(items):
         kind = item.kind
-        if kind == 'verb':
+        if kind == 'vocab' and item.entries and all(e[0] == 'rank' for e in item.entries):
+            rank = rank or 'most'
+            item.role = 'rank'
+            reading.cues.add('rank')
+            ranked_by.append(item.entries[0][1])
+        elif kind == 'verb':
             verbs.append(item)   # read once the measure is known (LOSS_VERBS, REJECT_VERBS, PRODUCE_VERBS), else refused
         elif kind == 'than':
             than.append(item)    # "more setups than 26-C": refused in _read, over any other refusal ("than last week" is PREVIOUS's)
@@ -1464,6 +1541,18 @@ def _assign(reading, items, mdl, store, a, context):
             reading.cues.add('group')
         else:
             leftover.append(item.words)
+    # ---- a ranking word of the model that names its dimension ("maintenance pareto": the stop reasons ranked, issue #185), when the
+    # question splits by nothing else
+    for dim in ranked_by:
+        if not group_by:
+            group_by.append(dim)
+            reading.cues.add('group')
+    # ... and the dimension's default ranking (the model's `rank_by`: stop reasons rank by downtime minutes, the owner's ruling on
+    # #172): "worst" of a stop's reasons is the most, never a direction the model does not hold
+    rank_by = (mdl.dimensions[group_by[0]].get('rank_by') if len(group_by) == 1 else None) or {}
+    if rank_by and evaluative and set(evaluative) <= {'worst', 'poorest'}:
+        rank, evaluative = rank or 'most', []
+        reading.cues.discard('evaluative')
     # ---- the measure when none is named: what the split's own words say ("downtime reason", "stop reason"), the default of a value's
     # records (a reject family's area), a count of stops asked, a speed ranked, minutes lost
     measure = named[0] if named else None
@@ -1505,6 +1594,25 @@ def _assign(reading, items, mdl, store, a, context):
         stopped = [mdl.dimensions[d]['entity'] for d in group_by] + [mdl.dimensions[e[1]]['entity'] for _, it in values for e in it.value]
         if a['loss'] or stopped and all(e == 'stop' for e in stopped):
             measure = 'downtime_minutes'
+    if measure is None and units and units[-1] == '$' and values and not group_by:
+        # money asked of a value of one kind of record, with no measure named ("how much money have missed splices cost me"): the one
+        # priced measure of those records (a stop's is its downtime priced as machine time; issue #185), never a choice between several;
+        # "where is the money" names no value and stays the money's own answer
+        entities = {mdl.dimensions[e[1]]['entity'] for _, it in values for e in it.value}
+        entities.discard('*')
+        priced = [n for n, o in mdl.measures.items() if o['agg'] == 'priced' and entities == {mdl.measure_entities(n)[0]}]
+        if len(priced) == 1:
+            measure = priced[0]
+    if measure is None and rank_by and rank:
+        # "top maintenance reasons", "biggest maintenance problems", "maintenance pareto": the dimension ranked by its default measure
+        # (issue #185); a unit said is that measure's in the unit ("which reasons cost the most": the downtime's dollars)
+        measure = rank_by['measure']
+        reading.cues.add('default measure')
+    if rank_by and rank and not a['top_said'] and (ranked_by or any(
+            it.role == 'dimension' and it.value == group_by[0] and it.words.endswith('s') for it in items)):
+        # ... and the reasons ranked as a set ("top reasons", "the pareto") with no number asked list the model's default top N
+        limit = rank_by['top']
+        reading.default_top = True
     # ---- the unit asked: the measure of the same quantity in it
     unit = units[-1] if units else None
     if counted:
@@ -1844,7 +1952,7 @@ def _assign(reading, items, mdl, store, a, context):
         shift = None
     if context.scope == 'shift' and shift is None:
         raise Refused('Selected shift only: choose All in the shift control to split or rank by shift')
-    grains = ('day', 'week', 'month', 'fiscal')
+    grains = ('day', 'week', 'month', 'fiscal', semantic.YTD)
     for dim in group_by:
         grain = mdl.dimensions[dim].get('grain')
         if grain and grains.index(grain) >= grains.index(a['period']):
@@ -1957,6 +2065,9 @@ def request_of(reading):
 # speed variance and opportunity, rollstock, the over/under-run, the day's matrices, notes and rankings).
 NEVER_PREEMPT = ('period_quantity', 'period_stops', 'period_trend', 'period_speedvar', 'period_speed_opportunity', 'period_rollstock',
                  'period_overrun', 'period_overview', 'period_summary', 'overview', 'summary', 'matrix', 'orders', 'notes', 'ranking')
+# The hand routes that read a window the semantic model does not read in their own words, so a refusal of those words never stands over
+# them: #113's quantity routes (every word consumed: "how many stops this week and last week") and the trend ("over the last eight weeks")
+WINDOW_READERS = (*ALLOW_LISTED, 'period_trend')
 # The cues a hand route that answers something else drops: a ranking, a share, a ratio the model does not define, a statistic, one
 # record asked ("the biggest stop"), "who".
 STRONG = ('rank', 'share', 'per', 'statistic', 'who', 'single')
@@ -2063,6 +2174,8 @@ def covers(request, reading, context=None, store=None):
         hand = _hand_window(request, context)
         if hand is not None and hand != (q.window['period'], q.window['anchor']) and intent not in ('period_quantity', 'period_stops', 'period_trend'):
             return False
+        if q.window['period'] == semantic.YTD and (hand is None or hand[0] != semantic.YTD):
+            return False   # no hand route reads the year to date (issue #185): never the selected day's answer for it
         if intent in ('period_quantity', 'period_stops') and hand is not None and hand[0] == q.window['period'] == 'month' \
                 and hand[1][:7] != q.window['anchor'][:7]:
             return False   # "stops per day in August" read as September: the month the question named is not the one answered
@@ -2077,15 +2190,18 @@ def covers(request, reading, context=None, store=None):
     if tools and set(tools) == {'get_downtime_pareto'}:
         unit = 'stops' if args.get('measure') == 'count' else 'downtime_minutes'
         return (q.measure == unit and group_by == [args.get('group_by')] and not filters and share is None
-                and rank in (None, 'most') and q.limit == semantic.DEFAULT_LIMIT)
+                and rank in (None, 'most') and (q.limit == semantic.DEFAULT_LIMIT or reading.default_top))
     if intent == 'period_review' or (tools and set(tools) == {'get_downtime_review'}):
         # the owner's downtime answer (issue #101): downtime by reason, ranked, maintenance and operator first; never a count, a split
         # by anything else or another filter
         # bare stops ("stops", "stops yesterday") are the owner's downtime default too (the review of PR #155); "most common" is a
         # count, which the review (ranked by minutes) does not rank
+        # A kind narrows only the whole: the review's ranking holds every kind's reasons together, so "top operator downtime reasons"
+        # (a split or a ranking by reason of one kind) is never its answer (issue #185: Knife / slitter jam, a maintenance reason, led it)
         return ((q.measure in DOWNTIME_FAMILY and rank in (None, 'most') or q.measure == 'stops' and rank is None)
-                and group_by in ([], ['reason']) and set(filters) <= {'kind'}
-                and filters.get('kind') in (None, 'Maintenance', 'Operator') and share is None and q.limit == semantic.DEFAULT_LIMIT)
+                and group_by in ([], ['reason']) and set(filters) <= {'kind'} and not (filters and group_by)
+                and filters.get('kind') in (None, 'Maintenance', 'Operator') and share is None
+                and (q.limit == semantic.DEFAULT_LIMIT or reading.default_top))   # "top downtime reasons": the review ranks them all
     if intent == 'quality':
         # the shift's rejects open with its dry-end rejects, the families and reasons after them: the dry-end line, "waste", or a family
         # or reason shown; never another waste line ("how much trim"), and no production day before beside it
@@ -2167,7 +2283,9 @@ OVERRULED = ((r"^The records do not count customers", lambda r: 'customer' in r.
              (r"^The records keep shear chops as square feet", lambda r: reads_otherwise(r, {'chop', 'chops'})),
              (r"^Square feet are kept for the waste lines", lambda r: semantic.model().measures[r.query.measure]['unit'] == 'sq ft'),
              (r"^Rejects are recorded as square feet by reason, not as sheets", lambda r: r.query.measure == 'reject_sheets'),
-             (r"\bnot by grade\b", lambda r: 'grade' in r.query.filters or 'grade' in r.query.group_by))
+             (r"\bnot by grade\b", lambda r: 'grade' in r.query.filters or 'grade' in r.query.group_by),
+             # the hand router reads no year to date ("'ytd' is not a window the router reads"): the reading read it (issue #185)
+             (r"is not a window the router reads", lambda r: r.query.window['period'] == semantic.YTD))
 
 
 def router_limit(refused):
@@ -2213,8 +2331,9 @@ def route(text, context, store, request, refused):
     if refused is not None:
         # the generic help ("Offline mode supports ...") answers nothing a ranking, a share or a statistic asked: the reading's
         # refusal names what it could not say and three questions that answer ("best crew"; the review of PR #155)
-        if str(refused).startswith('Offline mode supports') and reading.cues & (set(STRONG) - {'statistic'} | {'statistic asked', 'evaluative'}):
-            raise ValueError(refusal_text(reading))
+        if str(refused).startswith('Offline mode supports') and reading.cues & (set(STRONG) - {'statistic'} | {'statistic asked', 'evaluative',
+                                                                                                             'unread window'}):
+            raise ValueError(refusal_text(reading))   # ... and a window the model does not read ("top reasons last year"; issue #185)
         if 'modifier' in reading.cues and not str(refused).startswith(reading.refusal):
             # "which shift had the most board stops", "... board scrap": the dimension said bare beside the ranking, with the two
             # questions that answer, over the router's "one quantity" and its count of boards alike
@@ -2227,6 +2346,11 @@ def route(text, context, store, request, refused):
     if request is None:
         return None
     intent = request.get('intent')
+    if 'unread window' in reading.cues and intent not in WINDOW_READERS:
+        # "top operator downtime reasons month to date", "stops this quarter": a window the model does not read, which the hand route
+        # answers as another one (the selected day, the Period control's window; issue #185, item 4): refused with the parser's reason
+        # and the same question over the windows it reads
+        raise ValueError(refusal_text(reading))
     if unread_verb:
         # every word read but a verb the parser does not read: the hand route keeps the question only when it answers what the other
         # words ask ("how much MSF did we produce": the grade totals), else the verb is refused, never answered as something else
